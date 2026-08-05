@@ -32,6 +32,9 @@ import {
   buildExecutiveKpis,
   EXECUTIVE_HEALTH_COLORS,
   EXECUTIVE_RFI_SEVERITY_COLORS,
+  buildProjectSummaryCards,
+  daysToTargetTone,
+  formatDaysToTarget,
 } from "./executiveView/executiveViewPageHelpers";
 
 import {
@@ -75,6 +78,7 @@ export default function ExecutiveView() {
 
   // Charts data
   const projectBudgetData = buildProjectBudgetData(projects, codes, cos, computeCostCodeTotals);
+  const projectSummaryCards = buildProjectSummaryCards(projects, codes, rfis, computeCostCodeTotals);
 
   const rfiSeverity = buildRfiSeverity(rfis);
   
@@ -311,24 +315,21 @@ export default function ExecutiveView() {
       <div style={CARD_STYLE}>
         <div style={CARD_TITLE}>Project Summary — Click to Drill In</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-          {projects.map((p) => {
-            const pc = codes.filter((c) => c.project_id === p.id);
-            const { budget, actual } = computeCostCodeTotals(pc);
-            const pctSpend = budget > 0 ? actual / budget * 100 : 0;
-            const projRFIs = rfis.filter((r) => r.project_id === p.id && (r.status === "Open" || r.status === "Under Review")).length;
+          {projectSummaryCards.map((card) => {
+            const pctSpend = card.pctSpend;
             return (
-              <div key={p.id}
+              <div key={card.id}
                 style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: 14, cursor: "pointer", transition: "all 0.15s", background: "var(--bg-surface-low)" }}
-                onClick={() => navigate(`${createPageUrl("Dashboard")}?project=${p.id}`)}
+                onClick={() => navigate(`${createPageUrl("Dashboard")}?project=${card.id}`)}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.background = "var(--hover-bg)"; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "var(--bg-surface-low)"; }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                   <div>
-                    <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{p.name}</div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{p.project_number}</div>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{card.name}</div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{card.project_number}</div>
                   </div>
-                  <StatusBadge status={p.health_status} />
+                  <StatusBadge status={card.health_status} />
                 </div>
                 <div style={{ marginBottom: 6 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -341,29 +342,23 @@ export default function ExecutiveView() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>Phase: <span style={{ color: "var(--text-secondary)", fontWeight: 700 }}>{p.phase}</span></span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>Phase: <span style={{ color: "var(--text-secondary)", fontWeight: 700 }}>{card.phase}</span></span>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                      {formatCurrency(Number(p.original_contract_value) || 0)}
+                      {formatCurrency(card.original_contract_value)}
                     </span>
-                    {p.target_completion_date && (
+                    {card.daysToTarget != null && (
                       <span style={{
                         fontFamily: "var(--font-mono)",
                         fontSize: 9,
                         fontWeight: 700,
-                        color: (() => {
-                          const days = Math.ceil((new Date(p.target_completion_date) - new Date()) / 86400000);
-                          return days < 0 ? "var(--status-error)" : days < 30 ? "var(--status-warning)" : "var(--text-muted)";
-                        })(),
+                        color: daysToTargetTone(card.daysToTarget),
                       }}>
-                        {(() => {
-                          const days = Math.ceil((new Date(p.target_completion_date) - new Date()) / 86400000);
-                          return days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`;
-                        })()}
+                        {formatDaysToTarget(card.daysToTarget)}
                       </span>
                     )}
                   </div>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: projRFIs > 0 ? "var(--status-warning)" : "var(--text-muted)" }}>
-                    {projRFIs > 0 ? `${projRFIs} RFIs` : "—"}
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: card.openRfiCount > 0 ? "var(--status-warning)" : "var(--text-muted)" }}>
+                    {card.openRfiCount > 0 ? `${card.openRfiCount} RFIs` : "—"}
                   </span>
                 </div>
               </div>

@@ -296,3 +296,74 @@ export function buildExecutiveKpis(input: {
     },
   ];
 }
+
+export type ProjectSummaryCard = {
+  id: string;
+  name?: string | null;
+  project_number?: string | null;
+  health_status?: string | null;
+  phase?: string | null;
+  original_contract_value: number;
+  budget: number;
+  actual: number;
+  pctSpend: number;
+  openRfiCount: number;
+  /** Days until target completion (negative = overdue). Null when no target date. */
+  daysToTarget: number | null;
+  target_completion_date?: string | null;
+};
+
+/** Per-project summary card metrics for Executive View grid. */
+export function buildProjectSummaryCards(
+  projects: Array<ProjectLike & { target_completion_date?: string | null }>,
+  codes: CostCodeLike[],
+  rfis: RfiLike[],
+  computeCostCodeTotals: ProjectBudgetTotalsFn,
+  now: Date = new Date(),
+): ProjectSummaryCard[] {
+  return (projects || []).map((p) => {
+    const pc = (codes || []).filter((c) => c.project_id === p.id);
+    const { budget, actual } = computeCostCodeTotals(pc);
+    const pctSpend = budget > 0 ? (actual / budget) * 100 : 0;
+    const openRfiCount = (rfis || []).filter(
+      (r) =>
+        r.project_id === p.id &&
+        (r.status === "Open" || r.status === "Under Review"),
+    ).length;
+    let daysToTarget: number | null = null;
+    if (p.target_completion_date) {
+      daysToTarget = Math.ceil(
+        (new Date(p.target_completion_date).getTime() - now.getTime()) / 86400000,
+      );
+    }
+    return {
+      id: String(p.id ?? ""),
+      name: p.name,
+      project_number: p.project_number,
+      health_status: p.health_status,
+      phase: p.phase,
+      original_contract_value: Number(p.original_contract_value) || 0,
+      budget,
+      actual,
+      pctSpend,
+      openRfiCount,
+      daysToTarget,
+      target_completion_date: p.target_completion_date ?? null,
+    };
+  });
+}
+
+/** Tone helpers for target-completion countdown on project cards. */
+export function daysToTargetTone(days: number | null | undefined): string {
+  if (days == null) return "var(--text-muted)";
+  if (days < 0) return "var(--status-error)";
+  if (days < 30) return "var(--status-warning)";
+  return "var(--text-muted)";
+}
+
+export function formatDaysToTarget(days: number | null | undefined): string | null {
+  if (days == null) return null;
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  return `${days}d left`;
+}
+

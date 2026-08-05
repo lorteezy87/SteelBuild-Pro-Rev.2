@@ -13,7 +13,8 @@ import {sumContractValue,
   buildLaborByProject,
   buildWaterfallData,
   buildRfiAging,
-  buildProjectBudgetData, buildExecutiveKpis, EXECUTIVE_HEALTH_COLORS} from "../executiveViewPageHelpers";
+  buildProjectBudgetData, buildExecutiveKpis, EXECUTIVE_HEALTH_COLORS,
+  buildProjectSummaryCards, daysToTargetTone, formatDaysToTarget} from "../executiveViewPageHelpers";
 
 const NOW = new Date("2026-08-05T12:00:00Z");
 
@@ -108,5 +109,45 @@ describe("buildExecutiveKpis", () => {
     expect(kpis[1].color).toBe("rose"); // over budget
     expect(kpis[6].color).toBe("green"); // no delayed
     expect(EXECUTIVE_HEALTH_COLORS).toHaveLength(3);
+  });
+});
+
+describe("buildProjectSummaryCards", () => {
+  it("rolls budget/spend/open RFIs and days-to-target", () => {
+    const cards = buildProjectSummaryCards(
+      [
+        {
+          id: "p1",
+          name: "Alpha",
+          project_number: "A1",
+          phase: "Detailing",
+          health_status: "On Track",
+          original_contract_value: 1000,
+          target_completion_date: "2026-08-10T00:00:00Z",
+        },
+      ],
+      [{ project_id: "p1", budget: 100, actual: 50 }],
+      [
+        { project_id: "p1", status: "Open" },
+        { project_id: "p1", status: "Closed" },
+        { project_id: "p2", status: "Open" },
+      ],
+      (codes) => ({
+        budget: codes.reduce((s, c: any) => s + (c.budget || 0), 0),
+        actual: codes.reduce((s, c: any) => s + (c.actual || 0), 0),
+      }),
+      new Date("2026-08-05T12:00:00Z"),
+    );
+    expect(cards).toHaveLength(1);
+    expect(cards[0].budget).toBe(100);
+    expect(cards[0].actual).toBe(50);
+    expect(cards[0].pctSpend).toBe(50);
+    expect(cards[0].openRfiCount).toBe(1);
+    expect(cards[0].daysToTarget).toBe(5);
+    expect(formatDaysToTarget(5)).toBe("5d left");
+    expect(formatDaysToTarget(-3)).toBe("3d overdue");
+    expect(daysToTargetTone(-1)).toContain("error");
+    expect(daysToTargetTone(10)).toContain("warning");
+    expect(daysToTargetTone(40)).toContain("muted");
   });
 });

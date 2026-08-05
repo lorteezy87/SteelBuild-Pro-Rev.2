@@ -24,48 +24,23 @@ import { FilterBar, SelectFilter, SearchInput } from "./ReportFilters";
 import { exportTableCSV, formatDate } from "./utils";
 import { mono, body, CARD, PROJECT_HEALTH_COLORS } from "./constants";
 import { GANTT_TODAY_HEX } from "@/lib/ganttTheme";
+import {
+  mapProjectsToGanttRows,
+  filterGanttRows,
+  computeGanttWindow,
+  buildMonthTicks,
+  computeTodayPct,
+  computeGanttBarLayout,
+} from "./projectStatusGanttHelpers";
 
 const ROW_HEIGHT = 32;
 const HEADER_HEIGHT = 40;
 const LEFT_LABEL_W = 260;
 const MIN_TIMELINE_W = 520;
 
-function parseDate(input) {
-  if (!input) return null;
-  const d = input instanceof Date ? input : new Date(input);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-function monthStart(d) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function monthEnd(d) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 1);
-}
-
-/** Generate a list of {label, fraction} ticks spanning [from, to]. */
-function buildMonthTicks(from, to) {
-  const ticks = [];
-  const span = to - from;
-  if (span <= 0) return ticks;
-  let cur = monthStart(from);
-  while (cur <= to) {
-    ticks.push({
-      label: cur.toLocaleDateString("en-US", {
-        month: "short",
-        year: "2-digit",
-      }),
-      fraction: Math.max(0, Math.min(1, (cur - from) / span)),
-    });
-    cur = monthEnd(cur);
-  }
-  return ticks;
-}
-
 function GanttRow({ row, from, to, onClick }) {
-  const span = to - from;
-  if (span <= 0 || !row.start || !row.end) {
+  const layout = computeGanttBarLayout(row, from, to);
+  if (!layout) {
     return (
       <div
         style={{
@@ -83,8 +58,7 @@ function GanttRow({ row, from, to, onClick }) {
       </div>
     );
   }
-  const leftPct = ((row.start - from) / span) * 100;
-  const widthPct = ((row.end - row.start) / span) * 100;
+  const { leftPct, widthPct } = layout;
   const color = PROJECT_HEALTH_COLORS[row.health] || "var(--text-muted)";
 
   return (
@@ -149,67 +123,25 @@ export default function ProjectStatusGantt() {
     queryFn: () => entities.Project.list(),
   });
 
-  const allRows = useMemo(() => {
-    return projects.map((p) => ({
-      id: p.id,
-      name: p.name || "Untitled Project",
-      number: p.project_number || `P-${p.id}`,
-      health: p.health_status || "",
-      phase: p.phase || "",
-      start: parseDate(p.start_date),
-      end:
-        parseDate(p.target_completion_date) ||
-        parseDate(p.forecast_completion_date),
-    }));
-  }, [projects]);
+  const allRows = useMemo(
+    () => mapProjectsToGanttRows(projects),
+    [projects],
+  );
 
-  const filtered = useMemo(() => {
-    let out = allRows;
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.number.toLowerCase().includes(q)
-      );
-    }
-    if (healthFilter !== "all")
-      out = out.filter((r) => r.health === healthFilter);
-    return out;
-  }, [allRows, search, healthFilter]);
+  const filtered = useMemo(
+    () => filterGanttRows(allRows, { search, healthFilter }),
+    [allRows, search, healthFilter],
+  );
 
   // Compute timeline window from the filtered rows that actually have dates.
   const datedRows = filtered.filter((r) => r.start && r.end);
-  const { from, to } = useMemo(() => {
-    if (!datedRows.length) {
-      const now = new Date();
-      return {
-        from: new Date(now.getFullYear(), now.getMonth() - 1, 1),
-        to: new Date(now.getFullYear(), now.getMonth() + 6, 1),
-      };
-    }
-    const minStart = datedRows.reduce(
-      (min, r) => (r.start < min ? r.start : min),
-      datedRows[0].start
-    );
-    const maxEnd = datedRows.reduce(
-      (max, r) => (r.end > max ? r.end : max),
-      datedRows[0].end
-    );
-    // Pad ±2 weeks for breathing room.
-    const fromPadded = new Date(minStart.getTime() - 14 * 86400000);
-    const toPadded = new Date(maxEnd.getTime() + 14 * 86400000);
-    return {
-      from: monthStart(fromPadded),
-      to: monthEnd(toPadded),
-    };
-  }, [datedRows]);
+  const { from, to } = useMemo(
+    () => computeGanttWindow(datedRows),
+    [datedRows],
+  );
 
   const ticks = useMemo(() => buildMonthTicks(from, to), [from, to]);
-  const now = new Date();
-  const span = to - from;
-  const todayPct =
-    now >= from && now <= to ? ((now - from) / span) * 100 : null;
+  const todayPct = computeTodayPct(from, to);
 
   const handleExportCSV = () => {
     exportTableCSV({
