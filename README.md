@@ -100,6 +100,8 @@ billing secrets live server-side in the Edge Functions' environment.
 | `npm run typecheck:noimplicitany` | noImplicitAny ratchet — all `.ts/.tsx` except the grandfathered list |
 | `npm test`             | Vitest run (unit + jsdom integration tests)    |
 | `npm run test:watch`   | Vitest in watch mode                           |
+| `npm run supabase:drift` | Compare remote Supabase schema vs migrations (skips without token / `ALLOW_SKIP=1`) |
+| `npm run supabase:delete-deprecated-fns` | Dry-run delete of retired Edge Functions (`DRY_RUN=0` to apply) |
 
 ## Layout
 
@@ -219,8 +221,11 @@ Setup + promotion flow: [`docs/runbooks/staging-setup.md`](./docs/runbooks/stagi
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
 `{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor
 target. Enterprise-readiness remediation status + owner action list live in
-[`ENTERPRISE_READINESS_AUDIT.md`](./ENTERPRISE_READINESS_AUDIT.md) and
-[`docs/runbooks/owner-checklist.md`](./docs/runbooks/owner-checklist.md).
+[`ENTERPRISE_READINESS_AUDIT.md`](./ENTERPRISE_READINESS_AUDIT.md),
+[`docs/runbooks/owner-checklist.md`](./docs/runbooks/owner-checklist.md), and the
+Tier 1 split matrix
+[`docs/runbooks/tier1-enterprise-status.md`](./docs/runbooks/tier1-enterprise-status.md)
+(code-complete vs owner-only: PITR, Stripe Tax dashboard, branch protection, …).
 
 ## Error monitoring
 
@@ -248,6 +253,13 @@ const show3dViewer = useFlag("viewer_3d");
 Per-user overrides use `feature_flags.user_overrides` as a jsonb map and must not
 contain personal email addresses in source-controlled seeds.
 
+**Module scope-cut gates** (nav + route): deprioritized modules (Cost, advanced
+Reports/Portfolio, Procurement, Risk, Quality suite extras, Resources, Closeout,
+Email Inbox, Integrations, …) are hidden and deep-link-blocked unless their
+`module_*` flag is on. Core steel workflow (Dashboard, Detailing Control Center,
+RFIs, Work Packages / Piece Register / Fab, Schedule, Field, Projects, Settings)
+stays always on. Config: `src/config/moduleGating.js` + `useModuleAccess`.
+
 ## Notes on viewers
 
 - **3D**: a self-hosted IFC viewer (`web-ifc` + `three`) lazy-loaded into the
@@ -255,13 +267,33 @@ contain personal email addresses in source-controlled seeds.
   `web-ifc.wasm` is version-pinned and copied to `public/wasm/` by a Vite plugin
   on every build — a worker/package mismatch silently yields zero geometry. (The
   old `@thatopen/components` IFC/BIM stack was removed to shrink the bundle.)
+  **Fab color mode** paints linked lots from `pieces.lifecycle_status` (Production /
+  Logistics / fab-release invalidate `canonical-pieces-3d`). Measure snap targets
+  **1/16″**. Zoom/orbit do not "run out of gas" (unbounded camera).
 - **PDF**: `src/pages/DrawingViewer.jsx` defaults to a browser-native `<iframe>`;
   a pdf.js canvas mode is available via the toolbar toggle. Multi-sheet PDFs rely
   on correct `drawings.pdf_page`.
+
+## Product surfaces (recent)
+
+- **Drawing Register** — flat Doc Control sheet table with **set name filter** /
+  grouping (Detailing Control Center).
+- **Detailing event glue** — Create submittal from package (`?targetSetId=`),
+  revision **Attach / Not now** confirm, status → BIC/dates **suggest strip**
+  (`src/lib/submittalLinkGlue.ts`).
+- **Piece Register** — Overview / Register / Imports / Lots & links /
+  Production / Logistics / Settings. Lifecycle writes refresh 3D Fab colors.
+  **Package Board** (WP drag-assign columns) lands via the Package Board supersede
+  PR chain when CI is green.
+- **Theme** — SteelBuild Dark uses **opaque** panel tokens (`--sbd-bg-panel*`)
+  and `.sbp-opaque-popout` for menus (no frosted glass wash-out on selects).
+- **Signup** — Terms/Privacy clickwrap required before account creation.
 
 ## Where to find things
 
 - **Architecture + decisions** → [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 - **Known issues + remediation** → [`TECH_DEBT.md`](./TECH_DEBT.md)
-- **Agent / deploy conventions** → [`CLAUDE.md`](./CLAUDE.md)
+- **Enterprise Tier 1 status** → [`docs/runbooks/tier1-enterprise-status.md`](./docs/runbooks/tier1-enterprise-status.md)
+- **Agent / deploy conventions** → [`CLAUDE.md`](./CLAUDE.md) · concurrent claims → [`AGENT_CLAIMS.md`](./AGENT_CLAIMS.md)
 - **Drawing/submittal stage glossary** → [`ARCHITECTURE.md#domain-workflow`](./ARCHITECTURE.md#domain-workflow)
+- **Agent session memory** → [`.claude/agent-memory/construction-pm-dev/MEMORY.md`](./.claude/agent-memory/construction-pm-dev/MEMORY.md)
