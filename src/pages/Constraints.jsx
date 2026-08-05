@@ -29,6 +29,7 @@ import {
   computeConstraintKpis,
   filterAndSortConstraints,
   EMPTY_ENGINE_SOURCES,
+  CONSTRAINTS_COMMAND_SUBTITLE,
 } from "./constraints/constraintsPageHelpers";
 import KpiStrip from "./constraints/KpiStrip";
 import PriorityBar from "./constraints/PriorityBar";
@@ -303,7 +304,7 @@ export default function Constraints() {
     <OperationsPageShell
       eyebrow={activeProject?.name || findById(projects, projectId)?.name || "All Projects"}
       title="Constraint Log"
-      subtitle="Track upstream blockers, due dates, priority, mitigation, and the work packages they affect before field execution is held up."
+      subtitle={CONSTRAINTS_COMMAND_SUBTITLE}
       meta={[
         { label: "Total", value: kpis.total },
         { label: "Open", value: openCount, color: openCount > 0 ? "var(--status-warning)" : "var(--status-success)" },

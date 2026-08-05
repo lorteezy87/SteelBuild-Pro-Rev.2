@@ -58,3 +58,11 @@ describe("constraintsPageHelpers", () => {
     expect(bySearch[0].title).toBe("ifc block");
   });
 });
+
+import { CONSTRAINTS_COMMAND_SUBTITLE } from "../constraintsPageHelpers";
+
+describe("constraints command subtitle", () => {
+  it("exposes stable shell subtitle", () => {
+    expect(CONSTRAINTS_COMMAND_SUBTITLE).toContain("upstream blockers");
+  });
+});

@@ -146,3 +146,7 @@ export const EMPTY_ENGINE_SOURCES = {
   drawings: [],
   inspections: [],
 } as const;
+
+
+export const CONSTRAINTS_COMMAND_SUBTITLE =
+  "Track upstream blockers, due dates, priority, mitigation, and the work packages they affect before field execution is held up.";

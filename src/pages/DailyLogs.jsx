@@ -6,7 +6,7 @@ import DailyLogForm from "@/components/fieldops/DailyLogForm";
 import DailyLogsList from "@/components/fieldops/DailyLogsList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
 import { Copy } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -29,12 +29,16 @@ import {
   filterLiveDailyLogs,
   filterDailyLogs,
   computeDailyLogMetrics,
-  DAILY_LOG_DATE_PRESETS,
   pickMostRecentDailyLog,
   buildCopyFromRecentLogSeed,
   DAILY_LOGS_COMMAND_SUBTITLE,
   utcIsoDate,
 } from "./dailyLogs/dailyLogsPageHelpers";
+import {
+  DailyLogsKpiStrip,
+  DailyLogsFilterBar,
+  DailyLogsLoadError,
+} from "./dailyLogs/DailyLogsUi";
 
 import { findById } from "@/pages/shared/findById";
 export default function DailyLogs() {
@@ -188,22 +192,6 @@ export default function DailyLogs() {
 
   const selectedProject = findById(projects, projectId);
 
-  const datePresets = DAILY_LOG_DATE_PRESETS;
-
-  const presetBtnStyle = (active) => ({
-    background: active ? "var(--accent)" : "var(--bg-surface)",
-    color: active ? "white" : "var(--text-secondary)",
-    border: "none",
-    borderRadius: "var(--radius-btn)",
-    padding: "6px 12px",
-    fontFamily: "var(--font-mono)",
-    fontSize: "10px",
-    fontWeight: 700,
-    cursor: "pointer",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  });
-
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
@@ -225,44 +213,14 @@ export default function DailyLogs() {
         )}
       </CommandBar>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
-        <KpiTile compact label="Total Man-Hours"  value={metrics.totalManHours.toLocaleString()} color="var(--accent)" />
-        <KpiTile compact label="Avg Crew Size"    value={metrics.avgCrewSize.toFixed(1)}          color="var(--phase-fabrication)" />
-        <KpiTile compact label="Safety Incidents" value={metrics.safetyIncidents}                 color="var(--status-error)" />
-        <KpiTile compact label="Delay Hours"      value={metrics.delayHours}                      color="var(--status-warning)" />
-      </div>
+      <DailyLogsKpiStrip metrics={metrics} />
 
-      {/* Search and Date Range Filters */}
-      <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-        <input
-          type="text"
-          placeholder="Search logs..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{
-            flex: "1 1 200px",
-            background: "var(--bg-surface)",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 12px",
-            fontFamily: "var(--font-mono)",
-            fontSize: "12px",
-            outline: "none",
-          }}
-        />
-        <div style={{ display: "flex", gap: "4px" }}>
-          {datePresets.map((p) => (
-            <button
-              key={p.key}
-              onClick={() => setDateRange(p.key)}
-              style={presetBtnStyle(dateRange === p.key)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <DailyLogsFilterBar
+        searchTerm={searchTerm}
+        dateRange={dateRange}
+        onSearchTerm={setSearchTerm}
+        onDateRange={setDateRange}
+      />
 
       {/* Form */}
       {showForm && (
@@ -279,18 +237,10 @@ export default function DailyLogs() {
       {isLoading ? (
         <LoadingSkeleton variant="table" rows={4} />
       ) : isError ? (
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
-        }}>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-            Couldn’t load daily logs
-          </p>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
-            {toUserErrorMessage(error, "Something went wrong. Try again.")}
-          </p>
-          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
-        </div>
+        <DailyLogsLoadError
+          errorMessage={toUserErrorMessage(error, "Something went wrong. Try again.")}
+          onRetry={() => refetch()}
+        />
       ) : (
         <DailyLogsList
           logs={filteredLogs}
