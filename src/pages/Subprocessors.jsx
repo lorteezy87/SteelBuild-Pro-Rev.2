@@ -30,14 +30,8 @@ import {
   LEGAL_C,
   LEGAL_F,
 } from "./legal/LegalShell";
+import { LEGAL_CONTACT, LEGAL_LAST_UPDATED } from "./legal/legalMeta";
 
-
-const CONTACT = {
-  privacy: "privacy@steelbuild-pro.com",
-  support: "support@steelbuild-pro.com",
-};
-
-const LAST_UPDATED = "July 1, 2026";
 
 /* The current set of sub-processors. Purpose is the reason customer data may be
    handled; Location/Region is where the provider operates + stores data. */
@@ -79,6 +73,9 @@ const SUBPROCESSORS = [
     region: "US · no-training API terms",
   },
 ];
+
+const CONTACT = LEGAL_CONTACT;
+const LAST_UPDATED = LEGAL_LAST_UPDATED.subprocessors;
 
 export default function Subprocessors() {
   useLegalPageBackground();

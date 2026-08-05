@@ -22,15 +22,11 @@ import {
   legalStrong,
   legalInlineLink,
 } from "./legal/LegalShell";
+import { LEGAL_CONTACT, LEGAL_LAST_UPDATED } from "./legal/legalMeta";
 
 
-const CONTACT = {
-  privacy: "privacy@steelbuild-pro.com",
-  support: "support@steelbuild-pro.com",
-  security: "security@steelbuild-pro.com",
-};
-
-const LAST_UPDATED = "June 22, 2026";
+const CONTACT = LEGAL_CONTACT;
+const LAST_UPDATED = LEGAL_LAST_UPDATED.privacy;
 
 export default function Privacy() {
   useLegalPageBackground();
