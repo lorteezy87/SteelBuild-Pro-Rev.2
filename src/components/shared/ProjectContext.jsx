@@ -2,6 +2,7 @@ import { createContext, useState, useEffect, useContext, useMemo, useRef } from 
 import { entities } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 import { subscribeProjectUpdated } from "@/services/projectUpdateEvents";
+import { isLiveProject, sortProjects } from "./projectContextHelpers";
 
 export const ProjectContext = createContext({
   activeProject: null,
@@ -28,14 +29,6 @@ export const ProjectContext = createContext({
 
 const PROJECTS_CACHE_KEY = "sbp_projects_cache";
 
-/** Live (non-archived) projects only — never seed the switcher from tombstones. */
-function isLiveProject(project) {
-  return Boolean(project) && project.is_deleted !== true;
-}
-
-function sortProjects(list) {
-  return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-}
 
 function readProjectsCache() {
   try {

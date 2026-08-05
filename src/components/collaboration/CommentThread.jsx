@@ -5,6 +5,7 @@ import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { AuthContext } from "@/lib/AuthContext";
 import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
+import { formatRelative } from "./commentThreadHelpers";
 
 // Comment-resolution status (migration 073). Cycle matches the markup
 // status (3a) palette so resolution semantics read the same across
@@ -427,18 +428,3 @@ function renderBodyWithMentions(body) {
   });
 }
 
-function formatRelative(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const now = Date.now();
-  const diffMs = now - d.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return "just now";
-  const min = Math.floor(diffSec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  return d.toLocaleDateString();
-}
