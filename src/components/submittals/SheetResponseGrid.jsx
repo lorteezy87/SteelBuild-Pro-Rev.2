@@ -1,4 +1,11 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
+import {
+  buildSheetResponseInitialRows,
+  RESPONSE_OPTIONS,
+  RESPONSE_COLORS,
+  thStyle,
+  tdStyle,
+} from "./sheetResponseGridHelpers";
 
 /**
  * SheetResponseGrid — per-sheet response entry when a submittal round
@@ -16,22 +23,6 @@ import React, { useState, useMemo, useCallback, useRef } from "react";
  *   onSave             — callback(responses[]) with {drawing_id, sheet_number, response_status, reviewer_comment}
  *   onClose            — void callback
  */
-
-const RESPONSE_OPTIONS = [
-  "No Exception",
-  "Approved as Noted",
-  "Revise and Resubmit",
-  "Rejected",
-  "See Comments",
-];
-
-const RESPONSE_COLORS = {
-  "No Exception":        { color: "var(--status-success)", bg: "var(--success-muted)" },
-  "Approved as Noted":   { color: "var(--status-success-bright)", bg: "color-mix(in srgb, var(--status-success-bright) 15%, transparent)" },
-  "Revise and Resubmit": { color: "var(--status-review)", bg: "var(--status-review-muted)" },
-  "Rejected":            { color: "var(--status-error)", bg: "var(--danger-muted)" },
-  "See Comments":        { color: "var(--status-info)", bg: "var(--info-muted)" },
-};
 
 export default function SheetResponseGrid({
   round,
@@ -80,29 +71,6 @@ export default function SheetResponseGrid({
     } finally {
       saveInFlight.current = false;
     }
-  };
-
-  // Table styles
-  const thStyle = {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 700,
-    color: "var(--text-muted)",
-    letterSpacing: "0.10em",
-    textTransform: "uppercase",
-    padding: "8px 10px",
-    textAlign: "left",
-    borderBottom: "1px solid var(--divider)",
-    background: "var(--bg-surface-low)",
-    position: "sticky",
-    top: 0,
-    zIndex: 2,
-  };
-
-  const tdStyle = {
-    padding: "6px 10px",
-    borderBottom: "1px solid var(--divider)",
-    verticalAlign: "middle",
   };
 
   return (

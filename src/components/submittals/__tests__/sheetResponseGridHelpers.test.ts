@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildSheetResponseInitialRows } from "../sheetResponseGridHelpers";
+import {
+  buildSheetResponseInitialRows,
+  RESPONSE_OPTIONS,
+  RESPONSE_COLORS,
+  thStyle,
+  tdStyle,
+} from "../sheetResponseGridHelpers";
 
 describe("buildSheetResponseInitialRows", () => {
   it("maps drawings with existing responses", () => {
@@ -32,5 +38,14 @@ describe("buildSheetResponseInitialRows", () => {
 
   it("handles null inputs", () => {
     expect(buildSheetResponseInitialRows(null, null)).toEqual([]);
+  });
+});
+
+describe("sheet response chrome", () => {
+  it("options and colors", () => {
+    expect(RESPONSE_OPTIONS).toContain("No Exception");
+    expect(RESPONSE_COLORS.Rejected.color).toBe("var(--status-error)");
+    expect(thStyle.position).toBe("sticky");
+    expect(tdStyle.verticalAlign).toBe("middle");
   });
 });
