@@ -22,25 +22,13 @@ import {
   isCurrentUser,
   isProjectAdminRole,
 } from "@/lib/projectMembers";
-import { formatActivityEvent } from "./projectMembersHelpers";
+import {
+  formatActivityEvent,
+  inputStyle,
+  cellLabelStyle,
+} from "./projectMembersHelpers";
+export { inputStyle, cellLabelStyle };
 
-export const inputStyle = {
-  background: "var(--bg-surface-low)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 8,
-  padding: "7px 10px",
-  fontSize: 12,
-  color: "var(--text-primary)",
-  outline: "none",
-  fontFamily: "var(--font-body)",
-};
-
-export const cellLabelStyle = {
-  color: "var(--text-primary)",
-  fontWeight: 700,
-  fontSize: 11,
-  letterSpacing: "0.05em",
-};
 
 export function MembersCommandBar({ memberCount, subtitle, onRefresh, refreshDisabled }) {
   return (

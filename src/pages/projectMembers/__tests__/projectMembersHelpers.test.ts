@@ -13,6 +13,8 @@ import {
   commandBarSubtitle,
   bulkUpdateSuccessMessage,
   removeMemberDescription,
+  inputStyle,
+  cellLabelStyle,
 } from "../projectMembersHelpers";
 
 describe("projectMembersHelpers", () => {
@@ -60,3 +62,11 @@ describe("projectMembersHelpers", () => {
     expect(removeMemberDescription({ email: "a@x.com", role: "viewer" })).toContain("Remove a@x.com");
   });
 });
+
+describe("member form styles", () => {
+  it("input and cell label chrome", () => {
+    expect(inputStyle.borderRadius).toBe(8);
+    expect(cellLabelStyle.fontWeight).toBe(700);
+  });
+});
+

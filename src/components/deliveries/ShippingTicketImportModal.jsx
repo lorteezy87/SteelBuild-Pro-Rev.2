@@ -9,10 +9,12 @@ import {
   resolveProjectForTicket,
   commitShippingTicket,
 } from "@/lib/importShippingTicket";
+import {
+  monoStyle as mono,
+  displayStyle as display,
+  AI_ACCENT as AI,
+} from "./shippingTicketImportModalHelpers";
 
-const mono    = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const AI      = "var(--ai-accent, #22D3EE)";
 
 /**
  * Multi-file shipping ticket import wizard:

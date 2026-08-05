@@ -29,21 +29,10 @@ import {
   primaryBtnStyle,
   secondaryBtnStyle,
   iconBtnStyle,
+  PROVIDERS,
+  SYNC_FREQUENCIES,
 } from "./documentStorageSettingsStyleHelpers";
 
-// ── Provider config ───────────────────────────────────────────────────
-const PROVIDERS = [
-  { value: "sharepoint", label: "SharePoint", enabled: true },
-  { value: "onedrive",   label: "OneDrive",   enabled: true },
-  { value: "google_drive", label: "Google Drive", enabled: false, tooltip: "Coming soon" },
-  { value: "dropbox",    label: "Dropbox",     enabled: false, tooltip: "Coming soon" },
-];
-
-const SYNC_FREQUENCIES = [
-  { value: "manual",  label: "Manual" },
-  { value: "hourly",  label: "Hourly" },
-  { value: "daily",   label: "Daily" },
-];
 
 // ── Sync status badge ─────────────────────────────────────────────────
 export default function DocumentStorageSettings({ projectId }) {

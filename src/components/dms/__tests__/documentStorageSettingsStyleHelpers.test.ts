@@ -5,6 +5,8 @@ import {
   primaryBtnStyle,
   secondaryBtnStyle,
   iconBtnStyle,
+  PROVIDERS,
+  SYNC_FREQUENCIES,
 } from "../documentStorageSettingsStyleHelpers";
 
 describe("documentStorageSettingsStyleHelpers", () => {
@@ -16,3 +18,11 @@ describe("documentStorageSettingsStyleHelpers", () => {
     expect(iconBtnStyle.height).toBe(30);
   });
 });
+
+describe("PROVIDERS / SYNC_FREQUENCIES", () => {
+  it("lists enabled cloud providers and frequencies", () => {
+    expect(PROVIDERS.some((p) => p.value === "sharepoint" && p.enabled)).toBe(true);
+    expect(SYNC_FREQUENCIES.map((f) => f.value)).toContain("daily");
+  });
+});
+

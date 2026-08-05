@@ -150,3 +150,22 @@ export function removeMemberDescription(
   if (!removeTarget) return "";
   return `Remove ${removeTarget.email || removeTarget.user_id} (${formatRole(removeTarget.role)}) from this project? They will lose all access immediately. This cannot be undone, but you can re-add them.`;
 }
+
+export const inputStyle = {
+  background: "var(--bg-surface-low)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 8,
+  padding: "7px 10px",
+  fontSize: 12,
+  color: "var(--text-primary)",
+  outline: "none",
+  fontFamily: "var(--font-body)",
+};
+
+export const cellLabelStyle = {
+  color: "var(--text-primary)",
+  fontWeight: 700,
+  fontSize: 11,
+  letterSpacing: "0.05em",
+};
+

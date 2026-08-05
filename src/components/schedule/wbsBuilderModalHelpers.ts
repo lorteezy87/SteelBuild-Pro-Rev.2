@@ -89,3 +89,57 @@ export function formatPretty(iso) {
   } catch { return iso; }
 }
 
+export const monoStyle = { fontFamily: "var(--font-mono)" } as const;
+export const displayStyle = {
+  fontFamily: "'Space Grotesk', var(--font-display)",
+} as const;
+export const AI_ACCENT = "var(--ai-accent, var(--status-info))";
+
+/** Quick-pick scope starters for the WBS builder input step. */
+export const WBS_EXAMPLES = [
+  {
+    label: "Bid-style base bid",
+    text:  [
+      "1. SC1 columns per P-S1.010 and P-S1.011",
+      "2. W27x84 beams per P-S1.012 and P-S1.013",
+      "3. Canopy per P-S1.012 and P-S1.013 ref detail 308",
+      "4. Ledger at canopies ref detail 305",
+      "5. Elevator spreader beams per P-S1.015",
+      "6. Elevator spreader columns full height per keynote 107/P-S1.015",
+      "7. Elevator hoist beams per 4/P-S1.015",
+      "8. North Stair A and B per PA6.001A and PA6.003 ref P-S6.001",
+      "8a. Railing per details on PA8.005A",
+      "9. Moment Frame - Grid Line A per detail S1/P-S2.005",
+      "10. X-Brace at North Bay per detail 301/P-S2.006",
+      "11. Bollards per detail 5/PA8.002",
+      "12. Bike Racks per keynote 7/PA1.101A",
+      "13. Shear Studs - Level 2 Composite Beams per detail 704/P-S3.005",
+      "14. Floor Deck - Level 2 Composite Deck per detail 701/P-S3.003",
+      "15. RTU Dunnage Framing - Roof Level per detail 603/P-S5.004",
+    ].join("\n"),
+  },
+  {
+    label: "Two-building school (bid-style)",
+    text:  [
+      "1. Anchor Bolts - Bldg. 1 & 2",
+      "2. Embed Plates - Bldg. 1",
+      "3. Embed Plates - Bldg. 2",
+      "4. Main Steel Frame - Bldg. 1",
+      "5. Main Steel Frame - Bldg. 2",
+      "6. North Stair A - Bldg. 1 ref P-S6.001",
+      "6a. Railing per PA8.005A",
+      "7. South Stair B - Bldg. 2 ref P-S6.001",
+      "7a. Railing per PA8.005A",
+      "8. Site Misc - Bldg. 1 & 2",
+    ].join("\n"),
+  },
+  {
+    label: "Short category list",
+    text:  "Anchor Bolts - Bldg. 1\nPanel Embeds - Bldg. 1\nMain Steel - Bldg. 1\nStairs - Bldg. 1\nRailings - Bldg. 1\nJoists / Deck - Bldg. 1\nLadders - Bldg. 1\nSite Misc - Bldg. 1",
+  },
+  {
+    label: "Canopy retrofit",
+    text:  "1. Entry Canopy\n2. Railings\n3. Misc Steel",
+  },
+] as const;
+

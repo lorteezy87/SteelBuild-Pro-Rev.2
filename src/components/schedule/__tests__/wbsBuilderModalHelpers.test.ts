@@ -6,6 +6,9 @@ import {
   stripPhaseVerb,
   daysSpan,
   formatPretty,
+  WBS_EXAMPLES,
+  AI_ACCENT,
+  monoStyle,
 } from "../wbsBuilderModalHelpers";
 
 describe("groupWbsTasksByPhase", () => {
@@ -64,3 +67,12 @@ describe("stripPhaseVerb / formatPretty", () => {
     expect(formatPretty(null as any)).toBe("—");
   });
 });
+
+describe("WBS_EXAMPLES / chrome", () => {
+  it("has bid-style example and mono style", () => {
+    expect(WBS_EXAMPLES.some((e) => e.label.includes("Bid-style"))).toBe(true);
+    expect(monoStyle.fontFamily).toContain("mono");
+    expect(AI_ACCENT).toContain("ai-accent");
+  });
+});
+

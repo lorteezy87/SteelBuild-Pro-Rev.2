@@ -19,7 +19,13 @@ import { useDrawingRegister } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 import { attachableRegisterRows, resolveTransmittalDisplay } from "./docControl.derive";
-import { buildSheetOptions, directionTone, formForTransmittal as formForTransmittalHelper, headerPatch } from "./transmittalLogPanelHelpers";
+import {
+  buildSheetOptions,
+  directionTone,
+  formForTransmittal as formForTransmittalHelper,
+  headerPatch,
+  EMPTY_TRANSMITTAL_FORM,
+} from "./transmittalLogPanelHelpers";
 
 interface FormState {
   transmittal_number: string;
@@ -39,14 +45,7 @@ interface SheetOption {
   historical: boolean;
 }
 
-const EMPTY_FORM: FormState = {
-  transmittal_number: "",
-  direction: "incoming",
-  party: "",
-  subject: "",
-  date: "",
-  notes: "",
-};
+const EMPTY_FORM: FormState = { ...EMPTY_TRANSMITTAL_FORM };
 
 interface TransmittalEditorProps {
   title: string;

@@ -93,3 +93,13 @@ export function headerPatch(form: TransmittalFormState) {
     notes: form.notes.trim() || null,
   };
 }
+
+export const EMPTY_TRANSMITTAL_FORM = {
+  transmittal_number: "",
+  direction: "incoming",
+  party: "",
+  subject: "",
+  date: "",
+  notes: "",
+} as const;
+
