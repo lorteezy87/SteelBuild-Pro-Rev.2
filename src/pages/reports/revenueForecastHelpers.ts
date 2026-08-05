@@ -88,3 +88,33 @@ export function buildRevenueForecastSeries(
   }));
   return [...hist, ...fcast];
 }
+
+export type HistoryPoint = {
+  label: string;
+  monthKey: string;
+  value: number;
+};
+
+export function buildRevenueHistorySeries(
+  histKeys: string[],
+  monthlyBilled: Record<string, number>,
+): HistoryPoint[] {
+  return (histKeys || []).map((k) => ({
+    label: monthLabel(k),
+    monthKey: k,
+    value: monthlyBilled[k] || 0,
+  }));
+}
+
+export function sumSeriesValues(data: Array<{ value?: number }>): number {
+  return (data || []).reduce((s, r) => s + (Number(r.value) || 0), 0);
+}
+
+export function peakSeriesPoint<T extends { value?: number; label?: string }>(
+  data: T[],
+): T | { value: number; label: string } {
+  const rows = data || [];
+  if (!rows.length) return { value: 0, label: "—" };
+  return rows.reduce((mx, r) => ((Number(r.value) || 0) > (Number(mx.value) || 0) ? r : mx), rows[0]);
+}
+

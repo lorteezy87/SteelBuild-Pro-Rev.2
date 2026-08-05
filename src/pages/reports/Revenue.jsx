@@ -22,27 +22,13 @@ import ReportShell from "./ReportShell";
 import { LineChartSVG } from "./charts";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
-import { formatLocalDate } from "@/utils/dates";
-
-function monthKey(date) {
-  const d = date instanceof Date ? date : new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function monthLabel(key) {
-  const [y, m] = key.split("-").map(Number);
-  return formatLocalDate(y, m - 1, 1, "en-US", { month: "short", year: "2-digit" });
-}
-
-function lastNMonthKeys(n) {
-  const out = [];
-  const now = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push(monthKey(d));
-  }
-  return out;
-}
+import {
+  lastNMonthKeys,
+  bucketMonthlyBilled,
+  buildRevenueHistorySeries,
+  sumSeriesValues,
+  peakSeriesPoint,
+} from "./revenueForecastHelpers";
 
 export default function Revenue() {
   const { data: sov = [] } = useQuery({
@@ -52,28 +38,21 @@ export default function Revenue() {
 
   const monthKeys = useMemo(() => lastNMonthKeys(12), []);
 
-  const monthlyBilled = useMemo(() => {
-    const buckets = Object.fromEntries(monthKeys.map((k) => [k, 0]));
-    // Period delta over Certified rows only — see projectMetrics.js.
-    // Bucket on period_to (the application's billing period close), or
-    // submitted_date when period_to is missing.
-    for (const d of certifiedPeriodDeltas(sov)) {
-      const dateSrc = d.periodTo || d.submittedDate;
-      if (!dateSrc) continue;
-      const k = monthKey(dateSrc);
-      if (k in buckets) buckets[k] += d.delta;
-    }
-    return buckets;
-  }, [sov, monthKeys]);
+  // Period delta over Certified rows only — see projectMetrics.js.
+  // Bucket on period_to (the application's billing period close), or
+  // submitted_date when period_to is missing.
+  const monthlyBilled = useMemo(
+    () => bucketMonthlyBilled(certifiedPeriodDeltas(sov), monthKeys),
+    [sov, monthKeys],
+  );
 
-  const data = useMemo(() => monthKeys.map((k) => ({
-    label: monthLabel(k),
-    monthKey: k,
-    value: monthlyBilled[k] || 0,
-  })), [monthKeys, monthlyBilled]);
+  const data = useMemo(
+    () => buildRevenueHistorySeries(monthKeys, monthlyBilled),
+    [monthKeys, monthlyBilled],
+  );
 
-  const total = useMemo(() => data.reduce((s, r) => s + r.value, 0), [data]);
-  const peak = useMemo(() => data.reduce((mx, r) => (r.value > mx.value ? r : mx), data[0] || { value: 0, label: "—" }), [data]);
+  const total = useMemo(() => sumSeriesValues(data), [data]);
+  const peak = useMemo(() => peakSeriesPoint(data), [data]);
   const avg = data.length ? total / data.length : 0;
 
   const tableRows = data.map((r, i) => ({ id: r.monthKey, ...r, idx: i }));

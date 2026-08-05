@@ -6,6 +6,9 @@ import {
   bucketMonthlyBilled,
   trailingAverage,
   buildRevenueForecastSeries,
+  buildRevenueHistorySeries,
+  sumSeriesValues,
+  peakSeriesPoint,
 } from "../revenueForecastHelpers";
 
 describe("revenueForecastHelpers", () => {
@@ -32,5 +35,10 @@ describe("revenueForecastHelpers", () => {
     const series = buildRevenueForecastSeries(hist, nextNMonthKeys(1, now), billed, 50);
     expect(series.some((p) => p.forecast)).toBe(true);
     expect(series.filter((p) => !p.forecast)).toHaveLength(3);
+
+    const histSeries = buildRevenueHistorySeries(hist, billed);
+    expect(histSeries).toHaveLength(3);
+    expect(sumSeriesValues(histSeries)).toBe(150);
+    expect(peakSeriesPoint(histSeries).value).toBe(100);
   });
 });

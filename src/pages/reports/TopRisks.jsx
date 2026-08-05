@@ -22,19 +22,14 @@ import {
 } from "./risks/severity";
 import RiskFormModal from "@/components/risks/RiskFormModal";
 
-const MITIGATION_EXCERPT_LEN = 200;
+import { excerptText, buildTopRisksList } from "./topRisksHelpers";
 
-function excerpt(text, maxLen) {
-  if (!text) return null;
-  const trimmed = String(text).trim();
-  if (trimmed.length <= maxLen) return trimmed;
-  return trimmed.slice(0, maxLen).replace(/\s+\S*$/, "") + "…";
-}
+const MITIGATION_EXCERPT_LEN = 200;
 
 function RiskCard({ risk, onEdit, projectLabel }) {
   const color = severityColor(risk.severity);
   const score = risk.score;
-  const mitigationText = excerpt(risk.mitigation_plan, MITIGATION_EXCERPT_LEN);
+  const mitigationText = excerptText(risk.mitigation_plan, MITIGATION_EXCERPT_LEN);
   return (
     <div
       style={{
@@ -255,15 +250,17 @@ export default function TopRisks() {
     [projects]
   );
 
-  const top = useMemo(() => {
-    let list = risks;
-    if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
-    if (activeOnly === "active") list = list.filter(isActiveRisk);
-    return list
-      .map((r) => ({ ...r, score: computeScore(r.probability, r.impact) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
-  }, [risks, projectFilter, activeOnly]);
+  const top = useMemo(
+    () =>
+      buildTopRisksList(risks, {
+        projectFilter,
+        activeOnly,
+        isActiveRisk,
+        scoreOf: (r) => computeScore(r.probability, r.impact),
+        limit: 10,
+      }),
+    [risks, projectFilter, activeOnly],
+  );
 
   return (
     <ReportShell
