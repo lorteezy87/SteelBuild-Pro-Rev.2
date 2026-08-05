@@ -37,20 +37,15 @@ import {
   type ResourceRecord,
   filterResourcesCatalog,
 } from "./resourcesControlCenter.derive";
+import {
+  availabilityTone,
+} from "./resourcesControlCenterHelpers";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const TYPE_FILTERS = ["All", "Person", "Crew", "Labor", "Equipment", "Bay", "Subcontractor", "Material"];
-
-function availabilityTone(av: string): KpiTone {
-  if (av === "Over-Allocated") return "danger";
-  if (av === "Allocated" || av === "Committed") return "warn";
-  if (av === "Available") return "good";
-  if (av === "Partially Available") return "info";
-  return "neutral";
-}
 
 /** Small inline utilization bar — no SVG ring needed, simpler to maintain. */
 function UtilBar({ pct, tone }: { pct: number; tone: KpiTone }) {
