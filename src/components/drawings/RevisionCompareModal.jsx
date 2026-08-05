@@ -32,16 +32,17 @@ import { ensureCurrentRevision } from "@/lib/drawingHub";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
 import {
-import { buildRevisionCompareCandidates } from "./revisionCompareHelpers";
   generateRevisionDiff,
   setDeltaDismissed,
   sortDeltasBySeverity,
 } from "@/lib/revisionSnapshotDiff";
-
-const OLD_TINT = "#FF4D4D";   // removed content
-const NEW_TINT = "#2F81F7";   // added content
-const PDF_PAGE_BACKGROUND = "#fff";
-const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3];
+import {
+  buildRevisionCompareCandidates,
+  OLD_TINT,
+  NEW_TINT,
+  PDF_PAGE_BACKGROUND,
+  ZOOM_STEPS,
+} from "./revisionCompareHelpers";
 
 const mono = "var(--font-mono)";
 

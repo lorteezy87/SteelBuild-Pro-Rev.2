@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildRevisionCompareCandidates } from "../revisionCompareHelpers";
+import {
+  buildRevisionCompareCandidates,
+  OLD_TINT,
+  NEW_TINT,
+  ZOOM_STEPS,
+  PDF_PAGE_BACKGROUND,
+} from "../revisionCompareHelpers";
 
 describe("buildRevisionCompareCandidates", () => {
   it("includes current and non-current history rows", () => {
@@ -19,3 +25,14 @@ describe("buildRevisionCompareCandidates", () => {
     expect(buildRevisionCompareCandidates(null, [])).toEqual([]);
   });
 });
+
+describe("revision compare chrome constants", () => {
+  it("tints and zoom steps", () => {
+    expect(OLD_TINT).toMatch(/^#/);
+    expect(NEW_TINT).toMatch(/^#/);
+    expect(PDF_PAGE_BACKGROUND).toBe("#fff");
+    expect(ZOOM_STEPS).toContain(1);
+    expect(ZOOM_STEPS[0]).toBeLessThan(ZOOM_STEPS[ZOOM_STEPS.length - 1]);
+  });
+});
+

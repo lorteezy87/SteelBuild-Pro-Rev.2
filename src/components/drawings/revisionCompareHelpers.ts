@@ -44,3 +44,8 @@ export function buildRevisionCompareCandidates(
   }
   return list;
 }
+
+export const OLD_TINT = "#FF4D4D"; // removed content
+export const NEW_TINT = "#2F81F7"; // added content
+export const PDF_PAGE_BACKGROUND = "#fff";
+export const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3] as const;
