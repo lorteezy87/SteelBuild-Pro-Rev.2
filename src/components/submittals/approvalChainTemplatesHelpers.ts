@@ -24,3 +24,21 @@ export const APPROVAL_TEMPLATE_MONO = { fontFamily: "var(--font-mono)" } as cons
 export function buildPartySuggestions(bicChoices: readonly string[]): string[] {
   return Array.from(new Set([...bicChoices, "PM", "Fabricator"]));
 }
+
+/** Disabled-aware icon button chrome for template step reorder. */
+export function approvalChainIconBtnStyle(
+  disabled: boolean,
+): Record<string, string | number> {
+  return {
+    display: "inline-flex",
+    background: "none",
+    border: "none",
+    padding: 1,
+    color: disabled
+      ? "var(--text-disabled, var(--text-muted))"
+      : "var(--text-muted)",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.4 : 1,
+  };
+}
+

@@ -8,6 +8,7 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import "@/styles/piece-control-command.css";
 import { buildDrawingIdRecord } from "./wpFormModalHelpers";
 import {
+import { hoursBudgetColor, hoursBudgetPct } from "./workPackageListHelpers";
   PHASE_COLORS,
   STATUS_COLORS,
   STAGE_STYLES,
@@ -274,16 +275,11 @@ function HoursTab({ wp }) {
     { label: "Field", actual: wp.field_hours_actual, budget: wp.field_hours_budget },
   ];
 
-  const color = (a, b) => {
-    if (!b) return "var(--text-muted)";
-    return Number(a || 0) <= Number(b || 0) ? "var(--status-success)" : "var(--status-error)";
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {rows.map((r) => {
-        const pct = r.budget ? Math.min(100, Math.round(((Number(r.actual) || 0) / Number(r.budget)) * 100)) : 0;
-        const c = color(r.actual, r.budget);
+        const pct = hoursBudgetPct(r.actual, r.budget);
+        const c = hoursBudgetColor(r.actual, r.budget);
         return (
           <div key={r.label}>
             <Label text={`${r.label} Hours`} />

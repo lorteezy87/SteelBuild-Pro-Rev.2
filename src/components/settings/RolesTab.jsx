@@ -2,26 +2,23 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
 import { formatLocalDate } from "@/utils/dates";
-import { SETTINGS_LABEL_STYLE as labelStyle } from './settingsTabStyleHelpers';
+import {
+  SETTINGS_LABEL_STYLE as labelStyle,
+  PERM_BADGE_CONFIG,
+  ROLE_DESCRIPTIONS,
+  permBadgeStyle,
+} from './settingsTabStyleHelpers';
 
 const PermBadge = ({ type }) => {
-  const config = {
-    create: { color: 'var(--status-success)', text: '✓ Create' },
-    read: { color: 'var(--accent)', text: '✓ Read' },
-    update: { color: 'var(--status-warning)', text: '✓ Update' },
-    delete: { color: 'var(--status-error)', text: '✗ Delete' },
-  }[type];
+  const config = PERM_BADGE_CONFIG[type];
   return (
-    <span style={{ display: 'inline-block', background: config.color + '22', border: `1px solid ${config.color}44`, color: config.color, borderRadius: 4, padding: '3px 8px', fontSize: 10, fontWeight: 600, marginRight: 6, marginBottom: 4 }}>
+    <span style={permBadgeStyle(config.color)}>
       {config.text}
     </span>
   );
 };
 
-const roleDescriptions = {
-  admin: { title: 'Administrator', description: 'Full access to all features and settings', permissions: ['create', 'read', 'update', 'delete'] },
-  user: { title: 'User', description: 'Access to project features and documents', permissions: ['create', 'read', 'update'] },
-};
+const roleDescriptions = ROLE_DESCRIPTIONS;
 
 export default function RolesTab({ user }) {
   const { data: allUsers = [] } = useQuery({

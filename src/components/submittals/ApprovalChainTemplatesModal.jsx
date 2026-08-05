@@ -20,6 +20,7 @@ import {
   normalizeCustomApprovalTemplates,
   APPROVAL_TEMPLATE_MONO as mono,
   buildPartySuggestions,
+  approvalChainIconBtnStyle,
 } from "./approvalChainTemplatesHelpers";
 import { BIC_CHOICES } from "@/pages/submittals/format";
 
@@ -85,11 +86,7 @@ function StepEditor({ steps, setSteps }) {
   );
 }
 
-const iconBtn = (disabled) => ({
-  display: "inline-flex", background: "none", border: "none", padding: 1,
-  color: disabled ? "var(--text-disabled, var(--text-muted))" : "var(--text-muted)",
-  cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1,
-});
+const iconBtn = approvalChainIconBtnStyle;
 
 export default function ApprovalChainTemplatesModal({ open, onClose }) {
   const { activeProject, updateActiveProject } = useProjectContext();

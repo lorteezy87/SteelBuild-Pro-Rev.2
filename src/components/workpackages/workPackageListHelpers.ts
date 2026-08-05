@@ -26,3 +26,24 @@ export const STAGE_STYLES: Record<string, { bg: string; color: string }> = {
   IFC: { bg: "rgba(52,211,153,0.15)", color: "var(--status-success)" },
   Released: { bg: "rgba(168,240,203,0.12)", color: "var(--status-success)" },
 };
+
+/** Color for actual vs budget hours (under = success, over = error). */
+export function hoursBudgetColor(
+  actual: number | string | null | undefined,
+  budget: number | string | null | undefined,
+): string {
+  if (!budget) return "var(--text-muted)";
+  return Number(actual || 0) <= Number(budget || 0)
+    ? "var(--status-success)"
+    : "var(--status-error)";
+}
+
+/** Percent of budget consumed, capped at 100. */
+export function hoursBudgetPct(
+  actual: number | string | null | undefined,
+  budget: number | string | null | undefined,
+): number {
+  if (!budget) return 0;
+  return Math.min(100, Math.round(((Number(actual) || 0) / Number(budget)) * 100));
+}
+

@@ -6,6 +6,8 @@ import {
   PHASE_COLORS,
   STATUS_COLORS,
   STAGE_STYLES,
+  hoursBudgetColor,
+  hoursBudgetPct,
 } from "./workPackageListHelpers";
 
 const formatDate = (d) =>
@@ -94,14 +96,9 @@ export default function WorkPackageList({
     );
   }
 
-  const hoursColor = (actual, budget) => {
-    if (!budget) return "var(--text-muted)";
-    return Number(actual || 0) <= Number(budget || 0) ? "var(--status-success)" : "var(--status-error)";
-  };
-
   const renderHours = (label, actual, budget) => {
-    const pct = budget ? Math.min(100, Math.round(((Number(actual) || 0) / Number(budget)) * 100)) : 0;
-    const color = hoursColor(actual, budget);
+    const pct = hoursBudgetPct(actual, budget);
+    const color = hoursBudgetColor(actual, budget);
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ flex: 1, height: 6, background: "var(--bg-surface-high)", borderRadius: 3 }}>
