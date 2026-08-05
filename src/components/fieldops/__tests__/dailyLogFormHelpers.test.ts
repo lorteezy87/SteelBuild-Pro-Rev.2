@@ -8,6 +8,8 @@ import {
   buildActionItemOptions,
   buildDeliveryOptions,
   buildRfiOptions,
+  inputStyle,
+  labelStyle,
 } from "../dailyLogFormHelpers";
 
 describe("asArray / asObject", () => {
@@ -41,5 +43,14 @@ describe("link options", () => {
     expect(buildActionItemOptions([{ id: "1", title: "Fix bolt" }])[0].label).toBe("Fix bolt");
     expect(buildDeliveryOptions([{ id: "2", delivery_number: "D-1" }])[0].label).toBe("D-1");
     expect(buildRfiOptions([{ id: "3", rfi_number: "RFI-1", title: "Gap" }])[0].sublabel).toBe("Gap");
+  });
+});
+
+
+describe("dailyLogForm styles", () => {
+  it("input and label chrome", () => {
+    expect(inputStyle.fontSize).toBe(12);
+    expect(labelStyle.fontSize).toBe("9px");
+    expect(labelStyle.textTransform).toBe("uppercase");
   });
 });

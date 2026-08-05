@@ -39,30 +39,9 @@ import {
   buildActionItemOptions,
   buildDeliveryOptions,
   buildRfiOptions,
+  inputStyle,
+  labelStyle,
 } from "./dailyLogFormHelpers";
-
-const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "8px",
-  padding: "8px 12px",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "9px",
-  color: "var(--text-muted)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  display: "block",
-  marginBottom: "4px",
-};
 
 async function geocodeWithFallback(address) {
   if (!address) return null;
