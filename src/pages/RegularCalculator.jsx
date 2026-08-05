@@ -40,36 +40,16 @@ import CalcKeypad from "@/components/calculators/CalcKeypad";
 import CalcKey from "@/components/calculators/CalcKey";
 import CalcTape from "@/components/calculators/CalcTape";
 import useCalcTape from "@/components/calculators/useCalcTape";
+import {
+  OPS,
+  applyOp,
+  formatNumber,
+  computeDisplay,
+  computeAux,
+  parseEntryString,
+} from "./regularCalculator/regularCalculatorHelpers";
 
 const mono = { fontFamily: "var(--font-mono)" };
-
-const OPS = { ADD: "+", SUB: "−", MUL: "×", DIV: "÷" };
-
-function applyOp(a, op, b) {
-  switch (op) {
-    case OPS.ADD: return a + b;
-    case OPS.SUB: return a - b;
-    case OPS.MUL: return a * b;
-    case OPS.DIV: return b === 0 ? null : a / b;
-    default:      return b;
-  }
-}
-
-// Format with up to 12 significant digits, strip trailing zeros, and
-// localise thousands separators on the integer half so 1000000 reads
-// as 1,000,000 rather than 1e6.
-function formatNumber(n) {
-  if (!Number.isFinite(n)) return "—";
-  // Avoid scientific notation for medium-sized numbers; only fall back
-  // to it when the magnitude is genuinely outside what a fixed display
-  // can carry.
-  const abs = Math.abs(n);
-  if (abs !== 0 && (abs >= 1e15 || abs < 1e-9)) return n.toExponential(6);
-  const fixed = Number(n.toFixed(10)).toString();
-  const [intPart, frac] = fixed.split(".");
-  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return frac ? `${grouped}.${frac}` : grouped;
-}
 
 export default function RegularCalculator() {
   const [accum, setAccum] = useState(0);
@@ -82,25 +62,13 @@ export default function RegularCalculator() {
 
   useEffect(() => { rootRef.current?.focus(); }, []);
 
-  const display = useMemo(() => {
-    if (entry !== "") return entry;
-    return formatNumber(accum);
-  }, [entry, accum]);
+  const display = useMemo(() => computeDisplay(entry, accum), [entry, accum]);
 
   // Secondary expression line on the LCD: the pending operation when one
   // is in flight, or an "ANS" marker once a result is committed.
-  const aux = useMemo(() => {
-    if (pendingOp) return `${formatNumber(accum)} ${pendingOp}`;
-    if (entry === "" && accum !== 0) return "ANS";
-    return "";
-  }, [pendingOp, accum, entry]);
+  const aux = useMemo(() => computeAux(pendingOp, accum, entry), [pendingOp, accum, entry]);
 
-  const parseEntry = () => {
-    const s = entry.trim();
-    if (!s) return null;
-    const n = Number(s);
-    return Number.isFinite(n) ? n : null;
-  };
+  const parseEntry = () => parseEntryString(entry);
 
   // Push a completed calculation onto the persistent tape.
   const recordTape = (a, op, b, result) => {

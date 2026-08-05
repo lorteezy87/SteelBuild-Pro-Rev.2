@@ -41,6 +41,8 @@ import {
   formatCountLabel,
   isProjectFormReady,
   nextProjectFormWithField,
+  updateTeamRowAt,
+  removeTeamRowAt,
 } from "./onboarding/onboardingPageHelpers";
 import {
   TextField,
@@ -146,13 +148,11 @@ export default function Onboarding() {
   }
 
   function updateTeamRow(index, field, value) {
-    setTeamRows((rows) => rows.map((row, rowIndex) => (
-      rowIndex === index ? { ...row, [field]: value } : row
-    )));
+    setTeamRows((rows) => updateTeamRowAt(rows, index, field, value));
   }
 
   function removeTeamRow(index) {
-    setTeamRows((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
+    setTeamRows((rows) => removeTeamRowAt(rows, index));
   }
 
   function handleTargetChange(nextTarget) {

@@ -446,3 +446,77 @@ describe("buildScheduleSummaryCards / buildResourceSidebarGroups", () => {
     });
   });
 });
+
+
+import {
+  projectDragWindow,
+  computeDailyLoadHours,
+  buildDragTooltipText,
+  buildAutoHoursForDrop,
+  snapDropWindow,
+} from "../resourceSchedulingHelpers";
+
+describe("drag date projection", () => {
+  const addDays = (d: Date, n: number) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+  };
+  const snapToMonday = (d: Date) => {
+    const x = new Date(d);
+    const day = x.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    x.setDate(x.getDate() + diff);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+
+  it("projects window and tooltip", () => {
+    const start = new Date("2026-08-03T00:00:00");
+    const { newStart, durationDays } = projectDragWindow({
+      clientX: 100,
+      timelineLeft: 0,
+      scrollLeft: 0,
+      pxPerDay: 10,
+      timelineStart: start,
+      durationMs: 3 * 86400000,
+      addDays,
+    });
+    expect(durationDays).toBe(3);
+    expect(newStart.getDate()).toBe(13); // +10 days from Aug 3
+    expect(computeDailyLoadHours(30, 3)).toBe("10.0");
+    const tip = buildDragTooltipText({
+      newStart: start,
+      newEnd: addDays(start, 3),
+      durationDays: 3,
+      fmt: () => "Aug 3",
+      dailyLoad: "10.0",
+      totalHrs: 30,
+      isShop: true,
+    });
+    expect(tip.text).toContain("3d");
+    expect(tip.subText).toContain("SHOP");
+  });
+
+  it("auto hours and snap drop", () => {
+    expect(buildAutoHoursForDrop({ phase: "Fabrication", shop_hours_budget: 40 })).toEqual({
+      shop_hours_budget: 40,
+    });
+    expect(buildAutoHoursForDrop({ phase: "Erection", field_hours_budget: 20 })).toEqual({
+      field_hours_budget: 20,
+    });
+    // Monday Aug 3 2026; clientX places +1 day => Tue Aug 4 snap back to Mon Aug 3
+    const start = new Date(2026, 7, 3);
+    const { newStart } = snapDropWindow({
+      clientX: 10,
+      timelineLeft: 0,
+      scrollLeft: 0,
+      pxPerDay: 10,
+      timelineStart: start,
+      durationMs: 86400000,
+      addDays,
+      snapToMonday,
+    });
+    expect(newStart.getDay()).toBe(1);
+  });
+});

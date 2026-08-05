@@ -150,3 +150,46 @@ export function prepareImportRecords(opts: {
 
   return { recordsToCreate, skippedDuplicates };
 }
+
+
+export function buildImportSkipBits(skippedDuplicates: number, skippedCreates: number): string[] {
+  const skipBits: string[] = [];
+  if (skippedDuplicates) skipBits.push(`${skippedDuplicates} duplicate skipped`);
+  if (skippedCreates) skipBits.push(`${skippedCreates} row create failed`);
+  return skipBits;
+}
+
+export function buildImportSkipSuffix(skipBits: string[]): string {
+  return skipBits.length ? `, ${skipBits.join(", ")}` : "";
+}
+
+export type ImportToastKind = "warning" | "success" | "info";
+
+export function buildImportResultToast(opts: {
+  rowsCreated: number;
+  skippedDuplicates: number;
+  skippedCreates: number;
+  label: string;
+}): { kind: ImportToastKind; message: string } {
+  const skipBits = buildImportSkipBits(opts.skippedDuplicates, opts.skippedCreates);
+  const skipSuffix = buildImportSkipSuffix(skipBits);
+  if (opts.rowsCreated > 0 && opts.skippedCreates > 0) {
+    return {
+      kind: "warning",
+      message: `Imported ${opts.rowsCreated} ${opts.label.toLowerCase()}${skipSuffix}`,
+    };
+  }
+  if (opts.rowsCreated > 0) {
+    return {
+      kind: "success",
+      message: `Imported ${opts.rowsCreated} ${opts.label.toLowerCase()}${skipSuffix}`,
+    };
+  }
+  if (opts.skippedDuplicates || opts.skippedCreates) {
+    return {
+      kind: "warning",
+      message: `${skipBits.join(", ") || "rows skipped"}; no new rows imported`,
+    };
+  }
+  return { kind: "info", message: "No rows were imported" };
+}

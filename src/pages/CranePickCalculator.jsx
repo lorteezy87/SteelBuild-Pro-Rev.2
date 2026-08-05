@@ -24,6 +24,9 @@ import "@/components/calculators/calc.css";
 import {
   pickTapeExpr,
   keycapButtonStyle,
+  buildCranePickValidationErrors,
+  computeEffectiveSlingAngle,
+  buildPickSnapshot,
 } from "./cranePickCalculator/cranePickCalculatorHelpers";
 import {
   PICK_TAPE_KEY,
@@ -75,11 +78,16 @@ export default function CranePickCalculator() {
   const cap     = parseFloat(craneCapacity);
 
   const effectiveAngle = useMemo(() => {
-    if (numLegs === 1) return 90; // vertical pick — angle is irrelevant
-    if (angleMode === ANGLE_MODES.HEIGHT_SPAN) {
-      return angleFromHeightSpan(parseFloat(hspanH), parseFloat(hspanS));
-    }
-    return parseFloat(angleDeg);
+    // vertical pick — angle is irrelevant (numLegs === 1 → 90°)
+    return computeEffectiveSlingAngle({
+      numLegs,
+      angleMode,
+      heightSpanMode: ANGLE_MODES.HEIGHT_SPAN,
+      angleDeg,
+      hspanH,
+      hspanS,
+      angleFromHeightSpan,
+    });
   }, [angleMode, angleDeg, hspanH, hspanS, numLegs]);
 
   const totalLoad = useMemo(
@@ -106,26 +114,19 @@ export default function CranePickCalculator() {
   // ── Input validation ───────────────────────────────────────
   // Collect every failure upfront so the user sees a single "fix
   // these" list rather than whack-a-mole errors as fields clear.
-  const errors = useMemo(() => {
-    const e = [];
-    if (pieceWeight === "") {
-      e.push("Enter piece weight.");
-    } else if (!(piece > 0)) {
-      e.push("Piece weight must be a positive number.");
-    }
-    if (rigging < 0) e.push("Rigging weight cannot be negative.");
-    if (craneCapacity === "") {
-      e.push("Enter the crane's rated capacity at the planned radius.");
-    } else if (!(cap > 0)) {
-      e.push("Crane capacity must be a positive number.");
-    }
-    if (numLegs !== 1) {
-      if (!(effectiveAngle > 0 && effectiveAngle <= 90)) {
-        e.push("Sling angle must be > 0° and ≤ 90°.");
-      }
-    }
-    return e;
-  }, [pieceWeight, piece, rigging, craneCapacity, cap, numLegs, effectiveAngle]);
+  const errors = useMemo(
+    () =>
+      buildCranePickValidationErrors({
+        pieceWeight,
+        piece,
+        rigging,
+        craneCapacity,
+        cap,
+        numLegs,
+        effectiveAngle,
+      }),
+    [pieceWeight, piece, rigging, craneCapacity, cap, numLegs, effectiveAngle],
+  );
 
   const hasValidResults = errors.length === 0
     && Number.isFinite(totalLoad)
@@ -154,13 +155,25 @@ export default function CranePickCalculator() {
 
   // Build a self-contained snapshot of the current pick for the summary modal
   // AND the Pick-History tape. Pure data — derives nothing new from the math.
-  const buildSnapshot = () => ({
-    pieceWeight: piece, riggingWeight: rigging, totalLoad,
-    numLegs, angleDegrees: effectiveAngle, laf, tensionPerLeg,
-    craneCapacity: cap, utilization,
-    capacityStatus, angleStatus, warnings,
-    craneModel, boomLength, workingRadius, counterweight,
-  });
+  const buildSnapshot = () =>
+    buildPickSnapshot({
+      piece,
+      rigging,
+      totalLoad,
+      numLegs,
+      effectiveAngle,
+      laf,
+      tensionPerLeg,
+      cap,
+      utilization,
+      capacityStatus,
+      angleStatus,
+      craneModel,
+      boomLength,
+      workingRadius,
+      counterweight,
+      warnings,
+    });
 
   // Generate Pick Summary — open the modal AND record the pick on the
   // persisted history tape so a planner can recall earlier picks.

@@ -669,3 +669,80 @@ export function buildResourceSidebarGroups(opts: {
     return { type, resources };
   }).filter((group): group is ResourceSidebarGroup => Boolean(group));
 }
+
+
+/** Project new start/end from timeline pixel position + preserved duration. */
+export function projectDragWindow(opts: {
+  clientX: number;
+  timelineLeft: number;
+  scrollLeft: number;
+  pxPerDay: number;
+  timelineStart: Date;
+  durationMs: number;
+  addDays: (date: Date, n: number) => Date;
+}): { newStart: Date; newEnd: Date; durationDays: number; daysIn: number } {
+  const relX = opts.clientX - opts.timelineLeft + opts.scrollLeft;
+  const daysIn = relX / opts.pxPerDay;
+  const newStart = opts.addDays(opts.timelineStart, Math.round(daysIn));
+  const newEnd = new Date(newStart.getTime() + opts.durationMs);
+  const durationDays = Math.max(1, Math.round(opts.durationMs / 86400000));
+  return { newStart, newEnd, durationDays, daysIn };
+}
+
+export function computeDailyLoadHours(
+  totalHrs: number,
+  durationDays: number,
+): string | null {
+  if (!(totalHrs > 0) || !(durationDays > 0)) return null;
+  return (totalHrs / durationDays).toFixed(1);
+}
+
+export function buildDragTooltipText(opts: {
+  newStart: Date;
+  newEnd: Date;
+  durationDays: number;
+  fmt: (d: Date) => string;
+  dailyLoad: string | null;
+  totalHrs: number;
+  isShop: boolean;
+}): { text: string; subText: string | null } {
+  return {
+    text: `${opts.fmt(opts.newStart)} → ${opts.fmt(opts.newEnd)} · ${opts.durationDays}d`,
+    subText: opts.dailyLoad
+      ? `${opts.dailyLoad}h/day · ${opts.totalHrs}h total · ${opts.isShop ? "SHOP" : "FIELD"}`
+      : null,
+  };
+}
+
+/** Preserve shop/field budget bucket on reassignment (page auto-hour distribution). */
+export function buildAutoHoursForDrop(
+  wp: WorkPackageLike | null | undefined,
+): Record<string, number> {
+  const isShop = isShopWorkPackage(wp);
+  const totalEstHrs =
+    Number(wp?.shop_hours_budget) || Number(wp?.field_hours_budget) || 0;
+  const autoHours: Record<string, number> = {};
+  if (totalEstHrs > 0) {
+    if (isShop) autoHours.shop_hours_budget = totalEstHrs;
+    else autoHours.field_hours_budget = totalEstHrs;
+  }
+  return autoHours;
+}
+
+export function snapDropWindow(opts: {
+  clientX: number;
+  timelineLeft: number;
+  scrollLeft: number;
+  pxPerDay: number;
+  timelineStart: Date;
+  durationMs: number;
+  addDays: (date: Date, n: number) => Date;
+  snapToMonday: (date: Date) => Date;
+}): { newStart: Date; newEnd: Date; rawStart: Date } {
+  const relX = opts.clientX - opts.timelineLeft + opts.scrollLeft;
+  const daysIn = relX / opts.pxPerDay;
+  const rawStart = opts.addDays(opts.timelineStart, Math.round(daysIn));
+  const newStart = opts.snapToMonday(rawStart);
+  const newEnd = new Date(newStart.getTime() + opts.durationMs);
+  return { newStart, newEnd, rawStart };
+}

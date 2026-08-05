@@ -46,6 +46,11 @@ import {
   filterFocusedDisplayResources,
   isShopWorkPackage,
   toIsoDate,
+  projectDragWindow,
+  computeDailyLoadHours,
+  buildDragTooltipText,
+  buildAutoHoursForDrop,
+  snapDropWindow,
 } from "./resourceScheduling/resourceSchedulingHelpers";
 
 // Only mounted while the edit dialog is open — keep it off the board's chunk.
@@ -398,23 +403,36 @@ export default function ResourceScheduling() {
     const timelineEl = timelineRef.current;
     if (timelineEl) {
       const tRect = timelineEl.getBoundingClientRect();
-      const relX = e.clientX - tRect.left + timelineEl.scrollLeft;
-      const daysIn = relX / pxPerDay;
-      const newStart = addDays(timelineStart, Math.round(daysIn));
-      const newEnd = new Date(newStart.getTime() + d.durationMs);
-      const durationDays = Math.max(1, Math.round(d.durationMs / 86400000));
+      const { newStart, newEnd, durationDays } = projectDragWindow({
+        clientX: e.clientX,
+        timelineLeft: tRect.left,
+        scrollLeft: timelineEl.scrollLeft,
+        pxPerDay,
+        timelineStart,
+        durationMs: d.durationMs,
+        addDays,
+      });
 
       // Calculate daily load from WP budget hours
       const wp = workPackages.find((w) => w.id === d.wpId);
       const totalHrs = Number(wp?.shop_hours_budget) || Number(wp?.field_hours_budget) || 0;
-      const dailyLoad = totalHrs > 0 ? (totalHrs / durationDays).toFixed(1) : null;
+      const dailyLoad = computeDailyLoadHours(totalHrs, durationDays);
       const isShop = isShopWorkPackage(wp);
+      const tip = buildDragTooltipText({
+        newStart,
+        newEnd,
+        durationDays,
+        fmt,
+        dailyLoad,
+        totalHrs,
+        isShop,
+      });
 
       setDragTooltip({
         x: e.clientX,
         y: e.clientY - 54,
-        text: `${fmt(newStart)} → ${fmt(newEnd)} · ${durationDays}d`,
-        subText: dailyLoad ? `${dailyLoad}h/day · ${totalHrs}h total · ${isShop ? "SHOP" : "FIELD"}` : null,
+        text: tip.text,
+        subText: tip.subText,
       });
     }
   };
@@ -431,12 +449,16 @@ export default function ResourceScheduling() {
 
     const timelineEl = timelineRef.current;
     const tRect = timelineEl.getBoundingClientRect();
-    const relX = e.clientX - tRect.left + timelineEl.scrollLeft;
-    const daysIn = relX / pxPerDay;
-    const rawStart = addDays(timelineStart, Math.round(daysIn));
-
-    const newStart = snapToMonday(rawStart);
-    const newEnd = new Date(newStart.getTime() + d.durationMs);
+    const { newStart, newEnd } = snapDropWindow({
+      clientX: e.clientX,
+      timelineLeft: tRect.left,
+      scrollLeft: timelineEl.scrollLeft,
+      pxPerDay,
+      timelineStart,
+      durationMs: d.durationMs,
+      addDays,
+      snapToMonday,
+    });
 
     // Find target resource
     let newResourceId = d.fromResourceId;
@@ -458,16 +480,7 @@ export default function ResourceScheduling() {
     // field_hours_budget, field_hours_actual. Scheduling dates are on
     // scheduled_start_date / scheduled_end_date (migration 042).
     const droppedWp = workPackages.find((w) => w.id === d.wpId);
-    const isShop = isShopWorkPackage(droppedWp);
-    const totalEstHrs = Number(droppedWp?.shop_hours_budget) || Number(droppedWp?.field_hours_budget) || 0;
-    const autoHours: Record<string, any> = {};
-    if (totalEstHrs > 0) {
-      if (isShop) {
-        autoHours.shop_hours_budget = totalEstHrs;
-      } else {
-        autoHours.field_hours_budget = totalEstHrs;
-      }
-    }
+    const autoHours: Record<string, any> = buildAutoHoursForDrop(droppedWp);
 
     // Compute the new scheduling window. newStart comes from the drop
     // position above; newEnd was already computed on line ~551 from

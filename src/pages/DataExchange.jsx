@@ -33,6 +33,7 @@ import {
   downloadTextFile,
   readDataExchangeFile,
   prepareImportRecords,
+  buildImportResultToast,
 } from "./dataExchange/dataExchangePageHelpers";
 import {
   SectionHeader,
@@ -131,21 +132,15 @@ export default function DataExchange() {
       queryClient.invalidateQueries({ queryKey: ["data-exchange", selectedTarget.entityKey, selectedProjectId] });
       queryClient.invalidateQueries({ queryKey: [selectedTarget.entityKey] });
       setImportApproved(false);
-      const skipBits = [];
-      if (skippedDuplicates) skipBits.push(`${skippedDuplicates} duplicate skipped`);
-      if (skippedCreates) skipBits.push(`${skippedCreates} row create failed`);
-      const skipSuffix = skipBits.length ? `, ${skipBits.join(", ")}` : "";
-      if (rows.length > 0 && skippedCreates > 0) {
-        toast.warning(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skipSuffix}`);
-      } else if (rows.length > 0) {
-        toast.success(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skipSuffix}`);
-      } else if (skippedDuplicates || skippedCreates) {
-        toast.warning(
-          `${skipBits.join(", ") || "rows skipped"}; no new rows imported`,
-        );
-      } else {
-        toast.info("No rows were imported");
-      }
+      const resultToast = buildImportResultToast({
+        rowsCreated: rows.length,
+        skippedDuplicates,
+        skippedCreates,
+        label: selectedTarget.label,
+      });
+      if (resultToast.kind === "warning") toast.warning(resultToast.message);
+      else if (resultToast.kind === "success") toast.success(resultToast.message);
+      else toast.info(resultToast.message);
     },
     onError: (err) => toast.error(err?.message || "Import failed"),
   });

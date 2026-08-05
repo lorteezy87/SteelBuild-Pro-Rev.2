@@ -132,3 +132,90 @@ export function pickTapeExpr(s) {
     : (Number.isFinite(s.angleDegrees) ? `${s.angleDegrees.toFixed(0)}°` : "—");
   return `${tons} · ${s.numLegs}-leg · ${angle}`;
 }
+
+
+export type CranePickInputVals = {
+  pieceWeight: string;
+  piece: number;
+  rigging: number;
+  craneCapacity: string;
+  cap: number;
+  numLegs: number;
+  effectiveAngle: number;
+};
+
+/** Collect all input failures so the UI can show a single fix list. */
+export function buildCranePickValidationErrors(v: CranePickInputVals): string[] {
+  const e: string[] = [];
+  if (v.pieceWeight === "") {
+    e.push("Enter piece weight.");
+  } else if (!(v.piece > 0)) {
+    e.push("Piece weight must be a positive number.");
+  }
+  if (v.rigging < 0) e.push("Rigging weight cannot be negative.");
+  if (v.craneCapacity === "") {
+    e.push("Enter the crane's rated capacity at the planned radius.");
+  } else if (!(v.cap > 0)) {
+    e.push("Crane capacity must be a positive number.");
+  }
+  if (v.numLegs !== 1) {
+    if (!(v.effectiveAngle > 0 && v.effectiveAngle <= 90)) {
+      e.push("Sling angle must be > 0° and ≤ 90°.");
+    }
+  }
+  return e;
+}
+
+export function computeEffectiveSlingAngle(opts: {
+  numLegs: number;
+  angleMode: string;
+  heightSpanMode: string;
+  angleDeg: string;
+  hspanH: string;
+  hspanS: string;
+  angleFromHeightSpan: (h: number, s: number) => number;
+}): number {
+  if (opts.numLegs === 1) return 90;
+  if (opts.angleMode === opts.heightSpanMode) {
+    return opts.angleFromHeightSpan(parseFloat(opts.hspanH), parseFloat(opts.hspanS));
+  }
+  return parseFloat(opts.angleDeg);
+}
+
+export function buildPickSnapshot(d: {
+  piece: number;
+  rigging: number;
+  totalLoad: number;
+  numLegs: number;
+  effectiveAngle: number;
+  laf: number;
+  tensionPerLeg: number;
+  cap: number;
+  utilization: number;
+  capacityStatus: string;
+  angleStatus: string | null;
+  craneModel: string;
+  boomLength: string;
+  workingRadius: string;
+  counterweight: string;
+  warnings: unknown[];
+}) {
+  return {
+    pieceWeight: d.piece,
+    riggingWeight: d.rigging,
+    totalLoad: d.totalLoad,
+    numLegs: d.numLegs,
+    angleDegrees: d.effectiveAngle,
+    laf: d.laf,
+    tensionPerLeg: d.tensionPerLeg,
+    craneCapacity: d.cap,
+    utilization: d.utilization,
+    capacityStatus: d.capacityStatus,
+    angleStatus: d.angleStatus,
+    craneModel: d.craneModel,
+    boomLength: d.boomLength,
+    workingRadius: d.workingRadius,
+    counterweight: d.counterweight,
+    warnings: d.warnings,
+  };
+}

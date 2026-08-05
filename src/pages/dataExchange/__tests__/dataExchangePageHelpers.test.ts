@@ -70,3 +70,16 @@ describe("prepareImportRecords", () => {
     expect(IMPORT_EXAMPLES.workPackages).toContain("WP Number");
   });
 });
+
+
+import { buildImportSkipBits, buildImportResultToast } from "../dataExchangePageHelpers";
+
+describe("import result toast", () => {
+  it("formats skip bits and toast kinds", () => {
+    expect(buildImportSkipBits(2, 1)).toEqual(["2 duplicate skipped", "1 row create failed"]);
+    expect(buildImportResultToast({ rowsCreated: 3, skippedDuplicates: 0, skippedCreates: 0, label: "RFIs" }).kind).toBe("success");
+    expect(buildImportResultToast({ rowsCreated: 3, skippedDuplicates: 0, skippedCreates: 1, label: "RFIs" }).kind).toBe("warning");
+    expect(buildImportResultToast({ rowsCreated: 0, skippedDuplicates: 2, skippedCreates: 0, label: "RFIs" }).message).toContain("no new rows");
+    expect(buildImportResultToast({ rowsCreated: 0, skippedDuplicates: 0, skippedCreates: 0, label: "RFIs" }).kind).toBe("info");
+  });
+});
