@@ -6,7 +6,9 @@
  * component is presentation-only.
  */
 import { useMemo } from "react";
+import { fmtDate, phaseTone } from "./projectsControlCenterHelpers";
 import {
+
   FolderKanban,
   AlertTriangle,
   DollarSign,
@@ -46,19 +48,6 @@ function fmtMoney(n: number): string {
   return `$${n.toLocaleString()}`;
 }
 
-function fmtDate(iso?: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso + "T00:00:00").toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
 // ── Health → Pill tone mapping ────────────────────────────────────
 function healthTone(health?: string | null): PillTone {
   switch (health) {
@@ -70,21 +59,6 @@ function healthTone(health?: string | null): PillTone {
 }
 
 // ── Phase → Pill tone mapping ─────────────────────────────────────
-function phaseTone(phase?: string | null): PillTone {
-  switch (phase) {
-    case "Pre-Construction": return "neutral";
-    case "Detailing":        return "info";
-    case "Procurement":      return "warn";
-    case "Fabrication":      return "warn";
-    case "Delivery":         return "info";
-    case "Installation":
-    case "Installation/Erection":
-    case "Erection":         return "good";
-    case "Closeout":         return "neutral";
-    default:                 return "neutral";
-  }
-}
-
 // ── Scroll helper ─────────────────────────────────────────────────
 function scrollToTable() {
   document.querySelector(".projects-cc .cmd-table-wrap")?.scrollIntoView({

@@ -24,27 +24,10 @@ import {
   buildReportsSummary,
   type ReportCatalogEntry,
 } from "./reportsHubControlCenter.derive";
+import { categoryTone } from "./reportsHubControlCenterHelpers";
 
 // ── Local helpers ──────────────────────────────────────────────────────────────
 
-/** Maps category string to the closest semantic Pill tone. */
-function categoryTone(
-  cat: string
-): "danger" | "warn" | "good" | "info" | "neutral" {
-  switch (cat) {
-    case "Risk":
-      return "danger";
-    case "Financial":
-    case "Cost":
-      return "good";
-    case "Schedule":
-      return "warn";
-    case "Portfolio":
-      return "info";
-    default:
-      return "neutral";
-  }
-}
 
 function scrollToTable() {
   document

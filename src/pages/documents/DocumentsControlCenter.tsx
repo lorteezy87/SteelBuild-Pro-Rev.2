@@ -16,7 +16,9 @@
 import { type DragEventHandler, type ReactNode, useMemo } from "react";
 import { FolderOpen, FileText, Clock, AlertCircle, HardDrive, Layers, FolderInput, Trash2, XCircle } from "lucide-react";
 import "@/styles/command.css";
+import { statusToneForDoc } from "./documentsControlCenterHelpers";
 import {
+
   PageHero,
   KpiStrip,
   DecisionPanel,
@@ -41,25 +43,6 @@ import { buildFolderNameById } from "./documentsPageHelpers";
 // ---------------------------------------------------------------------------
 
 const KNOWN_CATEGORIES = ["All", "Structural", "Electrical", "Civil", "Mechanical", "Architectural", "General"];
-
-function statusToneForDoc(status?: string | null): "good" | "warn" | "danger" | "neutral" | "info" {
-  switch (status) {
-    case "Approved":
-    case "Approved with Comments":
-    case "Issued":
-      return "good";
-    case "Under Review":
-    case "Revise & Resubmit":
-      return "warn";
-    case "Rejected":
-    case "Void":
-      return "danger";
-    case "Draft":
-      return "info";
-    default:
-      return "neutral";
-  }
-}
 
 function fileTypeBadge(fileType?: string | null) {
   const key = (fileType || "other").toLowerCase();

@@ -21,6 +21,7 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import { border, error as errorTone, fmtDate, mono, surface2, textMuted, textPrimary } from "./format";
+import { buildContextBody } from "./escalateModalHelpers";
 
 export type EscalationKind = "rfi" | "pco";
 
@@ -35,19 +36,6 @@ interface EscalateModalProps {
   onClose: () => void;
 }
 
-function buildContextBody(item: any): string {
-  return [
-    `Escalated from Detailing Control — ${item.kind || "Drawing Set"}: ${item.title}`,
-    `Current status: ${item.status || "—"}`,
-    `Ball in court: ${item.owner || "Unassigned"}`,
-    item.dueDate ? `Required date: ${fmtDate(item.dueDate)}` : null,
-    item.group ? `Package: ${item.group}` : null,
-    "",
-    "Issue / question:",
-    "",
-  ].filter((line) => line !== null).join("\n");
-}
-
 export default function EscalateModal({ item, initialKind = "rfi", projectId, projectName, onClose }: EscalateModalProps) {
   const qc = useQueryClient();
   const { can } = usePermissions();
@@ -58,7 +46,7 @@ export default function EscalateModal({ item, initialKind = "rfi", projectId, pr
     initialKind === "pco" ? (canPco ? "pco" : "rfi") : (canRfi ? "rfi" : "pco"),
   );
   const [title, setTitle] = useState(`${item.title} — ${item.status || "detailing issue"}`.slice(0, 180));
-  const [body, setBody] = useState(() => buildContextBody(item));
+  const [body, setBody] = useState(() => buildContextBody(item, fmtDate));
   const [priority, setPriority] = useState(item?.due?.overdue ? "High" : "Medium");
   const [reasonCode, setReasonCode] = useState("Design Change");
   const [amount, setAmount] = useState("");

@@ -14,13 +14,13 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { usePermissions } from "@/services/permissions";
 import { useTransmittals } from "@/hooks/useTransmittals";
-import type { TransmittalAttachment, TransmittalRow } from "@/hooks/useTransmittals";
+import type { TransmittalRow } from "@/hooks/useTransmittals";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
-import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
 import { attachableRegisterRows, resolveTransmittalDisplay } from "./docControl.derive";
+import { buildSheetOptions } from "./transmittalLogPanelHelpers";
 
 function directionTone(direction: string): PillTone {
   if (direction === "incoming") return "info";
@@ -79,39 +79,6 @@ function headerPatch(form: FormState) {
     date_received: incoming ? (form.date || null) : null,
     notes: form.notes.trim() || null,
   };
-}
-
-function buildSheetOptions(
-  register: DrawingRegisterRow[],
-  attachedItems: TransmittalAttachment[],
-): SheetOption[] {
-  const byRevision = new Map<string, SheetOption>();
-  for (const row of register) {
-    if (!row.current_revision_id) continue;
-    byRevision.set(row.current_revision_id, {
-      revisionId: row.current_revision_id,
-      drawingId: row.drawing_id,
-      sheetNumber: row.sheet_number,
-      sheetTitle: row.sheet_title,
-      revisionCode: row.current_revision,
-      historical: false,
-    });
-  }
-  for (const item of attachedItems) {
-    if (byRevision.has(item.drawing_revision_id)) continue;
-    byRevision.set(item.drawing_revision_id, {
-      revisionId: item.drawing_revision_id,
-      drawingId: item.drawing_id,
-      sheetNumber: item.sheet_number,
-      sheetTitle: item.sheet_title,
-      revisionCode: item.revision_code,
-      historical: true,
-    });
-  }
-  return [...byRevision.values()].sort((a, b) =>
-    String(a.sheetNumber || "").localeCompare(String(b.sheetNumber || ""), undefined, { numeric: true })
-    || String(a.revisionCode || "").localeCompare(String(b.revisionCode || ""), undefined, { numeric: true }),
-  );
 }
 
 interface TransmittalEditorProps {

@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero, KpiStrip, DecisionPanel, Pill, statusTone,
+  PageHero, KpiStrip, DecisionPanel, Pill,
   FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
@@ -33,6 +33,7 @@ import { photoFor } from "@/config/launcherConfig";
 import { buildProcurementSummary, isOverdue, isLate, daysUntil } from "./procurementControlCenter.derive";
 import type { ProcurementItem } from "./procurementControlCenter.derive";
 import { PROCUREMENT_CATEGORIES, ALL_STATUSES, fmtDate } from "./format";
+import { procStatusTone } from "./procurementControlCenterHelpers";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -53,20 +54,6 @@ export interface ProcurementControlCenterProps {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Map procurement status to a pill tone. */
-function procStatusTone(status: string | null | undefined): ReturnType<typeof statusTone> {
-  switch (status) {
-    case "Received":      return "good";
-    case "Shipped":       return "info";
-    case "In Production": return "info";
-    case "Confirmed":     return "info";
-    case "PO Issued":     return "warn";
-    case "Quoted":        return "warn";
-    case "Identified":    return "neutral";
-    case "Cancelled":     return "neutral";
-    default:              return "neutral";
-  }
-}
 
 /** Need-by date cell — shows overdue badge when past. */
 function needByCell(item: ProcurementItem) {

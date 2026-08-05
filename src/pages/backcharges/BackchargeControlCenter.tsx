@@ -11,7 +11,7 @@ import { useMemo } from "react";
 import { ScrollText, DollarSign, AlertTriangle, ShieldCheck, FileWarning, TrendingDown, BarChart2 } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero, KpiStrip, DecisionPanel, Pill, statusTone,
+  PageHero, KpiStrip, DecisionPanel, Pill,
   FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
@@ -23,6 +23,7 @@ import {
   BACKCHARGE_STATUSES,
 } from "@/lib/backcharge/types";
 import type { BackchargeStatus } from "@/lib/backcharge/types";
+import { backchargeTone } from "./backchargeControlCenterHelpers";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -32,20 +33,6 @@ function fmtMoney(n: number): string {
   return `$${Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-/** Derive a Pill tone from a backcharge status. */
-function backchargeTone(status: string | null | undefined): ReturnType<typeof statusTone> {
-  switch (status as BackchargeStatus) {
-    case "draft":        return "neutral";
-    case "notice_sent":  return "info";
-    case "pending":      return "warn";
-    case "disputed":     return "danger";
-    case "approved":     return "good";
-    case "rejected":     return "neutral";
-    case "collected":    return "good";
-    case "void":         return "neutral";
-    default:             return "neutral";
-  }
-}
 
 /** Indicates whether the backcharge has a defensible notice on record. */
 function noticeCell(bc: Backcharge) {

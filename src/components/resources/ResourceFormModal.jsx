@@ -4,47 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button, Modal } from "@/components/design-system";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { fromEntity, toEntity } from "./resourceFormModalHelpers";
 
 // Map between UI field names and the actual DB columns on the `resources` table.
 // DB schema: name, resource_type, role, capacity, unit, cost_rate, availability, notes, metadata (JSONB)
 // We store budget_hours→capacity, hourly_rate→cost_rate, availability_status→availability,
 // and keep actual_hours / forecast_hours inside metadata.
-
-function fromEntity(e) {
-  const meta = typeof e.metadata === "object" && e.metadata !== null ? e.metadata : {};
-  return {
-    project_id: e.project_id || "",
-    name: e.name || "",
-    resource_type: e.resource_type || "Person",
-    role: e.role || "",
-    budget_hours: e.capacity ?? "",
-    actual_hours: meta.actual_hours ?? "0",
-    forecast_hours: meta.forecast_hours ?? "",
-    hourly_rate: e.cost_rate ?? "",
-    availability_status: e.availability || "Available",
-    notes: e.notes || "",
-    parent_resource_id: e.parent_resource_id || "",
-  };
-}
-
-function toEntity(form, projectId) {
-  return {
-    project_id: form.project_id || projectId,
-    name: form.name,
-    resource_type: form.resource_type,
-    role: form.role,
-    capacity: form.budget_hours ? parseFloat(form.budget_hours) : 0,
-    unit: "hours",
-    cost_rate: form.hourly_rate ? parseFloat(form.hourly_rate) : 0,
-    availability: form.availability_status || "Available",
-    notes: form.notes,
-    parent_resource_id: form.parent_resource_id || null,
-    metadata: {
-      actual_hours: parseFloat(form.actual_hours) || 0,
-      forecast_hours: form.forecast_hours ? parseFloat(form.forecast_hours) : 0,
-    },
-  };
-}
 
 export default function ResourceFormModal({ projectId, editing, onClose, onSave }) {
   const qc = useQueryClient();

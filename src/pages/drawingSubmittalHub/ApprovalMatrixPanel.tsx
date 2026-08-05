@@ -12,7 +12,9 @@ import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import { statusTone } from "./approvalMatrixPanelHelpers";
 import {
+
   CLOSED_SUBMITTAL_STATUSES,
   STATUS_COLORS,
   buildApprovalMatrixRows,
@@ -38,22 +40,6 @@ interface ApprovalMatrixPanelProps {
   roundsBySubmittal: Record<string, any[]>;
   isLoading: boolean;
   useWorkdays?: boolean;
-}
-
-function statusTone(status?: string | null): PillTone {
-  switch (status) {
-    case "Approved":
-    case "Approved as Noted":
-    case "Released for Fabrication":
-      return "good";
-    case "Rejected":
-    case "Revise and Resubmit":
-      return "review";
-    case "Void":
-      return "neutral";
-    default:
-      return "warn";
-  }
 }
 
 function dueTone(due: DueInfo | undefined): PillTone {
