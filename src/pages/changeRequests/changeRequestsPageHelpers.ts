@@ -1,4 +1,8 @@
 /** Pure helpers for ChangeRequests page shell. */
+import { CHANGE_REQUEST_STATUS, PRIORITY } from "@/lib/enums";
+import { nextFilterToggle } from "@/pages/shared/nextFilterToggle";
+
+export { nextFilterToggle };
 
 export type ChangeRequestLike = {
   status?: string | null;
@@ -37,3 +41,25 @@ export function computeChangeRequestStats(
     totalCostImpact: list.reduce((sum, c) => sum + (Number(c.estimated_cost_impact) || 0), 0),
   };
 }
+
+export const CHANGE_REQUEST_STATUS_FILTERS = Object.values(CHANGE_REQUEST_STATUS);
+
+export const CHANGE_REQUEST_PRIORITY_FILTERS = Object.values(PRIORITY);
+
+export function changeRequestCommandSubtitle(stats: {
+  submitted: number;
+  approved: number;
+}): string {
+  return `${stats.submitted} submitted · ${stats.approved} approved · pre-CO formal request tracking`;
+}
+
+export function createEmptyChangeRequestFilters(): {
+  filterStatus: string;
+  filterPriority: string;
+} {
+  return {
+    filterStatus: "all",
+    filterPriority: "all",
+  };
+}
+

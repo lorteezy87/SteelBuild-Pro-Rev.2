@@ -18,3 +18,26 @@ describe("changeRequestsPageHelpers", () => {
     expect(stats).toEqual({ total: 3, submitted: 1, approved: 1, rejected: 1, totalCostImpact: 150 });
   });
 });
+
+import {
+  CHANGE_REQUEST_STATUS_FILTERS,
+  CHANGE_REQUEST_PRIORITY_FILTERS,
+  changeRequestCommandSubtitle,
+  createEmptyChangeRequestFilters,
+  nextFilterToggle,
+} from "../changeRequestsPageHelpers";
+
+describe("change request catalogs and filters", () => {
+  it("exposes status/priority catalogs and subtitle", () => {
+    expect(CHANGE_REQUEST_STATUS_FILTERS.length).toBeGreaterThan(0);
+    expect(CHANGE_REQUEST_PRIORITY_FILTERS.length).toBeGreaterThan(0);
+    expect(changeRequestCommandSubtitle({ submitted: 2, approved: 1 })).toBe(
+      "2 submitted · 1 approved · pre-CO formal request tracking",
+    );
+    expect(createEmptyChangeRequestFilters()).toEqual({
+      filterStatus: "all",
+      filterPriority: "all",
+    });
+    expect(nextFilterToggle("Submitted", "Submitted")).toBe("all");
+  });
+});

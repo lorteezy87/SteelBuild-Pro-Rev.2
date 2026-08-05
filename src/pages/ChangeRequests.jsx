@@ -9,10 +9,18 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { formatCurrency } from "@/components/shared/formatters";
 import { Plus } from "lucide-react";
-import { CHANGE_REQUEST_STATUS, PRIORITY } from "@/lib/enums";
+import { CHANGE_REQUEST_STATUS } from "@/lib/enums";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
-import { filterChangeRequests, computeChangeRequestStats } from "./changeRequests/changeRequestsPageHelpers";
+import {
+  filterChangeRequests,
+  computeChangeRequestStats,
+  CHANGE_REQUEST_STATUS_FILTERS,
+  CHANGE_REQUEST_PRIORITY_FILTERS,
+  changeRequestCommandSubtitle,
+  createEmptyChangeRequestFilters,
+  nextFilterToggle,
+} from "./changeRequests/changeRequestsPageHelpers";
 
 import { findById } from "@/pages/shared/findById";
 export default function ChangeRequests() {
@@ -94,8 +102,8 @@ export default function ChangeRequests() {
     }
   };
 
-  const statuses = Object.values(CHANGE_REQUEST_STATUS);
-  const priorities = Object.values(PRIORITY);
+  const statuses = CHANGE_REQUEST_STATUS_FILTERS;
+  const priorities = CHANGE_REQUEST_PRIORITY_FILTERS;
 
   return (
     <div className="sb-dashboard-reference-page">
@@ -104,7 +112,7 @@ export default function ChangeRequests() {
         title="Change Requests"
         count={filtered.length}
         unit=" · REQUESTS"
-        subtitle={`${stats.submitted} submitted · ${stats.approved} approved · pre-CO formal request tracking`}
+        subtitle={changeRequestCommandSubtitle(stats)}
       >
         <button
           onClick={() => { setEditing(null); setShowForm(true); }}
@@ -125,11 +133,11 @@ export default function ChangeRequests() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
         <KpiTile compact label="Total"       value={stats.total}     color="var(--accent)" />
         <KpiTile compact label="Submitted"   value={stats.submitted} color="var(--status-warning)"
-                 active={filterStatus === "Submitted"} onClick={() => setFilterStatus(filterStatus === "Submitted" ? "all" : "Submitted")} />
+                 active={filterStatus === "Submitted"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "Submitted"))} />
         <KpiTile compact label="Approved"    value={stats.approved}  color="var(--status-success)"
-                 active={filterStatus === "Approved"}  onClick={() => setFilterStatus(filterStatus === "Approved" ? "all" : "Approved")} />
+                 active={filterStatus === "Approved"}  onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "Approved"))} />
         <KpiTile compact label="Rejected"    value={stats.rejected}  color="var(--status-error)"
-                 active={filterStatus === "Rejected"}  onClick={() => setFilterStatus(filterStatus === "Rejected" ? "all" : "Rejected")} />
+                 active={filterStatus === "Rejected"}  onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "Rejected"))} />
         <KpiTile compact label="Cost Impact" value={formatCurrency(stats.totalCostImpact || 0, 0)}
                  color={stats.totalCostImpact > 0 ? "var(--status-warning)" : "var(--status-success)"} />
       </div>
@@ -178,7 +186,11 @@ export default function ChangeRequests() {
         emptyBody="Log scope or cost change requests for this project."
         emptyActionLabel="+ New Request"
         onEmptyAction={() => { setEditing(null); setShowForm(true); }}
-        onClearFilters={() => { setFilterStatus("all"); setFilterPriority("all"); }}
+        onClearFilters={() => {
+          const empty = createEmptyChangeRequestFilters();
+          setFilterStatus(empty.filterStatus);
+          setFilterPriority(empty.filterPriority);
+        }}
       >
         <ChangeRequestList requests={filtered} onEdit={(cr) => {setEditing(cr); setShowForm(true);}} onDelete={setDeleteTarget} />
       </RegisterFetchBody>
