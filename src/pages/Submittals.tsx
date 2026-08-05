@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { ensureCriticalAgingActionItems } from "@/lib/submittalAgingTriggers";
 import { localToday } from "@/utils/dates";
+import {
+  buildCreateInitialFromSet,
+  buildStatusSuggestPatch,
+  filterSuggestAgainstCurrent,
+  type StatusSuggestPatch,
+} from "@/lib/submittalLinkGlue";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
   BulkActionBar as BulkActionBarRaw,
@@ -37,6 +44,7 @@ import { SubmittalDetail } from "./submittals/SubmittalDetail";
 import SubmittalRegisterPanel from "./submittals/SubmittalRegisterPanel";
 import { computeSubmittalStats, filterAndSortSubmittals, getVisibleSelectionState } from "./submittals/submittalRegister.derive";
 import SubmittalFormModal from "./submittals/SubmittalFormModal";
+import StatusSuggestStrip from "./submittals/StatusSuggestStrip";
 import { useSubmittalsPageMutations } from "./submittals/useSubmittalsPageMutations";
 import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types";
 
@@ -69,6 +77,12 @@ export default function Submittals() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  /** Event glue: create opened from a set (`?targetSetId=`) — seeds linked sets. */
+  const [createFromSet, setCreateFromSet] = useState<{
+    drawing_set_ids: string[];
+    status?: string;
+    requireLinkedSet: boolean;
+  } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   // Phase 3 splitting: when set, the create form opens as a "spin off child"
   // with this submittal as the parent (project + drawing sets prefilled).
@@ -89,6 +103,17 @@ export default function Submittals() {
   // override dialog (the server gate refused; PM can release with a reason).
   const [releaseBlock, setReleaseBlock] = useState<{ input: any; rfis: string[] } | null>(null);
   const [showSheetResponse, setShowSheetResponse] = useState<any>(null); // round object or null
+  /** Event glue: after status change, suggest BIC/dates that still need confirm. */
+  const [statusSuggest, setStatusSuggest] = useState<{
+    submittalId: string;
+    patch: StatusSuggestPatch;
+  } | null>(null);
+  const pendingSuggestRef = useRef<{
+    id: string;
+    before: Submittal;
+    nextStatus: string;
+  } | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Key ["submittals", projectId] matches getQueryKey("submittal", projectId) in useSubmittals.ts — React Query dedupes; no second fetch when embedded in the DCC hub.
   const { data: rows = [], isLoading } = useQuery({
@@ -103,6 +128,29 @@ export default function Submittals() {
     enabled: !isLoading,
     param: "recordId",
   });
+
+  // Event glue: Drawings / Detailing CC navigate with ?targetSetId= (+ optional
+  // prefilledStatus). Open create with that set pre-linked, then strip params
+  // so refresh doesn't re-open the modal.
+  useEffect(() => {
+    const targetSetId = searchParams.get("targetSetId");
+    if (!targetSetId) return;
+    const seeded = buildCreateInitialFromSet(targetSetId, {
+      prefilledStatus: searchParams.get("prefilledStatus"),
+    });
+    setCreateFromSet({
+      drawing_set_ids: seeded.drawing_set_ids,
+      status: seeded.status,
+      requireLinkedSet: true,
+    });
+    setShowCreate(true);
+    setSpinOffParentId(null);
+    setEditingId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("targetSetId");
+    next.delete("prefilledStatus");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Slice 7: draft ActionItems for Critical R&R/OFS/BFA aging (deduped).
   // Honest path — never invents Alerts Center rows / generate-alerts.
@@ -270,6 +318,20 @@ export default function Submittals() {
     remove: removeComponentMut,
   } = useSubmittalComponents(projectId, drawingTypesEnabled);
 
+  const settleStatusSuggest = useCallback((updatedRow: any | null | undefined) => {
+    const pending = pendingSuggestRef.current;
+    pendingSuggestRef.current = null;
+    if (!pending) return;
+    const raw = buildStatusSuggestPatch(pending.before, pending.nextStatus, {
+      today: localToday(),
+    });
+    const remaining = filterSuggestAgainstCurrent(raw, updatedRow || pending.before);
+    if (remaining) {
+      setStatusSuggest({ submittalId: pending.id, patch: remaining });
+      setSelectedId(pending.id);
+    }
+  }, []);
+
   const {
     createMut,
     updateMut,
@@ -295,6 +357,10 @@ export default function Submittals() {
     setShowBulkAdd,
     setShowNewRound,
     setShowSheetResponse,
+    onUpdateSettled: settleStatusSuggest,
+    onAdvanceSettled: settleStatusSuggest,
+    onUpdateError: () => { pendingSuggestRef.current = null; },
+    onAdvanceError: () => { pendingSuggestRef.current = null; },
   });
 
   // ── Filter/search ──────────────────────────────────────────────────
@@ -400,7 +466,24 @@ export default function Submittals() {
   );
 
   const detailEl = (
-    <SubmittalDetail
+    <>
+      {statusSuggest && selected && statusSuggest.submittalId === selected.id && (
+        <StatusSuggestStrip
+          patch={statusSuggest.patch}
+          busy={updateMut.isPending}
+          onDismiss={() => setStatusSuggest(null)}
+          onApply={async (patch) => {
+            try {
+              await updateMut.mutateAsync({ id: statusSuggest.submittalId, ...patch });
+              setStatusSuggest(null);
+              toast.success("Suggested fields applied");
+            } catch {
+              /* updateMut toasts */
+            }
+          }}
+        />
+      )}
+      <SubmittalDetail
       approvedRoutesToScrub={approvedRoutesToScrub}
       splittingEnabled={splittingEnabled}
       drawingTypesEnabled={drawingTypesEnabled}
@@ -506,11 +589,17 @@ export default function Submittals() {
       allTasks={allTasks}
       projectName={activeProject?.project_name || activeProject?.name || "Project"}
       project={activeProject}
-      onClose={() => setSelectedId(null)}
+      onClose={() => { setStatusSuggest(null); setSelectedId(null); }}
       onEdit={() => selected && setEditingId(selected.id)}
       onDelete={() => selected && setToDelete(selected.id)}
       onStatusChange={(status) => {
         if (!selected) return;
+        pendingSuggestRef.current = {
+          id: selected.id as string,
+          // Cast: DB row ↔ Submittal null/optional gap (same as selectedView bridge).
+          before: selected as Submittal,
+          nextStatus: status,
+        };
         const write = buildStatusChangeWrite({
           selected: selected as any,
           status,
@@ -529,6 +618,15 @@ export default function Submittals() {
       // (→BFA); never a fake date otherwise (§22).
       onAdvance={(action) => {
         if (!selected) return;
+        if (action?.nextStatus) {
+          pendingSuggestRef.current = {
+            id: selected.id as string,
+            before: selected as Submittal,
+            nextStatus: action.nextStatus,
+          };
+        } else {
+          pendingSuggestRef.current = null;
+        }
         const input = buildVerbCtaAdvanceInput({
           selected: selected as any,
           action,
@@ -553,6 +651,7 @@ export default function Submittals() {
         if (round) setShowSheetResponse(round);
       }}
     />
+    </>
   );
 
   if (!projectId) return (
@@ -581,7 +680,7 @@ export default function Submittals() {
         toggleAll={toggleAll}
         projectLabel={activeProject?.project_name || "Project"}
         canCreate={can("create", "submittal")}
-        onNewSubmittal={() => setShowCreate(true)}
+        onNewSubmittal={() => { setCreateFromSet(null); setShowCreate(true); }}
         onBulkAdd={() => setShowBulkAdd(true)}
         list={listEl}
         detail={detailEl}
@@ -592,7 +691,17 @@ export default function Submittals() {
           open={showCreate || !!editing || !!spinOffParent}
           // Spin-off: seed from the parent (project + drawing sets carried over).
           // Edit: the row being edited. Plain create: empty.
-          initial={editingView || (spinOffParent ? (spinOffInitial as Submittal) : {})}
+          initial={
+            editingView
+              || (spinOffParent ? (spinOffInitial as Submittal) : null)
+              || (createFromSet
+                ? {
+                    drawing_set_ids: createFromSet.drawing_set_ids,
+                    ...(createFromSet.status ? { status: createFromSet.status } : {}),
+                  }
+                : {})
+          }
+          requireLinkedSet={!!createFromSet?.requireLinkedSet}
           projectId={projectId}
           projectName={activeProject?.project_name || activeProject?.name || ""}
           availableSets={drawingSetsView}
@@ -607,7 +716,7 @@ export default function Submittals() {
               .map((r: any) => String(r.submittal_number || "").trim())
               .filter(Boolean),
           )}
-          onClose={() => { setShowCreate(false); setEditingId(null); setSpinOffParentId(null); }}
+          onClose={() => { setShowCreate(false); setEditingId(null); setSpinOffParentId(null); setCreateFromSet(null); }}
           onSubmit={async (data) => {
             if (editing) {
               await updateMut.mutateAsync({ id: editing.id, ...data });
