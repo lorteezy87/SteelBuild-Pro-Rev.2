@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { normalizeMfaCode, isMfaCodeReady } from "./mfa/mfaChallengeHelpers";
+import {
+  AUTH_FORM_WRAP_STYLE,
+  authFormCardStyle,
+  authFormTitleStyle,
+  AUTH_FORM_BODY_STYLE,
+  AUTH_FORM_LABEL_STYLE,
+  AUTH_FORM_INPUT_STYLE,
+  AUTH_FORM_ERROR_BOX_STYLE,
+  AUTH_FORM_PRIMARY_BTN_STYLE,
+  AUTH_FORM_GHOST_BTN_STYLE,
+} from "./authFormChromeHelpers";
 
 /**
  * MfaChallenge — the login step-up screen (H23). Shown at top precedence by
@@ -69,12 +80,12 @@ export default function MfaChallenge() {
   );
 }
 
-const wrap = { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "var(--bg-page)" };
-const card = { width: "100%", maxWidth: 400, padding: 32, borderRadius: 18, background: "var(--bg-surface)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-lg)" };
-const title = { color: "var(--text-primary)", margin: "0 0 6px", fontSize: 22, fontWeight: 800, letterSpacing: "-.02em" };
-const body = { color: "var(--text-muted)", margin: 0, fontSize: 14, lineHeight: 1.5 };
-const label = { display: "block", marginBottom: 6, color: "var(--text-secondary)", fontSize: 13, fontWeight: 600 };
-const input = { width: "100%" };
-const errorBox = { padding: "10px 13px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 10, color: "var(--status-error)", fontSize: 13 };
-const primaryBtn = { width: "100%", padding: "11px 16px", borderRadius: 10, border: 0, background: "var(--accent)", color: "var(--on-accent)", fontWeight: 800, fontSize: 15 };
-const ghostBtn = { width: "100%", padding: "9px 16px", borderRadius: 10, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", fontWeight: 600, fontSize: 14, cursor: "pointer" };
+const card = authFormCardStyle(400);
+const title = authFormTitleStyle(22);
+const wrap = AUTH_FORM_WRAP_STYLE;
+const body = AUTH_FORM_BODY_STYLE;
+const label = AUTH_FORM_LABEL_STYLE;
+const input = AUTH_FORM_INPUT_STYLE;
+const errorBox = AUTH_FORM_ERROR_BOX_STYLE;
+const primaryBtn = AUTH_FORM_PRIMARY_BTN_STYLE;
+const ghostBtn = AUTH_FORM_GHOST_BTN_STYLE;
