@@ -1,5 +1,6 @@
 /** Pure helpers for Vendors page shell (register filters + spend stats). */
 
+import { exportToCSV } from "@/lib/csv";
 export type VendorLike = {
   id?: string;
   company_name?: string | null;
@@ -175,3 +176,17 @@ export const VENDOR_CSV_HEADERS = [
   "COs",
   "Spend",
 ] as const;
+
+/** Side-effect CSV download for filtered vendor register. */
+export function downloadVendorsCsv(
+  filtered: VendorLike[],
+  vendorStats: Record<string, VendorStatBucket>,
+  filename = "vendors.csv",
+): void {
+  exportToCSV({
+    filename,
+    headers: [...VENDOR_CSV_HEADERS],
+    rows: buildVendorCsvRows(filtered, vendorStats),
+  });
+}
+

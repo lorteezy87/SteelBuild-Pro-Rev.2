@@ -6,16 +6,18 @@ import { toast } from "sonner";
 import VendorFormModal from "@/components/vendors/VendorFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { BulkActionBar } from "@/components/design-system";
-import { exportToCSV } from "@/lib/csv";
 import { batchProcess } from "@/utils/batchProcess";
 import VendorControlCenter from "./vendors/VendorControlCenter";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import {
+  toggleSelectionId,
+  selectAllOrNone,
+} from "@/pages/shared/selectionHelpers";
+import {
   buildPerVendorStats,
   filterVendors,
   uniqueVendorTypes,
-  buildVendorCsvRows,
-  VENDOR_CSV_HEADERS,
+  downloadVendorsCsv,
 } from "./vendors/vendorsPageHelpers";
 
 export default function Vendors() {
@@ -157,14 +159,10 @@ export default function Vendors() {
 
   // ── Selection helpers (new) ──
   const toggleSelect = (id) =>
-    setSelectedIds((prev) => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
+    setSelectedIds((prev) => toggleSelectionId(prev, id));
 
   const toggleAll = (checked) =>
-    setSelectedIds(checked ? new Set(filtered.map((v) => v.id)) : new Set());
+    setSelectedIds(selectAllOrNone(checked, filtered.map((v) => v.id)));
 
   // ── Filters ──
   const filtered = useMemo(
@@ -174,11 +172,7 @@ export default function Vendors() {
 
   const types = useMemo(() => uniqueVendorTypes(vendors), [vendors]);
 
-  const exportCSV = () => {
-    const headers = [...VENDOR_CSV_HEADERS];
-    const rows = buildVendorCsvRows(filtered, vendorStats);
-    exportToCSV({ filename: "vendors.csv", headers, rows });
-  };
+  const exportCSV = () => downloadVendorsCsv(filtered, vendorStats);
 
   // Shared dialogs remain owned by Vendors.jsx alongside the mutations.
   const modals = (
