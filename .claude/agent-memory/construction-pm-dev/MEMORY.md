@@ -32,3 +32,10 @@ recipes over narratives.
 - Production: CI-gated only (`vercel.json` `main: false`)
 - Edge functions: separate Supabase deploy
 - Owner-only: PITR, branch protection, Stripe Tax dashboard, apply migrations
+
+## Large-page thinning (continue)
+
+- PieceRegister: helpers/SelectFilter/ArchiveDialog extracted + wired (see pieceRegister/*).
+- Next candidates: Onboarding.jsx (~1.1k), ResourceScheduling.tsx (~800), register table/import workspace slices.
+- Always: byte-identical pure extracts first; wire page; full pieceRegister tests + typecheck ratchets.
+

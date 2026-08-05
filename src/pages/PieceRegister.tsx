@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Archive,
   AlertTriangle,
   Boxes,
   CheckCircle2,
@@ -98,6 +97,13 @@ import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitl
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import { filterPieceRegisterRows, type PieceRegisterFilters } from "./pieceRegister/filter";
 import {
+  applyAttentionFocus,
+  presentImportReconciliationText,
+  uniqueValues,
+} from "./pieceRegister/registerHelpers";
+import { SelectFilter } from "./pieceRegister/SelectFilter";
+import { PieceRegisterArchiveDialog } from "./pieceRegister/PieceRegisterArchiveDialog";
+import {
   deriveOverviewWorkPackages,
   selectUpcomingShipments,
 } from "./pieceRegister/overviewDerive";
@@ -133,54 +139,6 @@ const decisionTone: Record<string, PillTone> = {
   conflict: "danger",
   invalid: "danger",
 };
-
-const naturalSortCollator = new Intl.Collator("en-US", {
-  numeric: true,
-  sensitivity: "base",
-});
-
-function uniqueValues(values: Array<string | null | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))]
-    .sort(naturalSortCollator.compare);
-}
-
-function presentImportReconciliationText(value: string): string {
-  return value === "mark has split lots but no active ALL root"
-    ? "This piece mark has split lots but no active parent record."
-    : value;
-}
-
-function SelectFilter({
-  value,
-  onChange,
-  label,
-  options,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  label: string;
-  options: Array<string | { value: string; label: string }>;
-}) {
-  const controlId = `piece-register-filter-${label.toLowerCase().replace(/\s+/g, "-")}`;
-  return (
-    <label className="piece-register-filter" htmlFor={controlId}>
-      {label}
-      <select
-        id={controlId}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="piece-register-filter__control"
-      >
-        <option value="">All</option>
-        {options.map((option) => {
-          const value = typeof option === "string" ? option : option.value;
-          const optionLabel = typeof option === "string" ? option : option.label;
-          return <option key={value} value={value}>{optionLabel}</option>;
-        })}
-      </select>
-    </label>
-  );
-}
 
 export default function PieceRegister() {
   useCommandSkin();
@@ -326,14 +284,10 @@ export default function PieceRegister() {
     [overviewWorkPackages],
   );
   const filteredRows = useMemo(() => {
-    let rows = filterPieceRegisterRows(displayRows, filters);
-    if (attentionFocus === "unassigned") {
-      rows = rows.filter((piece) => !piece.work_package_id);
-    } else if (attentionFocus === "missing-weight") {
-      rows = rows.filter((piece) => pieceTons(piece) == null);
-    } else if (attentionFocus === "held") {
-      rows = rows.filter((piece) => piece.on_hold);
-    }
+    const rows = applyAttentionFocus(
+      filterPieceRegisterRows(displayRows, filters),
+      attentionFocus,
+    );
     return sortPieceRegisterRows(rows, registerSort);
   }, [attentionFocus, displayRows, filters, registerSort]);
   const canBulkUpdate = enabled && !roleLoading && roleAtLeast(role, "field");
@@ -863,125 +817,17 @@ export default function PieceRegister() {
       </nav>
 
         {archiveOpen && (
-          <div
-            className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-            style={{ background: "color-mix(in srgb, var(--bg-void, #050810) 72%, transparent)" }}
-            role="presentation"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget && !archiveMutation.isPending) setArchiveOpen(false);
-            }}
-          >
-            <div
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="archive-piece-title"
-              className="w-full max-w-lg rounded-2xl p-6 shadow-2xl"
-              style={{
-                border: "1px solid var(--cmd-border, var(--border-default))",
-                background: "var(--cmd-surface, var(--bg-surface))",
-                color: "var(--cmd-text, var(--text-primary))",
-                boxShadow: "var(--shadow-lg)",
-              }}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className="rounded-xl p-2"
-                  style={{
-                    background: "var(--cmd-chip-danger-bg, var(--danger-muted))",
-                    color: "var(--cmd-danger-text, var(--status-error))",
-                  }}
-                >
-                  <Archive className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2
-                    id="archive-piece-title"
-                    className="text-xl font-black"
-                    style={{ color: "var(--cmd-text, var(--text-primary))" }}
-                  >
-                    Archive {selectedPieceIds.size} piece{selectedPieceIds.size === 1 ? "" : "s"}?
-                  </h2>
-                  <p
-                    className="mt-2 text-sm leading-6"
-                    style={{ color: "var(--cmd-text-muted, var(--text-muted))" }}
-                  >
-                    Archived pieces are removed from active Piece Control counts and workflows. Import batches,
-                    relationships, and audit history are retained. Split, held, released, or production-started
-                    pieces cannot be archived.
-                  </p>
-                </div>
-              </div>
-              <label
-                htmlFor="piece-archive-reason"
-                className="mt-5 grid gap-2 text-xs font-bold uppercase tracking-wider"
-                style={{ color: "var(--cmd-text-muted, var(--text-muted))" }}
-              >
-                Reason
-                <textarea
-                  id="piece-archive-reason"
-                  value={archiveReason}
-                  onChange={(event) => setArchiveReason(event.target.value)}
-                  rows={3}
-                  placeholder="Why should these pieces be removed from the active register?"
-                  className="resize-none rounded-lg px-3 py-2 text-sm font-medium normal-case tracking-normal"
-                  style={{
-                    border: "1px solid var(--cmd-border, var(--border-default))",
-                    background: "var(--cmd-surface, var(--bg-input, var(--bg-surface)))",
-                    color: "var(--cmd-text, var(--text-primary))",
-                  }}
-                />
-              </label>
-              <label
-                htmlFor="piece-archive-confirmation"
-                className="mt-4 grid gap-2 text-xs font-bold uppercase tracking-wider"
-                style={{ color: "var(--cmd-text-muted, var(--text-muted))" }}
-              >
-                Type {archiveConfirmationText} to confirm
-                <input
-                  id="piece-archive-confirmation"
-                  value={archiveConfirmation}
-                  onChange={(event) => setArchiveConfirmation(event.target.value)}
-                  placeholder={archiveConfirmationText}
-                  className="h-11 rounded-lg px-3 font-mono text-sm font-bold normal-case tracking-normal"
-                  style={{
-                    border: "1px solid var(--cmd-border, var(--border-default))",
-                    background: "var(--cmd-surface, var(--bg-input, var(--bg-surface)))",
-                    color: "var(--cmd-text, var(--text-primary))",
-                  }}
-                />
-              </label>
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  disabled={archiveMutation.isPending}
-                  onClick={() => setArchiveOpen(false)}
-                  className="h-10 rounded-lg px-4 text-sm font-bold disabled:opacity-50"
-                  style={{
-                    border: "1px solid var(--cmd-border, var(--border-default))",
-                    background: "transparent",
-                    color: "var(--cmd-text, var(--text-primary))",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={archiveMutation.isPending
-                    || archiveReason.trim().length === 0
-                    || archiveConfirmation !== archiveConfirmationText}
-                  onClick={() => archiveMutation.mutate()}
-                  className="h-10 rounded-lg px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{
-                    border: "none",
-                    background: "var(--cmd-danger, var(--status-error))",
-                    color: "var(--cmd-pill-on-solid, #fff)",
-                  }}
-                >
-                  {archiveMutation.isPending ? "Archiving..." : "Archive pieces"}
-                </button>
-              </div>
-            </div>
-          </div>
+          <PieceRegisterArchiveDialog
+            selectedCount={selectedPieceIds.size}
+            archiveReason={archiveReason}
+            archiveConfirmation={archiveConfirmation}
+            archiveConfirmationText={archiveConfirmationText}
+            isPending={archiveMutation.isPending}
+            onReasonChange={setArchiveReason}
+            onConfirmationChange={setArchiveConfirmation}
+            onCancel={() => setArchiveOpen(false)}
+            onConfirm={() => archiveMutation.mutate()}
+          />
         )}
 
         {activeView === "overview" && !piecesQuery.isLoading && !piecesQuery.error && (

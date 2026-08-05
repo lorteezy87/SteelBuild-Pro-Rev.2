@@ -54,6 +54,8 @@ Notes:
 | 2026-07-09T20:00:00Z | measurement-ship1 | Drawing-viewer measurement correctness | src/components/drawings/viewer/{AnnotationLayer.jsx,detectScale.js,measureLabel.js,useMarkup.js} · src/pages/drawingViewer/{useAutoScaleOnLoad.js,ViewerToolbar.jsx,usePdfLoader.js} · src/pages/DrawingViewer.jsx · src/utils/feetInches.js · supabase/migrations/** | Fix `drawing_markups` CHECK (7 of 8 markup kinds rejected → table holds 0 rows), per-page scale detection + explicit ambiguous state, canonical ft-in 1/16" formatter, save-failure toast, badge+detection outside canvas mode. Plan: docs/superpowers/plans/2026-07-09-drawing-viewer-measurement-ship1.md |
 
 ## Recently released
+- 2026-08-05 · refactor-piece-register-wire · Wired registerHelpers + SelectFilter + ArchiveDialog into PieceRegister (supersedes #244 extract-only). Page ~1586→~1430 LOC.
+
 - 2026-08-05 · pr-hygiene-train · Merged supersedes: #221–#225, #227, #229, #232–#233, #236–#237, #239 (Package Board chain still open if #240 pending). Dirty mega-PRs re-landed clean; see `.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md`.
 - 2026-08-05 · enterprise-tier1 · Signup clickwrap + PM write floor migration + Stripe Tax hooks + `supabase:drift` + vercel main deploy off (#236).
 - 2026-08-05 · detailing-event-glue · targetSetId create/link + revision attach + status suggest (#239).
