@@ -42,9 +42,9 @@ import {
   NEW_TINT,
   PDF_PAGE_BACKGROUND,
   ZOOM_STEPS,
+  REVISION_COMPARE_MONO as mono,
 } from "./revisionCompareHelpers";
 
-const mono = "var(--font-mono)";
 
 // ── Raster helpers (pure canvas, no React) ──────────────────────────────
 

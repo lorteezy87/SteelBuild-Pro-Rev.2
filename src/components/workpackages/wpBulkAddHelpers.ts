@@ -230,3 +230,11 @@ export const PASTE_INPUT_EXTRA: Record<string, string | number> = {
 export const WP_BULK_EXAMPLE = `WP #	Name	Phase	Status	Tonnage	% Complete	Crew	Shop Hrs Budget	Shop Hrs Actual	Notes
 WP-001	Shop A - Main Steel	Fabrication	Not Started	42.5	0%		120	0	
 WP-002	Shop B - Misc Steel	Detailing	Not Started	18.2	0%		80	0	`;
+
+/** Compose paste-area style from PhoenixModal inputStyle + extras. */
+export function buildPasteInputStyle(
+  inputStyle: Record<string, unknown>,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  return { ...inputStyle, ...extra };
+}

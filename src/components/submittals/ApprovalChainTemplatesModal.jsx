@@ -16,10 +16,12 @@ import { Plus, X, ArrowUp, ArrowDown, Trash2, Pencil } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { getChainTemplates, normalizeChain } from "@/lib/approvalChains";
-import { normalizeCustomApprovalTemplates } from "./approvalChainTemplatesHelpers";
+import {
+  normalizeCustomApprovalTemplates,
+  APPROVAL_TEMPLATE_MONO as mono,
+} from "./approvalChainTemplatesHelpers";
 import { BIC_CHOICES } from "@/pages/submittals/format";
 
-const mono = { fontFamily: "var(--font-mono)" };
 
 // Common parties for the step picker — the canonical ball-in-court list plus the
 // internal/handoff roles users route through. Free text is still allowed.

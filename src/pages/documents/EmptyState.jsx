@@ -6,14 +6,20 @@
 
 import React from "react";
 import { CloudUpload, FileText, FileCode, File, FileImage, FileArchive } from "lucide-react";
+import { EMPTY_STATE_FILE_HINTS } from "./emptyStateHelpers";
 
-const ICONS = [
-  { Icon: FileText,    label: "PDF", color: "var(--status-error)" },
-  { Icon: FileCode,    label: "DWG", color: "var(--status-info)" },
-  { Icon: File,        label: "IFC", color: "var(--accent)" },
-  { Icon: FileImage,   label: "IMG", color: "var(--accent)" },
-  { Icon: FileArchive, label: "ZIP", color: "var(--status-warning)" },
-];
+const ICON_BY_KEY = {
+  pdf: FileText,
+  dwg: FileCode,
+  ifc: File,
+  img: FileImage,
+  zip: FileArchive,
+};
+
+const ICONS = EMPTY_STATE_FILE_HINTS.map((h) => ({
+  ...h,
+  Icon: ICON_BY_KEY[h.key],
+}));
 
 export default function EmptyState({ onUploadOpen }) {
   return (

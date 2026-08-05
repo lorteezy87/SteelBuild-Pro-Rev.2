@@ -5,6 +5,7 @@
  * addSubmittalRound, and submittals.status stays the workflow truth (§20).
  */
 import React, { useMemo, useState } from "react";
+import { APPROVAL_CHAIN_MONO as mono } from "./approvalChainPanelHelpers";
 import { Check, GitBranch, Settings, X } from "lucide-react";
 import {
   chainState,
@@ -14,7 +15,6 @@ import {
 } from "@/lib/approvalChains";
 import ApprovalChainTemplatesModal from "@/components/submittals/ApprovalChainTemplatesModal";
 
-const mono = "var(--font-mono)";
 
 function StepChip({ step, state }) {
   const palette = {

@@ -18,3 +18,5 @@ export function normalizeCustomApprovalTemplates(
     }))
     .filter((t) => t.steps.length > 0);
 }
+
+export const APPROVAL_TEMPLATE_MONO = { fontFamily: "var(--font-mono)" } as const;

@@ -8,6 +8,7 @@ import {
   PREVIEW_MIN_WIDTH,
   PASTE_INPUT_EXTRA,
   WP_BULK_EXAMPLE as EXAMPLE,
+  buildPasteInputStyle,
 } from "./wpBulkAddHelpers";
 
 /*
@@ -22,7 +23,7 @@ import {
  */
 
 
-const PASTE_INPUT_STYLE = { ...inputStyle, ...PASTE_INPUT_EXTRA };
+const PASTE_INPUT_STYLE = buildPasteInputStyle(inputStyle, PASTE_INPUT_EXTRA);
 
 export default function WPBulkAddModal({
   open,
