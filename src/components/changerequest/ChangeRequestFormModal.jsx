@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
+import { inputStyle, labelStyle } from "./changeRequestFormModalStyleHelpers";
 
 const emptyForm = {
   project_id: "",
@@ -16,30 +17,6 @@ const emptyForm = {
   priority: "Medium",
   status: "Submitted",
   scope_impact: "",
-};
-
-/** @type {import('react').CSSProperties} */
-const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "var(--radius-input)",
-  padding: "8px 12px",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  color: "var(--text-muted)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  display: "block",
-  marginBottom: 4,
 };
 
 export default function ChangeRequestFormModal({
