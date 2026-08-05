@@ -5,6 +5,7 @@ import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
 import { MapPin } from "lucide-react";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { asArray } from "@/lib/coerce";
 
 const emptyForm = {
   project_id: "",
@@ -21,19 +22,6 @@ const emptyForm = {
   drawing_id: "",
   inspection_id: "",
 };
-
-function asArray(v) {
-  if (Array.isArray(v)) return v;
-  if (typeof v === "string") {
-    try {
-      const parsed = JSON.parse(v);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
 
 const inputStyle = {
   width: "100%",

@@ -18,15 +18,8 @@ import type { TransmittalRow } from "@/hooks/useTransmittals";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
-import type { PillTone } from "@/components/command";
 import { attachableRegisterRows, resolveTransmittalDisplay } from "./docControl.derive";
-import { buildSheetOptions } from "./transmittalLogPanelHelpers";
-
-function directionTone(direction: string): PillTone {
-  if (direction === "incoming") return "info";
-  if (direction === "outgoing") return "good";
-  return "neutral";
-}
+import { buildSheetOptions, directionTone } from "./transmittalLogPanelHelpers";
 
 interface FormState {
   transmittal_number: string;

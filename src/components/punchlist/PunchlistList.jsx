@@ -1,18 +1,6 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
-
-function asArray(v) {
-  if (Array.isArray(v)) return v;
-  if (typeof v === "string") {
-    try {
-      const parsed = JSON.parse(v);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
+import { asArray } from "@/lib/coerce";
 
 const STATUS_COLORS = {
   Open: "var(--status-error)",

@@ -3,19 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { formatLocalDate } from "@/utils/dates";
 import { buildIdMap } from "@/pages/shared/buildIdMap";
-
-function asArray(v) {
-  if (Array.isArray(v)) return v;
-  if (typeof v === "string") {
-    try {
-      const parsed = JSON.parse(v);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
+import { asArray } from "@/lib/coerce";
 
 const sectionLabelStyle = {
   fontFamily: "var(--font-mono)",

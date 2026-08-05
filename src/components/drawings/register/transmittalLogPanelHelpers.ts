@@ -47,3 +47,11 @@ export function buildSheetOptions(
       }),
   );
 }
+
+export type DirectionPillTone = "info" | "good" | "neutral";
+
+export function directionTone(direction: string): DirectionPillTone {
+  if (direction === "incoming") return "info";
+  if (direction === "outgoing") return "good";
+  return "neutral";
+}
