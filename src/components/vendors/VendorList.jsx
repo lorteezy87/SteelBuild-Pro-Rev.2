@@ -2,13 +2,7 @@ import React, { useState } from "react";
 import { Pencil, Trash2, Star, Phone, Mail, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/components/shared/formatters";
-
-const STATUS_COLORS = {
-  Active: "var(--status-success)",
-  Inactive: "var(--text-muted)",
-  Probation: "var(--status-warning)",
-  Suspended: "var(--status-error)",
-};
+import { STATUS_COLORS } from "./vendorListHelpers";
 
 function StatusPill({ status }) {
   const color = STATUS_COLORS[status] || "var(--text-muted)";
