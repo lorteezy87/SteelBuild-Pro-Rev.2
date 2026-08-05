@@ -45,7 +45,7 @@ describe("Storage backup workflow", () => {
 
     expect(backupJob.environment).toBe("storage-backup-production");
     expect(backupJob.if).toBe("github.ref == 'refs/heads/main'");
-    expect(backupJob.steps.find(({ uses }) => uses === "actions/upload-artifact@v4").with.path)
-      .toBe("${{ runner.temp }}/storage-backup-manifest.json");
+    const uploadStep = backupJob.steps.find(({ uses }) => uses?.startsWith("actions/upload-artifact@"));
+    expect(uploadStep?.with?.path).toBe("${{ runner.temp }}/storage-backup-manifest.json");
   });
 });

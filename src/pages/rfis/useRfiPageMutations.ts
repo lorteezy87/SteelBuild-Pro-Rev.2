@@ -28,6 +28,7 @@ import {
   canUploadRfiAttachments,
   formatRfiAttachmentUploadToast,
 } from "./rfiAttachmentUpload";
+import { releaseHoldsForRfiMarks } from "@/lib/rfiPieceHolds";
 
 type RfiRow = {
   id: string;
@@ -122,7 +123,7 @@ export function useRfiPageMutations(args: {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, data }: { ids: string[]; data: Record<string, unknown> }) => {
-      const results = await batchProcess(ids, (id) => entities.RFI.update(id, data));
+      const results = await batchProcess(ids, (id: any) => entities.RFI.update(id, data));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
       }
@@ -140,7 +141,7 @@ export function useRfiPageMutations(args: {
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
-      const results = await batchProcess(ids, (id) => entities.RFI.delete(id));
+      const results = await batchProcess(ids, (id: any) => entities.RFI.delete(id));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
@@ -180,6 +181,36 @@ export function useRfiPageMutations(args: {
       toast.success("Field notified — alert posted");
     },
     onError: (e: unknown) => toast.error(formatRfiNotifyError(e)),
+  });
+
+  const releaseHoldsMut = useMutation({
+    mutationFn: async (r: RfiRow) => {
+      const project = (r.project_id as string) || projectId;
+      if (!project) throw new Error("No project for hold release");
+      const marks = (r.metadata as any)?.piece_marks;
+      return releaseHoldsForRfiMarks({
+        projectId: project,
+        pieceMarks: marks,
+        reason: `Released via ${r.rfi_number || "RFI"} answer`,
+      });
+    },
+    onSuccess: (result, r) => {
+      const project = (r.project_id as string) || projectId;
+      if (project) {
+        qc.invalidateQueries({ queryKey: ["piece-register", project] });
+        qc.invalidateQueries({ queryKey: ["piece-relationships", project] });
+        qc.invalidateQueries({ queryKey: ["model-elements", project] });
+        qc.invalidateQueries({ queryKey: ["canonical-pieces-3d", project] });
+        qc.invalidateQueries({ queryKey: ["canonical-reporting", project] });
+        qc.invalidateQueries({ queryKey: ["pieces"] });
+      }
+      if (result.releasedCount === 0) {
+        toast.message("No held pieces matched the RFI piece marks");
+      } else {
+        toast.success(`Released hold on ${result.releasedCount} piece(s)`);
+      }
+    },
+    onError: (e: unknown) => toastCrudError(e, "Failed to release piece holds"),
   });
 
   const uploadRfiPdfDocuments = useCallback(
@@ -311,6 +342,7 @@ export function useRfiPageMutations(args: {
     bulkUpdateMut,
     bulkDeleteMut,
     notifyFieldMut,
+    releaseHoldsMut,
     uploadRfiPdfDocuments,
     saveRfi,
     savingAttachments,

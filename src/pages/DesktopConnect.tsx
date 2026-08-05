@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
 
+import {
+  DesktopConnectShell,
+  DesktopConnectSpinner,
+  desktopConnectBody,
+  desktopConnectErrorBox,
+} from "@/components/desktopConnect/DesktopConnectShell";
 import { supabase } from "@/lib/supabase";
 import {
   DESKTOP_SESSION_ALGORITHM,
+  DesktopConnectQueryError,
   DesktopSessionCryptoError,
   DesktopSessionValidationError,
   buildDesktopCallbackUrl,
@@ -24,6 +31,7 @@ type BrowserSession = {
 
 export interface DesktopConnectDependencies {
   getSession(): Promise<BrowserSession | null>;
+  waitForSession?(timeoutMs?: number): Promise<BrowserSession | null>;
   encryptSession(input: {
     algorithm: typeof DESKTOP_SESSION_ALGORITHM;
     state: string;
@@ -35,17 +43,21 @@ export interface DesktopConnectDependencies {
     codeChallenge: string;
     encryptedSession: DesktopEncryptedSession;
   }): Promise<{ code: string; expiresAt: string }>;
+  attemptSoftRedirect?(url: string): void;
   redirect(url: string): void;
 }
 
 interface DesktopConnectProps {
   dependencies?: DesktopConnectDependencies;
+  /** When omitted, each attempt reads window.location.search (supports Retry). */
   search?: string;
   parseQuery?: (search: string) => DesktopConnectQuery;
 }
 
 type DesktopConnectFailure =
   | "query"
+  | "query-empty"
+  | "query-missing"
   | "session"
   | `session-${DesktopSessionValidationField}`
   | "crypto"
@@ -53,8 +65,13 @@ type DesktopConnectFailure =
   | "handoff";
 
 const failureMessages: Record<DesktopConnectFailure, string> = {
-  query: "The desktop connection request is invalid or expired. Start again from Desktop Command Center. (DC-QUERY)",
-  session: "Sign in to SteelBuild in this browser, then start again from Desktop Command Center. (DC-SESSION)",
+  "query-empty":
+    "This page needs a connection link from Desktop Command Center. In the desktop app, click Connect — do not open /DesktopConnect directly or use a bookmark. (DC-QUERY-EMPTY)",
+  "query-missing":
+    "The connection link is incomplete (state, challenge, or public key missing). Close this tab and click Connect again from Desktop Command Center. (DC-QUERY-MISSING)",
+  query:
+    "The desktop connection request is invalid or expired. Start again from Desktop Command Center. (DC-QUERY)",
+  session: "Sign in to SteelBuild in this browser tab, then click Retry. Being signed in on another tab or host is not enough. (DC-SESSION)",
   "session-access-token": "The browser session did not contain a usable access token. Sign in again, then restart the desktop connection. (DC-SESSION-ACCESS)",
   "session-refresh-token": "The browser session did not contain a usable refresh token. Sign in again, then restart the desktop connection. (DC-SESSION-REFRESH)",
   "session-expiry": "The browser session did not contain a usable expiry. Sign in again, then restart the desktop connection. (DC-SESSION-EXPIRY)",
@@ -71,12 +88,36 @@ const failureMessages: Record<DesktopConnectFailure, string> = {
   handoff: "SteelBuild could not create the one-time desktop handoff. Try again. (DC-HANDOFF)",
 };
 
+async function waitForBrowserSession(timeoutMs = 8_000): Promise<BrowserSession | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (!error && data.session) return data.session as BrowserSession;
+
+  return await new Promise((resolve) => {
+    let settled = false;
+    const finish = (session: BrowserSession | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      subscription.subscription.unsubscribe();
+      resolve(session);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) finish(session as BrowserSession);
+    });
+    void supabase.auth.getSession().then(({ data: latest }) => {
+      if (latest.session) finish(latest.session as BrowserSession);
+    });
+  });
+}
+
 const defaultDependencies: DesktopConnectDependencies = {
   async getSession() {
     const { data, error } = await supabase.auth.getSession();
     if (error) throw error;
     return data.session as BrowserSession | null;
   },
+  waitForSession: waitForBrowserSession,
   encryptSession: encryptDesktopSession,
   async createHandoff(input) {
     const { data, error } = await supabase.functions.invoke("command-center-session-handoff", {
@@ -92,31 +133,61 @@ const defaultDependencies: DesktopConnectDependencies = {
     }
     return { code: data.code, expiresAt: data.expiresAt };
   },
+  attemptSoftRedirect(url) {
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      window.setTimeout(() => iframe.remove(), 3_000);
+    } catch {
+      // Best-effort only; the explicit button remains the reliable path.
+    }
+  },
   redirect(url) {
     window.location.assign(url);
   },
 };
 
+/** Resolve the connect query string — always fresh from the browser unless tests pin it. */
+export function resolveDesktopConnectSearch(explicit?: string): string {
+  if (explicit !== undefined) return explicit;
+  return typeof window !== "undefined" ? window.location.search : "";
+}
+
+function classifyQueryFailure(error: unknown): DesktopConnectFailure {
+  if (error instanceof DesktopConnectQueryError) {
+    if (error.kind === "empty") return "query-empty";
+    if (error.kind === "missing") return "query-missing";
+  }
+  return "query";
+}
+
 export function DesktopConnect({
   dependencies = defaultDependencies,
-  search = window.location.search,
+  search,
   parseQuery = parseDesktopConnectQuery,
 }: DesktopConnectProps) {
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<"connecting" | "returning" | "error">("connecting");
   const [failure, setFailure] = useState<DesktopConnectFailure | null>(null);
+  const [callbackUrl, setCallbackUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     let failureStage: DesktopConnectFailure = "query";
     setStatus("connecting");
     setFailure(null);
+    setCallbackUrl(null);
 
     void (async () => {
       try {
-        const query = parseQuery(search);
+        const activeSearch = resolveDesktopConnectSearch(search);
+        const query = parseQuery(activeSearch);
         failureStage = "session";
-        const browserSession = await dependencies.getSession();
+        const browserSession = await (dependencies.waitForSession?.(8_000)
+          ?? dependencies.getSession());
         if (!browserSession?.expires_at || !browserSession.user.email) {
           throw new Error("Authenticated SteelBuild session is unavailable");
         }
@@ -140,12 +211,15 @@ export function DesktopConnect({
         });
         const callback = buildDesktopCallbackUrl({ code: handoff.code, state: query.state });
         if (!active) return;
+        setCallbackUrl(callback);
         setStatus("returning");
-        dependencies.redirect(callback);
+        dependencies.attemptSoftRedirect?.(callback);
       } catch (error) {
         if (active) {
           setFailure(
-            failureStage === "crypto" && error instanceof DesktopSessionValidationError
+            failureStage === "query"
+              ? classifyQueryFailure(error)
+              : failureStage === "crypto" && error instanceof DesktopSessionValidationError
               ? `session-${error.field}`
               : failureStage === "crypto" && error instanceof DesktopSessionCryptoError
                 ? `crypto-${error.stage}`
@@ -161,21 +235,64 @@ export function DesktopConnect({
     };
   }, [attempt, dependencies, parseQuery, search]);
 
+  if (status === "connecting") {
+    return (
+      <DesktopConnectShell
+        title="Connect SteelBuild"
+        subtitle="Connecting securely to Desktop Command Center. Sign in in this tab if prompted."
+      >
+        <DesktopConnectSpinner label="Connecting securely…" />
+      </DesktopConnectShell>
+    );
+  }
+
+  if (status === "returning") {
+    return (
+      <DesktopConnectShell
+        title="Handoff ready"
+        subtitle="If Desktop Command Center is still waiting, click the button below and allow the app to open."
+        footer="This link is one-time and expires quickly. It never contains your password or refresh token."
+      >
+        {callbackUrl ? (
+          <a
+            href={callbackUrl}
+            className="sbd-btn sbd-btn-primary"
+            style={{
+              display: "inline-flex",
+              width: "100%",
+              justifyContent: "center",
+              minHeight: 44,
+              fontSize: 14,
+              textDecoration: "none",
+            }}
+          >
+            Open Desktop Command Center
+          </a>
+        ) : null}
+      </DesktopConnectShell>
+    );
+  }
+
   return (
-    <main style={{ maxWidth: 560, margin: "8vh auto", padding: 32 }} aria-live="polite">
-      <p style={{ letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>
-        Desktop Command Center
+    <DesktopConnectShell
+      title="Connection failed"
+      subtitle="The secure desktop connection could not be completed."
+    >
+      <div role="alert" style={{ ...desktopConnectErrorBox, marginBottom: 18 }}>
+        {failure ? failureMessages[failure] : "The secure desktop connection could not be completed."}
+      </div>
+      <button
+        type="button"
+        className="sbd-btn sbd-btn-primary"
+        onClick={() => setAttempt((value) => value + 1)}
+        style={{ width: "100%", justifyContent: "center", minHeight: 44, fontSize: 14 }}
+      >
+        Retry connection
+      </button>
+      <p style={{ ...desktopConnectBody, margin: "16px 0 0" }}>
+        Sign in to SteelBuild in this browser tab before retrying. Close this tab and start again from Desktop Command Center if the problem persists.
       </p>
-      <h1>Connect SteelBuild</h1>
-      {status === "connecting" && <p>Connecting securely to the desktop application…</p>}
-      {status === "returning" && <p>Connected. Returning to Desktop Command Center…</p>}
-      {status === "error" && (
-        <>
-          <p>{failure ? failureMessages[failure] : "The secure desktop connection could not be completed."}</p>
-          <button type="button" onClick={() => setAttempt((value) => value + 1)}>Retry connection</button>
-        </>
-      )}
-    </main>
+    </DesktopConnectShell>
   );
 }
 

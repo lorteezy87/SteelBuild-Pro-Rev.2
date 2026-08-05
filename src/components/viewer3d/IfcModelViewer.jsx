@@ -1,27 +1,49 @@
 /**
- * IfcModelViewer — the three.js scene host for the Detailing Control Center 3D
- * tab. Lazy-loaded (so web-ifc + three never touch the main bundle): given an
- * IFC ArrayBuffer, it renders the model, colors each member via `colorForGuid`,
- * fits the camera, and reports clicks through `onPick`.
+ * IfcModelViewer — three.js scene host for the Detailing Control Center 3D tab.
+ * Supports pick/select and measureMode (vertex/edge-snapped point-to-point
+ * distance, displayed to the nearest 1/16").
  *
- * Owns no app data — it's a pure renderer over { buffer, colorForGuid, onPick }.
+ * Graphics: ACES tone-map, multi-light studio setup, soft ground disc.
+ * Navigation: OrbitControls with "walk-zoom" so wheel zoom never stalls at
+ * minDistance (the old "running out of gas" feel).
  */
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { loadIfcGeometry } from "@/lib/ifc/loadIfcGeometry";
+import {
+  snapMeasurePoint,
+  distanceMeters,
+  formatMeasureDistance,
+} from "@/lib/ifc/viewerMeasure";
 
 const HIGHLIGHT = new THREE.Color("#f5d90a");
+const MEASURE_COLOR = 0xf5d90a;
 
-export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onLoaded, onColorStats }) {
+export default function IfcModelViewer({
+  buffer,
+  colorFor,
+  onPick,
+  onSelect,
+  onLoaded,
+  onColorStats,
+  measureMode = false,
+  onMeasure,
+}) {
   const mountRef = useRef(null);
-  const apiRef = useRef(null); // { scene, camera, renderer, controls, model, raf, ro }
-  const selectedRef = useRef(new Map()); // expressID -> mesh (multi-select highlight)
-  const [status, setStatus] = useState("loading"); // loading | ready | error
+  const apiRef = useRef(null);
+  const selectedRef = useRef(new Map());
+  const measureRef = useRef({ a: null, b: null, group: null });
+  const measureModeRef = useRef(measureMode);
+  const onMeasureRef = useRef(onMeasure);
+  const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
   const [count, setCount] = useState(0);
+  const [measureLabel, setMeasureLabel] = useState(null);
 
-  // Scene setup + model load (once per buffer).
+  measureModeRef.current = measureMode;
+  onMeasureRef.current = onMeasure;
+
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount || !buffer) return undefined;
@@ -29,46 +51,74 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#0d1117");
-    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1e6);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // fewer pixels to shade → smoother
-    mount.appendChild(renderer.domElement);
+    // No scene fog — FogExp2 + ACES crushed large models to near-black after
+    // the polish pass and looked like a failed load.
 
-    // Lighting tuned for the cheap Lambert material (no env map): sky/ground
-    // hemisphere fill + a key directional for form + soft ambient.
-    const hemi = new THREE.HemisphereLight(0xdbe7ff, 0x2b2f36, 1.0);
-    scene.add(hemi);
-    const key = new THREE.DirectionalLight(0xffffff, 1.3);
-    key.position.set(1, 2.2, 1.4);
-    scene.add(key);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = false;      // stop dead on release — no inertia drift
-    controls.rotateSpeed = 0.6;          // calmer orbit when looking through members
-    controls.panSpeed = 0.8;
-    controls.zoomSpeed = 1.0;            // steady zoom; double-click smoothly flies you in
-    controls.zoomToCursor = true;        // zoom toward the cursor, not scene center
-    controls.screenSpacePanning = true;  // pan in screen space (intuitive)
-
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 1e6);
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: "high-performance",
+        alpha: false,
+      });
+    } catch (e) {
+      setError(e?.message || "WebGL unavailable");
+      setStatus("error");
+      return undefined;
+    }
+    // Cap DPR for GPU cost; 2 is enough for crisp edges without 3× fill-rate.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    if ("outputColorSpace" in renderer && THREE.SRGBColorSpace != null) {
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+    }
+    if (THREE.ACESFilmicToneMapping != null) {
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+    }
+    // updateStyle=true (default) so the canvas CSS size tracks the mount.
+    // updateStyle=false left a tiny/default canvas and looked like a blank load.
     const resize = () => {
-      const w = mount.clientWidth || 1;
-      const h = mount.clientHeight || 1;
-      // updateStyle defaults true on purpose: with setPixelRatio(1.5) the draw
-      // buffer is 1.5x, and WITHOUT updating the canvas CSS the element displays
-      // at buffer size (1.5x its column) — overflowing onto the side panel so
-      // the fab controls can't be clicked. Letting three set the CSS keeps the
-      // canvas the container's size (sharp via pixelRatio, no overflow).
-      renderer.setSize(w, h);
+      const w = Math.max(mount.clientWidth || 0, 1);
+      const h = Math.max(mount.clientHeight || 0, 1);
+      renderer.setSize(w, h, true);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     };
+    mount.appendChild(renderer.domElement);
+    renderer.domElement.style.display = "block";
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(mount);
 
+    // Studio lighting — cheap, no shadows (shadow maps × 12k meshes kills FPS).
+    scene.add(new THREE.HemisphereLight(0xd5e2f5, 0x1c222b, 1.0));
+    const key = new THREE.DirectionalLight(0xfff6ea, 1.25);
+    key.position.set(1.4, 2.4, 1.1);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xb8c8e0, 0.55);
+    fill.position.set(-1.6, 0.9, -1.2);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xe8f0ff, 0.4);
+    rim.position.set(0.2, 1.0, -2.0);
+    scene.add(rim);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.12;
+    controls.rotateSpeed = 0.55;
+    controls.panSpeed = 0.9;
+    controls.zoomSpeed = 1.15;
+    controls.zoomToCursor = true;
+    controls.screenSpacePanning = true;
+    controls.minDistance = 0.05;
+    controls.maxDistance = 1e7;
+
     let raf = 0;
-    let tween = null; // smooth camera move { fromPos, toPos, fromTgt, toTgt, start, dur }
+    let tween = null;
     const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
     const flyTo = (toTgt, toPos, dur = 380) => {
       tween = {
@@ -77,7 +127,21 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
         start: performance.now(), dur,
       };
     };
+
+    const updateClipPlanes = (rad) => {
+      const dist = camera.position.distanceTo(controls.target);
+      if (!Number.isFinite(dist) || dist <= 0) return;
+      const r = (Number.isFinite(rad) && rad > 0) ? rad : (apiRef.current?.modelRadius || 10);
+      const near = Math.max(dist * 0.0015, r * 0.00005, 0.01);
+      const far = Math.max(dist + r * 12, r * 40, near * 100, 100);
+      if (near >= far) return;
+      camera.near = near;
+      camera.far = far;
+      camera.updateProjectionMatrix();
+    };
+
     const tick = () => {
+      if (cancelled) return;
       if (tween) {
         const t = Math.min(1, (performance.now() - tween.start) / tween.dur);
         const e = easeInOut(t);
@@ -86,57 +150,141 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
         if (t >= 1) tween = null;
       }
       controls.update();
-      // Dynamic near/far around the current view → crisp z-precision at any zoom
-      // without the cost of a logarithmic depth buffer.
-      const rad = apiRef.current?.modelRadius;
-      if (rad) {
-        const dist = camera.position.distanceTo(controls.target);
-        camera.near = Math.max(dist * 0.02, rad / 5000);
-        camera.far = dist + rad * 5;
-        camera.updateProjectionMatrix();
-      }
+      updateClipPlanes(apiRef.current?.modelRadius);
       renderer.render(scene, camera);
       raf = requestAnimationFrame(tick);
+      if (apiRef.current) apiRef.current.raf = raf;
     };
 
-    apiRef.current = { scene, camera, renderer, controls, model: null, raf: 0, ro, flyTo, focusDist: 1 };
+    // Walk-zoom: when the user keeps scrolling in at minDistance, slide both
+    // camera and target forward so zoom never "runs out of gas".
+    const walkDir = new THREE.Vector3();
+    const onWheelCapture = (e) => {
+      const rad = apiRef.current?.modelRadius || 10;
+      const dist = camera.position.distanceTo(controls.target);
+      const zoomingIn = e.deltaY < 0;
+      const nearFloor = Math.max(controls.minDistance * 1.25, rad * 0.004, 0.08);
+      if (!zoomingIn || dist > nearFloor) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      walkDir.subVectors(controls.target, camera.position);
+      const len = walkDir.length();
+      if (len < 1e-8) return;
+      walkDir.multiplyScalar(1 / len);
+      const step = Math.max(dist * 0.12, rad * 0.002, 0.04);
+      camera.position.addScaledVector(walkDir, step);
+      controls.target.addScaledVector(walkDir, step);
+      controls.update();
+    };
+    renderer.domElement.addEventListener("wheel", onWheelCapture, {
+      capture: true,
+      passive: false,
+    });
+
+    const measureGroup = new THREE.Group();
+    measureGroup.name = "measure-overlay";
+    scene.add(measureGroup);
+    measureRef.current = { a: null, b: null, group: measureGroup };
+
+    apiRef.current = {
+      scene, camera, renderer, controls, model: null, raf: 0, ro, flyTo,
+      focusDist: 1, measureGroup, modelRadius: 1,
+    };
+
+    // Kick a render loop immediately so the mount isn't a black void while
+    // web-ifc parses (can take seconds on large IFCs).
+    raf = requestAnimationFrame(tick);
+    apiRef.current.raf = raf;
 
     loadIfcGeometry(buffer, { colorFor })
       .then((model) => {
-        if (cancelled) { model.dispose(); return; }
-        scene.add(model.group);
-        apiRef.current.model = model;
+        if (cancelled) {
+          try { model.dispose(); } catch { /* ignore */ }
+          return;
+        }
+        const api = apiRef.current;
+        if (!api) {
+          try { model.dispose(); } catch { /* ignore */ }
+          return;
+        }
 
-        // Fit camera to the model bounds (reusable — also drives the Fit button).
-        const box = new THREE.Box3().setFromObject(model.group);
-        const sphere = box.getBoundingSphere(new THREE.Sphere());
-        const r = sphere.radius || 1;
-        apiRef.current.modelRadius = r;    // drives the dynamic near/far in tick
-        controls.minDistance = r * 0.01;   // close enough to inspect a member
-        controls.maxDistance = r * 40;
-        apiRef.current.focusDist = r * 0.18; // double-click framing distance
-        const fitPos = new THREE.Vector3(sphere.center.x + r * 1.6, sphere.center.y + r * 1.2, sphere.center.z + r * 1.6);
-        const fitView = (animate) => {
-          if (animate) { apiRef.current.flyTo(sphere.center.clone(), fitPos.clone()); }
-          else { controls.target.copy(sphere.center); camera.position.copy(fitPos); controls.update(); }
-        };
-        fitView(false);                     // initial: instant
-        apiRef.current.fitView = () => fitView(true); // button: smooth
+        try {
+          scene.add(model.group);
+          api.model = model;
 
-        // Ground grid at the model's base for spatial reference.
-        const grid = new THREE.GridHelper(r * 4, 40, 0x3a4250, 0x1b2027);
-        grid.position.set(sphere.center.x, box.min.y, sphere.center.z);
-        scene.add(grid);
-        apiRef.current.grid = grid;
+          const box = new THREE.Box3().setFromObject(model.group);
+          if (box.isEmpty()) {
+            setCount(0);
+            onLoaded?.(0);
+            setStatus("ready");
+            return;
+          }
+          const sphere = box.getBoundingSphere(new THREE.Sphere());
+          const r = Math.max(
+            Number.isFinite(sphere.radius) && sphere.radius > 0 ? sphere.radius : 1,
+            0.5,
+          );
+          api.modelRadius = r;
+          controls.minDistance = Math.max(r * 0.0008, 0.02);
+          controls.maxDistance = Math.max(r * 80, 50);
+          api.focusDist = r * 0.18;
 
-        setCount(model.count);
-        onLoaded?.(model.count);
-        setStatus("ready");
-        raf = requestAnimationFrame(tick);
-        apiRef.current.raf = raf;
+          // Soft ground disc under the model (cheap depth cue, no shadow map).
+          const groundGeo = new THREE.CircleGeometry(r * 2.4, 64);
+          groundGeo.rotateX(-Math.PI / 2);
+          const groundMat = new THREE.MeshBasicMaterial({
+            color: 0x12171e,
+            transparent: true,
+            opacity: 0.55,
+            depthWrite: false,
+          });
+          const ground = new THREE.Mesh(groundGeo, groundMat);
+          const minY = Number.isFinite(box.min.y) ? box.min.y : sphere.center.y - r * 0.1;
+          ground.position.set(sphere.center.x, minY - r * 0.002, sphere.center.z);
+          ground.renderOrder = -1;
+          scene.add(ground);
+          api.ground = ground;
+
+          const grid = new THREE.GridHelper(r * 4, 40, 0x3d4654, 0x1a2028);
+          grid.position.set(sphere.center.x, minY, sphere.center.z);
+          if (Array.isArray(grid.material)) {
+            grid.material.forEach((m) => { m.transparent = true; m.opacity = 0.45; });
+          } else if (grid.material) {
+            grid.material.transparent = true;
+            grid.material.opacity = 0.45;
+          }
+          scene.add(grid);
+          api.grid = grid;
+
+          const fitPos = new THREE.Vector3(
+            sphere.center.x + r * 1.55,
+            sphere.center.y + r * 1.05,
+            sphere.center.z + r * 1.55,
+          );
+          const fitView = (animate) => {
+            if (!apiRef.current) return;
+            if (animate) apiRef.current.flyTo(sphere.center.clone(), fitPos.clone());
+            else {
+              controls.target.copy(sphere.center);
+              camera.position.copy(fitPos);
+              controls.update();
+            }
+          };
+          fitView(false);
+          api.fitView = () => fitView(true);
+
+          setCount(model.count);
+          onLoaded?.(model.count);
+          setStatus("ready");
+        } catch (e) {
+          console.error("[IfcModelViewer] post-load setup failed:", e);
+          setError(e?.message || String(e));
+          setStatus("error");
+        }
       })
       .catch((e) => {
         if (cancelled) return;
+        console.error("[IfcModelViewer] loadIfcGeometry failed:", e);
         setError(e?.message || String(e));
         setStatus("error");
       });
@@ -144,35 +292,108 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
     return () => {
       cancelled = true;
       cancelAnimationFrame(apiRef.current?.raf || raf);
+      renderer.domElement.removeEventListener("wheel", onWheelCapture, { capture: true });
       ro.disconnect();
       controls.dispose();
       apiRef.current?.grid?.geometry?.dispose();
-      apiRef.current?.grid?.material?.dispose();
+      if (Array.isArray(apiRef.current?.grid?.material)) {
+        apiRef.current.grid.material.forEach((m) => m.dispose?.());
+      } else {
+        apiRef.current?.grid?.material?.dispose?.();
+      }
+      apiRef.current?.ground?.geometry?.dispose();
+      apiRef.current?.ground?.material?.dispose?.();
       apiRef.current?.model?.dispose();
+      clearMeasureVisuals();
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
       apiRef.current = null;
       selectedRef.current = new Map();
+      measureRef.current = { a: null, b: null, group: null };
     };
-  // colorForGuid handled by the recolor effect; reloading on it would be wasteful.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buffer]);
 
-  // Recolor in place when the color mode / status data changes — no reload.
-  // `status` is in the deps on purpose: the model loads ASYNC, so a colorFor
-  // change that lands while the geometry is still parsing (e.g. the fab roster
-  // arriving from the DB during a big-model parse on reload) hits a null
-  // apiRef.current.model and no-ops. Without re-running when status flips to
-  // "ready", the model stays painted with the stale colorFor captured at load
-  // and the saved fab colors never appear — they only showed on a live assign
-  // (model already loaded). Re-running on "ready" repaints with the latest.
   useEffect(() => {
     const stats = apiRef.current?.model?.recolor?.(colorFor);
     if (stats) onColorStats?.(stats);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorFor, status]);
 
-  // Click picking.
+  useEffect(() => {
+    if (!measureMode) {
+      clearMeasureVisuals();
+      measureRef.current.a = null;
+      measureRef.current.b = null;
+      setMeasureLabel(null);
+      onMeasureRef.current?.(null);
+    }
+  }, [measureMode]);
+
+  function clearMeasureVisuals() {
+    const g = measureRef.current?.group;
+    if (!g) return;
+    while (g.children.length) {
+      const c = g.children[0];
+      g.remove(c);
+      c.geometry?.dispose?.();
+      if (Array.isArray(c.material)) c.material.forEach((m) => m.dispose?.());
+      else c.material?.dispose?.();
+    }
+  }
+
+  function measureMarkerRadius() {
+    const r = apiRef.current?.modelRadius || 1;
+    return Math.min(Math.max(r * 0.004, 0.025), 0.18);
+  }
+
+  function drawMeasure(a, b) {
+    clearMeasureVisuals();
+    const g = measureRef.current?.group;
+    if (!g || !a) return;
+    const rad = measureMarkerRadius();
+    const mkPoint = (p) => {
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(rad, 18, 14),
+        new THREE.MeshBasicMaterial({
+          color: MEASURE_COLOR,
+          depthTest: false,
+          transparent: true,
+          opacity: 0.95,
+        }),
+      );
+      mesh.position.copy(p);
+      mesh.renderOrder = 10;
+      g.add(mesh);
+    };
+    mkPoint(a);
+    if (!b) return;
+    mkPoint(b);
+    const positions = new Float32Array([a.x, a.y, a.z, b.x, b.y, b.z]);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const line = new THREE.Line(
+      geo,
+      new THREE.LineBasicMaterial({
+        color: MEASURE_COLOR,
+        depthTest: false,
+        transparent: true,
+        opacity: 0.95,
+      }),
+    );
+    line.renderOrder = 10;
+    g.add(line);
+
+    const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+    const tick = new THREE.Mesh(
+      new THREE.SphereGeometry(rad * 0.55, 12, 10),
+      new THREE.MeshBasicMaterial({ color: 0xfff3a0, depthTest: false }),
+    );
+    tick.position.copy(mid);
+    tick.renderOrder = 11;
+    g.add(tick);
+  }
+
   useEffect(() => {
     const mount = mountRef.current;
     const ctx = apiRef.current;
@@ -180,58 +401,97 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
     const raycaster = new THREE.Raycaster();
     const ndc = new THREE.Vector2();
 
+    const hitMesh = (ev) => {
+      const ctx2 = apiRef.current;
+      const model = ctx2?.model;
+      if (!model) return null;
+      const rect = ctx2.renderer.domElement.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return null;
+      ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(ndc, ctx2.camera);
+      const hits = raycaster.intersectObjects(model.group.children, false);
+      return hits[0] || null;
+    };
+
     const onClick = (ev) => {
       const ctx2 = apiRef.current;
       const model = ctx2?.model;
       if (!model) return;
-      const rect = ctx2.renderer.domElement.getBoundingClientRect();
-      ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(ndc, ctx2.camera);
-      const hits = raycaster.intersectObjects(model.group.children, false);
 
-      // Ctrl / Cmd / Shift add-to-selection; a plain click replaces it.
+      if (measureModeRef.current) {
+        const hit = hitMesh(ev);
+        if (!hit) return;
+        const { point, snapped, snapKind } = snapMeasurePoint(hit.object, hit.point);
+        const m = measureRef.current;
+
+        if (!m.a || m.b) {
+          m.a = point;
+          m.b = null;
+          drawMeasure(m.a, null);
+          setMeasureLabel({ phase: "a", snapped, snapKind, formatted: null });
+          onMeasureRef.current?.({
+            phase: "a", a: m.a, b: null, distanceM: null, snappedA: snapped, snapKindA: snapKind,
+          });
+          return;
+        }
+
+        m.b = point;
+        drawMeasure(m.a, m.b);
+        const dist = distanceMeters(m.a, m.b);
+        const formatted = formatMeasureDistance(dist);
+        setMeasureLabel({ phase: "done", snapped, snapKind, formatted, distanceM: dist });
+        onMeasureRef.current?.({
+          phase: "done",
+          a: m.a,
+          b: m.b,
+          distanceM: dist,
+          snappedB: snapped,
+          snapKindB: snapKind,
+          ...formatted,
+        });
+        return;
+      }
+
+      const hit = hitMesh(ev);
       const additive = ev.ctrlKey || ev.metaKey || ev.shiftKey;
       const sel = selectedRef.current;
-      const clearAll = () => { for (const m of sel.values()) m.material.emissive?.set("#000000"); sel.clear(); };
+      const clearAll = () => {
+        for (const mesh of sel.values()) mesh.material.emissive?.set("#000000");
+        sel.clear();
+      };
 
-      if (!hits.length) {
+      if (!hit) {
         if (!additive) { clearAll(); onPick?.(null); onSelect?.([]); }
         return;
       }
-      const mesh = hits[0].object;
+      const mesh = hit.object;
       const { expressID } = mesh.userData || {};
 
       if (additive && sel.has(expressID)) {
-        mesh.material.emissive?.set("#000000");   // toggle off
+        mesh.material.emissive?.set("#000000");
         sel.delete(expressID);
       } else {
         if (!additive) clearAll();
         sel.set(expressID, mesh);
-        mesh.material.emissive?.copy(HIGHLIGHT).multiplyScalar(0.45);
+        if (mesh.material?.emissive) {
+          mesh.material.emissive.copy(HIGHLIGHT).multiplyScalar(0.4);
+        }
       }
 
-      onSelect?.([...sel.values()].map((m) => m.userData?.guid).filter(Boolean));
+      onSelect?.([...sel.values()].map((x) => x.userData?.guid).filter(Boolean));
       if (sel.has(expressID)) model.pickInfo(expressID).then((info) => onPick?.(info));
       else onPick?.(null);
     };
 
-    // Double-click flies the orbit pivot to the clicked point and steps the
-    // camera halfway in — so you can keep moving deeper instead of stalling at
-    // the model's center (the cause of "zoom slows then stops").
     const onDblClick = (ev) => {
+      if (measureModeRef.current) return;
       const ctx2 = apiRef.current;
       const model = ctx2?.model;
       if (!model) return;
-      const rect = ctx2.renderer.domElement.getBoundingClientRect();
-      ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(ndc, ctx2.camera);
-      const hits = raycaster.intersectObjects(model.group.children, false);
-      if (!hits.length) return;
-      const p = hits[0].point;
-      // Smoothly fly to frame the clicked point + re-pivot there (the instant
-      // half-jump was the disorienting part). Keeps the current view direction.
+      const hit = hitMesh(ev);
+      if (!hit) return;
+      const p = hit.point;
       const dir = ctx2.camera.position.clone().sub(ctx2.controls.target).normalize();
       const toPos = p.clone().addScaledVector(dir, ctx2.focusDist || 1);
       ctx2.flyTo(p.clone(), toPos);
@@ -244,16 +504,14 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
       el.removeEventListener("click", onClick);
       el.removeEventListener("dblclick", onDblClick);
     };
-  }, [status, onPick]);
+  }, [status, onPick, onSelect]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 420 }}>
       <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
       {status === "loading" && (
         <div style={overlay}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" }}>
-            Loading model…
-          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" }}>Loading model…</div>
         </div>
       )}
       {status === "error" && (
@@ -267,8 +525,7 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
         <div style={overlay}>
           <div role="alert" style={{ maxWidth: 440, textAlign: "center", color: "var(--text-primary)", fontSize: 13, lineHeight: 1.6 }}>
             No structural members to show — this IFC has no beams, columns, plates,
-            or members (it looks like a reference/proxy export). Re-export from your
-            detailer with structural members, then load it again.
+            or members. Re-export with structural members, then load again.
           </div>
         </div>
       )}
@@ -277,8 +534,32 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
           <button type="button" onClick={() => apiRef.current?.fitView?.()} title="Fit whole model in view" style={fitBtn}>
             Fit view
           </button>
-          <div style={{ position: "absolute", left: 12, bottom: 10, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", pointerEvents: "none" }}>
-            {count.toLocaleString()} parts · drag to orbit · click a member · ctrl/shift-click to multi-select · double-click to fly in
+          {measureMode && measureLabel?.formatted?.ftIn && (
+            <div style={measureHud} aria-live="polite">
+              <span style={{ fontWeight: 800 }}>{measureLabel.formatted.ftIn}</span>
+              <span style={{ opacity: 0.75, marginLeft: 10 }}>
+                {measureLabel.formatted.decimalFeet?.toFixed(3)} ft · {measureLabel.formatted.meters?.toFixed(3)} m
+              </span>
+              <span style={{ opacity: 0.55, marginLeft: 10, fontSize: 11 }}>to 1/16″</span>
+            </div>
+          )}
+          {measureMode && measureLabel?.phase === "a" && (
+            <div style={measureHud}>
+              Click second point…
+              {measureLabel.snapKind ? (
+                <span style={{ opacity: 0.7, marginLeft: 8, fontSize: 11 }}>
+                  ({measureLabel.snapKind} snap)
+                </span>
+              ) : null}
+            </div>
+          )}
+          <div style={{
+            position: "absolute", left: 12, bottom: 10,
+            fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", pointerEvents: "none",
+          }}>
+            {measureMode
+              ? `${count.toLocaleString()} parts · MEASURE · click two points (vertex/edge snap · nearest 1/16″) · toggle off to clear`
+              : `${count.toLocaleString()} parts · drag orbit · scroll zoom (no limit) · click member · ctrl/shift multi · double-click fly in`}
           </div>
         </>
       )}
@@ -295,5 +576,14 @@ const fitBtn = {
   position: "absolute", top: 10, right: 10, padding: "6px 12px", borderRadius: 8,
   border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
   color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
-  fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer",
+  fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer", zIndex: 2,
+};
+
+const measureHud = {
+  position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)",
+  padding: "8px 16px", borderRadius: 999,
+  background: "rgba(13,17,23,0.88)", border: "1px solid #f5d90a",
+  color: "#f5d90a", fontFamily: "var(--font-mono)", fontSize: 13,
+  fontWeight: 600, letterSpacing: "0.03em", whiteSpace: "nowrap",
+  boxShadow: "0 6px 24px rgba(0,0,0,0.45)", pointerEvents: "none", zIndex: 3,
 };

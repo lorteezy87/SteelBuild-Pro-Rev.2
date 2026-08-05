@@ -15,6 +15,10 @@ export interface PieceRegisterRow {
   weight_each_lbs: number | null;
   weight_total_lbs: number | null;
   work_package_id: string | null;
+  /** Lot / WP sequence from import (used by auto-assign). */
+  sequence_number?: string | null;
+  /** Erection area from import (used by auto-assign). */
+  erection_area?: string | null;
   lifecycle_status: string;
   current_station?: string | null;
   on_hold: boolean;
@@ -46,6 +50,8 @@ export interface PieceImportStagedRow {
   id: string;
   source_row_number: number;
   normalized_payload: Record<string, unknown>;
+  /** Raw staged row (keeps wp_number / sheet_number hints for post-apply). */
+  original_payload?: Record<string, unknown> | null;
   decision: string;
   warnings: string[];
   resolution: string | null;
@@ -53,6 +59,13 @@ export interface PieceImportStagedRow {
 }
 
 const db = supabase as any;
+
+function isActivePieceRow(row: {
+  is_deleted?: boolean | null;
+  deleted_at?: string | null;
+}): boolean {
+  return !row.is_deleted && !row.deleted_at;
+}
 
 async function fetchAllProjectRows<T>(table: string, projectId: string): Promise<T[]> {
   const rows: T[] = [];
@@ -71,7 +84,8 @@ async function fetchAllProjectRows<T>(table: string, projectId: string): Promise
 
 export async function fetchPieceRegister(projectId: string): Promise<PieceRegisterRow[]> {
   const rows = await fetchAllProjectRows<PieceRegisterRow>("pieces", projectId);
-  return rows.filter((row) => !row.deleted_at);
+  // pieces uses both is_deleted and deleted_at in different write paths — require both clear.
+  return rows.filter(isActivePieceRow);
 }
 
 export async function fetchPieceImportBatches(projectId: string): Promise<PieceImportBatch[]> {
@@ -91,7 +105,7 @@ export async function fetchPieceImportRows(
 ): Promise<PieceImportStagedRow[]> {
   const { data, error } = await db
     .from("piece_import_rows")
-    .select("id, source_row_number, normalized_payload, decision, warnings, resolution, matched_piece_id")
+    .select("id, source_row_number, normalized_payload, original_payload, decision, warnings, resolution, matched_piece_id")
     .eq("project_id", projectId)
     .eq("batch_id", batchId)
     .order("source_row_number");

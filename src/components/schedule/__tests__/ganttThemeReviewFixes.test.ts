@@ -71,11 +71,13 @@ describe("dual-theme Gantt review fixes", () => {
 
   it("uses theme variables for ScheduleGantt delivery and critical-row chrome", () => {
     const scheduleGantt = readRepoFile("src", "components", "schedule", "ScheduleGantt.jsx");
+    const ganttTaskRows = readRepoFile("src", "components", "schedule", "GanttTaskRows.tsx");
+    const ganttSources = scheduleGantt + ganttTaskRows;
 
-    expect(scheduleGantt).not.toContain("GANTT_PHASE_HEX");
-    expect(scheduleGantt).toContain("GANTT_PHASE_VAR");
-    expect(scheduleGantt).toContain("color-mix(in srgb, ${GANTT_PHASE_VAR.Delivery}");
-    expect(scheduleGantt).toContain("color-mix(in srgb, ${GANTT_PHASE_VAR.Procurement}");
+    expect(ganttSources).not.toContain("GANTT_PHASE_HEX");
+    expect(ganttSources).toContain("GANTT_PHASE_VAR");
+    expect(ganttSources).toContain("color-mix(in srgb, ${GANTT_PHASE_VAR.Delivery}");
+    expect(ganttSources).toContain("color-mix(in srgb, ${GANTT_PHASE_VAR.Procurement}");
   });
 
   it("does not use the black keyword in Rivet or Gantt color-mix expressions", () => {

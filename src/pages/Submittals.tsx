@@ -502,7 +502,7 @@ export default function Submittals() {
       drawings={allDrawings}
       cycleStats={reviewForecast.stats}
       today={today}
-      allRfis={allRfis}
+      allRfis={allRfis as any}
       allTasks={allTasks}
       projectName={activeProject?.project_name || activeProject?.name || "Project"}
       project={activeProject}
@@ -597,7 +597,7 @@ export default function Submittals() {
           projectName={activeProject?.project_name || activeProject?.name || ""}
           availableSets={drawingSetsView}
           allDrawings={allDrawings}
-          allRfis={allRfis}
+          allRfis={allRfis as any}
           parentSubmittal={spinOffParent as Submittal | null}
           drawingTypesEnabled={drawingTypesEnabled}
           saving={createMut.isPending || updateMut.isPending}

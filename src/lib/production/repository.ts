@@ -8,13 +8,15 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { PRODUCTION_STAGES, STAGE_PERCENT, type ProductionStage } from "@/lib/importProductionStatus";
+import { syncProductionRowsToModelAndPieces } from "./productionToFabBridge";
 
 const TABLE = "piece_production";
 
 // piece_production isn't in the generated Database types — own the cast here.
 // The optional client arg lets listPieceProduction page against an injected
 // mock in tests; every other caller uses the real client by default.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const from = (table: string, client: typeof supabase = supabase): any =>
   (client.from as unknown as (t: string) => any)(table);
 
@@ -86,7 +88,7 @@ export async function listPieceProduction(
     if (batch.length < page) return all;
   }
   // Hit the safety ceiling — surface it rather than silently returning partial.
-  // eslint-disable-next-line no-console
+
   console.warn(`[piece_production] listPieceProduction stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
   return all;
 }
@@ -111,10 +113,14 @@ function toFields(row: StagedProductionRow, projectId: string, importedAt: strin
 }
 
 const CHUNK = 200;
+/** Parallelism for per-row updates (each row has a distinct payload). */
+const UPDATE_CONCURRENCY = 25;
 
 /**
  * Commit staged rows: bulk-insert the creates (chunked), update the existing
- * pieces by id. Returns the applied counts.
+ * pieces by id in parallel batches. Returns the applied counts.
+ * After a successful write, best-effort sync into model_elements.fab_status and
+ * (when pilot/live) unique leaf pieces.lifecycle_status so Fab-mode colors update.
  */
 export async function commitProductionRows(
   projectId: string,
@@ -133,10 +139,29 @@ export async function commitProductionRows(
   }
 
   let updated = 0;
-  for (const row of updates) {
-    const { error } = await from(TABLE).update(toFields(row, projectId, importedAt)).eq("id", row.existing_id);
-    if (error) throw error;
-    updated += 1;
+  for (let i = 0; i < updates.length; i += UPDATE_CONCURRENCY) {
+    const slice = updates.slice(i, i + UPDATE_CONCURRENCY);
+    const results = await Promise.all(
+      slice.map((row) =>
+        from(TABLE)
+          .update(toFields(row, projectId, importedAt))
+          .eq("id", row.existing_id)
+          .then(({ error }: { error: unknown }) => {
+            if (error) throw error;
+            return 1;
+          }),
+      ),
+    );
+    updated += results.length;
+  }
+
+  try {
+    await syncProductionRowsToModelAndPieces(projectId, rows);
+  } catch (bridgeError) {
+    console.warn(
+      "[piece_production] production→fab bridge failed after commit:",
+      bridgeError,
+    );
   }
 
   return { created, updated };
@@ -145,4 +170,76 @@ export async function commitProductionRows(
 export async function softDeletePieceProduction(id: string): Promise<void> {
   const { error } = await from(TABLE).update({ is_deleted: true }).eq("id", id);
   if (error) throw error;
+}
+
+/**
+ * Bulk-set stage (and STAGE_PERCENT baseline) for existing piece_production rows.
+ * Loads marks for the fab bridge, updates status/percent in chunks, then runs
+ * syncProductionRowsToModelAndPieces so 3D / Piece Control colors stay in sync.
+ * Returns the number of rows actually found and written (not the request size).
+ */
+export async function bulkUpdateProductionStage(
+  projectId: string,
+  ids: string[],
+  stage: ProductionStage,
+): Promise<{ updated: number }> {
+  if (!projectId || !ids.length) return { updated: 0 };
+  if (!(PRODUCTION_STAGES as readonly string[]).includes(stage)) {
+    throw new Error(`Invalid production stage: ${stage}`);
+  }
+  const percent = STAGE_PERCENT[stage];
+  const uniqueIds = [...new Set(ids)];
+
+  const selected: PieceProductionRow[] = [];
+  for (let i = 0; i < uniqueIds.length; i += CHUNK) {
+    const slice = uniqueIds.slice(i, i + CHUNK);
+    const { data, error } = await from(TABLE)
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("is_deleted", false)
+      .in("id", slice);
+    if (error) throw error;
+    selected.push(...((data || []) as PieceProductionRow[]));
+  }
+
+  if (selected.length === 0) return { updated: 0 };
+
+  const selectedIds = selected.map((r) => r.id);
+  for (let i = 0; i < selectedIds.length; i += CHUNK) {
+    const slice = selectedIds.slice(i, i + CHUNK);
+    const { error } = await from(TABLE)
+      .update({ status: stage, percent_complete: percent })
+      .eq("project_id", projectId)
+      .eq("is_deleted", false)
+      .in("id", slice);
+    if (error) throw error;
+  }
+
+  const staged: StagedProductionRow[] = selected.map((row) => ({
+    action: "update",
+    existing_id: row.id,
+    piece_mark: row.piece_mark,
+    assembly_mark: row.assembly_mark,
+    status: stage,
+    percent_complete: percent,
+    ship_date: row.ship_date,
+    stage_data: row.stage_data,
+    quantity: row.quantity,
+    weight: row.weight,
+    sequence_number: row.sequence_number,
+    erection_area: row.erection_area,
+    external_ref: row.external_ref,
+  }));
+
+  try {
+    // Explicit operator bulk may correct backward (Shipped → Cut). Import path
+    // leaves allowLifecycleRegress unset so EPM never regresses lifecycle.
+    await syncProductionRowsToModelAndPieces(projectId, staged, {
+      allowLifecycleRegress: true,
+    });
+  } catch (bridgeError) {
+    console.warn("[piece_production] bulk stage → fab bridge failed:", bridgeError);
+  }
+
+  return { updated: selected.length };
 }

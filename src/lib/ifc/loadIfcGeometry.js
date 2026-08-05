@@ -81,10 +81,14 @@ export async function loadIfcGeometry(buffer, opts = {}) {
       const c = pg.color || { x: 0.62, y: 0.66, z: 0.72, w: 1 };
       const ifcHex = `#${new THREE.Color(c.x, c.y, c.z).getHexString()}`;
       const chosen = opts.colorFor?.({ guid, ifcHex, ifcType }) || ifcHex;
-      // Lambert (not PBR Standard): ~2,600 draw calls a frame, so the cheap
-      // per-fragment shading keeps it smooth. No env map needed.
-      const mat = new THREE.MeshLambertMaterial({
+      // Phong (not PBR Standard): still one cheap specular term for a light
+      // steel sheen, without env maps / IBL. Fine at ~10k draw calls.
+      const mat = new THREE.MeshPhongMaterial({
         color: new THREE.Color(chosen),
+        specular: new THREE.Color(0x3a3f48),
+        shininess: 28,
+        emissive: new THREE.Color(0x000000),
+        flatShading: false,
         transparent: c.w < 1,
         opacity: c.w < 1 ? c.w : 1,
       });

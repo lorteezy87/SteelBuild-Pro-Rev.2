@@ -4,15 +4,20 @@
  * "what's ready to ship / erect?" from production-control exports.
  *
  * ProductionStatusControlCenter is the canonical presentation. This page owns
- * the project-scoped reads, import modal state, and cache invalidation.
+ * the project-scoped reads, import modal state, selection, and cache invalidation.
  */
 
-import React, { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { listPieceProduction } from "@/lib/production/repository";
+import {
+  bulkUpdateProductionStage,
+  listPieceProduction,
+} from "@/lib/production/repository";
 import {
   fetchAllModelElements,
   MODEL_ELEMENT_DRAWING_LINK_COLUMNS,
@@ -22,6 +27,10 @@ import { normalizePieceMark } from "@/services/modelElementStatus";
 import ProductionStatusImportModal from "@/components/production/ProductionStatusImportModal";
 import TeklaEpmImportModal from "@/components/production/TeklaEpmImportModal";
 import ProductionStatusControlCenter from "./productionStatus/ProductionStatusControlCenter";
+import {
+  invalidatePieceControlQueries,
+  pieceControlKeys,
+} from "@/lib/pieceControl/queryKeys";
 
 /** CSV export — reuses the same field order as the control-center columns. */
 function exportProductionCSV(rows) {
@@ -58,9 +67,17 @@ export default function ProductionStatus() {
   const [showEpmImport, setShowEpmImport] = useState(false);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("All");
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+
+  // Multi-user: when another session writes piece_production (import / station
+  // update), refresh this page's list without a hard reload. Debounced 300ms
+  // inside the hook so bulk imports don't thrash.
+  useRealtimeInvalidation("piece_production", projectId, [
+    pieceControlKeys.legacyProduction(projectId),
+  ]);
 
   const { data: pieces = [], isLoading } = useQuery({
-    queryKey: ["piece-production", projectId],
+    queryKey: pieceControlKeys.legacyProduction(projectId),
     queryFn: () => listPieceProduction(projectId),
     enabled: !!projectId,
     staleTime: 30_000,
@@ -97,6 +114,11 @@ export default function ProductionStatus() {
     });
   }, [pieces, search, stageFilter]);
 
+  // Drop selection when the visible set changes so bulk actions only hit current filters.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [search, stageFilter, projectId]);
+
   const drawingCoverage = useMemo(() => {
     const total = filtered.length;
     if (!total) return { total: 0, linked: 0, pct: 0 };
@@ -106,6 +128,62 @@ export default function ProductionStatus() {
     }
     return { total, linked, pct: Math.round((linked / total) * 100) };
   }, [filtered, pieceDrawingMap]);
+
+  const bulkStageMutation = useMutation({
+    mutationFn: (stage) =>
+      bulkUpdateProductionStage(projectId, Array.from(selectedIds), stage),
+    onSuccess: async (result, stage) => {
+      toast.success(
+        `Set ${result.updated} piece${result.updated === 1 ? "" : "s"} to ${stage}.`,
+      );
+      setSelectedIds(new Set());
+      await invalidatePieceControlQueries(queryClient, projectId, "production");
+    },
+    onError: (error) => {
+      toast.error(error?.message || "Bulk stage update failed.");
+    },
+  });
+
+  const onToggleRow = (id, next) => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (next) n.add(id);
+      else n.delete(id);
+      return n;
+    });
+  };
+
+  const onToggleAll = (selectAll) => {
+    if (!selectAll) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(filtered.map((p) => p.id).filter(Boolean)));
+  };
+
+  /** After CSV production-status import: bridge already wrote fab_status/lifecycle; refresh caches. */
+  const handleProductionImported = async () => {
+    await Promise.all([
+      // Shared helper: production board + logistics + legacyProduction + model-elements +
+      // canonical-pieces-3d + reporting (Fab-mode colors). legacyProduction is included
+      // in the production scope after #193 — no separate invalidate needed.
+      invalidatePieceControlQueries(queryClient, projectId, "production"),
+      // Drawing-link map used by this page only (also covered when model_element
+      // is invalidated via cacheRegistry, but keep explicit for CSV path clarity).
+      queryClient.invalidateQueries({
+        queryKey: ["production-model-elements", projectId],
+      }),
+    ]);
+  };
+
+  /** After Tekla EPM XML (BOM → model_elements): refresh drawing-link map on this page.
+   *  invalidateEntity inside the modal already covers model-elements + production-model-elements
+   *  via cacheRegistry; this is a focused page-local refresh so Shop Dwg updates immediately. */
+  const handleTeklaEpmImported = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["production-model-elements", projectId],
+    });
+  };
 
   if (!projectId) {
     return (
@@ -123,13 +201,14 @@ export default function ProductionStatus() {
         projectName={activeProject?.name}
         existing={pieces}
         onClose={() => setShowImport(false)}
-        onImported={() => queryClient.invalidateQueries({ queryKey: ["piece-production", projectId] })}
+        onImported={handleProductionImported}
       />
       <TeklaEpmImportModal
         open={showEpmImport}
         projectId={projectId}
         projectName={activeProject?.name}
         onClose={() => setShowEpmImport(false)}
+        onImported={handleTeklaEpmImported}
       />
     </>
   );
@@ -159,6 +238,12 @@ export default function ProductionStatus() {
         drawingCoverage={drawingCoverage}
         projectHealth={activeProject?.health_status || null}
         percentComplete={activeProject?.scope_complete_pct_override != null ? Number(activeProject.scope_complete_pct_override) : null}
+        selectedIds={selectedIds}
+        onToggleRow={onToggleRow}
+        onToggleAll={onToggleAll}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onBulkSetStage={(stage) => bulkStageMutation.mutate(stage)}
+        bulkPending={bulkStageMutation.isPending}
       />
       {modals}
     </div>

@@ -34,9 +34,33 @@ vi.mock("@/hooks/useProjectRole", () => ({
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
     WorkPackage: {
-      filter: vi.fn().mockResolvedValue([]),
+      filter: vi.fn().mockResolvedValue([
+        {
+          id: "wp-1",
+          wp_number: "WP-001",
+          name: "Embeds & Lintels",
+          is_deleted: false,
+        },
+      ]),
     },
   },
+}));
+
+vi.mock("@/lib/pieceControl/relationshipsRepository", () => ({
+  assignPiecesToWorkPackage: vi.fn(),
+  fetchPieceRelationshipSnapshot: vi.fn().mockResolvedValue({
+    pieces: [],
+    pieceDrawings: [],
+    drawings: [],
+    workPackages: [],
+    drawingSets: [],
+    submittals: [],
+    sheetResponses: [],
+    drawingRevisions: [],
+    drawingReviews: [],
+    drawingSignoffs: [],
+    commentDispositions: [],
+  }),
 }));
 
 vi.mock("@/lib/pieceControl/repository", () => ({
@@ -455,5 +479,49 @@ describe("Piece Register command shell", () => {
         (option) => option.text,
       ),
     ).toEqual(["All", "B-2", "B-10"]);
+  });
+
+  it("offers a work package assignment box on approved import batches", async () => {
+    vi.mocked(fetchPieceImportBatches).mockResolvedValue([
+      {
+        id: "batch-1",
+        project_id: "project-1",
+        source_type: "csv",
+        source_name: "Embeds import",
+        status: "approved",
+        row_count: 2,
+        decision_counts: { new: 2 },
+        created_at: "2026-07-23T12:00:00.000Z",
+        approved_at: "2026-07-23T13:00:00.000Z",
+        applied_at: null,
+        apply_summary: null,
+      },
+    ]);
+
+    renderPieceRegister();
+    fireEvent.click(screen.getByRole("button", { name: "Imports" }));
+
+    expect(
+      await screen.findByLabelText(/Work package override \(optional — or use CSV wp_number\)/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "WP-001 - Embeds & Lintels" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Apply batch (CSV WP / sheet hints)" }),
+    ).toBeDisabled();
+
+    fireEvent.change(
+      screen.getByLabelText(/Work package override \(optional — or use CSV wp_number\)/i),
+      { target: { value: "wp-1" } },
+    );
+    expect(
+      screen.getByRole("button", { name: "Apply, assign WP, and link drawings" }),
+    ).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/Confirm eligible creates and updates/i));
+    expect(
+      screen.getByRole("button", { name: "Apply, assign WP, and link drawings" }),
+    ).toBeEnabled();
   });
 });

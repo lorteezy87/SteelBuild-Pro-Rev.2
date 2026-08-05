@@ -1,24 +1,13 @@
 /**
  * ApprovalMatrixPanel — the canonical Detailing Approval Matrix (matrix tab).
  *
- * Presentation-only. Renders inside the DetailingCommandShell light island
- * (`.detailing-cc` token cascade). The hub owns every query/mutation and this
- * panel owns only the matrix presentation and pure formatting.
- *
- * What this converts to kit primitives: the summary/search chrome (kit FilterBar
- * + Pills) and the matrix table + expandable child rows (on `cmd-table`). The
- * analytics cards (CycleTimeCard / AgingReportTable) are REUSED VERBATIM under
- * `.detailing-cc` so they inherit the shipped light cascade — same reuse the
- * merged 2b/2c slices used for their native sub-widgets.
- *
- * ⚠ Working-day due display (`submittal_workday_dues`, Phase 5): `useWorkdays`
- * is threaded into `buildApprovalMatrixRows` (main-row dues) AND the expanded
- * child rows' inline `dueInfoFor`. Every
- * matrix due is a submittal date (no drawing carve-out here), so no source-gate.
+ * Clean default columns (7): Set | Set # | Submittal | Status | Due | Ball In Court | Round.
+ * Secondary (discipline, sheets, submitted/required/returned dates) live on expand.
+ * Summary pills trimmed to the four action signals operators care about.
  */
 import { Fragment, useMemo, useState } from "react";
 import type { ComponentType } from "react";
-import { AlertTriangle, ClipboardList, Clock3, Layers3, Link2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ClipboardList, ShieldCheck } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
@@ -51,9 +40,6 @@ interface ApprovalMatrixPanelProps {
   useWorkdays?: boolean;
 }
 
-/** Submittal status → kit Pill tone. Uses the shared status colour
- *  families (approved → good, R&R/rejected → review, closed → neutral, else
- *  warn/pending). */
 function statusTone(status?: string | null): PillTone {
   switch (status) {
     case "Approved":
@@ -70,7 +56,6 @@ function statusTone(status?: string | null): PillTone {
   }
 }
 
-/** Due-status → kit Pill tone. */
 function dueTone(due: DueInfo | undefined): PillTone {
   if (!due) return "neutral";
   if (due.overdue) return "danger";
@@ -91,23 +76,18 @@ export function ApprovalMatrixPanel({ drawingSets, submittals, roundsBySubmittal
 
   return (
     <section className="detailing-cc" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* ── Analytics (cycle-time + aging) — reused verbatim ─────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 16 }}>
         <CycleTimeCard submittals={submittals} roundsBySubmittal={roundsBySubmittal} isLoading={isLoading} />
         <AgingReportTable submittals={submittals} isLoading={isLoading} />
       </div>
 
-      {/* ── Summary pills + search (kit FilterBar) ───────────────────────── */}
       <FilterBar
         search={search}
         onSearch={setSearch}
         searchPlaceholder="Search sets, submittals…"
         filters={
           <>
-            <SummaryPill icon={Layers3} label="Sets" value={summary.total} tone="neutral" />
-            <SummaryPill icon={Link2} label="No Submittal" value={summary.noSubmittal} tone="neutral" />
             <SummaryPill icon={AlertTriangle} label="Overdue" value={summary.overdue} tone="danger" />
-            <SummaryPill icon={Clock3} label="Due Soon" value={summary.dueSoon} tone="warn" />
             <SummaryPill icon={ClipboardList} label="Pending" value={summary.pending} tone="warn" />
             <SummaryPill icon={ShieldCheck} label="Approved" value={summary.approved} tone="good" />
             <SummaryPill icon={AlertTriangle} label="Needs Action" value={summary.rejected} tone="review" />
@@ -115,29 +95,23 @@ export function ApprovalMatrixPanel({ drawingSets, submittals, roundsBySubmittal
         }
       />
 
-      {/* ── Matrix table ─────────────────────────────────────────────────── */}
       <div className="cmd-table-wrap">
-        <table className="cmd-table" style={{ minWidth: 980 }}>
+        <table className="cmd-table" style={{ minWidth: 720 }}>
           <thead>
             <tr>
-              <th>Drawing Set Package</th>
+              <th>Drawing Set</th>
               <th>Set #</th>
-              <th>Discipline</th>
-              <th style={{ textAlign: "center" }}>Sheets</th>
-              <th>Linked Submittal</th>
+              <th>Submittal</th>
               <th>Status</th>
-              <th>Due Status</th>
-              <th style={{ textAlign: "center" }}>Round</th>
+              <th>Due</th>
               <th>Ball In Court</th>
-              <th>Submitted</th>
-              <th>Required</th>
-              <th>Returned</th>
+              <th style={{ textAlign: "center" }}>Round</th>
             </tr>
           </thead>
           <tbody>
             {matrixRows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="cmd-table__empty">
+                <td colSpan={7} className="cmd-table__empty">
                   {search ? "No matching drawing sets." : "No drawing sets yet."}
                 </td>
               </tr>
@@ -161,8 +135,6 @@ export function ApprovalMatrixPanel({ drawingSets, submittals, roundsBySubmittal
   );
 }
 
-// ── Matrix row (with expandable submittal history) ──────────────────────────
-
 interface MatrixRowProps {
   drawingSet: any;
   sub: any;
@@ -174,74 +146,73 @@ interface MatrixRowProps {
 
 function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, useWorkdays = false }: MatrixRowProps) {
   const [expanded, setExpanded] = useState(false);
-  const hasMultiple = allSubmittals.length > 1;
   const rowRail = sub ? getStatusColor(sub.status) : "var(--cmd-warn)";
+  const hasHistory = allSubmittals.length > 1 || (sub && (roundsBySubmittal[sub.id]?.length ?? 0) > 0);
 
   return (
     <>
       <tr
-        className={hasMultiple ? "is-clickable" : undefined}
-        onClick={hasMultiple ? () => setExpanded(!expanded) : undefined}
-        style={{ borderLeft: `3px solid ${rowRail}` }}
+        className="is-clickable"
+        onClick={() => setExpanded(!expanded)}
+        style={{ borderLeft: `3px solid ${rowRail}`, cursor: "pointer" }}
       >
         <td style={{ fontWeight: 600 }}>
-          {hasMultiple && (
-            <span style={{ marginRight: 6, fontSize: 10, opacity: 0.6 }}>{expanded ? "▾" : "▸"}</span>
-          )}
+          <span style={{ marginRight: 6, fontSize: 10, opacity: 0.6 }}>{expanded ? "▾" : "▸"}</span>
           {drawingSet.set_name || "—"}
         </td>
         <td style={{ color: "var(--cmd-gold)", fontWeight: 800 }}>{formatDrawingSetNumber(drawingSet)}</td>
-        <td style={{ color: "var(--cmd-text-muted)" }}>{drawingSet.discipline || "—"}</td>
-        <td style={{ textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{drawingSet.sheet_count || 0}</td>
         {sub ? (
           <>
             <td style={{ color: "var(--cmd-gold)" }}>{sub.submittal_number}</td>
             <td><Pill tone={statusTone(sub.status)}>{sub.status}</Pill></td>
             <td><Pill tone={dueTone(due)}>{due.label}</Pill></td>
+            <td>{CLOSED_SUBMITTAL_STATUSES.has(sub.status ?? "") ? "Closed" : (sub.ball_in_court || "—")}</td>
             <td style={{ textAlign: "center" }}>
               {sub.round_number > 1
                 ? <Pill tone="warn">R{sub.round_number}</Pill>
                 : "1"}
             </td>
-            <td>{CLOSED_SUBMITTAL_STATUSES.has(sub.status ?? "") ? "Closed" : (sub.ball_in_court || "—")}</td>
-            <td>{fmtDate(sub.submitted_date)}</td>
-            <td style={due?.overdue ? { color: "var(--cmd-danger)", fontWeight: 700 } : undefined}>{fmtDate(getSubmittalDueDate(sub))}</td>
-            <td>{fmtDate(sub.returned_date)}</td>
           </>
         ) : (
-          <td style={{ color: "var(--cmd-warn)", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }} colSpan={8}>
-            No submittal linked - not tracked in approval pipeline
+          <td style={{ color: "var(--cmd-warn)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }} colSpan={5}>
+            No submittal linked
           </td>
         )}
       </tr>
 
-      {/* Expanded: all other submittals for this set */}
-      {expanded && allSubmittals
-        .filter((s) => s.id !== sub?.id)
-        .map((s) => (
-          <tr key={s.id} style={{ background: "var(--cmd-row-hover)" }}>
-            <td style={{ paddingLeft: 32, color: "var(--cmd-text-muted)" }}>↳</td>
-            <td />
-            <td />
-            <td />
-            <td style={{ color: "var(--cmd-gold)" }}>{s.submittal_number}</td>
-            <td><Pill tone={statusTone(s.status)}>{s.status}</Pill></td>
-            <td><Pill tone={dueTone(dueInfoFor(getSubmittalDueDate(s), { closed: isClosedSubmittal(s), useWorkdays }))}>
-              {dueInfoFor(getSubmittalDueDate(s), { closed: isClosedSubmittal(s), useWorkdays }).label}
-            </Pill></td>
-            <td style={{ textAlign: "center" }}>{s.round_number || 1}</td>
-            <td>{CLOSED_SUBMITTAL_STATUSES.has(s.status ?? "") ? "Closed" : (s.ball_in_court || "—")}</td>
-            <td>{fmtDate(s.submitted_date)}</td>
-            <td>{fmtDate(getSubmittalDueDate(s))}</td>
-            <td>{fmtDate(s.returned_date)}</td>
-          </tr>
-        ))}
-
-      {/* Expanded: round history for the latest submittal */}
-      {expanded && sub && roundsBySubmittal[sub.id]?.length > 0 && (
+      {expanded && (
         <tr style={{ background: "var(--cmd-row-hover)" }}>
-          <td colSpan={12} style={{ padding: "8px 32px 12px" }}>
-            <RoundTimeline rounds={roundsBySubmittal[sub.id]} />
+          <td colSpan={7} style={{ padding: "10px 16px 12px 28px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 18px", fontSize: 12, color: "var(--cmd-text-muted)", marginBottom: hasHistory ? 10 : 0 }}>
+              <span>Discipline: <strong style={{ color: "var(--cmd-text)" }}>{drawingSet.discipline || "—"}</strong></span>
+              <span>Sheets: <strong style={{ color: "var(--cmd-text)", fontVariantNumeric: "tabular-nums" }}>{drawingSet.sheet_count || 0}</strong></span>
+              {sub && (
+                <>
+                  <span>Submitted: <strong style={{ color: "var(--cmd-text)" }}>{fmtDate(sub.submitted_date)}</strong></span>
+                  <span>Required: <strong style={{ color: due?.overdue ? "var(--cmd-danger)" : "var(--cmd-text)" }}>{fmtDate(getSubmittalDueDate(sub))}</strong></span>
+                  <span>Returned: <strong style={{ color: "var(--cmd-text)" }}>{fmtDate(sub.returned_date)}</strong></span>
+                </>
+              )}
+            </div>
+
+            {allSubmittals.filter((s) => s.id !== sub?.id).map((s) => {
+              const childDue = dueInfoFor(getSubmittalDueDate(s), { closed: isClosedSubmittal(s), useWorkdays });
+              return (
+                <div key={s.id} style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center", marginBottom: 6, fontSize: 12 }}>
+                  <span style={{ color: "var(--cmd-text-muted)" }}>↳</span>
+                  <span style={{ color: "var(--cmd-gold)", fontWeight: 600 }}>{s.submittal_number}</span>
+                  <Pill tone={statusTone(s.status)}>{s.status}</Pill>
+                  <Pill tone={dueTone(childDue)}>{childDue.label}</Pill>
+                  <span style={{ color: "var(--cmd-text-muted)" }}>R{s.round_number || 1}</span>
+                  <span style={{ color: "var(--cmd-text-muted)" }}>{CLOSED_SUBMITTAL_STATUSES.has(s.status ?? "") ? "Closed" : (s.ball_in_court || "—")}</span>
+                  <span style={{ color: "var(--cmd-text-muted)" }}>{fmtDate(s.submitted_date)} → {fmtDate(getSubmittalDueDate(s))} → {fmtDate(s.returned_date)}</span>
+                </div>
+              );
+            })}
+
+            {sub && roundsBySubmittal[sub.id]?.length > 0 && (
+              <RoundTimeline rounds={roundsBySubmittal[sub.id]} />
+            )}
           </td>
         </tr>
       )}
@@ -249,13 +220,11 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
   );
 }
 
-// ── Round timeline (compact inline history) ─────────────────────────────────
-
 function RoundTimeline({ rounds }: { rounds: any[] }) {
   if (!rounds || rounds.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
       <span style={{ fontSize: 10, color: "var(--cmd-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>
         Round History:
       </span>
@@ -287,8 +256,6 @@ function RoundTimeline({ rounds }: { rounds: any[] }) {
     </div>
   );
 }
-
-// ── Leaf chrome ──────────────────────────────────────────────────────────────
 
 function SummaryPill({ icon: Icon, label, value, tone }: { icon: ComponentType<{ size?: number | string }>; label: string; value: number; tone: PillTone }) {
   return (

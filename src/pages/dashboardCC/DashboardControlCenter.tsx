@@ -239,7 +239,7 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
         safetyIncidents,
         qualityRecords,
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [
       project, rfis, cos, codes, wps, deliveries, actionItems,
       expenses, submittals, drawings, sovItems, scheduleTasks,

@@ -239,7 +239,7 @@ export default function DrawingSubmittalHub() {
         queryKey: ["drawing-revisions", projectId],
         queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const pkg = setPackages.find((p: any) => p.key === pkgKey);
       if (!pkg) {
         toast.warning("Revision uploaded, but its summary could not be generated because the set is no longer visible.");
@@ -277,21 +277,21 @@ export default function DrawingSubmittalHub() {
       summaryInFlight.current.delete(pkgKey);
     }
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const openDeepDive = (summary: any) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const pkg = setPackages.find((p: any) => String(p.setId) === String(summary?.setId));
     setSummaryCard(null);
     if (pkg) setDeepDiveSet(pkg);
   };
   // Create an RFI pre-filled from the deterministic summary (no AI diff needed);
   // the user reviews/edits it in RFIFormModal before it is saved.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const openRfiFromSummary = (summary: any) => {
     setSummaryCard(null);
     setRfiDraft({ prefill: buildRfiPrefillFromSummary(summary) });
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const saveRfiFromSummary = async (formData: any) => {
     setSavingRfi(true);
     try {

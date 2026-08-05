@@ -6,6 +6,8 @@
  * the React Query fetch, modal state, and import mutations). This component is
  * the canonical presentation and is purely presentational — no network calls.
  *
+ * Large filtered lists virtualize via the shared command-kit DataTable
+ * (useVirtualizer house pattern when rows > 100).
  */
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
@@ -24,7 +26,14 @@ import type { Column, KpiCellDef } from "@/components/command";
 import type { PieceProductionRow } from "@/lib/production/repository";
 import type { PieceDrawingLink } from "@/lib/production/pieceDrawingLinks";
 import { normalizePieceMark } from "@/services/modelElementStatus";
-import { buildProductionSummary, stageTone, PRODUCTION_STAGES } from "./productionStatusControlCenter.derive";
+import type { ProductionStage } from "@/lib/importProductionStatus";
+import {
+  buildProductionSummary,
+  stageTone,
+  PRODUCTION_STAGES,
+  localTodayISO,
+} from "./productionStatusControlCenter.derive";
+import ProductionStatusBulkBar from "./ProductionStatusBulkBar";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -35,9 +44,8 @@ function fmtPct(n: number): string {
 }
 
 /** ISO date cell — mono, compact, highlights past-due pieces. */
-function shipDateCell(p: PieceProductionRow) {
+function shipDateCell(p: PieceProductionRow, today: string) {
   if (!p.ship_date) return <span style={{ color: "var(--cmd-meta)" }}>—</span>;
-  const today = new Date().toISOString().slice(0, 10);
   const overdue = p.status !== "Shipped" && p.ship_date < today;
   return (
     <span style={overdue ? { color: "var(--cmd-danger)", fontWeight: 600 } : { fontFamily: "var(--font-mono)", fontSize: 11 }}>
@@ -107,6 +115,13 @@ export interface ProductionStatusControlCenterProps {
   projectHealth?: string | null;
   percentComplete?: number | null;
   photoSrc?: string;
+  /** Selection (owned by shell). */
+  selectedIds?: ReadonlySet<string>;
+  onToggleRow?: (id: string, next: boolean) => void;
+  onToggleAll?: (selectAll: boolean) => void;
+  onClearSelection?: () => void;
+  onBulkSetStage?: (stage: ProductionStage) => void;
+  bulkPending?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -128,10 +143,18 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
     projectHealth,
     percentComplete,
     photoSrc,
+    selectedIds,
+    onToggleRow,
+    onToggleAll,
+    onClearSelection,
+    onBulkSetStage,
+    bulkPending,
   } = props;
 
   useCommandSkin();
   const s = useMemo(() => buildProductionSummary(pieces), [pieces]);
+  // Local calendar day once per render — not per row (UTC toISOString drifts near midnight).
+  const today = localTodayISO();
 
   // Hero chips: quick-glance totals
   const chips = [
@@ -195,42 +218,49 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
     },
   ];
 
-  // DataTable columns — mapped directly to real PieceProductionRow fields
+  // DataTable columns — grid tracks tune proportions when the virtualizer kicks in.
   const columns: Column<PieceProductionRow>[] = [
     {
       key: "piece_mark",
       header: "Piece Mark",
+      grid: "minmax(100px, 1.2fr)",
       render: (p) => <span className="cmd-row__num">{p.piece_mark}</span>,
     },
     {
       key: "assembly_mark",
       header: "Assembly",
+      grid: "minmax(80px, 1fr)",
       render: (p) => p.assembly_mark || <span style={{ color: "var(--cmd-meta)" }}>—</span>,
     },
     {
       key: "shop_dwg",
       header: "Shop Dwg",
+      grid: "minmax(80px, 1fr)",
       render: (p) => shopDrawingCell(pieceDrawingMap?.get(normalizePieceMark(p.piece_mark))),
     },
     {
       key: "sequence_number",
       header: "Seq",
+      grid: "minmax(56px, 0.6fr)",
       render: (p) => p.sequence_number || <span style={{ color: "var(--cmd-meta)" }}>—</span>,
     },
     {
       key: "erection_area",
       header: "Area",
+      grid: "minmax(72px, 0.9fr)",
       render: (p) => p.erection_area || <span style={{ color: "var(--cmd-meta)" }}>—</span>,
     },
     {
       key: "status",
       header: "Stage",
+      grid: "minmax(88px, 0.9fr)",
       render: (p) => stagePill(p.status),
     },
     {
       key: "percent_complete",
       header: "% Complete",
       align: "right",
+      grid: "minmax(72px, 0.7fr)",
       render: (p) => (
         <span className="cmd-row__num">
           {p.percent_complete != null ? `${p.percent_complete}%` : "—"}
@@ -241,14 +271,18 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
       key: "quantity",
       header: "Qty",
       align: "right",
+      grid: "minmax(48px, 0.5fr)",
       render: (p) => <span className="cmd-row__num">{p.quantity ?? "—"}</span>,
     },
     {
       key: "ship_date",
       header: "Ship Date",
-      render: shipDateCell,
+      grid: "minmax(96px, 0.9fr)",
+      render: (p) => shipDateCell(p, today),
     },
   ];
+
+  const selectedCount = selectedIds?.size ?? 0;
 
   return (
     <div className="prod-cc">
@@ -369,9 +403,21 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
         </div>
       ) : null}
 
+      {selectedIds && onBulkSetStage && onClearSelection ? (
+        <ProductionStatusBulkBar
+          selectedCount={selectedCount}
+          pending={bulkPending}
+          onApplyStage={onBulkSetStage}
+          onClear={onClearSelection}
+        />
+      ) : null}
+
       <DataTable
         columns={columns}
         rows={filtered}
+        selectedIds={selectedIds}
+        onToggleRow={onToggleRow}
+        onToggleAll={onToggleAll}
         emptyMessage={
           pieces.length === 0
             ? "No production data yet — import a CSV from Tekla EPM or FabSuite."

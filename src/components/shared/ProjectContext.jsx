@@ -322,7 +322,7 @@ export function ProjectProvider({ children }) {
     if (activeProject?.on_hold === true || activeProject?.is_deleted === true) {
       handleProjectSelect(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [activeProject?.id, activeProject?.on_hold, activeProject?.is_deleted]);
 
   return (

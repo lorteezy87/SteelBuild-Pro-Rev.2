@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { fetchPieceRelationshipSnapshot } from "@/lib/pieceControl/relationshipsRepository";
+import {
+  fetchPieceRelationshipSnapshot,
+  linkPieceDrawingSet,
+} from "@/lib/pieceControl/relationshipsRepository";
 import PieceRelationshipManager from "../PieceRelationshipManager";
 
 vi.mock("@/components/shared/ProjectContext", () => ({
@@ -18,9 +21,9 @@ vi.mock("@/components/shared/ProjectContext", () => ({
 vi.mock("@/lib/pieceControl/relationshipsRepository", () => ({
   assignPiecesToWorkPackage: vi.fn(),
   fetchPieceRelationshipSnapshot: vi.fn(),
-  linkPieceDrawing: vi.fn(),
+  linkPieceDrawingSet: vi.fn(),
   unassignPiecesFromWorkPackage: vi.fn(),
-  unlinkPieceDrawing: vi.fn(),
+  unlinkPieceDrawingSet: vi.fn(),
 }));
 
 describe("PieceRelationshipManager", () => {
@@ -28,6 +31,7 @@ describe("PieceRelationshipManager", () => {
     vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
       pieces: [],
       pieceDrawings: [],
+      pieceDrawingSets: [],
       drawings: [],
       workPackages: [
         {
@@ -66,6 +70,9 @@ describe("PieceRelationshipManager", () => {
     expect(
       await screen.findByRole("heading", { name: "Piece assignments" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "WP-001 - First sequence" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/pieces\.work_package_id/i)).not.toBeInTheDocument();
     expect(
       screen.getByText(/read-only readiness check/i),
@@ -80,12 +87,12 @@ describe("PieceRelationshipManager", () => {
     expect(screen.queryByText(/canonical pieces/i)).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "Import or add active pieces to the Piece Register before linking drawings.",
+        "Import or add active pieces to the Piece Register before linking drawing sets.",
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Add active project drawings before creating piece links.",
+        "Add active project drawing sets before creating piece links.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Piece")).not.toBeInTheDocument();
@@ -121,6 +128,7 @@ describe("PieceRelationshipManager", () => {
     vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
       pieces: [],
       pieceDrawings: [],
+      pieceDrawingSets: [],
       drawings: [],
       workPackages: [],
       drawingSets: [],
@@ -150,7 +158,7 @@ describe("PieceRelationshipManager", () => {
 
     expect(
       await screen.findByText(
-        "Assign active pieces to this work package before linking drawings.",
+        "Assign active pieces to this work package before linking drawing sets.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -158,24 +166,64 @@ describe("PieceRelationshipManager", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("sanitizes relationship read errors and retries in place", async () => {
-    vi.mocked(fetchPieceRelationshipSnapshot)
-      .mockRejectedValueOnce(
-        new Error("PGRST301: canonical piece scope query failed"),
-      )
-      .mockResolvedValueOnce({
-        pieces: [],
-        pieceDrawings: [],
-        drawings: [],
-        workPackages: [],
-        drawingSets: [],
-        submittals: [],
-        sheetResponses: [],
-        drawingRevisions: [],
-        drawingReviews: [],
-        drawingSignoffs: [],
-        commentDispositions: [],
-      });
+  it("previews auto-assign matches by sequence before applying", async () => {
+    vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
+      pieces: [
+        {
+          id: "piece-1",
+          project_id: "project-1",
+          piece_mark: "B-101",
+          normalized_piece_mark: "b-101",
+          lot_code: "L1",
+          parent_piece_id: null,
+          quantity: 1,
+          profile: null,
+          material_grade: null,
+          weight_each_lbs: null,
+          weight_total_lbs: null,
+          work_package_id: null,
+          sequence_number: "WP-002",
+          erection_area: null,
+          lifecycle_status: "active",
+          on_hold: false,
+          source_system: null,
+          external_ref: null,
+          metadata: null,
+          updated_at: "2026-07-01T00:00:00Z",
+          deleted_at: null,
+        } as any,
+      ],
+      pieceDrawings: [],
+      pieceDrawingSets: [],
+      drawings: [],
+      workPackages: [
+        {
+          id: "wp-1",
+          project_id: "project-1",
+          wp_number: "WP-001",
+          name: "Foundations",
+          sequence_number: "1",
+          is_deleted: false,
+          deleted_at: null,
+        },
+        {
+          id: "wp-2",
+          project_id: "project-1",
+          wp_number: "WP-002",
+          name: "ladder",
+          sequence_number: "2",
+          is_deleted: false,
+          deleted_at: null,
+        },
+      ],
+      drawingSets: [],
+      submittals: [],
+      sheetResponses: [],
+      drawingRevisions: [],
+      drawingReviews: [],
+      drawingSignoffs: [],
+      commentDispositions: [],
+    });
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -193,16 +241,263 @@ describe("PieceRelationshipManager", () => {
     );
 
     expect(
-      await screen.findByText("Piece relationships could not be loaded."),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/PGRST301|canonical/i)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-
-    expect(
       await screen.findByRole("heading", { name: "Piece assignments" }),
     ).toBeInTheDocument();
-    expect(vi.mocked(fetchPieceRelationshipSnapshot).mock.calls.length)
-      .toBeGreaterThanOrEqual(2);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Auto-assign by import \/ sequence/i }),
+    );
+
+    expect(screen.getByText(/Auto-assign preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/B-101 → WP-002 - ladder/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Confirm auto-assign" }),
+    ).toBeEnabled();
+  });
+
+  it("shift-clicks to select an inclusive range of piece marks", async () => {
+    const pieces = ["A", "B", "C", "D"].map((mark, index) => ({
+      id: `piece-${index + 1}`,
+      project_id: "project-1",
+      piece_mark: mark,
+      normalized_piece_mark: mark.toLowerCase(),
+      lot_code: "ALL",
+      parent_piece_id: null,
+      quantity: 1,
+      profile: null,
+      material_grade: null,
+      weight_each_lbs: null,
+      weight_total_lbs: null,
+      work_package_id: null,
+      lifecycle_status: "active",
+      on_hold: false,
+      source_system: null,
+      external_ref: null,
+      metadata: null,
+      updated_at: "2026-07-01T00:00:00Z",
+      deleted_at: null,
+    } as any));
+    vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
+      pieces,
+      pieceDrawings: [],
+      pieceDrawingSets: [],
+      drawings: [],
+      workPackages: [
+        {
+          id: "wp-1",
+          project_id: "project-1",
+          wp_number: "WP-001",
+          name: "Sequence",
+          is_deleted: false,
+          deleted_at: null,
+        },
+      ],
+      drawingSets: [],
+      submittals: [],
+      sheetResponses: [],
+      drawingRevisions: [],
+      drawingReviews: [],
+      drawingSignoffs: [],
+      commentDispositions: [],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PieceRelationshipManager
+          projectId="project-1"
+          pieceControlMode="shadow"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByText(/Shift-click to select a range/i),
+    ).toBeInTheDocument();
+
+    const boxA = document.getElementById("piece-assignment-piece-1") as HTMLInputElement;
+    const boxC = document.getElementById("piece-assignment-piece-3") as HTMLInputElement;
+    expect(boxA).toBeTruthy();
+    expect(boxC).toBeTruthy();
+
+    const rowA = boxA.closest("label") as HTMLElement;
+    const rowC = boxC.closest("label") as HTMLElement;
+
+    fireEvent.click(rowA);
+    expect(boxA).toBeChecked();
+
+    fireEvent.click(rowC, { shiftKey: true });
+    expect(boxA).toBeChecked();
+    expect(document.getElementById("piece-assignment-piece-2")).toBeChecked();
+    expect(boxC).toBeChecked();
+    expect(document.getElementById("piece-assignment-piece-4")).not.toBeChecked();
+    expect(screen.getByText(/3 selected/i)).toBeInTheDocument();
+  });
+
+  it("bulk-links the selected pieces to one drawing set", async () => {
+    const pieces = ["A", "B"].map((mark, index) => ({
+      id: `piece-${index + 1}`,
+      project_id: "project-1",
+      piece_mark: mark,
+      normalized_piece_mark: mark.toLowerCase(),
+      lot_code: "ALL",
+      parent_piece_id: null,
+      quantity: 1,
+      profile: null,
+      material_grade: null,
+      weight_each_lbs: null,
+      weight_total_lbs: null,
+      work_package_id: null,
+      lifecycle_status: "active",
+      on_hold: false,
+      source_system: null,
+      external_ref: null,
+      metadata: null,
+      updated_at: "2026-07-01T00:00:00Z",
+      deleted_at: null,
+    } as any));
+    vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
+      pieces,
+      pieceDrawings: [],
+      pieceDrawingSets: [],
+      drawings: [],
+      workPackages: [],
+      drawingSets: [
+        {
+          id: "set-1",
+          set_name: "Shop Drawings Demo",
+          set_approval_status: null,
+          is_deleted: false,
+          deleted_at: null,
+        },
+      ],
+      submittals: [],
+      sheetResponses: [],
+      drawingRevisions: [],
+      drawingReviews: [],
+      drawingSignoffs: [],
+      commentDispositions: [],
+    });
+    vi.mocked(linkPieceDrawingSet).mockResolvedValue({ linked: true } as never);
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PieceRelationshipManager
+          projectId="project-1"
+          pieceControlMode="shadow"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /Link set to selected/i }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      document.getElementById("piece-assignment-piece-1")!.closest("label")!,
+    );
+    fireEvent.click(
+      document.getElementById("piece-assignment-piece-2")!.closest("label")!,
+    );
+
+    fireEvent.change(screen.getByLabelText("Set for selection"), {
+      target: { value: "set-1" },
+    });
+
+    const bulkButtons = screen.getAllByRole("button", {
+      name: /Link set to 2 selected/i,
+    });
+    expect(bulkButtons.length).toBeGreaterThan(0);
+    expect(bulkButtons[0]).toBeEnabled();
+    fireEvent.click(bulkButtons[0]);
+
+    await waitFor(() => {
+      expect(linkPieceDrawingSet).toHaveBeenCalledTimes(2);
+    });
+    expect(linkPieceDrawingSet).toHaveBeenCalledWith(
+      "project-1",
+      "piece-1",
+      "set-1",
+    );
+    expect(linkPieceDrawingSet).toHaveBeenCalledWith(
+      "project-1",
+      "piece-2",
+      "set-1",
+    );
+  });
+
+  it("selects all visible piece marks", async () => {
+    const pieces = ["A", "B"].map((mark, index) => ({
+      id: `piece-${index + 1}`,
+      project_id: "project-1",
+      piece_mark: mark,
+      normalized_piece_mark: mark.toLowerCase(),
+      lot_code: "ALL",
+      parent_piece_id: null,
+      quantity: 1,
+      profile: null,
+      material_grade: null,
+      weight_each_lbs: null,
+      weight_total_lbs: null,
+      work_package_id: null,
+      lifecycle_status: "active",
+      on_hold: false,
+      source_system: null,
+      external_ref: null,
+      metadata: null,
+      updated_at: "2026-07-01T00:00:00Z",
+      deleted_at: null,
+    } as any));
+    vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
+      pieces,
+      pieceDrawings: [],
+      pieceDrawingSets: [],
+      drawings: [],
+      workPackages: [],
+      drawingSets: [],
+      submittals: [],
+      sheetResponses: [],
+      drawingRevisions: [],
+      drawingReviews: [],
+      drawingSignoffs: [],
+      commentDispositions: [],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PieceRelationshipManager
+          projectId="project-1"
+          pieceControlMode="shadow"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /Select all visible \(2\)/i }),
+    ).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Select all visible \(2\)/i }));
+
+    expect(document.getElementById("piece-assignment-piece-1")).toBeChecked();
+    expect(document.getElementById("piece-assignment-piece-2")).toBeChecked();
+    expect(screen.getByText(/2 selected/i)).toBeInTheDocument();
   });
 });

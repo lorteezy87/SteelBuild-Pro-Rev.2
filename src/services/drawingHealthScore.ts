@@ -46,9 +46,9 @@ export interface DrawingHealthScore {
 }
 
 export interface HealthContext {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   rfis?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   revisions?: any[]; // drawing_revisions for the set's sheets (optional)
   today?: string; // local YYYY-MM-DD; defaults to today
 }
@@ -100,7 +100,7 @@ function normRfi(s: unknown): string {
   return String(s ?? "").replace(/[-\s]/g, "").toLowerCase();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function countOpenRfis(sheets: any[], rfis: any[]): number {
   const linked = new Set<string>();
   for (const sheet of sheets || []) {
@@ -121,7 +121,7 @@ function countOpenRfis(sheets: any[], rfis: any[]): number {
   return open;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function setDueDate(pkg: any): string | null {
   if (pkg?.parent?.due_date) return pkg.parent.due_date;
   const dues = (pkg?.sheets || [])
@@ -135,13 +135,13 @@ function setDueDate(pkg: any): string | null {
  * Score a single drawing set's health.
  * @param pkg a set package from buildSetPackages: { setId, name, parent, sheets, submittals }
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function calculateDrawingHealthScore(pkg: any, context: HealthContext = {}): DrawingHealthScore {
   const today = context.today || todayLocalISO();
   const rfis = context.rfis || [];
   const revisions = context.revisions || [];
   const sheets = pkg?.sheets || [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const subs = (pkg?.submittals || []).filter((s: any) => s && !s.is_deleted);
   const recent = pickMostRecentSubmittal(subs);
   const recentStatus: string | undefined = recent?.status ?? undefined;

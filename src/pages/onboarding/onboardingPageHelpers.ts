@@ -31,15 +31,15 @@ export function createDefaultProjectForm() {
   };
 }
 
-export function buildPayloadWithTeamPlan(projectForm, templateKey, teamRows) {
+export function buildPayloadWithTeamPlan(projectForm: any, templateKey: any, teamRows: any[]) {
   const payload = buildProjectPayload(projectForm, templateKey);
   const teamPlan = teamRows
-    .map((row) => ({
+    .map((row: any) => ({
       email: row.email.trim(),
       role: row.role,
       discipline: row.discipline.trim(),
     }))
-    .filter((row) => row.email || row.discipline);
+    .filter((row: any) => row.email || row.discipline);
 
   return {
     ...payload,
@@ -53,13 +53,13 @@ export function buildPayloadWithTeamPlan(projectForm, templateKey, teamRows) {
   };
 }
 
-export function formatCountLabel(key) {
+export function formatCountLabel(key: any) {
   return key
     .replace(/([A-Z])/g, " $1")
-    .replace(/^./, (char) => char.toUpperCase());
+    .replace(/^./, (char: any) => char.toUpperCase());
 }
 
-export function isProjectFormReady(projectForm, templateKey) {
+export function isProjectFormReady(projectForm: any, templateKey: any) {
   const isDemoTemplate = templateKey === SAMPLE_PROJECT_TEMPLATE_KEY;
   return isDemoTemplate || (
     Boolean(projectForm.project_number.trim())
@@ -69,7 +69,7 @@ export function isProjectFormReady(projectForm, templateKey) {
   );
 }
 
-export function buildPreviewProject(selectedProject, projectForm, isDemoTemplate) {
+export function buildPreviewProject(selectedProject: any, projectForm: any, isDemoTemplate: any) {
   return selectedProject || {
     id: "preview-project",
     name: projectForm.name || (isDemoTemplate ? SAMPLE_PROJECT.name : "New project"),
@@ -77,7 +77,7 @@ export function buildPreviewProject(selectedProject, projectForm, isDemoTemplate
   };
 }
 
-export function nextProjectFormWithField(prev, field, value) {
+export function nextProjectFormWithField(prev: any, field: any, value: any) {
   return {
     ...prev,
     [field]: value,
@@ -103,8 +103,8 @@ export function buildDemoProjectForm() {
   };
 }
 
-export function buildInvitePrefill(teamRows) {
+export function buildInvitePrefill(teamRows: any[]) {
   return teamRows
-    .filter((row) => row.email.trim())
-    .map((row) => ({ email: row.email.trim(), role: row.role }));
+    .filter((row: any) => row.email.trim())
+    .map((row: any) => ({ email: row.email.trim(), role: row.role }));
 }

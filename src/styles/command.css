@@ -146,15 +146,26 @@
   [data-skin="command"] .cmd-hero { flex-direction: column; align-items: flex-start; }
 }
 
-/* Dual theme — command dark maps onto SteelBuild Dark (Phase 4). */
+/* Dual theme — command dark maps onto SteelBuild Dark (Phase 4).
+   IMPORTANT: include DESCENDANT selectors. Nested elements often set
+   data-skin="command" (Piece Register, Dashboard CC, WP detail drawer).
+   The light defaults on [data-skin="command"] re-declare --cmd-* vars and
+   would otherwise override the dark remap inherited from <html>, leaving
+   whole pages stuck in the light palette under SteelBuild Dark. */
 html.steelbuild-dark[data-skin="command"],
-[data-skin="command"][data-theme="dark"] {
-  --cmd-bg: var(--sbd-bg-base, var(--bg-page));
-  --cmd-surface: var(--sbd-bg-surface, var(--bg-surface));
-  --cmd-border: var(--sbd-border, var(--border-default));
-  --cmd-text: var(--sbd-text, var(--text-primary));
-  --cmd-text-muted: var(--sbd-text-muted, var(--text-muted));
-  --cmd-gold: var(--sbd-gold, var(--accent-light));
+html.steelbuild-dark [data-skin="command"],
+.steelbuild-dark[data-skin="command"],
+.steelbuild-dark [data-skin="command"],
+[data-theme="dark"][data-skin="command"],
+[data-theme="dark"] [data-skin="command"] {
+  /* Solid page/surface tones — translucent sbd glass reads as "unfinished"
+     on full control-center canvases (Piece Register, Dashboard, etc.). */
+  --cmd-bg: var(--sbd-bg-page, var(--bg-page, #0B0E11));
+  --cmd-surface: color-mix(in srgb, var(--sbd-bg-page, #0B0E11) 86%, #ffffff 14%);
+  --cmd-border: var(--sbd-border, rgba(255, 255, 255, 0.10));
+  --cmd-text: var(--sbd-text, var(--text-primary, #F3F6FB));
+  --cmd-text-muted: var(--sbd-text-muted, var(--text-muted, rgba(255, 255, 255, 0.55)));
+  --cmd-gold: var(--sbd-gold, var(--accent-light, #E0B030));
   --cmd-good: var(--sbd-success, var(--status-success));
   --cmd-warn: var(--sbd-warning, var(--status-warning));
   --cmd-danger: var(--sbd-error, var(--status-error));
@@ -171,13 +182,14 @@ html.steelbuild-dark[data-skin="command"],
   --cmd-chip-info-bg: rgba(96, 165, 250, 0.16);
   --cmd-icon-wash: rgba(224, 176, 48, 0.18);
   --cmd-kpi-icon-bg: rgba(255, 255, 255, 0.06);
-  --cmd-row-hover: rgba(255, 255, 255, 0.04);
-  --cmd-hero-fade: rgba(5, 8, 16, 0.55);
+  --cmd-row-hover: rgba(255, 255, 255, 0.05);
+  --cmd-hero-fade: rgba(11, 14, 17, 0.72);
   --cmd-on-gold: #20160a;
   --cmd-pill-good-fg: #04331d;
   --cmd-pill-warn-fg: #422c00;
   --cmd-pill-neutral-fg: var(--cmd-text);
   --cmd-pill-on-solid: #fff;
+  color-scheme: dark;
 }
 
 /* ===========================================================================

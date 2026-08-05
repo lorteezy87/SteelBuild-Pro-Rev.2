@@ -19,6 +19,7 @@ function chainFor(result: { data: unknown; error: unknown }) {
   const chain: Record<string, unknown> = {};
   chain.select = vi.fn(() => chain);
   chain.eq = vi.fn(() => chain);
+  chain.is = vi.fn(() => chain);
   chain.range = vi.fn(async () => result);
   return chain;
 }
@@ -52,9 +53,11 @@ describe("fetchPieceRelationshipSnapshot", () => {
   });
 
   it("soft-fails optional tables so a missing dispositions table still loads core rows", async () => {
+    let workPackagesSelect = "";
+    let sawDeletedFilter = false;
     fromMock.mockImplementation((table: string) => {
       if (table === "work_packages") {
-        return chainFor({
+        const chain = chainFor({
           data: [
             {
               id: "wp-1",
@@ -64,9 +67,30 @@ describe("fetchPieceRelationshipSnapshot", () => {
               is_deleted: false,
               deleted_at: null,
             },
+            {
+              id: "wp-dead",
+              project_id: "project-1",
+              wp_number: "WP-99",
+              name: "Deleted package",
+              is_deleted: true,
+              deleted_at: "2026-07-01T00:00:00Z",
+            },
           ],
           error: null,
         });
+        chain.select = vi.fn((cols: string) => {
+          workPackagesSelect = cols;
+          return chain;
+        });
+        chain.eq = vi.fn((col: string, val: unknown) => {
+          if (col === "is_deleted" && val === false) sawDeletedFilter = true;
+          return chain;
+        });
+        chain.is = vi.fn((col: string, val: unknown) => {
+          if (col === "deleted_at" && val === null) sawDeletedFilter = true;
+          return chain;
+        });
+        return chain;
       }
       if (table === "submittal_comment_dispositions") {
         return chainFor({
@@ -86,8 +110,14 @@ describe("fetchPieceRelationshipSnapshot", () => {
     warn.mockRestore();
 
     expect(snapshot.pieces).toHaveLength(1);
+    // Mock still returns both rows; client defense filter drops deleted.
     expect(snapshot.workPackages).toHaveLength(1);
+    expect(snapshot.workPackages[0].id).toBe("wp-1");
     expect(snapshot.commentDispositions).toEqual([]);
+    expect(workPackagesSelect).toContain("sequence_number");
+    expect(workPackagesSelect).toContain("area");
+    expect(workPackagesSelect).not.toMatch(/\bdescription\b/);
+    expect(sawDeletedFilter).toBe(true);
   });
 
   it("fails closed when work_packages cannot load", async () => {

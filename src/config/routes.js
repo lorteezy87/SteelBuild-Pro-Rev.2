@@ -44,6 +44,7 @@ export const ROUTE_LIFECYCLES = Object.freeze(["active", "internal"]);
 export const STATIC_ROUTE_METADATA = {
   "/": { lifecycle: "active", kind: "entry" },
   "/Landing": { lifecycle: "active", kind: "entry" },
+  "/DesktopConnect": { lifecycle: "internal", kind: "entry" },
   "/GanttChart": { lifecycle: "legacy", kind: "redirect", target: "/Schedule" },
   "/RFIHub": { lifecycle: "legacy", kind: "redirect", target: "/RFIs" },
   "/Financials": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
@@ -213,6 +214,7 @@ const ROUTE_REGISTRY = Object.values(ROUTE_DOMAINS).reduce(
 // Sidebar/modules hover and keyboard focus can warm these chunks, but app boot
 // no longer idle-prefetches them for users who never open the route.
 registerRoutePrefetcher("Dashboard", () => import("@/pages/Dashboard"));
+registerRoutePrefetcher("DrawingSubmittalHub", () => import("@/pages/DrawingSubmittalHub"));
 registerRoutePrefetcher("Schedule", () => import("@/pages/Schedule"));
 registerRoutePrefetcher("RFIs", () => import("@/pages/RFIs"));
 registerRoutePrefetcher("Drawings", () => import("@/pages/Drawings"));

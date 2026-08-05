@@ -97,7 +97,7 @@ function todayUTC(): Date {
  * parseDateUTC — same logic the Gantt uses.
  */
 function adaptedIsStalledTask(task: TaskRecord, today: Date): boolean {
-  return isStalledTask(task, today, (t: TaskRecord) => parseDateUTC(t.start_date));
+  return isStalledTask(task as any, today, (t: any) => parseDateUTC(t.start_date));
 }
 
 /**
@@ -106,10 +106,10 @@ function adaptedIsStalledTask(task: TaskRecord, today: Date): boolean {
  */
 function adaptedIsLookaheadTask(task: TaskRecord, today: Date, days = 14): boolean {
   return isLookaheadTask(
-    task,
+    task as any,
     today,
-    (t: TaskRecord) => t.start_date ?? null,
-    (t: TaskRecord) => t.end_date ?? null,
+    (t: any) => t.start_date ?? null,
+    (t: any) => t.end_date ?? null,
     days,
   );
 }
@@ -123,8 +123,8 @@ function riskScore(task: TaskRecord, today: Date, isOverdue: boolean): number {
   let score = 0;
   if (isOverdue) score += 900;
   if (adaptedIsStalledTask(task, today)) score += 400;
-  if (isCriticalTask(task)) score += 300;
-  if (isUnassignedTask(task)) score += 200;
+  if (isCriticalTask(task as any)) score += 300;
+  if (isUnassignedTask(task as any)) score += 200;
   if (task.blockers && String(task.blockers).trim()) score += 150;
   return score;
 }
@@ -151,8 +151,8 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
   const today = todayUTC();
 
   // --- base populations ---
-  const actionable = tasks.filter((t) => isActionableScheduleTask(t));
-  const open = actionable.filter((t) => isOpenScheduleTask(t));
+  const actionable = tasks.filter((t) => isActionableScheduleTask(t as any));
+  const open = actionable.filter((t) => isOpenScheduleTask(t as any));
 
   // --- overdue: open actionable with a real end_date before today ---
   const overdueList = open.filter((t) => {
@@ -199,7 +199,7 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
 
   return {
     total: tasks.length,
-    critical: tasks.filter((t) => isCriticalTask(t)).length,
+    critical: tasks.filter((t) => isCriticalTask(t as any)).length,
     activities: actionable.length,
     atRisk,
     overdue: overdueList.length,

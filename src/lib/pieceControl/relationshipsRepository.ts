@@ -12,6 +12,7 @@ import type {
   DrawingSignoffEvidence,
   ReadinessDrawing,
   ReadinessPieceDrawing,
+  ReadinessPieceDrawingSet,
   ReadinessWorkPackage,
   SheetResponseEvidence,
   SubmittalEvidence,
@@ -28,6 +29,7 @@ export interface PieceCommentDispositionEvidence extends CommentDispositionLike 
 export interface PieceRelationshipSnapshot {
   pieces: PieceRegisterRow[];
   pieceDrawings: ReadinessPieceDrawing[];
+  pieceDrawingSets: ReadinessPieceDrawingSet[];
   drawings: ReadinessDrawing[];
   workPackages: ReadinessWorkPackage[];
   drawingSets: DrawingSetEvidence[];
@@ -65,6 +67,32 @@ async function fetchProjectRows<T>(
   }
 }
 
+/** Active work packages only — soft-deleted rows never appear in assign UI. */
+async function fetchActiveWorkPackages(
+  projectId: string,
+): Promise<ReadinessWorkPackage[]> {
+  const rows: ReadinessWorkPackage[] = [];
+  const pageSize = 1000;
+  // work_packages has name/notes — not description (PGRST/42703 if selected).
+  const select =
+    "id, project_id, wp_number, name, sequence_number, area, is_deleted, deleted_at";
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db
+      .from("work_packages")
+      .select(select)
+      .eq("project_id", projectId)
+      .eq("is_deleted", false)
+      .is("deleted_at", null)
+      .range(from, from + pageSize - 1);
+    if (error) throw taggedTableError("work_packages", error);
+    rows.push(...((data ?? []) as ReadinessWorkPackage[]));
+    if (!data || data.length < pageSize) {
+      // Defense in depth if a row slips past DB filters.
+      return rows.filter((wp) => wp.is_deleted !== true && !wp.deleted_at);
+    }
+  }
+}
+
 /**
  * Enrichment tables used for readiness scoring / drawing links. Missing
  * migrations (e.g. submittal_comment_dispositions) must not blank the whole
@@ -97,17 +125,14 @@ export async function fetchPieceRelationshipSnapshot(
     fetchPieceRegister(projectId).catch((error) => {
       throw taggedTableError("pieces", error);
     }),
-    fetchProjectRows<ReadinessWorkPackage>(
-      "work_packages",
-      projectId,
-      "id, project_id, wp_number, name, is_deleted, deleted_at",
-    ),
+    fetchActiveWorkPackages(projectId),
   ]);
 
   // Everything else is best-effort so a single missing/denied table does not
   // strand WP assignment. Readiness panels degrade gracefully with empty sets.
   const [
     pieceDrawings,
+    pieceDrawingSets,
     drawings,
     drawingSets,
     submittals,
@@ -118,6 +143,11 @@ export async function fetchPieceRelationshipSnapshot(
     commentDispositions,
   ] = await Promise.all([
     fetchOptionalProjectRows<ReadinessPieceDrawing>("piece_drawings", projectId),
+    fetchOptionalProjectRows<ReadinessPieceDrawingSet>(
+      "piece_drawing_sets",
+      projectId,
+      "piece_id, drawing_set_id, project_id",
+    ),
     fetchOptionalProjectRows<ReadinessDrawing>(
       "drawings",
       projectId,
@@ -126,7 +156,7 @@ export async function fetchPieceRelationshipSnapshot(
     fetchOptionalProjectRows<DrawingSetEvidence>(
       "drawing_sets",
       projectId,
-      "id, set_approval_status, is_deleted, deleted_at",
+      "id, set_name, set_approval_status, is_deleted, deleted_at",
     ),
     fetchOptionalProjectRows<SubmittalEvidence>(
       "submittals",
@@ -163,6 +193,7 @@ export async function fetchPieceRelationshipSnapshot(
   return {
     pieces,
     pieceDrawings,
+    pieceDrawingSets,
     drawings,
     workPackages,
     drawingSets,
@@ -213,5 +244,29 @@ export function unlinkPieceDrawing(projectId: string, pieceId: string, drawingId
     p_project_id: projectId,
     p_piece_id: pieceId,
     p_drawing_id: drawingId,
+  });
+}
+
+export function linkPieceDrawingSet(
+  projectId: string,
+  pieceId: string,
+  drawingSetId: string,
+) {
+  return callRpc("link_piece_drawing_set", {
+    p_project_id: projectId,
+    p_piece_id: pieceId,
+    p_drawing_set_id: drawingSetId,
+  });
+}
+
+export function unlinkPieceDrawingSet(
+  projectId: string,
+  pieceId: string,
+  drawingSetId: string,
+) {
+  return callRpc("unlink_piece_drawing_set", {
+    p_project_id: projectId,
+    p_piece_id: pieceId,
+    p_drawing_set_id: drawingSetId,
   });
 }

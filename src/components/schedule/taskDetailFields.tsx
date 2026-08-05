@@ -252,7 +252,7 @@ export function StageGateDates({
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: "0.10em",
-              color: DETAILING_STAGE_META[activeGate]?.color || "var(--accent)",
+              color: (DETAILING_STAGE_META as Record<string, any>)[activeGate]?.color || "var(--accent)",
             }}
           >
             ACTIVE · {activeGate}
@@ -262,7 +262,7 @@ export function StageGateDates({
       </div>
 
       {DETAILING_STAGE_GATES.map((gate) => {
-        const meta = DETAILING_STAGE_META[gate];
+        const meta = (DETAILING_STAGE_META as Record<string, any>)[gate];
         const v = stageDates?.[gate] || { start: null, end: null };
         const start = v.start || "";
         const end = v.end || "";
