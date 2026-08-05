@@ -1,5 +1,5 @@
 /** Presentational keyboard help row for Regular Calculator. */
-const mono = { fontFamily: "var(--font-mono)" } as const;
+import { monoStyle as mono } from "./regularCalculatorHelpers";
 
 export function KbRow({ k, label }: { k: string; label: string }) {
   return (

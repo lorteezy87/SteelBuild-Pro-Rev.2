@@ -6,14 +6,10 @@
  * submittals.fab_release_override_reason (and which lets the gate trigger pass).
  */
 import { useEffect, useState } from "react";
-
-const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
-
-const btnBase = {
-  ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
-  padding: "8px 16px", borderRadius: 2, border: "1px solid var(--border-default)",
-  cursor: "pointer", textTransform: "uppercase",
-};
+import {
+  RELEASE_GATE_MONO as mono,
+  RELEASE_GATE_BTN_BASE as btnBase,
+} from "./releaseGateOverrideModalHelpers";
 
 export default function ReleaseGateOverrideModal({
   open,

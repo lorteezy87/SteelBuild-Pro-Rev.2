@@ -3,6 +3,11 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { STAGES, DISCIPLINES, EMPTY_FORM, mono, surface } from "./drawingsConfig";
+import {
+  SHEET_FORM_LABEL_STYLE,
+  SHEET_FORM_INPUT_STYLE,
+  SHEET_FORM_SELECT_STYLE,
+} from "./sheetFormModalStyleHelpers";
 
 /**
  * Modal for creating or editing a single drawing sheet.
@@ -17,17 +22,9 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
   const [uploading, setUploading] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const labelStyle = {
-    ...mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.15em", color: "var(--text-muted)", display: "block", marginBottom: 5,
-  };
-  const inputStyle = {
-    width: "100%", padding: "8px 10px", background: "var(--bg-page)",
-    border: "1px solid var(--border-default)", borderRadius: 2,
-    color: "var(--text-primary)", fontFamily: "var(--font-body)",
-    fontSize: 13, boxSizing: "border-box",
-  };
-  const selectStyle = { ...inputStyle };
+  const labelStyle = SHEET_FORM_LABEL_STYLE;
+  const inputStyle = SHEET_FORM_INPUT_STYLE;
+  const selectStyle = SHEET_FORM_SELECT_STYLE;
 
   const handleSubmit = async () => {
     let fileUrl = form.file_url || "";

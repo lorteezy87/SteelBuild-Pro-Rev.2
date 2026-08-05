@@ -5,9 +5,14 @@
 import React, { useMemo, useState } from "react";
 import { parseLength, formatLength } from "@/utils/lengthMath";
 import { optimizeCutList } from "@/utils/cutListOptimizer";
-import { STOCK_PRESETS } from "./feetInchesCalculatorHelpers";
+import {
+  STOCK_PRESETS,
+  CUT_LIST_INPUT_STYLE,
+  CUT_LIST_FIELD_LABEL,
+  monoStyle,
+} from "./feetInchesCalculatorHelpers";
 
-const mono = { fontFamily: "var(--font-mono)" };
+const mono = monoStyle;
 
 // ── Cut-List & Stock Optimizer ──────────────────────────────────────
 // Collapsible sub-tool: parse a part length (ft-in), a quantity, and a
@@ -52,27 +57,8 @@ export function CutListOptimizerPanel({ precision, onCopy }) {
     partTicks != null && qty != null && effectiveStockTicks != null && kerfTicks != null;
   const showRejected = hasAllInputs && result == null;
 
-  const inputStyle = {
-    width: "100%",
-    background: "var(--bg-input)",
-    border: "1px solid var(--border-default)",
-    borderRadius: 6,
-    padding: "8px 10px",
-    color: "var(--text-primary)",
-    fontSize: 14,
-    ...mono,
-    outline: "none",
-    boxSizing: "border-box",
-  };
-  const fieldLabel = {
-    ...mono,
-    fontSize: 9,
-    color: "var(--text-muted)",
-    letterSpacing: "0.12em",
-    textTransform: "uppercase",
-    marginBottom: 4,
-    display: "block",
-  };
+  const inputStyle = CUT_LIST_INPUT_STYLE;
+  const fieldLabel = CUT_LIST_FIELD_LABEL;
 
   return (
     <div className="sbd-card" style={{ marginTop: 16, padding: open ? 16 : "12px 16px" }}>

@@ -26,8 +26,7 @@ import {
   FractionToDecimalPanel,
   UnitsPanel,
 } from "./decimalFractionConverter/DecimalFractionConverterUi";
-
-const mono = { fontFamily: "var(--font-mono)" };
+import { mono } from "./decimalFractionConverter/decimalFractionConverterHelpers";
 
 export default function DecimalFractionConverter() {
   const [subMode, setSubMode] = useState(SUB_MODES.DEC_FRAC);

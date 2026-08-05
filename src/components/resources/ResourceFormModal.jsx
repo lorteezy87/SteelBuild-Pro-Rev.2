@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button, Modal } from "@/components/design-system";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-import { fromEntity, toEntity } from "./resourceFormModalHelpers";
+import {
+  fromEntity,
+  toEntity,
+  RESOURCE_INPUT_STYLE,
+  RESOURCE_LABEL_STYLE,
+} from "./resourceFormModalHelpers";
 
 // Map between UI field names and the actual DB columns on the `resources` table.
 // DB schema: name, resource_type, role, capacity, unit, cost_rate, availability, notes, metadata (JSONB)
@@ -73,16 +78,8 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
     }
   };
 
-  const inputStyle = {
-    width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)",
-    borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)",
-    fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box",
-  };
-
-  const labelStyle = {
-    fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)",
-    letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px",
-  };
+  const inputStyle = RESOURCE_INPUT_STYLE;
+  const labelStyle = RESOURCE_LABEL_STYLE;
 
   return (
     <Modal

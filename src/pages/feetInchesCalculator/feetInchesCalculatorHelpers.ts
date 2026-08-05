@@ -121,3 +121,26 @@ export const STOCK_PRESETS = [
   { label: "40'", ticks: 40 * TICKS_PER_FOOT },
   { label: "60'", ticks: 60 * TICKS_PER_FOOT },
 ] as const;
+
+export const CUT_LIST_INPUT_STYLE: Record<string, string | number> = {
+  width: "100%",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 6,
+  padding: "8px 10px",
+  color: "var(--text-primary)",
+  fontSize: 14,
+  ...monoStyle,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+export const CUT_LIST_FIELD_LABEL: Record<string, string | number> = {
+  ...monoStyle,
+  fontSize: 9,
+  color: "var(--text-muted)",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  marginBottom: 4,
+  display: "block",
+};

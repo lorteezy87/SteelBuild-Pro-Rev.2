@@ -14,6 +14,7 @@ import {
   INLINE_INPUT,
   INLINE_SELECT,
   TASK_LIST_GRID,
+  TASK_LIST_SELECT_STYLE,
 } from "./scheduleTaskListHelpers";
 
 export { getScheduleTaskRowKey };
@@ -95,16 +96,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
     [collapsedTasks, filtered, sortBy],
   );
 
-  const selectStyle = {
-    background: "var(--bg-input)",
-    border: "1px solid var(--border-default)",
-    borderRadius: "8px",
-    padding: "8px 12px",
-    color: "var(--text-primary)",
-    fontFamily: "var(--font-body)",
-    fontSize: 12,
-    outline: "none",
-  };
+  const selectStyle = TASK_LIST_SELECT_STYLE;
 
   const GRID = TASK_LIST_GRID;
 
