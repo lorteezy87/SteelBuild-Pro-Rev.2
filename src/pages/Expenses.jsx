@@ -31,7 +31,7 @@ import { getNextNumber } from "../components/shared/numberSequencing";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
-import { safeNum, buildRedFlagAlerts, exportExpensesCSV } from "./expenses/utils";
+import { buildRedFlagAlerts, exportExpensesCSV } from "./expenses/utils";
 import {
   filterActiveExpenses,
   computeExpenseKpis,
@@ -45,6 +45,8 @@ import {
   nextKpiFilterState,
   toggleSelectedId,
   toggleSelectAllIds,
+  filterVisibleAlerts,
+  nextDismissedAlertKeys,
 } from "./expenses/expensesPageHelpers";
 import { computeCostCodeTotals } from "@/services/costRollup";
 import KpiStrip      from "./expenses/KpiStrip";
@@ -291,7 +293,7 @@ export default function ExpensesPage() {
     () => buildRedFlagAlerts({ totalCommitted, totalBudget, topVendors, activeExpenses, formatCurrencyShort }),
     [totalCommitted, totalBudget, topVendors, activeExpenses]
   );
-  const visibleAlerts = redFlagAlerts.filter((a) => !dismissedAlerts.includes(a.key));
+  const visibleAlerts = filterVisibleAlerts(redFlagAlerts, dismissedAlerts);
 
   /* ── Selection + CSV handlers ── */
   const toggleSelect = (id) => setSelected((s) => toggleSelectedId(s, id));
@@ -394,7 +396,7 @@ export default function ExpensesPage() {
 
         <AlertChips
           alerts={visibleAlerts}
-          onDismiss={(key) => setDismissedAlerts((prev) => [...prev, key])}
+          onDismiss={(key) => setDismissedAlerts((prev) => nextDismissedAlertKeys(prev, key))}
         />
 
         <FilterBar

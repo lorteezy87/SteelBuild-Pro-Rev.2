@@ -1,4 +1,14 @@
-import { Button } from "@/components/design-system";
+/**
+ * Presentational pieces for Punchlist page.
+ */
+// @ts-nocheck
+import React from "react";
+import { Button, KpiTile, ProgressBar } from "@/components/design-system";
+import {
+  PUNCHLIST_STATUSES,
+  PUNCHLIST_CATEGORIES,
+  PUNCHLIST_PRIORITIES,
+} from "./punchlistPageHelpers";
 /** Presentational close-out signature modal for Punchlist. */
 export function CloseoutSignatureModal({ count, signature, onSignatureChange, onCancel, onConfirm, isSaving }) {
   return (
@@ -60,6 +70,101 @@ export function CloseoutSignatureModal({ count, signature, onSignatureChange, on
             {isSaving ? "Closing…" : "Sign & Close"}
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+const chipStyle = (active) => ({
+  background: active ? "var(--accent)" : "var(--bg-surface-low)",
+  color: active ? "white" : "var(--text-secondary)",
+  border: "none",
+  borderRadius: "var(--radius-btn)",
+  padding: "5px 12px",
+  fontFamily: "var(--font-body)",
+  fontSize: "8px",
+  fontWeight: 700,
+  cursor: "pointer",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+});
+
+export function PunchlistCompletionCard({ completionRate }) {
+  return (
+    <div className="sbd-card" style={{ padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.10em" }}>
+          Project Completion
+        </span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>
+          {completionRate}%
+        </span>
+      </div>
+      <ProgressBar value={completionRate} color="var(--status-success)" height={6} />
+    </div>
+  );
+}
+
+export function PunchlistKpiStrip({
+  stats,
+  filterStatus,
+  filterPriority,
+  onToggleStatus,
+  onTogglePriority,
+}) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+      <KpiTile compact label="Total" value={stats.total} color="var(--accent)" />
+      <KpiTile compact label="Completed" value={stats.completed} color="var(--status-success)"
+        active={filterStatus === "Completed"} onClick={() => onToggleStatus("Completed")} />
+      <KpiTile compact label="In Progress" value={stats.inProgress} color="var(--status-warning)"
+        active={filterStatus === "In Progress"} onClick={() => onToggleStatus("In Progress")} />
+      <KpiTile compact label="Open" value={stats.open} color="var(--status-error)"
+        active={filterStatus === "Open"} onClick={() => onToggleStatus("Open")} />
+      <KpiTile compact label="On Hold" value={stats.onHold} color="var(--status-review)"
+        active={filterStatus === "On Hold"} onClick={() => onToggleStatus("On Hold")} />
+      <KpiTile compact label="Critical" value={stats.critical} color="var(--status-error)"
+        active={filterPriority === "Critical"} onClick={() => onTogglePriority("Critical")} />
+    </div>
+  );
+}
+
+export function PunchlistFilterBar({
+  filterStatus,
+  filterCategory,
+  filterPriority,
+  onFilterStatus,
+  onFilterCategory,
+  onFilterPriority,
+}) {
+  return (
+    <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "8px" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Status:</span>
+        {["all", ...PUNCHLIST_STATUSES].map((status) => (
+          <button key={status} onClick={() => onFilterStatus(status)} style={chipStyle(filterStatus === status)}>
+            {status === "all" ? "All" : status.slice(0, 6)}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: "8px" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Category:</span>
+        {["all", ...PUNCHLIST_CATEGORIES.slice(0, 4)].map((cat) => (
+          <button key={cat} onClick={() => onFilterCategory(cat)} style={chipStyle(filterCategory === cat)}>
+            {cat === "all" ? "All" : cat.slice(0, 5)}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: "8px" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Priority:</span>
+        {["all", ...PUNCHLIST_PRIORITIES].map((pri) => (
+          <button key={pri} onClick={() => onFilterPriority(pri)} style={chipStyle(filterPriority === pri)}>
+            {pri === "all" ? "All" : pri}
+          </button>
+        ))}
       </div>
     </div>
   );

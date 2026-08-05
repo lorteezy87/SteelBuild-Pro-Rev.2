@@ -237,3 +237,19 @@ export function toggleSelectedId(selected: string[], id: string): string[] {
 export function toggleSelectAllIds(selected: string[], filteredIds: string[]): string[] {
   return selected.length === filteredIds.length ? [] : filteredIds;
 }
+
+export function filterVisibleAlerts<T extends { key?: string }>(
+  alerts: T[],
+  dismissedKeys: string[],
+): T[] {
+  const dismissed = new Set(dismissedKeys || []);
+  return (alerts || []).filter((a) => a?.key != null && !dismissed.has(String(a.key)));
+}
+
+export function nextDismissedAlertKeys(
+  dismissedKeys: string[],
+  key: string,
+): string[] {
+  if ((dismissedKeys || []).includes(key)) return dismissedKeys;
+  return [...(dismissedKeys || []), key];
+}

@@ -8,9 +8,6 @@ import {
   createEmptyPunchlistFilters,
   buildPunchlistCloseoutPatch,
   requireCloseoutSignature,
-  PUNCHLIST_STATUSES,
-  PUNCHLIST_CATEGORIES,
-  PUNCHLIST_PRIORITIES,
 } from "./punchlist/punchlistPageHelpers";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
@@ -20,7 +17,7 @@ import { toast } from "sonner";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import PunchlistList from "@/components/punchlist/PunchlistList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, KpiTile, ProgressBar, BulkActionBar, Button } from "@/components/design-system";
+import { CommandBar, BulkActionBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
 import { useOutbox } from "@/lib/field/OutboxContext";
 import { makePunchCreateOp, newClientOpId, isLikelyOfflineError } from "@/lib/field/offlineQueue";
@@ -29,7 +26,12 @@ import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
-import { CloseoutSignatureModal } from "./punchlist/PunchlistUi";
+import {
+  CloseoutSignatureModal,
+  PunchlistCompletionCard,
+  PunchlistKpiStrip,
+  PunchlistFilterBar,
+} from "./punchlist/PunchlistUi";
 
 import { findById } from "@/pages/shared/findById";
 export default function Punchlist() {
@@ -217,10 +219,6 @@ export default function Punchlist() {
   const filtered = filterPunchlist(punchlist, { filterStatus, filterCategory, filterPriority });
   const { completionRate, ...stats } = computePunchlistStats(punchlist);
 
-  const statuses = PUNCHLIST_STATUSES;
-  const categories = PUNCHLIST_CATEGORIES;
-  const priorities = PUNCHLIST_PRIORITIES;
-
   return (
     <div
       className="sb-dashboard-reference-page"
@@ -238,62 +236,24 @@ export default function Punchlist() {
         </Button>
       </CommandBar>
 
-      {/* Completion Progress */}
-      <div className="sbd-card" style={{ padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.10em" }}>
-            Project Completion
-          </span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>
-            {completionRate}%
-          </span>
-        </div>
-        <ProgressBar value={completionRate} color="var(--status-success)" height={6} />
-      </div>
+      <PunchlistCompletionCard completionRate={completionRate} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-        <KpiTile compact label="Total"       value={stats.total}      color="var(--accent)" />
-        <KpiTile compact label="Completed"   value={stats.completed}  color="var(--status-success)"
-                 active={filterStatus === "Completed"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "Completed"))} />
-        <KpiTile compact label="In Progress" value={stats.inProgress} color="var(--status-warning)"
-                 active={filterStatus === "In Progress"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "In Progress"))} />
-        <KpiTile compact label="Open"        value={stats.open}       color="var(--status-error)"
-                 active={filterStatus === "Open"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "Open"))} />
-        <KpiTile compact label="On Hold"     value={stats.onHold}     color="var(--status-review)"
-                 active={filterStatus === "On Hold"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "On Hold"))} />
-        <KpiTile compact label="Critical"    value={stats.critical}   color="var(--status-error)"
-                 active={filterPriority === "Critical"} onClick={() => setFilterPriority(nextFilterToggle(filterPriority, "Critical"))} />
-      </div>
+      <PunchlistKpiStrip
+        stats={stats}
+        filterStatus={filterStatus}
+        filterPriority={filterPriority}
+        onToggleStatus={(v) => setFilterStatus(nextFilterToggle(filterStatus, v))}
+        onTogglePriority={(v) => setFilterPriority(nextFilterToggle(filterPriority, v))}
+      />
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Status:</span>
-          {["all", ...statuses].map((status) => (
-            <button key={status} onClick={() => setFilterStatus(status)} style={{ background: filterStatus === status ? "var(--accent)" : "var(--bg-surface-low)", color: filterStatus === status ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {status === "all" ? "All" : status.slice(0, 6)}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Category:</span>
-          {["all", ...categories.slice(0, 4)].map((cat) => (
-            <button key={cat} onClick={() => setFilterCategory(cat)} style={{ background: filterCategory === cat ? "var(--accent)" : "var(--bg-surface-low)", color: filterCategory === cat ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {cat === "all" ? "All" : cat.slice(0, 5)}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Priority:</span>
-          {["all", ...priorities].map((pri) => (
-            <button key={pri} onClick={() => setFilterPriority(pri)} style={{ background: filterPriority === pri ? "var(--accent)" : "var(--bg-surface-low)", color: filterPriority === pri ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {pri === "all" ? "All" : pri}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PunchlistFilterBar
+        filterStatus={filterStatus}
+        filterCategory={filterCategory}
+        filterPriority={filterPriority}
+        onFilterStatus={setFilterStatus}
+        onFilterCategory={setFilterCategory}
+        onFilterPriority={setFilterPriority}
+      />
 
       {/* Form Modal */}
       {showForm && <PunchlistFormModal projectId={projectId} item={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}

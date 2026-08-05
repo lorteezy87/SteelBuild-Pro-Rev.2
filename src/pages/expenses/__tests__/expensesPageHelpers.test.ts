@@ -77,3 +77,14 @@ describe("expensesPageHelpers", () => {
     expect(toggleSelectAllIds(["1", "2"], ["1", "2"])).toEqual([]);
   });
 });
+
+import { filterVisibleAlerts, nextDismissedAlertKeys } from "../expensesPageHelpers";
+
+describe("expense alert dismiss helpers", () => {
+  it("filters dismissed and appends keys", () => {
+    const alerts = [{ key: "a" }, { key: "b" }, { key: "c" }];
+    expect(filterVisibleAlerts(alerts, ["b"]).map((a) => a.key)).toEqual(["a", "c"]);
+    expect(nextDismissedAlertKeys(["a"], "b")).toEqual(["a", "b"]);
+    expect(nextDismissedAlertKeys(["a"], "a")).toEqual(["a"]);
+  });
+});
