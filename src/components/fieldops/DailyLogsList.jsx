@@ -4,16 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatLocalDate } from "@/utils/dates";
 import { buildIdMap } from "@/pages/shared/buildIdMap";
 import { asArray } from "@/lib/coerce";
-
-const sectionLabelStyle = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "9px",
-  fontWeight: 700,
-  color: "var(--text-muted)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  marginBottom: "6px",
-};
+import { sectionLabelStyle } from "./dailyLogsListStyleHelpers";
 
 export default function DailyLogsList({ logs = [] }) {
   const [expandedId, setExpandedId] = useState(null);
