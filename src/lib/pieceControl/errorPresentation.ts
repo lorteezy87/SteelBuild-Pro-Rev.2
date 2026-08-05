@@ -53,8 +53,15 @@ export function presentPieceControlError(
     return "You do not have permission to complete this Piece Register action.";
   }
 
-  // Schema / migration lag — keep the table tag so operators can act.
-  if (/does not exist|schema cache|Could not find the table|column .* does not exist/i.test(message)) {
+  // Schema / migration lag — keep the table/function tag so operators can act.
+  if (
+    /does not exist|schema cache|Could not find the table|Could not find the function|column .* does not exist/i.test(
+      message,
+    )
+  ) {
+    if (/link_model_elements_to_pieces/i.test(message)) {
+      return "3D mark linking is unavailable until Piece Control migrations are applied (link_model_elements_to_pieces).";
+    }
     const tableMatch = message.match(/\[([a-z0-9_]+)\]/i);
     const table = tableMatch?.[1];
     if (table === "pieces" || table === "work_packages") {

@@ -32,4 +32,15 @@ describe("presentPieceControlError", () => {
   it("falls back for opaque PGRST-only codes", () => {
     expect(presentPieceControlError(new Error("PGRST116"), "fallback")).toBe("fallback");
   });
+
+  it("maps missing link_model_elements_to_pieces to migration guidance", () => {
+    expect(
+      presentPieceControlError(
+        new Error(
+          "Could not find the function public.link_model_elements_to_pieces(p_project_id) in the schema cache",
+        ),
+        "fallback",
+      ),
+    ).toMatch(/link_model_elements_to_pieces/);
+  });
 });

@@ -17,6 +17,16 @@ describe("postgrestErrors", () => {
     ).toBe(true);
   });
 
+  it("detects PGRST202 missing-function failures", () => {
+    expect(
+      isMissingSchemaObjectError({
+        code: "PGRST202",
+        message:
+          "Could not find the function public.link_model_elements_to_pieces(p_project_id) in the schema cache",
+      }),
+    ).toBe(true);
+  });
+
   it("normalizes plain PostgREST objects into Error instances", () => {
     const normalized = normalizeThrownQueryError({
       code: "PGRST205",

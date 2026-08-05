@@ -1276,8 +1276,11 @@ export default function PieceRegister() {
                 onClick={() => {
                   void linkModelElementsToPieces(projectId)
                     .then((summary) => {
+                      const viaClient = summary.used_client_fallback
+                        ? " (client fallback — apply Piece Control migrations when ready)"
+                        : "";
                       toast.success(
-                        `Linked ${summary.linked ?? 0} · unmatched ${summary.unmatched ?? 0} · ambiguous ${summary.ambiguous ?? 0}`,
+                        `Linked ${summary.linked ?? 0} · unmatched ${summary.unmatched ?? 0} · ambiguous ${summary.ambiguous ?? 0}${viaClient}`,
                       );
                       void queryClient.invalidateQueries({
                         queryKey: ["model-elements", projectId],
