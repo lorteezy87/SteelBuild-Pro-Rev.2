@@ -119,3 +119,17 @@ export function sortDrawingRegisterRows(
     return compareDrawingSetPackages(a.pkg.parent || a.pkg, b.pkg.parent || b.pkg);
   });
 }
+
+/** Flat sheet list across all set packages (upload modal existing drawings). */
+export function collectAllSheetsFromPackages(
+  setPackages: Array<{ sheets?: any[] | null }> | null | undefined,
+): any[] {
+  return (setPackages || []).flatMap((p) => p.sheets || []);
+}
+
+/** Unique set names for upload validation. */
+export function collectExistingSetNames(
+  setPackages: Array<{ name?: string | null }> | null | undefined,
+): string[] {
+  return [...new Set((setPackages || []).map((p) => p.name).filter(Boolean))] as string[];
+}

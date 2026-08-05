@@ -153,3 +153,18 @@ describe("sortDrawingRegisterRows", () => {
     expect(out.map((r) => r.pkg.key)).toEqual(["b", "a", "c"]);
   });
 });
+
+import { collectAllSheetsFromPackages, collectExistingSetNames } from "../drawingRegister.derive";
+
+describe("collect sheets/names from packages", () => {
+  const pkgs = [
+    { name: "Set A", sheets: [{ id: "1" }, { id: "2" }] },
+    { name: "Set B", sheets: [{ id: "3" }] },
+    { name: "Set A", sheets: [] },
+    { name: null, sheets: null },
+  ];
+  it("flattens sheets and unique names", () => {
+    expect(collectAllSheetsFromPackages(pkgs).map((s: any) => s.id)).toEqual(["1", "2", "3"]);
+    expect(collectExistingSetNames(pkgs)).toEqual(["Set A", "Set B"]);
+  });
+});

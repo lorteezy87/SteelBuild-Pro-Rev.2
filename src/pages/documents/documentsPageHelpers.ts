@@ -139,3 +139,21 @@ export function validateBulkFolderIndent(
   return warnings;
 }
 
+
+/** Immediate children of currentFolderId (null = root). */
+export function filterChildFolders<
+  T extends { parent_folder_id?: string | null },
+>(
+  folders: T[] | null | undefined,
+  currentFolderId: string | null | undefined,
+): T[] {
+  const parent = currentFolderId ?? null;
+  return (folders || []).filter((f) => (f.parent_folder_id ?? null) === parent);
+}
+
+/** id → folder name map for search result location column. */
+export function buildFolderNameById(
+  folders: Array<{ id?: string | null; name?: string | null }> | null | undefined,
+): Map<string, string | null | undefined> {
+  return new Map((folders || []).filter((f) => f?.id).map((f) => [f.id as string, f.name]));
+}

@@ -34,6 +34,8 @@ import {
   buildDrawingRegisterRows,
   filterDrawingRegisterRows,
   sortDrawingRegisterRows,
+  collectAllSheetsFromPackages,
+  collectExistingSetNames,
 } from "./drawingRegister.derive";
 
 // These shared screens are still .jsx; cast at the boundary (removable
@@ -236,8 +238,14 @@ export function DrawingRegisterTable({
   const [healthDetail, setHealthDetail] = useState<any>(null);
   const [sortByHealth, setSortByHealth] = useState<null | "asc" | "desc">(null);
 
-  const allSheets = useMemo(() => (setPackages || []).flatMap((p: any) => p.sheets || []), [setPackages]);
-  const existingSetNames = useMemo(() => [...new Set((setPackages || []).map((p: any) => p.name).filter(Boolean))], [setPackages]);
+  const allSheets = useMemo(
+    () => collectAllSheetsFromPackages(setPackages),
+    [setPackages],
+  );
+  const existingSetNames = useMemo(
+    () => collectExistingSetNames(setPackages),
+    [setPackages],
+  );
   const refetchDrawings = () => {
     // Scope every key with projectId — bare ["drawings"] refetches every
     // project's drawing queries still in the cache (portfolio fan-out).

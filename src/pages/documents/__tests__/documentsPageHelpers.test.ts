@@ -6,7 +6,7 @@ import {nextActiveFilters,
   toggleSelectionId,
   selectionFromDocs,
   removeIdFromSelection, selectDocsByIds, countDocsForStatusTab,
-  parseBulkFolderInput, validateBulkFolderIndent} from "../documentsPageHelpers";
+  parseBulkFolderInput, validateBulkFolderIndent, filterChildFolders, buildFolderNameById} from "../documentsPageHelpers";
 
 describe("documentsPageHelpers", () => {
   it("filter mutators", () => {
@@ -69,5 +69,24 @@ describe("parseBulkFolderInput / validateBulkFolderIndent", () => {
 
   it("accepts sequential indent", () => {
     expect(validateBulkFolderIndent(parseBulkFolderInput("A\n  B\n    C"))).toEqual([]);
+  });
+});
+
+describe("filterChildFolders / buildFolderNameById", () => {
+  it("filters children of current folder", () => {
+    const folders = [
+      { id: "a", parent_folder_id: null },
+      { id: "b", parent_folder_id: "a" },
+      { id: "c", parent_folder_id: "a" },
+      { id: "d", parent_folder_id: "b" },
+    ];
+    expect(filterChildFolders(folders, null).map((f) => f.id)).toEqual(["a"]);
+    expect(filterChildFolders(folders, "a").map((f) => f.id)).toEqual(["b", "c"]);
+  });
+
+  it("builds name map", () => {
+    const m = buildFolderNameById([{ id: "x", name: "Specs" }, { id: null, name: "skip" }]);
+    expect(m.get("x")).toBe("Specs");
+    expect(m.has("skip" as any)).toBe(false);
   });
 });

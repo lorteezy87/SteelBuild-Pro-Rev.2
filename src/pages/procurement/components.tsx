@@ -6,6 +6,7 @@ import {
   daysBetween, addWeeks, fmtDate, todayISO,
   groupProcurementByCategory,
   sumWeightTons,
+  sortWorkPackagesByNumber,
 } from "./format";
 
 // StatusBadge is a still-.jsx component; cast at the boundary.
@@ -400,9 +401,7 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
   // swap this for a search input - not yet a problem in practice but
   // flagged in the rebuild brief.
   const sortedWPs = useMemo(
-    () => [...workPackages].sort((a, b) =>
-      String(a.wp_number || '').localeCompare(String(b.wp_number || ''))
-    ),
+    () => sortWorkPackagesByNumber(workPackages),
     [workPackages],
   );
 

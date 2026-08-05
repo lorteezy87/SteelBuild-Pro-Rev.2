@@ -22,7 +22,7 @@ import {
   ChevronRight, FolderPlus, Folder, MoreHorizontal,
   CheckSquare, XCircle, Trash2, FolderInput, FolderTree,
 } from "lucide-react";
-import { buildFolderBreadcrumbPath } from "./documentsPageHelpers";
+import { buildFolderBreadcrumbPath, filterChildFolders } from "./documentsPageHelpers";
 import { toggleSelectionId } from "@/pages/shared/selectionHelpers";
 
 const PILL_BTN = {
@@ -87,7 +87,7 @@ export default function FolderBar({
   useEffect(() => { setSelectedIds(new Set()); }, [currentFolderId]);
 
   const childFolders = useMemo(
-    () => folders.filter((f) => (f.parent_folder_id ?? null) === (currentFolderId ?? null)),
+    () => filterChildFolders(folders, currentFolderId),
     [folders, currentFolderId],
   );
 

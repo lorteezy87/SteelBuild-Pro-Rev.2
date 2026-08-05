@@ -114,3 +114,12 @@ export function groupProcurementByCategory<
 export function sumWeightTons(rows: ReadonlyArray<any> | null | undefined): number {
   return (rows || []).reduce((s, r) => s + (Number(r?.weight_tons) || 0), 0);
 }
+
+/** Sort work packages by wp_number for procurement form dropdowns. */
+export function sortWorkPackagesByNumber<
+  T extends { wp_number?: string | number | null },
+>(workPackages: T[] | null | undefined): T[] {
+  return [...(workPackages || [])].sort((a, b) =>
+    String(a.wp_number || "").localeCompare(String(b.wp_number || "")),
+  );
+}

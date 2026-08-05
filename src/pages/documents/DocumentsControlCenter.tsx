@@ -34,6 +34,7 @@ import {
 } from "./documentsControlCenter.derive";
 import type { DocumentRecord, FolderRecord } from "./documentsControlCenter.derive";
 import { LIST_FILETYPE_STYLES, FILETYPE_FALLBACK } from "./utils";
+import { buildFolderNameById } from "./documentsPageHelpers";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -171,7 +172,7 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
   // lives. Inside a folder the column would be a constant, so we hide it.
   const isSearching = search.trim().length > 0;
   const folderNameById = useMemo(
-    () => new Map(folders.map((f) => [f.id, f.name])),
+    () => buildFolderNameById(folders),
     [folders],
   );
 

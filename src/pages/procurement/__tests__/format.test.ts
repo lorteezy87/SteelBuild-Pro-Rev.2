@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupProcurementByCategory, sumWeightTons } from "../format";
+import { groupProcurementByCategory, sumWeightTons, sortWorkPackagesByNumber } from "../format";
 
 describe("groupProcurementByCategory", () => {
   it("buckets by category, defaults Other, sorts keys", () => {
@@ -24,5 +24,12 @@ describe("sumWeightTons", () => {
   it("sums numeric weight_tons", () => {
     expect(sumWeightTons([{ weight_tons: 1.5 }, { weight_tons: "2" }, { weight_tons: null }])).toBe(3.5);
     expect(sumWeightTons([])).toBe(0);
+  });
+});
+
+describe("sortWorkPackagesByNumber", () => {
+  it("sorts by wp_number string", () => {
+    const wps = [{ wp_number: "10" }, { wp_number: "2" }, { wp_number: "1" }];
+    expect(sortWorkPackagesByNumber(wps).map((w) => w.wp_number)).toEqual(["1", "10", "2"]);
   });
 });
