@@ -43,9 +43,8 @@ import {
   buildVarianceAlerts,
   buildCoAging,
   costStatusTone,
-  buildCostControlCsvString,
+  downloadCostControlCsv,
 } from "./costControlCenter.derive";
-import { downloadTextFile } from "@/lib/exports/fabRelease";
 import CostChartRow from "./CostChartRow";
 import { persistCostCode } from "./costCodeSave";
 
@@ -254,13 +253,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   ];
 
   // ── CSV export ──
-  const handleExport = () => {
-    downloadTextFile(
-      buildCostControlCsvString(filteredRows),
-      "cost_control_center.csv",
-      "text/csv;charset=utf-8",
-    );
-  };
+  const handleExport = () => downloadCostControlCsv(filteredRows);
 
   // ── Row click → edit ──
   const handleRowClick = (row: CostCodeRow) => {

@@ -258,3 +258,77 @@ export function pruneSelectedIds(selectedIds, sourceRows) {
 export function filterRowsBySelectedIds(rows, selectedIds) {
   return (rows || []).filter((r) => selectedIds?.has?.(r.id));
 }
+
+/** Escape a single CSV cell (quote when needed). */
+export function csvCell(v: unknown): string {
+  const s = String(v ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export type RfiAgendaItemLike = {
+  group?: string | null;
+  rfiNumber?: string | null;
+  title?: string | null;
+  reason?: string | null;
+  bic?: string | null;
+  priority?: string | null;
+};
+
+export type RfiAgendaLike = {
+  items?: RfiAgendaItemLike[] | null;
+};
+
+export const RFI_AGENDA_CSV_HEADERS = [
+  "Group",
+  "RFI",
+  "Title",
+  "Reason",
+  "Ball In Court",
+  "Priority",
+] as const;
+
+/** Pure agenda CSV rows (no header). */
+export function buildRfiAgendaCsvRows(
+  agenda: RfiAgendaLike | null | undefined,
+): string[][] {
+  return (agenda?.items || []).map((i) => [
+    i.group || "",
+    i.rfiNumber || "",
+    i.title || "",
+    i.reason || "",
+    i.bic || "",
+    i.priority || "",
+  ]);
+}
+
+/** Serialize today's RFI agenda to a CSV string. */
+export function buildRfiAgendaCsvString(
+  agenda: RfiAgendaLike | null | undefined,
+): string {
+  const rows = [[...RFI_AGENDA_CSV_HEADERS], ...buildRfiAgendaCsvRows(agenda)];
+  return rows.map((r) => r.map(csvCell).join(",")).join("\n");
+}
+
+/** Default download filename for agenda export (local calendar day). */
+export function rfiAgendaCsvFilename(now: Date = new Date()): string {
+  // Match prior AgendaPanel: UTC calendar day via toISOString().
+  return `rfi-agenda-${now.toISOString().slice(0, 10)}.csv`;
+}
+
+/** Side-effect CSV download for the RFI agenda panel. */
+export function downloadRfiAgendaCsv(
+  agenda: RfiAgendaLike | null | undefined,
+  filename?: string,
+  now: Date = new Date(),
+): void {
+  if (typeof document === "undefined" || typeof URL === "undefined") return;
+  const csv = buildRfiAgendaCsvString(agenda);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || rfiAgendaCsvFilename(now);
+  a.click();
+  URL.revokeObjectURL(url);
+}
+

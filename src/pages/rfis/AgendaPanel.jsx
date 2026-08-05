@@ -1,6 +1,7 @@
 import React from "react";
 import { BicPill } from "@/components/design-system";
 import { AGENDA_GROUPS } from "@/lib/commandCenter/rfiAgenda";
+import { downloadRfiAgendaCsv } from "./utils";
 
 const GROUP_ACCENT = {
   Overdue: "var(--status-error)",
@@ -15,26 +16,6 @@ const PRIORITY_COLOR = {
   Medium: "var(--status-info)",
   Low: "var(--text-muted)",
 };
-
-function csvCell(v) {
-  const s = String(v ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-function exportAgendaCsv(agenda) {
-  const header = ["Group", "RFI", "Title", "Reason", "Ball In Court", "Priority"];
-  const rows = agenda.items.map((i) => [
-    i.group, i.rfiNumber || "", i.title, i.reason, i.bic, i.priority || "",
-  ]);
-  const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `rfi-agenda-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 function AgendaRow({ item, onOpenRfi }) {
   const accent = GROUP_ACCENT[item.group] || "var(--text-muted)";
@@ -89,7 +70,7 @@ export default function AgendaPanel({ agenda, onOpenRfi, onClose }) {
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           <button
             type="button"
-            onClick={() => exportAgendaCsv(agenda)}
+            onClick={() => downloadRfiAgendaCsv(agenda)}
             disabled={total === 0}
             style={{
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",

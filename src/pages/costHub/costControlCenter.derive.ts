@@ -12,6 +12,7 @@
  */
 import { COST_CODES, CATEGORY_COLORS, CATEGORY_ORDER } from "@/components/shared/costCodes";
 import type { PillTone } from "@/components/command";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -280,5 +281,17 @@ export function buildCostControlCsvString(rows: CostControlCsvRow[]): string {
   return [COST_CONTROL_CSV_HEADERS as unknown as Array<string | number>, ...buildCostControlCsvRows(rows)]
     .map((row) => row.map((c) => `"${c ?? ""}"`).join(","))
     .join("\n");
+}
+
+/** Side-effect CSV download for Cost Control Center table. */
+export function downloadCostControlCsv(
+  rows: CostControlCsvRow[],
+  filename = "cost_control_center.csv",
+): void {
+  downloadTextFile(
+    buildCostControlCsvString(rows),
+    filename,
+    "text/csv;charset=utf-8",
+  );
 }
 

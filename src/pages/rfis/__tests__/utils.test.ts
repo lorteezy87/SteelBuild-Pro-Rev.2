@@ -130,3 +130,37 @@ describe("RFI selection helpers", () => {
     expect(filterRowsBySelectedIds(rows, new Set(["b"]))).toEqual([{ id: "b" }]);
   });
 });
+
+import {
+  buildRfiAgendaCsvString,
+  buildRfiAgendaCsvRows,
+  rfiAgendaCsvFilename,
+  csvCell,
+} from "../utils";
+
+describe("RFI agenda CSV", () => {
+  it("escapes cells and serializes agenda rows", () => {
+    expect(csvCell("a,b")).toBe('"a,b"');
+    expect(csvCell('say "hi"')).toBe('"say ""hi"""');
+    const agenda = {
+      items: [
+        {
+          group: "Overdue",
+          rfiNumber: "RFI-1",
+          title: "Gap, weld",
+          reason: "Due",
+          bic: "GC",
+          priority: "High",
+        },
+      ],
+    };
+    const rows = buildRfiAgendaCsvRows(agenda);
+    expect(rows[0][2]).toBe("Gap, weld");
+    const csv = buildRfiAgendaCsvString(agenda);
+    expect(csv.split("\n")[0]).toContain("Group");
+    expect(csv).toContain('"Gap, weld"');
+    expect(rfiAgendaCsvFilename(new Date("2026-08-05T12:00:00.000Z"))).toBe(
+      "rfi-agenda-2026-08-05.csv",
+    );
+  });
+});
