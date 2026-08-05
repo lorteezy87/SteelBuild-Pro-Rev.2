@@ -17,6 +17,9 @@ import {
 } from "../lib/importSovSpreadsheet";
 import SovControlCenter from "./sov/SovControlCenter";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { Button as DsButton } from "@/components/design-system";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { SovNoProjectGuard } from "./sov/components";
 import {
   buildSovCsvRows,
@@ -54,7 +57,13 @@ export default function SOV() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: sovs = [] } = useQuery({
+  const {
+    data: sovs = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["sov-items", activeProject?.id],
     queryFn: () => activeProject?.id
       ? entities.SOVItem.filter({ project_id: activeProject.id }, "-created_at")
@@ -325,6 +334,37 @@ export default function SOV() {
       />
     </>
   );
+
+  // Gate fetch states at the page shell — SovControlCenter has no loading props
+  // (same pattern as ActionItems / Procurement / Backcharges).
+  if (isLoading) {
+    return (
+      <div className="sov-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sov-page" style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load SOV items
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(error, "Something went wrong. Try again.")}
+        </p>
+        <DsButton variant="outline" onClick={() => refetch()}>Retry</DsButton>
+      </div>
+    );
+  }
 
   return (
     <div className="sov-page">
