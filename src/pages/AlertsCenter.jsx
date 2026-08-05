@@ -9,32 +9,16 @@ import { useAlerts } from "@/hooks/useAlerts";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
-
-const PAGE_MAP = {
-  RFI: "RFIs",
-  RFI_Overdue: "RFIs",
-  Drawing: "Drawings",
-  ChangeOrder: "ChangeOrders",
-  Delivery: "Deliveries",
-  WorkPackage: "WorkPackages",
-  ActionItem: "ActionItems",
-};
+import {
+  resolveAlertPath as resolveAlertPathHelper,
+  filterAlerts,
+  uniqueAlertTypes,
+  severityStyle,
+} from "./alertsCenter/alertsCenterPageHelpers";
 
 function resolveAlertPath(alert) {
-  const recordType = alert.record_type || alert.alert_type;
-  const page = PAGE_MAP[recordType];
-  if (!page) return null;
-  const base = createPageUrl(page);
-  if (alert.related_record_id) return `${base}?id=${encodeURIComponent(String(alert.related_record_id))}`;
-  return base;
+  return resolveAlertPathHelper(alert, createPageUrl);
 }
-
-const SEVERITY_BG = {
-  Critical: { bg: "var(--danger-muted)", border: "var(--status-error)" },
-  High:     { bg: "var(--warning-muted)", border: "var(--status-warning)" },
-  Medium:   { bg: "var(--warning-muted)", border: "var(--status-warning)" },
-  Low:      { bg: "var(--hover-bg)", border: "var(--border-strong)" },
-};
 
 export default function AlertsCenter() {
   const navigate = useNavigate();
@@ -55,14 +39,12 @@ export default function AlertsCenter() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
-  const filtered = useMemo(() => alerts.filter(a => {
-    if (a.is_dismissed) return false;
-    const matchSeverity = severityFilter === "all" || a.severity === severityFilter;
-    const matchType = typeFilter === "all" || a.alert_type === typeFilter;
-    return matchSeverity && matchType;
-  }), [alerts, severityFilter, typeFilter]);
+  const filtered = useMemo(
+    () => filterAlerts(alerts, { severityFilter, typeFilter }),
+    [alerts, severityFilter, typeFilter],
+  );
 
-  const alertTypes = useMemo(() => [...new Set(alerts.map(a => a.alert_type).filter(Boolean))], [alerts]);
+  const alertTypes = useMemo(() => uniqueAlertTypes(alerts), [alerts]);
 
   const btnActive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--accent-muted)", color: "var(--accent-light)" };
   const btnInactive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--bg-surface-low)", color: "var(--text-muted)" };
@@ -152,7 +134,7 @@ export default function AlertsCenter() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {filtered.map(alert => {
-            const sev = SEVERITY_BG[alert.severity] || SEVERITY_BG.Low;
+            const sev = severityStyle(alert.severity);
             return (
               <div key={alert.id} style={{ background: sev.bg, border: "none", borderLeft: `3px solid ${sev.border}`, borderRadius: "var(--radius-card)", overflow: "hidden", opacity: alert.is_read ? 0.60 : 1, transition: "opacity 0.2s" }}>
                 <div style={{ padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}>

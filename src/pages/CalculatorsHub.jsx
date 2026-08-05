@@ -16,6 +16,7 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import CalculatorShell from "@/components/calculators/CalculatorShell";
+import { resolveCalculatorTabKey } from "./calculatorsHub/calculatorsHubPageHelpers";
 
 const RegularCalc = lazyWithRetry(() => import("@/pages/RegularCalculator"));
 const FeetInchesCalc = lazyWithRetry(() => import("@/pages/FeetInchesCalculator"));
@@ -38,7 +39,7 @@ const RAIL_TOOLS = TABS.map((t) => ({ id: t.key, label: t.label }));
 export default function CalculatorsHub() {
   const [params, setParams] = useSearchParams();
   const param = params.get("calc_tab");
-  const activeKey = TABS.some((t) => t.key === param) ? param : "calculator";
+  const activeKey = resolveCalculatorTabKey(param);
   const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
   const setTab = (key) =>
     setParams(

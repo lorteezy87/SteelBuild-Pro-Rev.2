@@ -31,6 +31,8 @@ import {
   buildShapeLabel,
   tryCalculateWeight,
   sumRunningWeight,
+  appendRunningTotalRow,
+  removeRunningTotalById,
 } from "./steelWeightCalculator/steelWeightCalculatorHelpers";
 import {
   mono,
@@ -154,25 +156,12 @@ export default function SteelWeightCalculator() {
 
   const handleAddToRunningTotal = () => {
     if (!result) return;
-    setRunningTotal((prev) => [
-      ...prev,
-      {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        shape:        result.shape,
-        lbPerFt:      result.lbPerFt,
-        qty:          result.qty,
-        lengthFt:     result.lengthFt,
-        lengthDisplay: result.lengthDisplay,
-        pieceWeight:  result.pieceWeight,
-        totalWeight:  result.totalWeight,
-        cost:         result.cost,
-      },
-    ]);
+    setRunningTotal((prev) => appendRunningTotalRow(prev, result));
     toast.success("Added to running total");
   };
 
   const removeFromRunningTotal = (id) =>
-    setRunningTotal((prev) => prev.filter((r) => r.id !== id));
+    setRunningTotal((prev) => removeRunningTotalById(prev, id));
 
   const clearRunningTotal = () => {
     setRunningTotal([]);

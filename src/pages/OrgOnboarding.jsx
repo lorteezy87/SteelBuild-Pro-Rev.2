@@ -13,8 +13,12 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
 import { useOrg } from "@/components/shared/OrgContext";
 import { createOrganization, getInvitation, acceptInvitation } from "@/lib/org/repository";
-
-const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "Member" };
+import {
+  ROLE_LABEL,
+  parseInviteTokenFromSearch,
+  isInviteInvalid,
+  canSubmitWorkspaceName,
+} from "./orgOnboarding/orgOnboardingPageHelpers";
 
 function Shell({ children, email, onSignOut }) {
   return (
@@ -39,9 +43,7 @@ export default function OrgOnboarding() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
 
-  const token = useMemo(() => {
-    try { return new URLSearchParams(window.location.search).get("invite"); } catch { return null; }
-  }, []);
+  const token = useMemo(() => parseInviteTokenFromSearch(window.location.search), []);
 
   const { data: invite, isLoading: loadingInvite } = useQuery({
     queryKey: ["invite", token],
@@ -62,7 +64,7 @@ export default function OrgOnboarding() {
   const submitCreate = async (e) => {
     e.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed || busy) return;
+    if (!canSubmitWorkspaceName(name, busy)) return;
     setBusy(true);
     try {
       const org = await createOrganization(trimmed);
@@ -94,7 +96,7 @@ export default function OrgOnboarding() {
     if (loadingInvite) {
       return <Shell email={user?.email} onSignOut={() => logout?.()}><p style={{ color: "var(--text-muted)", marginTop: 18 }}>Loading invitation…</p></Shell>;
     }
-    const invalid = !invite || invite.status !== "pending" || invite.expired;
+    const invalid = isInviteInvalid(invite);
     if (invalid) {
       return (
         <Shell email={user?.email} onSignOut={() => logout?.()}>

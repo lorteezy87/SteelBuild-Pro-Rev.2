@@ -254,3 +254,47 @@ export function sumRunningWeight(
 ): number {
   return (rows || []).reduce((sum, r) => sum + (Number(r.totalWeight) || 0), 0);
 }
+
+
+export type RunningTotalResult = {
+  shape?: string | null;
+  lbPerFt?: number | null;
+  qty?: number | null;
+  lengthFt?: number | null;
+  lengthDisplay?: string | null;
+  pieceWeight?: number | null;
+  totalWeight?: number | null;
+  cost?: number | null;
+};
+
+export type RunningTotalRow = RunningTotalResult & { id: string };
+
+export function appendRunningTotalRow(
+  prev: RunningTotalRow[],
+  result: RunningTotalResult,
+  idFactory: () => string = () =>
+    `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+): RunningTotalRow[] {
+  if (!result) return prev || [];
+  return [
+    ...(prev || []),
+    {
+      id: idFactory(),
+      shape: result.shape,
+      lbPerFt: result.lbPerFt,
+      qty: result.qty,
+      lengthFt: result.lengthFt,
+      lengthDisplay: result.lengthDisplay,
+      pieceWeight: result.pieceWeight,
+      totalWeight: result.totalWeight,
+      cost: result.cost,
+    },
+  ];
+}
+
+export function removeRunningTotalById<T extends { id?: string }>(
+  rows: T[],
+  id: string,
+): T[] {
+  return (rows || []).filter((r) => r.id !== id);
+}

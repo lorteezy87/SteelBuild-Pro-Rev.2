@@ -117,3 +117,15 @@ describe("steelWeight shape/calc helpers", () => {
     expect(sumRunningWeight([{ totalWeight: 10 }, { totalWeight: 5 }])).toBe(15);
   });
 });
+
+
+import { appendRunningTotalRow, removeRunningTotalById } from "../steelWeightCalculatorHelpers";
+
+describe("running total mutators", () => {
+  it("appends and removes", () => {
+    const next = appendRunningTotalRow([], { shape: "W12", totalWeight: 10, qty: 1 }, () => "id1");
+    expect(next).toHaveLength(1);
+    expect(next[0].id).toBe("id1");
+    expect(removeRunningTotalById(next, "id1")).toEqual([]);
+  });
+});

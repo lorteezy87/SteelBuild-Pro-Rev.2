@@ -11,20 +11,19 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import PortfolioControlCenter from "./portfolio/PortfolioControlCenter";
+import {
+  PORTFOLIO_TABS as TABS,
+  resolvePortfolioTabKey,
+} from "./portfolioHub/portfolioHubPageHelpers";
 
 const ExecutiveView = lazyWithRetry(() => import("@/pages/ExecutiveView"));
-
-const TABS = [
-  { key: "overview", label: "Portfolio Overview" },
-  { key: "executive", label: "Executive View" },
-];
 
 export default function PortfolioHub() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
 
   const param = params.get("pf_tab");
-  const activeKey = TABS.some((t) => t.key === param) ? param : "overview";
+  const activeKey = resolvePortfolioTabKey(param);
   const setTab = (key) =>
     setParams(
       (prev) => {

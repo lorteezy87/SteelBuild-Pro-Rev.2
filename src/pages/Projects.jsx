@@ -13,6 +13,10 @@ import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
+import {
+  buildLiveProjectIdSet,
+  filterRowsByLiveProjectIds,
+} from "./dashboard/dashboardPageHelpers";
 
 export default function Projects() {
   const qc         = useQueryClient();
@@ -51,18 +55,18 @@ export default function Projects() {
   const { data: rawRfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => entities.RFI.list() });
   const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => entities.ChangeOrder.list() });
 
-  const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
+  const liveProjectIds = useMemo(() => buildLiveProjectIdSet(projects), [projects]);
   useAutoOpenEdit(projects, setDetailProject, { enabled: !projectsLoading, param: "recordId" });
   const workPackages = useMemo(
-    () => rawWorkPackages.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
+    () => filterRowsByLiveProjectIds(rawWorkPackages, liveProjectIds),
     [liveProjectIds, rawWorkPackages],
   );
   const rfis = useMemo(
-    () => rawRfis.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
+    () => filterRowsByLiveProjectIds(rawRfis, liveProjectIds),
     [liveProjectIds, rawRfis],
   );
   const changeOrders = useMemo(
-    () => rawChangeOrders.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
+    () => filterRowsByLiveProjectIds(rawChangeOrders, liveProjectIds),
     [liveProjectIds, rawChangeOrders],
   );
   const { plan } = usePlan();

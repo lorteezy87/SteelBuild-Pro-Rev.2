@@ -7,6 +7,12 @@ import { useProjectContext } from "../components/shared/ProjectContext";
 import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import {
+  filterPortfolioProjects,
+  buildLiveProjectIdSet,
+  scopePortfolioRows as scopePortfolioRowsHelper,
+  filterRowsByProjectId,
+} from "./dashboard/dashboardPageHelpers";
 // Canonical control-center loading uses the same query set for all project views.
 const DashboardControlCenter = lazyWithRetry(() => import("./dashboardCC/DashboardControlCenter"));
 const PortfolioControlCenter = lazyWithRetry(() => import("./portfolio/PortfolioControlCenter"));
@@ -61,8 +67,8 @@ export default function Dashboard() {
   // contributions); on-hold projects are visible only on the /Projects page.
   // `liveProjectIds` is the active (non-on-hold) id set used by every
   // portfolio aggregation downstream (scopePortfolioRows + PortfolioControlCenter).
-  const portfolioProjects = useMemo(() => projects.filter((p) => !p.on_hold), [projects]);
-  const liveProjectIds = useMemo(() => new Set(portfolioProjects.map((p) => p.id).filter(Boolean)), [portfolioProjects]);
+  const portfolioProjects = useMemo(() => filterPortfolioProjects(projects), [projects]);
+  const liveProjectIds = useMemo(() => buildLiveProjectIdSet(portfolioProjects), [portfolioProjects]);
   const activeProjectIsLive = !pid || projectsLoading || liveProjectIds.has(pid);
 
   useEffect(() => {
@@ -72,7 +78,7 @@ export default function Dashboard() {
   }, [activeProjectIsLive, pid, projectsLoading, setActiveProject]);
 
   const scopePortfolioRows = useCallback(
-    (rows) => pid ? rows : rows.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
+    (rows) => scopePortfolioRowsHelper(rows, { projectId: pid, liveProjectIds }),
     [pid, liveProjectIds],
   );
 
@@ -207,17 +213,14 @@ export default function Dashboard() {
   });
 
   /* ── Project-scoped slices (derived from global data to avoid dupe queries) ── */
-  const rfis       = useMemo(() => (pid ? allRFIs.filter((r)       => r.project_id === pid) : []), [allRFIs, pid]);
-  const cos        = useMemo(() => (pid ? allCOs.filter((c)        => c.project_id === pid) : []), [allCOs, pid]);
-  const codes      = useMemo(() => (pid ? allCodes.filter((c)      => c.project_id === pid) : []), [allCodes, pid]);
-  const wps        = useMemo(() => (pid ? allWPs.filter((w)        => w.project_id === pid) : []), [allWPs, pid]);
-  const deliveries = useMemo(() => (pid ? allDeliveries.filter((d) => d.project_id === pid) : []), [allDeliveries, pid]);
-  const expenses   = useMemo(() => (pid ? allExpenses.filter((e)   => e.project_id === pid) : []), [allExpenses, pid]);
-  const actionItems = useMemo(
-    () => (pid ? allActionItems.filter((a) => a.project_id === pid) : []),
-    [allActionItems, pid]
-  );
-  const submittals    = useMemo(() => (pid ? allSubmittals.filter((s) => s.project_id === pid) : []), [allSubmittals, pid]);
+  const rfis       = useMemo(() => filterRowsByProjectId(allRFIs, pid), [allRFIs, pid]);
+  const cos        = useMemo(() => filterRowsByProjectId(allCOs, pid), [allCOs, pid]);
+  const codes      = useMemo(() => filterRowsByProjectId(allCodes, pid), [allCodes, pid]);
+  const wps        = useMemo(() => filterRowsByProjectId(allWPs, pid), [allWPs, pid]);
+  const deliveries = useMemo(() => filterRowsByProjectId(allDeliveries, pid), [allDeliveries, pid]);
+  const expenses   = useMemo(() => filterRowsByProjectId(allExpenses, pid), [allExpenses, pid]);
+  const actionItems = useMemo(() => filterRowsByProjectId(allActionItems, pid), [allActionItems, pid]);
+  const submittals    = useMemo(() => filterRowsByProjectId(allSubmittals, pid), [allSubmittals, pid]);
   const drawings      = useMemo(() => (pid ? allDrawings.filter((d) => d.project_id === pid && !d.is_deleted) : []), [allDrawings, pid]);
   const sovItems      = useMemo(() => (pid ? allSovItems.filter((s) => s.project_id === pid) : []), [allSovItems, pid]);
   const scheduleTasks = useMemo(
