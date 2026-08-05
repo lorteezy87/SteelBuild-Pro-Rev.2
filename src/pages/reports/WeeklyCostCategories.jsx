@@ -15,6 +15,12 @@ import ReportShell from "./ReportShell";
 import { formatCurrencyFull, formatCurrency, exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
 
+import {
+  lastNWeekKeys,
+  isoWeekStart,
+  buildWeeklyCostMatrix,
+} from "./weeklyReportHelpers";
+
 // Stable color palette for cost categories — picked to avoid purple/pink
 // per CLAUDE.md, drawn from the existing CSS var palette.
 const CATEGORY_COLORS = [
@@ -30,36 +36,6 @@ const CATEGORY_COLORS = [
   "var(--text-secondary)",
 ];
 
-function isoWeekKey(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
-}
-
-function isoWeekStart(yearWeekKey) {
-  const [y, w] = yearWeekKey.split("-W").map(Number);
-  const simple = new Date(Date.UTC(y, 0, 1 + (w - 1) * 7));
-  const day = simple.getUTCDay() || 7;
-  const monday = new Date(simple);
-  monday.setUTCDate(simple.getUTCDate() - day + 1);
-  return monday;
-}
-
-function lastNWeekKeys(n) {
-  const keys = [];
-  const now = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i * 7);
-    keys.push(isoWeekKey(d));
-  }
-  // De-dup in case of timezone weirdness
-  return Array.from(new Set(keys));
-}
-
 export default function WeeklyCostCategories() {
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses-all"],
@@ -69,25 +45,10 @@ export default function WeeklyCostCategories() {
   const weekKeys = useMemo(() => lastNWeekKeys(12), []);
 
   // Aggregate matrix[week][category] = total
-  const { matrix, categories, weeklyTotals } = useMemo(() => {
-    const m = {};
-    weekKeys.forEach((k) => { m[k] = {}; });
-    const cats = new Set();
-    for (const e of expenses) {
-      const dateSrc = e.expense_date || e.invoice_date || e.payment_date;
-      if (!dateSrc) continue;
-      const wk = isoWeekKey(new Date(dateSrc));
-      if (!(wk in m)) continue;
-      const cat = e.cost_code_name || e.cost_code || "Uncategorised";
-      const amt = Number(e.amount) || 0;
-      if (e.payment_status === "Voided") continue;
-      m[wk][cat] = (m[wk][cat] || 0) + amt;
-      cats.add(cat);
-    }
-    const catList = Array.from(cats).sort();
-    const totals = Object.fromEntries(weekKeys.map((k) => [k, catList.reduce((s, c) => s + (m[k][c] || 0), 0)]));
-    return { matrix: m, categories: catList, weeklyTotals: totals };
-  }, [expenses, weekKeys]);
+  const { matrix, categories, weeklyTotals } = useMemo(
+    () => buildWeeklyCostMatrix(expenses, weekKeys),
+    [expenses, weekKeys],
+  );
 
   const colorFor = (cat) => CATEGORY_COLORS[categories.indexOf(cat) % CATEGORY_COLORS.length] || "var(--text-muted)";
 

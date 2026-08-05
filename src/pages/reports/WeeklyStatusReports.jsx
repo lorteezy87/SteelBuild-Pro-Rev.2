@@ -16,34 +16,11 @@ import ReportShell from "./ReportShell";
 import { exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
 
-function isoWeekKey(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
-}
-
-function isoWeekStart(yearWeekKey) {
-  const [y, w] = yearWeekKey.split("-W").map(Number);
-  const simple = new Date(Date.UTC(y, 0, 1 + (w - 1) * 7));
-  const day = simple.getUTCDay() || 7;
-  const monday = new Date(simple);
-  monday.setUTCDate(simple.getUTCDate() - day + 1);
-  return monday;
-}
-
-function lastNWeekKeys(n) {
-  const out = [];
-  const now = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i * 7);
-    out.push(isoWeekKey(d));
-  }
-  return Array.from(new Set(out));
-}
+import {
+  lastNWeekKeys,
+  isoWeekStart,
+  buildWeeklyActivityMatrix,
+} from "./weeklyReportHelpers";
 
 export default function WeeklyStatusReports() {
   const { data: activity = [] } = useQuery({
@@ -53,23 +30,10 @@ export default function WeeklyStatusReports() {
 
   const weekKeys = useMemo(() => lastNWeekKeys(8), []);
 
-  const { matrix, eventTypes, weeklyTotals } = useMemo(() => {
-    const m = {};
-    weekKeys.forEach((k) => { m[k] = {}; });
-    const types = new Set();
-    for (const e of activity) {
-      const ts = e.created_at || e.timestamp;
-      if (!ts) continue;
-      const wk = isoWeekKey(new Date(ts));
-      if (!(wk in m)) continue;
-      const t = e.event_type || "other";
-      m[wk][t] = (m[wk][t] || 0) + 1;
-      types.add(t);
-    }
-    const typeList = Array.from(types).sort();
-    const totals = Object.fromEntries(weekKeys.map((k) => [k, typeList.reduce((s, t) => s + (m[k][t] || 0), 0)]));
-    return { matrix: m, eventTypes: typeList, weeklyTotals: totals };
-  }, [activity, weekKeys]);
+  const { matrix, eventTypes, weeklyTotals } = useMemo(
+    () => buildWeeklyActivityMatrix(activity, weekKeys),
+    [activity, weekKeys],
+  );
 
   const tableRows = weekKeys.map((k, i) => {
     const ws = isoWeekStart(k);
