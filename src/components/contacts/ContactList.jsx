@@ -1,14 +1,5 @@
 import React from "react";
-
-const TYPE_COLORS = {
-  Owner: "var(--status-error)",
-  GC: "var(--status-info)",
-  Engineer: "var(--accent)",
-  Subcontractor: "var(--status-warning)",
-  Supplier: "var(--status-success)",
-  Inspector: "var(--text-muted)",
-  Internal: "var(--secondary)",
-};
+import { TYPE_COLORS } from "./contactListHelpers";
 
 export default function ContactList({ contacts, view, onEdit, onDelete, onAdd }) {
   if (contacts.length === 0) {
