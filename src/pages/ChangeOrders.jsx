@@ -14,6 +14,7 @@ import { entities } from "@/api/supabaseClient";
 import { computeRevisedContractValue } from "@/services/costRollup";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { nextSearchParamsWithout } from "./hubs/hubTabHelpers";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -141,9 +142,10 @@ export default function ChangeOrders() {
       setEditing(null);
       setModalOpen(true);
     }
-    const next = new URLSearchParams(searchParams);
-    next.delete("fromRfi");
-    setSearchParams(next, { replace: true });
+    setSearchParams(
+      nextSearchParamsWithout(searchParams, ["fromRfi"]),
+      { replace: true },
+    );
   }, [searchParams, rfis, projectId, setSearchParams]);
 
   // Label for the "converted from RFI" banner — works for both a fresh

@@ -32,6 +32,7 @@ import React, { useState, useMemo } from 'react';
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
+import { nextSearchParamsPatch } from "./hubs/hubTabHelpers";
 import { toast } from 'sonner';
 import type { RowWithAliases } from '@/api/supabaseClient';
 import { useProjectId } from '@/hooks/useProjectId';
@@ -197,9 +198,10 @@ export default function Procurement() {
     setFilterStatus(s);
     // Update URL so the filter stays deep-linkable but doesn't pollute
     // history - replace, not push.
-    const next = new URLSearchParams(searchParams);
-    if (s === 'all') next.delete('status'); else next.set('status', s);
-    setSearchParams(next, { replace: true });
+    setSearchParams(
+      nextSearchParamsPatch(searchParams, { status: s === "all" ? null : s }),
+      { replace: true },
+    );
   };
 
   const handleExportCSV = () =>

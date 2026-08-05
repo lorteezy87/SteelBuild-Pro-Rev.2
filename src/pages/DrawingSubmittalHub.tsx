@@ -14,6 +14,7 @@ import { Suspense, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useSearchParams } from "react-router-dom";
+import { nextHubTabParams } from "./hubs/hubTabHelpers";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
@@ -139,11 +140,10 @@ export default function DrawingSubmittalHub() {
   const tabParam = searchParams.get("hub_tab") || "overview";
   const activeTab = tabs.find((t) => t.key === tabParam) ? tabParam : "overview";
   const setActiveTab = (key: string) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("hub_tab", key);
-      return next;
-    }, { replace: true });
+    setSearchParams(
+      (prev) => nextHubTabParams(prev, "hub_tab", key),
+      { replace: true },
+    );
   };
 
   // ── Data for KPI strip & matrix ────────────────────────────────────────

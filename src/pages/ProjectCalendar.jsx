@@ -24,6 +24,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { nextSearchParamsPatch } from "./hubs/hubTabHelpers";
 import { useQuery } from "@tanstack/react-query";
 
 import { entities } from "@/api/supabaseClient";
@@ -78,10 +79,13 @@ export default function ProjectCalendar() {
 
   // Sync state → URL (so deep-links / reloads persist).
   useEffect(() => {
-    const next = new URLSearchParams(searchParams);
-    next.set("view", view);
-    next.set("date", toIsoDate(focus));
-    setSearchParams(next, { replace: true });
+    setSearchParams(
+      nextSearchParamsPatch(searchParams, {
+        view,
+        date: toIsoDate(focus),
+      }),
+      { replace: true },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, focus]);
 

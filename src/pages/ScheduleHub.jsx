@@ -12,7 +12,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { resolveHubTabKey } from "./hubs/hubTabHelpers";
+import { resolveHubTabKey, nextHubTabParams } from "./hubs/hubTabHelpers";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
@@ -40,11 +40,7 @@ export default function ScheduleHub() {
   const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
   const setTab = (key) =>
     setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("sched_tab", key);
-        return next;
-      },
+      (prev) => nextHubTabParams(prev, "sched_tab", key),
       { replace: true },
     );
 

@@ -17,7 +17,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { resolveHubTabKey } from "./hubs/hubTabHelpers";
+import { resolveHubTabKey, nextHubTabParams } from "./hubs/hubTabHelpers";
 import { RESOURCE_HUB_TAB_DEFS } from "./resourceHub/resourceHubPageHelpers";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -39,11 +39,7 @@ export default function ResourceHub() {
   const activeTab = resolveHubTabKey(param, TABS.map((t) => t.key), "register");
   const setTab = (key) =>
     setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("res_tab", key);
-        return next;
-      },
+      (prev) => nextHubTabParams(prev, "res_tab", key),
       { replace: true },
     );
 

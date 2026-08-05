@@ -8,6 +8,7 @@ import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { logActivity } from "@/services/auditLogger";
 import { useSearchParams } from "react-router-dom";
+import { nextSearchParamsPatch, nextSearchParamsWithout } from "./hubs/hubTabHelpers";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { removeIdFromSelection } from "@/pages/shared/selectionHelpers";
@@ -303,19 +304,18 @@ export default function Deliveries() {
   }, [filtered]);
 
   const handleProjectSelect = (value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set("project", value);
-    else {
-      next.delete("project");
-      next.delete("projectId");
-    }
-    setSearchParams(next);
+    setSearchParams(
+      value
+        ? nextSearchParamsPatch(searchParams, { project: value })
+        : nextSearchParamsWithout(searchParams, ["project", "projectId"]),
+    );
   };
 
   const clearReceiveMode = () => {
-    const next = new URLSearchParams(searchParams);
-    next.delete("receive");
-    setSearchParams(next, { replace: true });
+    setSearchParams(
+      nextSearchParamsWithout(searchParams, ["receive"]),
+      { replace: true },
+    );
   };
 
   const setDeliveryStatus = (delivery: DeliveryRecord, status: string) => {

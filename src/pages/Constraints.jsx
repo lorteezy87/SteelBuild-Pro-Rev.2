@@ -13,6 +13,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { nextSearchParamsWithout } from "./hubs/hubTabHelpers";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -108,9 +109,10 @@ export default function Constraints() {
       setEditing(null);
       setShowForm(true);
     }
-    const next = new URLSearchParams(searchParams);
-    next.delete("fromRfi");
-    setSearchParams(next, { replace: true });
+    setSearchParams(
+      nextSearchParamsWithout(searchParams, ["fromRfi"]),
+      { replace: true },
+    );
   }, [searchParams, rfis, projectId, setSearchParams]);
 
   const { data: wps = [] } = useQuery({

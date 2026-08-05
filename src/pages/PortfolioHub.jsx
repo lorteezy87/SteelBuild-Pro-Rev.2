@@ -4,6 +4,7 @@
  */
 import { Suspense, useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { nextHubTabParams } from "./hubs/hubTabHelpers";
 import { useQuery } from "@tanstack/react-query";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
@@ -26,11 +27,7 @@ export default function PortfolioHub() {
   const activeKey = resolvePortfolioTabKey(param);
   const setTab = (key) =>
     setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("pf_tab", key);
-        return next;
-      },
+      (prev) => nextHubTabParams(prev, "pf_tab", key),
       { replace: true },
     );
 

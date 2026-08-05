@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { nextSearchParamsWithout } from "./hubs/hubTabHelpers";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
@@ -155,10 +156,10 @@ export default function Submittals() {
     setShowCreate(true);
     setSpinOffParentId(null);
     setEditingId(null);
-    const next = new URLSearchParams(searchParams);
-    next.delete("targetSetId");
-    next.delete("prefilledStatus");
-    setSearchParams(next, { replace: true });
+    setSearchParams(
+      nextSearchParamsWithout(searchParams, ["targetSetId", "prefilledStatus"]),
+      { replace: true },
+    );
   }, [searchParams, setSearchParams]);
 
   // Slice 7: draft ActionItems for Critical R&R/OFS/BFA aging (deduped).

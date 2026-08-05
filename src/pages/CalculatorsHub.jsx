@@ -12,6 +12,7 @@
  */
 import { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
+import { nextHubTabParams } from "./hubs/hubTabHelpers";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -50,11 +51,7 @@ export default function CalculatorsHub() {
   const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
   const setTab = (key) =>
     setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("calc_tab", key);
-        return next;
-      },
+      (prev) => nextHubTabParams(prev, "calc_tab", key),
       { replace: true },
     );
 
