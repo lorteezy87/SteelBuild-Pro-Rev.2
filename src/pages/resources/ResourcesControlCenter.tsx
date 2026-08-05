@@ -35,6 +35,7 @@ import {
   buildResourcesSummary,
   getAvailability,
   type ResourceRecord,
+  filterResourcesCatalog,
 } from "./resourcesControlCenter.derive";
 
 // ---------------------------------------------------------------------------
@@ -151,18 +152,10 @@ export default function ResourcesControlCenter({
   const s = useMemo(() => buildResourcesSummary(resources, workPackages), [resources, workPackages]);
 
   // Filtered rows for the DataTable.
-  const filtered = useMemo(() => {
-    const lc = search.toLowerCase();
-    return resources.filter((r) => {
-      const typeMatch = typeFilter === "All" || r.resource_type === typeFilter;
-      const searchMatch =
-        !lc ||
-        (r.name || "").toLowerCase().includes(lc) ||
-        (r.role || "").toLowerCase().includes(lc) ||
-        (r.resource_type || "").toLowerCase().includes(lc);
-      return typeMatch && searchMatch;
-    });
-  }, [resources, search, typeFilter]);
+  const filtered = useMemo(
+    () => filterResourcesCatalog(resources, { search, typeFilter }),
+    [resources, search, typeFilter],
+  );
 
   // Hero chips
   const chips = [

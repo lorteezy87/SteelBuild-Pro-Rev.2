@@ -44,6 +44,7 @@ import {
   buildCoAging,
   costStatusTone,
   downloadCostControlCsv,
+  filterCostCodeRows,
 } from "./costControlCenter.derive";
 import CostChartRow from "./CostChartRow";
 import { persistCostCode } from "./costCodeSave";
@@ -96,21 +97,10 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
     [costCodeRows],
   );
 
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return costCodeRows.filter((r) => {
-      if (phaseFilter !== "All" && r.phase !== phaseFilter) return false;
-      if (overBudgetOnly && !r.is_over) return false;
-      if (q) {
-        return (
-          (r.cost_code_number ?? "").toLowerCase().includes(q) ||
-          (r.description ?? "").toLowerCase().includes(q) ||
-          (r.phase ?? "").toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [costCodeRows, phaseFilter, overBudgetOnly, search]);
+  const filteredRows = useMemo(
+    () => filterCostCodeRows(costCodeRows, { search, phaseFilter, overBudgetOnly }),
+    [costCodeRows, phaseFilter, overBudgetOnly, search],
+  );
 
   // Chart data uses costCodeRows from useFinancials, whose actual_cost /
   // committed_cost are resolved with preferManualActual: a typed-in column on

@@ -32,7 +32,10 @@ import {
   pieceControlKeys,
 } from "@/lib/pieceControl/queryKeys";
 
-import { downloadProductionStatusCsv as exportProductionCSV } from "./productionStatus/productionStatusPageHelpers";
+import {
+  downloadProductionStatusCsv as exportProductionCSV,
+  filterProductionPieces,
+} from "./productionStatus/productionStatusPageHelpers";
 import {
   applySelectionChecked,
   selectAllOrNone,
@@ -80,19 +83,10 @@ export default function ProductionStatus() {
     [modelElements],
   );
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return pieces.filter((p) => {
-      if (stageFilter !== "All" && p.status !== stageFilter) return false;
-      if (!q) return true;
-      return (
-        (p.piece_mark || "").toLowerCase().includes(q) ||
-        (p.assembly_mark || "").toLowerCase().includes(q) ||
-        (p.erection_area || "").toLowerCase().includes(q) ||
-        (p.sequence_number || "").toLowerCase().includes(q)
-      );
-    });
-  }, [pieces, search, stageFilter]);
+  const filtered = useMemo(
+    () => filterProductionPieces(pieces, { search, stageFilter }),
+    [pieces, search, stageFilter],
+  );
 
   // Drop selection when the visible set changes so bulk actions only hit current filters.
   useEffect(() => {

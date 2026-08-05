@@ -65,3 +65,30 @@ export function downloadProductionStatusCsv(
     "text/csv;charset=utf-8",
   );
 }
+
+export function filterProductionPieces<
+  T extends {
+    status?: string | null;
+    piece_mark?: string | null;
+    assembly_mark?: string | null;
+    erection_area?: string | null;
+    sequence_number?: string | null;
+  },
+>(
+  pieces: T[],
+  opts: { search?: string; stageFilter?: string } = {},
+): T[] {
+  const q = (opts.search || "").trim().toLowerCase();
+  return (pieces || []).filter((p) => {
+    if (opts.stageFilter && opts.stageFilter !== "All" && p.status !== opts.stageFilter) {
+      return false;
+    }
+    if (!q) return true;
+    return (
+      (p.piece_mark || "").toLowerCase().includes(q)
+      || (p.assembly_mark || "").toLowerCase().includes(q)
+      || (p.erection_area || "").toLowerCase().includes(q)
+      || (p.sequence_number || "").toLowerCase().includes(q)
+    );
+  });
+}

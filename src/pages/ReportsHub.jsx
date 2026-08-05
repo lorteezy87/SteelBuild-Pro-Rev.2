@@ -1,3 +1,4 @@
+import { filterReportCatalog } from "./reportsHub/reportsHubControlCenter.derive";
 /** Canonical Reports & Insights catalog. Individual reports remain /Reports/:slug. */
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -9,19 +10,10 @@ export default function ReportsHub() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
 
-  const filteredReports = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    return REPORTS.filter((report) => (
-      (categoryFilter === "All" || report.category === categoryFilter)
-      && (
-        !q
-        || report.title.toLowerCase().includes(q)
-        || report.summary.toLowerCase().includes(q)
-        || report.category.toLowerCase().includes(q)
-      )
-    ));
-  }, [search, categoryFilter]);
+  const filteredReports = useMemo(
+    () => filterReportCatalog(REPORTS, { search, categoryFilter }),
+    [search, categoryFilter],
+  );
 
   return (
     <ReportsHubControlCenter

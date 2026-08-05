@@ -295,3 +295,29 @@ export function downloadCostControlCsv(
   );
 }
 
+export function filterCostCodeRows<
+  T extends {
+    phase?: string | null;
+    is_over?: boolean | null;
+    cost_code_number?: string | null;
+    description?: string | null;
+  },
+>(
+  costCodeRows: T[],
+  opts: { search?: string; phaseFilter?: string; overBudgetOnly?: boolean } = {},
+): T[] {
+  const q = (opts.search || "").trim().toLowerCase();
+  const phaseFilter = opts.phaseFilter ?? "All";
+  return (costCodeRows || []).filter((r) => {
+    if (phaseFilter !== "All" && r.phase !== phaseFilter) return false;
+    if (opts.overBudgetOnly && !r.is_over) return false;
+    if (q) {
+      return (
+        (r.cost_code_number ?? "").toLowerCase().includes(q)
+        || (r.description ?? "").toLowerCase().includes(q)
+        || (r.phase ?? "").toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+}

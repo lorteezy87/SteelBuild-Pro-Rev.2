@@ -23,7 +23,10 @@ import {
 import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import type { OrgMemberRow, OrgInvitation } from "@/lib/org/repository";
-import { buildTeamSummary, roleTone, inviteExpiryTone } from "./teamControlCenter.derive";
+import {
+  buildTeamSummary, roleTone, inviteExpiryTone,
+  filterTeamMembers,
+} from "./teamControlCenter.derive";
 import type { StagedInvite } from "@/lib/org/onboardingInvites";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -140,15 +143,10 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
   const s = useMemo(() => buildTeamSummary(members, invites, seatsLimit), [members, invites, seatsLimit]);
 
   // Filter the members table by search
-  const filteredMembers = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter((m) =>
-      (m.full_name || "").toLowerCase().includes(q) ||
-      (m.email || "").toLowerCase().includes(q) ||
-      (m.role || "").toLowerCase().includes(q)
-    );
-  }, [members, search]);
+  const filteredMembers = useMemo(
+    () => filterTeamMembers(members, search),
+    [members, search],
+  );
 
   // ── Hero ────────────────────────────────────────────────────────────────────
 

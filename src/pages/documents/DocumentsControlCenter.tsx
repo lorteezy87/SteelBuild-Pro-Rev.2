@@ -28,7 +28,10 @@ import {
 import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import FolderBar from "./FolderBar";
-import { buildDocumentsSummary, fmtSizeKb } from "./documentsControlCenter.derive";
+import {
+  buildDocumentsSummary, fmtSizeKb,
+  buildLiveDocumentCategories,
+} from "./documentsControlCenter.derive";
 import type { DocumentRecord, FolderRecord } from "./documentsControlCenter.derive";
 import { LIST_FILETYPE_STYLES, FILETYPE_FALLBACK } from "./utils";
 
@@ -173,10 +176,10 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
   );
 
   // Derive the list of unique categories from the real data so chips are dynamic.
-  const liveCategories = useMemo(() => {
-    const cats = new Set(allDocuments.map((d) => d.category || "Uncategorized"));
-    return ["All", ...Array.from(cats).sort()];
-  }, [allDocuments]);
+  const liveCategories = useMemo(
+    () => buildLiveDocumentCategories(allDocuments),
+    [allDocuments],
+  );
 
   const heroChips = [
     { label: `${s.total} Total` },

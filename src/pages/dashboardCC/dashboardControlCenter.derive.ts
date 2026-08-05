@@ -408,3 +408,24 @@ export function buildDashboardSummary(input: {
     schedulePct,
   };
 }
+
+export function filterDashboardActivity<
+  T extends {
+    code?: string | null;
+    type?: string | null;
+    description?: string | null;
+    status?: string | null;
+    relatedTo?: string | null;
+  },
+>(rows: T[], search = ""): T[] {
+  if (!(search || "").trim()) return rows || [];
+  const q = search.toLowerCase();
+  return (rows || []).filter(
+    (r) =>
+      (r.code || "").toLowerCase().includes(q)
+      || (r.type || "").toLowerCase().includes(q)
+      || (r.description || "").toLowerCase().includes(q)
+      || (r.status || "").toLowerCase().includes(q)
+      || (r.relatedTo || "").toLowerCase().includes(q),
+  );
+}

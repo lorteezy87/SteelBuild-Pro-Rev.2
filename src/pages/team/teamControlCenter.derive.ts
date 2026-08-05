@@ -172,3 +172,19 @@ export function inviteExpiryTone(daysUntilExpiry: number): TeamTone {
   if (daysUntilExpiry <= 3) return "warn";
   return "neutral";
 }
+
+export function filterTeamMembers<
+  T extends {
+    full_name?: string | null;
+    email?: string | null;
+    role?: string | null;
+  },
+>(members: T[], search = ""): T[] {
+  const q = search.trim().toLowerCase();
+  if (!q) return members || [];
+  return (members || []).filter((m) =>
+    (m.full_name || "").toLowerCase().includes(q)
+    || (m.email || "").toLowerCase().includes(q)
+    || (m.role || "").toLowerCase().includes(q),
+  );
+}

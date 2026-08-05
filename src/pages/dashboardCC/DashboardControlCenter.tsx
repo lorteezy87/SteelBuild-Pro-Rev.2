@@ -31,7 +31,10 @@ import {
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
-import { buildDashboardSummary } from "./dashboardControlCenter.derive";
+import {
+  buildDashboardSummary,
+  filterDashboardActivity,
+} from "./dashboardControlCenter.derive";
 import type { DashActivityRow, ModuleTile } from "./dashboardControlCenter.derive";
 import { getPageIcon } from "@/config/pageIcons";
 import { PieceControlDashboardPanel } from "@/components/pieceControl/PieceControlDashboardPanel";
@@ -269,18 +272,10 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
   ];
 
   // Filter activity rows by search
-  const filteredActivity = useMemo(() => {
-    if (!search.trim()) return s.recentActivity;
-    const q = search.toLowerCase();
-    return s.recentActivity.filter(
-      (r) =>
-        r.code.toLowerCase().includes(q) ||
-        r.type.toLowerCase().includes(q) ||
-        r.description.toLowerCase().includes(q) ||
-        r.status.toLowerCase().includes(q) ||
-        r.relatedTo.toLowerCase().includes(q),
-    );
-  }, [s.recentActivity, search]);
+  const filteredActivity = useMemo(
+    () => filterDashboardActivity(s.recentActivity, search),
+    [s.recentActivity, search],
+  );
 
   // Activity table columns
   const activityColumns: Column<DashActivityRow>[] = [

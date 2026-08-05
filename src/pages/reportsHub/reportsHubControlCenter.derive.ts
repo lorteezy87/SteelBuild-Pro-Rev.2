@@ -160,3 +160,27 @@ export function buildReportsSummary(
     byCategory,
   };
 }
+
+export type ReportCatalogItem = {
+  title: string;
+  summary: string;
+  category: string;
+  [key: string]: unknown;
+};
+
+export function filterReportCatalog(
+  reports: ReportCatalogItem[],
+  opts: { search?: string; categoryFilter?: string } = {},
+): ReportCatalogItem[] {
+  const q = (opts.search || "").trim().toLowerCase();
+  const categoryFilter = opts.categoryFilter ?? "All";
+  return (reports || []).filter((report) => (
+    (categoryFilter === "All" || report.category === categoryFilter)
+    && (
+      !q
+      || report.title.toLowerCase().includes(q)
+      || report.summary.toLowerCase().includes(q)
+      || report.category.toLowerCase().includes(q)
+    )
+  ));
+}

@@ -290,3 +290,12 @@ export function buildDocumentsSummary(docs: DocumentRecord[]): DocumentsSummary 
     reviewTone: needsReviewCount > 10 ? "danger" : needsReviewCount > 0 ? "warn" : "neutral",
   };
 }
+
+export function buildLiveDocumentCategories(
+  allDocuments: Array<{ category?: string | null }>,
+): string[] {
+  const cats = new Set(
+    (allDocuments || []).map((d) => d.category || "Uncategorized"),
+  );
+  return ["All", ...Array.from(cats).sort()];
+}

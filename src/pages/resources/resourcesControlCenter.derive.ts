@@ -216,3 +216,26 @@ export function buildResourcesSummary(
     utilizationTone,
   };
 }
+
+export function filterResourcesCatalog<
+  T extends {
+    name?: string | null;
+    role?: string | null;
+    resource_type?: string | null;
+  },
+>(
+  resources: T[],
+  opts: { search?: string; typeFilter?: string } = {},
+): T[] {
+  const lc = (opts.search || "").toLowerCase();
+  const typeFilter = opts.typeFilter ?? "All";
+  return (resources || []).filter((r) => {
+    const typeMatch = typeFilter === "All" || r.resource_type === typeFilter;
+    const searchMatch =
+      !lc
+      || (r.name || "").toLowerCase().includes(lc)
+      || (r.role || "").toLowerCase().includes(lc)
+      || (r.resource_type || "").toLowerCase().includes(lc);
+    return typeMatch && searchMatch;
+  });
+}
