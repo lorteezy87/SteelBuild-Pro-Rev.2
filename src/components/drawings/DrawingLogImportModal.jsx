@@ -23,6 +23,7 @@ import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 import { parseDrawingLog, classifyDrawingRows } from "@/lib/importDrawingLog";
+import { logMeta } from "./drawingLogImportModalHelpers";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -349,22 +350,6 @@ export default function DrawingLogImportModal({ open, projectId, projectName, on
       </div>
     </>
   );
-}
-
-/** Log metadata bundle stored under metadata.drawing_log. */
-function logMeta(r) {
-  return {
-    drawing_log: {
-      detailer: r.detailer || null,
-      checker: r.checker || null,
-      sheet_size: r.sheet_size || null,
-      issued_date: r.issued_date || null,
-      category: r.category || null,
-      remark: r.remark || null,
-      rev_remark: r.rev_remark || null,
-      source: "drawing_log",
-    },
-  };
 }
 
 const th = { textAlign: "left", padding: "8px 10px", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", borderBottom: "1px solid var(--divider)" };

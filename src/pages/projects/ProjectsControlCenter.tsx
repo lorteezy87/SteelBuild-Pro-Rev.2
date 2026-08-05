@@ -6,7 +6,7 @@
  * component is presentation-only.
  */
 import { useMemo } from "react";
-import { fmtDate, phaseTone } from "./projectsControlCenterHelpers";
+import { fmtDate, phaseTone, healthTone } from "./projectsControlCenterHelpers";
 import {
 
   FolderKanban,
@@ -27,7 +27,7 @@ import {
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef, PillTone } from "@/components/command";
+import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import {
   buildProjectsSummary,
@@ -49,15 +49,6 @@ function fmtMoney(n: number): string {
 }
 
 // ── Health → Pill tone mapping ────────────────────────────────────
-function healthTone(health?: string | null): PillTone {
-  switch (health) {
-    case "On Track": return "good";
-    case "Watch":    return "warn";
-    case "At Risk":  return "danger";
-    default:         return "neutral";
-  }
-}
-
 // ── Phase → Pill tone mapping ─────────────────────────────────────
 // ── Scroll helper ─────────────────────────────────────────────────
 function scrollToTable() {

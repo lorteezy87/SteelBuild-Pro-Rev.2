@@ -19,7 +19,7 @@ import { useDrawingRegister } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 import { attachableRegisterRows, resolveTransmittalDisplay } from "./docControl.derive";
-import { buildSheetOptions, directionTone } from "./transmittalLogPanelHelpers";
+import { buildSheetOptions, directionTone, formForTransmittal as formForTransmittalHelper, headerPatch } from "./transmittalLogPanelHelpers";
 
 interface FormState {
   transmittal_number: string;
@@ -47,32 +47,6 @@ const EMPTY_FORM: FormState = {
   date: "",
   notes: "",
 };
-
-function formForTransmittal(transmittal: TransmittalRow): FormState {
-  const { party, date } = resolveTransmittalDisplay(transmittal);
-  return {
-    transmittal_number: transmittal.transmittal_number,
-    direction: transmittal.direction,
-    party: party || "",
-    subject: transmittal.subject || "",
-    date: date ? String(date).slice(0, 10) : "",
-    notes: transmittal.notes || "",
-  };
-}
-
-function headerPatch(form: FormState) {
-  const incoming = form.direction === "incoming";
-  return {
-    transmittal_number: form.transmittal_number.trim(),
-    direction: form.direction,
-    received_from: incoming ? (form.party.trim() || null) : null,
-    sent_to: incoming ? null : (form.party.trim() || null),
-    subject: form.subject.trim() || null,
-    date_sent: incoming ? null : (form.date || null),
-    date_received: incoming ? (form.date || null) : null,
-    notes: form.notes.trim() || null,
-  };
-}
 
 interface TransmittalEditorProps {
   title: string;
@@ -240,7 +214,7 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     setActiveId(transmittal.id);
     setConfirmingDelete(false);
     setDeleteConfirmation("");
-    setForm(formForTransmittal(transmittal));
+    setForm(formForTransmittalHelper(transmittal, resolveTransmittalDisplay));
     setSelected(new Set(transmittal.items.map((item) => item.drawing_revision_id)));
     setEditing(true);
   };

@@ -55,3 +55,41 @@ export function directionTone(direction: string): DirectionPillTone {
   if (direction === "outgoing") return "good";
   return "neutral";
 }
+
+export type TransmittalFormState = {
+  transmittal_number: string;
+  direction: "incoming" | "outgoing" | "internal";
+  party: string;
+  subject: string;
+  date: string;
+  notes: string;
+};
+
+export function formForTransmittal(
+  transmittal: any,
+  resolveDisplay: (t: any) => { party?: string | null; date?: string | null },
+): TransmittalFormState {
+  const { party, date } = resolveDisplay(transmittal);
+  return {
+    transmittal_number: transmittal.transmittal_number,
+    direction: transmittal.direction,
+    party: party || "",
+    subject: transmittal.subject || "",
+    date: date ? String(date).slice(0, 10) : "",
+    notes: transmittal.notes || "",
+  };
+}
+
+export function headerPatch(form: TransmittalFormState) {
+  const incoming = form.direction === "incoming";
+  return {
+    transmittal_number: form.transmittal_number.trim(),
+    direction: form.direction,
+    received_from: incoming ? form.party.trim() || null : null,
+    sent_to: incoming ? null : form.party.trim() || null,
+    subject: form.subject.trim() || null,
+    date_sent: incoming ? null : form.date || null,
+    date_received: incoming ? form.date || null : null,
+    notes: form.notes.trim() || null,
+  };
+}

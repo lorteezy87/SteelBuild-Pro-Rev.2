@@ -25,7 +25,8 @@ import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
 import { computeEffectiveDates } from '@/services/scheduleCascade';
-import { asIdArray, filterTasksLinkedToTarget } from './relatedScheduleTasksHelpers';
+import { filterTasksLinkedToTarget } from './relatedScheduleTasksHelpers';
+import { fmtMD } from "./relatedScheduleTasksChipsHelpers";
 
 const VALID_FIELDS = new Set([
   'related_rfi_ids',
@@ -38,17 +39,6 @@ const VALID_FIELDS = new Set([
 // the supabase-js path. We tolerate both.
 
 // Format a YYYY-MM-DD date as "MMM D" — small chip footprint, no year.
-function fmtMD(iso) {
-  if (!iso) return null;
-  try {
-    const d = typeof iso === 'string'
-      ? new Date(iso + 'T00:00:00Z')
-      : iso;
-    if (isNaN(d.getTime())) return null;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  } catch { return null; }
-}
-
 const sectionLabelStyle = {
   fontFamily: 'var(--font-mono)',
   fontSize: 9,

@@ -30,7 +30,7 @@ import {
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef, PillTone } from "@/components/command";
+import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import { buildCommandCenterSummary,
   filterCommandCenterActionItems } from "./commandCenterControlCenter.derive";
@@ -38,8 +38,8 @@ import type {
   CommandCenterSources,
   ActionItem,
   PanelRow,
-  PanelTone,
 } from "./commandCenterControlCenter.derive";
+import { urgencyTone, panelToneToPillTone } from "./commandCenterControlCenterHelpers";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -66,25 +66,6 @@ export interface CommandCenterControlCenterProps {
 const TYPE_CHIPS = ["All", "RFI", "SUB", "CO", "DEL", "WP"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-
-function urgencyTone(u: ActionItem["urgency"]): PanelTone {
-  switch (u) {
-    case "overdue": return "danger";
-    case "blocking": return "danger";
-    case "due-soon": return "warn";
-    case "awaiting": return "neutral";
-    default: return "neutral";
-  }
-}
-
-function panelToneToPillTone(t: PanelTone): PillTone {
-  switch (t) {
-    case "danger": return "danger";
-    case "warn": return "warn";
-    case "good": return "good";
-    default: return "neutral";
-  }
-}
 
 function itemTypeLabel(t: string): string {
   return t; // Already short (RFI, SUB, CO, DEL, WP, TASK)

@@ -35,3 +35,16 @@ export function phaseTone(phase?: string | null): ProjectPillTone {
       return "neutral";
   }
 }
+
+export function healthTone(health?: string | null): ProjectPillTone {
+  switch (health) {
+    case "On Track":
+      return "good";
+    case "Watch":
+      return "warn";
+    case "At Risk":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}

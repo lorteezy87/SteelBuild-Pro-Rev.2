@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Upload, Camera, Trash2, Check, AlertCircle } from "lucide-react";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { cancelButtonStyle, uploadButtonStyle } from "./photoUploadModalHelpers";
 
 const CATEGORIES = ["Progress", "Safety", "Issue", "Delivery", "Punchlist", "Other"];
 const MAX_DIMENSION = 2400;
@@ -815,39 +816,3 @@ const compactInputStyle = {
   padding: "5px 7px",
 };
 
-function cancelButtonStyle(disabled) {
-  return {
-    background: "var(--bg-surface)",
-    border: "1px solid var(--border-default)",
-    borderRadius: 6,
-    padding: "8px 14px",
-    color: "var(--text-primary)",
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    fontWeight: 700,
-    cursor: disabled ? "not-allowed" : "pointer",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    opacity: disabled ? 0.5 : 1,
-  };
-}
-
-function uploadButtonStyle(disabled) {
-  return {
-    background: "var(--accent)",
-    color: "var(--bg-base)",
-    border: "none",
-    borderRadius: 6,
-    padding: "8px 14px",
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    fontWeight: 700,
-    cursor: disabled ? "not-allowed" : "pointer",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    opacity: disabled ? 0.5 : 1,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  };
-}

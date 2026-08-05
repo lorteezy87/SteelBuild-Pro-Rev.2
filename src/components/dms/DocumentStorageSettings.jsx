@@ -21,6 +21,8 @@ import {
   buildUnavailableSyncStatusPatch,
 } from "@/lib/dms/sharepointSyncHonesty";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { timeAgo } from "@/lib/timeAgo";
+import { syncStatusLabel } from "./documentStorageSettingsHelpers";
 
 // ── Provider config ───────────────────────────────────────────────────
 const PROVIDERS = [
@@ -36,18 +38,6 @@ const SYNC_FREQUENCIES = [
   { value: "daily",   label: "Daily" },
 ];
 
-// ── Time helper ───────────────────────────────────────────────────────
-function timeAgo(dateStr) {
-  if (!dateStr) return "Never";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
 // ── Sync status badge ─────────────────────────────────────────────────
 function syncStatusColor(status) {
   switch (status) {
@@ -55,16 +45,6 @@ function syncStatusColor(status) {
     case "error":   return "var(--status-error)";
     case "pending": return "var(--warning)";
     default:        return "var(--text-muted)";
-  }
-}
-
-function syncStatusLabel(status) {
-  switch (status) {
-    case "success": return "Synced";
-    case "error":   return "Error";
-    case "pending": return "Pending";
-    case "unavailable": return "Unavailable";
-    default:        return "Never";
   }
 }
 

@@ -39,6 +39,7 @@ import type {
   SiteCoordRow,
   InspectionQueueRow,
 } from "./fieldHubControlCenter.derive";
+import { fmtDate } from "./fieldHubControlCenterHelpers";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -67,25 +68,6 @@ function fieldPriorityTone(priority: string) {
   if (priority === "Critical" || priority === "High") return "danger" as const;
   if (priority === "Medium") return "warn" as const;
   return "neutral" as const;
-}
-
-/** Tone for status. */
-function fieldStatusTone(status: string) {
-  if (["Closed", "Completed", "Complete"].includes(status)) return "good" as const;
-  if (["Open", "Scheduled", "In Progress"].includes(status)) return "info" as const;
-  return "neutral" as const;
-}
-
-/** Render "2026-06-28" → "Jun 28" for compact display. */
-function fmtDate(iso: string | null): string {
-  if (!iso || iso === "—") return "—";
-  try {
-    const [, m, d] = iso.split("-");
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return `${months[Number(m) - 1]} ${Number(d)}`;
-  } catch {
-    return iso;
-  }
 }
 
 // ---------------------------------------------------------------------------

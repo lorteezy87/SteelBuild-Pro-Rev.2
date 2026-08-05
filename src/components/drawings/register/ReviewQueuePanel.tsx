@@ -17,26 +17,15 @@ import { useDrawingReviews, type DrawingReviewRow } from "@/hooks/useDrawingRevi
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
-import type { PillTone } from "@/components/command";
 import { attachableRegisterRows, filterReviews } from "./docControl.derive";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { decisionTone } from "./reviewQueuePanelHelpers";
 
 const ROLES = ["project_manager", "detailer", "shop", "field_ops", "document_control", "executive"];
 const DECIDE_OPTIONS = ["approved", "approved_with_notes", "rejected", "not_required"];
 
 const label = (s: string | null) => (s ? s.replace(/_/g, " ") : "—");
-
-/** Decision → kit Pill tone. Mirrors the legacy DECISION_TONE hues. */
-function decisionTone(decision: string): PillTone {
-  switch (decision) {
-    case "pending": return "warn";
-    case "approved": return "good";
-    case "approved_with_notes": return "info";
-    case "rejected": return "danger";
-    default: return "neutral"; // not_required
-  }
-}
 
 export function ReviewQueuePanel({ projectId }: { projectId: string | null }) {
   const { data: reviews = [], isLoading, error } = useDrawingReviews(projectId);

@@ -18,18 +18,7 @@ import {
 } from "lucide-react";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-
-// ── Time helper ────────────────────────────────────────────────────────
-function timeAgo(dateStr) {
-  if (!dateStr) return "Never";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
+import { timeAgo } from "@/lib/timeAgo";
 
 export default function EmailAccountSettings({ projectId }) {
   const qc = useQueryClient();
