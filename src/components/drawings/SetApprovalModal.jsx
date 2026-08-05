@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  SET_APPROVAL_STATUS_OPTS as STATUS_OPTS,
+  SET_APPROVAL_STATUS_LABELS as STATUS_LABELS,
+} from "./setApprovalModalHelpers";
 
 const today = () => new Date().toISOString().split("T")[0];
-
-const STATUS_OPTS = ["approved", "rejected", "superseded"];
-const STATUS_LABELS = { approved: "Approved", rejected: "Rejected", superseded: "Superseded" };
 
 export default function SetApprovalModal({ open, onClose, setName, sheetCount, existingRevision, onConfirm, saving }) {
   const [status, setStatus] = useState("approved");

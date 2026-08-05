@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { SETUP_ADMIN_ITEMS as ITEMS } from "./setupAdminTabHelpers";
 
 /**
  * SetupAdminTab — the "Setup & Admin" panel in Settings. Surfaces the
@@ -8,15 +9,6 @@ import { createPageUrl } from "@/utils";
  * clicking one opens its existing full page. Admin-only destinations
  * (User Management, Feature Flags) are hidden from non-admins.
  */
-const ITEMS = [
-  { page: "Onboarding",        label: "Onboarding",      icon: "▣", desc: "Spin up and configure a new project" },
-  { page: "DataExchange",      label: "Data Exchange",   icon: "⇅", desc: "Import / export project data" },
-  { page: "Integrations",      label: "Integrations",    icon: "◎", desc: "Email, document storage, and other connections" },
-  { page: "UsersManagement",   label: "User Management", icon: "👥", desc: "Users, roles, and access", adminOnly: true },
-  { page: "FeatureFlagsAdmin", label: "Feature Flags",   icon: "⚑", desc: "Toggle staged / rollout features", adminOnly: true },
-  { page: "Tutorial",          label: "Tutorial / Help", icon: "📘", desc: "Guides and product help" },
-];
-
 export default function SetupAdminTab({ isAdmin = false }) {
   const navigate = useNavigate();
   const items = ITEMS.filter((i) => !i.adminOnly || isAdmin);

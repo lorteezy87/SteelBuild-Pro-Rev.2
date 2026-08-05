@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle } from "@/components/shared/PhoenixModal";
 import { STAGES, DISCIPLINES, mono } from "./drawingsConfig";
-import { labelStyle } from "./bulkEditModalStyleHelpers";
+import { labelStyle, BULK_EDIT_INITIAL as INITIAL } from "./bulkEditModalStyleHelpers";
 
 /**
  * BulkEditModal — Apply field updates to multiple selected drawings at once.
@@ -11,19 +11,6 @@ import { labelStyle } from "./bulkEditModalStyleHelpers";
  */
 
 const selectStyle = { ...inputStyle, cursor: "pointer" };
-
-const INITIAL = {
-  revision_number: "",
-  submitted_date: "",
-  due_date: "",
-  return_date: "",
-  reviewer: "",
-  discipline: "",
-  stage: "",
-  spec_section: "",
-  priority_flag: false,
-  notes: "",
-};
 
 export default function BulkEditModal({ open, onClose, onApply, selectedCount }) {
   const [form, setForm] = useState({ ...INITIAL });

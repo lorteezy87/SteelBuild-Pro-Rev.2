@@ -5,18 +5,10 @@ import { formatLocalDate } from "@/utils/dates";
 import { useAuth } from "@/lib/AuthContext";
 import MfaSection from "./MfaSection.jsx";
 import DeleteAccountZone from "./DeleteAccountZone.jsx";
-
-const S = {
-  input: { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box' },
-  label: { fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: 5 },
-  section: { marginBottom: 28, paddingBottom: 28, borderBottom: '1px solid var(--divider)' },
-  sectionTitle: { fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 },
-};
-
-const TIMEZONES = [
-  'America/New_York', 'America/Chicago', 'America/Denver',
-  'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu',
-];
+import {
+  USER_SETTINGS_STYLES as S,
+  USER_TIMEZONES as TIMEZONES,
+} from "./userSettingsTabHelpers";
 
 export default function UserSettingsTab({ user, onSave }) {
   const [form, setForm] = useState({

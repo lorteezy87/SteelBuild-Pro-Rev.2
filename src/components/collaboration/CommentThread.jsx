@@ -11,6 +11,7 @@ import {
   COMMENT_STATUS_COLOR,
   COMMENT_STATUS_LABEL,
   nextCommentStatus,
+  commentThreadQueryKey as QKEY,
 } from "./commentThreadHelpers";
 
 /**
@@ -36,8 +37,6 @@ import {
  * unavailable (e.g. the Supabase instance is on a plan without
  * realtime).
  */
-
-const QKEY = (entityType, entityId) => ["comments", entityType, entityId];
 
 export default function CommentThread({
   entityType,

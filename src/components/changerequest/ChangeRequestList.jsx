@@ -1,22 +1,9 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
-
-const STATUS_COLORS = {
-  Submitted: "var(--status-warning)",
-  "Under Review": "var(--status-info)",
-  "Awaiting Approval": "var(--status-warning)",
-  Approved: "var(--status-success)",
-  Rejected: "var(--status-error)",
-  "Approved with Conditions": "var(--accent)",
-  "On Hold": "var(--text-muted)",
-};
-
-const PRIORITY_COLORS = {
-  Critical: "var(--status-error)",
-  High: "var(--status-warning)",
-  Medium: "var(--status-info)",
-  Low: "var(--accent)",
-};
+import {
+  CR_STATUS_COLORS as STATUS_COLORS,
+  CR_PRIORITY_COLORS as PRIORITY_COLORS,
+} from "./changeRequestListHelpers";
 
 export default function ChangeRequestList({ requests = [] }) {
   const [expanded, setExpanded] = useState(null);

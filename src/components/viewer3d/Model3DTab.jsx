@@ -23,30 +23,15 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
 import Model3dSyncPanel from "@/components/viewer3d/Model3dSyncPanel";
 import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
+import {
+  MODEL3D_COLOR_MODES as COLOR_MODES,
+  MODEL3D_TYPE_LABELS as TYPE_LABELS,
+  MODEL3D_MONO as mono,
+  MODEL3D_VIEWER_TOOLS as viewerTools,
+  MODEL3D_TOOL_BTN as toolBtn,
+} from "./model3dTabHelpers";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
-
-const mono = { fontFamily: "var(--font-mono)" };
-
-const COLOR_MODES = [
-  { key: "model", label: "Model" },
-  { key: "fab", label: "Fab" },
-  { key: "type", label: "Type" },
-  { key: "sequence", label: "Sequence" },
-  { key: "status", label: "Detailing" },
-];
-const TYPE_LABELS = [["beam", "Beam"], ["column", "Column"], ["plate", "Plate"], ["member", "Member"]];
-
-const viewerTools = {
-  position: "absolute", top: 10, left: 10, display: "flex", gap: 6, zIndex: 2,
-};
-
-const toolBtn = {
-  padding: "6px 12px", borderRadius: 8,
-  border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
-  color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
-  fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer",
-};
 
 const linkBtn = {
   background: "none", border: "none", color: "var(--accent)", cursor: "pointer",

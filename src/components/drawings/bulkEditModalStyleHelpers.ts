@@ -12,3 +12,17 @@ export const labelStyle: Record<string, string | number> = {
   textTransform: "uppercase",
   marginBottom: 4,
 };
+
+export const BULK_EDIT_INITIAL = {
+  revision_number: "",
+  submitted_date: "",
+  due_date: "",
+  return_date: "",
+  reviewer: "",
+  discipline: "",
+  stage: "",
+  spec_section: "",
+  priority_flag: false,
+  notes: "",
+};
+

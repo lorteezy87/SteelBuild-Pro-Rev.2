@@ -18,27 +18,13 @@ import {
 } from "recharts";
 import type { HourBarDatum } from "./budgetHoursControlCenter.derive";
 import { fmtHours } from "./budgetHoursControlCenter.derive";
-
-// ─── Shared axis / legend styles ─────────────────────────────────────────────
-
-const AXIS_TICK = { fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 };
-const AXIS_LINE = { stroke: "var(--border-default)" };
-const LEGEND_STYLE = { fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" };
-
-const EMPTY_STYLE: React.CSSProperties = {
-  textAlign: "center",
-  padding: 32,
-  color: "var(--text-muted)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-};
-
-// ─── Pie colours ─────────────────────────────────────────────────────────────
-
-const PIE_COLORS: Record<string, string> = {
-  Shop: "var(--accent)",
-  Field: "#3B82F6",
-};
+import {
+  AXIS_TICK,
+  AXIS_LINE,
+  LEGEND_STYLE,
+  EMPTY_STYLE,
+  PIE_COLORS,
+} from "./bhChartRowHelpers";
 
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
 

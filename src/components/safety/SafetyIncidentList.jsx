@@ -1,13 +1,11 @@
 import React, { useState } from "react";
 import { StatusPill } from "@/components/design-system";
 import { formatLocalDate } from "@/utils/dates";
-
-const SEVERITY_COLORS = {
-  Critical: "var(--status-error)",
-  High: "var(--status-warning)",
-  Medium: "var(--status-info)",
-  Low: "var(--accent)",
-};
+import {
+  SEVERITY_COLORS,
+  SAFETY_STATUS_COLORS as STATUS_COLORS,
+  SAFETY_STATUS_OPTIONS as STATUSES,
+} from "./safetyIncidentListHelpers";
 
 const TYPE_ICONS = {
   Injury: "🚑",
@@ -19,17 +17,6 @@ const TYPE_ICONS = {
   "Equipment Failure": "⚙",
   Other: "📋",
 };
-
-const STATUS_COLORS = {
-  Open: "var(--status-error)",
-  "Under Investigation": "var(--status-warning)",
-  "Action Plan": "var(--status-info)",
-  "In Progress": "var(--status-warning)",
-  Completed: "var(--status-success)",
-  Closed: "var(--accent)",
-};
-
-const STATUSES = ["Open", "In Progress", "Completed", "Closed"];
 
 export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, onStatusChange }) {
   const [expanded, setExpanded] = useState(null);

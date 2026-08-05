@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import {
+  QR_CODE_BACKGROUND,
+  MFA_LBL as LBL,
+  MFA_INP as INP,
+  mfaBtnPrimary as BTN_PRIMARY,
+  MFA_BTN_GHOST as BTN_GHOST,
+} from './mfaSectionHelpers';
 
 // QR scanner matte must remain literal white so the Supabase SVG data URL scans reliably.
-const QR_CODE_BACKGROUND = '#fff';
-
 /**
  * MfaSection — TOTP enrollment/management for the signed-in user (H23).
  * Lives in Settings → Profile → Security. Flow:
@@ -131,7 +136,3 @@ export default function MfaSection() {
   );
 }
 
-const LBL = { fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: 5 };
-const INP = { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none', boxSizing: 'border-box' };
-const BTN_PRIMARY = (busy) => ({ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 8, padding: '9px 18px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: busy ? 0.6 : 1 });
-const BTN_GHOST = { background: 'var(--bg-surface-low)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' };

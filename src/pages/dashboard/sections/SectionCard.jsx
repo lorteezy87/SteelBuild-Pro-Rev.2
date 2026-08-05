@@ -19,15 +19,7 @@
 
 import React, { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-
-const STAT_COLOR = {
-  accent:  "var(--accent)",
-  success: "var(--status-success-bright)",
-  warning: "var(--status-warning-bright)",
-  error:   "var(--status-error-bright)",
-  muted:   "var(--text-muted)",
-  info:    "var(--status-info)",
-};
+import { SECTION_STAT_COLOR as STAT_COLOR } from "./sectionCardHelpers";
 
 export default function SectionCard({
   icon,                     // lucide icon component

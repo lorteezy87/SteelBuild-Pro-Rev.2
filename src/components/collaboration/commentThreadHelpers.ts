@@ -36,3 +36,11 @@ export function nextCommentStatus(current: string | null | undefined): string {
   const safe = idx >= 0 ? idx : 0;
   return COMMENT_STATUS_ORDER[(safe + 1) % COMMENT_STATUS_ORDER.length];
 }
+
+/** Pure query-key builder for CommentThread. */
+export function commentThreadQueryKey(
+  entityType: string | null | undefined,
+  entityId: string | null | undefined,
+) {
+  return ["comments", entityType, entityId] as const;
+}

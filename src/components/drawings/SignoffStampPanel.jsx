@@ -31,8 +31,7 @@ import {
   voidSignoff,
   SIGNOFF_STAMP_TYPES,
 } from "@/lib/drawingHub";
-
-const QKEY = (drawingId, revId) => ["signoffs", drawingId, revId];
+import { signoffQueryKey as QKEY } from "./signoffStampPanelHelpers";
 
 // Icon overlay keeps lucide components local to this presentational panel.
 const STAMP_ICONS = {
