@@ -32,8 +32,6 @@ import {
   TabButton,
 } from "./contractManagement/ContractManagementUi";
 
-const fmtShort = (v) => formatCurrencyShort(v);
-
 export default function ContractManagement() {
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
@@ -278,7 +276,7 @@ export default function ContractManagement() {
         title="Contract Management"
         count={changeOrders?.length || 0}
         unit=" · CHANGE ORDERS"
-        subtitle={`${fmtShort(revisedValue || 0)} revised contract · ${fmtShort(pendingCOTotal || 0)} pending CO value`}
+        subtitle={`${formatCurrencyShort(revisedValue || 0)} revised contract · ${formatCurrencyShort(pendingCOTotal || 0)} pending CO value`}
       >
         {activeTab === "BILLING & SOV" && can("create", "sov_item") && (
           <button

@@ -168,3 +168,18 @@ export function buildActionItemsCsvString(
     .join("\n");
 }
 
+/** Filter / form priority options (canonical enum order). */
+export const ACTION_ITEM_PRIORITIES = [
+  PRIORITY.CRITICAL,
+  PRIORITY.HIGH,
+  PRIORITY.MEDIUM,
+  PRIORITY.LOW,
+] as const;
+
+/** Display colors for priority chips on the Action Items shell. */
+export const PRIORITY_COLORS: Record<string, string> = {
+  [PRIORITY.CRITICAL]: "var(--status-error)",
+  [PRIORITY.HIGH]: "var(--status-warning)",
+  [PRIORITY.MEDIUM]: "var(--status-info)",
+  [PRIORITY.LOW]: "var(--text-muted)",
+};

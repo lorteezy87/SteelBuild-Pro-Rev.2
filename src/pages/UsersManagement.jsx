@@ -20,13 +20,10 @@ import {
   countAdmins,
   countNonAdmins,
   getUserAvatarColor,
+  ACTIVITY_DOT_COLORS,
 } from "./usersManagement/usersManagementPageHelpers";
 
-const activityDotColors = {
-  active: "#10B981",
-  pending: "#F59E0B",
-  inactive: "var(--text-muted)",
-};
+const activityDotColors = ACTIVITY_DOT_COLORS;
 
 function UsersManagementContent() {
   const qc = useQueryClient();

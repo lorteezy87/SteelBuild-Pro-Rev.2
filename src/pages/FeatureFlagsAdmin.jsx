@@ -22,24 +22,10 @@ import { toast } from "sonner";
  * non-admin out of this surface is the AdminRoute wrap below.
  */
 
-// ── small style helpers (mirrors UsersManagement.jsx idiom) ─────────
-const inputStyle = {
-  background: "var(--bg-surface-low)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 8,
-  padding: "7px 10px",
-  fontSize: 12,
-  color: "var(--text-primary)",
-  outline: "none",
-  fontFamily: "var(--font-body)",
-};
-
-const cellLabelStyle = {
-  color: "var(--text-primary)",
-  fontWeight: 700,
-  fontSize: 11,
-  letterSpacing: "0.05em",
-};
+import {
+  featureFlagsInputStyle as inputStyle,
+  featureFlagsCellLabelStyle as cellLabelStyle,
+} from "./featureFlags/FeatureFlagsAdminUi";
 
 import {
   coerceOverrides,

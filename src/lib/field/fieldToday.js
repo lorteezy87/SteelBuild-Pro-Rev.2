@@ -139,3 +139,19 @@ export function tasksForToday(tasks, todayIso, { horizonDays = 7 } = {}) {
 
   return relevant.sort((a, b) => compareTasks(a, b, todayIso));
 }
+
+/**
+ * Group already-sorted today's tasks into urgency sections (overdue first).
+ * Pure — never reads the clock; `todayIso` and order are injected.
+ */
+export function groupTasksByUrgency(todaysWork, todayIso, order = ["overdue", "due-today", "active", "unscheduled", "upcoming"]) {
+  const byBucket = new Map();
+  for (const task of todaysWork || []) {
+    const bucket = taskUrgency(task, todayIso);
+    if (!byBucket.has(bucket)) byBucket.set(bucket, []);
+    byBucket.get(bucket).push(task);
+  }
+  return order
+    .filter((bucket) => byBucket.has(bucket))
+    .map((bucket) => ({ bucket, tasks: byBucket.get(bucket) }));
+}

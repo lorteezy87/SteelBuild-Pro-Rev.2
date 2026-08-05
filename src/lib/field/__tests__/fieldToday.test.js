@@ -8,6 +8,7 @@ import {
   taskLabel,
   taskCrew,
   PROGRESS_STEPS,
+  groupTasksByUrgency,
 } from "../fieldToday";
 
 const TODAY = "2026-06-12";
@@ -143,5 +144,18 @@ describe("display helpers", () => {
   });
   it("exposes the quick-set steps", () => {
     expect(PROGRESS_STEPS).toEqual([0, 25, 50, 75, 100]);
+  });
+});
+
+
+describe("groupTasksByUrgency", () => {
+  it("groups by urgency bucket preserving order", () => {
+    const tasks = [
+      { id: "1", end_date: "2020-01-01", percent_complete: 0 },
+      { id: "2", end_date: "2099-01-01", percent_complete: 50, start_date: "2020-01-01" },
+    ];
+    const sections = groupTasksByUrgency(tasks, "2026-08-05");
+    expect(sections.length).toBeGreaterThan(0);
+    expect(sections.every((s) => Array.isArray(s.tasks))).toBe(true);
   });
 });

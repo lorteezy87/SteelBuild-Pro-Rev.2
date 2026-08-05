@@ -33,7 +33,7 @@ import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import { compressImage } from "@/utils/compressImage";
 import { localToday } from "@/utils/dates";
-import { tasksForToday, taskUrgency, clampPercent, progressPatch } from "@/lib/field/fieldToday";
+import { tasksForToday, clampPercent, progressPatch, groupTasksByUrgency } from "@/lib/field/fieldToday";
 import { useOutbox } from "@/lib/field/OutboxContext";
 import {
   makeProgressOp,
@@ -45,16 +45,9 @@ import {
 } from "@/lib/field/offlineQueue";
 import { putPendingPhoto, reconcilePendingPhotos } from "@/lib/field/blobStore";
 import FieldTodayControlCenter from "./fieldToday/FieldTodayControlCenter";
+import { URGENCY_DISPLAY } from "./fieldToday/fieldTodayControlCenter.derive";
 
-// ── Urgency presentation (logic-free; buckets come from the helper) ──
-const URGENCY = {
-  overdue: { label: "OVERDUE", color: "var(--status-error)" },
-  "due-today": { label: "DUE TODAY", color: "var(--status-warning)" },
-  active: { label: "ACTIVE", color: "var(--accent)" },
-  unscheduled: { label: "TBD", color: "var(--text-muted)" },
-  upcoming: { label: "UPCOMING", color: "var(--status-info)" },
-};
-
+const URGENCY = URGENCY_DISPLAY;
 
 export default function FieldToday() {
   const { activeProject } = useProjectContext();
@@ -96,18 +89,10 @@ export default function FieldToday() {
 
   // Group the already-sorted list by urgency so a long day (lots of overdue
   // work) stays scannable — every item still shows; nothing is hidden.
-  const sections = useMemo(() => {
-    const order = ["overdue", "due-today", "active", "unscheduled", "upcoming"];
-    const byBucket = new Map();
-    for (const task of todaysWork) {
-      const bucket = taskUrgency(task, todayIso);
-      if (!byBucket.has(bucket)) byBucket.set(bucket, []);
-      byBucket.get(bucket).push(task);
-    }
-    return order
-      .filter((bucket) => byBucket.has(bucket))
-      .map((bucket) => ({ bucket, tasks: byBucket.get(bucket) }));
-  }, [todaysWork, todayIso]);
+  const sections = useMemo(
+    () => groupTasksByUrgency(todaysWork, todayIso),
+    [todaysWork, todayIso],
+  );
 
   // ── Offline outbox: queued idempotent captures replay (in order) on reconnect.
   // The single app-wide instance lives in OutboxProvider so the queue drains from

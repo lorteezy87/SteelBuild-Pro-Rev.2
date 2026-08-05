@@ -29,3 +29,13 @@ describe("getUserAvatarColor", () => {
     expect(b.length).toBeGreaterThan(0);
   });
 });
+
+import { ACTIVITY_DOT_COLORS } from "../usersManagementPageHelpers";
+
+describe("ACTIVITY_DOT_COLORS", () => {
+  it("covers active/pending/inactive", () => {
+    expect(ACTIVITY_DOT_COLORS.active).toBeTruthy();
+    expect(ACTIVITY_DOT_COLORS.pending).toBeTruthy();
+    expect(ACTIVITY_DOT_COLORS.inactive).toBeTruthy();
+  });
+});

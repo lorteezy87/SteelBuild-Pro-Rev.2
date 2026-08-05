@@ -11,7 +11,7 @@ import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { toast } from "sonner";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { BulkActionBar, Button } from "@/components/design-system";
-import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
+import { ACTION_ITEM_STATUS } from "@/lib/enums";
 import {
   splitSetupItems,
   computeSetupStats,
@@ -38,20 +38,6 @@ function exportActionItemsToCSV(items) {
   downloadTextFile(buildActionItemsCsvString(items), "action-items.csv", "text/csv;charset=utf-8");
 }
 
-
-const priorities = [
-  PRIORITY.CRITICAL,
-  PRIORITY.HIGH,
-  PRIORITY.MEDIUM,
-  PRIORITY.LOW,
-];
-
-const PRIORITY_COLORS = {
-  [PRIORITY.CRITICAL]: "var(--status-error)",
-  [PRIORITY.HIGH]: "var(--status-warning)",
-  [PRIORITY.MEDIUM]: "var(--status-info)",
-  [PRIORITY.LOW]: "var(--text-muted)",
-};
 
 export default function ActionItems() {
   const projectId = useProjectId();

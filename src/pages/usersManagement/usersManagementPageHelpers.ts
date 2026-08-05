@@ -48,3 +48,9 @@ export function getUserAvatarColor(user: { full_name?: string | null; email?: st
   return getAvatarColor(user?.full_name || user?.email);
 }
 
+/** Dot colors for last-activity status on Users Management. */
+export const ACTIVITY_DOT_COLORS: Record<"active" | "pending" | "inactive", string> = {
+  active: "#10B981",
+  pending: "#F59E0B",
+  inactive: "var(--text-muted)",
+};

@@ -59,3 +59,14 @@ describe("buildActionItemsCsvString", () => {
     expect(csv).toContain('"Say ""hi"""');
   });
 });
+
+import { ACTION_ITEM_PRIORITIES, PRIORITY_COLORS } from "../actionItemsPageHelpers";
+
+describe("action item priority tokens", () => {
+  it("exposes four priorities with colors", () => {
+    expect(ACTION_ITEM_PRIORITIES).toHaveLength(4);
+    for (const p of ACTION_ITEM_PRIORITIES) {
+      expect(PRIORITY_COLORS[p]).toBeTruthy();
+    }
+  });
+});
