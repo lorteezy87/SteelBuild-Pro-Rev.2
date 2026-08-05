@@ -1,6 +1,8 @@
 /**
  * Pure helpers for Production Status page shell.
  */
+import { downloadTextFile } from "@/lib/exports/fabRelease";
+
 
 export const PRODUCTION_STATUS_CSV_HEADERS = [
   "Piece Mark",
@@ -50,4 +52,16 @@ export function buildProductionStatusCsvString(rows: ProductionStatusCsvRow[]): 
   return [PRODUCTION_STATUS_CSV_HEADERS as unknown as Array<string | number>, ...data]
     .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
     .join("\n");
+}
+
+/** Side-effect CSV download for Production Status page. */
+export function downloadProductionStatusCsv(
+  rows: Parameters<typeof buildProductionStatusCsvString>[0],
+  filename = "production-status.csv",
+): void {
+  downloadTextFile(
+    buildProductionStatusCsvString(rows),
+    filename,
+    "text/csv;charset=utf-8",
+  );
 }

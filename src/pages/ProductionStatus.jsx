@@ -32,17 +32,7 @@ import {
   pieceControlKeys,
 } from "@/lib/pieceControl/queryKeys";
 
-import { buildProductionStatusCsvString } from "./productionStatus/productionStatusPageHelpers";
-import { downloadTextFile } from "@/lib/exports/fabRelease";
-
-/** CSV export — reuses the same field order as the control-center columns. */
-function exportProductionCSV(rows) {
-  downloadTextFile(
-    buildProductionStatusCsvString(rows),
-    "production-status.csv",
-    "text/csv;charset=utf-8",
-  );
-}
+import { downloadProductionStatusCsv as exportProductionCSV } from "./productionStatus/productionStatusPageHelpers";
 
 
 export default function ProductionStatus() {

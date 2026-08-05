@@ -1,6 +1,8 @@
 /**
  * Pure helpers for ActionItems page shell.
  */
+import { downloadTextFile } from "@/lib/exports/fabRelease";
+
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 
 export type ActionItemLike = {
@@ -183,3 +185,11 @@ export const PRIORITY_COLORS: Record<string, string> = {
   [PRIORITY.MEDIUM]: "var(--status-info)",
   [PRIORITY.LOW]: "var(--text-muted)",
 };
+
+/** Side-effect CSV download for Action Items page. */
+export function downloadActionItemsCsv(
+  items: Parameters<typeof buildActionItemsCsvString>[0],
+  filename = "action-items.csv",
+): void {
+  downloadTextFile(buildActionItemsCsvString(items), filename, "text/csv;charset=utf-8");
+}

@@ -20,10 +20,9 @@ import {
   filterActionItems,
   buildExecutionQueue,
   resolveToggleStatus,
-  buildActionItemsCsvString,
   shiftDate,
+  downloadActionItemsCsv,
 } from "./actionItems/actionItemsPageHelpers";
-import { downloadTextFile } from "@/lib/exports/fabRelease";
 import { daysUntil } from "@/lib/dateMath";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ActionItemsControlCenter from "./actionItems/ActionItemsControlCenter";
@@ -32,12 +31,9 @@ import {
   buildActionItemCreatePayload,
 } from "./actionItems/actionItemMutationHelpers";
 
-/** Lightweight CSV export for the canonical presentation path. */
 import { findById } from "@/pages/shared/findById";
-function exportActionItemsToCSV(items) {
-  downloadTextFile(buildActionItemsCsvString(items), "action-items.csv", "text/csv;charset=utf-8");
-}
 
+const exportActionItemsToCSV = downloadActionItemsCsv;
 
 export default function ActionItems() {
   const projectId = useProjectId();
