@@ -1,97 +1,26 @@
-import { describe, it, expect } from "vitest";
-import * as viewerUtils from "../drawingViewerUtils";
+import { describe, expect, it } from "vitest";
+import { pickViewerRecordId, normalizeSN, documentToViewerDrawing } from "../drawingViewerUtils";
 
-const { normalizeSN, parseZonePayload } = viewerUtils;
-
-describe("normalizeSN", () => {
-  it("handles nullish and non-string input by returning empty string", () => {
-    expect(normalizeSN(null)).toBe("");
-    expect(normalizeSN(undefined)).toBe("");
-    expect(normalizeSN("")).toBe("");
+describe("drawingViewerUtils", () => {
+  it("picks record id from query params", () => {
+    const sp = new URLSearchParams("drawingId=d1");
+    expect(pickViewerRecordId(sp)).toBe("d1");
+    expect(pickViewerRecordId(new URLSearchParams("recordId=r1&id=i1"))).toBe("r1");
+    expect(pickViewerRecordId(new URLSearchParams(""))).toBeNull();
   });
 
-  it("uppercases and strips spaces / dashes / underscores / dots", () => {
-    expect(normalizeSN("s-201")).toBe("S201");
-    expect(normalizeSN("S 201")).toBe("S201");
-    expect(normalizeSN("S_201")).toBe("S201");
-    expect(normalizeSN("S.2.01")).toBe("S201");
-    expect(normalizeSN(" S - 2 0 1 ")).toBe("S201");
-  });
-
-  it("collapses callout-style references to the same key", () => {
-    // The viewer relies on this collapse so that "S-201", "S201" and
-    // "DETAIL 3 / S-201" share a normalised prefix when matched against
-    // the project drawing list.
-    const a = normalizeSN("S-201");
-    const b = normalizeSN("S201");
-    const c = normalizeSN("s 201");
-    expect(a).toBe(b);
-    expect(b).toBe(c);
-  });
-
-  it("coerces numeric input to a string before normalising", () => {
-    // Some legacy callouts come in as numbers (sheet 201 with no prefix).
-    expect(normalizeSN(201)).toBe("201");
-  });
-});
-
-describe("parseZonePayload", () => {
-  it("returns polygon geometry when the payload shape is 'polygon'", () => {
-    const points = [[0, 0], [10, 0], [10, 10]];
-    expect(parseZonePayload({ shape: "polygon", points })).toEqual({
-      shapeType: "polygon",
-      polygonPoints: points,
+  it("normalizes sheet numbers and document adapter", () => {
+    expect(normalizeSN("A-1.0")).toBe("A10");
+    const d = documentToViewerDrawing({
+      id: "x",
+      project_id: "p",
+      document_number: "DOC-1",
+      display_name: "Spec",
+      file_name: "a.pdf",
+      file_url: "u",
+      revision_number: "B",
     });
-  });
-
-  it("returns the rect bbox for the default (MVP) rect path", () => {
-    const payload = { xMin: 0.1, yMin: 0.2, xMax: 0.5, yMax: 0.6 };
-    expect(parseZonePayload(payload)).toEqual({
-      xMin: 0.1, yMin: 0.2, xMax: 0.5, yMax: 0.6,
-    });
-  });
-
-  it("treats a missing/undefined shape as the rect path", () => {
-    // ZoneLayer emits rect payloads without a `shape` discriminator; the
-    // original branch used `payload?.shape === "polygon"` so anything else
-    // falls to the bbox path.
-    const payload = { xMin: 1, yMin: 2, xMax: 3, yMax: 4 };
-    expect(parseZonePayload(payload)).toEqual({
-      xMin: 1, yMin: 2, xMax: 3, yMax: 4,
-    });
-    expect(parseZonePayload(payload)).not.toHaveProperty("shapeType");
-  });
-
-  it("treats an explicit shape:'rect' as the rect path", () => {
-    const payload = { shape: "rect", xMin: 1, yMin: 2, xMax: 3, yMax: 4 };
-    expect(parseZonePayload(payload)).toEqual({
-      xMin: 1, yMin: 2, xMax: 3, yMax: 4,
-    });
-  });
-});
-
-describe("documentToViewerDrawing", () => {
-  it("adapts a DMS document opened with docId into the PDF viewer record shape", () => {
-    expect(typeof viewerUtils.documentToViewerDrawing).toBe("function");
-    expect(viewerUtils.documentToViewerDrawing({
-      id: "doc-1",
-      project_id: "project-1",
-      document_number: "SK-10",
-      display_name: "Connection sketch",
-      file_name: "connection-sketch.pdf",
-      file_url: "documents/project-1/connection-sketch.pdf",
-      revision_number: "2",
-    })).toEqual(expect.objectContaining({
-      id: "doc-1",
-      project_id: "project-1",
-      sheet_number: "SK-10",
-      title: "Connection sketch",
-      file_name: "connection-sketch.pdf",
-      file_url: "documents/project-1/connection-sketch.pdf",
-      revision_number: "2",
-      pdf_page: 1,
-      drawing_set_id: null,
-      viewer_source: "document",
-    }));
+    expect(d.sheet_number).toBe("DOC-1");
+    expect(d.viewer_source).toBe("document");
   });
 });

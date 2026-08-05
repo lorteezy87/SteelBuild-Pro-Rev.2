@@ -25,7 +25,7 @@ import { usePermissions } from "@/services/permissions";
 
 import { BulkActionBar } from "@/components/design-system";
 
-import { exportRFIsToCSV, filterAndSortRfis, buildProjectNameMap } from "./rfis/utils";
+import { exportRFIsToCSV, filterAndSortRfis, buildProjectNameMap, pruneSelectedIds, filterRowsBySelectedIds } from "./rfis/utils";
 import { useRfiSelection, useRfiDensity, useRfiInsightsCollapsed } from "./rfis/useRfiViewState";
 import { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { RFI_ROW_GRID } from "./rfis/RfiRow";
@@ -126,11 +126,7 @@ export default function RFIs() {
 
   const { selectedIds, setSelectedIds, toggleSelect, toggleAll } = useRfiSelection(filtered);
   useEffect(() => {
-    const sourceIds = new Set(rfis.map((r) => r.id));
-    setSelectedIds((current) => {
-      const next = new Set([...current].filter((id) => sourceIds.has(id)));
-      return next.size === current.size ? current : next;
-    });
+  setSelectedIds((current) => pruneSelectedIds(current, rfis));
   }, [rfis, setSelectedIds]);
 
   const projectMap = useMemo(() => buildProjectNameMap(projects), [projects]);
@@ -370,7 +366,7 @@ export default function RFIs() {
                 label: "EXPORT",
                 icon: "download",
                 disabled: !filtered.some((r) => selectedIds.has(r.id)),
-                onClick: () => exportRFIsToCSV(filtered.filter((r) => selectedIds.has(r.id))),
+                onClick: () => exportRFIsToCSV(filterRowsBySelectedIds(filtered, selectedIds)),
               },
               ...(can("delete", "rfi") ? [{
                 label: "DELETE",

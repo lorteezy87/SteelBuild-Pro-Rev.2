@@ -29,7 +29,7 @@ import ZoneLayer from "@/components/drawings/viewer/ZoneLayer";
 import ZonePanel from "@/components/drawings/viewer/ZonePanel";
 import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
 import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
-import { mono, normalizeSN, parseZonePayload } from "@/pages/drawingViewer/drawingViewerUtils";
+import { mono, normalizeSN, parseZonePayload, pickViewerRecordId } from "@/pages/drawingViewer/drawingViewerUtils";
 import { parseAnnotationLink } from "@/pages/drawingViewer/annotationLinks";
 import { useAutoScaleOnLoad } from "@/pages/drawingViewer/useAutoScaleOnLoad";
 import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
@@ -65,7 +65,7 @@ export default function DrawingViewer() {
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
 
-  const initialId = searchParams.get("recordId") || searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
+  const initialId = pickViewerRecordId(searchParams);
   const requestedRevisionId = searchParams.get("revisionId");
 
   const [userId, setUserId] = useState(null);

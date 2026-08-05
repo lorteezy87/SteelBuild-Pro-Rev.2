@@ -2,6 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import {
   compareRfisByNumber, extractRfiSequence,
   loadDensity, loadInsightsCollapsed, buildRfiCounts, filterAndSortRfis, buildProjectNameMap,
+  pruneSelectedIds, filterRowsBySelectedIds,
 } from "../utils";
 
 describe("RFI numeric ordering", () => {
@@ -116,5 +117,16 @@ describe("filterAndSortRfis", () => {
 describe("buildProjectNameMap", () => {
   it("maps id → name, blank when missing", () => {
     expect(buildProjectNameMap([{ id: "a", name: "Alpha" }, { id: "b" }])).toEqual({ a: "Alpha", b: "" });
+  });
+});
+
+
+describe("RFI selection helpers", () => {
+  it("prunes and filters", () => {
+    const rows = [{ id: "a" }, { id: "b" }];
+    const selected = new Set(["a", "c"]);
+    const pruned = pruneSelectedIds(selected, rows);
+    expect([...pruned]).toEqual(["a"]);
+    expect(filterRowsBySelectedIds(rows, new Set(["b"]))).toEqual([{ id: "b" }]);
   });
 });

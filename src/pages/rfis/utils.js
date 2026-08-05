@@ -247,3 +247,14 @@ export function buildProjectNameMap(projects) {
   for (const p of projects) m[p.id] = p.name || "";
   return m;
 }
+
+
+export function pruneSelectedIds(selectedIds, sourceRows) {
+  const sourceIds = new Set((sourceRows || []).map((r) => r.id).filter(Boolean));
+  const next = new Set([...(selectedIds || [])].filter((id) => sourceIds.has(id)));
+  return next.size === (selectedIds?.size || 0) ? selectedIds : next;
+}
+
+export function filterRowsBySelectedIds(rows, selectedIds) {
+  return (rows || []).filter((r) => selectedIds?.has?.(r.id));
+}

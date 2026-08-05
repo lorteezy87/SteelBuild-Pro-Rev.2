@@ -69,3 +69,16 @@ export function documentToViewerDrawing(doc) {
     viewer_source: "document",
   };
 }
+
+
+/** Resolve the sheet/doc id from DrawingViewer deep-link query params. */
+export function pickViewerRecordId(searchParams) {
+  if (!searchParams) return null;
+  return (
+    searchParams.get("recordId") ||
+    searchParams.get("id") ||
+    searchParams.get("drawingId") ||
+    searchParams.get("docId") ||
+    null
+  );
+}
