@@ -10,7 +10,7 @@
  *   .dlv-cc-view-toggle — the 3-button Register/Dispatch/Schedule tab strip
  */
 
-import { useMemo, type CSSProperties, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import "@/styles/command.css";
 import {
   PageHero,
@@ -36,49 +36,17 @@ import { buildDeliveryPanels, deliveryStatusTone } from "./deliveryControlCenter
 import { formatDate, formatTons } from "./format";
 import { deliveryStyles } from "./styles";
 import type { DeliveryMetrics, DeliveryRecord } from "./types";
+import {
+  viewToggleWrapStyle,
+  viewToggleBtnBase,
+  viewToggleBtnLast,
+  viewToggleActiveStyle,
+} from "./deliveryControlCenterStyleHelpers";
 
 // ---------------------------------------------------------------------------
 // Inline styles for custom elements
 // (coordinator: these belong in command.css once stable)
 // ---------------------------------------------------------------------------
-
-/**
- * View toggle strip — sits just above the body, below the FilterBar.
- * Uses command-skin tokens so the light default and dark remap stay aligned.
- */
-const viewToggleWrapStyle: CSSProperties = {
-  display: "flex",
-  gap: 0,
-  border: "1px solid var(--cmd-border)",
-  borderRadius: 6,
-  overflow: "hidden",
-  background: "var(--cmd-surface)",
-  marginBottom: 12,
-  width: "fit-content",
-};
-
-const viewToggleBtnBase: CSSProperties = {
-  padding: "6px 16px",
-  fontSize: 13,
-  fontWeight: 500,
-  color: "var(--cmd-text)",
-  background: "transparent",
-  border: "none",
-  borderRight: "1px solid var(--cmd-border)",
-  cursor: "pointer",
-  transition: "background 0.12s",
-  whiteSpace: "nowrap",
-};
-
-const viewToggleBtnLast: CSSProperties = {
-  ...viewToggleBtnBase,
-  borderRight: "none",
-};
-
-const viewToggleActiveStyle: CSSProperties = {
-  background: "var(--cmd-text)",
-  color: "var(--cmd-surface)",
-};
 
 // ---------------------------------------------------------------------------
 // Props
