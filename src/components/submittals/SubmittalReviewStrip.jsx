@@ -5,13 +5,7 @@ import {
   Inbox, CheckSquare, Search, Lightbulb, Send,
   ChevronDown, ChevronUp, Copy, ArrowRight, AlertTriangle, CheckCircle,
 } from "lucide-react";
-
-const TONE_COLORS = {
-  success: { bg: "var(--success-muted)", border: "var(--success-border)", text: "var(--status-success)" },
-  warning: { bg: "var(--warning-muted)", border: "var(--warning-border)", text: "var(--status-warning)" },
-  error:   { bg: "var(--danger-muted)",  border: "var(--danger-border)",  text: "var(--status-error)" },
-  muted:   { bg: "var(--bg-surface-low)", border: "var(--border-default)", text: "var(--text-muted)" },
-};
+import { TONE_COLORS } from "./submittalReviewStripHelpers";
 
 /**
  * SubmittalReviewStrip — inline 5-stage review pipeline visualization.
