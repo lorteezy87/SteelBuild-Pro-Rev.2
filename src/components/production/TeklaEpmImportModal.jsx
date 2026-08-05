@@ -26,6 +26,7 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseFabSuiteXml, stageModelElements, teklaRowToModelElement } from "@/lib/importFabSuiteXml";
 import {
 import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
+import ImportStatChip from "@/components/shared/ImportStatChip";
   monoStyle as mono,
   displayStyle as display,
   ACCENT,
@@ -221,10 +222,10 @@ export default function TeklaEpmImportModal({ open, projectId, projectName, onCl
           {(step === "preview" || step === "committing") && parsed && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                <StatChip label="New pieces" value={staged.stats.create} tone="var(--status-success)" />
-                <StatChip label="Updates" value={staged.stats.update} tone={ACCENT} />
-                <StatChip label="Drawings" value={drawings.length} tone="var(--text-muted)" />
-                {parsed.source.stage && <StatChip label="Stage" value={parsed.source.stage} tone="var(--status-warning)" />}
+                <ImportStatChip label="New pieces" value={staged.stats.create} tone="var(--status-success)" />
+                <ImportStatChip label="Updates" value={staged.stats.update} tone={ACCENT} />
+                <ImportStatChip label="Drawings" value={drawings.length} tone="var(--text-muted)" />
+                {parsed.source.stage && <ImportStatChip label="Stage" value={parsed.source.stage} tone="var(--status-warning)" />}
                 {parsed.project?.number && (
                   <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
                     {parsed.project.number} · {parsed.project.name}
@@ -345,10 +346,3 @@ function Section({ icon, title, children }) {
   );
 }
 
-function StatChip({ label, value, tone }) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
-      {label}<strong style={{ color: tone, fontSize: 12 }}>{value}</strong>
-    </span>
-  );
-}

@@ -27,6 +27,7 @@ import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups"
 import { summarizeShippingListCommit } from "@/lib/deliveries/summarizeShippingListCommit";
 import {
 import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
+import ImportStatChip from "@/components/shared/ImportStatChip";
   monoStyle as mono,
   displayStyle as display,
   ACCENT,
@@ -292,9 +293,9 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
           {(step === "preview" || step === "committing") && staged && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <StatChip label="New loads" value={staged.stats.create} tone="var(--status-success)" />
-                <StatChip label="Already imported" value={staged.stats.exists} tone="var(--text-muted)" />
-                <StatChip label="Pieces" value={totalPieces} tone={ACCENT} />
+                <ImportStatChip label="New loads" value={staged.stats.create} tone="var(--status-success)" />
+                <ImportStatChip label="Already imported" value={staged.stats.exists} tone="var(--text-muted)" />
+                <ImportStatChip label="Pieces" value={totalPieces} tone={ACCENT} />
               </div>
 
               <div style={{ border: "1px solid var(--border-default)", borderRadius: 10, overflow: "hidden" }}>
@@ -471,10 +472,3 @@ async function markCanonicalPiecesShipped(keptLoads, projectId) {
 const th = IMPORT_TABLE_TH_STYLE;
 const td = IMPORT_TABLE_TD_STYLE;
 
-function StatChip({ label, value, tone }) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
-      {label}<strong style={{ color: tone, fontSize: 12 }}>{value}</strong>
-    </span>
-  );
-}

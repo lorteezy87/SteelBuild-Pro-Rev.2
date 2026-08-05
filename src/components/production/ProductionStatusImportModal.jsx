@@ -17,6 +17,7 @@ import { parseProductionCsv } from "@/lib/importProductionStatus";
 import { commitProductionRows } from "@/lib/production/repository";
 import {
 import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
+import ImportStatChip from "@/components/shared/ImportStatChip";
   PRODUCTION_IMPORT_MONO as mono,
   PRODUCTION_IMPORT_DISPLAY as display,
   PRODUCTION_IMPORT_ACCENT as ACCENT,
@@ -191,9 +192,9 @@ export default function ProductionStatusImportModal({
           {(step === "preview" || step === "committing") && parsed && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <StatChip label="New" value={stats.create} tone="var(--status-success)" />
-                <StatChip label="Updates" value={stats.update} tone={ACCENT} />
-                <StatChip label="Skipped rows" value={stats.skipped} tone="var(--text-muted)" />
+                <ImportStatChip label="New" value={stats.create} tone="var(--status-success)" />
+                <ImportStatChip label="Updates" value={stats.update} tone={ACCENT} />
+                <ImportStatChip label="Skipped rows" value={stats.skipped} tone="var(--text-muted)" />
               </div>
 
               <div style={{ border: "1px solid var(--border-default)", borderRadius: 10, overflow: "hidden" }}>
@@ -284,15 +285,3 @@ export default function ProductionStatusImportModal({
 const th = IMPORT_TABLE_TH_STYLE;
 const td = IMPORT_TABLE_TD_STYLE;
 
-function StatChip({ label, value, tone }) {
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999,
-      border: "1px solid var(--border-default)", background: "var(--bg-surface-low)",
-      fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)",
-    }}>
-      {label}
-      <strong style={{ color: tone, fontSize: 12 }}>{value}</strong>
-    </span>
-  );
-}

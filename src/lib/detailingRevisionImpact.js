@@ -19,7 +19,8 @@ function reached(dateStr, today) {
   return daysBetween(dateStr, today) >= 0;
 }
 
-const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+export const DETAILING_IMPACT_SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+const SEVERITY_RANK = DETAILING_IMPACT_SEVERITY_RANK;
 
 /**
  * @param {object} args

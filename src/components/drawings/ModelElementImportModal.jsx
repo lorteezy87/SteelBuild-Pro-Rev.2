@@ -22,6 +22,7 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseModelElementsCsv } from "@/lib/importModelElements";
 import {
 import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
+import ImportStatChip from "@/components/shared/ImportStatChip";
   mono,
   display,
   ACCENT,
@@ -256,11 +257,11 @@ export default function ModelElementImportModal({
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {/* Stats strip */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <StatChip label="New" value={stats.create} tone="var(--status-success)" />
-                <StatChip label="Updates" value={stats.update} tone={ACCENT} />
-                <StatChip label="Sheets linked" value={stats.drawingMatched} tone="var(--status-success)" />
-                <StatChip label="Ambiguous sheets" value={stats.drawingAmbiguous} tone="var(--status-warning)" />
-                <StatChip label="Skipped rows" value={stats.skipped} tone="var(--text-muted)" />
+                <ImportStatChip label="New" value={stats.create} tone="var(--status-success)" />
+                <ImportStatChip label="Updates" value={stats.update} tone={ACCENT} />
+                <ImportStatChip label="Sheets linked" value={stats.drawingMatched} tone="var(--status-success)" />
+                <ImportStatChip label="Ambiguous sheets" value={stats.drawingAmbiguous} tone="var(--status-warning)" />
+                <ImportStatChip label="Skipped rows" value={stats.skipped} tone="var(--text-muted)" />
               </div>
 
               {/* Rows table */}
@@ -370,16 +371,3 @@ export default function ModelElementImportModal({
 const th = IMPORT_TABLE_TH_STYLE;
 const td = IMPORT_TABLE_TD_STYLE;
 
-function StatChip({ label, value, tone }) {
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 6,
-      padding: "4px 10px", borderRadius: 999,
-      border: "1px solid var(--border-default)", background: "var(--bg-surface-low)",
-      fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)",
-    }}>
-      {label}
-      <strong style={{ color: tone, fontSize: 12 }}>{value}</strong>
-    </span>
-  );
-}
