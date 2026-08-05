@@ -23,8 +23,6 @@ import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import {
   IMPORT_TARGETS,
-  PROJECT_TEMPLATES,
-  SAMPLE_PROJECT,
   SAMPLE_PROJECT_TEMPLATE_KEY,
   SEED_ENTITY_MAP,
   TEMPLATE_LIBRARY,
@@ -43,6 +41,7 @@ import {
   nextProjectFormWithField,
   updateTeamRowAt,
   removeTeamRowAt,
+  TEMPLATE_OPTIONS,
 } from "./onboarding/onboardingPageHelpers";
 import {
   TextField,
@@ -59,8 +58,6 @@ import {
   readOnboardingImportFile,
 } from "./onboarding/onboardingMutationHelpers";
 import { onboardingStyles } from "./onboarding/onboardingStyles";
-
-const TEMPLATE_OPTIONS = [SAMPLE_PROJECT, ...PROJECT_TEMPLATES];
 
 export default function Onboarding() {
   const navigate = useNavigate();

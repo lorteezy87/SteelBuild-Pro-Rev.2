@@ -16,3 +16,12 @@ describe("fieldHubPageHelpers", () => {
     expect(buildFieldHubVisibleTabs([{ key: "lems", label: "LEMs" } as any])[0].key).toBe("hub");
   });
 });
+
+import { FIELD_HUB_TAB_DEFS } from "../fieldHubPageHelpers";
+
+describe("FIELD_HUB_TAB_DEFS", () => {
+  it("includes today and safety", () => {
+    expect(FIELD_HUB_TAB_DEFS.map((t) => t.key)).toContain("today");
+    expect(FIELD_HUB_TAB_DEFS.map((t) => t.key)).toContain("safety");
+  });
+});

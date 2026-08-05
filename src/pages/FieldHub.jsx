@@ -26,6 +26,7 @@ import {
   resolveFieldHubTabKey,
   resolveProjectName,
   buildFieldHubVisibleTabs,
+  FIELD_HUB_TAB_DEFS,
 } from "./fieldHub/fieldHubPageHelpers";
 
 const FieldTodayPage = lazyWithRetry(() => import("@/pages/FieldToday"));
@@ -38,17 +39,22 @@ const SafetyPage = lazyWithRetry(() => import("@/pages/Safety"));
 const PunchlistPage = lazyWithRetry(() => import("@/pages/Punchlist"));
 const QualityControlPage = lazyWithRetry(() => import("@/pages/QualityControl"));
 
-const TABS = [
-  { key: "today", label: "Today", Component: FieldTodayPage },
-  { key: "overview", label: "Overview", Component: FieldOverview },
-  { key: "dailylogs", label: "Daily Logs", Component: DailyLogsPage },
-  { key: "photos", label: "Photos", Component: PhotosPage },
-  { key: "lems", label: "LEMs", Component: LEMsPage },
-  { key: "inspections", label: "Inspections", Component: InspectionsPage },
-  { key: "punchlist", label: "Punchlist", Component: PunchlistPage },
-  { key: "quality", label: "Quality Control", Component: QualityControlPage },
-  { key: "safety", label: "Safety", Component: SafetyPage },
-];
+const FIELD_HUB_COMPONENTS = {
+  today: FieldTodayPage,
+  overview: FieldOverview,
+  dailylogs: DailyLogsPage,
+  photos: PhotosPage,
+  lems: LEMsPage,
+  inspections: InspectionsPage,
+  punchlist: PunchlistPage,
+  quality: QualityControlPage,
+  safety: SafetyPage,
+};
+
+const TABS = FIELD_HUB_TAB_DEFS.map((def) => ({
+  ...def,
+  Component: FIELD_HUB_COMPONENTS[def.key],
+}));
 
 export default function FieldHub() {
   const [params, setParams] = useSearchParams();

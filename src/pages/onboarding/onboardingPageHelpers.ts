@@ -5,6 +5,7 @@
 import {
   SAMPLE_PROJECT,
   SAMPLE_PROJECT_TEMPLATE_KEY,
+  PROJECT_TEMPLATES,
   addDaysIso,
   buildProjectPayload,
   todayIso,
@@ -131,3 +132,6 @@ export function appendEmptyTeamRow<T extends { email: string; role: string; disc
 ): T[] {
   return [...(rows || []), empty];
 }
+
+/** Sample + library templates offered on the onboarding project step. */
+export const TEMPLATE_OPTIONS = [SAMPLE_PROJECT, ...PROJECT_TEMPLATES];

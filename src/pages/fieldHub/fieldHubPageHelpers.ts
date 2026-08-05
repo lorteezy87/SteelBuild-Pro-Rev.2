@@ -28,3 +28,18 @@ export function buildFieldHubVisibleTabs<T extends { key: string; label: string 
 ): Array<T | { key: "hub"; label: string; Component: null }> {
   return [{ key: "hub", label: "Command Center", Component: null }, ...tabs];
 }
+
+/** Tab keys/labels for Field Hub (components stay on the page shell). */
+export const FIELD_HUB_TAB_DEFS = [
+  { key: "today", label: "Today" },
+  { key: "overview", label: "Overview" },
+  { key: "dailylogs", label: "Daily Logs" },
+  { key: "photos", label: "Photos" },
+  { key: "lems", label: "LEMs" },
+  { key: "inspections", label: "Inspections" },
+  { key: "punchlist", label: "Punchlist" },
+  { key: "quality", label: "Quality Control" },
+  { key: "safety", label: "Safety" },
+] as const;
+
+export type FieldHubTabKey = (typeof FIELD_HUB_TAB_DEFS)[number]["key"];

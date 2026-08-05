@@ -92,3 +92,12 @@ describe("team row mutators", () => {
     expect(appendEmptyTeamRow(rows)).toHaveLength(3);
   });
 });
+
+import { TEMPLATE_OPTIONS } from "../onboardingPageHelpers";
+
+describe("TEMPLATE_OPTIONS", () => {
+  it("includes sample project", () => {
+    expect(TEMPLATE_OPTIONS.length).toBeGreaterThan(0);
+    expect(TEMPLATE_OPTIONS[0].key).toBeTruthy();
+  });
+});
