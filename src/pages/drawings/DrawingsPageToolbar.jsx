@@ -1,9 +1,8 @@
 /**
  * Banner + CommandBar + KPI tiles for the Drawings page.
- * Extracted from Drawings.jsx — toolbar wiring only; no behavior change.
+ * When embedded in Detailing Control Center, banner + KPI row are hidden.
  */
 import React from "react";
-import { mono } from "@/components/drawings/drawingsConfig";
 import { exportTransmittal } from "@/components/drawings/drawingsUtils";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { toggleStageFilterValue } from "./drawingActionHelpers";
@@ -27,7 +26,6 @@ export default function DrawingsPageToolbar({
 }) {
   return (
     <>
-      {/* ── Secondary-view banner: this is the full editor; the Hub is the command center ── */}
       {!embedded && (
         <div
           style={{
@@ -37,11 +35,8 @@ export default function DrawingsPageToolbar({
             background: "var(--bg-surface-low)",
           }}
         >
-          <span style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", flexShrink: 0 }}>
-            Full Editor
-          </span>
           <span style={{ fontSize: 12.5, color: "var(--text-secondary, var(--text-muted))", lineHeight: 1.5 }}>
-            The <strong style={{ color: "var(--text-primary)" }}>Detailing Control Center</strong> is your command center. This page is the detailed editor — filters, bulk actions, rename / delete, per-sheet.
+            Prefer the <strong style={{ color: "var(--text-primary)" }}>Detailing Control Center</strong> Drawing Register — full edit lives there now.
           </span>
           <span style={{ flex: 1 }} />
           <button
@@ -55,7 +50,6 @@ export default function DrawingsPageToolbar({
         </div>
       )}
 
-      {/* ── CommandBar ─────────────────────────────────────────────────────── */}
       <CommandBar
         eyebrow={`DESIGN & DOCUMENTS · ${(projectName || "").toUpperCase()}`}
         title="Drawings & Submittals"
@@ -99,7 +93,6 @@ export default function DrawingsPageToolbar({
         </Button>
       </CommandBar>
 
-      {/* ── KPI Row (hidden when embedded — the hub shows its own KPIs) ─────── */}
       {!embedded && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 14 }}>
           <KpiTile compact label="PACKAGES"  value={stats.total}    color="var(--accent)"          active={stageFilter === "ALL"}        onClick={() => onStageFilter("ALL")} />
