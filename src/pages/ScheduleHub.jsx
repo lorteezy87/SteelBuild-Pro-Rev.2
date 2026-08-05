@@ -16,15 +16,22 @@ import { resolveHubTabKey } from "./hubs/hubTabHelpers";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
+import { SCHEDULE_HUB_TAB_DEFS } from "./scheduleHub/scheduleHubPageHelpers";
+
 const SchedulePage = lazyWithRetry(() => import("@/pages/Schedule"));
 const LookAheadPage = lazyWithRetry(() => import("@/pages/LookAheadSchedule"));
 const CalendarPage = lazyWithRetry(() => import("@/pages/ProjectCalendar"));
 
-const TABS = [
-  { key: "schedule", label: "Schedule", Component: SchedulePage },
-  { key: "lookahead", label: "Look-Ahead", Component: LookAheadPage },
-  { key: "calendar", label: "Calendar", Component: CalendarPage },
-];
+const SCHEDULE_HUB_COMPONENTS = {
+  schedule: SchedulePage,
+  lookahead: LookAheadPage,
+  calendar: CalendarPage,
+};
+
+const TABS = SCHEDULE_HUB_TAB_DEFS.map((def) => ({
+  ...def,
+  Component: SCHEDULE_HUB_COMPONENTS[def.key],
+}));
 
 export default function ScheduleHub() {
   const [params, setParams] = useSearchParams();

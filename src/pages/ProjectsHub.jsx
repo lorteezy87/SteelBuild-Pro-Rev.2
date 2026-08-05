@@ -15,17 +15,24 @@ import { resolveHubTabKey } from "./hubs/hubTabHelpers";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
+import { PROJECTS_HUB_TAB_DEFS } from "./projectsHub/projectsHubPageHelpers";
+
 const ProjectsPage = lazyWithRetry(() => import("@/pages/Projects"));
 const ScopePage = lazyWithRetry(() => import("@/pages/ScopeExclusions"));
 const ContactsPage = lazyWithRetry(() => import("@/pages/Contacts"));
 const MembersPage = lazyWithRetry(() => import("@/pages/ProjectMembers"));
 
-const TABS = [
-  { key: "projects", label: "Projects", Component: ProjectsPage },
-  { key: "scope", label: "Scope & Exclusions", Component: ScopePage },
-  { key: "contacts", label: "Contacts", Component: ContactsPage },
-  { key: "members", label: "Members", Component: MembersPage },
-];
+const PROJECTS_HUB_COMPONENTS = {
+  projects: ProjectsPage,
+  scope: ScopePage,
+  contacts: ContactsPage,
+  members: MembersPage,
+};
+
+const TABS = PROJECTS_HUB_TAB_DEFS.map((def) => ({
+  ...def,
+  Component: PROJECTS_HUB_COMPONENTS[def.key],
+}));
 
 export default function ProjectsHub() {
   const [params, setParams] = useSearchParams();

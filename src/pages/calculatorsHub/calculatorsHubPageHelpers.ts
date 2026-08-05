@@ -18,3 +18,11 @@ export function resolveCalculatorTabKey(
 ): CalculatorTabKey {
   return resolveHubTabKey(param, CALCULATOR_TAB_KEYS, "calculator") as CalculatorTabKey;
 }
+
+export const CALCULATOR_HUB_TAB_DEFS = [
+  { key: "calculator", label: "Calculator" },
+  { key: "feetinches", label: "Ft / In" },
+  { key: "steelweight", label: "Steel Weight" },
+  { key: "cranepick", label: "Crane Pick" },
+  { key: "decimalfraction", label: "Decimal / Fraction" },
+] as const;

@@ -5,16 +5,16 @@ import ItemDetailDrawer from "@/components/commandcenter/ItemDetailDrawer";
 import ForwardLookDrawer from "@/components/commandcenter/ForwardLookDrawer";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import CommandCenterControlCenter from "./commandCenter/CommandCenterControlCenter";
+import {
+  COMMAND_CENTER_STALE_TIME_MS as STALE_TIME,
+  COMMAND_CENTER_EMPTY_LIST as EMPTY_LIST,
+} from "./commandCenter/commandCenterPageHelpers";
+
 
 /**
  * Command Center canonical cockpit.
  * Queries remain page-owned; CommandCenterControlCenter owns only presentation.
  */
-
-import {
-  COMMAND_CENTER_STALE_TIME_MS as STALE_TIME,
-  COMMAND_CENTER_EMPTY_LIST as EMPTY_LIST,
-} from "./commandCenter/commandCenterPageHelpers";
 
 export default function CommandCenter() {
   // Canonical control-center state.

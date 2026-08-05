@@ -7,3 +7,11 @@ describe("calculatorsHubPageHelpers", () => {
     expect(resolveCalculatorTabKey("x")).toBe("calculator");
   });
 });
+
+import { CALCULATOR_HUB_TAB_DEFS } from "../calculatorsHubPageHelpers";
+
+describe("CALCULATOR_HUB_TAB_DEFS", () => {
+  it("matches calculator tab keys", () => {
+    expect(CALCULATOR_HUB_TAB_DEFS.map((t) => t.key)).toContain("steelweight");
+  });
+});

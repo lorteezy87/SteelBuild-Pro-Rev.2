@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { resolveHubTabKey } from "./hubs/hubTabHelpers";
+import { RESOURCE_HUB_TAB_DEFS } from "./resourceHub/resourceHubPageHelpers";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -28,10 +29,7 @@ import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 const CrewSchedule = lazyWithRetry(() => import("@/pages/ResourceScheduling"));
 const ResourceFormModal = lazyWithRetry(() => import("@/components/resources/ResourceFormModal"));
 
-const TABS = [
-  { key: "register", label: "Resource Register" },
-  { key: "schedule", label: "Crew Schedule" },
-];
+const TABS = RESOURCE_HUB_TAB_DEFS;
 
 export default function ResourceHub() {
   const qc = useQueryClient();

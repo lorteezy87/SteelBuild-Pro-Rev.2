@@ -16,7 +16,9 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import CalculatorShell from "@/components/calculators/CalculatorShell";
-import { resolveCalculatorTabKey } from "./calculatorsHub/calculatorsHubPageHelpers";
+import { resolveCalculatorTabKey,
+  CALCULATOR_HUB_TAB_DEFS,
+} from "./calculatorsHub/calculatorsHubPageHelpers";
 
 const RegularCalc = lazyWithRetry(() => import("@/pages/RegularCalculator"));
 const FeetInchesCalc = lazyWithRetry(() => import("@/pages/FeetInchesCalculator"));
@@ -24,13 +26,18 @@ const SteelWeightCalc = lazyWithRetry(() => import("@/pages/SteelWeightCalculato
 const CranePickCalc = lazyWithRetry(() => import("@/pages/CranePickCalculator"));
 const DecimalFractionConv = lazyWithRetry(() => import("@/pages/DecimalFractionConverter"));
 
-const TABS = [
-  { key: "calculator", label: "Calculator", Component: RegularCalc },
-  { key: "feetinches", label: "Ft / In", Component: FeetInchesCalc },
-  { key: "steelweight", label: "Steel Weight", Component: SteelWeightCalc },
-  { key: "cranepick", label: "Crane Pick", Component: CranePickCalc },
-  { key: "decimalfraction", label: "Decimal / Fraction", Component: DecimalFractionConv },
-];
+const CALCULATOR_HUB_COMPONENTS = {
+  calculator: RegularCalc,
+  feetinches: FeetInchesCalc,
+  steelweight: SteelWeightCalc,
+  cranepick: CranePickCalc,
+  decimalfraction: DecimalFractionConv,
+};
+
+const TABS = CALCULATOR_HUB_TAB_DEFS.map((def) => ({
+  ...def,
+  Component: CALCULATOR_HUB_COMPONENTS[def.key],
+}));
 
 // The tool rail wants {id, label}; our canonical key IS the id (preserve the
 // exact ?calc_tab= deep-link keys).
