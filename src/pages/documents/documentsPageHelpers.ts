@@ -55,3 +55,31 @@ export function countDocsForStatusTab<T extends { status?: string | null }>(
   if (tabKey === "all") return (docs || []).length;
   return (docs || []).filter((d) => d.status === tabKey).length;
 }
+
+export type FolderLike = {
+  id?: string | null;
+  parent_folder_id?: string | null;
+  [k: string]: unknown;
+};
+
+/**
+ * Walk up parent_folder_id chain from currentFolderId to build the
+ * breadcrumb path. Bounded depth = 50 to defensively prevent
+ * runaway loops if a cycle ever appeared in the data.
+ */
+export function buildFolderBreadcrumbPath<T extends FolderLike>(
+  folders: T[],
+  currentFolderId: string | null | undefined,
+): T[] {
+  if (!currentFolderId) return [];
+  const byId = new Map((folders || []).map((f) => [f.id, f]));
+  const path: T[] = [];
+  let cursor = byId.get(currentFolderId);
+  let safety = 0;
+  while (cursor && safety++ < 50) {
+    path.unshift(cursor);
+    cursor = cursor.parent_folder_id ? byId.get(cursor.parent_folder_id as string) : undefined;
+  }
+  return path;
+}
+

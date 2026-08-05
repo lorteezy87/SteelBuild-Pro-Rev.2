@@ -15,34 +15,13 @@ import ReportShell from "./ReportShell";
 import { LineChartSVG } from "./charts";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
-import { formatLocalDate } from "@/utils/dates";
-
-function monthKey(date) {
-  const d = date instanceof Date ? date : new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-function monthLabel(key) {
-  const [y, m] = key.split("-").map(Number);
-  return formatLocalDate(y, m - 1, 1, "en-US", { month: "short", year: "2-digit" });
-}
-function lastNMonthKeys(n) {
-  const out = [];
-  const now = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push(monthKey(d));
-  }
-  return out;
-}
-function nextNMonthKeys(n) {
-  const out = [];
-  const now = new Date();
-  for (let i = 1; i <= n; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    out.push(monthKey(d));
-  }
-  return out;
-}
+import {
+  lastNMonthKeys,
+  nextNMonthKeys,
+  bucketMonthlyBilled,
+  trailingAverage,
+  buildRevenueForecastSeries,
+} from "./revenueForecastHelpers";
 
 export default function RevenueForecast() {
   const { data: sov = [] } = useQuery({
@@ -53,31 +32,23 @@ export default function RevenueForecast() {
   const histKeys = useMemo(() => lastNMonthKeys(12), []);
   const fcastKeys = useMemo(() => nextNMonthKeys(6), []);
 
-  const monthlyBilled = useMemo(() => {
-    const buckets = Object.fromEntries(histKeys.map((k) => [k, 0]));
-    // Period delta over Certified rows only — same approach as
-    // Revenue.jsx so the forecast baseline matches the trend chart.
-    for (const d of certifiedPeriodDeltas(sov)) {
-      const dateSrc = d.periodTo || d.submittedDate;
-      if (!dateSrc) continue;
-      const k = monthKey(dateSrc);
-      if (k in buckets) buckets[k] += d.delta;
-    }
-    return buckets;
-  }, [sov, histKeys]);
+  // Period delta over Certified rows only — same approach as
+  // Revenue.jsx so the forecast baseline matches the trend chart.
+  const monthlyBilled = useMemo(
+    () => bucketMonthlyBilled(certifiedPeriodDeltas(sov), histKeys),
+    [sov, histKeys],
+  );
 
   // Trailing 3-month average for forecast
-  const trailing3 = useMemo(() => {
-    const last3 = histKeys.slice(-3);
-    const sum = last3.reduce((s, k) => s + (monthlyBilled[k] || 0), 0);
-    return last3.length ? sum / last3.length : 0;
-  }, [histKeys, monthlyBilled]);
+  const trailing3 = useMemo(
+    () => trailingAverage(histKeys, monthlyBilled, 3),
+    [histKeys, monthlyBilled],
+  );
 
-  const data = useMemo(() => {
-    const hist = histKeys.map((k) => ({ label: monthLabel(k), monthKey: k, value: monthlyBilled[k] || 0, forecast: false }));
-    const fcast = fcastKeys.map((k) => ({ label: monthLabel(k), monthKey: k, value: trailing3, forecast: true }));
-    return [...hist, ...fcast];
-  }, [histKeys, fcastKeys, monthlyBilled, trailing3]);
+  const data = useMemo(
+    () => buildRevenueForecastSeries(histKeys, fcastKeys, monthlyBilled, trailing3),
+    [histKeys, fcastKeys, monthlyBilled, trailing3],
+  );
 
   const histTotal = histKeys.reduce((s, k) => s + (monthlyBilled[k] || 0), 0);
   const fcastTotal = trailing3 * fcastKeys.length;

@@ -1,50 +1,13 @@
 import React from "react";
 import { StatusPill, BicPill, Icon } from "@/components/design-system";
-import { daysOpen, isOverdue, rfiStatusShortLabel } from "./utils";
+import { daysOpen, isOverdue, rfiStatusShortLabel, rfiDueSummary, rfiImpactSummary } from "./utils";
 
 export const RFI_ROW_GRID = "46px 108px minmax(360px, 1.45fr) minmax(156px, 0.58fr) minmax(142px, 0.5fr) minmax(148px, 0.5fr) minmax(148px, 0.5fr) 44px";
 
-function formatDate(value) {
-  if (!value) return "No date";
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function dueSummary(rfi) {
-  if (!rfi.date_required) return { primary: "No due date", secondary: `${daysOpen(rfi)}d open`, late: false };
-  const overdue = isOverdue(rfi);
-  return {
-    primary: formatDate(rfi.date_required),
-    secondary: overdue ? `${daysOpen(rfi)}d open / late` : `${daysOpen(rfi)}d open`,
-    late: overdue,
-  };
-}
-
-function impactSummary(rfi) {
-  const m = rfi.metadata || {};
-  const cost = rfi.cost_impact && rfi.cost_impact_amount
-    ? `$${Number(rfi.cost_impact_amount).toLocaleString()}`
-    : null;
-  const schedule = rfi.schedule_impact && rfi.schedule_impact_days
-    ? `${rfi.schedule_impact_days}d schedule`
-    : null;
-  const flags = [];
-  if (m.change_order_likely) flags.push("CO likely");
-  if (m.drawing_revision_required) flags.push("rev req'd");
-  if (m.fab_impact) flags.push("fab");
-  if (m.erection_impact) flags.push("erection");
-  const primary = cost || schedule || (flags[0] || "None");
-  const secondary = flags.length
-    ? flags.join(" · ")
-    : cost && schedule ? schedule : rfi.cost_impact || rfi.schedule_impact ? "Potential impact" : "No known impact";
-  return { primary, secondary, live: Boolean(cost || schedule || flags.length || rfi.cost_impact || rfi.schedule_impact) };
-}
-
 export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
   const overdue = isOverdue(rfi);
-  const due = dueSummary(rfi);
-  const impact = impactSummary(rfi);
+  const due = rfiDueSummary(rfi);
+  const impact = rfiImpactSummary(rfi);
   const reference = [rfi.discipline, rfi.drawing_reference, rfi.spec_section].filter(Boolean).join(" / ");
   const submitted = [rfi.submitted_by, rfi.submitted_date].filter(Boolean).join(" / ");
   const assigned = rfi.assigned_to || rfi.project_name || "";

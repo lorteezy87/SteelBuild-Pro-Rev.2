@@ -1,6 +1,6 @@
 import React from "react";
 import { Modal, Button, StatusPill, BicPill, PhaseChevron, Icon } from "@/components/design-system";
-import { daysOpen, isOverdue } from "./utils";
+import { daysOpen, isOverdue, formatRfiDate, rfiImpactValue } from "./utils";
 import RfiCopilotPanel from "@/components/rfis/RfiCopilotPanel";
 import { recommendedDownstreamActions } from "@/lib/rfiDownstream";
 
@@ -13,24 +13,6 @@ const STAGES = [
   { id: "ans",   label: "ANSWERED",   color: "var(--status-success)" },
   { id: "cls",   label: "CLOSED",     color: "var(--text-muted)" },
 ];
-
-function formatDate(value) {
-  if (!value) return "No date";
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function impactValue(rfi) {
-  const parts = [];
-  if (rfi.cost_impact) {
-    parts.push(rfi.cost_impact_amount ? `$${Number(rfi.cost_impact_amount).toLocaleString()}` : "Cost impact");
-  }
-  if (rfi.schedule_impact) {
-    parts.push(rfi.schedule_impact_days ? `${rfi.schedule_impact_days} days` : "Schedule impact");
-  }
-  return parts.join(" / ") || "No known impact";
-}
 
 export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO, onDownstreamAction }) {
   if (!rfi) return null;
@@ -77,17 +59,17 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
           </div>
           <div className="rfi-detail-age">
             <Metric label="Age" value={`${age}d`} alert={overdue || age > 14} />
-            <Metric label="Required" value={formatDate(rfi.date_required)} alert={overdue} />
-            <Metric label="Impact" value={impactValue(rfi)} alert={rfi.cost_impact || rfi.schedule_impact} />
+            <Metric label="Required" value={formatRfiDate(rfi.date_required, { withYear: true })} alert={overdue} />
+            <Metric label="Impact" value={rfiImpactValue(rfi)} alert={rfi.cost_impact || rfi.schedule_impact} />
           </div>
         </section>
 
         <section className="rfi-detail-card">
           <div className="rfi-detail-meta-grid">
-            <MetaCell label="Submitted" value={formatDate(rfi.submitted_date)} />
+            <MetaCell label="Submitted" value={formatRfiDate(rfi.submitted_date, { withYear: true })} />
             <MetaCell label="Submitter" value={rfi.submitted_by || "Not recorded"} />
             <MetaCell label="Assigned To" value={rfi.assigned_to || "Not assigned"} />
-            <MetaCell label="Answered" value={rfi.date_answered ? formatDate(rfi.date_answered) : "Pending"} />
+            <MetaCell label="Answered" value={rfi.date_answered ? formatRfiDate(rfi.date_answered, { withYear: true }) : "Pending"} />
           </div>
         </section>
       </div>
@@ -112,7 +94,7 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
           <div className="rfi-detail-body-text">{rfi.answer}</div>
           {rfi.answered_by && (
             <div className="rfi-row-date-sub">
-              Answered by {rfi.answered_by} on {rfi.date_answered ? formatDate(rfi.date_answered) : "No date"}
+              Answered by {rfi.answered_by} on {rfi.date_answered ? formatRfiDate(rfi.date_answered, { withYear: true }) : "No date"}
             </div>
           )}
         </section>

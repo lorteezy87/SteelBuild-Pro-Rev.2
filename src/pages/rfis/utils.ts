@@ -332,3 +332,94 @@ export function downloadRfiAgendaCsv(
   URL.revokeObjectURL(url);
 }
 
+/** Format an ISO date-only string for RFI UI (local midnight parse). */
+export function formatRfiDate(
+  value: string | null | undefined,
+  opts: { withYear?: boolean } = {},
+): string {
+  if (!value) return "No date";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString(
+    "en-US",
+    opts.withYear
+      ? { month: "short", day: "numeric", year: "numeric" }
+      : { month: "short", day: "numeric" },
+  );
+}
+
+export function rfiImpactValue(rfi: {
+  cost_impact?: boolean | null;
+  cost_impact_amount?: number | string | null;
+  schedule_impact?: boolean | null;
+  schedule_impact_days?: number | string | null;
+}): string {
+  const parts: string[] = [];
+  if (rfi.cost_impact) {
+    parts.push(
+      rfi.cost_impact_amount
+        ? `$${Number(rfi.cost_impact_amount).toLocaleString()}`
+        : "Cost impact",
+    );
+  }
+  if (rfi.schedule_impact) {
+    parts.push(
+      rfi.schedule_impact_days
+        ? `${rfi.schedule_impact_days} days`
+        : "Schedule impact",
+    );
+  }
+  return parts.join(" / ") || "No known impact";
+}
+
+export function rfiDueSummary(rfi: {
+  date_required?: string | null;
+  [k: string]: unknown;
+}): { primary: string; secondary: string; late: boolean } {
+  if (!rfi.date_required) {
+    return { primary: "No due date", secondary: `${daysOpen(rfi)}d open`, late: false };
+  }
+  const overdue = isOverdue(rfi);
+  return {
+    primary: formatRfiDate(rfi.date_required),
+    secondary: overdue ? `${daysOpen(rfi)}d open / late` : `${daysOpen(rfi)}d open`,
+    late: overdue,
+  };
+}
+
+export function rfiImpactSummary(rfi: {
+  cost_impact?: boolean | null;
+  cost_impact_amount?: number | string | null;
+  schedule_impact?: boolean | null;
+  schedule_impact_days?: number | string | null;
+  metadata?: Record<string, unknown> | null;
+}): { primary: string; secondary: string; live: boolean } {
+  const m = (rfi.metadata || {}) as Record<string, unknown>;
+  const cost =
+    rfi.cost_impact && rfi.cost_impact_amount
+      ? `$${Number(rfi.cost_impact_amount).toLocaleString()}`
+      : null;
+  const schedule =
+    rfi.schedule_impact && rfi.schedule_impact_days
+      ? `${rfi.schedule_impact_days}d schedule`
+      : null;
+  const flags: string[] = [];
+  if (m.change_order_likely) flags.push("CO likely");
+  if (m.drawing_revision_required) flags.push("rev req'd");
+  if (m.fab_impact) flags.push("fab");
+  if (m.erection_impact) flags.push("erection");
+  const primary = cost || schedule || (flags[0] || "None");
+  const secondary = flags.length
+    ? flags.join(" · ")
+    : cost && schedule
+      ? schedule
+      : rfi.cost_impact || rfi.schedule_impact
+        ? "Potential impact"
+        : "No known impact";
+  return {
+    primary,
+    secondary,
+    live: Boolean(cost || schedule || flags.length || rfi.cost_impact || rfi.schedule_impact),
+  };
+}
+

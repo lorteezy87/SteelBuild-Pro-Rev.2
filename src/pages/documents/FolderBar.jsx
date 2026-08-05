@@ -1,4 +1,3 @@
-import { toggleSelectionId } from "@/pages/shared/selectionHelpers";
 /**
  * FolderBar — sits above the documents list and renders:
  *   - Breadcrumb showing the path from "All Documents" → … → current folder
@@ -23,6 +22,8 @@ import {
   ChevronRight, FolderPlus, Folder, MoreHorizontal,
   CheckSquare, XCircle, Trash2, FolderInput, FolderTree,
 } from "lucide-react";
+import { buildFolderBreadcrumbPath } from "./documentsPageHelpers";
+import { toggleSelectionId } from "@/pages/shared/selectionHelpers";
 
 const PILL_BTN = {
   display: "inline-flex", alignItems: "center", gap: 6,
@@ -64,24 +65,6 @@ const CARD_STYLE = {
   position: "relative",
 };
 
-/**
- * Walk up parent_folder_id chain from currentFolderId to build the
- * breadcrumb path. Bounded depth = 50 to defensively prevent
- * runaway loops if a cycle ever appeared in the data.
- */
-function buildPath(folders, currentFolderId) {
-  if (!currentFolderId) return [];
-  const byId = new Map(folders.map((f) => [f.id, f]));
-  const path = [];
-  let cursor = byId.get(currentFolderId);
-  let safety = 0;
-  while (cursor && safety++ < 50) {
-    path.unshift(cursor);
-    cursor = cursor.parent_folder_id ? byId.get(cursor.parent_folder_id) : null;
-  }
-  return path;
-}
-
 export default function FolderBar({
   folders,                  // all folders for the project (active only)
   currentFolderId,          // null = root
@@ -108,7 +91,7 @@ export default function FolderBar({
     [folders, currentFolderId],
   );
 
-  const path = useMemo(() => buildPath(folders, currentFolderId), [folders, currentFolderId]);
+  const path = useMemo(() => buildFolderBreadcrumbPath(folders, currentFolderId), [folders, currentFolderId]);
 
   const handleNewFolder = () => {
     const name = window.prompt(
