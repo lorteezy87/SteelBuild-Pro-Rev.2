@@ -33,6 +33,15 @@ import { filterDocuments, planFolderDeletion } from "./documents/documentsContro
 import { STATUS_TABS } from "./documents/constants";
 import FolderView from "./documents/FolderView";
 import { normalizeDocument, exportDocsCsv, sortDocuments, countReviewDocuments } from "./documents/utils";
+import {
+  nextActiveFilters,
+  nextCategoryFilters,
+  categoryFilterFromActive,
+  pruneSelectionToAllowed,
+  toggleSelectionId,
+  selectionFromDocs,
+  removeIdFromSelection,
+} from "./documents/documentsPageHelpers";
 import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
 import ListView from "./documents/ListView";
@@ -313,7 +322,7 @@ export default function Documents() {
   };
 
   /* ── Filter + sort ── */
-  const categoryFilter = activeFilters.category?.[0] || "All";
+  const categoryFilter = categoryFilterFromActive(activeFilters);
   const filteredDocs = useMemo(() => {
     const result = filterDocuments({
       docs: allDocuments,
@@ -328,10 +337,7 @@ export default function Documents() {
 
   React.useEffect(() => {
     const allowedIds = new Set(filteredDocs.map((doc) => doc.id));
-    setSelectedIds((previous) => {
-      const next = new Set([...previous].filter((id) => allowedIds.has(id)));
-      return next.size === previous.size ? previous : next;
-    });
+    setSelectedIds((previous) => pruneSelectionToAllowed(previous, allowedIds));
   }, [filteredDocs]);
 
   const reviewCount = useMemo(
@@ -389,11 +395,8 @@ export default function Documents() {
   });
 
   /* ── Handlers ── */
-  const handleFilterChange    = (key, value) => setActiveFilters((prev) => ({ ...prev, [key]: value }));
-  const handleCategoryChange  = (value) => setActiveFilters((prev) => ({
-    ...prev,
-    category: value === "All" ? [] : [value],
-  }));
+  const handleFilterChange    = (key, value) => setActiveFilters((prev) => nextActiveFilters(prev, key, value));
+  const handleCategoryChange  = (value) => setActiveFilters((prev) => nextCategoryFilters(prev, value));
   const handleClearAllFilters = () => { setActiveFilters({}); setSearchQuery(""); setStatusTab("all"); };
   const handleViewDoc         = (doc) => setSelectedDoc(doc);
   const handleEditDoc         = (doc) => setEditingDoc(doc);
@@ -418,12 +421,7 @@ export default function Documents() {
     try {
       await entities.Document.delete(doc.id);
       queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
-      setSelectedIds((previous) => {
-        if (!previous.has(doc.id)) return previous;
-        const next = new Set(previous);
-        next.delete(doc.id);
-        return next;
-      });
+      setSelectedIds((previous) => removeIdFromSelection(previous, doc.id));
       toast.success("Document deleted");
     } catch (err) {
       toast.error(toUserErrorMessage(err, "Failed to delete document"));
@@ -445,14 +443,10 @@ export default function Documents() {
   };
 
   const toggleSelect = useCallback((id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) => toggleSelectionId(prev, id));
   }, []);
 
-  const selectAll = () => setSelectedIds(new Set(filteredDocs.map((d) => d.id)));
+  const selectAll = () => setSelectedIds(selectionFromDocs(filteredDocs));
   const deselectAll = () => setSelectedIds(new Set());
 
   const handleConfirmBulkDeleteDocs = () => {

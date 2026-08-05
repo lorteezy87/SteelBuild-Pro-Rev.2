@@ -7,6 +7,7 @@ import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 // travel together — fix something in the app, fix the doc in the same
 // commit. No extra fetch, no separate hosting, no CORS.
 import TUTORIAL_SOURCE from "../../docs/TUTORIAL.md?raw";
+import { slugify, buildToc, filterMarkdownBySearch } from "./tutorial/tutorialPageHelpers";
 
 /**
  * Tutorial — in-app help / onboarding.
@@ -28,30 +29,6 @@ import TUTORIAL_SOURCE from "../../docs/TUTORIAL.md?raw";
  *     scheduling explained again?"
  */
 
-// Same slug rule the TOC builder uses — keep in sync.
-function slugify(s) {
-  return String(s || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-}
-
-// Pull H2 (and a few H3s) titles out of the markdown to build the TOC.
-// Avoids a full markdown parse — the doc has stable headings with
-// "## N. Section" / "### N.M Subsection" so a regex is enough.
-function buildToc(md) {
-  const out = [];
-  const re = /^(#{2,3})\s+(.+)$/gm;
-  let m;
-  while ((m = re.exec(md)) !== null) {
-    const depth = m[1].length;          // 2 or 3
-    const text = m[2].trim();
-    out.push({ depth, text, id: slugify(text) });
-  }
-  return out;
-}
-
 export default function Tutorial() {
   const [search, setSearch] = useState("");
 
@@ -60,17 +37,10 @@ export default function Tutorial() {
   // Filter mode — when the user types a search term, dim sections
   // (H2 blocks) that have no matching text. We do the filter in the
   // markdown source so the rendered output collapses naturally.
-  const filteredSource = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return TUTORIAL_SOURCE;
-    // Split into H2-headed chunks; keep the chunk if it contains q.
-    const parts = TUTORIAL_SOURCE.split(/^(?=## )/m);
-    const kept = parts.filter((p, i) => {
-      if (i === 0) return true;                 // preamble always shown
-      return p.toLowerCase().includes(q);
-    });
-    return kept.join("");
-  }, [search]);
+  const filteredSource = useMemo(
+    () => filterMarkdownBySearch(TUTORIAL_SOURCE, search),
+    [search],
+  );
 
   return (
     <div className="sb-dashboard-reference-page" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14, height: "100%", overflow: "hidden" }}>
