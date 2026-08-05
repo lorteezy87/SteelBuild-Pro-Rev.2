@@ -6,7 +6,7 @@
  * Short-form label for a constraint type — used on narrow list rows and
  * board cards where the full name wouldn't fit.
  */
-export function abbreviateType(type) {
+export function abbreviateType(type: string | null | undefined): string {
   const map = {
     "Engineering Hold":          "ENGINEER",
     "Approval Hold":             "APPROVAL",
@@ -32,11 +32,12 @@ export function abbreviateType(type) {
 }
 
 /** True if the given constraint is overdue (not resolved/closed AND past due_date). */
-export function isOverdue(c) {
+export function isOverdue(c: { due_date?: string | null; status?: string | null } | null | undefined): boolean {
   if (!c?.due_date) return false;
   if (["Resolved", "Closed"].includes(c.status)) return false;
   return new Date(`${c.due_date}T00:00:00Z`) < new Date();
 }
 
 /** True if the constraint is considered "done" (resolved or closed). */
-export const isResolved = (c) => ["Resolved", "Closed"].includes(c?.status);
+export const isResolved = (c: { status?: string | null } | null | undefined): boolean =>
+  ["Resolved", "Closed"].includes(c?.status || "");

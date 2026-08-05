@@ -9,7 +9,7 @@
  * the boundary so every downstream component gets the same shape.
  */
 
-export function normalizeDocument(d) {
+export function normalizeDocument(d: any): any {
   return {
     ...d,
     projectId:      d.projectId      ?? d.project_id,
@@ -32,7 +32,7 @@ export function normalizeDocument(d) {
   };
 }
 
-export function exportDocsCsv(docs, projectName) {
+export function exportDocsCsv(docs: any[], projectName?: string | null): void {
   const headers = [
     "Document #", "Name", "Category", "Discipline", "Status",
     "Revision", "File Type", "Size (KB)", "Uploaded By", "Upload Date",
@@ -104,18 +104,18 @@ export const SORT_FNS = {
   "doc-num":    (a, b) => (a.documentNumber || "").localeCompare(b.documentNumber || "", undefined, { numeric: true }),
 };
 
-export function sortDocuments(docs, sortKey) {
+export function sortDocuments(docs: any[], sortKey: string): any[] {
   const result = [...docs];
   const fn = SORT_FNS[sortKey];
   if (fn) result.sort(fn);
   return result;
 }
 
-export function countReviewDocuments(docs) {
+export function countReviewDocuments(docs: any[] | null | undefined): number {
   return (docs || []).filter((d) => d.status === "Under Review" || d.status === "Revise & Resubmit").length;
 }
 
-export function groupDocumentsByCategory(docs) {
+export function groupDocumentsByCategory(docs: any[] | null | undefined): Array<{ name: string; docs: any[] }> {
   const folders = {};
   (docs || []).forEach((doc) => {
     const cat = doc.category || "Uncategorized";
