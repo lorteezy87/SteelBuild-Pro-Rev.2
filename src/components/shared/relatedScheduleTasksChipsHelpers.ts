@@ -15,3 +15,13 @@ export const VALID_RELATED_FIELDS = new Set([
   "related_change_order_ids",
   "related_action_item_ids",
 ]);
+
+export const SECTION_LABEL_STYLE: Record<string, string | number> = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  color: "var(--text-muted)",
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  display: "block",
+  marginBottom: 6,
+};

@@ -3,37 +3,13 @@
  * Keeps ID-18 patterns consistent without pulling each page into a control center.
  */
 import React from "react";
+import {
+  REGISTER_FETCH_PANEL_STYLE as panelStyle,
+  REGISTER_FETCH_TITLE_STYLE as titleStyle,
+  REGISTER_FETCH_BODY_STYLE as bodyStyle,
+} from "./registerFetchStatesHelpers";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
-
-const panelStyle = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "48px 24px",
-  background: "var(--bg-surface)",
-  borderRadius: "var(--radius-card)",
-  gap: 16,
-};
-
-const titleStyle = {
-  fontFamily: "var(--font-body)",
-  fontSize: 13,
-  fontWeight: 600,
-  color: "var(--text-secondary)",
-  margin: 0,
-  textAlign: "center",
-};
-
-const bodyStyle = {
-  fontFamily: "var(--font-body)",
-  fontSize: 11,
-  color: "var(--text-muted)",
-  margin: 0,
-  textAlign: "center",
-  maxWidth: 320,
-};
 
 /**
  * Render loading / error / empty / filter-empty / list for a register body.

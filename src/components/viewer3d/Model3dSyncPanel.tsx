@@ -3,6 +3,7 @@
  * Live link health, one-click sync, GUID CSV export — no SQL required.
  */
 import { useMemo } from "react";
+import { MODEL3D_MONO as mono } from "./model3dTabHelpers";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -13,7 +14,7 @@ import {
 } from "@/lib/pieceControl/modelElementLink";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 
-const mono = { fontFamily: "var(--font-mono)" };
+
 
 interface Model3dSyncPanelProps {
   projectId: string;

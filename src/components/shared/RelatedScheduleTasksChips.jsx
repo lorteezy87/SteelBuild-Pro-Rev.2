@@ -26,22 +26,13 @@ import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
 import { computeEffectiveDates } from '@/services/scheduleCascade';
 import { filterTasksLinkedToTarget } from './relatedScheduleTasksHelpers';
-import { fmtMD, VALID_RELATED_FIELDS as VALID_FIELDS } from "./relatedScheduleTasksChipsHelpers";
+import { fmtMD, VALID_RELATED_FIELDS as VALID_FIELDS, SECTION_LABEL_STYLE as sectionLabelStyle } from "./relatedScheduleTasksChipsHelpers";
 
 // Match the asIdArray idiom used in the entity wrapper / DailyLogForm —
 // JSONB columns can come back as arrays OR stringified JSON depending on
 // the supabase-js path. We tolerate both.
 
 // Format a YYYY-MM-DD date as "MMM D" — small chip footprint, no year.
-const sectionLabelStyle = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 9,
-  color: 'var(--text-muted)',
-  letterSpacing: '0.10em',
-  textTransform: 'uppercase',
-  display: 'block',
-  marginBottom: 6,
-};
 
 export default function RelatedScheduleTasksChips({
   projectId,

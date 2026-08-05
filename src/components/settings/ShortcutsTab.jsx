@@ -8,52 +8,14 @@
  * keyboard support discoverable so users actually use it.
  */
 
+import {
+  SHORTCUTS_HEADER_STYLE as headerStyle,
+  SHORTCUTS_GROUP_HEADER_STYLE as groupHeaderStyle,
+  SHORTCUTS_ROW_STYLE as rowStyle,
+  SHORTCUTS_KBD_STYLE as kbdStyle,
+} from "./shortcutsTabStyleHelpers";
 import React from 'react';
 import { KEYBOARD_SHORTCUTS as SHORTCUTS } from './shortcutsTabHelpers';
-
-const headerStyle = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 16,
-  fontWeight: 700,
-  color: 'var(--text-primary)',
-  margin: '0 0 6px 0',
-  textTransform: 'uppercase',
-  letterSpacing: '0.06em',
-};
-
-const groupHeaderStyle = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 9,
-  fontWeight: 700,
-  color: 'var(--text-muted)',
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
-  margin: '24px 0 10px 0',
-};
-
-const rowStyle = {
-  display: 'grid',
-  gridTemplateColumns: '180px 1fr',
-  gap: 12,
-  alignItems: 'center',
-  padding: '8px 12px',
-  borderBottom: '1px solid var(--divider)',
-};
-
-const kbdStyle = {
-  display: 'inline-block',
-  padding: '2px 7px',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  fontWeight: 700,
-  background: 'var(--bg-surface-low)',
-  border: '1px solid var(--border-default)',
-  borderBottom: '2px solid var(--border-default)',
-  borderRadius: 4,
-  color: 'var(--text-secondary)',
-  letterSpacing: '0.04em',
-  marginRight: 4,
-};
 
 
 export default function ShortcutsTab() {
