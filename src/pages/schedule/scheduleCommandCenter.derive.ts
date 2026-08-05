@@ -212,3 +212,17 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
     riskQueue,
   };
 }
+
+/** Display date for schedule CC panels — null → TBD (CLAUDE.md §22). */
+export function fmtScheduleCcDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "TBD";
+  const parsed = parseDateUTC(dateStr);
+  if (!parsed) return "TBD";
+  return parsed.toLocaleDateString("en-US", {
+    month: "numeric",
+    day: "numeric",
+    year: "2-digit",
+    timeZone: "UTC",
+  });
+}
+

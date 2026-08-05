@@ -19,6 +19,7 @@
  * `dueInfoFor` dispatcher with the same source-gating. No behavior change.
  */
 import { useMemo, useState } from "react";
+import { statusPillTone } from "./processBoardPanelHelpers";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -405,23 +406,6 @@ function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: str
   );
 }
 
-/** Stage → a kit Pill tone for the status chip (approximates the stage colour
- *  families: released/IFC → good, OFS/BFA → warn, IFA/OFA → info). */
-function statusPillTone(stage: string): PillTone {
-  switch (stage) {
-    case "Released":
-    case "IFC":
-      return "good";
-    case "OFS":
-    case "BFA":
-      return "warn";
-    case "IFA":
-    case "OFA":
-      return "info";
-    default:
-      return "neutral";
-  }
-}
 
 function DueCardChip({ item }: { item: BoardItem }) {
   const tone: PillTone = item.due.overdue ? "danger" : item.due.dueSoon ? "warn" : "good";

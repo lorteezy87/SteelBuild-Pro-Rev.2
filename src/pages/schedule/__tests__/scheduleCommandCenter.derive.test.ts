@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildScheduleSummary } from "../scheduleCommandCenter.derive";
+import { buildScheduleSummary, fmtScheduleCcDate } from "../scheduleCommandCenter.derive";
 import type { TaskRecord } from "../scheduleCommandCenter.derive";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -326,5 +326,15 @@ describe("buildScheduleSummary — null-date / TBD invariants (CLAUDE.md §22)",
     // isLookaheadTask returns false when both dates are null
     expect(s.inLookahead).toBe(0);
     expect(s.lookaheadQueue).toHaveLength(0);
+  });
+});
+
+describe("fmtScheduleCcDate", () => {
+  it("returns TBD for empty and formats UTC date", () => {
+    expect(fmtScheduleCcDate(null)).toBe("TBD");
+    expect(fmtScheduleCcDate("")).toBe("TBD");
+    const s = fmtScheduleCcDate("2026-08-05");
+    expect(s).not.toBe("TBD");
+    expect(/8\/5\/26|8\/5\/2026/.test(s)).toBe(true);
   });
 });

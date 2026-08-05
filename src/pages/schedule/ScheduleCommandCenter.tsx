@@ -20,25 +20,10 @@ import {
   Pill,
 } from "@/components/command";
 import type { KpiCellDef } from "@/components/command";
-import { buildScheduleSummary } from "./scheduleCommandCenter.derive";
+import { buildScheduleSummary, fmtScheduleCcDate } from "./scheduleCommandCenter.derive";
 import type { TaskRecord, ScheduleSummary } from "./scheduleCommandCenter.derive";
 import { parseDateUTC } from "@/components/schedule/scheduleDateUtils";
 
-// ---------------------------------------------------------------------------
-// Date formatting — uses TBD for null per CLAUDE.md §22
-// ---------------------------------------------------------------------------
-
-function fmtDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "TBD";
-  const d = parseDateUTC(dateStr);
-  if (!d) return "TBD";
-  return d.toLocaleDateString("en-US", {
-    month: "numeric",
-    day: "numeric",
-    year: "2-digit",
-    timeZone: "UTC",
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -218,7 +203,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
                   <div className="cmd-row__meta">
                     {t.phase || "—"}
                     {" · "}
-                    {fmtDate(t.start_date)} – {fmtDate(t.end_date)}
+                    {fmtScheduleCcDate(t.start_date)} – {fmtScheduleCcDate(t.end_date)}
                   </div>
                 </div>
                 {(t.resource_names || t.assigned_to) ? (
@@ -248,7 +233,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
                   <div className="cmd-row__num">{t.task_name || "Untitled milestone"}</div>
                   <div className="cmd-row__meta">
                     {t.wbs_code ? `${t.wbs_code} · ` : ""}
-                    {fmtDate(t.start_date)}
+                    {fmtScheduleCcDate(t.start_date)}
                   </div>
                 </div>
                 <Pill tone={t.status === "Complete" ? "good" : "neutral"}>
