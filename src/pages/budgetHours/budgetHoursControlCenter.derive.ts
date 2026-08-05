@@ -123,8 +123,53 @@ export function fmtPct(pct: number): string {
   return `${rounded > 0 ? "+" : ""}${rounded.toFixed(1)}%`;
 }
 
+/** Classic page cell color (token strings). Control Center uses varianceTone. */
+export function varianceColor(pct: number): string {
+  if (pct >= 10) return "var(--status-error)";
+  if (pct > 0) return "var(--status-warning)";
+  return "var(--status-success)";
+}
+
+/**
+ * Display helper for cells where 0 should read as blank so the user
+ * doesn't have to delete the placeholder zero before typing.
+ */
+export function fmtHoursOrBlank(n: unknown): string {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v === 0) return "—";
+  return v.toFixed(1);
+}
+
+export function filterLiveBudgetRows<T extends { is_deleted?: boolean | null }>(rows: T[]): T[] {
+  return rows.filter((r) => !r?.is_deleted);
+}
+
+export function partitionBudgetRows(rows: BudgetHourRow[]) {
+  return {
+    standardRows: rows.filter((r) => r.category === "Standard" && !r.is_specialty),
+    specialtyRows: rows.filter((r) => r.category === "Specialty" || r.is_specialty),
+    missesRow: rows.find((r) => r.category === "Misses") || null,
+  };
+}
+
+export function computeBudgetTotals(
+  rows: BudgetHourRow[],
+  wpsById: Map<string, WorkPackageRow>,
+) {
+  const real = rows.filter((r) => r.category !== "Misses");
+  let sb = 0, sa = 0, fb = 0, fa = 0;
+  for (const r of real) {
+    sb += Number(r.shop_hours_budget) || 0;
+    fb += Number(r.field_hours_budget) || 0;
+    const eff = effectiveActuals(r, wpsById);
+    sa += eff.shop;
+    fa += eff.field;
+  }
+  return { sb, sa, fb, fa };
+}
+
 /** Roll actuals from linked work packages when available, else use manual entry. */
-function effectiveActuals(
+export function effectiveActuals(
   row: BudgetHourRow,
   wpsById: Map<string, WorkPackageRow>,
 ): { shop: number; field: number; linked: boolean } {
