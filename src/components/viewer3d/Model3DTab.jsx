@@ -517,7 +517,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
                     {measureResult.meters != null ? ` · ${measureResult.meters.toFixed(3)} m` : ""}
                   </div>
                   <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    Click two more points for a new measure. Toggle Measure off to clear.
+                    Nearest 1/16″. Click two more points for a new measure. Toggle Measure off to clear.
                   </div>
                 </>
               ) : measureResult?.phase === "a" ? (
@@ -526,7 +526,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
                 </div>
               ) : (
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                  Click two points on the model. Ends snap to nearest vertices (~3″).
+                  Click two points on the model. Ends snap to nearest vertices or edges (~2″). Result rounds to 1/16″.
                 </div>
               )}
               <button
@@ -540,7 +540,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                Point-to-point distance with vertex snap. Uses model units (meters → ft-in).
+                Point-to-point distance with vertex/edge snap. Displayed to the nearest 1/16″.
               </div>
               <button type="button" onClick={() => setMeasureMode(true)} className="sbd-btn" style={{ alignSelf: "flex-start" }}>
                 Start measure
