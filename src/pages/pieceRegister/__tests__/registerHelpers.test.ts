@@ -117,6 +117,7 @@ import {
   EMPTY_PIECE_REGISTER_FILTERS,
   PIECE_REGISTER_VIEW_IDS,
   resolvePieceRegisterView,
+  PIECE_REGISTER_VIEW_LABELS,
 } from "../registerHelpers";
 
 describe("piece register view + empty filters", () => {
@@ -125,5 +126,6 @@ describe("piece register view + empty filters", () => {
     expect(resolvePieceRegisterView("nope")).toBe("overview");
     expect(EMPTY_PIECE_REGISTER_FILTERS.hold).toBe("all");
     expect(PIECE_REGISTER_VIEW_IDS).toContain("register");
+    expect(PIECE_REGISTER_VIEW_LABELS.register).toBe("Register");
   });
 });

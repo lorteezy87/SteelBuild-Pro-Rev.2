@@ -208,3 +208,14 @@ export function resolvePieceRegisterView(
     ? (id as PieceRegisterViewId)
     : fallback;
 }
+
+export const PIECE_REGISTER_VIEW_LABELS: Record<PieceRegisterViewId, string> = {
+  overview: "Overview",
+  register: "Register",
+  board: "Board",
+  import: "Imports",
+  relationships: "Lots & links",
+  production: "Production",
+  logistics: "Logistics",
+  settings: "Settings",
+};

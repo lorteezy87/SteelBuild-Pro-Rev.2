@@ -88,6 +88,8 @@ import {
   buildSelectedPieceImpact,
   IMPORT_DECISION_TONE,
   EMPTY_PIECE_REGISTER_FILTERS,
+  PIECE_REGISTER_VIEW_LABELS,
+  PIECE_REGISTER_VIEW_IDS,
 } from "./pieceRegister/registerHelpers";
 import { PieceRegisterArchiveDialog } from "./pieceRegister/PieceRegisterArchiveDialog";
 import { PieceRegisterRegisterView } from "./pieceRegister/PieceRegisterRegisterView";
@@ -100,18 +102,24 @@ import PieceRegisterOverview from "./pieceRegister/PieceRegisterOverview";
 
 const EMPTY_FILTERS = EMPTY_PIECE_REGISTER_FILTERS;
 
-const REGISTER_VIEWS = [
-  { id: "overview", label: "Overview", icon: Boxes },
-  { id: "register", label: "Register", icon: PackageOpen },
-  { id: "board", label: "Board", icon: LayoutGrid },
-  { id: "import", label: "Imports", icon: FileUp },
-  { id: "relationships", label: "Lots & links", icon: GitBranch },
-  { id: "production", label: "Production", icon: Factory },
-  { id: "logistics", label: "Logistics", icon: Truck },
-  { id: "settings", label: "Settings", icon: Settings2 },
-] as const;
+const REGISTER_VIEW_ICONS = {
+  overview: Boxes,
+  register: PackageOpen,
+  board: LayoutGrid,
+  import: FileUp,
+  relationships: GitBranch,
+  production: Factory,
+  logistics: Truck,
+  settings: Settings2,
+} as const;
 
-type PieceRegisterView = (typeof REGISTER_VIEWS)[number]["id"];
+const REGISTER_VIEWS = PIECE_REGISTER_VIEW_IDS.map((id) => ({
+  id,
+  label: PIECE_REGISTER_VIEW_LABELS[id],
+  icon: REGISTER_VIEW_ICONS[id],
+}));
+
+type PieceRegisterView = (typeof PIECE_REGISTER_VIEW_IDS)[number];
 
 export default function PieceRegister() {
   useCommandSkin();
