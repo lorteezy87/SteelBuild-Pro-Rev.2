@@ -26,6 +26,8 @@
  *   - Filter is_deleted on every list (inherited from entity
  *     soft-delete contract; defensive in the in-page useMemo too)
  *   - TanStack Query + entity clients + inline style objects
+ *
+ * Pure derive → field/fieldPageHelpers.ts; presentational UI → field/FieldUi.tsx
  */
 
 import React, { useMemo } from "react";
@@ -46,46 +48,42 @@ import {
   CheckSquare,
   Truck,
   Plus,
-  ArrowRight,
-  CalendarDays,
-  Cloud,
-  Users,
-  AlertOctagon,
   ListChecks,
 } from "lucide-react";
 import { localToday } from "@/utils/dates";
+import {
+  startOfWeekISO,
+  startOfMonthISO,
+  startOfYearISO,
+  filterLiveRecords,
+  findTodayLog,
+  countPhotosOnDate,
+  countPhotosSince,
+  countOpenPunch,
+  countOpenInspections,
+  countSafetyYtd,
+  countQcSince,
+  countOpenSafety,
+  countTodayActivity,
+  buildActionFeed,
+  buildWeekDays,
+  selectRecentLogs,
+  selectRecentPhotos,
+} from "./field/fieldPageHelpers";
+import {
+  FieldFastCaptureRail,
+  TodayExecutionStrip,
+  SubPanel,
+  SectionLabel,
+  EmptyHint,
+  DailyLogPreview,
+  LogFeedRow,
+  ActionRow,
+  PhotoThumb,
+  WeekActivityStrip,
+} from "./field/FieldUi";
 
 const today = localToday;
-
-function startOfWeekISO() {
-  const now = new Date();
-  const day = now.getDay();
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(now.getFullYear(), now.getMonth(), diff).toISOString().slice(0, 10);
-}
-
-function startOfMonthISO() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-}
-
-function startOfYearISO() {
-  const now = new Date();
-  return new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
-}
-
-function safeArray(v) {
-  return Array.isArray(v) ? v : [];
-}
-
-function fmtShortDate(iso) {
-  if (!iso) return "—";
-  try {
-    const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch { return iso; }
-}
 
 export default function Field() {
   const { activeProject } = useProjectContext();
@@ -164,13 +162,13 @@ export default function Field() {
   // Defensive in-memory is_deleted filter — the entity client already
   // skips deleted rows on filter/list, but a stale cache from an
   // earlier session could surface them. Belt + suspenders.
-  const liveLogs        = useMemo(() => logs.filter((r) => !r.is_deleted), [logs]);
-  const livePhotos      = useMemo(() => photos.filter((r) => !r.is_deleted), [photos]);
-  const livePunchlist   = useMemo(() => punchlist.filter((r) => !r.is_deleted), [punchlist]);
-  const liveInspections = useMemo(() => inspections.filter((r) => !r.is_deleted), [inspections]);
-  const liveSafety      = useMemo(() => safety.filter((r) => !r.is_deleted), [safety]);
-  const liveQC          = useMemo(() => qc.filter((r) => !r.is_deleted), [qc]);
-  const liveDeliveries  = useMemo(() => deliveries.filter((r) => !r.is_deleted), [deliveries]);
+  const liveLogs        = useMemo(() => filterLiveRecords(logs), [logs]);
+  const livePhotos      = useMemo(() => filterLiveRecords(photos), [photos]);
+  const livePunchlist   = useMemo(() => filterLiveRecords(punchlist), [punchlist]);
+  const liveInspections = useMemo(() => filterLiveRecords(inspections), [inspections]);
+  const liveSafety      = useMemo(() => filterLiveRecords(safety), [safety]);
+  const liveQC          = useMemo(() => filterLiveRecords(qc), [qc]);
+  const liveDeliveries  = useMemo(() => filterLiveRecords(deliveries), [deliveries]);
 
   const deliveryMetrics = useMemo(
     () => buildDeliveryMetrics(liveDeliveries, []),
@@ -178,144 +176,90 @@ export default function Field() {
   );
 
   const todayLog = useMemo(
-    () => liveLogs.find((l) => String(l.date || "").slice(0, 10) === todayIso) || null,
+    () => findTodayLog(liveLogs, todayIso),
     [liveLogs, todayIso],
   );
 
   const photosToday = useMemo(
-    () => livePhotos.filter((p) => String(p.taken_date || p.created_at || "").slice(0, 10) === todayIso).length,
+    () => countPhotosOnDate(livePhotos, todayIso),
     [livePhotos, todayIso],
   );
 
   const photosThisWeek = useMemo(
-    () => livePhotos.filter((p) => String(p.taken_date || p.created_at || "").slice(0, 10) >= weekStart).length,
+    () => countPhotosSince(livePhotos, weekStart),
     [livePhotos, weekStart],
   );
 
   const openPunch = useMemo(
-    () => livePunchlist.filter((p) => p.status !== "Completed" && p.status !== "Cancelled" && p.status !== "Deferred").length,
+    () => countOpenPunch(livePunchlist),
     [livePunchlist],
   );
 
   const openInspections = useMemo(
-    () => liveInspections.filter((i) => i.status === "Scheduled" || i.status === "In Progress").length,
+    () => countOpenInspections(liveInspections),
     [liveInspections],
   );
 
   const safetyYTD = useMemo(
-    () => liveSafety.filter((i) => String(i.incident_date || "").slice(0, 10) >= yearStart).length,
+    () => countSafetyYtd(liveSafety, yearStart),
     [liveSafety, yearStart],
   );
 
   const qcThisMonth = useMemo(
-    () => liveQC.filter((r) => String(r.test_date || "").slice(0, 10) >= monthStart).length,
+    () => countQcSince(liveQC, monthStart),
     [liveQC, monthStart],
   );
 
   // Today's-activity headline count
-  const todayActivityCount = useMemo(() => {
-    let n = 0;
-    n += todayLog ? 1 : 0;
-    n += photosToday;
-    n += livePunchlist.filter((p) => String(p.created_at || "").slice(0, 10) === todayIso).length;
-    n += liveInspections.filter((i) => String(i.inspection_date || "").slice(0, 10) === todayIso).length;
-    n += liveSafety.filter((s) => String(s.incident_date || "").slice(0, 10) === todayIso).length;
-    n += deliveryMetrics.dueToday.length;
-    return n;
-  }, [todayLog, photosToday, livePunchlist, liveInspections, liveSafety, todayIso, deliveryMetrics.dueToday.length]);
+  const todayActivityCount = useMemo(
+    () =>
+      countTodayActivity({
+        todayLog,
+        photosToday,
+        livePunchlist,
+        liveInspections,
+        liveSafety,
+        todayIso,
+        deliveryDueTodayCount: deliveryMetrics.dueToday.length,
+      }),
+    [todayLog, photosToday, livePunchlist, liveInspections, liveSafety, todayIso, deliveryMetrics.dueToday.length],
+  );
 
   // ── Action Items feed (open punch / open inspections / unresolved safety) ──
   const actionFeed = useMemo(() => {
-    const items = [];
-    for (const p of livePunchlist) {
-      if (p.status === "Completed" || p.status === "Cancelled" || p.status === "Deferred") continue;
-      items.push({
-        key: `punch-${p.id}`,
-        type: "punch",
-        date: p.target_completion_date || p.created_at,
-        title: p.description || "(no description)",
-        sub: p.location || "",
-        status: p.status,
-        priority: p.priority,
-        color: p.priority === "Critical" ? "var(--status-error)"
-          : p.priority === "High" ? "var(--status-warning)"
-          : "var(--accent)",
-        onClick: () => navigate(`/Punchlist?id=${p.id}`),
-      });
-    }
-    for (const i of liveInspections) {
-      if (i.status !== "Scheduled" && i.status !== "In Progress") continue;
-      items.push({
-        key: `insp-${i.id}`,
-        type: "inspection",
-        date: i.inspection_date || i.created_at,
-        title: `${i.inspection_type || "Inspection"}${i.location ? ` · ${i.location}` : ""}`,
-        sub: i.inspector_name || "",
-        status: i.status,
-        color: "var(--status-info)",
-        onClick: () => navigate(`/Inspections?id=${i.id}`),
-      });
-    }
-    for (const s of liveSafety) {
-      if (s.status === "Closed" || s.status === "Completed") continue;
-      items.push({
-        key: `safety-${s.id}`,
-        type: "safety",
-        date: s.incident_date || s.created_at,
-        title: `${s.severity || ""} ${s.incident_type || "Incident"}`.trim(),
-        sub: s.location || "",
-        status: s.status,
-        color: s.severity === "Critical" ? "var(--status-error)"
-          : s.severity === "High" ? "var(--status-warning)"
-          : "var(--status-info)",
-        onClick: () => navigate(`/Safety?id=${s.id}`),
-      });
-    }
-    for (const d of deliveryMetrics.exceptions.slice(0, 8)) {
-      items.push({
-        key: `delivery-${d.id}`,
-        type: "delivery",
-        date: d.scheduled_date || d.required_date || d.created_at,
-        title: d.delivery_title || d.load_number || d.vendor || "Delivery exception",
-        sub: d._signals?.flags?.[0]?.label || d.receiving_location || "",
-        status: d.status,
-        color: d._signals?.risk === "high" ? "var(--status-error)"
-          : d._signals?.risk === "medium" ? "var(--status-warning)"
-          : "var(--phase-delivery)",
-        onClick: () => navigate("/Deliveries?receive=1"),
-      });
-    }
-    items.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
-    return items;
+    const items = buildActionFeed({
+      livePunchlist,
+      liveInspections,
+      liveSafety,
+      deliveryExceptions: deliveryMetrics.exceptions,
+    });
+    return items.map((item) => ({
+      ...item,
+      onClick: () => navigate(item.path),
+    }));
   }, [livePunchlist, liveInspections, liveSafety, deliveryMetrics.exceptions, navigate]);
 
   // 7-day activity bars (events per day) for the mini chart in this week section
-  const weekDays = useMemo(() => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
-      const dayOfWeek = d.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 1);
-      let count = 0;
-      count += liveLogs.filter((l) => String(l.date || "").slice(0, 10) === iso).length;
-      count += livePhotos.filter((p) => String(p.taken_date || "").slice(0, 10) === iso).length;
-      count += livePunchlist.filter((p) => String(p.created_at || "").slice(0, 10) === iso).length;
-      count += liveInspections.filter((i) => String(i.inspection_date || "").slice(0, 10) === iso).length;
-      count += liveDeliveries.filter((delivery) => String(delivery.scheduled_date || "").slice(0, 10) === iso).length;
-      days.push({ iso, day: dayOfWeek, count });
-    }
-    return days;
-  }, [liveLogs, livePhotos, livePunchlist, liveInspections, liveDeliveries]);
+  const weekDays = useMemo(
+    () =>
+      buildWeekDays({
+        liveLogs,
+        livePhotos,
+        livePunchlist,
+        liveInspections,
+        liveDeliveries,
+      }),
+    [liveLogs, livePhotos, livePunchlist, liveInspections, liveDeliveries],
+  );
 
   const recentLogs = useMemo(
-    () => [...liveLogs]
-      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
-      .slice(0, 4),
+    () => selectRecentLogs(liveLogs, 4),
     [liveLogs],
   );
 
-  const recentPhotos = useMemo(() => livePhotos.slice(0, 12), [livePhotos]);
+  const recentPhotos = useMemo(() => selectRecentPhotos(livePhotos, 12), [livePhotos]);
+
+  const safetyOpen = useMemo(() => countOpenSafety(liveSafety), [liveSafety]);
 
   const tiles = [
     {
@@ -467,7 +411,7 @@ export default function Field() {
         todayLog={todayLog}
         photosToday={photosToday}
         openPunch={openPunch}
-        safetyOpen={liveSafety.filter((s) => s.status !== "Closed" && s.status !== "Completed").length}
+        safetyOpen={safetyOpen}
         deliveryDueToday={deliveryMetrics.dueToday.length}
         deliveryLate={deliveryMetrics.overdue.length}
       />
@@ -582,512 +526,6 @@ export default function Field() {
           </SubPanel>
         </>
       )}
-    </div>
-  );
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────
-
-function FieldFastCaptureRail({ actions }) {
-  return (
-    <div className="field-fast-capture-rail" aria-label="Field quick actions">
-      {actions.map((action) => {
-        const Icon = action.icon;
-        return (
-          <button
-            key={action.key}
-            type="button"
-            className="field-fast-action"
-            onClick={action.onClick}
-            style={{ "--field-action-color": action.color }}
-            aria-label={action.label}
-          >
-            <span className="field-fast-action-icon">
-              <Icon size={18} />
-            </span>
-            <span className="field-fast-action-copy">
-              <strong>{action.label}</strong>
-              <small>{action.sub}</small>
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function TodayExecutionStrip({
-  todayLog,
-  photosToday,
-  openPunch,
-  safetyOpen,
-  deliveryDueToday,
-  deliveryLate,
-}) {
-  const stats = [
-    {
-      key: "crew",
-      label: "Crew",
-      value: todayLog ? todayLog.headcount || 0 : "TBD",
-      tone: todayLog ? "var(--status-success-bright)" : "var(--text-muted)",
-    },
-    {
-      key: "hours",
-      label: "Hours",
-      value: todayLog ? todayLog.hours_worked || 0 : "TBD",
-      tone: todayLog ? "var(--status-success-bright)" : "var(--text-muted)",
-    },
-    { key: "photos", label: "Photos", value: photosToday, tone: "var(--accent)" },
-    {
-      key: "punch",
-      label: "Open Punch",
-      value: openPunch,
-      tone: openPunch ? "var(--status-warning-bright)" : "var(--status-success-bright)",
-    },
-    {
-      key: "safety",
-      label: "Open Safety",
-      value: safetyOpen,
-      tone: safetyOpen ? "var(--status-error-bright)" : "var(--status-success-bright)",
-    },
-    {
-      key: "delivery",
-      label: "Loads",
-      value: deliveryLate ? `${deliveryLate} late` : deliveryDueToday,
-      tone: deliveryLate ? "var(--status-error-bright)" : "var(--phase-delivery)",
-    },
-  ];
-
-  return (
-    <div className="field-today-strip" aria-label="Today's field execution status">
-      {stats.map((stat) => (
-        <div key={stat.key} className="field-today-stat" style={{ "--field-stat-color": stat.tone }}>
-          <span>{stat.label}</span>
-          <strong>{stat.value}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SubPanel({ title, icon: IconCmp, count, cta, children }) {
-  return (
-    <div className="field-sub-panel" style={{
-      background: "var(--bg-surface)",
-      border: "1px solid var(--border-default)",
-      borderRadius: 10,
-      padding: 16,
-    }}>
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 12,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {IconCmp && <IconCmp size={14} color="var(--accent)" />}
-          <span style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            color: "var(--text-secondary)",
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-          }}>
-            {title}
-            {Number.isFinite(count) && (
-              <span style={{ marginLeft: 6, color: "var(--text-muted)" }}>· {count}</span>
-            )}
-          </span>
-        </div>
-        {cta && (
-          <button
-            onClick={cta.onClick}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              color: "var(--accent)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            {cta.label} <ArrowRight size={10} />
-          </button>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function SectionLabel({ children }) {
-  return (
-    <div style={{
-      fontFamily: "var(--font-mono)",
-      fontSize: 9,
-      fontWeight: 700,
-      color: "var(--text-muted)",
-      letterSpacing: "0.10em",
-      textTransform: "uppercase",
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function EmptyHint({ text }) {
-  return (
-    <div style={{
-      fontFamily: "var(--font-body)",
-      fontSize: 12,
-      color: "var(--text-muted)",
-      fontStyle: "italic",
-      textAlign: "center",
-      padding: "20px 8px",
-    }}>
-      {text}
-    </div>
-  );
-}
-
-function DailyLogPreview({ log, onClick }) {
-  const photos = safeArray(log.photos);
-  return (
-    <div
-      className="field-daily-log-preview"
-      onClick={onClick}
-      style={{
-        padding: 12,
-        background: "var(--bg-surface-low)",
-        border: "1px solid var(--border-default)",
-        borderRadius: 8,
-        cursor: "pointer",
-        transition: "border-color 0.12s",
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          fontWeight: 700,
-          color: "var(--accent)",
-          letterSpacing: "0.10em",
-          textTransform: "uppercase",
-        }}>
-          {fmtShortDate(log.date)} · TODAY
-        </span>
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-muted)",
-        }}>
-          {log.superintendent || "—"}
-        </span>
-      </div>
-      <div className="field-log-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
-        <Stat icon={Users}        label="Crew"     value={log.headcount || 0} />
-        <Stat icon={CalendarDays} label="Hours"    value={log.hours_worked || 0} />
-        <Stat icon={Cloud}        label="Weather"  value={log.weather_description || "—"} small />
-        <Stat icon={AlertOctagon} label="Incidents" value={log.safety_incidents || 0} />
-      </div>
-      {log.activities && (
-        <div style={{
-          fontFamily: "var(--font-body)",
-          fontSize: 11,
-          color: "var(--text-secondary)",
-          lineHeight: 1.5,
-          maxHeight: 64,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          display: "-webkit-box",
-          WebkitLineClamp: 3,
-          WebkitBoxOrient: "vertical",
-        }}>
-          {log.activities}
-        </div>
-      )}
-      {photos.length > 0 && (
-        <div style={{
-          marginTop: 8,
-          fontFamily: "var(--font-mono)",
-          fontSize: 9,
-          color: "var(--accent)",
-        }}>
-          📷 {photos.length} photo{photos.length === 1 ? "" : "s"}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Stat({ icon: IconCmp, label, value, small }) {
-  return (
-    <div>
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        fontFamily: "var(--font-mono)",
-        fontSize: 8,
-        color: "var(--text-muted)",
-        letterSpacing: "0.10em",
-        textTransform: "uppercase",
-        marginBottom: 2,
-      }}>
-        {IconCmp && <IconCmp size={9} />}
-        {label}
-      </div>
-      <div style={{
-        fontFamily: small ? "var(--font-body)" : "var(--font-mono)",
-        fontSize: small ? 11 : 14,
-        fontWeight: 600,
-        color: "var(--text-primary)",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-      }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function LogFeedRow({ log, onClick }) {
-  return (
-    <div
-      className="field-log-feed-row"
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 8px",
-        background: "var(--bg-page)",
-        border: "1px solid var(--divider)",
-        borderRadius: 4,
-        cursor: "pointer",
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--divider)")}
-    >
-      <span style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 9,
-        fontWeight: 700,
-        color: "var(--accent)",
-        letterSpacing: "0.06em",
-      }}>
-        {fmtShortDate(log.date)}
-      </span>
-      <span style={{
-        flex: 1,
-        fontFamily: "var(--font-body)",
-        fontSize: 11,
-        color: "var(--text-secondary)",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-      }}>
-        {log.activities || "(no narrative)"}
-      </span>
-      <span style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 9,
-        color: "var(--text-muted)",
-      }}>
-        {log.headcount || 0}× · {log.hours_worked || 0}h
-      </span>
-      {safeArray(log.photos).length > 0 && (
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 9,
-          color: "var(--accent)",
-        }}>
-          📷 {safeArray(log.photos).length}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function ActionRow({ item }) {
-  return (
-    <div
-      className="field-action-row"
-      onClick={item.onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 8px",
-        background: "var(--bg-page)",
-        border: "1px solid var(--divider)",
-        borderLeft: `3px solid ${item.color}`,
-        borderRadius: 4,
-        cursor: "pointer",
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--divider)")}
-    >
-      <span style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 8,
-        fontWeight: 700,
-        color: item.color,
-        letterSpacing: "0.10em",
-        textTransform: "uppercase",
-        minWidth: 56,
-      }}>
-        {item.type}
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontFamily: "var(--font-body)",
-          fontSize: 11,
-          color: "var(--text-primary)",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}>
-          {item.title}
-        </div>
-        {item.sub && (
-          <div style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--text-muted)",
-          }}>
-            {item.sub}
-          </div>
-        )}
-      </div>
-      <span style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 9,
-        color: "var(--text-muted)",
-      }}>
-        {fmtShortDate(item.date)}
-      </span>
-    </div>
-  );
-}
-
-function PhotoThumb({ photo, onClick }) {
-  const url = photo.file_url || photo.path || "";
-  return (
-    <div
-      className="field-photo-thumb"
-      onClick={onClick}
-      title={photo.title || photo.file_name || ""}
-      style={{
-        width: 88,
-        height: 88,
-        flexShrink: 0,
-        borderRadius: 6,
-        border: "1px solid var(--border-default)",
-        overflow: "hidden",
-        background: "var(--bg-input)",
-        cursor: "pointer",
-        position: "relative",
-      }}
-    >
-      {url && (
-        <img
-          src={url}
-          alt={photo.title || photo.file_name || "photo"}
-          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          onError={(e) => { e.currentTarget.style.display = "none"; }}
-        />
-      )}
-      {photo.category && (
-        <div style={{
-          position: "absolute",
-          bottom: 2,
-          left: 2,
-          right: 2,
-          background: "color-mix(in srgb, var(--bg-base) 80%, transparent)",
-          color: "var(--on-accent)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          fontWeight: 700,
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-          padding: "2px 4px",
-          borderRadius: 2,
-          textAlign: "center",
-        }}>
-          {photo.category}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function WeekActivityStrip({ days }) {
-  const max = Math.max(1, ...days.map((d) => d.count));
-  const total = days.reduce((s, d) => s + d.count, 0);
-  return (
-    <div className="field-week-strip" style={{
-      background: "var(--bg-surface)",
-      border: "1px solid var(--border-default)",
-      borderRadius: 10,
-      padding: "12px 16px",
-    }}>
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 10,
-      }}>
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 9,
-          fontWeight: 700,
-          color: "var(--text-muted)",
-          letterSpacing: "0.10em",
-          textTransform: "uppercase",
-        }}>
-          7-Day Activity · {total} events
-        </span>
-      </div>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(7, 1fr)",
-        gap: 6,
-        height: 50,
-        alignItems: "end",
-      }}>
-        {days.map((d) => (
-          <div key={d.iso} title={`${d.iso}: ${d.count} events`}>
-            <div style={{
-              height: `${Math.max(2, (d.count / max) * 40)}px`,
-              background: d.count > 0 ? "var(--accent)" : "var(--border-default)",
-              borderRadius: 2,
-              transition: "height 0.2s",
-            }} />
-            <div style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 8,
-              color: "var(--text-muted)",
-              textAlign: "center",
-              marginTop: 4,
-              letterSpacing: "0.06em",
-            }}>
-              {d.day}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
