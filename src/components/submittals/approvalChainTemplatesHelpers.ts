@@ -20,3 +20,7 @@ export function normalizeCustomApprovalTemplates(
 }
 
 export const APPROVAL_TEMPLATE_MONO = { fontFamily: "var(--font-mono)" } as const;
+
+export function buildPartySuggestions(bicChoices: readonly string[]): string[] {
+  return Array.from(new Set([...bicChoices, "PM", "Fabricator"]));
+}

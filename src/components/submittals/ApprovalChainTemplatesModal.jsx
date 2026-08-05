@@ -19,13 +19,14 @@ import { getChainTemplates, normalizeChain } from "@/lib/approvalChains";
 import {
   normalizeCustomApprovalTemplates,
   APPROVAL_TEMPLATE_MONO as mono,
+  buildPartySuggestions,
 } from "./approvalChainTemplatesHelpers";
 import { BIC_CHOICES } from "@/pages/submittals/format";
 
 
 // Common parties for the step picker — the canonical ball-in-court list plus the
 // internal/handoff roles users route through. Free text is still allowed.
-const PARTY_SUGGESTIONS = Array.from(new Set([...BIC_CHOICES, "PM", "Fabricator"]));
+const PARTY_SUGGESTIONS = buildPartySuggestions(BIC_CHOICES);
 
 const newKey = () => `tpl-${Math.random().toString(36).slice(2, 9)}`;
 

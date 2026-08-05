@@ -5,7 +5,10 @@
  * addSubmittalRound, and submittals.status stays the workflow truth (§20).
  */
 import React, { useMemo, useState } from "react";
-import { APPROVAL_CHAIN_MONO as mono } from "./approvalChainPanelHelpers";
+import {
+  APPROVAL_CHAIN_MONO as mono,
+  STEP_CHIP_PALETTE,
+} from "./approvalChainPanelHelpers";
 import { Check, GitBranch, Settings, X } from "lucide-react";
 import {
   chainState,
@@ -17,11 +20,7 @@ import ApprovalChainTemplatesModal from "@/components/submittals/ApprovalChainTe
 
 
 function StepChip({ step, state }) {
-  const palette = {
-    done:     { color: "var(--status-success)", border: "color-mix(in srgb, var(--status-success) 45%, transparent)", bg: "color-mix(in srgb, var(--status-success) 12%, transparent)" },
-    current:  { color: "var(--on-accent)", border: "var(--accent)", bg: "var(--accent)" },
-    upcoming: { color: "var(--text-muted)", border: "var(--border-default)", bg: "transparent" },
-  }[state];
+  const palette = STEP_CHIP_PALETTE[state] || STEP_CHIP_PALETTE.upcoming;
   return (
     <span
       title={state === "current" ? `${step.party} currently holds the ball` : step.party}
