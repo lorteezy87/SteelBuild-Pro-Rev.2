@@ -25,28 +25,42 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { toast } from "sonner";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
-import { KpiTile as KpiTileRaw, Modal as ModalRaw, BulkActionBar as BulkActionBarRaw, Button as ButtonRaw } from "@/components/design-system";
-import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import {
-  Archive, Clock, Eye, Inbox, Mail, PenSquare, Search, Send, Settings, Star, XCircle,
-} from "lucide-react";
+import { Modal as ModalRaw } from "@/components/design-system";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
-import { DEFAULT_LABELS, FOLDERS, getLabelColor, useWindowWidth } from "./emailInbox/constants";
-import { EmailBodyContent, EmailDetail, EmailRow, MobileDetailFooter } from "./emailInbox/components";
+import { useWindowWidth } from "./emailInbox/constants";
+import { EmailBodyContent, EmailDetail, MobileDetailFooter } from "./emailInbox/components";
 import { ComposeEmailModal, CreateRecordModal, LinkToExistingModal, ReplyEmailModal } from "./emailInbox/modals";
 import type { EmailAttachment, EmailMessage, ReplyMode } from "./emailInbox/types";
+import {
+  groupAttachmentsByMessage,
+  collectAllLabels,
+  filterMessages,
+  computeEmailStats,
+  computeFolderCounts,
+  labelsWithAdded,
+  labelsWithout,
+  allFilteredSelected,
+  nextSelectedIdsForToggleAll,
+  nextSelectedIdsForToggle,
+} from "./emailInbox/emailInboxHelpers";
+import {
+  InboxHeader,
+  EmailKpiStrip,
+  FolderSidebar,
+  EmailListToolbar,
+  EmailListBody,
+  DetailEmptyState,
+  EmailBulkBar,
+} from "./emailInbox/EmailInboxUi";
 
 // design-system primitives are still .jsx — type them permissively at the
 // boundary until the design system is converted. Removable once it is typed.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
-const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const Modal = ModalRaw as unknown as ComponentType<AnyProps>;
-const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
-const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 
 export default function EmailInbox() {
   const projectId = useProjectId();
@@ -101,16 +115,10 @@ export default function EmailInbox() {
     ["email-attachments", projectId],
   ]);
 
-  const attachmentsByMessage = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    attachments.forEach((att) => {
-      const messageId = att.message_id;
-      if (messageId == null) return;
-      if (!map[messageId]) map[messageId] = [];
-      map[messageId].push(att);
-    });
-    return map;
-  }, [attachments]);
+  const attachmentsByMessage = useMemo(
+    () => groupAttachmentsByMessage(attachments),
+    [attachments],
+  );
 
   // ── Mutations ──────────────────────────────────────────────────────
   const updateMut = useMutation({
@@ -134,56 +142,19 @@ export default function EmailInbox() {
   });
 
   // ── Collect all labels used across messages ────────────────────────
-  const allLabels = useMemo(() => {
-    const labelSet = new Set(DEFAULT_LABELS);
-    messages.forEach((m) => {
-      const labels = Array.isArray(m.labels) ? m.labels : [];
-      labels.forEach((l) => labelSet.add(l));
-    });
-    return Array.from(labelSet).sort();
-  }, [messages]);
+  const allLabels = useMemo(() => collectAllLabels(messages), [messages]);
 
   // ── Filtering ──────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    const folder = FOLDERS.find((f) => f.id === activeFolder) || FOLDERS[0];
-    let items = messages.filter(folder.filter);
-
-    if (activeLabelFilter) {
-      items = items.filter((m) => {
-        const labels = Array.isArray(m.labels) ? m.labels : [];
-        return labels.includes(activeLabelFilter);
-      });
-    }
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      items = items.filter((m) =>
-        (m.subject || "").toLowerCase().includes(q)
-        || (m.sender_email || "").toLowerCase().includes(q)
-        || (m.sender_name || "").toLowerCase().includes(q)
-      );
-    }
-    return items;
-  }, [messages, activeFolder, activeLabelFilter, search]);
+  const filtered = useMemo(
+    () => filterMessages(messages, { activeFolder, activeLabelFilter, search }),
+    [messages, activeFolder, activeLabelFilter, search],
+  );
 
   // ── Stats ──────────────────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const total = messages.filter((m) => m.import_status === "pending" && m.direction !== "outbound").length;
-    const unread = messages.filter((m) => !m.is_read && m.import_status === "pending" && m.direction !== "outbound").length;
-    const starred = messages.filter((m) => m.is_starred && m.import_status !== "archived" && m.import_status !== "rejected").length;
-    const pending = messages.filter((m) => m.import_status === "pending" && m.direction !== "outbound").length;
-    const sent = messages.filter((m) => m.direction === "outbound").length;
-    return { total, unread, starred, pending, sent };
-  }, [messages]);
+  const stats = useMemo(() => computeEmailStats(messages), [messages]);
 
   // ── Folder counts ──────────────────────────────────────────────────
-  const folderCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    FOLDERS.forEach((f) => {
-      counts[f.id] = messages.filter(f.filter).length;
-    });
-    return counts;
-  }, [messages]);
+  const folderCounts = useMemo(() => computeFolderCounts(messages), [messages]);
 
   // ── Selected message ───────────────────────────────────────────────
   const selectedMessage = useMemo(
@@ -233,34 +204,25 @@ export default function EmailInbox() {
   }, [updateMut]);
 
   const handleAddLabel = useCallback((msg: EmailMessage, label: string) => {
-    const current = Array.isArray(msg.labels) ? msg.labels : [];
-    if (current.includes(label)) return;
-    updateMut.mutate({ id: msg.id, data: { labels: [...current, label] } });
+    const next = labelsWithAdded(msg.labels, label);
+    if (!next) return;
+    updateMut.mutate({ id: msg.id, data: { labels: next } });
   }, [updateMut]);
 
   const handleRemoveLabel = useCallback((msg: EmailMessage, label: string) => {
-    const current = Array.isArray(msg.labels) ? msg.labels : [];
-    updateMut.mutate({ id: msg.id, data: { labels: current.filter((l) => l !== label) } });
+    updateMut.mutate({ id: msg.id, data: { labels: labelsWithout(msg.labels, label) } });
   }, [updateMut]);
 
   // ── Bulk actions ───────────────────────────────────────────────────
-  const allFilteredSelected = filtered.length > 0 && filtered.every((m) => selectedIds.has(m.id));
+  const allSelected = allFilteredSelected(filtered, selectedIds);
 
   const toggleSelectAll = useCallback(() => {
-    if (allFilteredSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filtered.map((m) => m.id)));
-    }
-  }, [filtered, allFilteredSelected]);
+    setSelectedIds(nextSelectedIdsForToggleAll(filtered, selectedIds));
+  }, [filtered, selectedIds]);
 
   const toggleSelect = useCallback((id: string, e?: any) => {
     e?.stopPropagation();
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) => nextSelectedIdsForToggle(prev, id));
   }, []);
 
   const handleSelectMessage = useCallback((msg: EmailMessage) => {
@@ -275,58 +237,40 @@ export default function EmailInbox() {
     }
   }, [isNarrow, updateMut]);
 
+  const goFolder = useCallback((folderId: string) => {
+    setActiveFolder(folderId);
+    setActiveLabelFilter(null);
+  }, []);
+
+  const handleBulk = useCallback((action: "read" | "star" | "archive" | "reject") => {
+    const ids = [...selectedIds];
+    if (action === "read") {
+      bulkUpdateMut.mutate({ ids, data: { is_read: true } });
+    } else if (action === "star") {
+      bulkUpdateMut.mutate({ ids, data: { is_starred: true } });
+    } else if (action === "archive") {
+      bulkUpdateMut.mutate({
+        ids,
+        data: { import_status: "archived", reviewed_at: new Date().toISOString() },
+      });
+    } else {
+      bulkUpdateMut.mutate({
+        ids,
+        data: { import_status: "rejected", reviewed_at: new Date().toISOString() },
+      });
+    }
+  }, [selectedIds, bulkUpdateMut]);
+
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* KPI strip */}
       <div style={{ padding: "16px 20px 0", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <Mail size={20} strokeWidth={1.75} style={{ color: "var(--accent)" }} />
-          <h1 style={{
-            fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700,
-            color: "var(--text-primary)", margin: 0,
-          }}>
-            Email Inbox
-          </h1>
-          <div style={{ flex: 1 }} />
-          <button
-            onClick={() => setComposeModal(true)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              height: 30, padding: "0 12px",
-              background: "var(--accent)", border: "1px solid var(--accent-border)",
-              borderRadius: 8, cursor: "pointer",
-              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600,
-              color: "var(--on-accent)", flexShrink: 0,
-            }}
-          >
-            <PenSquare size={12} strokeWidth={2} />
-            Compose
-          </button>
-          <button
-            onClick={() => navigate(createPageUrl("Integrations"))}
-            title="Email Settings"
-            style={{
-              height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center",
-              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-              borderRadius: 8, cursor: "pointer", color: "var(--text-muted)", flexShrink: 0,
-            }}
-          >
-            <Settings size={13} strokeWidth={2} />
-          </button>
-        </div>
-        <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-          <KpiTile compact label="Inbox" value={stats.total} icon={<Inbox size={14} />} color="var(--accent)"
-            active={activeFolder === "inbox"} onClick={() => { setActiveFolder("inbox"); setActiveLabelFilter(null); }} />
-          <KpiTile compact label="Unread" value={stats.unread} icon={<Mail size={14} />} color="var(--warning)"
-            onClick={() => { setActiveFolder("inbox"); setActiveLabelFilter(null); }} />
-          <KpiTile compact label="Starred" value={stats.starred} icon={<Star size={14} />} color="var(--status-warning)"
-            active={activeFolder === "starred"} onClick={() => { setActiveFolder("starred"); setActiveLabelFilter(null); }} />
-          <KpiTile compact label="Sent" value={stats.sent} icon={<Send size={14} />} color="var(--accent)"
-            active={activeFolder === "sent"} onClick={() => { setActiveFolder("sent"); setActiveLabelFilter(null); }} />
-          <KpiTile compact label="Pending Review" value={stats.pending} icon={<Clock size={14} />} color="var(--info)"
-            active={activeFolder === "inbox"} onClick={() => { setActiveFolder("inbox"); setActiveLabelFilter(null); }} />
-        </div>
+        <InboxHeader
+          onCompose={() => setComposeModal(true)}
+          onOpenSettings={() => navigate(createPageUrl("Integrations"))}
+        />
+        <EmailKpiStrip stats={stats} activeFolder={activeFolder} onFolder={goFolder} />
       </div>
 
       {/* Main content area */}
@@ -337,102 +281,23 @@ export default function EmailInbox() {
       }}>
         {/* ── Left sidebar ──────────────────────────────────────────── */}
         {!isNarrow && (
-          <div style={{
-            width: 200, flexShrink: 0, borderRight: "1px solid var(--border-default)",
-            display: "flex", flexDirection: "column", overflow: "hidden",
-          }}>
-            {/* Folders */}
-            <div style={{ padding: "12px 8px 6px" }}>
-              <div style={{
-                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-                letterSpacing: "0.14em", textTransform: "uppercase",
-                color: "var(--text-muted)", padding: "0 8px 6px",
-              }}>
-                Folders
-              </div>
-              {FOLDERS.map((f) => {
-                const FolderIcon = f.icon;
-                const isActive = activeFolder === f.id && !activeLabelFilter;
-                const count = folderCounts[f.id] || 0;
-                return (
-                  <button
-                    key={f.id}
-                    onClick={() => { setActiveFolder(f.id); setActiveLabelFilter(null); setSelectedIds(new Set()); }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8, width: "100%",
-                      padding: "7px 10px", borderRadius: 6, border: "none",
-                      background: isActive ? "var(--accent-muted)" : "transparent",
-                      color: isActive ? "var(--accent)" : "var(--text-secondary)",
-                      fontFamily: "var(--font-body)", fontSize: 12, fontWeight: isActive ? 600 : 400,
-                      cursor: "pointer", textAlign: "left", transition: "all 100ms",
-                    }}
-                  >
-                    <FolderIcon size={14} strokeWidth={isActive ? 2 : 1.5} />
-                    <span style={{ flex: 1 }}>{f.label}</span>
-                    {count > 0 && (
-                      <span style={{
-                        fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600,
-                        color: isActive ? "var(--accent)" : "var(--text-muted)",
-                        minWidth: 18, textAlign: "right",
-                      }}>
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Labels */}
-            <div style={{ padding: "8px 8px 12px", borderTop: "1px solid var(--border-default)", marginTop: 4 }}>
-              <div style={{
-                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-                letterSpacing: "0.14em", textTransform: "uppercase",
-                color: "var(--text-muted)", padding: "4px 8px 6px",
-              }}>
-                Labels
-              </div>
-              {allLabels.map((label) => {
-                const isActive = activeLabelFilter === label;
-                const color = getLabelColor(label);
-                const count = messages.filter((m) => {
-                  const labels = Array.isArray(m.labels) ? m.labels : [];
-                  return labels.includes(label);
-                }).length;
-                return (
-                  <button
-                    key={label}
-                    onClick={() => {
-                      setActiveLabelFilter(isActive ? null : label);
-                      setActiveFolder("all");
-                      setSelectedIds(new Set());
-                    }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8, width: "100%",
-                      padding: "5px 10px", borderRadius: 6, border: "none",
-                      background: isActive ? `color-mix(in srgb, ${color} 15%, transparent)` : "transparent",
-                      color: isActive ? color : "var(--text-secondary)",
-                      fontFamily: "var(--font-body)", fontSize: 11, fontWeight: isActive ? 600 : 400,
-                      cursor: "pointer", textAlign: "left", transition: "all 100ms",
-                    }}
-                  >
-                    <div style={{
-                      width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0,
-                    }} />
-                    <span style={{ flex: 1 }}>{label}</span>
-                    {count > 0 && (
-                      <span style={{
-                        fontFamily: "var(--font-mono)", fontSize: 10,
-                        color: "var(--text-muted)",
-                      }}>
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <FolderSidebar
+            activeFolder={activeFolder}
+            activeLabelFilter={activeLabelFilter}
+            folderCounts={folderCounts}
+            allLabels={allLabels}
+            messages={messages}
+            onSelectFolder={(id) => {
+              setActiveFolder(id);
+              setActiveLabelFilter(null);
+              setSelectedIds(new Set());
+            }}
+            onSelectLabel={(label, isActive) => {
+              setActiveLabelFilter(isActive ? null : label);
+              setActiveFolder("all");
+              setSelectedIds(new Set());
+            }}
+          />
         )}
 
         {/* ── Email list ────────────────────────────────────────────── */}
@@ -441,110 +306,34 @@ export default function EmailInbox() {
           borderRight: isNarrow ? "none" : "1px solid var(--border-default)",
           display: "flex", flexDirection: "column", overflow: "hidden",
         }}>
-          {/* Search + filter bar */}
-          <div style={{
-            padding: "10px 12px", borderBottom: "1px solid var(--border-default)",
-            display: "flex", gap: 8, alignItems: "center", flexShrink: 0,
-          }}>
-            <div style={{ flex: 1, position: "relative" }}>
-              <Search size={13} strokeWidth={2} style={{
-                position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
-                color: "var(--text-muted)", pointerEvents: "none",
-              }} />
-              <input
-                type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search emails..."
-                style={{
-                  width: "100%", height: 30, padding: "0 8px 0 28px",
-                  background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
-                  borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 11,
-                  color: "var(--text-primary)", outline: "none",
-                }}
-              />
-            </div>
-            {/* Mobile folder selector */}
-            {isNarrow && (
-              <select
-                value={activeFolder}
-                onChange={(e) => { setActiveFolder(e.target.value); setActiveLabelFilter(null); }}
-                style={{
-                  height: 30, padding: "0 24px 0 8px", background: "var(--bg-surface-low)",
-                  border: "1px solid var(--border-default)", borderRadius: 6,
-                  fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)",
-                  cursor: "pointer", appearance: "none",
-                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
-                  backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center",
-                }}
-              >
-                {FOLDERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-              </select>
-            )}
-          </div>
-
-          {/* Select-all header */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8, padding: "6px 12px",
-            borderBottom: "1px solid var(--border-default)", flexShrink: 0,
-            background: "var(--bg-surface-low)",
-          }}>
-            <input
-              type="checkbox"
-              checked={allFilteredSelected && filtered.length > 0}
-              onChange={toggleSelectAll}
-              style={{ accentColor: "var(--accent)", cursor: "pointer" }}
-            />
-            <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-              letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)",
-            }}>
-              {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${filtered.length} emails`}
-            </span>
-          </div>
+          <EmailListToolbar
+            search={search}
+            onSearchChange={setSearch}
+            isNarrow={isNarrow}
+            activeFolder={activeFolder}
+            onFolderChange={(v) => { setActiveFolder(v); setActiveLabelFilter(null); }}
+            allFilteredSelected={allSelected}
+            filteredCount={filtered.length}
+            selectedCount={selectedIds.size}
+            onToggleSelectAll={toggleSelectAll}
+          />
 
           {/* Email rows */}
           <div style={{ flex: 1, overflowY: "auto" }}>
-            {isLoading ? (
-              <div style={{ padding: 16 }}>
-                <LoadingSkeleton variant="table" rows={8} />
-              </div>
-            ) : isError ? (
-              <div style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "40px 24px",
-                gap: 12,
-              }}>
-                <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-                  Couldn’t load emails
-                </p>
-                <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 280 }}>
-                  {toUserErrorMessage(error, "Something went wrong. Try again.")}
-                </p>
-                <Button variant="outline" onClick={() => refetch()}>Retry</Button>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 40 }}>
-                <Inbox size={32} strokeWidth={1.25} style={{ color: "var(--text-muted)", marginBottom: 8 }} />
-                <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
-                  {messages.length > 0 ? "No emails match your filters" : "No emails yet"}
-                </p>
-              </div>
-            ) : (
-              filtered.map((msg) => (
-                <EmailRow
-                  key={msg.id}
-                  message={msg}
-                  isSelected={selectedId === msg.id}
-                  isChecked={selectedIds.has(msg.id)}
-                  onSelect={() => handleSelectMessage(msg)}
-                  onCheck={(e) => toggleSelect(msg.id, e)}
-                  onStar={(e) => handleStar(msg, e)}
-                  attachmentCount={(attachmentsByMessage[msg.id] || []).length}
-                />
-              ))
-            )}
+            <EmailListBody
+              isLoading={isLoading}
+              isError={isError}
+              error={error}
+              onRetry={() => refetch()}
+              filtered={filtered}
+              messagesLength={messages.length}
+              selectedId={selectedId}
+              selectedIds={selectedIds}
+              attachmentsByMessage={attachmentsByMessage}
+              onSelectMessage={handleSelectMessage}
+              onToggleSelect={toggleSelect}
+              onStar={handleStar}
+            />
           </div>
         </div>
 
@@ -571,13 +360,7 @@ export default function EmailInbox() {
                 onReplyAll={() => setReplyState({ mode: "reply_all", message: selectedMessage })}
               />
             ) : (
-              <div style={{
-                flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                flexDirection: "column", gap: 8, color: "var(--text-muted)",
-              }}>
-                <Mail size={40} strokeWidth={1} style={{ opacity: 0.4 }} />
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 13 }}>Select an email to read</span>
-              </div>
+              <DetailEmptyState />
             )}
           </div>
         )}
@@ -585,33 +368,10 @@ export default function EmailInbox() {
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <BulkActionBar
-          count={selectedIds.size}
+        <EmailBulkBar
+          selectedIds={selectedIds}
           onClear={() => setSelectedIds(new Set())}
-          actions={[
-            {
-              label: "Mark Read", icon: <Eye size={12} />,
-              onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { is_read: true } }),
-            },
-            {
-              label: "Star", icon: <Star size={12} />,
-              onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { is_starred: true } }),
-            },
-            {
-              label: "Archive", icon: <Archive size={12} />,
-              onClick: () => bulkUpdateMut.mutate({
-                ids: [...selectedIds],
-                data: { import_status: "archived", reviewed_at: new Date().toISOString() },
-              }),
-            },
-            {
-              label: "Reject", icon: <XCircle size={12} />, variant: "danger",
-              onClick: () => bulkUpdateMut.mutate({
-                ids: [...selectedIds],
-                data: { import_status: "rejected", reviewed_at: new Date().toISOString() },
-              }),
-            },
-          ]}
+          onBulk={handleBulk}
         />
       )}
 
