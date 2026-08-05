@@ -22,6 +22,8 @@ import {
   resolveToggleStatus,
   shiftDate,
   downloadActionItemsCsv,
+  toControlCenterFilterLabel,
+  fromControlCenterFilterLabel,
 } from "./actionItems/actionItemsPageHelpers";
 import { daysUntil } from "@/lib/dateMath";
 import { calcWpProgress } from "@/utils/projectKpis";
@@ -325,10 +327,10 @@ export default function ActionItems() {
 
     // filter state maps "All" → "all" for the shared filter helpers,
     // and passes display-friendly values (e.g. "Open") through unchanged.
-    const ccStatusFilter = filterStatus === "all" ? "All" : filterStatus;
-    const ccPriorityFilter = filterPriority === "all" ? "All" : filterPriority;
-    const handleCcStatusChange = (v) => setFilterStatus(v === "All" ? "all" : v);
-    const handleCcPriorityChange = (v) => setFilterPriority(v === "All" ? "all" : v);
+    const ccStatusFilter = toControlCenterFilterLabel(filterStatus);
+    const ccPriorityFilter = toControlCenterFilterLabel(filterPriority);
+    const handleCcStatusChange = (v) => setFilterStatus(fromControlCenterFilterLabel(v));
+    const handleCcPriorityChange = (v) => setFilterPriority(fromControlCenterFilterLabel(v));
 
     return (
       <div>

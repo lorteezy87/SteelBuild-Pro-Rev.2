@@ -4,18 +4,21 @@ import {
   filterLiveRecords,
   filterPhotos,
   computePhotoStats,
-  PHOTO_CATEGORIES,
-  PHOTO_DATE_RANGES,
   nextFilterToggle,
   PHOTOS_COMMAND_SUBTITLE,
 } from "./photos/photosPageHelpers";
+import {
+  PhotosKpiStrip,
+  PhotosFilterBar,
+  PhotosLoadError,
+} from "./photos/PhotosUi";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import PhotoUploadModal from "@/components/photos/PhotoUploadModal";
 import PhotoGallery from "@/components/photos/PhotoGallery";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
 import { Upload } from "lucide-react";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
@@ -56,9 +59,6 @@ export default function Photos() {
   const filtered = filterPhotos(photos, { filterDate, filterCategory });
   const stats = computePhotoStats(photos);
 
-  const categories = PHOTO_CATEGORIES;
-  const dateRanges = PHOTO_DATE_RANGES;
-
   return (
     <div
       className="sb-dashboard-reference-page"
@@ -76,119 +76,30 @@ export default function Photos() {
         </Button>
       </CommandBar>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
-        <KpiTile compact label="Total"     value={stats.total}    color="var(--accent)"
-                 active={filterCategory === "all"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "all"))} />
-        <KpiTile compact label="Progress"  value={stats.progress} color="var(--status-info)"
-                 active={filterCategory === "Progress"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Progress"))} />
-        <KpiTile compact label="Safety"    value={stats.safety}   color="var(--status-error)"
-                 active={filterCategory === "Safety"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Safety"))} />
-        <KpiTile compact label="Issues"    value={stats.issue}    color="var(--status-warning)"
-                 active={filterCategory === "Issue"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Issue"))} />
-        <KpiTile compact label="Delivery"  value={stats.delivery} color="var(--status-success)"
-                 active={filterCategory === "Delivery"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Delivery"))} />
-        <KpiTile compact label="Punchlist" value={stats.punchlist} color="var(--phase-detailing)"
-                 active={filterCategory === "Punchlist"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Punchlist"))} />
-      </div>
+      <PhotosKpiStrip
+        stats={stats}
+        filterCategory={filterCategory}
+        onToggleCategory={(cat) => setFilterCategory(nextFilterToggle(filterCategory, cat))}
+      />
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-        {/* Category Filter */}
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "9px",
-              color: "var(--text-muted)",
-              alignSelf: "center",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            Category:
-          </span>
-          {["all", ...categories].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilterCategory(cat)}
-              style={{
-                background: filterCategory === cat ? "var(--accent)" : "var(--bg-surface-low)",
-                color: filterCategory === cat ? "white" : "var(--text-secondary)",
-                border: "none",
-                borderRadius: "var(--radius-btn)",
-                padding: "5px 12px",
-                fontFamily: "var(--font-body)",
-                fontSize: "8px",
-                fontWeight: 700,
-                cursor: "pointer",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-              }}
-            >
-              {cat === "all" ? "All" : cat}
-            </button>
-          ))}
-        </div>
+      <PhotosFilterBar
+        filterCategory={filterCategory}
+        filterDate={filterDate}
+        onFilterCategory={setFilterCategory}
+        onFilterDate={setFilterDate}
+      />
 
-        {/* Date Range Filter */}
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "9px",
-              color: "var(--text-muted)",
-              alignSelf: "center",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            When:
-          </span>
-          {dateRanges.map((range) => (
-            <button
-              key={range.value}
-              onClick={() => setFilterDate(range.value)}
-              style={{
-                background: filterDate === range.value ? "var(--accent)" : "var(--bg-surface-low)",
-                color: filterDate === range.value ? "white" : "var(--text-secondary)",
-                border: "none",
-                borderRadius: "var(--radius-btn)",
-                padding: "5px 12px",
-                fontFamily: "var(--font-body)",
-                fontSize: "8px",
-                fontWeight: 700,
-                cursor: "pointer",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-              }}
-            >
-              {range.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Upload Modal */}
       {showUpload && (
         <PhotoUploadModal projectId={projectId} onClose={() => setShowUpload(false)} />
       )}
 
-      {/* Photo Gallery — gate loading/error so empty chrome does not flash */}
       {isLoading ? (
         <LoadingSkeleton variant="table" rows={4} />
       ) : isError ? (
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
-        }}>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-            Couldn’t load photos
-          </p>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
-            {toUserErrorMessage(error, "Something went wrong. Try again.")}
-          </p>
-          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
-        </div>
+        <PhotosLoadError
+          errorMessage={toUserErrorMessage(error, "Something went wrong. Try again.")}
+          onRetry={() => refetch()}
+        />
       ) : (
         <PhotoGallery photos={filtered} />
       )}

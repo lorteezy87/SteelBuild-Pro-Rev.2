@@ -193,3 +193,12 @@ export function downloadActionItemsCsv(
 ): void {
   downloadTextFile(buildActionItemsCsvString(items), filename, "text/csv;charset=utf-8");
 }
+
+/** Map shell filter `"all"` ↔ control-center display `"All"`. */
+export function toControlCenterFilterLabel(value: string): string {
+  return value === "all" ? "All" : value;
+}
+
+export function fromControlCenterFilterLabel(value: string): string {
+  return value === "All" ? "all" : value;
+}

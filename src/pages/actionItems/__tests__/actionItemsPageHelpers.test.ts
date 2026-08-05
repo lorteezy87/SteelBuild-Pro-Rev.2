@@ -70,3 +70,17 @@ describe("action item priority tokens", () => {
     }
   });
 });
+
+import {
+  toControlCenterFilterLabel,
+  fromControlCenterFilterLabel,
+} from "../actionItemsPageHelpers";
+
+describe("control center filter label bridge", () => {
+  it("maps all ↔ All", () => {
+    expect(toControlCenterFilterLabel("all")).toBe("All");
+    expect(toControlCenterFilterLabel("Open")).toBe("Open");
+    expect(fromControlCenterFilterLabel("All")).toBe("all");
+    expect(fromControlCenterFilterLabel("Open")).toBe("Open");
+  });
+});

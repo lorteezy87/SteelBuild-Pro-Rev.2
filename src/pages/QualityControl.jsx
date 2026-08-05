@@ -7,20 +7,23 @@ import QCFormModal from "@/components/qc/QCFormModal";
 import QCList from "@/components/qc/QCList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
-import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import {
   filterLiveRecords,
   filterQcRecords,
   computeQcStats,
-  QC_TEST_TYPES,
-  QC_RESULT_FILTERS,
   hasActiveQcFilters,
   resolveActiveQcCard,
   createEmptyQcFilters,
   qcCommandSubtitle,
   applyQcCardFilters,
 } from "./qualityControl/qualityControlPageHelpers";
+import {
+  QcKpiStrip,
+  QcSearchBar,
+  QcFilterBar,
+} from "./qualityControl/QualityControlUi";
 
 import { findById } from "@/pages/shared/findById";
 export default function QualityControl() {
@@ -97,14 +100,20 @@ export default function QualityControl() {
   const { passRate, total, passed, failed, conditional, pending } = computeQcStats(qcRecords);
   const stats = { total, passed, failed, conditional, pending };
 
-  const types = QC_TEST_TYPES;
-
   const clearFilters = () => {
     const empty = createEmptyQcFilters();
     setFilterType(empty.filterType);
     setFilterResult(empty.filterResult);
     setFilterStatus(empty.filterStatus);
     setSearchQuery(empty.searchQuery);
+  };
+
+  const applyCard = (card) => {
+    const next = applyQcCardFilters(card);
+    setFilterResult(next.filterResult);
+    setFilterStatus(next.filterStatus);
+    setFilterType(next.filterType);
+    setSearchQuery(next.searchQuery);
   };
 
   const activeCard = resolveActiveQcCard({ filterStatus, filterResult });
@@ -126,88 +135,27 @@ export default function QualityControl() {
         </Button>
       </CommandBar>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
-        <KpiTile compact label="Total Tests" value={stats.total}    color="var(--accent)"
-                 active={activeCard === null && !hasActiveFilters}  onClick={clearFilters} />
-        <KpiTile compact label="Pass Rate"   value={`${passRate}%`} color="var(--status-success)" />
-        <KpiTile compact label="Passed"      value={stats.passed}   color="var(--status-success)"
-                 active={activeCard === "passed"}
-                 onClick={() => {
-                   const next = applyQcCardFilters("passed");
-                   setFilterResult(next.filterResult);
-                   setFilterStatus(next.filterStatus);
-                   setFilterType(next.filterType);
-                   setSearchQuery(next.searchQuery);
-                 }} />
-        <KpiTile compact label="Failed"      value={stats.failed}   color="var(--status-error)"
-                 active={activeCard === "failed"}
-                 onClick={() => {
-                   const next = applyQcCardFilters("failed");
-                   setFilterResult(next.filterResult);
-                   setFilterStatus(next.filterStatus);
-                   setFilterType(next.filterType);
-                   setSearchQuery(next.searchQuery);
-                 }} />
-        <KpiTile compact label="Pending"     value={stats.pending}  color="var(--status-warning)"
-                 active={activeCard === "pending"}
-                 onClick={() => {
-                   const next = applyQcCardFilters("pending");
-                   setFilterResult(next.filterResult);
-                   setFilterStatus(next.filterStatus);
-                   setFilterType(next.filterType);
-                   setSearchQuery(next.searchQuery);
-                 }} />
-      </div>
+      <QcKpiStrip
+        stats={stats}
+        passRate={passRate}
+        activeCard={activeCard}
+        hasActiveFilters={hasActiveFilters}
+        onClear={clearFilters}
+        onPassed={() => applyCard("passed")}
+        onFailed={() => applyCard("failed")}
+        onPending={() => applyCard("pending")}
+      />
 
-      {/* Search Bar */}
-      <div style={{ position: "relative" }}>
-        <svg style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-        </svg>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by material, location, heat number, spec..."
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: "8px 12px 8px 32px",
-            fontFamily: "var(--font-body)",
-            fontSize: "11px",
-            color: "var(--text-primary)",
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-btn)",
-            outline: "none",
-          }}
-          onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-          onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-        />
-      </div>
+      <QcSearchBar searchQuery={searchQuery} onSearchQuery={setSearchQuery} />
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Type:</span>
-          {["all", ...types].map((type) => (
-            <button key={type} onClick={() => setFilterType(type)} style={{ background: filterType === type ? "var(--accent)" : "var(--bg-surface-low)", color: filterType === type ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {type === "all" ? "All" : type.split(" ")[0].slice(0, 5)}
-            </button>
-          ))}
-        </div>
+      <QcFilterBar
+        filterType={filterType}
+        filterResult={filterResult}
+        filterStatus={filterStatus}
+        onFilterType={setFilterType}
+        onFilterResult={(result) => { setFilterResult(result); setFilterStatus(null); }}
+      />
 
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Result:</span>
-          {QC_RESULT_FILTERS.map((result) => (
-            <button key={result} onClick={() => { setFilterResult(result); setFilterStatus(null); }} style={{ background: filterResult === result && filterStatus === null ? "var(--accent)" : "var(--bg-surface-low)", color: filterResult === result && filterStatus === null ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {result === "all" ? "All" : result.slice(0, 5)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Form Modal */}
       {showForm && (
         <QCFormModal
           projectId={projectId}
@@ -218,7 +166,6 @@ export default function QualityControl() {
         />
       )}
 
-      {/* QC Records List */}
       <RegisterFetchBody
         isLoading={isLoading}
         isError={isError}
@@ -235,9 +182,7 @@ export default function QualityControl() {
         <QCList records={filtered} onEdit={(record) => {setEditing(record); setShowForm(true);}} onDelete={setDeleteTarget} />
       </RegisterFetchBody>
 
-      {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Record" description="Delete this record? This cannot be undone." />
     </div>
   );
 }
-
