@@ -125,3 +125,39 @@ export function downloadChangeOrdersCsv(
   );
 }
 
+
+export type RfiPrefillSource = {
+  id?: string;
+  rfi_number?: string | null;
+  title?: string | null;
+  subject?: string | null;
+  question?: string | null;
+  description?: string | null;
+  cost_impact_amount?: string | number | null;
+  schedule_impact_days?: string | number | null;
+};
+
+/** Form prefill when converting a cost-impact RFI into a CO. */
+export function buildChangeOrderPrefillFromRfi(
+  rfi: RfiPrefillSource,
+  projectId: string | null | undefined,
+): {
+  source_rfi_id: string | undefined;
+  project_id: string | null | undefined;
+  title: string;
+  description: string;
+  reason_code: string;
+  co_amount: number;
+  schedule_impact_days: number;
+} {
+  const label = rfi.rfi_number ? `RFI ${rfi.rfi_number}` : "RFI";
+  return {
+    source_rfi_id: rfi.id,
+    project_id: projectId,
+    title: `${label}: ${rfi.title || rfi.subject || "cost change"}`.slice(0, 200),
+    description: rfi.question || rfi.description || "",
+    reason_code: "Design Change",
+    co_amount: Number(rfi.cost_impact_amount) || 0,
+    schedule_impact_days: Number(rfi.schedule_impact_days) || 0,
+  };
+}

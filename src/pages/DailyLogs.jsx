@@ -32,6 +32,8 @@ import {
   DAILY_LOG_DATE_PRESETS,
   pickMostRecentDailyLog,
   buildCopyFromRecentLogSeed,
+  DAILY_LOGS_COMMAND_SUBTITLE,
+  utcIsoDate,
 } from "./dailyLogs/dailyLogsPageHelpers";
 
 import { findById } from "@/pages/shared/findById";
@@ -179,7 +181,7 @@ export default function DailyLogs() {
       toast.error("No previous logs to copy from");
       return;
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = utcIsoDate();
     setEditing(buildCopyFromRecentLogSeed(mostRecent, today));
     setShowForm(true);
   };
@@ -209,7 +211,7 @@ export default function DailyLogs() {
         title="Daily Logs"
         count={filteredLogs.length}
         unit=" · ENTRIES"
-        subtitle="Field superintendent journal · man-hours · safety · delays"
+        subtitle={DAILY_LOGS_COMMAND_SUBTITLE}
       >
         {can("create", "daily_log") && (
           <Button variant="secondary" onClick={handleCopyFromYesterday}>

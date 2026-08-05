@@ -67,3 +67,27 @@ describe("countHighlightedNotes", () => {
     expect(countHighlightedNotes([{ is_high_priority: true }, { is_high_priority: false }, {}])).toBe(1);
   });
 });
+
+import {
+  buildOptimisticProductionNote,
+  replaceNoteInList,
+  removeNoteFromList,
+} from "../productionNotesHelpers";
+
+describe("production note list mutators", () => {
+  it("buildOptimisticProductionNote", () => {
+    const row = buildOptimisticProductionNote({ content: "x", project_id: "p" }, 1000, 0.5);
+    expect(row.id).toBe("tmp-1000-0.5");
+    expect(row._optimistic).toBe(true);
+    expect(row.content).toBe("x");
+  });
+
+  it("replace and remove in list", () => {
+    const list = [{ id: "a", content: "1" }, { id: "b", content: "2" }];
+    expect(replaceNoteInList(list, "b", { content: "9" })).toEqual([
+      { id: "a", content: "1" },
+      { id: "b", content: "9" },
+    ]);
+    expect(removeNoteFromList(list, "a").map((n) => n.id)).toEqual(["b"]);
+  });
+});

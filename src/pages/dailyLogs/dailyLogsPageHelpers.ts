@@ -139,3 +139,11 @@ export function buildCopyFromRecentLogSeed(
   };
 }
 
+
+export const DAILY_LOGS_COMMAND_SUBTITLE =
+  "Field superintendent journal · man-hours · safety · delays";
+
+/** Local calendar date YYYY-MM-DD (page uses UTC ISO date for copy seed historically). */
+export function utcIsoDate(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}

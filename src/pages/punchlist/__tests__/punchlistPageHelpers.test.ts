@@ -52,3 +52,28 @@ describe("punchlist filter tokens", () => {
     });
   });
 });
+
+import {
+  buildPunchlistCloseoutPatch,
+  requireCloseoutSignature,
+} from "../punchlistPageHelpers";
+
+describe("punchlist closeout pure", () => {
+  it("requireCloseoutSignature trims and rejects empty", () => {
+    expect(requireCloseoutSignature("  Ada  ")).toBe("Ada");
+    expect(() => requireCloseoutSignature("  ")).toThrow("Signature required");
+  });
+
+  it("buildPunchlistCloseoutPatch", () => {
+    const p = buildPunchlistCloseoutPatch("  Bob  ", "2026-01-02T00:00:00.000Z");
+    expect(p.status).toBe("Completed");
+    expect(p.percent_complete).toBe(100);
+    expect(p.closed_by).toBe("Bob");
+    expect(p.closed_at).toBe("2026-01-02T00:00:00.000Z");
+    expect(p.metadata.close_signature).toEqual({
+      by: "Bob",
+      at: "2026-01-02T00:00:00.000Z",
+      method: "text",
+    });
+  });
+});

@@ -49,6 +49,7 @@ import {
   nextSelectedToggle,
   selectAllOrNone,
   downloadChangeOrdersCsv,
+  buildChangeOrderPrefillFromRfi,
 } from "./changeOrders/changeOrdersPageHelpers";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
@@ -136,16 +137,7 @@ export default function ChangeOrders() {
     if (!fromRfi || !rfis.length) return;
     const rfi = rfis.find((r) => r.id === fromRfi);
     if (rfi) {
-      const label = rfi.rfi_number ? `RFI ${rfi.rfi_number}` : "RFI";
-      setPrefill({
-        source_rfi_id: rfi.id,
-        project_id: projectId,
-        title: `${label}: ${rfi.title || rfi.subject || "cost change"}`.slice(0, 200),
-        description: rfi.question || rfi.description || "",
-        reason_code: "Design Change",
-        co_amount: Number(rfi.cost_impact_amount) || 0,
-        schedule_impact_days: Number(rfi.schedule_impact_days) || 0,
-      });
+      setPrefill(buildChangeOrderPrefillFromRfi(rfi, projectId));
       setEditing(null);
       setModalOpen(true);
     }

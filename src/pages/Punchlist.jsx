@@ -6,6 +6,8 @@ import {
   nextFilterToggle,
   punchlistCommandSubtitle,
   createEmptyPunchlistFilters,
+  buildPunchlistCloseoutPatch,
+  requireCloseoutSignature,
   PUNCHLIST_STATUSES,
   PUNCHLIST_CATEGORIES,
   PUNCHLIST_PRIORITIES,
@@ -176,27 +178,16 @@ export default function Punchlist() {
   // brief explicit guidance "keep it simple").
   const closeoutMut = useMutation({
     mutationFn: async ({ ids, signature }) => {
-      if (!signature || !signature.trim()) throw new Error("Signature required");
+      const by = requireCloseoutSignature(signature);
       const stamp = new Date().toISOString();
+      const patch = buildPunchlistCloseoutPatch(by, stamp);
       const updated = [];
       for (const id of ids) {
-        const row = await entities.PunchlistItem.update(id, {
-          status: "Completed",
-          percent_complete: 100,
-          closed_by: signature.trim(),
-          closed_at: stamp,
-          metadata: {
-            close_signature: {
-              by: signature.trim(),
-              at: stamp,
-              method: "text",
-            },
-          },
-        });
+        const row = await entities.PunchlistItem.update(id, patch);
         updated.push(row);
         logActivity("punchlist_item", "status_changed", row, {
           projectId,
-          description: `Closed via batch · signature: ${signature.trim()}`,
+          description: `Closed via batch · signature: ${by}`,
         });
       }
       return updated;

@@ -40,3 +40,33 @@ describe("buildChangeOrdersCsvString", () => {
     expect(changeOrdersCsvFilename("My Project")).toBe("change-orders-My-Project.csv");
   });
 });
+
+import { buildChangeOrderPrefillFromRfi } from "../changeOrdersPageHelpers";
+
+describe("buildChangeOrderPrefillFromRfi", () => {
+  it("builds title, amount, and schedule from RFI", () => {
+    const prefill = buildChangeOrderPrefillFromRfi(
+      {
+        id: "r1",
+        rfi_number: "12",
+        title: "Extra steel",
+        question: "Need more beams",
+        cost_impact_amount: "1500",
+        schedule_impact_days: "3",
+      },
+      "p1",
+    );
+    expect(prefill.source_rfi_id).toBe("r1");
+    expect(prefill.project_id).toBe("p1");
+    expect(prefill.title).toBe("RFI 12: Extra steel");
+    expect(prefill.description).toBe("Need more beams");
+    expect(prefill.reason_code).toBe("Design Change");
+    expect(prefill.co_amount).toBe(1500);
+    expect(prefill.schedule_impact_days).toBe(3);
+  });
+
+  it("falls back when rfi_number missing", () => {
+    const prefill = buildChangeOrderPrefillFromRfi({ id: "r2", subject: "hold" }, null);
+    expect(prefill.title).toBe("RFI: hold");
+  });
+});

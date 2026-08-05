@@ -32,6 +32,9 @@ import {
   projectIdsWithRows,
   filterAvailableProjects,
   countHighlightedNotes,
+  buildOptimisticProductionNote,
+  replaceNoteInList,
+  removeNoteFromList,
 } from "./productionNotes/productionNotesHelpers";
 import {
   ProjectRow,
@@ -75,7 +78,7 @@ export default function ProductionNotes() {
     onMutate: async (data) => {
       await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
       const previous = qc.getQueryData(["production-notes", meetingDate]);
-      const optimistic = { ...data, id: `tmp-${Date.now()}-${Math.random()}`, _optimistic: true };
+      const optimistic = buildOptimisticProductionNote(data);
       qc.setQueryData(["production-notes", meetingDate], (old = []) => [...old, optimistic]);
       return { previous, optimisticId: optimistic.id };
     },
@@ -99,7 +102,7 @@ export default function ProductionNotes() {
       await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
       const previous = qc.getQueryData(["production-notes", meetingDate]);
       qc.setQueryData(["production-notes", meetingDate], (old = []) =>
-        old.map((n) => (n.id === id ? { ...n, ...data } : n))
+        replaceNoteInList(old, id, data)
       );
       return { previous };
     },
@@ -115,7 +118,7 @@ export default function ProductionNotes() {
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
       const previous = qc.getQueryData(["production-notes", meetingDate]);
-      qc.setQueryData(["production-notes", meetingDate], (old = []) => old.filter((n) => n.id !== id));
+      qc.setQueryData(["production-notes", meetingDate], (old = []) => removeNoteFromList(old, id));
       return { previous };
     },
     onError: (err, _id, ctx) => {

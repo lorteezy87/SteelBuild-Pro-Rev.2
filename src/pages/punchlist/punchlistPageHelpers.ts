@@ -80,3 +80,44 @@ export function createEmptyPunchlistFilters(): {
     filterPriority: "all",
   };
 }
+
+export type PunchlistCloseoutPatch = {
+  status: string;
+  percent_complete: number;
+  closed_by: string;
+  closed_at: string;
+  metadata: {
+    close_signature: {
+      by: string;
+      at: string;
+      method: string;
+    };
+  };
+};
+
+/** Pure update payload for batch close-out with text signature. */
+export function buildPunchlistCloseoutPatch(
+  signature: string,
+  stamp: string,
+): PunchlistCloseoutPatch {
+  const by = (signature || "").trim();
+  return {
+    status: "Completed",
+    percent_complete: 100,
+    closed_by: by,
+    closed_at: stamp,
+    metadata: {
+      close_signature: {
+        by,
+        at: stamp,
+        method: "text",
+      },
+    },
+  };
+}
+
+export function requireCloseoutSignature(signature: string | null | undefined): string {
+  const by = (signature || "").trim();
+  if (!by) throw new Error("Signature required");
+  return by;
+}

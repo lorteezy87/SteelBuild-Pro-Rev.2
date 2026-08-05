@@ -117,3 +117,33 @@ export function countHighlightedNotes<T extends { is_high_priority?: boolean | n
   return (notes || []).filter((n) => n.is_high_priority).length;
 }
 
+
+/** Optimistic production-note row for onMutate cache insert. */
+export function buildOptimisticProductionNote<T extends Record<string, unknown>>(
+  data: T,
+  nowMs: number = Date.now(),
+  random: number = Math.random(),
+): T & { id: string; _optimistic: true } {
+  return {
+    ...data,
+    id: `tmp-${nowMs}-${random}`,
+    _optimistic: true,
+  };
+}
+
+/** Immutable list replace for optimistic update of one note. */
+export function replaceNoteInList<T extends { id?: string }>(
+  list: T[] | null | undefined,
+  id: string,
+  patch: Partial<T>,
+): T[] {
+  return (list || []).map((n) => (n.id === id ? { ...n, ...patch } : n));
+}
+
+/** Immutable list remove for optimistic delete. */
+export function removeNoteFromList<T extends { id?: string }>(
+  list: T[] | null | undefined,
+  id: string,
+): T[] {
+  return (list || []).filter((n) => n.id !== id);
+}

@@ -62,3 +62,15 @@ describe("daily log copy helpers", () => {
     });
   });
 });
+
+import { DAILY_LOGS_COMMAND_SUBTITLE, utcIsoDate } from "../dailyLogsPageHelpers";
+
+describe("daily log subtitle and utc date", () => {
+  it("exposes command subtitle", () => {
+    expect(DAILY_LOGS_COMMAND_SUBTITLE).toContain("Field superintendent");
+  });
+
+  it("utcIsoDate slices ISO date", () => {
+    expect(utcIsoDate(new Date("2026-08-05T23:30:00.000Z"))).toBe("2026-08-05");
+  });
+});
