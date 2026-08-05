@@ -18,7 +18,10 @@ import ReportTable from "./ReportTable";
 import { FilterBar, SelectFilter, SearchInput } from "./ReportFilters";
 import { exportTableCSV, formatDate } from "./utils";
 import { mono, body } from "./constants";
-import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
+import {
+  buildUpcomingMilestoneRows,
+  filterUpcomingMilestoneRows,
+} from "./upcomingMilestonesHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 const WINDOWS = [
@@ -47,59 +50,20 @@ export default function UpcomingMilestones() {
     [projects]
   );
 
-  const rows = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const windowEnd = new Date(today.getTime() + Number(windowDays) * 86400000);
-    // A milestone is a leaf marker; exclude any that has become a parent so a
-    // rolled-up summary never masquerades as a milestone on this list.
-    const parentIds = buildParentIdSet(tasks);
-    return tasks
-      .filter(
-        (t) =>
-          t.task_type === "Milestone" &&
-          !isSummaryTask(t, parentIds) &&
-          t.start_date &&
-          new Date(t.start_date) >= today &&
-          new Date(t.start_date) <= windowEnd
-      )
-      .map((t) => {
-        const proj = projectsById.get(t.project_id);
-        const dueDate = new Date(t.start_date);
-        const daysOut = Math.round(
-          (dueDate - today) / 86400000
-        );
-        const phase = t.phase || "";
-        return {
-          id: t.id,
-          taskName: t.task_name || "Untitled milestone",
-          projectId: t.project_id,
-          projectName: proj?.name || "—",
-          projectNumber: proj?.project_number || "",
-          phase,
-          startDate: t.start_date,
-          daysOut,
-          status: t.status || "Not Started",
-        };
-      })
-      .sort((a, b) => {
-        // Group by project, then by date asc.
-        const byProj = a.projectName.localeCompare(b.projectName);
-        if (byProj !== 0) return byProj;
-        return new Date(a.startDate) - new Date(b.startDate);
-      });
-  }, [tasks, projectsById, windowDays]);
+  const rows = useMemo(
+    () =>
+      buildUpcomingMilestoneRows({
+        tasks,
+        projectsById,
+        windowDays,
+      }),
+    [tasks, projectsById, windowDays],
+  );
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return rows;
-    const q = search.trim().toLowerCase();
-    return rows.filter(
-      (r) =>
-        r.taskName.toLowerCase().includes(q) ||
-        r.projectName.toLowerCase().includes(q) ||
-        r.projectNumber.toLowerCase().includes(q)
-    );
-  }, [rows, search]);
+  const filtered = useMemo(
+    () => filterUpcomingMilestoneRows(rows, search),
+    [rows, search],
+  );
 
   const columns = useMemo(
     () => [

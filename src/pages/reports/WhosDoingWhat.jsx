@@ -16,6 +16,10 @@ import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { formatDate, formatPercent } from "./utils";
 import { mono, body, CARD } from "./constants";
+import {
+  countActiveTasks,
+  groupInProgressByAssignee,
+} from "./whosDoingWhatHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -33,34 +37,12 @@ export default function WhosDoingWhat() {
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
-  const grouped = useMemo(() => {
-    const m = {};
-    tasks.filter((t) => t.status === "In Progress").forEach((t) => {
-      const a = (t.assigned_to || "").trim() || "Unassigned";
-      if (!m[a]) m[a] = [];
-      const proj = projectsById.get(t.project_id);
-      m[a].push({
-        id: t.id,
-        taskName: t.task_name || "Untitled",
-        projectId: t.project_id,
-        projectName: proj?.name || "—",
-        projectNumber: proj?.project_number || "",
-        phase: t.phase || "",
-        endDate: t.end_date,
-        pct: Number(t.percent_complete) || 0,
-      });
-    });
-    Object.values(m).forEach((arr) => arr.sort((a, b) => {
-      const da = a.endDate ? new Date(a.endDate).getTime() : Infinity;
-      const db = b.endDate ? new Date(b.endDate).getTime() : Infinity;
-      return da - db;
-    }));
-    return Object.entries(m)
-      .map(([name, items]) => ({ name, items }))
-      .sort((a, b) => b.items.length - a.items.length);
-  }, [tasks, projectsById]);
+  const grouped = useMemo(
+    () => groupInProgressByAssignee({ tasks, projectsById }),
+    [tasks, projectsById],
+  );
 
-  const totalActive = grouped.reduce((s, p) => s + p.items.length, 0);
+  const totalActive = countActiveTasks(grouped);
 
   return (
     <ReportShell

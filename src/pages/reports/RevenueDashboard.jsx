@@ -35,6 +35,13 @@ import {
   exportTableCSV,
 } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
+import {
+  billedByClient,
+  billedByContractType,
+  buildPerProjectRevenueRows,
+  collectedPercent,
+  decoratePositiveSegments,
+} from "./revenueDashboardHelpers";
 
 const PALETTE = [
   "var(--status-info)",
@@ -74,76 +81,29 @@ export default function RevenueDashboard() {
     [sovItems],
   );
 
-  /** SOV items have a project_id; project tells us the client + contract type. */
-  const billedByClient = useMemo(() => {
-    const map = new Map();
-    for (const i of certifiedDeduped) {
-      const proj = projectsById.get(i.project_id);
-      const client = proj?.general_contractor || proj?.client || "Unknown";
-      const value =
-        ((Number(i.scheduled_value) || 0) *
-          (Number(i.current_percent_complete) || 0)) /
-        100;
-      map.set(client, (map.get(client) || 0) + value);
-    }
-    const all = [...map.entries()]
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value);
-    // Collapse the long tail to "Other".
-    if (all.length <= 6) return all;
-    const top = all.slice(0, 6);
-    const otherTotal = all.slice(6).reduce((s, r) => s + r.value, 0);
-    return [...top, { label: "Other", value: otherTotal }];
-  }, [certifiedDeduped, projectsById]);
+  const billedByClientSegments = useMemo(
+    () => billedByClient(certifiedDeduped, projectsById),
+    [certifiedDeduped, projectsById],
+  );
 
-  const billedByContractType = useMemo(() => {
-    const map = new Map();
-    for (const i of certifiedDeduped) {
-      const proj = projectsById.get(i.project_id);
-      const type = proj?.contract_type || "Unspecified";
-      const value =
-        ((Number(i.scheduled_value) || 0) *
-          (Number(i.current_percent_complete) || 0)) /
-        100;
-      map.set(type, (map.get(type) || 0) + value);
-    }
-    return [...map.entries()]
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [certifiedDeduped, projectsById]);
+  const billedByContractTypeSegments = useMemo(
+    () => billedByContractType(certifiedDeduped, projectsById),
+    [certifiedDeduped, projectsById],
+  );
 
   const decoratedClient = useMemo(
-    () =>
-      billedByClient
-        .filter((s) => s.value > 0)
-        .map((s, i) => ({ ...s, color: PALETTE[i % PALETTE.length] })),
-    [billedByClient]
+    () => decoratePositiveSegments(billedByClientSegments, PALETTE),
+    [billedByClientSegments],
   );
   const decoratedContractType = useMemo(
-    () =>
-      billedByContractType
-        .filter((s) => s.value > 0)
-        .map((s, i) => ({ ...s, color: PALETTE[i % PALETTE.length] })),
-    [billedByContractType]
+    () => decoratePositiveSegments(billedByContractTypeSegments, PALETTE),
+    [billedByContractTypeSegments],
   );
 
-  const collectedPct = billed ? (collected / billed) * 100 : 0;
+  const collectedPct = collectedPercent(collected, billed);
 
   const handleExportCSV = () => {
-    // Build a flat row per project — billed/collected/pending/retention.
-    const perProject = projects.map((p) => {
-      const items = sovItems.filter((i) => i.project_id === p.id);
-      return {
-        number: p.project_number || `P-${p.id}`,
-        name: p.name || "",
-        client: p.general_contractor || p.client || "",
-        contractType: p.contract_type || "",
-        billed: totalBilled(items),
-        collected: cashCollected(items),
-        pending: pendingPayment(items).total,
-        retention: retentionHeld(items),
-      };
-    });
+    const perProject = buildPerProjectRevenueRows({ projects, sovItems });
     exportTableCSV({
       filename: "revenue_dashboard",
       columns: [

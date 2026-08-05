@@ -11,17 +11,10 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
-import { isRfiOpen, isActionItemOpen } from "@/lib/entityPredicates";
 import ReportShell from "./ReportShell";
 import { exportTableCSV } from "./utils";
 import { mono, body, CARD } from "./constants";
-
-// Schedule tasks have their own status enum (Not Started / In Progress
-// / Complete / Delayed / On Hold / Cancelled) — they're not in the
-// shared entity predicates because RFIs/COs/WPs/actions live in their
-// own slice of the schema. Defining locally keeps the open-task rule
-// next to its caller.
-const isOpenTask = (t) => t?.status !== "Complete" && t?.status !== "Cancelled";
+import { buildTeamPeople, teamOpenTotals } from "./teamDashboardHelpers";
 
 export default function TeamDashboard() {
   const { data: tasks = [] } = useQuery({
@@ -37,31 +30,15 @@ export default function TeamDashboard() {
     queryFn: () => entities.ActionItem.list(),
   });
 
-  const people = useMemo(() => {
-    const m = {};
-    const ensure = (name) => {
-      if (!m[name]) m[name] = { name, tasks: 0, rfis: 0, actions: 0 };
-      return m[name];
-    };
-    tasks.filter(isOpenTask).forEach((t) => {
-      const a = (t.assigned_to || "").trim();
-      if (a) ensure(a).tasks += 1;
-    });
-    rfis.filter(isRfiOpen).forEach((r) => {
-      const a = (r.assigned_to || r.ball_in_court || "").trim();
-      if (a) ensure(a).rfis += 1;
-    });
-    actionItems.filter(isActionItemOpen).forEach((it) => {
-      const a = (it.assigned_to || "").trim();
-      if (a) ensure(a).actions += 1;
-    });
-    Object.values(m).forEach((p) => { p.total = p.tasks + p.rfis + p.actions; });
-    return Object.values(m).sort((a, b) => b.total - a.total);
-  }, [tasks, rfis, actionItems]);
+  const people = useMemo(
+    () => buildTeamPeople({ tasks, rfis, actionItems }),
+    [tasks, rfis, actionItems],
+  );
 
-  const totalOpenTasks = tasks.filter(isOpenTask).length;
-  const totalOpenRFIs = rfis.filter(isRfiOpen).length;
-  const totalOpenActions = actionItems.filter(isActionItemOpen).length;
+  const { tasks: totalOpenTasks, rfis: totalOpenRFIs, actions: totalOpenActions } = useMemo(
+    () => teamOpenTotals({ tasks, rfis, actionItems }),
+    [tasks, rfis, actionItems],
+  );
 
   const tableColumns = [
     { key: "name", label: "Assignee" },
