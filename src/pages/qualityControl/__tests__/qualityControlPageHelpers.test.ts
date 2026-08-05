@@ -49,3 +49,31 @@ describe("qc filter pure helpers", () => {
     expect(resolveActiveQcCard({ filterStatus: null, filterResult: "Pass" })).toBe("passed");
   });
 });
+
+import {
+  QC_RESULT_FILTERS,
+  qcCommandSubtitle,
+  applyQcCardFilters,
+  createEmptyQcFilters,
+} from "../qualityControlPageHelpers";
+
+describe("qc result filters and card patches", () => {
+  it("exposes result catalog and builds subtitle", () => {
+    expect(QC_RESULT_FILTERS).toContain("Conditional Pass");
+    expect(qcCommandSubtitle(80, 3)).toBe(
+      "80% pass rate · 3 pending · material certs, weld inspections, NDT tests",
+    );
+  });
+
+  it("applyQcCardFilters patches state", () => {
+    expect(applyQcCardFilters("passed")).toEqual({
+      filterType: "all",
+      filterResult: "Pass",
+      filterStatus: null,
+      searchQuery: "",
+    });
+    expect(applyQcCardFilters("failed").filterResult).toBe("Fail");
+    expect(applyQcCardFilters("pending").filterStatus).toBe("Pending");
+    expect(applyQcCardFilters("clear")).toEqual(createEmptyQcFilters());
+  });
+});

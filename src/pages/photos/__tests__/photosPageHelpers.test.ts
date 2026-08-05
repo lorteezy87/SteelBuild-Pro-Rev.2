@@ -31,3 +31,21 @@ describe("photo filter tokens", () => {
     expect(PHOTO_DATE_RANGES[0].value).toBe("all");
   });
 });
+
+import {
+  nextFilterToggle,
+  PHOTOS_COMMAND_SUBTITLE,
+  createEmptyPhotoFilters,
+} from "../photosPageHelpers";
+
+describe("photo filter toggles", () => {
+  it("toggles category and exposes subtitle/empty filters", () => {
+    expect(nextFilterToggle("Progress", "Progress")).toBe("all");
+    expect(nextFilterToggle("all", "Safety")).toBe("Safety");
+    expect(PHOTOS_COMMAND_SUBTITLE).toContain("Progress");
+    expect(createEmptyPhotoFilters()).toEqual({
+      filterCategory: "all",
+      filterDate: "all",
+    });
+  });
+});

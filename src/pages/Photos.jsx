@@ -6,6 +6,8 @@ import {
   computePhotoStats,
   PHOTO_CATEGORIES,
   PHOTO_DATE_RANGES,
+  nextFilterToggle,
+  PHOTOS_COMMAND_SUBTITLE,
 } from "./photos/photosPageHelpers";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
@@ -67,7 +69,7 @@ export default function Photos() {
         title="Project Photos"
         count={filtered.length}
         unit=" · PHOTOS"
-        subtitle="Progress · safety · issues · delivery · punchlist · field documentation"
+        subtitle={PHOTOS_COMMAND_SUBTITLE}
       >
         <Button variant="primary" onClick={() => setShowUpload(true)}>
           <Upload size={12} /> Upload Photo
@@ -76,17 +78,17 @@ export default function Photos() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
         <KpiTile compact label="Total"     value={stats.total}    color="var(--accent)"
-                 active={filterCategory === "all"} onClick={() => setFilterCategory("all")} />
+                 active={filterCategory === "all"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "all"))} />
         <KpiTile compact label="Progress"  value={stats.progress} color="var(--status-info)"
-                 active={filterCategory === "Progress"} onClick={() => setFilterCategory(filterCategory === "Progress" ? "all" : "Progress")} />
+                 active={filterCategory === "Progress"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Progress"))} />
         <KpiTile compact label="Safety"    value={stats.safety}   color="var(--status-error)"
-                 active={filterCategory === "Safety"} onClick={() => setFilterCategory(filterCategory === "Safety" ? "all" : "Safety")} />
+                 active={filterCategory === "Safety"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Safety"))} />
         <KpiTile compact label="Issues"    value={stats.issue}    color="var(--status-warning)"
-                 active={filterCategory === "Issue"} onClick={() => setFilterCategory(filterCategory === "Issue" ? "all" : "Issue")} />
+                 active={filterCategory === "Issue"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Issue"))} />
         <KpiTile compact label="Delivery"  value={stats.delivery} color="var(--status-success)"
-                 active={filterCategory === "Delivery"} onClick={() => setFilterCategory(filterCategory === "Delivery" ? "all" : "Delivery")} />
+                 active={filterCategory === "Delivery"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Delivery"))} />
         <KpiTile compact label="Punchlist" value={stats.punchlist} color="var(--phase-detailing)"
-                 active={filterCategory === "Punchlist"} onClick={() => setFilterCategory(filterCategory === "Punchlist" ? "all" : "Punchlist")} />
+                 active={filterCategory === "Punchlist"} onClick={() => setFilterCategory(nextFilterToggle(filterCategory, "Punchlist"))} />
       </div>
 
       {/* Filters */}

@@ -66,3 +66,19 @@ export const PHOTO_DATE_RANGES = [
   { label: "Today", value: "today" },
 ] as const;
 
+
+/** @deprecated Prefer `@/pages/shared/nextFilterToggle`. */
+export { nextFilterToggle } from "@/pages/shared/nextFilterToggle";
+
+export const PHOTOS_COMMAND_SUBTITLE =
+  "Progress · safety · issues · delivery · punchlist · field documentation";
+
+export function createEmptyPhotoFilters(): {
+  filterCategory: string;
+  filterDate: string;
+} {
+  return {
+    filterCategory: "all",
+    filterDate: "all",
+  };
+}

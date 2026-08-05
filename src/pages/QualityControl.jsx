@@ -14,9 +14,12 @@ import {
   filterQcRecords,
   computeQcStats,
   QC_TEST_TYPES,
+  QC_RESULT_FILTERS,
   hasActiveQcFilters,
   resolveActiveQcCard,
   createEmptyQcFilters,
+  qcCommandSubtitle,
+  applyQcCardFilters,
 } from "./qualityControl/qualityControlPageHelpers";
 
 import { findById } from "@/pages/shared/findById";
@@ -116,7 +119,7 @@ export default function QualityControl() {
         title="Quality Control"
         count={filtered.length}
         unit=" · RECORDS"
-        subtitle={`${passRate}% pass rate · ${stats.pending} pending · material certs, weld inspections, NDT tests`}
+        subtitle={qcCommandSubtitle(passRate, stats.pending)}
       >
         <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
           New Test
@@ -129,13 +132,31 @@ export default function QualityControl() {
         <KpiTile compact label="Pass Rate"   value={`${passRate}%`} color="var(--status-success)" />
         <KpiTile compact label="Passed"      value={stats.passed}   color="var(--status-success)"
                  active={activeCard === "passed"}
-                 onClick={() => { setFilterResult("Pass"); setFilterStatus(null); setFilterType("all"); setSearchQuery(""); }} />
+                 onClick={() => {
+                   const next = applyQcCardFilters("passed");
+                   setFilterResult(next.filterResult);
+                   setFilterStatus(next.filterStatus);
+                   setFilterType(next.filterType);
+                   setSearchQuery(next.searchQuery);
+                 }} />
         <KpiTile compact label="Failed"      value={stats.failed}   color="var(--status-error)"
                  active={activeCard === "failed"}
-                 onClick={() => { setFilterResult("Fail"); setFilterStatus(null); setFilterType("all"); setSearchQuery(""); }} />
+                 onClick={() => {
+                   const next = applyQcCardFilters("failed");
+                   setFilterResult(next.filterResult);
+                   setFilterStatus(next.filterStatus);
+                   setFilterType(next.filterType);
+                   setSearchQuery(next.searchQuery);
+                 }} />
         <KpiTile compact label="Pending"     value={stats.pending}  color="var(--status-warning)"
                  active={activeCard === "pending"}
-                 onClick={() => { setFilterResult("all"); setFilterStatus("Pending"); setFilterType("all"); setSearchQuery(""); }} />
+                 onClick={() => {
+                   const next = applyQcCardFilters("pending");
+                   setFilterResult(next.filterResult);
+                   setFilterStatus(next.filterStatus);
+                   setFilterType(next.filterType);
+                   setSearchQuery(next.searchQuery);
+                 }} />
       </div>
 
       {/* Search Bar */}
@@ -178,7 +199,7 @@ export default function QualityControl() {
 
         <div style={{ display: "flex", gap: "8px" }}>
           <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Result:</span>
-          {["all", "Pass", "Fail", "Conditional Pass"].map((result) => (
+          {QC_RESULT_FILTERS.map((result) => (
             <button key={result} onClick={() => { setFilterResult(result); setFilterStatus(null); }} style={{ background: filterResult === result && filterStatus === null ? "var(--accent)" : "var(--bg-surface-low)", color: filterResult === result && filterStatus === null ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               {result === "all" ? "All" : result.slice(0, 5)}
             </button>

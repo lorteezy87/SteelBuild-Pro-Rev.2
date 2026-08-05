@@ -109,3 +109,37 @@ export function createEmptyQcFilters(): {
   };
 }
 
+
+export const QC_RESULT_FILTERS = [
+  "all",
+  "Pass",
+  "Fail",
+  "Conditional Pass",
+] as const;
+
+export function qcCommandSubtitle(passRate: number, pendingCount: number): string {
+  return `${passRate}% pass rate · ${pendingCount} pending · material certs, weld inspections, NDT tests`;
+}
+
+export type QcFilterState = {
+  filterType: string;
+  filterResult: string;
+  filterStatus: string | null;
+  searchQuery: string;
+};
+
+/** Pure filter patch when a KPI card is activated. */
+export function applyQcCardFilters(
+  card: "passed" | "failed" | "pending" | "clear",
+): QcFilterState {
+  if (card === "passed") {
+    return { filterType: "all", filterResult: "Pass", filterStatus: null, searchQuery: "" };
+  }
+  if (card === "failed") {
+    return { filterType: "all", filterResult: "Fail", filterStatus: null, searchQuery: "" };
+  }
+  if (card === "pending") {
+    return { filterType: "all", filterResult: "all", filterStatus: "Pending", searchQuery: "" };
+  }
+  return createEmptyQcFilters();
+}
