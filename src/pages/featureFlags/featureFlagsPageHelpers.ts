@@ -47,3 +47,11 @@ export function removeOverride(current: unknown, email: string): Record<string, 
   delete overrides[email];
   return overrides;
 }
+
+export function createEmptyFlagDraft(): { flag_key: string; description: string; enabled: boolean } {
+  return { flag_key: "", description: "", enabled: false };
+}
+
+export function createEmptyOverrideDraft(): { email: string; enabled: boolean } {
+  return { email: "", enabled: true };
+}

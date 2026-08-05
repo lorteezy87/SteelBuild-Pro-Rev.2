@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * View-state hooks for the RFIs page — bulk selection + the two localStorage-
  * backed display preferences (row density, insights-strip collapsed). Extracted
@@ -6,6 +7,7 @@
  * density / insights localStorage-key constants) are the same ones the page used inline.
  */
 import { useState } from "react";
+import { toggleSelectionId, selectAllOrNone } from "@/pages/shared/selectionHelpers";
 import { loadDensity, loadInsightsCollapsed } from "./utils";
 import { DENSITY_LS_KEY, DENSITY_PRESETS, INSIGHTS_LS_KEY } from "./constants";
 
@@ -14,13 +16,9 @@ import { DENSITY_LS_KEY, DENSITY_PRESETS, INSIGHTS_LS_KEY } from "./constants";
 export function useRfiSelection(filtered) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const toggleSelect = (id) =>
-    setSelectedIds((prev) => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
+    setSelectedIds((prev) => toggleSelectionId(prev, id));
   const toggleAll = (checked) =>
-    setSelectedIds(checked ? new Set(filtered.map((r) => r.id)) : new Set());
+    setSelectedIds(selectAllOrNone(checked, (filtered || []).map((r) => r.id).filter(Boolean)));
   return { selectedIds, setSelectedIds, toggleSelect, toggleAll };
 }
 

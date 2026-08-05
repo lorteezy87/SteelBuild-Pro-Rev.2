@@ -35,11 +35,13 @@ import {
   isValidFlagKey,
   mergeOverride,
   removeOverride,
+  createEmptyFlagDraft,
+  createEmptyOverrideDraft,
 } from "./featureFlags/featureFlagsPageHelpers";
 
 function FeatureFlagsAdminContent() {
   const qc = useQueryClient();
-  const [newFlag, setNewFlag] = useState({ flag_key: "", description: "", enabled: false });
+  const [newFlag, setNewFlag] = useState(() => createEmptyFlagDraft());
   const [overrideDrafts, setOverrideDrafts] = useState({});
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -67,7 +69,7 @@ function FeatureFlagsAdminContent() {
     mutationFn: (record) => entities.FeatureFlag.create(record),
     onSuccess: () => {
       invalidate();
-      setNewFlag({ flag_key: "", description: "", enabled: false });
+      setNewFlag(createEmptyFlagDraft());
       toast.success("Flag created");
     },
     onError: (err) => toast.error(err?.message || "Failed to create flag"),
@@ -93,7 +95,7 @@ function FeatureFlagsAdminContent() {
   };
 
   const handleAddOverride = (flag) => {
-    const draft = overrideDrafts[flag.id] || { email: "", enabled: true };
+    const draft = overrideDrafts[flag.id] || createEmptyOverrideDraft();
     const email = (draft.email || "").trim().toLowerCase();
     if (!isValidOverrideEmail(email)) {
       toast.error("Enter a valid email");
@@ -104,7 +106,7 @@ function FeatureFlagsAdminContent() {
       { id: flag.id, updates: { user_overrides: overrides } },
       {
         onSuccess: () => {
-          setOverrideDrafts((d) => ({ ...d, [flag.id]: { email: "", enabled: true } }));
+          setOverrideDrafts((d) => ({ ...d, [flag.id]: createEmptyOverrideDraft() }));
         },
       },
     );
@@ -238,7 +240,7 @@ function FeatureFlagsAdminContent() {
             ) : (
               flags.map((flag) => {
                 const overrides = coerceOverrides(flag.user_overrides);
-                const draft = overrideDrafts[flag.id] || { email: "", enabled: true };
+                const draft = overrideDrafts[flag.id] || createEmptyOverrideDraft();
                 return (
                   <TableRow key={flag.id} style={{ borderBottom: "1px solid var(--border-default)" }}>
                     <TableCell style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-primary)" }}>

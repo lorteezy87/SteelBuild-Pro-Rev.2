@@ -35,3 +35,12 @@ describe("featureFlagsPageHelpers", () => {
     expect(removeOverride({ a: true, b: false }, "a")).toEqual({ b: false });
   });
 });
+
+import { createEmptyFlagDraft, createEmptyOverrideDraft } from "../featureFlagsPageHelpers";
+
+describe("flag drafts", () => {
+  it("creates empty drafts", () => {
+    expect(createEmptyFlagDraft().flag_key).toBe("");
+    expect(createEmptyOverrideDraft().enabled).toBe(true);
+  });
+});
