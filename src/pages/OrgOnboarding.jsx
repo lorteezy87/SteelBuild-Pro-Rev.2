@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
 import { useOrg } from "@/components/shared/OrgContext";
 import { createOrganization, getInvitation, acceptInvitation } from "@/lib/org/repository";
+import { OrgOnboardingShell } from "./orgOnboarding/OrgOnboardingUi";
 import {
   ROLE_LABEL,
   parseInviteTokenFromSearch,
@@ -20,22 +21,6 @@ import {
   canSubmitWorkspaceName,
 } from "./orgOnboarding/orgOnboardingPageHelpers";
 
-function Shell({ children, email, onSignOut }) {
-  return (
-    <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24, background: "var(--bg-base, #0D1117)" }}>
-      <div style={{ width: "100%", maxWidth: 460, background: "var(--bg-surface-secondary, #161B22)", border: "1px solid var(--border-default)", borderRadius: 14, padding: "32px 28px", boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--accent)", fontWeight: 800 }}>
-          SteelBuild Pro
-        </div>
-        {children}
-        <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--text-muted)" }}>
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>{email || "Signed in"}</span>
-          <button type="button" onClick={onSignOut} style={{ background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>Sign out</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function OrgOnboarding() {
   const { user, logout } = useAuth();
@@ -94,23 +79,23 @@ export default function OrgOnboarding() {
   // ── Invite-accept mode ──
   if (token) {
     if (loadingInvite) {
-      return <Shell email={user?.email} onSignOut={() => logout?.()}><p style={{ color: "var(--text-muted)", marginTop: 18 }}>Loading invitation…</p></Shell>;
+      return <OrgOnboardingShell email={user?.email} onSignOut={() => logout?.()}><p style={{ color: "var(--text-muted)", marginTop: 18 }}>Loading invitation…</p></OrgOnboardingShell>;
     }
     const invalid = isInviteInvalid(invite);
     if (invalid) {
       return (
-        <Shell email={user?.email} onSignOut={() => logout?.()}>
+        <OrgOnboardingShell email={user?.email} onSignOut={() => logout?.()}>
           <h1 style={hStyle}>Invitation unavailable</h1>
           <p style={pStyle}>This invitation has expired, been revoked, or already used. Ask your workspace admin to send a new one — or create your own workspace below.</p>
           <button className="sbd-btn sbd-btn-ghost" style={{ width: "100%", justifyContent: "center", minHeight: 42 }} onClick={() => { try { window.history.replaceState({}, "", "/"); } catch { /* ignore */ } window.location.reload(); }}>
             Create a workspace instead
           </button>
-        </Shell>
+        </OrgOnboardingShell>
       );
     }
     const emailMismatch = invite.email && user?.email && invite.email.toLowerCase() !== user.email.toLowerCase();
     return (
-      <Shell email={user?.email} onSignOut={() => logout?.()}>
+      <OrgOnboardingShell email={user?.email} onSignOut={() => logout?.()}>
         <h1 style={hStyle}>Join {invite.org_name}</h1>
         <p style={pStyle}>
           You've been invited to the <strong>{invite.org_name}</strong> workspace as{" "}
@@ -124,13 +109,13 @@ export default function OrgOnboarding() {
         <button className="sbd-btn sbd-btn-primary" style={{ width: "100%", justifyContent: "center", minHeight: 44, fontSize: 14 }} disabled={busy || emailMismatch} onClick={accept}>
           {busy ? "Joining…" : `Accept & join ${invite.org_name}`}
         </button>
-      </Shell>
+      </OrgOnboardingShell>
     );
   }
 
   // ── Create-workspace mode ──
   return (
-    <Shell email={user?.email} onSignOut={() => logout?.()}>
+    <OrgOnboardingShell email={user?.email} onSignOut={() => logout?.()}>
       <h1 style={hStyle}>Create your workspace</h1>
       <p style={pStyle}>A workspace holds your projects, your team, and your billing. Name it after your shop or company — you can invite teammates once it's set up.</p>
       <form onSubmit={submitCreate}>
@@ -141,7 +126,7 @@ export default function OrgOnboarding() {
           {busy ? "Creating…" : "Create workspace"}
         </button>
       </form>
-    </Shell>
+    </OrgOnboardingShell>
   );
 }
 
