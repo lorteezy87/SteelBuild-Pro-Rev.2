@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 /**
- * DrawingSubmittalHub smoke + wiring test — boots the real hub (the moat shell:
- * Control Board / Process Board / Drawing Register / Submittal Register /
- * Approval Matrix) with Supabase mocked to empty, then confirms the new clean
- * Drawing Register tab is wired in: clicking it renders DrawingRegisterTable
- * (the flat per-set table), not the old embedded Drawings page.
+ * DrawingSubmittalHub smoke + wiring test — boots the real hub with Supabase
+ * mocked empty, then confirms the Drawing Register tab embeds the full
+ * Drawings editor (rename / delete / bulk / per-sheet).
  */
 import React from "react";
 import { render, screen } from "@testing-library/react";
@@ -98,12 +96,11 @@ describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
     expect(screen.getByText("Approval Matrix")).toBeInTheDocument();
   });
 
-  it("renders the clean DrawingRegisterTable on the Drawing Register tab", async () => {
+  it("embeds the full Drawings editor on the Drawing Register tab", async () => {
     const user = userEvent.setup();
     renderHub();
     await user.click(await screen.findByText("Drawing Register"));
-    // "Drawing Set Package" is the DrawingRegisterTable column header — unique to
-    // the clean flat table (the old embedded Drawings page never rendered it).
-    expect(await screen.findByText("Drawing Set Package")).toBeInTheDocument();
+    // CommandBar title from Drawings — proves full editor is mounted.
+    expect(await screen.findByText(/Drawings & Submittals/i)).toBeInTheDocument();
   });
 });
