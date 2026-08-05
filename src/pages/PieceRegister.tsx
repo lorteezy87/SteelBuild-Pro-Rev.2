@@ -40,10 +40,6 @@ import { planBulkPieceAttributeUpdate } from "@/lib/pieceControl/bulkUpdatePiece
 import { bulkUpdatePieceAttributes } from "@/lib/pieceControl/bulkUpdateRepository";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
-import {
-  buildPieceImpact,
-  currentRevisionCodeForDrawing,
-} from "@/lib/pieceControl/drawingReleaseReady";
 import { readPieceImportFile } from "@/lib/pieceControl/importAdapters";
 import {
   collectAppliedPieceIds,
@@ -54,10 +50,7 @@ import {
   collectAppliedPieceSheetHints,
   planImportDrawingLinks,
 } from "@/lib/pieceControl/importDrawingLink";
-import {
-  sortPieceRegisterRows,
-  type PieceRegisterSort,
-} from "@/lib/pieceControl/pieceRegisterSort";
+import type { PieceRegisterSort } from "@/lib/pieceControl/pieceRegisterSort";
 import {
   buildPieceControlSummary,
   modePresentation,
@@ -85,10 +78,15 @@ import {
 import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
-import { filterPieceRegisterRows, type PieceRegisterFilters } from "./pieceRegister/filter";
+import type { PieceRegisterFilters } from "./pieceRegister/filter";
 import {
-  applyAttentionFocus,
   uniqueValues,
+  buildWorkPackageLabelMap,
+  buildPieceDisplayRows,
+  buildFilteredRegisterRows,
+  archiveConfirmationText as buildArchiveConfirmationText,
+  allRowsSelected,
+  buildSelectedPieceImpact,
 } from "./pieceRegister/registerHelpers";
 import { PieceRegisterArchiveDialog } from "./pieceRegister/PieceRegisterArchiveDialog";
 import { PieceRegisterRegisterView } from "./pieceRegister/PieceRegisterRegisterView";
@@ -192,41 +190,10 @@ export default function PieceRegister() {
     enabled: enabled && Boolean(selectedPieceId),
     staleTime: 15_000,
   });
-  const selectedPieceImpact = useMemo(() => {
-    if (!selectedPieceId || !impactSnapshotQuery.data) return null;
-    const snapshot = impactSnapshotQuery.data;
-    const piece = snapshot.pieces.find((row) => row.id === selectedPieceId);
-    if (!piece) return null;
-    const linkedDrawingIds = snapshot.pieceDrawings
-      .filter((link) => link.piece_id === selectedPieceId)
-      .map((link) => link.drawing_id);
-    const governingId = linkedDrawingIds[0] ?? null;
-    const commentDispositions = snapshot.commentDispositions.filter((row) =>
-      (row.related_piece_ids ?? []).includes(selectedPieceId),
-    );
-    return buildPieceImpact({
-      piece: {
-        id: piece.id,
-        piece_mark: piece.piece_mark,
-        lifecycle_status: piece.lifecycle_status,
-        on_hold: piece.on_hold,
-      },
-      linkedDrawingIds,
-      drawings: snapshot.drawings,
-      evidence: {
-        drawingSets: snapshot.drawingSets,
-        submittals: snapshot.submittals,
-        sheetResponses: snapshot.sheetResponses,
-        drawingRevisions: snapshot.drawingRevisions,
-        drawingReviews: snapshot.drawingReviews,
-        drawingSignoffs: snapshot.drawingSignoffs,
-      },
-      commentDispositions,
-      currentRevisionCode: governingId
-        ? currentRevisionCodeForDrawing(governingId, snapshot.drawingRevisions)
-        : null,
-    });
-  }, [impactSnapshotQuery.data, selectedPieceId]);
+  const selectedPieceImpact = useMemo(
+    () => buildSelectedPieceImpact(selectedPieceId, impactSnapshotQuery.data),
+    [impactSnapshotQuery.data, selectedPieceId],
+  );
 
   const batches = batchesQuery.data ?? [];
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) ?? batches[0] ?? null;
@@ -237,22 +204,11 @@ export default function PieceRegister() {
   });
 
   const workPackageMap = useMemo(
-    () => new Map(
-      (workPackagesQuery.data ?? []).map((wp: any) => [
-        wp.id,
-        formatWorkPackageTitle(wp),
-      ]),
-    ),
+    () => buildWorkPackageLabelMap(workPackagesQuery.data ?? []),
     [workPackagesQuery.data],
   );
   const displayRows = useMemo(
-    () => (piecesQuery.data ?? []).map((piece) => ({
-      ...piece,
-      workPackageLabel:
-        piece.work_package_id && workPackageMap.has(piece.work_package_id)
-          ? workPackageMap.get(piece.work_package_id)!
-          : "Unassigned",
-    })),
+    () => buildPieceDisplayRows(piecesQuery.data, workPackageMap),
     [piecesQuery.data, workPackageMap],
   );
   const overviewSnapshotQuery = useQuery({
@@ -273,20 +229,14 @@ export default function PieceRegister() {
     () => selectUpcomingShipments(overviewWorkPackages),
     [overviewWorkPackages],
   );
-  const filteredRows = useMemo(() => {
-    const rows = applyAttentionFocus(
-      filterPieceRegisterRows(displayRows, filters),
-      attentionFocus,
-    );
-    return sortPieceRegisterRows(rows, registerSort);
-  }, [attentionFocus, displayRows, filters, registerSort]);
+  const filteredRows = useMemo(
+    () => buildFilteredRegisterRows(displayRows, filters, attentionFocus, registerSort),
+    [attentionFocus, displayRows, filters, registerSort],
+  );
   const canBulkUpdate = enabled && !roleLoading && roleAtLeast(role, "field");
   const canArchive = enabled && !roleLoading && roleAtLeast(role, "admin");
-  const allFilteredSelected = filteredRows.length > 0
-    && filteredRows.every((piece) => selectedPieceIds.has(piece.id));
-  const archiveConfirmationText = selectedPieceIds.size === 1
-    ? "ARCHIVE 1 PIECE"
-    : `ARCHIVE ${selectedPieceIds.size} PIECES`;
+  const allFilteredSelected = allRowsSelected(filteredRows, selectedPieceIds);
+  const archiveConfirmationText = buildArchiveConfirmationText(selectedPieceIds.size);
 
   const profiles = useMemo(() => uniqueValues(displayRows.map((row) => row.profile)), [displayRows]);
   const grades = useMemo(() => uniqueValues(displayRows.map((row) => row.material_grade)), [displayRows]);

@@ -4,6 +4,21 @@
  */
 import type { PieceAttentionItem } from "@/lib/pieceControl/presentation";
 import { pieceTons } from "@/lib/pieceControl/tonnage";
+import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
+import {
+  buildPieceImpact,
+  currentRevisionCodeForDrawing,
+} from "@/lib/pieceControl/drawingReleaseReady";
+import {
+  sortPieceRegisterRows,
+  type PieceRegisterSort,
+} from "@/lib/pieceControl/pieceRegisterSort";
+import type { PieceRegisterRow } from "@/lib/pieceControl/repository";
+import {
+  filterPieceRegisterRows,
+  type PieceRegisterDisplayRow,
+  type PieceRegisterFilters,
+} from "./filter";
 
 const naturalSortCollator = new Intl.Collator("en-US", {
   numeric: true,
@@ -41,4 +56,113 @@ export function applyAttentionFocus<
     return rows.filter((piece) => Boolean(piece.on_hold));
   }
   return rows;
+}
+
+export function buildWorkPackageLabelMap(
+  workPackages: Array<{ id?: string; [k: string]: unknown }>,
+): Map<string, string> {
+  return new Map(
+    (workPackages || [])
+      .filter((wp): wp is { id: string; [k: string]: unknown } => Boolean(wp?.id))
+      .map((wp) => [wp.id, formatWorkPackageTitle(wp as never)]),
+  );
+}
+
+export function buildPieceDisplayRows(
+  pieces: PieceRegisterRow[] | null | undefined,
+  workPackageMap: Map<string, string>,
+): PieceRegisterDisplayRow[] {
+  return (pieces ?? []).map((piece) => ({
+    ...piece,
+    workPackageLabel:
+      piece.work_package_id && workPackageMap.has(piece.work_package_id)
+        ? workPackageMap.get(piece.work_package_id)!
+        : "Unassigned",
+  }));
+}
+
+export function buildFilteredRegisterRows(
+  displayRows: PieceRegisterDisplayRow[],
+  filters: PieceRegisterFilters,
+  attentionFocus: PieceAttentionItem["key"] | null,
+  registerSort: PieceRegisterSort,
+): PieceRegisterDisplayRow[] {
+  const rows = applyAttentionFocus(
+    filterPieceRegisterRows(displayRows, filters),
+    attentionFocus,
+  );
+  return sortPieceRegisterRows(rows, registerSort);
+}
+
+export function archiveConfirmationText(selectedCount: number): string {
+  return selectedCount === 1
+    ? "ARCHIVE 1 PIECE"
+    : `ARCHIVE ${selectedCount} PIECES`;
+}
+
+export function allRowsSelected(
+  filteredRows: Array<{ id: string }>,
+  selectedPieceIds: Set<string>,
+): boolean {
+  return (
+    filteredRows.length > 0 &&
+    filteredRows.every((piece) => selectedPieceIds.has(piece.id))
+  );
+}
+
+export type PieceImpactSnapshotLike = {
+  pieces: Array<{
+    id: string;
+    piece_mark?: string | null;
+    lifecycle_status?: string | null;
+    on_hold?: boolean | null;
+  }>;
+  pieceDrawings: Array<{ piece_id: string; drawing_id: string }>;
+  commentDispositions: Array<{ related_piece_ids?: string[] | null }>;
+  drawings: unknown[];
+  drawingSets: unknown[];
+  submittals: unknown[];
+  sheetResponses: unknown[];
+  drawingRevisions: unknown[];
+  drawingReviews: unknown[];
+  drawingSignoffs: unknown[];
+};
+
+/** Selected-piece impact panel model; null when no selection or piece missing. */
+export function buildSelectedPieceImpact(
+  selectedPieceId: string | null | undefined,
+  snapshot: PieceImpactSnapshotLike | null | undefined,
+) {
+  if (!selectedPieceId || !snapshot) return null;
+  const piece = snapshot.pieces.find((row) => row.id === selectedPieceId);
+  if (!piece) return null;
+  const linkedDrawingIds = snapshot.pieceDrawings
+    .filter((link) => link.piece_id === selectedPieceId)
+    .map((link) => link.drawing_id);
+  const governingId = linkedDrawingIds[0] ?? null;
+  const commentDispositions = snapshot.commentDispositions.filter((row) =>
+    (row.related_piece_ids ?? []).includes(selectedPieceId),
+  );
+  return buildPieceImpact({
+    piece: {
+      id: piece.id,
+      piece_mark: piece.piece_mark,
+      lifecycle_status: piece.lifecycle_status,
+      on_hold: piece.on_hold,
+    },
+    linkedDrawingIds,
+    drawings: snapshot.drawings as never,
+    evidence: {
+      drawingSets: snapshot.drawingSets as never,
+      submittals: snapshot.submittals as never,
+      sheetResponses: snapshot.sheetResponses as never,
+      drawingRevisions: snapshot.drawingRevisions as never,
+      drawingReviews: snapshot.drawingReviews as never,
+      drawingSignoffs: snapshot.drawingSignoffs as never,
+    },
+    commentDispositions: commentDispositions as never,
+    currentRevisionCode: governingId
+      ? currentRevisionCodeForDrawing(governingId, snapshot.drawingRevisions as never)
+      : null,
+  });
 }

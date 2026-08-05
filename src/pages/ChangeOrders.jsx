@@ -43,6 +43,12 @@ import {
   reconcileSelectedIds,
   summarizeBulkResult,
 } from "./changeOrders/changeOrderBulk";
+import {
+  sourceRfiLabel as buildSourceRfiLabel,
+  filterChangeOrders,
+  nextSelectedToggle,
+  selectAllOrNone,
+} from "./changeOrders/changeOrdersPageHelpers";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 import { BulkActionBar } from "@/components/design-system";
@@ -150,11 +156,10 @@ export default function ChangeOrders() {
   // conversion (prefill) and editing an already-linked CO. Derived (not stored
   // in the form) so it never gets written back to the record.
   const activeSourceRfiId = prefill?.source_rfi_id || editing?.source_rfi_id || null;
-  const sourceRfiLabel = useMemo(() => {
-    if (!activeSourceRfiId) return "";
-    const r = rfis.find((x) => x.id === activeSourceRfiId);
-    return r?.rfi_number ? `RFI ${r.rfi_number}` : (r ? "the source RFI" : "");
-  }, [activeSourceRfiId, rfis]);
+  const sourceRfiLabel = useMemo(
+    () => buildSourceRfiLabel(activeSourceRfiId, rfis),
+    [activeSourceRfiId, rfis],
+  );
 
   /* -- Mutations -- */
   const createMut = useMutation({
@@ -316,19 +321,10 @@ export default function ChangeOrders() {
   const baseContract = Number(liveProject?.original_contract_value) || 0;
   const revisedContract = computeRevisedContractValue(liveProject, cos);
 
-  const filtered = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
-    return cos.filter((c) => {
-      if (filter !== "all" && c.status !== filter) return false;
-      if (!q) return true;
-      return (
-        (c.co_number || "").toLowerCase().includes(q) ||
-        (c.title || "").toLowerCase().includes(q) ||
-        (c.description || "").toLowerCase().includes(q) ||
-        (c.reason_code || "").toLowerCase().includes(q)
-      );
-    });
-  }, [cos, filter, debouncedSearch]);
+  const filtered = useMemo(
+    () => filterChangeOrders(cos, filter, debouncedSearch),
+    [cos, filter, debouncedSearch],
+  );
 
   // Selection is scoped to the visible project/filter result set. This clears
   // stale IDs after query refreshes, project changes, and filter/search changes,
@@ -342,15 +338,11 @@ export default function ChangeOrders() {
   }, [filtered, projectId]);
 
   const toggleSelect = (id) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelectedIds((current) => nextSelectedToggle(current, id));
   };
 
   const toggleAll = (checked) => {
-    setSelectedIds(checked ? new Set(filtered.map((co) => co.id)) : new Set());
+    setSelectedIds(selectAllOrNone(checked, filtered.map((co) => co.id)));
   };
 
   if (!projectId) {
