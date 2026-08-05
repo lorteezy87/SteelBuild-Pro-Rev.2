@@ -6,28 +6,23 @@ import {
   getEffectiveDueDate,
 } from '../../lib/stageDates';
 import { filterSearchableTasks } from './searchableTaskPickerHelpers';
-
-export const drawerSurface = 'var(--bg-surface-secondary)';
-export const drawerPanel = 'var(--bg-surface-low)';
-export const drawerPanelStrong = 'var(--bg-surface-high)';
-export const drawerBorder = 'var(--border-default)';
-export const drawerMutedBorder = 'var(--divider)';
-export const drawerText = 'var(--text-primary)';
-export const drawerMutedText = 'var(--text-muted)';
-
-export const drawerControlStyle = {
-  width: '100%',
-  background: drawerPanelStrong,
-  border: `1px solid ${drawerBorder}`,
-  borderRadius: 8,
-  padding: '8px 10px',
-  fontFamily: 'var(--font-body)',
-  fontSize: 12,
-  color: drawerText,
-  boxSizing: 'border-box' as const,
-  colorScheme: 'dark',
-  outline: 'none',
-};
+export {
+  drawerSurface,
+  drawerPanel,
+  drawerPanelStrong,
+  drawerBorder,
+  drawerMutedBorder,
+  drawerText,
+  drawerMutedText,
+  drawerControlStyle,
+} from './taskDetailTokens';
+import {
+  drawerPanelStrong,
+  drawerBorder,
+  drawerText,
+  drawerMutedText,
+  drawerControlStyle,
+} from './taskDetailTokens';
 
 /**
  * Searchable task picker — replaces the plain <select> for adding
