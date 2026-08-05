@@ -200,3 +200,14 @@ export function summarizeAutoAssignSkips(
   }
   return counts;
 }
+
+/** UI copy overrides for readiness blocker strings from the pilot. */
+export const READINESS_BLOCKER_COPY: Record<string, string> = {
+  "No canonical pieces assigned to this work package.":
+    "No active pieces assigned to this work package.",
+};
+
+/** UI copy overrides for material-state strings. */
+export const READINESS_MATERIAL_COPY: Record<string, string> = {
+  "not yet evaluated in this release.": "Material status is not available.",
+};

@@ -1,6 +1,8 @@
 /**
  * Pure presentation helpers for ProcessBoardPanel.
  */
+import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
+
 export type ProcessPillTone = "good" | "warn" | "info" | "neutral" | "danger" | "review";
 
 /** Stage → kit Pill tone (released/IFC → good, OFS/BFA → warn, IFA/OFA → info). */
@@ -40,3 +42,20 @@ export function riskPillTone(tier: string | undefined): ProcessPillTone {
   if (tier === "attention") return "warn";
   return "neutral";
 }
+
+/** Human captions under each process-board stage column. */
+export const STAGE_CAPTIONS: Record<string, string> = {
+  "Not Started": "Not started",
+  IFA: "In for approval",
+  OFA: "Out for approval",
+  BFA: "Back from approval",
+  "R&R": "Revise and resubmit",
+  OFS: "OFS — Out for Scrub",
+  IFC: "Issued for construction",
+  Released: "Released for fab",
+};
+
+export function getStageColor(stage: string): string {
+  return (STAGE_MAP as Record<string, { color?: string } | undefined>)[stage]?.color || "var(--text-muted)";
+}
+

@@ -23,6 +23,8 @@ import {
   statusPillTone,
   cardTone,
   riskPillTone,
+  STAGE_CAPTIONS,
+  getStageColor,
 } from "./processBoardPanelHelpers";
 import { useNavigate } from "react-router-dom";
 import {
@@ -53,23 +55,8 @@ import type { BoardFilter, BoardItem, BoardSummary } from "./processBoard.derive
 type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 
-const STAGE_CAPTIONS: Record<string, string> = {
-  "Not Started": "Not started",
-  IFA: "In for approval",
-  OFA: "Out for approval",
-  BFA: "Back from approval",
-  "R&R": "Revise and resubmit",
-  OFS: "OFS — Out for Scrub",
-  IFC: "Issued for construction",
-  Released: "Released for fab",
-};
-
 // Timezone-safe short date for the canonical process board.
 const fmtDate = (input: any) => formatShortDate(input);
-
-function getStageColor(stage: string): string {
-  return STAGE_MAP[stage]?.color || "var(--text-muted)";
-}
 
 export interface ProcessBoardPanelProps {
   setPackages?: any[];

@@ -10,6 +10,8 @@ import {
   filterActiveDrawingSets,
   filterDrawingSetsByNeedle,
   summarizeAutoAssignSkips,
+  READINESS_BLOCKER_COPY,
+  READINESS_MATERIAL_COPY,
 } from "../pieceRelationshipHelpers";
 
 describe("leaf / container selection", () => {
@@ -129,3 +131,17 @@ describe("summarizeAutoAssignSkips", () => {
     ).toEqual({ "no match": 2, ambiguous: 1 });
   });
 });
+
+describe("readiness copy maps", () => {
+  it("overrides known blocker and material strings", () => {
+    expect(
+      READINESS_BLOCKER_COPY[
+        "No canonical pieces assigned to this work package."
+      ],
+    ).toMatch(/active pieces/i);
+    expect(
+      READINESS_MATERIAL_COPY["not yet evaluated in this release."],
+    ).toMatch(/not available/i);
+  });
+});
+

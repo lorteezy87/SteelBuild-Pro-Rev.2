@@ -11,3 +11,10 @@ export const CATEGORY_COLORS: Record<string, string> = {
   Engineering: "var(--accent)",
   Other: "var(--text-muted)",
 };
+
+/** Pure type → color for scope item badges (icons stay in the list component). */
+export const TYPE_COLORS: Record<string, string> = {
+  Scope: "var(--status-success)",
+  Exclusion: "var(--status-error)",
+  Clarification: "var(--status-info)",
+};

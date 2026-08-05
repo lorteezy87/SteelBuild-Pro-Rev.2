@@ -36,6 +36,8 @@ import {
   filterActiveDrawingSets,
   filterDrawingSetsByNeedle,
   summarizeAutoAssignSkips,
+  READINESS_BLOCKER_COPY,
+  READINESS_MATERIAL_COPY,
 } from "./pieceRelationshipHelpers";
 
 
@@ -45,15 +47,6 @@ interface PieceRelationshipManagerProps {
   focusedWorkPackageId?: string;
   compact?: boolean;
 }
-
-const READINESS_BLOCKER_COPY: Record<string, string> = {
-  "No canonical pieces assigned to this work package.":
-    "No active pieces assigned to this work package.",
-};
-
-const READINESS_MATERIAL_COPY: Record<string, string> = {
-  "not yet evaluated in this release.": "Material status is not available.",
-};
 
 export default function PieceRelationshipManager({
   projectId,

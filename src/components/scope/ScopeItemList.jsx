@@ -1,12 +1,12 @@
 import React from "react";
 import { Check, X, Info, FileText, Plus, Filter, Paperclip, Clock } from "lucide-react";
 import { formatLocalDate } from "@/utils/dates";
-import { CATEGORY_COLORS } from "./scopeItemListHelpers";
+import { CATEGORY_COLORS, TYPE_COLORS } from "./scopeItemListHelpers";
 
-const TYPE_META = {
-  Scope:         { color: "var(--status-success)", Icon: Check },
-  Exclusion:     { color: "var(--status-error)",   Icon: X },
-  Clarification: { color: "var(--status-info)",    Icon: Info },
+const TYPE_ICONS = {
+  Scope: Check,
+  Exclusion: X,
+  Clarification: Info,
 };
 
 export default function ScopeItemList({
@@ -141,7 +141,10 @@ export default function ScopeItemList({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       {items.map((item) => {
-        const typeMeta = TYPE_META[item.item_type] || { color: "var(--text-muted)", Icon: FileText };
+        const typeMeta = {
+          color: TYPE_COLORS[item.item_type] || "var(--text-muted)",
+          Icon: TYPE_ICONS[item.item_type] || FileText,
+        };
         const TypeIcon = typeMeta.Icon;
         const categoryColor = CATEGORY_COLORS[item.category] || "var(--text-muted)";
         const isComplete = !!item.is_completed;

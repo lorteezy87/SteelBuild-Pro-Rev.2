@@ -35,22 +35,15 @@ import {
   hasLogicGapTask,
 } from "./scheduleGanttHelpers";
 import { GANTT_ROW_H, GANTT_SUM_H } from "./scheduleGanttDerive";
-
-const DELIVERY_STATUS_DOT: Record<string, string> = {
-  "Scheduled":  GANTT_PHASE_VAR.Procurement,
-  "In Transit": GANTT_STATUS_HEX.inProgress,
-  "Delivered":  GANTT_STATUS_HEX.complete,
-  "Partial":    GANTT_STATUS_HEX.delayed,
-  "Rejected":   GANTT_STATUS_HEX.delayed,
-  "Delayed":    GANTT_STATUS_HEX.delayed,
-};
+import {
+  DELIVERY_STATUS_DOT,
+  DETAILING_STAGES,
+  STAGE_DISPLAY,
+  tintColor as tint,
+} from "./ganttTaskRowsHelpers";
 
 const ROW_H   = GANTT_ROW_H;
 const SUM_H   = GANTT_SUM_H;
-const tint = (color: any, percent: any) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
-
-const DETAILING_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
-const STAGE_DISPLAY: Record<string, any> = {};
 
 export function GanttLeftPanelRows(props: any) {
   const {

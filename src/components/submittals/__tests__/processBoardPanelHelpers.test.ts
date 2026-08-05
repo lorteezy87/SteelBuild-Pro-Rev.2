@@ -4,6 +4,8 @@ import {
   statusPillTone,
   cardTone,
   riskPillTone,
+  STAGE_CAPTIONS,
+  getStageColor,
 } from "../processBoardPanelHelpers";
 
 describe("statusPillTone", () => {
@@ -31,3 +33,15 @@ describe("cardTone / riskPillTone", () => {
     expect(riskPillTone(undefined)).toBe("neutral");
   });
 });
+
+describe("STAGE_CAPTIONS / getStageColor", () => {
+  it("maps known stage captions", () => {
+    expect(STAGE_CAPTIONS.IFA).toMatch(/approval/i);
+    expect(STAGE_CAPTIONS.Released).toMatch(/fab/i);
+  });
+  it("returns a color string for known and unknown stages", () => {
+    expect(typeof getStageColor("IFC")).toBe("string");
+    expect(getStageColor("__nope__")).toBe("var(--text-muted)");
+  });
+});
+
