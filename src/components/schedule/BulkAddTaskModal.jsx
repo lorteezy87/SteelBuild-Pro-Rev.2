@@ -2,66 +2,20 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { PHASES } from "../../utils/phases";
 import DateOrTbdInput from "./DateOrTbdInput";
 import { addDays, daysBetween, emptyBulkTaskRow } from "./bulkAddTaskHelpers";
-
-const TASK_TYPES = ["Task", "Fabrication", "Delivery", "Install", "Submittal", "RFI", "Milestone"];
-const STATUSES   = ["Not Started", "In Progress", "Complete", "On Hold", "Cancelled"];
-const PRIORITIES = ["Low", "Normal", "High", "Critical"];
-
-const CELL = {
-  padding: "0 7px",
-  height: "100%",
-  display: "flex",
-  alignItems: "center",
-  minWidth: 0,
-};
-
-const INPUT_STYLE = {
-  width: "100%",
-  minWidth: 0,
-  height: 34,
-  boxSizing: "border-box",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 2,
-  outline: "none",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  lineHeight: "18px",
-  padding: "7px 9px",
-};
-
-const SELECT_STYLE = {
-  width: "100%",
-  minWidth: 0,
-  height: 34,
-  boxSizing: "border-box",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 2,
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  lineHeight: "16px",
-  padding: "0 8px",
-  cursor: "pointer",
-  outline: "none",
-};
-
-// Column widths are tuned so the grid's intrinsic width (≈1346px) fits inside
-// the modal's inner content box with NO horizontal scroll at desktop widths
-// (>=1440px viewport → inner ≈1364px, ~18px slack). At wider viewports the
-// task-name flex column absorbs the extra space up to the modal's 1688px inner
-// cap. START/END DATE get 158px so the full MM/DD/YYYY + the TBD control shows
-// without clipping; the selects get room for their longest option text
-// ("Not Started", "Fabrication", etc.). GRID_MIN_WIDTH is only a small-screen
-// fallback floor below which a horizontal scrollbar appears gracefully.
-const COL_WIDTHS = "40px minmax(200px, 1.4fr) 94px 126px 158px 60px 158px 112px 92px 124px 132px 50px";
-const GRID_MIN_WIDTH = 1346;
-const ROW_BG = "var(--bg-surface)";
-const ROW_ALT_BG = "var(--bg-surface-low)";
-const ROW_ERROR_BG = "var(--danger-muted)";
-const PANEL_BG = "var(--bg-surface-secondary)";
+import {
+  TASK_TYPES,
+  BULK_STATUSES as STATUSES,
+  BULK_PRIORITIES as PRIORITIES,
+  CELL,
+  INPUT_STYLE,
+  SELECT_STYLE,
+  COL_WIDTHS,
+  GRID_MIN_WIDTH,
+  ROW_BG,
+  ROW_ALT_BG,
+  ROW_ERROR_BG,
+  PANEL_BG,
+} from "./bulkAddTaskStyleHelpers";
 
 export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName, isSaving, existingTasks }) {
   const [rows, setRows] = useState(() => [emptyBulkTaskRow(1), emptyBulkTaskRow(2), emptyBulkTaskRow(3)]);
