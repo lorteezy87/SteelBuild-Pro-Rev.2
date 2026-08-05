@@ -75,9 +75,9 @@ describe("buildFlatDrawingRows", () => {
 
 describe("estimateFlatRowHeight", () => {
   it("returns height by row type", () => {
-    expect(estimateFlatRowHeight({ type: "group" } as any)).toBe(62);
+    expect(estimateFlatRowHeight({ type: "group" } as any)).toBe(48);
     expect(estimateFlatRowHeight({ type: "setOnlyInfo" } as any)).toBe(120);
-    expect(estimateFlatRowHeight({ type: "sheet" } as any)).toBe(48);
+    expect(estimateFlatRowHeight({ type: "sheet" } as any)).toBe(44);
   });
 });
 
