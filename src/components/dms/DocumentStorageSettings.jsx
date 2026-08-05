@@ -22,7 +22,7 @@ import {
 } from "@/lib/dms/sharepointSyncHonesty";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { timeAgo } from "@/lib/timeAgo";
-import { syncStatusLabel } from "./documentStorageSettingsHelpers";
+import { syncStatusLabel, syncStatusColor } from "./documentStorageSettingsHelpers";
 
 // ── Provider config ───────────────────────────────────────────────────
 const PROVIDERS = [
@@ -39,15 +39,6 @@ const SYNC_FREQUENCIES = [
 ];
 
 // ── Sync status badge ─────────────────────────────────────────────────
-function syncStatusColor(status) {
-  switch (status) {
-    case "success": return "var(--success)";
-    case "error":   return "var(--status-error)";
-    case "pending": return "var(--warning)";
-    default:        return "var(--text-muted)";
-  }
-}
-
 export default function DocumentStorageSettings({ projectId }) {
   const qc = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);

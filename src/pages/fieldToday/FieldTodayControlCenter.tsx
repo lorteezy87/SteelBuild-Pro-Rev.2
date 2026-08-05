@@ -60,7 +60,7 @@ import {
   filterFieldTaskRows,
 } from "./fieldTodayControlCenter.derive";
 import { PROGRESS_STEPS, clampPercent } from "@/lib/field/fieldToday";
-import { urgencyTone } from "./fieldTodayControlCenterHelpers";
+import { urgencyTone, statusTone } from "./fieldTodayControlCenterHelpers";
 
 // ── Photo thumbnail ─────────────────────────────────────────────────────────────
 // Stored photo file_url values are storage PATHS (not fetchable URLs), so an
@@ -131,15 +131,6 @@ export interface FieldTodayControlCenterProps {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Map task completion status to Pill tone. */
-function statusTone(status: string): import("@/components/command").PillTone {
-  switch (status) {
-    case "Complete":    return "good";
-    case "In Progress": return "info";
-    default:            return "neutral";
-  }
-}
 
 /** Scroll the DataTable into view when a panel "View all" is clicked. */
 function scrollToTable() {

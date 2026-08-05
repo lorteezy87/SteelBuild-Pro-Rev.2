@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatLocalDate } from "@/utils/dates";
+import { btnStyle } from "./documentCardHelpers";
 
 /* ── More vibrant file type badges with high contrast ── */
 const FILE_TYPE_CONFIG = {
@@ -50,17 +51,6 @@ const CATEGORY_COLORS = {
 };
 
 const DEFAULT_CATEGORY_STYLE = { bg: "var(--bg-surface-high)", color: "var(--text-muted)", border: "var(--border-default)" };
-
-function btnStyle(bg, border, color) {
-  return {
-    flex: 1, padding: "5px 4px",
-    background: bg || "transparent",
-    border: "1px solid " + (border || "var(--border-default)"),
-    color: color || "var(--text-secondary)",
-    borderRadius: 4, fontFamily: "var(--font-mono)",
-    fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em",
-  };
-}
 
 export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, onMove, onDelete }) {
   const navigate = useNavigate();

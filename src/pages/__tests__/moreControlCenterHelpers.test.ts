@@ -39,3 +39,22 @@ describe("more pure helpers", () => {
     expect(uploadButtonStyle(false).background).toBe("var(--accent)");
   });
 });
+
+import { priorityTone } from "../../components/drawings/register/impactBoardPanelHelpers";
+import { statusTone as regStatusTone } from "../../components/drawings/register/drawingRegisterGridPanelHelpers";
+import { statusTone as fieldStatusTone } from "../fieldToday/fieldTodayControlCenterHelpers";
+import { syncStatusColor } from "../../components/dms/documentStorageSettingsHelpers";
+import { btnStyle } from "../../components/dms/documentCardHelpers";
+
+describe("register/dms/field residual tones", () => {
+  it("maps priority and register status", () => {
+    expect(priorityTone("critical")).toBe("danger");
+    expect(regStatusTone("released_for_field")).toBe("good");
+    expect(regStatusTone(null)).toBe("neutral");
+    expect(fieldStatusTone("In Progress")).toBe("info");
+  });
+  it("sync color and btn style", () => {
+    expect(syncStatusColor("error")).toBe("var(--status-error)");
+    expect(btnStyle("red", "blue", "white").background).toBe("red");
+  });
+});

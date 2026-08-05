@@ -17,25 +17,15 @@ import { useDrawingImpacts } from "@/hooks/useDrawingImpacts";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
-import type { PillTone } from "@/components/command";
 import { IMPACT_STATUSES, attachableRegisterRows, groupImpactsByStatus } from "./docControl.derive";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { priorityTone } from "./impactBoardPanelHelpers";
 
 const IMPACT_TYPES = [
   "fabrication", "erection", "embed", "anchor_bolts", "connections", "material_takeoff",
   "shop_drawing_required", "rfi_followup", "change_order", "field_rework",
 ];
 const PRIORITIES = ["low", "medium", "high", "critical"];
-
-/** Priority → kit Pill tone. Mirrors the legacy PRIORITY_TONE hues. */
-function priorityTone(priority: string): PillTone {
-  switch (priority) {
-    case "critical": return "danger";
-    case "high": return "warn";
-    case "medium": return "info";
-    default: return "neutral"; // low
-  }
-}
 
 /** Status → header accent colour, mirroring the legacy STATUS_TONE. */
 const STATUS_ACCENT: Record<string, string> = {

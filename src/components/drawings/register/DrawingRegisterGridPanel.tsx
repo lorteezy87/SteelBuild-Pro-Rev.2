@@ -21,7 +21,6 @@ import { batchProcess } from "@/utils/batchProcess";
 import { createPageUrl } from "@/utils";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
-import type { PillTone } from "@/components/command";
 import { registerRowToDrawing, rowsNeedingProvisioning } from "./registerProvision";
 import {
   filterRegisterRows,
@@ -29,6 +28,7 @@ import {
   groupRegisterRowsBySet,
   SET_FILTER_NONE,
 } from "./docControl.derive";
+import { statusTone } from "./drawingRegisterGridPanelHelpers";
 
 const STATUS_FILTERS = [
   "all", "received", "pending_review", "reviewed", "released_for_estimate",
@@ -40,15 +40,6 @@ const RELEASE_OPTIONS: { value: ReleaseStatus; label: string }[] = [
   { value: "released_for_shop", label: "Shop" },
   { value: "released_for_field", label: "Field" },
 ];
-
-function statusTone(status: string | null): PillTone {
-  if (!status) return "neutral";
-  if (status === "released_for_field") return "good";
-  if (status === "void") return "danger";
-  if (status === "released_for_shop" || status === "on_hold" || status === "pending_review") return "warn";
-  if (status === "reviewed" || status === "released_for_estimate") return "info";
-  return "neutral";
-}
 
 function StatusCell({ status }: { status: string | null }) {
   const label = status ? status.replace(/_/g, " ") : "no revision";

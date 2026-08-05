@@ -16,3 +16,14 @@ export function urgencyTone(bucket: string): FieldUrgencyPill {
       return "neutral";
   }
 }
+
+export function statusTone(status: string): FieldUrgencyPill {
+  switch (status) {
+    case "Complete":
+      return "good";
+    case "In Progress":
+      return "info";
+    default:
+      return "neutral";
+  }
+}
