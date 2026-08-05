@@ -6,6 +6,9 @@ import {
   SAFETY_INCIDENT_TYPES,
   SAFETY_SEVERITIES,
   SAFETY_STATUS_FILTERS,
+  nextFilterToggle,
+  safetyCommandSubtitle,
+  createEmptySafetyFilters,
 } from "./safety/safetyPageHelpers";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
@@ -136,7 +139,7 @@ export default function Safety() {
         title="Safety & Hazards"
         count={filtered.length}
         unit=" · INCIDENTS"
-        subtitle={`${stats.open} open · ${stats.critical} critical · injuries / near-misses / hazards`}
+        subtitle={safetyCommandSubtitle(stats.open, stats.critical)}
       >
         <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
           Report Incident
@@ -146,17 +149,17 @@ export default function Safety() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
         <KpiTile compact label="Total"       value={stats.total}      color="var(--accent)" />
         <KpiTile compact label="Critical"    value={stats.critical}   color="var(--status-error)"
-                 active={filterSeverity === "Critical"} onClick={() => setFilterSeverity(filterSeverity === "Critical" ? "all" : "Critical")} />
+                 active={filterSeverity === "Critical"} onClick={() => setFilterSeverity(nextFilterToggle(filterSeverity, "Critical"))} />
         <KpiTile compact label="High"        value={stats.high}       color="var(--status-warning)"
-                 active={filterSeverity === "High"} onClick={() => setFilterSeverity(filterSeverity === "High" ? "all" : "High")} />
+                 active={filterSeverity === "High"} onClick={() => setFilterSeverity(nextFilterToggle(filterSeverity, "High"))} />
         <KpiTile compact label="Injuries"    value={stats.injuries}   color="var(--status-error)"
-                 active={filterType === "Injury"} onClick={() => setFilterType(filterType === "Injury" ? "all" : "Injury")} />
+                 active={filterType === "Injury"} onClick={() => setFilterType(nextFilterToggle(filterType, "Injury"))} />
         <KpiTile compact label="Near Misses" value={stats.nearMisses} color="var(--status-warning)"
-                 active={filterType === "Near Miss"} onClick={() => setFilterType(filterType === "Near Miss" ? "all" : "Near Miss")} />
+                 active={filterType === "Near Miss"} onClick={() => setFilterType(nextFilterToggle(filterType, "Near Miss"))} />
         <KpiTile compact label="Hazards"     value={stats.hazards}    color="var(--status-info)"
-                 active={filterType === "Hazard"} onClick={() => setFilterType(filterType === "Hazard" ? "all" : "Hazard")} />
+                 active={filterType === "Hazard"} onClick={() => setFilterType(nextFilterToggle(filterType, "Hazard"))} />
         <KpiTile compact label="Open"        value={stats.open}       color="var(--phase-fabrication)"
-                 active={filterStatus === "Open"} onClick={() => setFilterStatus(filterStatus === "Open" ? "all" : "Open")} />
+                 active={filterStatus === "Open"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "Open"))} />
       </div>
 
       {/* Filters */}
@@ -233,9 +236,10 @@ export default function Safety() {
               No incidents match the current filters
             </p>
             <Button variant="outline" onClick={() => {
-              setFilterType("all");
-              setFilterSeverity("all");
-              setFilterStatus("all");
+              const empty = createEmptySafetyFilters();
+              setFilterType(empty.filterType);
+              setFilterSeverity(empty.filterSeverity);
+              setFilterStatus(empty.filterStatus);
             }}>
               Clear Filters
             </Button>

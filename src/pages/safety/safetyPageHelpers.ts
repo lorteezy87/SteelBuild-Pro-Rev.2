@@ -55,3 +55,22 @@ export const SAFETY_STATUS_FILTERS = [
   "Closed",
 ] as const;
 
+
+/** @deprecated Prefer `@/pages/shared/nextFilterToggle`. */
+export { nextFilterToggle } from "@/pages/shared/nextFilterToggle";
+
+export function safetyCommandSubtitle(openCount: number, criticalCount: number): string {
+  return `${openCount} open · ${criticalCount} critical · injuries / near-misses / hazards`;
+}
+
+export function createEmptySafetyFilters(): {
+  filterType: string;
+  filterSeverity: string;
+  filterStatus: string;
+} {
+  return {
+    filterType: "all",
+    filterSeverity: "all",
+    filterStatus: "all",
+  };
+}
