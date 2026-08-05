@@ -21,6 +21,7 @@ import {
   STATUS_ORDER,
   STATUS_STYLE,
   mono,
+  inputStyle,
 } from "./projectHandoffChecklistHelpers";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -308,15 +309,3 @@ function Stat({ label, value, color }) {
   );
 }
 
-const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 4,
-  padding: "5px 7px",
-  fontSize: 11,
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  boxSizing: "border-box",
-  minHeight: 26,
-};

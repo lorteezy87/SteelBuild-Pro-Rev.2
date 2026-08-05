@@ -189,3 +189,44 @@ export function flagDuplicateWpRows<T extends { wp_number?: string }>(
     isDuplicate: (r.wp_number && existingWpNumbers.has(r.wp_number)) as string | boolean,
   }));
 }
+
+export const PREVIEW_COLUMNS: Array<{
+  key: string;
+  label: string;
+  width: number;
+  numeric?: boolean;
+}> = [
+  { key: "wp_number", label: "WP #", width: 96 },
+  { key: "name", label: "Name", width: 260 },
+  { key: "phase", label: "Phase", width: 124 },
+  { key: "status", label: "Status", width: 128 },
+  { key: "tonnage", label: "Tons", width: 82, numeric: true },
+  { key: "percent_complete", label: "%", width: 72, numeric: true },
+  { key: "crew", label: "Crew", width: 126 },
+  { key: "shop_hours_budget", label: "Shop Bud", width: 104, numeric: true },
+  { key: "shop_hours_actual", label: "Shop Act", width: 104, numeric: true },
+  { key: "notes", label: "Notes", width: 200 },
+];
+
+export const PREVIEW_MIN_WIDTH =
+  PREVIEW_COLUMNS.reduce((sum, col) => sum + col.width, 46);
+
+/** Paste textarea chrome (extends shared Phoenix inputStyle at use site). */
+export const PASTE_INPUT_EXTRA: Record<string, string | number> = {
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+  lineHeight: "20px",
+  minHeight: 160,
+  maxHeight: 240,
+  whiteSpace: "pre",
+  overflow: "auto",
+  resize: "vertical",
+  tabSize: 4,
+};
+
+export const WP_BULK_EXAMPLE = `WP #	Name	Phase	Status	Tonnage	% Complete	Crew	Shop Hrs Budget	Shop Hrs Actual	Notes
+WP-001	Shop A - Main Steel	Fabrication	Not Started	42.5	0%		120	0	
+WP-002	Shop B - Misc Steel	Detailing	Not Started	18.2	0%		80	0	`;

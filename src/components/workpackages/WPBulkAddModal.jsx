@@ -4,6 +4,10 @@ import {
   parseBlock,
   buildExistingWpNumberSet,
   flagDuplicateWpRows,
+  PREVIEW_COLUMNS,
+  PREVIEW_MIN_WIDTH,
+  PASTE_INPUT_EXTRA,
+  WP_BULK_EXAMPLE as EXAMPLE,
 } from "./wpBulkAddHelpers";
 
 /*
@@ -18,40 +22,7 @@ import {
  */
 
 
-// Canonical column order for the preview table header
-const PREVIEW_COLUMNS = [
-  { key: "wp_number", label: "WP #", width: 96 },
-  { key: "name", label: "Name", width: 260 },
-  { key: "phase", label: "Phase", width: 124 },
-  { key: "status", label: "Status", width: 128 },
-  { key: "tonnage", label: "Tons", width: 82, numeric: true },
-  { key: "percent_complete", label: "%", width: 72, numeric: true },
-  { key: "crew", label: "Crew", width: 126 },
-  { key: "shop_hours_budget", label: "Shop Bud", width: 104, numeric: true },
-  { key: "shop_hours_actual", label: "Shop Act", width: 104, numeric: true },
-  { key: "notes", label: "Notes", width: 200 },
-];
-
-const PREVIEW_MIN_WIDTH = PREVIEW_COLUMNS.reduce((sum, col) => sum + col.width, 46);
-const PASTE_INPUT_STYLE = {
-  ...inputStyle,
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 12,
-  lineHeight: "20px",
-  minHeight: 160,
-  maxHeight: 240,
-  whiteSpace: "pre",
-  overflow: "auto",
-  resize: "vertical",
-  tabSize: 4,
-};
-
-const EXAMPLE = `WP #\tName\tPhase\tStatus\tTonnage\t% Complete\tCrew\tShop Hrs Budget\tShop Hrs Actual\tNotes
-WP-001\tShop A - Main Steel\tFabrication\tNot Started\t42.5\t0%\t\t120\t0\t
-WP-002\tShop B - Misc Steel\tDetailing\tNot Started\t18.2\t0%\t\t80\t0\t`;
+const PASTE_INPUT_STYLE = { ...inputStyle, ...PASTE_INPUT_EXTRA };
 
 export default function WPBulkAddModal({
   open,

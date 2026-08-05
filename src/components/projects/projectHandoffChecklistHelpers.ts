@@ -36,3 +36,16 @@ export const STATUS_STYLE: Record<
 };
 
 export const mono: Record<string, string> = { fontFamily: "var(--font-mono)" };
+
+export const inputStyle: Record<string, string | number> = {
+  width: "100%",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 4,
+  padding: "5px 7px",
+  fontSize: 11,
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  boxSizing: "border-box",
+  minHeight: 26,
+};

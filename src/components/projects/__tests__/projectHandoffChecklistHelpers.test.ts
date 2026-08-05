@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { STATUS_ORDER, STATUS_STYLE, mono } from "../projectHandoffChecklistHelpers";
+import {
+  STATUS_ORDER,
+  STATUS_STYLE,
+  mono,
+  inputStyle,
+} from "../projectHandoffChecklistHelpers";
 
 describe("projectHandoffChecklistHelpers", () => {
   it("status order and styles", () => {
@@ -7,5 +12,11 @@ describe("projectHandoffChecklistHelpers", () => {
     expect(STATUS_STYLE.Completed.color).toBe("var(--status-success)");
     expect(STATUS_STYLE["In Progress"].bg).toBe("var(--warning-muted)");
     expect(mono.fontFamily).toBe("var(--font-mono)");
+  });
+});
+
+describe("handoff input chrome", () => {
+  it("input style", () => {
+    expect(inputStyle.fontSize).toBe(11);
   });
 });

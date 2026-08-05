@@ -3,6 +3,10 @@ import {
   parseBlock,
   buildExistingWpNumberSet,
   flagDuplicateWpRows,
+  PREVIEW_COLUMNS,
+  PREVIEW_MIN_WIDTH,
+  PASTE_INPUT_EXTRA,
+  WP_BULK_EXAMPLE,
 } from "../wpBulkAddHelpers";
 
 describe("parseBlock", () => {
@@ -38,5 +42,14 @@ describe("flagDuplicateWpRows", () => {
     );
     expect(flagged[0].isDuplicate).toBeTruthy();
     expect(flagged[1].isDuplicate).toBeFalsy();
+  });
+});
+
+describe("wp bulk chrome", () => {
+  it("preview columns and paste extras", () => {
+    expect(PREVIEW_COLUMNS[0].key).toBe("wp_number");
+    expect(PREVIEW_MIN_WIDTH).toBeGreaterThan(1000);
+    expect(PASTE_INPUT_EXTRA.minHeight).toBe(160);
+    expect(WP_BULK_EXAMPLE).toContain("WP-001");
   });
 });

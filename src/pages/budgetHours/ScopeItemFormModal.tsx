@@ -18,6 +18,7 @@
 
 import React, { useState } from "react";
 import { X } from "lucide-react";
+import { labelStyle } from "./scopeItemFormModalStyleHelpers";
 
 // ─── Form shape ────────────────────────────────────────────────────────────────
 
@@ -82,19 +83,6 @@ export function buildScopeItemPatch(values: ScopeItemFormValues): Record<string,
     notes: values.notes.trim() || null,
   };
 }
-
-// ─── Field styling (design tokens, skin-agnostic) ────────────────────────────────
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  color: "var(--text-muted)",
-  marginBottom: 4,
-};
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
