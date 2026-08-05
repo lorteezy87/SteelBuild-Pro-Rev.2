@@ -39,7 +39,11 @@ import type {
   SiteCoordRow,
   InspectionQueueRow,
 } from "./fieldHubControlCenter.derive";
-import { fmtDate } from "./fieldHubControlCenterHelpers";
+import {
+  fmtDate,
+  typeTone,
+  fieldPriorityTone,
+} from "./fieldHubControlCenterHelpers";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,21 +57,6 @@ function todayLocal(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-/** Tone for a type pill in the table. */
-function typeTone(type: string) {
-  if (type === "Safety") return "danger" as const;
-  if (type === "Inspection") return "info" as const;
-  if (type === "Punchlist") return "warn" as const;
-  return "neutral" as const;
-}
-
-/** Tone for priority. */
-function fieldPriorityTone(priority: string) {
-  if (priority === "Critical" || priority === "High") return "danger" as const;
-  if (priority === "Medium") return "warn" as const;
-  return "neutral" as const;
 }
 
 // ---------------------------------------------------------------------------

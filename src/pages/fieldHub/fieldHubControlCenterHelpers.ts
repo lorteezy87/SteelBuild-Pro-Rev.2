@@ -8,3 +8,18 @@ export function fmtDate(iso: string | null): string {
     return iso;
   }
 }
+
+export function typeTone(type: string): "danger" | "info" | "warn" | "neutral" {
+  if (type === "Safety") return "danger";
+  if (type === "Inspection") return "info";
+  if (type === "Punchlist") return "warn";
+  return "neutral";
+}
+
+export function fieldPriorityTone(
+  priority: string,
+): "danger" | "warn" | "neutral" {
+  if (priority === "Critical" || priority === "High") return "danger";
+  if (priority === "Medium") return "warn";
+  return "neutral";
+}
