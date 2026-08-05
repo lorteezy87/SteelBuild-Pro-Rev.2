@@ -9,6 +9,7 @@ import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Upload } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 import { CONTACT_TYPE } from "@/lib/enums";
+import { filterContacts, computeContactStats } from "./contacts/contactsPageHelpers";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
@@ -90,30 +91,15 @@ export default function Contacts() {
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;
 
-  const filtered = useMemo(() => {
-    return contacts.filter((c) => {
-      const typeMatch = filterType === "all" || c.contact_type === filterType;
-      const q = search.toLowerCase();
-      const searchMatch =
-        !q ||
-        `${c.first_name || ""} ${c.last_name || ""}`.toLowerCase().includes(q) ||
-        (c.company || "").toLowerCase().includes(q) ||
-        (c.email || "").toLowerCase().includes(q) ||
-        (c.role || "").toLowerCase().includes(q);
-      return typeMatch && searchMatch;
-    });
-  }, [contacts, filterType, search]);
+  const filtered = useMemo(
+    () => filterContacts(contacts, filterType, search),
+    [contacts, filterType, search],
+  );
 
-  const stats = useMemo(() => ({
-    total: contacts.length,
-    owner: contacts.filter((c) => c.contact_type === CONTACT_TYPE.OWNER).length,
-    gc: contacts.filter((c) => c.contact_type === CONTACT_TYPE.GC).length,
-    engineer: contacts.filter((c) => c.contact_type === CONTACT_TYPE.ENGINEER).length,
-    subcontractor: contacts.filter((c) => c.contact_type === CONTACT_TYPE.SUBCONTRACTOR).length,
-    supplier: contacts.filter((c) => c.contact_type === CONTACT_TYPE.SUPPLIER).length,
-    inspector: contacts.filter((c) => c.contact_type === CONTACT_TYPE.INSPECTOR).length,
-    internal: contacts.filter((c) => c.contact_type === CONTACT_TYPE.INTERNAL).length,
-  }), [contacts]);
+  const stats = useMemo(
+    () => computeContactStats(contacts),
+    [contacts],
+  );
 
   const typeOptions = ["all", ...Object.values(CONTACT_TYPE)];
 

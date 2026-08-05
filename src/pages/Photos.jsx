@@ -1,5 +1,6 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { filterLiveRecords, filterPhotos, computePhotoStats } from "./photos/photosPageHelpers";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
@@ -33,7 +34,7 @@ export default function Photos() {
         : entities.Photo.list("-taken_date"),
   });
   // Defensive soft-delete filter (matches DailyLogs / Procurement pattern).
-  const photos = React.useMemo(() => rawPhotos.filter((r) => !r.is_deleted), [rawPhotos]);
+  const photos = React.useMemo(() => filterLiveRecords(rawPhotos), [rawPhotos]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -45,35 +46,8 @@ export default function Photos() {
     ? projects.find((p) => p.id === projectId)
     : null;
 
-  // Date filtering logic
-  const getFilteredByDate = () => {
-    if (filterDate === "all") return photos;
-    const now = new Date();
-    const ranges = {
-      today: 1,
-      week: 7,
-      month: 30,
-    };
-    const days = ranges[filterDate] || 0;
-    const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() - days);
-    return photos.filter((p) => new Date(p.taken_date) >= cutoff);
-  };
-
-  const filtered = getFilteredByDate().filter((p) => {
-    const categoryMatch = filterCategory === "all" || p.category === filterCategory;
-    return categoryMatch;
-  });
-
-  const stats = {
-    total: photos.length,
-    progress: photos.filter((p) => p.category === "Progress").length,
-    safety: photos.filter((p) => p.category === "Safety").length,
-    issue: photos.filter((p) => p.category === "Issue").length,
-    delivery: photos.filter((p) => p.category === "Delivery").length,
-    punchlist: photos.filter((p) => p.category === "Punchlist").length,
-    other: photos.filter((p) => p.category === "Other").length,
-  };
+  const filtered = filterPhotos(photos, { filterDate, filterCategory });
+  const stats = computePhotoStats(photos);
 
   const categories = ["Progress", "Safety", "Issue", "Delivery", "Punchlist", "Other"];
   const dateRanges = [

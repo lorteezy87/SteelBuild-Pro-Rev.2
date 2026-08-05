@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { localToday } from "@/utils/dates";
-import { formatMoney, sumMoney } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 import { logActivity } from "@/services/auditLogger";
 import {
   createPayApplication,
@@ -27,6 +27,7 @@ import { computeG702, lineFigures } from "@/lib/payapp/g702";
 import { PAY_APP_STATUSES, PAY_APP_STATUS_LABELS } from "@/lib/payapp/types";
 import { buildPayAppPdf, suggestPayAppFilename } from "@/lib/payapp/payAppPdf";
 import PayApplicationsControlCenter from "./payApplications/PayApplicationsControlCenter";
+import { buildPayAppContract, findById } from "./payApplications/payApplicationsPageHelpers";
 import { assertProjectId, toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
@@ -92,13 +93,12 @@ export default function PayApplications() {
   // approving a CO left this pay app billing against a stale contract sum.
   const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders", projectId], queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
 
-  const contract = useMemo(() => ({
-    originalContractSum: num(activeProject?.original_contract_value),
-    netChangeOrders: sumMoney((changeOrders || []).filter((co) => String(co.status).toLowerCase() === "approved").map((co) => co.co_amount)),
-    retainagePercent: num(activeProject?.retainage_percent),
-  }), [activeProject, changeOrders]);
+  const contract = useMemo(
+    () => buildPayAppContract(activeProject, changeOrders || []),
+    [activeProject, changeOrders],
+  );
 
-  const selectedApp = payApps.find((a) => a.id === selectedId) || null;
+  const selectedApp = findById(payApps, selectedId);
   // Only a DRAFT pay app is editable — once submitted/approved/paid the G703
   // figures are a billing record (locked in the UI here + by the DB trigger, C2).
   const isDraft = selectedApp?.status === "draft";

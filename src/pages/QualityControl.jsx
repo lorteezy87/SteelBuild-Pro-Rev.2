@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { filterLiveRecords, filterQcRecords, computeQcStats } from "./qualityControl/qualityControlPageHelpers";
 
 export default function QualityControl() {
   const projectId = useProjectId();
@@ -58,7 +59,7 @@ export default function QualityControl() {
         : entities.QualityControlRecord.list("-test_date"),
   });
   // Defensive soft-delete filter (entity layer also does this at fetch).
-  const qcRecords = useMemo(() => rawQcRecords.filter((r) => !r.is_deleted), [rawQcRecords]);
+  const qcRecords = useMemo(() => filterLiveRecords(rawQcRecords), [rawQcRecords]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -72,35 +73,19 @@ export default function QualityControl() {
 
   const hasActiveFilters = filterType !== "all" || filterResult !== "all" || filterStatus !== null || searchQuery.trim() !== "";
 
-  const filtered = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return qcRecords.filter((record) => {
-      const typeMatch = filterType === "all" || record.test_type === filterType;
-      const resultMatch = filterResult === "all" || record.result === filterResult;
-      const statusMatch = filterStatus === null || record.status === filterStatus;
-      const searchMatch = !query || [
-        record.material_or_component,
-        record.location,
-        record.test_lab_or_inspector,
-        record.specification,
-        record.notes,
-      ].some((field) => field && String(field).toLowerCase().includes(query));
-      return typeMatch && resultMatch && statusMatch && searchMatch;
-    });
-  }, [qcRecords, filterType, filterResult, filterStatus, searchQuery]);
+  const filtered = useMemo(
+    () =>
+      filterQcRecords(qcRecords, {
+        filterType,
+        filterResult,
+        filterStatus,
+        searchQuery,
+      }),
+    [qcRecords, filterType, filterResult, filterStatus, searchQuery],
+  );
 
-  const stats = {
-    total: qcRecords.length,
-    passed: qcRecords.filter((r) => r.result === "Pass").length,
-    failed: qcRecords.filter((r) => r.result === "Fail").length,
-    conditional: qcRecords.filter((r) => r.result === "Conditional Pass").length,
-    pending: qcRecords.filter((r) => r.status === "Pending").length,
-  };
-
-  const conclusiveCount = qcRecords.filter((r) => r.result !== "Inconclusive").length;
-  const passRate = conclusiveCount > 0
-    ? Math.round(((stats.passed + stats.conditional) / conclusiveCount) * 100)
-    : 0;
+  const { passRate, total, passed, failed, conditional, pending } = computeQcStats(qcRecords);
+  const stats = { total, passed, failed, conditional, pending };
 
   const types = [
     "Material Certificate",
