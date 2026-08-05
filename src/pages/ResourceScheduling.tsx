@@ -51,6 +51,8 @@ import {
   buildDragTooltipText,
   buildAutoHoursForDrop,
   snapDropWindow,
+  computeResourceRowLoad,
+  buildResourceRowDropStyle,
 } from "./resourceScheduling/resourceSchedulingHelpers";
 
 // Only mounted while the edit dialog is open — keep it off the board's chunk.
@@ -377,24 +379,22 @@ export default function ResourceScheduling() {
       const resId = row.getAttribute("data-resource-id");
       const res = resources.find((r) => r.id === resId);
       const resCapacity = Number(effectiveCapacityById[resId] ?? res?.capacity ?? (res as any)?.budget_hours) || 0;
-      const resAssigned = scheduledWps
-        .filter((wp) => wp.crew === row.getAttribute("data-resource-name"))
-        .reduce((s, wp) => s + (Number(wp.shop_hours_budget) || Number(wp.field_hours_budget) || 0), 0);
-      const utilPct = resCapacity > 0 ? (resAssigned / resCapacity) * 100 : 0;
-      const isOverAlloc = resCapacity > 0 && resAssigned >= resCapacity;
+      const load = computeResourceRowLoad({
+        resCapacity,
+        scheduledWps,
+        resourceName: row.getAttribute("data-resource-name"),
+      });
+      const style = buildResourceRowDropStyle(load);
 
       if (hit) {
         // Strong highlight on hovered row
-        const hoverColor = isOverAlloc ? "rgba(248,81,73,0.15)" : utilPct > 80 ? "rgba(227,179,65,0.12)" : "rgba(63,185,80,0.10)";
-        const borderColor = isOverAlloc ? "rgba(248,81,73,0.5)" : utilPct > 80 ? "rgba(227,179,65,0.45)" : "rgba(63,185,80,0.4)";
-        row.style.background = hoverColor;
-        row.style.outline = `1px solid ${borderColor}`;
-        row.style.boxShadow = `inset 0 0 16px ${borderColor.replace("0.5", "0.1").replace("0.45", "0.1").replace("0.4", "0.08")}`;
+        row.style.background = style.hoverBackground;
+        row.style.outline = style.hoverOutline;
+        row.style.boxShadow = style.hoverBoxShadow;
       } else {
         // Subtle capacity indicator on non-hovered rows
-        const bgColor = isOverAlloc ? "rgba(248,81,73,0.04)" : utilPct > 80 ? "rgba(227,179,65,0.03)" : "rgba(63,185,80,0.02)";
-        row.style.background = bgColor;
-        row.style.outline = `1px dashed ${isOverAlloc ? "rgba(248,81,73,0.15)" : "rgba(200,155,32,0.12)"}`;
+        row.style.background = style.idleBackground;
+        row.style.outline = style.idleOutline;
         row.style.boxShadow = "none";
       }
     });

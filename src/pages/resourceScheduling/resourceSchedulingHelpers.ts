@@ -746,3 +746,76 @@ export function snapDropWindow(opts: {
   const newEnd = new Date(newStart.getTime() + opts.durationMs);
   return { newStart, newEnd, rawStart };
 }
+
+export type ResourceRowLoad = {
+  resCapacity: number;
+  resAssigned: number;
+  utilPct: number;
+  isOverAlloc: boolean;
+};
+
+/** Capacity / assigned / util for a resource lane during drag hover. */
+export function computeResourceRowLoad(opts: {
+  resCapacity: number;
+  scheduledWps: Array<{
+    crew?: string | null;
+    shop_hours_budget?: number | string | null;
+    field_hours_budget?: number | string | null;
+  }>;
+  resourceName: string | null | undefined;
+}): ResourceRowLoad {
+  const resCapacity = Number(opts.resCapacity) || 0;
+  const name = opts.resourceName || "";
+  const resAssigned = (opts.scheduledWps || [])
+    .filter((wp) => wp.crew === name)
+    .reduce(
+      (s, wp) => s + (Number(wp.shop_hours_budget) || Number(wp.field_hours_budget) || 0),
+      0,
+    );
+  const utilPct = resCapacity > 0 ? (resAssigned / resCapacity) * 100 : 0;
+  const isOverAlloc = resCapacity > 0 && resAssigned >= resCapacity;
+  return { resCapacity, resAssigned, utilPct, isOverAlloc };
+}
+
+export type ResourceRowDropStyle = {
+  hoverBackground: string;
+  hoverOutline: string;
+  hoverBoxShadow: string;
+  idleBackground: string;
+  idleOutline: string;
+};
+
+/** Drop-zone colors for capacity-aware drag highlight. */
+export function buildResourceRowDropStyle(load: ResourceRowLoad): ResourceRowDropStyle {
+  const { utilPct, isOverAlloc } = load;
+  const hoverBackground = isOverAlloc
+    ? "rgba(248,81,73,0.15)"
+    : utilPct > 80
+      ? "rgba(227,179,65,0.12)"
+      : "rgba(63,185,80,0.10)";
+  const borderColor = isOverAlloc
+    ? "rgba(248,81,73,0.5)"
+    : utilPct > 80
+      ? "rgba(227,179,65,0.45)"
+      : "rgba(63,185,80,0.4)";
+  const hoverBoxShadow = `inset 0 0 16px ${borderColor
+    .replace("0.5", "0.1")
+    .replace("0.45", "0.1")
+    .replace("0.4", "0.08")}`;
+  const idleBackground = isOverAlloc
+    ? "rgba(248,81,73,0.04)"
+    : utilPct > 80
+      ? "rgba(227,179,65,0.03)"
+      : "rgba(63,185,80,0.02)";
+  const idleOutline = `1px dashed ${
+    isOverAlloc ? "rgba(248,81,73,0.15)" : "rgba(200,155,32,0.12)"
+  }`;
+  return {
+    hoverBackground,
+    hoverOutline: `1px solid ${borderColor}`,
+    hoverBoxShadow,
+    idleBackground,
+    idleOutline,
+  };
+}
+

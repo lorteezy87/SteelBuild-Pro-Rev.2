@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  filterTopLevelResources,
+import {filterTopLevelResources,
   buildMembersByParentId,
   buildEffectiveCapacityById,
   buildDisplayResources,
@@ -18,8 +17,7 @@ import {
   isShopWorkPackage,
   toIsoDate,
   buildScheduleSummaryCards,
-  buildResourceSidebarGroups,
-} from "../resourceSchedulingHelpers";
+  buildResourceSidebarGroups, computeResourceRowLoad, buildResourceRowDropStyle} from "../resourceSchedulingHelpers";
 
 describe("filterTopLevelResources / buildMembersByParentId / buildEffectiveCapacityById", () => {
   const resources: Array<{
@@ -518,5 +516,24 @@ describe("drag date projection", () => {
       snapToMonday,
     });
     expect(newStart.getDay()).toBe(1);
+  });
+});
+
+describe("computeResourceRowLoad / buildResourceRowDropStyle", () => {
+  it("sums crew hours and flags over-alloc", () => {
+    const load = computeResourceRowLoad({
+      resCapacity: 40,
+      resourceName: "Crew A",
+      scheduledWps: [
+        { crew: "Crew A", shop_hours_budget: 30 },
+        { crew: "Crew A", field_hours_budget: 20 },
+        { crew: "Other", shop_hours_budget: 99 },
+      ],
+    });
+    expect(load.resAssigned).toBe(50);
+    expect(load.isOverAlloc).toBe(true);
+    expect(load.utilPct).toBeGreaterThan(100);
+    const style = buildResourceRowDropStyle(load);
+    expect(style.hoverBackground).toContain("248,81,73");
   });
 });
