@@ -23,11 +23,13 @@ import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 import { parseDrawingLog, classifyDrawingRows } from "@/lib/importDrawingLog";
-import { logMeta } from "./drawingLogImportModalHelpers";
+import {
+  logMeta,
+  monoStyle as mono,
+  displayStyle as display,
+  ACCENT,
+} from "./drawingLogImportModalHelpers";
 
-const mono = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const ACCENT = "var(--accent, #3B82F6)";
 
 const isUniqueViolation = (e) => {
   const m = String(e?.message || e || "").toLowerCase();

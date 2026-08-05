@@ -14,8 +14,8 @@ import { formatDate, formatDateShort as formatShortDate } from "@/components/sha
 import { PRIORITY_CONFIG, STATUS_CONFIG, TYPE_COLORS, TYPE_ICONS } from "./constants";
 import { abbreviateType, isOverdue, isResolved } from "./utils";
 import { Meta, ActionBtn } from "./subcomponents";
+import { GRID_COLS } from "./listViewHelpers";
 
-const GRID_COLS = "6px 28px 1fr 110px 80px 90px 80px 100px";
 
 export default function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit, onDelete }) {
   return (

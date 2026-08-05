@@ -24,10 +24,12 @@ import { entities } from "@/api/supabaseClient";
 import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseFabSuiteXml, stageModelElements, teklaRowToModelElement } from "@/lib/importFabSuiteXml";
+import {
+  monoStyle as mono,
+  displayStyle as display,
+  ACCENT,
+} from "./teklaEpmImportModalHelpers";
 
-const mono = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const ACCENT = "var(--accent, #3B82F6)";
 
 export default function TeklaEpmImportModal({ open, projectId, projectName, onClose, onImported }) {
   const qc = useQueryClient();

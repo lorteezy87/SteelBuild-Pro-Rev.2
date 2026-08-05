@@ -39,10 +39,10 @@ import {
   applyMemoryRecall,
   applyMemoryStoreToEntry,
   applyTapeRecall,
+  monoStyle as mono,
 } from "./regularCalculator/regularCalculatorHelpers";
 import { KbRow } from "./regularCalculator/RegularCalculatorUi";
 
-const mono = { fontFamily: "var(--font-mono)" };
 
 function toastCalcError(error) {
   if (error === "divide_by_zero") toast.error("Cannot divide by zero");

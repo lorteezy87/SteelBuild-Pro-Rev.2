@@ -1,6 +1,6 @@
 import React from "react";
+import { monoStyle as mono } from "./operationsPageShellHelpers";
 
-const mono = { fontFamily: "var(--font-mono)" };
 
 const styles = `
 .ops-page-shell {

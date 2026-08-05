@@ -16,14 +16,8 @@ import {
   LEFT_COL,
   ROW_H,
   HEADER_H,
+  ZOOM_LEVELS,
 } from "./wpGanttHelpers";
-
-// ─── Zoom level config ───────────────────────────────────────────────
-const ZOOM_LEVELS = [
-  { id: "day",   label: "Day",   pxPerDay: 40,  tickEvery: 1,  fmt: d => fmtDate(d) },
-  { id: "week",  label: "Week",  pxPerDay: 18,  tickEvery: 7,  fmt: d => `W${Math.ceil(d.getDate() / 7)} ${d.toLocaleDateString("en-US", { month: "short" })}` },
-  { id: "month", label: "Month", pxPerDay: 6,   tickEvery: 28, fmt: d => d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) },
-];
 
 // ─── Main Gantt Component ────────────────────────────────────────────
 export default function WPGantt({ wps, updateMut }) {

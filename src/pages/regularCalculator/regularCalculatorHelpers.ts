@@ -303,3 +303,5 @@ export function applyTapeRecall(
     justEvaluated: false,
   };
 }
+
+export const monoStyle = { fontFamily: "var(--font-mono)" } as const;

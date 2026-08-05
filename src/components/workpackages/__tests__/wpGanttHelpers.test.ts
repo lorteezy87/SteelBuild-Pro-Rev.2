@@ -12,6 +12,7 @@ import {
   LEFT_COL,
   ROW_H,
   HEADER_H,
+  ZOOM_LEVELS,
 } from "../wpGanttHelpers";
 
 describe("getWPDates", () => {
@@ -76,5 +77,12 @@ describe("wp gantt chrome", () => {
     expect(LEFT_COL).toBe(340);
     expect(ROW_H).toBe(38);
     expect(HEADER_H).toBe(56);
+  });
+});
+
+describe("ZOOM_LEVELS", () => {
+  it("has day/week/month", () => {
+    expect(ZOOM_LEVELS.map((z) => z.id)).toEqual(["day", "week", "month"]);
+    expect(ZOOM_LEVELS[0].fmt(new Date("2026-01-15"))).toBeTruthy();
   });
 });

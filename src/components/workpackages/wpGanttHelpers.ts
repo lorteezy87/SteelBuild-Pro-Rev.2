@@ -166,3 +166,30 @@ export const PHASE_COLOR: Record<string, string> = {
 export const LEFT_COL = 340;
 export const ROW_H = 38;
 export const HEADER_H = 56;
+
+export const ZOOM_LEVELS = [
+  {
+    id: "day",
+    label: "Day",
+    pxPerDay: 40,
+    tickEvery: 1,
+    fmt: (d: Date) => fmtDate(d),
+  },
+  {
+    id: "week",
+    label: "Week",
+    pxPerDay: 18,
+    tickEvery: 7,
+    fmt: (d: Date) =>
+      `W${Math.ceil(d.getDate() / 7)} ${d.toLocaleDateString("en-US", { month: "short" })}`,
+  },
+  {
+    id: "month",
+    label: "Month",
+    pxPerDay: 6,
+    tickEvery: 28,
+    fmt: (d: Date) =>
+      d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
+  },
+] as const;
+

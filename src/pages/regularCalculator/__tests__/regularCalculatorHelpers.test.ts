@@ -21,6 +21,7 @@ import {
   displayedValue,
   applyMemoryRecall,
   applyTapeRecall,
+  monoStyle,
 } from "../regularCalculatorHelpers";
 
 describe("regularCalculatorHelpers", () => {
