@@ -1,4 +1,4 @@
-import { parseLength } from "@/utils/lengthMath";
+import { parseLength, TICKS_PER_FOOT } from "@/utils/lengthMath";
 /**
  * Pure helpers for Feet/Inches Calculator.
  */
@@ -114,3 +114,10 @@ export function createEmptyFeetInchesState(): {
 }
 
 export const monoStyle = { fontFamily: "var(--font-mono)" } as const;
+
+/** Stock length presets for the cut-list optimizer (20'/40'/60'). */
+export const STOCK_PRESETS = [
+  { label: "20'", ticks: 20 * TICKS_PER_FOOT },
+  { label: "40'", ticks: 40 * TICKS_PER_FOOT },
+  { label: "60'", ticks: 60 * TICKS_PER_FOOT },
+] as const;

@@ -14,8 +14,9 @@
 
 import React from "react";
 import { StatusPill, Icon } from "@/components/design-system";
+import { CO_ROW_GRID } from "./coRowHelpers";
 
-export const CO_ROW_GRID = "36px 90px 1fr 110px 90px 90px 110px 80px 110px 50px";
+export { CO_ROW_GRID };
 
 export default function CoRow({ co, idx, selected, onToggle, onOpen }) {
   const amount = Number(co.co_amount) || 0;

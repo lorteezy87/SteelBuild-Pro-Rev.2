@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  RFI_ROW_GRID,
   rfiAssignedLine,
   rfiPriorityColor,
   rfiReferenceLine,
@@ -34,5 +35,11 @@ describe("rfiRowHelpers", () => {
       rfiRowClassNames({ selected: true, overdue: true, priority: "Critical" }),
     ).toBe("rfi-record-row is-selected is-overdue is-critical");
     expect(rfiRowClassNames({})).toBe("rfi-record-row");
+  });
+});
+
+describe("RFI_ROW_GRID", () => {
+  it("has five minmax columns", () => {
+    expect(RFI_ROW_GRID.match(/minmax/g)?.length).toBe(5);
   });
 });

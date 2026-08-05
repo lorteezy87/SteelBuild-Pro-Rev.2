@@ -3,8 +3,9 @@
  */
 // @ts-nocheck
 import React, { useMemo, useState } from "react";
-import { parseLength, formatLength, TICKS_PER_FOOT } from "@/utils/lengthMath";
+import { parseLength, formatLength } from "@/utils/lengthMath";
 import { optimizeCutList } from "@/utils/cutListOptimizer";
+import { STOCK_PRESETS } from "./feetInchesCalculatorHelpers";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -13,11 +14,6 @@ const mono = { fontFamily: "var(--font-mono)" };
 // stock length (preset chips 20'/40'/60' + custom ft-in), with optional
 // kerf. Runs the deterministic optimizeCutList engine and reports
 // pieces/stick, sticks needed, total stock, total drop, and waste %.
-const STOCK_PRESETS = [
-  { label: "20'", ticks: 20 * TICKS_PER_FOOT },
-  { label: "40'", ticks: 40 * TICKS_PER_FOOT },
-  { label: "60'", ticks: 60 * TICKS_PER_FOOT },
-];
 
 export function CutListOptimizerPanel({ precision, onCopy }) {
   const [open, setOpen] = useState(false);

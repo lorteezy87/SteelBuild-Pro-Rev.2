@@ -121,3 +121,39 @@ export const inlineErrorStyle: Record<string, string | number> = {
   borderRadius: 4,
   marginTop: 6,
 };
+
+export const DECIMAL_MODES = {
+  FEET: "feet",
+  INCHES: "inches",
+} as const;
+
+export const SUB_MODES = {
+  DEC_FRAC: "dec_frac",
+  FRAC_DEC: "frac_dec",
+  UNITS: "units",
+} as const;
+
+export const SUB_MODE_TABS = [
+  { key: SUB_MODES.DEC_FRAC, label: "Dec → Frac" },
+  { key: SUB_MODES.FRAC_DEC, label: "Frac → Dec" },
+  { key: SUB_MODES.UNITS, label: "Units" },
+] as const;
+
+export const COMMON_FRACTIONS = [
+  { num: 0, den: 1 },
+  { num: 1, den: 16 },
+  { num: 1, den: 8 },
+  { num: 3, den: 16 },
+  { num: 1, den: 4 },
+  { num: 5, den: 16 },
+  { num: 3, den: 8 },
+  { num: 7, den: 16 },
+  { num: 1, den: 2 },
+  { num: 9, den: 16 },
+  { num: 5, den: 8 },
+  { num: 11, den: 16 },
+  { num: 3, den: 4 },
+  { num: 13, den: 16 },
+  { num: 7, den: 8 },
+  { num: 15, den: 16 },
+] as const;

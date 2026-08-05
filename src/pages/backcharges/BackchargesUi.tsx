@@ -13,19 +13,18 @@ import {
   BACKCHARGE_STATUS_LABELS,
   RESPONSIBLE_PARTY_TYPES,
 } from "@/lib/backcharge/types";
+import {
+  bcMono,
+  BACKCHARGE_CARD_STYLE as card,
+  BACKCHARGE_INPUT_STYLE as input,
+  BACKCHARGE_LABEL_STYLE as labelCss,
+  BACKCHARGE_BTN_STYLE as btn,
+  BACKCHARGE_BTN_PRIMARY_STYLE as btnPrimary,
+  EMPTY_BACKCHARGE_FORM as EMPTY_FORM,
+  EMPTY_TM_TICKET as EMPTY_TICKET,
+} from "./backchargesUiHelpers";
 
-export const bcMono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
-const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: 16 };
-const input = { ...bcMono, width: "100%", boxSizing: "border-box", fontSize: 12, padding: "7px 9px", borderRadius: 3, background: "var(--bg-input, var(--bg-surface-low))", border: "1px solid var(--border-default)", color: "var(--text-primary)", outline: "none" };
-const labelCss = { ...bcMono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: 4 };
-const btn = { ...bcMono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "7px 14px", borderRadius: 3, border: "1px solid var(--border-default)", cursor: "pointer" };
-const btnPrimary = { ...btn, background: "var(--accent-muted)", borderColor: "var(--accent)", color: "var(--accent)" };
-
-const EMPTY_FORM = {
-  title: "", description: "", responsible_party: "", responsible_party_type: "subcontractor",
-  reason_code: "rework", status: "draft", amount: "", incident_date: "", notice_date: "",
-  backcharge_number: "", notes: "", linked_co_id: "", source_rfi_id: "",
-};
+export { bcMono };
 
 function Field({ label, children }) {
   return (
@@ -103,8 +102,6 @@ export function BackchargeFormModal({ open, initial, onClose, onSubmit, busy, ch
     </div>
   );
 }
-
-const EMPTY_TICKET = { ticket_number: "", ticket_date: "", description: "", labor_hours: "", labor_rate: "", equipment_cost: "", material_cost: "", markup_percent: "", signed_by: "" };
 
 function AddTicketRow({ onAdd, busy }) {
   const [t, setT] = useState({ ...EMPTY_TICKET, ticket_date: localToday() });

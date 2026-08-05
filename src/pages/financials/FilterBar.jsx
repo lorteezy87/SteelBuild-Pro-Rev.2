@@ -1,15 +1,11 @@
 import React from "react";
 import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
 import { mono, body } from "./utils";
+import { FINANCIALS_VIEW_TABS } from "./filterBarHelpers";
 
 export { FilterBar } from "@/components/command/FilterBar";
 
-export const VIEW_TABS = [
-  { key: "summary", label: "Project Summary" },
-  { key: "sov", label: "SOV Analysis" },
-  { key: "budget", label: "Budget Control" },
-  { key: "unmapped", label: "Unmapped Costs" },
-];
+export const VIEW_TABS = FINANCIALS_VIEW_TABS;
 
 export function SectionTabs({ active, onChange }) {
   return (

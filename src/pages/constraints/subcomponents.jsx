@@ -6,6 +6,10 @@
  */
 
 import React from "react";
+import {
+  CONSTRAINT_ACTION_TONES as ACTION_TONES,
+  CONSTRAINT_MINI_TONES as MINI_TONES,
+} from "./constraintsChromeHelpers";
 
 export function Meta({ label, value }) {
   return (
@@ -36,14 +40,6 @@ export function Meta({ label, value }) {
   );
 }
 
-const ACTION_TONES = {
-  accent:  { background: "var(--accent-muted)",   border: "1px solid var(--accent-border)",   color: "var(--accent)" },
-  success: { background: "var(--success-muted)",  border: "1px solid var(--success-border)",  color: "var(--status-success)" },
-  warning: { background: "var(--warning-muted)",  border: "1px solid var(--warning-border)",  color: "var(--status-warning)" },
-  muted:   { background: "transparent",           border: "1px solid var(--border-strong)",   color: "var(--text-muted)" },
-  neutral: { background: "var(--bg-surface-high)", border: "1px solid var(--border-default)", color: "var(--text-secondary)" },
-};
-
 export function ActionBtn({ label, onClick, tone = "accent" }) {
   const s = ACTION_TONES[tone] || ACTION_TONES.accent;
   return (
@@ -66,13 +62,6 @@ export function ActionBtn({ label, onClick, tone = "accent" }) {
     </button>
   );
 }
-
-const MINI_TONES = {
-  accent:  { bg: "var(--accent-muted)",  border: "var(--accent-border)",  color: "var(--accent)" },
-  success: { bg: "var(--success-muted)", border: "var(--success-border)", color: "var(--status-success)" },
-  warning: { bg: "var(--warning-muted)", border: "var(--warning-border)", color: "var(--status-warning)" },
-  muted:   { bg: "transparent",          border: "var(--border-default)", color: "var(--text-muted)" },
-};
 
 export function MiniBtn({ label, onClick, tone = "muted" }) {
   const t = MINI_TONES[tone] || MINI_TONES.muted;

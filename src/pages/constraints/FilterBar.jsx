@@ -5,10 +5,11 @@
  */
 
 import React from "react";
-import { CONSTRAINT_TYPES, PRIORITY_CONFIG, PRIORITIES, inputStyle } from "./constants";
-
-const STATUS_OPTIONS = ["all", "open", "In Progress", "Resolved", "Closed"];
-const PRIORITY_OPTIONS = ["all", ...PRIORITIES];
+import { CONSTRAINT_TYPES, PRIORITY_CONFIG, inputStyle } from "./constants";
+import {
+  CONSTRAINT_FILTER_STATUS_OPTIONS as STATUS_OPTIONS,
+  CONSTRAINT_FILTER_PRIORITY_OPTIONS as PRIORITY_OPTIONS,
+} from "./constraintsChromeHelpers";
 
 export default function FilterBar({
   filterStatus,

@@ -8,18 +8,10 @@ import React from "react";
 import { ArrowUpDown } from "lucide-react";
 import { LIST_FILETYPE_STYLES, LIST_STATUS_STYLES, FILETYPE_FALLBACK } from "./utils";
 import { formatLocalDate } from "@/utils/dates";
-
-const GRID = "28px 1fr 100px 80px 70px 80px 90px 100px";
-
-const SORTABLE_COLUMNS = [
-  { label: "Name",   sort: "name-asc",  sortAlt: "name-desc" },
-  { label: "Doc #",  sort: "doc-num",   sortAlt: null },
-  { label: "Rev",    sort: null,        sortAlt: null },
-  { label: "Type",   sort: null,        sortAlt: null },
-  { label: "Status", sort: "status",    sortAlt: null },
-  { label: "Size",   sort: "size-desc", sortAlt: "size-asc" },
-  { label: "Date",   sort: "date-desc", sortAlt: "date-asc" },
-];
+import {
+  DOCUMENTS_LIST_GRID as GRID,
+  DOCUMENTS_SORTABLE_COLUMNS as SORTABLE_COLUMNS,
+} from "./listViewHelpers";
 
 export default function ListView({
   filteredDocs,

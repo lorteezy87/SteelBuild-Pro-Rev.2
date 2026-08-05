@@ -2,6 +2,7 @@ import React from "react";
 import { StatusPill, BicPill, Icon } from "@/components/design-system";
 import { daysOpen, isOverdue, rfiStatusShortLabel, rfiDueSummary, rfiImpactSummary } from "./utils";
 import {
+  RFI_ROW_GRID,
   rfiAssignedLine,
   rfiPriorityColor,
   rfiReferenceLine,
@@ -9,7 +10,7 @@ import {
   rfiSubmittedLine,
 } from "./rfiRowHelpers";
 
-export const RFI_ROW_GRID = "46px 108px minmax(360px, 1.45fr) minmax(156px, 0.58fr) minmax(142px, 0.5fr) minmax(148px, 0.5fr) minmax(148px, 0.5fr) 44px";
+export { RFI_ROW_GRID };
 
 export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
   const overdue = isOverdue(rfi);

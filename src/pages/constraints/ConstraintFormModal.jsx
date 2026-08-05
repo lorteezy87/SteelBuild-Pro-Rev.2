@@ -18,8 +18,7 @@ import {
   inputStyle,
   labelStyle,
 } from "./constants";
-
-const STATUS_OPTIONS = ["Open", "In Progress", "Resolved", "Closed"];
+import { CONSTRAINT_FORM_STATUS_OPTIONS as STATUS_OPTIONS } from "./constraintsChromeHelpers";
 
 export default function ConstraintFormModal({ projectId, constraint, prefill = null, wps, onClose, onSave }) {
   // Prefill (e.g. RFI → constraint handoff) is create-only; edit requires a real id.

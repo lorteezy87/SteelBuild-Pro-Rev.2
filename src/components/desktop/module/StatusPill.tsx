@@ -2,16 +2,12 @@
  * StatusPill — small status chip. tone: open | review | done | danger | neutral.
  */
 import React from "react";
+import { STATUS_PILL_TONES as TONES } from "./statusPillHelpers";
 
 interface Props {
   tone?: string;
   children?: React.ReactNode;
 }
-
-const TONES = new Set([
-  "open", "review", "done", "danger",
-  "overdue", "atrisk", "inreview", "approved", "needsaction", "fabready", "fieldready", "blocked",
-]);
 
 export default function StatusPill({ tone = "neutral", children }: Props) {
   const mod = TONES.has(tone) ? ` desk-status-pill--${tone}` : "";
