@@ -44,6 +44,11 @@ import {
   buildProjectFinancialMetrics,
   filterFinancialProjectMetrics,
   aggregateFinancialKpis,
+  buildFinancialAlerts,
+  buildEvmScatterData,
+  buildCashFlowChartData,
+  buildMarginChartData,
+  buildArAgingBuckets,
 } from "./financialKpisHelpers";
 
 /* ─── Presentational helpers ──────────────────────────────────────── */
@@ -158,85 +163,27 @@ export default function FinancialKPIs() {
   const agg = useMemo(() => aggregateFinancialKpis(filtered), [filtered]);
 
   /* ── Alerts ── */
-  const alerts = useMemo(() => {
-    const items = [];
-    for (const p of filtered) {
-      if (p.cpi != null && p.cpi < 0.9)
-        items.push({ project: p, type: "CPI", msg: `CPI ${p.cpi.toFixed(2)} — over budget`, severity: "risk" });
-      else if (p.cpi != null && p.cpi < 0.95)
-        items.push({ project: p, type: "CPI", msg: `CPI ${p.cpi.toFixed(2)} — trending over`, severity: "watch" });
-
-      if (p.budgetUsedPct > 95)
-        items.push({ project: p, type: "Budget", msg: `${p.budgetUsedPct.toFixed(0)}% budget consumed`, severity: "risk" });
-      else if (p.budgetUsedPct > 85)
-        items.push({ project: p, type: "Budget", msg: `${p.budgetUsedPct.toFixed(0)}% budget consumed`, severity: "watch" });
-
-      if (p.marginPct < 5 && p.revised > 0)
-        items.push({ project: p, type: "Margin", msg: `${p.marginPct.toFixed(1)}% margin — critical`, severity: "risk" });
-      else if (p.marginPct < 10 && p.revised > 0)
-        items.push({ project: p, type: "Margin", msg: `${p.marginPct.toFixed(1)}% margin — low`, severity: "watch" });
-
-      if (p.avgDSO != null && p.avgDSO > 60)
-        items.push({ project: p, type: "DSO", msg: `${p.avgDSO}d avg payment cycle`, severity: "risk" });
-      else if (p.avgDSO != null && p.avgDSO > 45)
-        items.push({ project: p, type: "DSO", msg: `${p.avgDSO}d avg payment cycle`, severity: "watch" });
-
-      if (p.coGrowthPct > 10 && p.original > 0)
-        items.push({ project: p, type: "CO Growth", msg: `${p.coGrowthPct.toFixed(1)}% CO growth`, severity: "risk" });
-    }
-    return items.sort((a, b) => (a.severity === "risk" ? -1 : 1) - (b.severity === "risk" ? -1 : 1));
-  }, [filtered]);
+  const alerts = useMemo(() => buildFinancialAlerts(filtered), [filtered]);
 
   /* ── Chart data ── */
-  const scatterData = useMemo(
-    () => filtered.filter((r) => r.cpi != null && r.spi != null).map((r) => ({
-      name: r.number,
-      fullName: r.name,
-      cpi: Number(r.cpi.toFixed(2)),
-      spi: Number(r.spi.toFixed(2)),
-      size: Math.max(r.revised / 100000, 4),
-      health: r.cpiHealth,
-    })),
-    [filtered]
+  const scatterData = useMemo(() => buildEvmScatterData(filtered), [filtered]);
+
+  const cashFlowData = useMemo(
+    () =>
+      buildCashFlowChartData(agg, {
+        primary: chartTheme.colors.primary,
+        info: chartTheme.colors.info,
+        success: chartTheme.colors.success,
+        warning: chartTheme.colors.warning,
+        muted: chartTheme.text.muted,
+      }),
+    [agg, chartTheme],
   );
 
-  const cashFlowData = useMemo(() => [
-    { name: "Contract Value", value: agg.totalRevised, fill: chartTheme.colors.primary },
-    { name: "Billed", value: agg.totalBilled, fill: chartTheme.colors.info },
-    { name: "Collected", value: agg.totalCollected, fill: chartTheme.colors.success },
-    { name: "AR Outstanding", value: agg.totalAR, fill: chartTheme.colors.warning },
-    { name: "Retention Held", value: agg.totalRetention, fill: chartTheme.text.muted },
-  ], [agg, chartTheme]);
-
-  const marginData = useMemo(
-    () => filtered
-      .filter((r) => r.revised > 0)
-      .sort((a, b) => a.marginPct - b.marginPct)
-      .map((r) => ({
-        name: r.number,
-        fullName: r.name,
-        margin: Number(r.marginPct.toFixed(1)),
-        health: r.marginHealth,
-      })),
-    [filtered]
-  );
+  const marginData = useMemo(() => buildMarginChartData(filtered), [filtered]);
 
   /* ── AR Aging ── */
-  const arAging = useMemo(() => {
-    const buckets = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
-    const now = Date.now();
-    for (const s of sovItems) {
-      if (!s.submitted_date || s.payment_received_date) continue;
-      if (!["Certified"].includes(s.status)) continue;
-      const days = Math.ceil((now - new Date(s.submitted_date).getTime()) / 86400000);
-      const amt = (Number(s.scheduled_value) || 0) * ((Number(s.current_percent_complete) || 0) / 100);
-      if (days <= 30) buckets["0-30"] += amt;
-      else if (days <= 60) buckets["31-60"] += amt;
-      else if (days <= 90) buckets["61-90"] += amt;
-      else buckets["90+"] += amt;
-    }
-    return Object.entries(buckets).map(([name, value]) => ({ name, value }));
-  }, [sovItems]);
+  const arAging = useMemo(() => buildArAgingBuckets(sovItems), [sovItems]);
 
   const SCATTER_COLORS = {
     good: chartTheme.colors.success,

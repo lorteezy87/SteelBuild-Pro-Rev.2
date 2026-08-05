@@ -356,3 +356,112 @@ export function aggregateFinancialKpis(
     avgDSO,
   };
 }
+
+export type FinancialAlert = {
+  project: ProjectFinancialMetric;
+  type: string;
+  msg: string;
+  severity: "risk" | "watch";
+};
+
+export function buildFinancialAlerts(
+  filtered: ProjectFinancialMetric[],
+): FinancialAlert[] {
+  const items: FinancialAlert[] = [];
+  for (const p of filtered || []) {
+    if (p.cpi != null && p.cpi < 0.9)
+      items.push({ project: p, type: "CPI", msg: `CPI ${p.cpi.toFixed(2)} — over budget`, severity: "risk" });
+    else if (p.cpi != null && p.cpi < 0.95)
+      items.push({ project: p, type: "CPI", msg: `CPI ${p.cpi.toFixed(2)} — trending over`, severity: "watch" });
+
+    if (p.budgetUsedPct > 95)
+      items.push({ project: p, type: "Budget", msg: `${p.budgetUsedPct.toFixed(0)}% budget consumed`, severity: "risk" });
+    else if (p.budgetUsedPct > 85)
+      items.push({ project: p, type: "Budget", msg: `${p.budgetUsedPct.toFixed(0)}% budget consumed`, severity: "watch" });
+
+    if (p.marginPct < 5 && p.revised > 0)
+      items.push({ project: p, type: "Margin", msg: `${p.marginPct.toFixed(1)}% margin — critical`, severity: "risk" });
+    else if (p.marginPct < 10 && p.revised > 0)
+      items.push({ project: p, type: "Margin", msg: `${p.marginPct.toFixed(1)}% margin — low`, severity: "watch" });
+
+    if (p.avgDSO != null && p.avgDSO > 60)
+      items.push({ project: p, type: "DSO", msg: `${p.avgDSO}d avg payment cycle`, severity: "risk" });
+    else if (p.avgDSO != null && p.avgDSO > 45)
+      items.push({ project: p, type: "DSO", msg: `${p.avgDSO}d avg payment cycle`, severity: "watch" });
+
+    if (p.coGrowthPct > 10 && p.original > 0)
+      items.push({ project: p, type: "CO Growth", msg: `${p.coGrowthPct.toFixed(1)}% CO growth`, severity: "risk" });
+  }
+  return items.sort(
+    (a, b) =>
+      (a.severity === "risk" ? -1 : 1) - (b.severity === "risk" ? -1 : 1),
+  );
+}
+
+export function buildEvmScatterData(filtered: ProjectFinancialMetric[]) {
+  return (filtered || [])
+    .filter((r) => r.cpi != null && r.spi != null)
+    .map((r) => ({
+      name: r.number,
+      fullName: r.name,
+      cpi: Number((r.cpi as number).toFixed(2)),
+      spi: Number((r.spi as number).toFixed(2)),
+      size: Math.max(r.revised / 100000, 4),
+      health: r.cpiHealth,
+    }));
+}
+
+export function buildCashFlowChartData(
+  agg: FinancialAgg,
+  colors: {
+    primary: string;
+    info: string;
+    success: string;
+    warning: string;
+    muted: string;
+  },
+) {
+  return [
+    { name: "Contract Value", value: agg.totalRevised, fill: colors.primary },
+    { name: "Billed", value: agg.totalBilled, fill: colors.info },
+    { name: "Collected", value: agg.totalCollected, fill: colors.success },
+    { name: "AR Outstanding", value: agg.totalAR, fill: colors.warning },
+    { name: "Retention Held", value: agg.totalRetention, fill: colors.muted },
+  ];
+}
+
+export function buildMarginChartData(filtered: ProjectFinancialMetric[]) {
+  return (filtered || [])
+    .filter((r) => r.revised > 0)
+    .sort((a, b) => a.marginPct - b.marginPct)
+    .map((r) => ({
+      name: r.number,
+      fullName: r.name,
+      margin: Number(r.marginPct.toFixed(1)),
+      health: r.marginHealth,
+    }));
+}
+
+export type ArAgingBucket = { name: string; value: number };
+
+/** Outstanding certified AR aging buckets from SOV lines. */
+export function buildArAgingBuckets(
+  sovItems: SovLineLike[],
+  nowMs: number = Date.now(),
+): ArAgingBucket[] {
+  const buckets: Record<string, number> = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+  for (const s of sovItems || []) {
+    if (!s.submitted_date || s.payment_received_date) continue;
+    if (!["Certified"].includes(String(s.status || ""))) continue;
+    const days = Math.ceil((nowMs - new Date(s.submitted_date).getTime()) / 86400000);
+    const amt =
+      (Number(s.scheduled_value) || 0) *
+      ((Number(s.current_percent_complete) || 0) / 100);
+    if (days <= 30) buckets["0-30"] += amt;
+    else if (days <= 60) buckets["31-60"] += amt;
+    else if (days <= 90) buckets["61-90"] += amt;
+    else buckets["90+"] += amt;
+  }
+  return Object.entries(buckets).map(([name, value]) => ({ name, value }));
+}
+

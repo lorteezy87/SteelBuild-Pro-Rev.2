@@ -6,6 +6,10 @@ import {
   buildProjectFinancialMetrics,
   filterFinancialProjectMetrics,
   aggregateFinancialKpis,
+  buildFinancialAlerts,
+  buildEvmScatterData,
+  buildArAgingBuckets,
+  buildMarginChartData,
 } from "../financialKpisHelpers";
 
 describe("financialKpisHelpers", () => {
@@ -82,3 +86,39 @@ describe("financialKpisHelpers", () => {
     expect(agg.avgDSO).toBe(30);
   });
 });
+
+  it("alerts, scatter, margin, AR aging", () => {
+    const metrics = buildProjectFinancialMetrics({
+      projects: [{ id: "p1", name: "Alpha", project_number: "A1" }],
+      workPackages: [],
+      changeOrders: [],
+      expenses: [{ project_id: "p1", payment_status: "Paid", amount: 950 }],
+      sovItems: [],
+      calcContractValue: () => ({ original: 1000, revised: 1000, approvedCOTotal: 0, pendingCOValue: 0 }),
+      calcEVM: () => ({ cpi: 0.8, spi: 0.9, eac: 1200, vac: -200, bac: 1000, ev: 400, ac: 500 }),
+      calcWpProgress: () => ({ pct: 40 }),
+      calcLaborBurn: () => ({ burnPct: 50 }),
+    });
+    // force high DSO / low margin via override
+    metrics[0].avgDSO = 70;
+    metrics[0].marginPct = 3;
+    metrics[0].coGrowthPct = 12;
+    metrics[0].original = 1000;
+    const alerts = buildFinancialAlerts(metrics);
+    expect(alerts.some((a) => a.type === "CPI" && a.severity === "risk")).toBe(true);
+    expect(alerts.some((a) => a.type === "DSO")).toBe(true);
+
+    expect(buildEvmScatterData(metrics)[0].cpi).toBe(0.8);
+    expect(buildMarginChartData(metrics)[0].margin).toBe(3);
+
+    const aging = buildArAgingBuckets(
+      [
+        { status: "Certified", submitted_date: "2026-07-20", scheduled_value: 100, current_percent_complete: 100 },
+        { status: "Certified", submitted_date: "2026-05-01", scheduled_value: 50, current_percent_complete: 100 },
+        { status: "Certified", submitted_date: "2026-01-01", payment_received_date: "2026-02-01", scheduled_value: 999, current_percent_complete: 100 },
+      ],
+      new Date("2026-08-05T12:00:00Z").getTime(),
+    );
+    expect(aging.find((b) => b.name === "0-30")!.value).toBe(100);
+    expect(aging.find((b) => b.name === "90+")!.value).toBe(50);
+  });
