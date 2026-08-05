@@ -82,3 +82,10 @@ export function contactsCommandSubtitle(
   return filterType !== "all" ? `${base} · filtered: ${filterType}` : base;
 }
 
+
+export function createEmptyContactFilters(): {
+  filterType: string;
+  search: string;
+} {
+  return { filterType: "all", search: "" };
+}

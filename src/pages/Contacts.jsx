@@ -14,6 +14,7 @@ import {
   findById,
   nextContactTypeFilter,
   contactsCommandSubtitle,
+  createEmptyContactFilters,
 } from "./contacts/contactsPageHelpers";
 import {
   ContactsKpiStrip,
@@ -143,7 +144,11 @@ export default function Contacts() {
         emptyBody="Add owner, GC, engineer, sub, and supplier contacts for this project directory."
         emptyActionLabel="+ New Contact"
         onEmptyAction={() => { setEditingContact(null); setShowForm(true); }}
-        onClearFilters={() => { setFilterType("all"); setSearch(""); }}
+        onClearFilters={() => {
+          const empty = createEmptyContactFilters();
+          setFilterType(empty.filterType);
+          setSearch(empty.search);
+        }}
       >
         <ContactList
           contacts={filtered}

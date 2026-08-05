@@ -60,3 +60,14 @@ describe("findById", () => {
     expect(findById([{ id: "a" }], null)).toBeNull();
   });
 });
+
+import { createEmptyContactFilters } from "../contactsPageHelpers";
+
+describe("createEmptyContactFilters", () => {
+  it("resets type and search", () => {
+    expect(createEmptyContactFilters()).toEqual({
+      filterType: "all",
+      search: "",
+    });
+  });
+});

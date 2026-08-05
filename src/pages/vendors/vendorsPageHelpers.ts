@@ -190,3 +190,23 @@ export function downloadVendorsCsv(
   });
 }
 
+
+export function createEmptyVendorFilters(): {
+  search: string;
+  statusFilter: string;
+  typeFilter: string;
+} {
+  return {
+    search: "",
+    statusFilter: "all",
+    typeFilter: "all",
+  };
+}
+
+export function vendorBulkDeleteTitle(count: number): string {
+  return `Delete ${count} Vendor${count === 1 ? "" : "s"}`;
+}
+
+export function vendorBulkDeleteDescription(count: number): string {
+  return `Permanently delete ${count} selected vendor${count === 1 ? "" : "s"}? This cannot be undone.`;
+}

@@ -18,6 +18,9 @@ import {
   filterVendors,
   uniqueVendorTypes,
   downloadVendorsCsv,
+  createEmptyVendorFilters,
+  vendorBulkDeleteTitle,
+  vendorBulkDeleteDescription,
 } from "./vendors/vendorsPageHelpers";
 
 export default function Vendors() {
@@ -194,8 +197,8 @@ export default function Vendors() {
         open={showBulkDelete}
         onClose={() => setShowBulkDelete(false)}
         onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
-        title={`Delete ${selectedIds.size} Vendor${selectedIds.size === 1 ? "" : "s"}`}
-        description={`Permanently delete ${selectedIds.size} selected vendor${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
+        title={vendorBulkDeleteTitle(selectedIds.size)}
+        description={vendorBulkDeleteDescription(selectedIds.size)}
       />
     </>
   );

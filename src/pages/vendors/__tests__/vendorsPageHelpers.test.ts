@@ -29,3 +29,26 @@ describe("vendorsPageHelpers", () => {
     expect(VENDOR_CSV_HEADERS).toHaveLength(11);
   });
 });
+
+import {
+  createEmptyVendorFilters,
+  vendorBulkDeleteTitle,
+  vendorBulkDeleteDescription,
+} from "../vendorsPageHelpers";
+
+describe("vendor empty filters and bulk copy", () => {
+  it("createEmptyVendorFilters", () => {
+    expect(createEmptyVendorFilters()).toEqual({
+      search: "",
+      statusFilter: "all",
+      typeFilter: "all",
+    });
+  });
+
+  it("bulk delete copy", () => {
+    expect(vendorBulkDeleteTitle(1)).toBe("Delete 1 Vendor");
+    expect(vendorBulkDeleteTitle(2)).toBe("Delete 2 Vendors");
+    expect(vendorBulkDeleteDescription(1)).toContain("1 selected vendor?");
+    expect(vendorBulkDeleteDescription(3)).toContain("3 selected vendors?");
+  });
+});
