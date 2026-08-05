@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import {filterWorkPackages,
+import {
+  filterWorkPackages,
   filterSelectedRows,
   nextSelectedIdsToggle,
   resolveProjectPercentComplete,
   formatWpNumber,
   buildLiveProjectIdSet,
-  scopeWorkPackagesForPage, sortWorkPackagesByProjectName} from "../workPackagesPageHelpers";
+  scopeWorkPackagesForPage,
+  sortWorkPackagesByProjectName,
+  WP_PHASE_FILTERS,
+  WP_STATUS_FILTERS,
+} from "../workPackagesPageHelpers";
 
 describe("workPackagesPageHelpers", () => {
   const rows = [
@@ -88,5 +93,12 @@ describe("sortWorkPackagesByProjectName", () => {
       { project_name: "Alpha" },
     ]);
     expect(sorted.map((r) => r.project_name)).toEqual(["Alpha", "Zeta"]);
+  });
+});
+
+describe("WP phase/status filters", () => {
+  it("includes Detailing and On Hold", () => {
+    expect(WP_PHASE_FILTERS).toContain("Detailing");
+    expect(WP_STATUS_FILTERS).toContain("On Hold");
   });
 });

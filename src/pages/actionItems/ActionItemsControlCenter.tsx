@@ -19,11 +19,13 @@ import {
   type ActionItemRecord,
 } from "./actionItemsControlCenter.derive";
 import { daysUntil } from "@/lib/dateMath";
+import {
+  STATUS_FILTERS,
+  PRIORITY_FILTERS,
+} from "./actionItemsPageHelpers";
 
 // ─── Local helpers ─────────────────────────────────────────────────────────────
 
-const STATUS_FILTERS = ["All", "Open", "In Progress", "Complete", "Cancelled"];
-const PRIORITY_FILTERS = ["All", "Critical", "High", "Medium", "Low"];
 
 function dueCell(item: ActionItemRecord) {
   if (!item.due_date)

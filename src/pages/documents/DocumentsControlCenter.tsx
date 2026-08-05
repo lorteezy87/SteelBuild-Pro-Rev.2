@@ -16,9 +16,11 @@
 import { type DragEventHandler, type ReactNode, useMemo } from "react";
 import { FolderOpen, FileText, Clock, AlertCircle, HardDrive, Layers, FolderInput, Trash2, XCircle } from "lucide-react";
 import "@/styles/command.css";
-import { statusToneForDoc } from "./documentsControlCenterHelpers";
 import {
-
+  statusToneForDoc,
+  KNOWN_CATEGORIES,
+} from "./documentsControlCenterHelpers";
+import {
   PageHero,
   KpiStrip,
   DecisionPanel,
@@ -42,7 +44,6 @@ import { buildFolderNameById } from "./documentsPageHelpers";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const KNOWN_CATEGORIES = ["All", "Structural", "Electrical", "Civil", "Mechanical", "Architectural", "General"];
 
 function fileTypeBadge(fileType?: string | null) {
   const key = (fileType || "other").toLowerCase();

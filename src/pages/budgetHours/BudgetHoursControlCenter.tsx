@@ -47,6 +47,9 @@ import {
 } from "./budgetHoursControlCenter.derive";
 import type { BudgetHourRow, WorkPackageRow } from "./budgetHoursControlCenter.derive";
 import BhChartRow from "./BhChartRow";
+import {
+  CATEGORY_OPTIONS,
+} from "./budgetHoursPageHelpers";
 
 // ─── Variance color (mirrors the page varianceColor helper) ────────────────────
 
@@ -107,7 +110,6 @@ interface TableRow extends BudgetHourRow {
   _isLinked: boolean;
 }
 
-const CATEGORY_OPTIONS = ["All", "Standard", "Specialty"] as const;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 

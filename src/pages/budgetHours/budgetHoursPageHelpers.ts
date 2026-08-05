@@ -54,3 +54,5 @@ export function buildScopeCreatePayload(
     metadata: {},
   };
 }
+
+export const CATEGORY_OPTIONS = ["All", "Standard", "Specialty"] as const;

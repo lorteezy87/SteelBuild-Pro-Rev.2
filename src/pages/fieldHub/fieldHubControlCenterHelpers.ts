@@ -1,3 +1,5 @@
+import { FIELD_PHASES } from "@/lib/field/fieldPhase";
+
 export function fmtDate(iso: string | null): string {
   if (!iso || iso === "—") return "—";
   try {
@@ -23,3 +25,15 @@ export function fieldPriorityTone(
   if (priority === "Medium") return "warn";
   return "neutral";
 }
+
+export function fieldStatusTone(
+  status: string,
+): "good" | "info" | "neutral" {
+  if (["Closed", "Completed", "Complete"].includes(status)) return "good";
+  if (["Open", "Scheduled", "In Progress"].includes(status)) return "info";
+  return "neutral";
+}
+
+export const TYPE_CHIPS = ["All", "Daily Log", "Inspection", "Safety", "Punchlist"] as const;
+
+export const PHASE_CHIPS = ["All", ...FIELD_PHASES] as const;

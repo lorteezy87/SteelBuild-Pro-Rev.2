@@ -3,6 +3,7 @@ import {
   nextBudgetHourSortOrder,
   buildBlankBudgetHourRow,
   buildScopeCreatePayload,
+  CATEGORY_OPTIONS,
 } from "../budgetHoursPageHelpers";
 
 describe("budgetHoursPageHelpers", () => {
@@ -33,5 +34,11 @@ describe("budgetHoursPageHelpers", () => {
       sort_order: 50,
       metadata: {},
     });
+  });
+});
+
+describe("CATEGORY_OPTIONS", () => {
+  it("includes Specialty", () => {
+    expect(CATEGORY_OPTIONS).toContain("Specialty");
   });
 });

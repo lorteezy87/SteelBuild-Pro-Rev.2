@@ -40,13 +40,15 @@ import type { WpMetrics, EnrichedWp } from "./wpControlCenter.derive";
 import { formatTons, formatHours, phaseColor, PHASE_META, VIEW_OPTIONS } from "./format";
 import { ControlPanel } from "./components";
 import { RESPONSIVE_CSS, contentGridStyle, pageStyle } from "./styles";
+import {
+  WP_PHASE_FILTERS as PHASES,
+  WP_STATUS_FILTERS as STATUSES,
+} from "./workPackagesPageHelpers";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const PHASES = ["All", "Detailing", "Fabrication", "Delivery", "Erection"];
-const STATUSES = ["All", "Not Started", "In Progress", "Complete", "On Hold"];
 
 /** Map phase name to the phase's next step label (for "Ready to Advance" panel). */
 function nextPhase(phase: string): string {

@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import {splitSetupItems,
+import {
+  splitSetupItems,
   computeSetupStats,
   collectKnownAssignees,
   computeActionItemStats,
   filterActionItems,
   buildExecutionQueue,
-  resolveToggleStatus, buildActionItemsCsvString} from "../actionItemsPageHelpers";
+  resolveToggleStatus,
+  buildActionItemsCsvString,
+  STATUS_FILTERS,
+  PRIORITY_FILTERS,
+} from "../actionItemsPageHelpers";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 
 describe("actionItemsPageHelpers", () => {
@@ -82,5 +87,12 @@ describe("control center filter label bridge", () => {
     expect(toControlCenterFilterLabel("Open")).toBe("Open");
     expect(fromControlCenterFilterLabel("All")).toBe("all");
     expect(fromControlCenterFilterLabel("Open")).toBe("Open");
+  });
+});
+
+describe("STATUS_FILTERS / PRIORITY_FILTERS", () => {
+  it("includes Open and Critical", () => {
+    expect(STATUS_FILTERS).toContain("Open");
+    expect(PRIORITY_FILTERS).toContain("Critical");
   });
 });

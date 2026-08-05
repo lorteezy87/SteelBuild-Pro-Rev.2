@@ -28,6 +28,12 @@ import {
   filterTeamMembers,
 } from "./teamControlCenter.derive";
 import type { StagedInvite } from "@/lib/org/onboardingInvites";
+import {
+  ROLE_OPTIONS,
+  formatTeamRole,
+  monoStyle,
+  smallBtnStyle,
+} from "./teamControlCenterHelpers";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -84,29 +90,14 @@ export interface TeamControlCenterProps {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const ROLE_LABEL: Record<string, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  member: "Member",
-};
-const ROLE_OPTIONS = ["member", "admin"];
-
-function fmt(role: string): string {
-  return ROLE_LABEL[role] ?? role;
-}
-
 function scrollToTable() {
   document.querySelector(".team-cc .cmd-table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-// Inline-style atoms — only what command.css doesn't already provide
-const mono: React.CSSProperties = { fontFamily: "var(--font-mono)" };
-const smallBtn: React.CSSProperties = { padding: "4px 8px", fontSize: 11, minHeight: 28, display: "inline-flex", alignItems: "center", gap: 4 };
-
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function RolePill({ role }: { role: string }) {
-  return <Pill tone={roleTone(role)}>{fmt(role)}</Pill>;
+  return <Pill tone={roleTone(role)}>{formatTeamRole(role)}</Pill>;
 }
 
 function SeatBar({ pct, atLimit, near, unlimited }: { pct: number; atLimit: boolean; near: boolean; unlimited: boolean }) {
@@ -205,11 +196,11 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
             <div style={{ color: "var(--text-primary)", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
               {display}
               {self && (
-                <span style={{ ...mono, fontSize: 9, color: "var(--accent)", letterSpacing: "0.06em" }}>YOU</span>
+                <span style={{ ...monoStyle, fontSize: 9, color: "var(--accent)", letterSpacing: "0.06em" }}>YOU</span>
               )}
             </div>
             {m.email && m.full_name && (
-              <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>{m.email}</div>
+              <div style={{ ...monoStyle, fontSize: 11, color: "var(--text-muted)" }}>{m.email}</div>
             )}
           </div>
         );
@@ -230,8 +221,8 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
               // Prevent row-click from firing when interacting with the select
               onClick={(e) => e.stopPropagation()}
             >
-              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{fmt(r)}</option>)}
-              {(isOwner || m.role === "owner") && <option value="owner">{fmt("owner")}</option>}
+              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{formatTeamRole(r)}</option>)}
+              {(isOwner || m.role === "owner") && <option value="owner">{formatTeamRole("owner")}</option>}
             </select>
           );
         }
@@ -241,7 +232,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
     {
       key: "email",
       header: "Email",
-      render: (m) => <span style={{ ...mono, fontSize: 12, color: "var(--text-secondary)" }}>{m.email || "—"}</span>,
+      render: (m) => <span style={{ ...monoStyle, fontSize: 12, color: "var(--text-secondary)" }}>{m.email || "—"}</span>,
     },
     {
       key: "status",
@@ -251,7 +242,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
     {
       key: "joined",
       header: "Joined",
-      render: (m) => <span style={{ ...mono, fontSize: 12 }}>{m.created_at.slice(0, 10)}</span>,
+      render: (m) => <span style={{ ...monoStyle, fontSize: 12 }}>{m.created_at.slice(0, 10)}</span>,
     },
     {
       key: "actions",
@@ -263,7 +254,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
           <button
             type="button"
             className="sbd-btn sbd-btn-ghost"
-            style={{ ...smallBtn, color: "var(--status-error)" }}
+            style={{ ...smallBtnStyle, color: "var(--status-error)" }}
             title="Remove from workspace"
             onClick={(e) => { e.stopPropagation(); onRemove(m); }}
           >
@@ -295,9 +286,9 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
         <div style={{ padding: "0 var(--cmd-page-px, 24px) 4px" }}>
           <SeatBar pct={seatsPct} atLimit={seatsAtLimit} near={seatsNear} unlimited={false} />
           {seatsAtLimit && canManage && (
-            <div style={{ ...mono, fontSize: 11, color: "var(--status-error)", marginTop: 4, display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ ...monoStyle, fontSize: 11, color: "var(--status-error)", marginTop: 4, display: "flex", gap: 6, alignItems: "center" }}>
               {planName} seat limit reached ({seatsLimit}).{!native && (<>{" "}
-              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11 }}>Upgrade</button></>)}
+              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...monoStyle, fontSize: 11 }}>Upgrade</button></>)}
             </div>
           )}
         </div>
@@ -313,7 +304,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
             <div className="cmd-row" key={rg.role}>
               <div className="cmd-row__num">{rg.label}</div>
               <RolePill role={rg.role} />
-              <div style={{ ...mono, fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>{rg.count}</div>
+              <div style={{ ...monoStyle, fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>{rg.count}</div>
             </div>
           ))}
         </DecisionPanel>
@@ -331,15 +322,15 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
                     {inv.daysUntilExpiry <= 0 ? "Expired" : `${inv.daysUntilExpiry}d left`}
                   </Pill>
                   {" · "}
-                  {fmt(inv.role)}
+                  {formatTeamRole(inv.role)}
                 </div>
               </div>
               {canManage && (
                 <div style={{ display: "flex", gap: 4, alignItems: "center", marginLeft: "auto" }}>
-                  <button type="button" className="sbd-btn sbd-btn-ghost" style={smallBtn} title="Copy link" onClick={() => onCopyLink(inv.token)}>
+                  <button type="button" className="sbd-btn sbd-btn-ghost" style={smallBtnStyle} title="Copy link" onClick={() => onCopyLink(inv.token)}>
                     <Link2 size={13} />
                   </button>
-                  <button type="button" className="sbd-btn sbd-btn-ghost" style={{ ...smallBtn, color: "var(--status-error)" }} title="Revoke" onClick={() => onRevoke(inv.id)}>
+                  <button type="button" className="sbd-btn sbd-btn-ghost" style={{ ...smallBtnStyle, color: "var(--status-error)" }} title="Revoke" onClick={() => onRevoke(inv.id)}>
                     <X size={13} />
                   </button>
                 </div>
@@ -384,7 +375,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, color: "var(--text-primary)", fontWeight: 700, fontSize: 13 }}>
             <UserPlus size={15} style={{ color: "var(--accent)" }} /> Invite your team from setup
           </div>
-          <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.5 }}>
+          <div style={{ ...monoStyle, fontSize: 11, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.5 }}>
             Carried over from onboarding — review roles then send. Each becomes a 14-day invite link.
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -402,7 +393,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
                   <option value="admin">Admin</option>
                   {isOwner && <option value="owner">Owner</option>}
                 </select>
-                <button type="button" onClick={() => onRemoveStaged(idx)} disabled={sendingStaged} className="sbd-btn sbd-btn-ghost" style={{ ...smallBtn, color: "var(--status-error)" }}>
+                <button type="button" onClick={() => onRemoveStaged(idx)} disabled={sendingStaged} className="sbd-btn sbd-btn-ghost" style={{ ...smallBtnStyle, color: "var(--status-error)" }}>
                   <X size={13} />
                 </button>
               </div>
@@ -413,12 +404,12 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
               {sendingStaged ? "Sending…" : `Send ${staged.length} invite${staged.length === 1 ? "" : "s"}`}
             </button>
             <button type="button" className="sbd-btn sbd-btn-ghost" onClick={onDismissStaged} disabled={sendingStaged} style={{ minHeight: 40 }}>Dismiss</button>
-            {stagedSkippedNote && <span style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>{stagedSkippedNote}</span>}
+            {stagedSkippedNote && <span style={{ ...monoStyle, fontSize: 11, color: "var(--text-muted)" }}>{stagedSkippedNote}</span>}
           </div>
           {seatsLimit != null && staged.length > seatsLeft && (
-            <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
+            <div style={{ ...monoStyle, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
               Only {seatsLeft} seat{seatsLeft === 1 ? "" : "s"} left on {planName}.{!native && (<>{" "}
-              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11 }}>Upgrade</button></>)}
+              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...monoStyle, fontSize: 11 }}>Upgrade</button></>)}
             </div>
           )}
         </div>
@@ -464,12 +455,12 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
             </button>
           </form>
           {atMemberLimit ? (
-            <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
+            <div style={{ ...monoStyle, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
               {planName} plan limit reached.{!native && (<>{" "}
-              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11 }}>Upgrade</button></>)}
+              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...monoStyle, fontSize: 11 }}>Upgrade</button></>)}
             </div>
           ) : (
-            <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+            <div style={{ ...monoStyle, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
               Creates a 14-day invite link (copied to clipboard) — send it to them.
             </div>
           )}

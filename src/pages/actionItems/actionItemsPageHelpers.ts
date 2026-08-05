@@ -202,3 +202,6 @@ export function toControlCenterFilterLabel(value: string): string {
 export function fromControlCenterFilterLabel(value: string): string {
   return value === "All" ? "all" : value;
 }
+
+export const STATUS_FILTERS = ["All", "Open", "In Progress", "Complete", "Cancelled"] as const;
+export const PRIORITY_FILTERS = ["All", "Critical", "High", "Medium", "Low"] as const;

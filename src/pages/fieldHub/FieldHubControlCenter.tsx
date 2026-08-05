@@ -26,7 +26,6 @@ import {
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
-import { FIELD_PHASES } from "@/lib/field/fieldPhase";
 import PhaseBadge from "@/components/field/PhaseBadge";
 import { buildFieldHubSummary, filterFieldActivityRows } from "./fieldHubControlCenter.derive";
 import type {
@@ -43,14 +42,15 @@ import {
   fmtDate,
   typeTone,
   fieldPriorityTone,
+  fieldStatusTone,
+  TYPE_CHIPS,
+  PHASE_CHIPS,
 } from "./fieldHubControlCenterHelpers";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const TYPE_CHIPS = ["All", "Daily Log", "Inspection", "Safety", "Punchlist"];
-const PHASE_CHIPS = ["All", ...FIELD_PHASES];
 
 /** Today ISO string (local) for overdue comparisons in cells. */
 function todayLocal(): string {

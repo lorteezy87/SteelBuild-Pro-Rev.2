@@ -19,3 +19,13 @@ export function statusToneForDoc(
       return "neutral";
   }
 }
+
+export const KNOWN_CATEGORIES = [
+  "All",
+  "Structural",
+  "Electrical",
+  "Civil",
+  "Mechanical",
+  "Architectural",
+  "General",
+] as const;

@@ -34,6 +34,9 @@ import {
   type PortfolioPanelRow,
 } from "./portfolioControlCenter.derive";
 import { buildIdMap } from "@/pages/shared/buildIdMap";
+import {
+  HEALTH_FILTERS,
+} from "./portfolioControlCenterHelpers";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -82,7 +85,6 @@ export interface PortfolioControlCenterProps {
 // Health chip filter labels
 // ---------------------------------------------------------------------------
 
-const HEALTH_FILTERS = ["All", "On Track", "Watch", "At Risk"] as const;
 
 // ---------------------------------------------------------------------------
 // Component

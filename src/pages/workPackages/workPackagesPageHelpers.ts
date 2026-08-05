@@ -120,3 +120,6 @@ export function sortWorkPackagesByProjectName<
   );
 }
 
+
+export const WP_PHASE_FILTERS = ["All", "Detailing", "Fabrication", "Delivery", "Erection"] as const;
+export const WP_STATUS_FILTERS = ["All", "Not Started", "In Progress", "Complete", "On Hold"] as const;
