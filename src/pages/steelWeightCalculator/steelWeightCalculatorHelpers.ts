@@ -1,7 +1,12 @@
 /**
  * Pure helpers for Steel Weight Calculator.
  */
-import { parseLength, ticksToDecimalFeet } from "@/utils/lengthMath";
+import { parseLength, ticksToDecimalFeet, formatLength } from "@/utils/lengthMath";
+import {
+  findShape,
+  computeDynamicLbPerFt,
+} from "@/data/aiscShapes";
+import { pieceCost } from "@/utils/steelCost";
 
 export const LS_RATE = "calc:steelweight:rate";
 export const LS_UNIT = "calc:steelweight:unit";
@@ -101,4 +106,151 @@ export function buildTakeoffCsv(
     );
   }
   return lines.join("\n");
+}
+
+export type ShapeFamily = {
+  key: string;
+  dynamic?: string;
+  shapes?: Array<{ designation: string; weightPerFoot: number }>;
+  label?: string;
+};
+
+/** Resolve lb/ft for the current family/designation/dimensions. */
+export function resolveCurrentLbPerFt(input: {
+  family: ShapeFamily;
+  designation: string;
+  plateThickness: string;
+  plateWidth: string;
+  roundDiameter: string;
+  squareSide: string;
+  flatThickness: string;
+  flatWidth: string;
+}): number | null {
+  const { family, designation } = input;
+  if (!family.dynamic) {
+    const row = findShape(designation);
+    return row ? row.weightPerFoot : null;
+  }
+  switch (family.dynamic) {
+    case "plate":
+      return computeDynamicLbPerFt("plate", {
+        thickness: parseFloat(input.plateThickness),
+        width: parseFloat(input.plateWidth),
+      });
+    case "round-bar":
+      return computeDynamicLbPerFt("round-bar", {
+        diameter: parseFloat(input.roundDiameter),
+      });
+    case "square-bar":
+      return computeDynamicLbPerFt("square-bar", {
+        side: parseFloat(input.squareSide),
+      });
+    case "flat-bar":
+      return computeDynamicLbPerFt("flat-bar", {
+        thickness: parseFloat(input.flatThickness),
+        width: parseFloat(input.flatWidth),
+      });
+    default:
+      return null;
+  }
+}
+
+export function buildShapeLabel(input: {
+  family: ShapeFamily;
+  designation: string;
+  plateThickness: string;
+  plateWidth: string;
+  roundDiameter: string;
+  squareSide: string;
+  flatThickness: string;
+  flatWidth: string;
+}): string {
+  const { family, designation } = input;
+  if (!family.dynamic) return designation || "—";
+  switch (family.dynamic) {
+    case "plate":
+      if (!input.plateThickness || !input.plateWidth) return "PL";
+      return `PL ${input.plateThickness}" × ${input.plateWidth}"`;
+    case "round-bar":
+      if (!input.roundDiameter) return "Round Bar";
+      return `Ø${input.roundDiameter}" Round`;
+    case "square-bar":
+      if (!input.squareSide) return "Square Bar";
+      return `${input.squareSide}" Square`;
+    case "flat-bar":
+      if (!input.flatThickness || !input.flatWidth) return "Flat Bar";
+      return `FB ${input.flatThickness}" × ${input.flatWidth}"`;
+    default:
+      return "—";
+  }
+}
+
+export type CalcSuccess = {
+  shape: string;
+  lbPerFt: number;
+  lengthFt: number;
+  lengthDisplay: string;
+  qty: number;
+  pieceWeight: number;
+  totalWeight: number;
+  totalTons: number;
+  cost: number;
+};
+
+export function tryCalculateWeight(input: {
+  lbPerFt: number | null;
+  lengthRaw: string;
+  lengthMode: string;
+  qty: string;
+  shapeLabel: string;
+  rateNum: number;
+  costUnit: string;
+}): { ok: true; result: CalcSuccess } | { ok: false; error: string } {
+  const lbPerFt = input.lbPerFt;
+  if (!(lbPerFt != null && lbPerFt > 0)) {
+    return { ok: false, error: "Enter valid shape dimensions (positive numbers only)." };
+  }
+
+  const lengthFt = parseLengthFeet(input.lengthRaw, input.lengthMode);
+  if (!(lengthFt != null && lengthFt > 0)) {
+    return {
+      ok: false,
+      error:
+        input.lengthMode === LENGTH_MODES.DECIMAL
+          ? "Enter a positive length (ft)."
+          : "Enter a valid length, e.g. 12'-6 1/2\" or 150 (inches).",
+    };
+  }
+
+  const qtyN = parseInt(input.qty, 10);
+  if (!(qtyN > 0)) {
+    return { ok: false, error: "Quantity must be a positive whole number." };
+  }
+
+  const { piece, total } = computeWeightTotals(lbPerFt, lengthFt, qtyN);
+  const totalCost = pieceCost(total, input.rateNum, input.costUnit);
+
+  return {
+    ok: true,
+    result: {
+      shape: input.shapeLabel,
+      lbPerFt,
+      lengthFt,
+      lengthDisplay:
+        input.lengthMode === LENGTH_MODES.FT_IN
+          ? formatLength(parseLength(input.lengthRaw), 16)
+          : `${lengthFt.toFixed(4)} ft`,
+      qty: qtyN,
+      pieceWeight: piece,
+      totalWeight: total,
+      totalTons: total / 2000,
+      cost: totalCost,
+    },
+  };
+}
+
+export function sumRunningWeight(
+  rows: Array<{ totalWeight?: number }>,
+): number {
+  return (rows || []).reduce((sum, r) => sum + (Number(r.totalWeight) || 0), 0);
 }

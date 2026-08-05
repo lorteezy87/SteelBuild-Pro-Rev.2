@@ -6,6 +6,10 @@ import {
   parsePositiveRate,
   computeWeightTotals,
   buildTakeoffCsv,
+  buildShapeLabel,
+  resolveCurrentLbPerFt,
+  tryCalculateWeight,
+  sumRunningWeight,
 } from "../steelWeightCalculatorHelpers";
 
 describe("parseLengthFeet", () => {
@@ -49,5 +53,67 @@ describe("csv / weight helpers", () => {
     expect(csv.split("\n")[1]).toContain("W12x26");
     expect(csv.split("\n")[1]).toContain("26.000");
     expect(csv.split("\n")[1]).toContain("624.00");
+  });
+});
+
+describe("steelWeight shape/calc helpers", () => {
+  it("builds shape labels for rolled and dynamic families", () => {
+    expect(
+      buildShapeLabel({
+        family: { key: "w" },
+        designation: "W12×26",
+        plateThickness: "",
+        plateWidth: "",
+        roundDiameter: "",
+        squareSide: "",
+        flatThickness: "",
+        flatWidth: "",
+      }),
+    ).toBe("W12×26");
+    expect(
+      buildShapeLabel({
+        family: { key: "pl", dynamic: "plate" },
+        designation: "",
+        plateThickness: "0.5",
+        plateWidth: "12",
+        roundDiameter: "",
+        squareSide: "",
+        flatThickness: "",
+        flatWidth: "",
+      }),
+    ).toBe('PL 0.5" × 12"');
+  });
+
+  it("tryCalculateWeight validates and computes", () => {
+    const bad = tryCalculateWeight({
+      lbPerFt: null,
+      lengthRaw: "10",
+      lengthMode: LENGTH_MODES.DECIMAL,
+      qty: "1",
+      shapeLabel: "X",
+      rateNum: 0,
+      costUnit: "/lb",
+    });
+    expect(bad.ok).toBe(false);
+
+    const ok = tryCalculateWeight({
+      lbPerFt: 10,
+      lengthRaw: "10",
+      lengthMode: LENGTH_MODES.DECIMAL,
+      qty: "2",
+      shapeLabel: "W10",
+      rateNum: 1,
+      costUnit: "/lb",
+    });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.result.pieceWeight).toBe(100);
+      expect(ok.result.totalWeight).toBe(200);
+      expect(ok.result.totalTons).toBeCloseTo(0.1);
+    }
+  });
+
+  it("sums running weight", () => {
+    expect(sumRunningWeight([{ totalWeight: 10 }, { totalWeight: 5 }])).toBe(15);
   });
 });

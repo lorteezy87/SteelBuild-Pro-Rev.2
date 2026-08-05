@@ -11,13 +11,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  SHAPE_FAMILIES,
-  findShape,
-  computeDynamicLbPerFt,
-} from "@/data/aiscShapes";
-import { formatLength, parseLength } from "@/utils/lengthMath";
-import { pieceCost, rollupCost, COST_UNITS } from "@/utils/steelCost";
+import { SHAPE_FAMILIES } from "@/data/aiscShapes";
+import { rollupCost, COST_UNITS } from "@/utils/steelCost";
 import CalcKey from "@/components/calculators/CalcKey";
 import CalcDisplay from "@/components/calculators/CalcDisplay";
 import {
@@ -31,8 +26,11 @@ import {
   writeLS,
   readRows,
   parsePositiveRate,
-  computeWeightTotals,
   buildTakeoffCsv,
+  resolveCurrentLbPerFt,
+  buildShapeLabel,
+  tryCalculateWeight,
+  sumRunningWeight,
 } from "./steelWeightCalculator/steelWeightCalculatorHelpers";
 import {
   mono,
@@ -116,112 +114,42 @@ export default function SteelWeightCalculator() {
    * Resolve the currently-chosen shape into lb/ft. Returns null when
    * the dimensional inputs for a dynamic family aren't valid yet.
    */
-  const currentLbPerFt = useMemo(() => {
-    if (!family.dynamic) {
-      const row = findShape(designation);
-      return row ? row.weightPerFoot : null;
-    }
-    switch (family.dynamic) {
-      case "plate":
-        return computeDynamicLbPerFt("plate", {
-          thickness: parseFloat(plateThickness),
-          width:     parseFloat(plateWidth),
-        });
-      case "round-bar":
-        return computeDynamicLbPerFt("round-bar", {
-          diameter: parseFloat(roundDiameter),
-        });
-      case "square-bar":
-        return computeDynamicLbPerFt("square-bar", {
-          side: parseFloat(squareSide),
-        });
-      case "flat-bar":
-        return computeDynamicLbPerFt("flat-bar", {
-          thickness: parseFloat(flatThickness),
-          width:     parseFloat(flatWidth),
-        });
-      default:
-        return null;
-    }
-  }, [
+  const shapeDims = {
     family, designation,
     plateThickness, plateWidth,
     roundDiameter, squareSide,
     flatThickness, flatWidth,
-  ]);
+  };
+  const currentLbPerFt = useMemo(
+    () => resolveCurrentLbPerFt(shapeDims),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [family, designation, plateThickness, plateWidth, roundDiameter, squareSide, flatThickness, flatWidth],
+  );
 
-  /** Human-readable description of the current shape for tape rows. */
-  const currentShapeLabel = useMemo(() => {
-    if (!family.dynamic) return designation || "—";
-    switch (family.dynamic) {
-      case "plate":
-        if (!plateThickness || !plateWidth) return "PL";
-        return `PL ${plateThickness}" × ${plateWidth}"`;
-      case "round-bar":
-        if (!roundDiameter) return "Round Bar";
-        return `Ø${roundDiameter}" Round`;
-      case "square-bar":
-        if (!squareSide) return "Square Bar";
-        return `${squareSide}" Square`;
-      case "flat-bar":
-        if (!flatThickness || !flatWidth) return "Flat Bar";
-        return `FB ${flatThickness}" × ${flatWidth}"`;
-      default:
-        return "—";
-    }
-  }, [
-    family, designation,
-    plateThickness, plateWidth,
-    roundDiameter, squareSide,
-    flatThickness, flatWidth,
-  ]);
+  const currentShapeLabel = useMemo(
+    () => buildShapeLabel(shapeDims),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [family, designation, plateThickness, plateWidth, roundDiameter, squareSide, flatThickness, flatWidth],
+  );
 
   // ── Calculate ──────────────────────────────────────────────────
   const handleCalculate = () => {
     setError(null);
     setResult(null);
-
-    const lbPerFt = currentLbPerFt;
-    if (!(lbPerFt > 0)) {
-      setError("Enter valid shape dimensions (positive numbers only).");
-      return;
-    }
-
-    const lengthFt = parseLengthFeet(lengthRaw, lengthMode);
-    if (!(lengthFt > 0)) {
-      setError(
-        lengthMode === LENGTH_MODES.DECIMAL
-          ? "Enter a positive length (ft)."
-          : "Enter a valid length, e.g. 12'-6 1/2\" or 150 (inches)."
-      );
-      return;
-    }
-
-    const qtyN = parseInt(qty, 10);
-    if (!(qtyN > 0)) {
-      setError("Quantity must be a positive whole number.");
-      return;
-    }
-
-    const { piece, total } = computeWeightTotals(lbPerFt, lengthFt, qtyN);
-    // Cost is computed off the TOTAL weight (piece × qty) at the
-    // current rate/unit; 0 when no rate has been entered.
-    const totalCost = pieceCost(total, rateNum, costUnit);
-
-    setResult({
-      shape:     currentShapeLabel,
-      lbPerFt,
-      lengthFt,
-      lengthDisplay:
-        lengthMode === LENGTH_MODES.FT_IN
-          ? formatLength(parseLength(lengthRaw), 16)
-          : `${lengthFt.toFixed(4)} ft`,
-      qty:       qtyN,
-      pieceWeight: piece,
-      totalWeight: total,
-      totalTons:   total / 2000,
-      cost:        totalCost,
+    const outcome = tryCalculateWeight({
+      lbPerFt: currentLbPerFt,
+      lengthRaw,
+      lengthMode,
+      qty,
+      shapeLabel: currentShapeLabel,
+      rateNum,
+      costUnit,
     });
+    if (!outcome.ok) {
+      setError(outcome.error);
+      return;
+    }
+    setResult(outcome.result);
   };
 
   const handleAddToRunningTotal = () => {
@@ -251,7 +179,7 @@ export default function SteelWeightCalculator() {
   };
 
   const grandTotal = useMemo(
-    () => runningTotal.reduce((sum, r) => sum + r.totalWeight, 0),
+    () => sumRunningWeight(runningTotal),
     [runningTotal]
   );
 
