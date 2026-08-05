@@ -29,6 +29,7 @@ import { BackchargeFormModal } from "@/pages/Backcharges";
 import { buildBackchargePrefillFromSheet, createBackchargeFromDelta, sheetsWithRevisionBackcharge } from "@/lib/backchargeFromDelta";
 import { listBackcharges } from "@/lib/backcharge/repository";
 import { downloadRevisionImpactPdf } from "@/lib/exports/revisionImpactPDF";
+import { filterRevisionsForSheets } from "./revisionImpactHelpers";
 
 const mono = "var(--font-mono)";
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
@@ -52,10 +53,10 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
   });
   const loggedBcSheets = useMemo(() => sheetsWithRevisionBackcharge(projectBackcharges), [projectBackcharges]);
 
-  const revisionsForSet = useMemo(() => {
-    const ids = new Set(setSheets.map((s) => String(s.id)));
-    return (allRevisions || []).filter((r) => ids.has(String(r.drawing_id)));
-  }, [allRevisions, setSheets]);
+  const revisionsForSet = useMemo(
+    () => filterRevisionsForSheets(allRevisions, setSheets),
+    [allRevisions, setSheets],
+  );
 
   const changedSheets = useMemo(
     () => selectChangedSheets(setSheets, revisionsForSet),

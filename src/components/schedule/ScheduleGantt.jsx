@@ -41,6 +41,7 @@ import {
   pluralize, taskOwner, isUnassignedTask, hasLogicGapTask,
   groupGanttTasksByPhase,
   filterGroupedTasksByVisibleIds,
+  utcToday,
 } from "./scheduleGanttHelpers";
 import {
   WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
@@ -112,10 +113,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   // line, scroll-to-today) compares apples to apples with task dates that are
   // stored as YYYY-MM-DD and parsed at T00:00:00Z. Without this, a 4pm local
   // load drifts every comparison by hours and can flip overdue/upcoming.
-  const today = useMemo(() => {
-    const d = new Date();
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  }, []);
+  const today = useMemo(() => utcToday(), []);
 
   const startInlineEdit = (task, e) => {
     e.stopPropagation();

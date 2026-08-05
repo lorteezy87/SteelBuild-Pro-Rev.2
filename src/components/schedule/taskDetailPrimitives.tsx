@@ -5,6 +5,7 @@ import {
   getActiveStage,
   getEffectiveDueDate,
 } from '../../lib/stageDates';
+import { filterSearchableTasks } from './searchableTaskPickerHelpers';
 
 export const drawerSurface = 'var(--bg-surface-secondary)';
 export const drawerPanel = 'var(--bg-surface-low)';
@@ -42,16 +43,10 @@ export function SearchableTaskPicker(props: any) {
   const inputRef = useRef<any>(null);
   const listRef = useRef<any>(null);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return tasks.slice(0, 50); // show first 50 when empty
-    const q = query.toLowerCase();
-    return tasks.filter((t: any) => {
-      const name = (t.task_name || '').toLowerCase();
-      const wbs = (t.wbs_code || '').toLowerCase();
-      const phase = (t.phase || '').toLowerCase();
-      return name.includes(q) || wbs.includes(q) || phase.includes(q);
-    }).slice(0, 50);
-  }, [tasks, query]);
+  const filtered = useMemo(
+    () => filterSearchableTasks(tasks, query, 50),
+    [tasks, query],
+  );
 
   // Reset highlight when results change
   useEffect(() => { setHighlightIdx(0); }, [filtered.length, query]);

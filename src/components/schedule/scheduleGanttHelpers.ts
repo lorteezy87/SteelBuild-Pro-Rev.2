@@ -297,3 +297,8 @@ export function filterGroupedTasksByVisibleIds<
     }))
     .filter((g) => g.tasks.length > 0) as G[];
 }
+
+/** UTC midnight "today" for Gantt date math. */
+export function utcToday(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
