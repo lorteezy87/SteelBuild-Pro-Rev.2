@@ -14,12 +14,13 @@ Snapshot of **main** after the PR hygiene pass (see also README “Product surfa
 - Enterprise Tier 1 **code**: PM floor migration, signup clickwrap, Stripe Tax hooks,
   `supabase:drift`, vercel main auto-deploy off
 - Capacitor iOS / account delete, security matrix docs (earlier supersedes)
+- Package Board (Piece Register Board view) — #240
 
 ## Not fully closed from PRs alone
 
 - Owner Tier 1: PITR, backup secrets, apply PM-floor migration, Stripe Tax dashboard,
   counsel, branch protection, dead edge-fn delete with `DRY_RUN=0`
-- Package Board may still be on an open supersede PR until CI green + merge
+- Package Board on main via #240 (Unassigned + WP columns, `@hello-pangea/dnd`)
 
 ## Key paths
 
