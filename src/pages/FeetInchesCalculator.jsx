@@ -36,7 +36,7 @@ import CalcKey from "@/components/calculators/CalcKey";
 import CalcTape from "@/components/calculators/CalcTape";
 import useCalcTape from "@/components/calculators/useCalcTape";
 import "@/components/calculators/calc.css";
-import { OPS, applyOp, fracLabel } from "./feetInchesCalculator/feetInchesCalculatorHelpers";
+import { OPS, applyOp, fracLabel, parseFeetInchesEntry } from "./feetInchesCalculator/feetInchesCalculatorHelpers";
 import {
   CutListOptimizerPanel,
   ConversionRow,
@@ -67,15 +67,7 @@ export default function FeetInchesCalculator() {
 
   // ── Entry parsing ─────────
   // When pendingOp is × or ÷, we expect a bare number.
-  const parseEntry = () => {
-    const s = entry.trim();
-    if (!s) return null;
-    if (mulDivMode) {
-      const n = parseFloat(s);
-      return Number.isFinite(n) ? n : null;
-    }
-    return parseLength(s);
-  };
+  const parseEntry = () => parseFeetInchesEntry(entry, mulDivMode);
 
   const commit = (nextOp /* optional; if set, op continues */) => {
     const value = parseEntry();

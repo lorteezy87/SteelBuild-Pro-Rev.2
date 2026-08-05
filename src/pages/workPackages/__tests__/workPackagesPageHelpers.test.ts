@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {
-  filterWorkPackages,
+import {filterWorkPackages,
   filterSelectedRows,
   nextSelectedIdsToggle,
   resolveProjectPercentComplete,
   formatWpNumber,
   buildLiveProjectIdSet,
-  scopeWorkPackagesForPage,
-} from "../workPackagesPageHelpers";
+  scopeWorkPackagesForPage, sortWorkPackagesByProjectName} from "../workPackagesPageHelpers";
 
 describe("workPackagesPageHelpers", () => {
   const rows = [
@@ -83,3 +81,12 @@ describe("workPackagesPageHelpers", () => {
     expect(scopeWorkPackagesForPage(raw, { projectId: "p1", selectedProject: { id: "p1" }, liveProjectIds: live })).toEqual(raw);
     expect(scopeWorkPackagesForPage(raw, { projectId: "p1", selectedProject: null, liveProjectIds: live })).toEqual([]);
   });
+describe("sortWorkPackagesByProjectName", () => {
+  it("sorts by project_name", () => {
+    const sorted = sortWorkPackagesByProjectName([
+      { project_name: "Zeta" },
+      { project_name: "Alpha" },
+    ]);
+    expect(sorted.map((r) => r.project_name)).toEqual(["Alpha", "Zeta"]);
+  });
+});

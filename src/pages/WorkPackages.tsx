@@ -54,6 +54,7 @@ import {
   formatWpNumber,
   buildLiveProjectIdSet,
   scopeWorkPackagesForPage,
+  sortWorkPackagesByProjectName,
 } from "./workPackages/workPackagesPageHelpers";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
@@ -94,7 +95,7 @@ export default function WorkPackages() {
     queryFn: async () => {
       if (projectId) return entities.WorkPackage.filter({ project_id: projectId });
       const all = await entities.WorkPackage.list();
-      return all.sort((a, b) => (a.project_name || "").localeCompare(b.project_name || ""));
+      return sortWorkPackagesByProjectName(all);
     },
   });
 

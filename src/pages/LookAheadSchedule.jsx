@@ -16,6 +16,8 @@ import {
   buildRfisById,
   groupLookAheadItems,
   computeLookAheadStats,
+  buildLookAheadWindow,
+  formatLookAheadWindowDate,
 } from "./lookAheadSchedule/lookAheadScheduleHelpers";
 import {
   PHASE_COLORS,
@@ -119,12 +121,8 @@ export default function LookAheadSchedule() {
   const handleSave = (d) => { if (editing) updateMut.mutate({ id: editing.id, data: d }); else createMut.mutate(d); };
 
   // Compute 2-week window based on weekOffset
-  const windowStart = new Date();
-  windowStart.setDate(windowStart.getDate() + weekOffset * 14);
-  const windowEnd = new Date(windowStart);
-  windowEnd.setDate(windowStart.getDate() + 14);
-
-  const fmtWindow = (d) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const { start: windowStart, end: windowEnd } = buildLookAheadWindow(weekOffset);
+  const fmtWindow = formatLookAheadWindowDate;
 
   // Group items — bucket once per (groupBy, items) instead of re-filtering the
   // full list once per group key on every render (was O(groups·items) each pass

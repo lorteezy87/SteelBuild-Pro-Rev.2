@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildWpLabelById,
+import {buildWpLabelById,
   groupLookAheadItems,
   computeLookAheadStats,
-  buildRfisById,
-} from "../lookAheadScheduleHelpers";
+  buildRfisById, buildLookAheadWindow, formatLookAheadWindowDate} from "../lookAheadScheduleHelpers";
 
 describe("lookAheadScheduleHelpers", () => {
   it("builds wp labels", () => {
@@ -36,5 +34,16 @@ describe("lookAheadScheduleHelpers", () => {
 
   it("builds rfi id map", () => {
     expect(buildRfisById([{ id: "r1", title: "A" }]).r1.title).toBe("A");
+  });
+});
+
+describe("buildLookAheadWindow", () => {
+  it("shifts 14-day windows by offset", () => {
+    const now = new Date("2026-08-05T12:00:00");
+    const w0 = buildLookAheadWindow(0, now);
+    const w1 = buildLookAheadWindow(1, now);
+    expect(w0.end.getTime() - w0.start.getTime()).toBe(14 * 24 * 60 * 60 * 1000);
+    expect(w1.start.getDate()).toBe(w0.end.getDate());
+    expect(formatLookAheadWindowDate(w0.start)).toMatch(/2026/);
   });
 });

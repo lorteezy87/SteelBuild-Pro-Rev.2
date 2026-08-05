@@ -1,3 +1,4 @@
+import { parseLength } from "@/utils/lengthMath";
 /**
  * Pure helpers for Feet/Inches Calculator.
  */
@@ -27,3 +28,15 @@ export function applyOp(
 export function fracLabel(den: number): string {
   return `1/${den}`;
 }
+
+/** Parse calculator entry: bare number in mul/div mode, otherwise a length. */
+export function parseFeetInchesEntry(entry: string, mulDivMode: boolean): number | null {
+  const s = (entry || "").trim();
+  if (!s) return null;
+  if (mulDivMode) {
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  }
+  return parseLength(s);
+}
+

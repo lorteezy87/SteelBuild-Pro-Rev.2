@@ -57,3 +57,29 @@ export function buildRfisById<T extends { id?: string | null }>(
 ): Record<string, T> {
   return Object.fromEntries((rfis || []).map((r) => [String(r.id), r]));
 }
+
+export type LookAheadWindow = {
+  start: Date;
+  end: Date;
+};
+
+/** 2-week window anchored to today, shifted by weekOffset (in 14-day steps). */
+export function buildLookAheadWindow(
+  weekOffset: number,
+  now: Date = new Date(),
+): LookAheadWindow {
+  const start = new Date(now);
+  start.setDate(start.getDate() + weekOffset * 14);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 14);
+  return { start, end };
+}
+
+export function formatLookAheadWindowDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+

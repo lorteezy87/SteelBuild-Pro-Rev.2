@@ -114,3 +114,13 @@ export function scopeWorkPackagesForPage<T extends { project_id?: string | null 
     (wp) => wp?.project_id && liveProjectIds.has(wp.project_id),
   );
 }
+
+/** Global WP list sort when no project filter is active. */
+export function sortWorkPackagesByProjectName<
+  T extends { project_name?: string | null },
+>(rows: T[]): T[] {
+  return [...(rows || [])].sort((a, b) =>
+    (a.project_name || "").localeCompare(b.project_name || ""),
+  );
+}
+

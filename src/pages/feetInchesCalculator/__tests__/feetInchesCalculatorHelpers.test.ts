@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyOp, OPS, fracLabel } from "../feetInchesCalculatorHelpers";
+import {applyOp, OPS, fracLabel, parseFeetInchesEntry} from "../feetInchesCalculatorHelpers";
 
 describe("applyOp", () => {
   it("adds subtracts multiplies divides ticks", () => {
@@ -12,5 +12,16 @@ describe("applyOp", () => {
 
   it("labels fractions", () => {
     expect(fracLabel(16)).toBe("1/16");
+  });
+});
+
+describe("parseFeetInchesEntry", () => {
+  it("parses mul/div bare numbers and empty", () => {
+    expect(parseFeetInchesEntry("", true)).toBeNull();
+    expect(parseFeetInchesEntry("2.5", true)).toBe(2.5);
+    expect(parseFeetInchesEntry("x", true)).toBeNull();
+  });
+  it("parses lengths outside mul/div mode", () => {
+    expect(parseFeetInchesEntry("12'", false)).not.toBeNull();
   });
 });
