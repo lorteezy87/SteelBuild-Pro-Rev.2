@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * DrawingSubmittalHub smoke + wiring test — boots the real hub with Supabase
- * mocked empty, then confirms the Drawing Register tab embeds the full
- * Drawings editor (rename / delete / bulk / per-sheet).
+ * mocked empty, then confirms the Drawing Register tab mounts the clean
+ * sheet-level DrawingRegisterGridPanel (Doc Control parity).
  */
 import React from "react";
 import { render, screen } from "@testing-library/react";
@@ -96,11 +96,17 @@ describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
     expect(screen.getByText("Approval Matrix")).toBeInTheDocument();
   });
 
-  it("embeds the full Drawings editor on the Drawing Register tab", async () => {
+  it("mounts the clean sheet register on the Drawing Register tab", async () => {
     const user = userEvent.setup();
     renderHub();
     await user.click(await screen.findByText("Drawing Register"));
-    // CommandBar title from Drawings — proves full editor is mounted.
-    expect(await screen.findByText(/Drawings & Submittals/i)).toBeInTheDocument();
+    // DrawingRegisterGridPanel chrome — proves clean register is mounted
+    // (not the full Drawings editor CommandBar).
+    expect(
+      await screen.findByText(/Current revision \+ release status/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(/Filter sheet, title, discipline, set/i),
+    ).toBeInTheDocument();
   });
 });

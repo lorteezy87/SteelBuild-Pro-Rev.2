@@ -1,18 +1,13 @@
 /**
  * DrawingRegisterPanel — Drawing Register tab in the Detailing Control Center.
  *
- * The register IS the full editor. Embeds Drawings (embedded mode) so operators
- * can rename sets, edit sheets, bulk-update, delete, advance stage, and upload
- * without leaving the hub. The prior read-only set table + "Open full editor"
- * link was the chaos source.
+ * Renders the clean sheet-level register (same as Doc Control) for visual
+ * parity with the requested clean table. Full set/sheet editor remains on
+ * the standalone Drawings page.
  */
-import type { ComponentType } from "react";
-import DrawingsRaw from "@/pages/Drawings";
+import { DrawingRegisterGridPanel } from "@/components/drawings/register/DrawingRegisterGridPanel";
 
-type AnyProps = Record<string, any>;
-const Drawings = DrawingsRaw as unknown as ComponentType<AnyProps>;
-
-/** Props retained for hub call-site compatibility; editor owns its own data. */
+/** Props retained for hub call-site compatibility. */
 export interface DrawingRegisterPanelProps {
   setPackages?: any[];
   projectId?: string;
@@ -26,6 +21,7 @@ export interface DrawingRegisterPanelProps {
   onOpenSummary?: (summary: any) => void;
 }
 
-export default function DrawingRegisterPanel(_props: DrawingRegisterPanelProps) {
-  return <Drawings embedded />;
+export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
+  const projectId = props.projectId ?? props.activeProject?.id ?? null;
+  return <DrawingRegisterGridPanel projectId={projectId} />;
 }
