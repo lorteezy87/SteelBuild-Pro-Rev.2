@@ -24,46 +24,13 @@ import {
 } from "lucide-react";
 import { buildFolderBreadcrumbPath, filterChildFolders } from "./documentsPageHelpers";
 import { toggleSelectionId } from "@/pages/shared/selectionHelpers";
-
-const PILL_BTN = {
-  display: "inline-flex", alignItems: "center", gap: 6,
-  padding: "6px 12px",
-  background: "var(--bg-surface-low)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-  letterSpacing: "0.08em", textTransform: "uppercase",
-  cursor: "pointer", color: "var(--text-secondary)",
-  transition: "all 0.12s",
-};
-
-const PRIMARY_BTN = {
-  ...PILL_BTN,
-  background: "var(--accent)",
-  color: "var(--bg-base)",
-  borderColor: "var(--accent)",
-};
-
-const CRUMB_LINK = {
-  background: "none", border: "none", padding: 0,
-  cursor: "pointer",
-  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-  letterSpacing: "0.08em", textTransform: "uppercase",
-  color: "var(--text-secondary)",
-};
-
-const CRUMB_CURRENT = { ...CRUMB_LINK, color: "var(--text-primary)", cursor: "default" };
-
-const CARD_STYLE = {
-  display: "flex", alignItems: "center", gap: 10,
-  padding: "10px 12px",
-  background: "var(--bg-surface)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 8,
-  cursor: "pointer",
-  transition: "all 0.12s",
-  position: "relative",
-};
+import {
+  PILL_BTN,
+  PRIMARY_BTN,
+  CRUMB_LINK,
+  CRUMB_CURRENT,
+  CARD_STYLE,
+} from "./folderBarStyleHelpers";
 
 export default function FolderBar({
   folders,                  // all folders for the project (active only)
