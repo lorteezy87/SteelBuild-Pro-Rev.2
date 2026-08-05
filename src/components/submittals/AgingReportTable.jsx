@@ -197,15 +197,6 @@ function Empty({ message }) {
   );
 }
 
-) {
-  return {
-    padding: "6px 10px", textAlign: align,
-    color: "var(--text-primary)",
-    fontVariantNumeric: "tabular-nums",
-    ...extra,
-  };
-}
-
 // Timezone-safe: lastActivityIso can derive from a date-only column (UTC
 // midnight), which a bare new Date(...).toLocaleDateString renders a day early
 // in MST. formatShortDate reads the calendar day as written.
