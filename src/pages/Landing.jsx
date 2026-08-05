@@ -7,7 +7,7 @@
  * screenshots, and a boardroom-ready narrative for steel contractors.
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { PLANS } from "@/lib/billing/plans";
 import { supabase } from "@/lib/supabase";
 import {
