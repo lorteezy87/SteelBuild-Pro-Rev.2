@@ -26,3 +26,9 @@ export const BULK_EDIT_INITIAL = {
   notes: "",
 };
 
+/** Merge PhoenixModal inputStyle with select cursor. */
+export function bulkEditSelectStyle(
+  inputStyle: Record<string, unknown>,
+): Record<string, unknown> {
+  return { ...inputStyle, cursor: "pointer" };
+}

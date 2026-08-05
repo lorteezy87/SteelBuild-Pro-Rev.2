@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { mono, surface } from "./drawingsConfig";
+import {
+  RENAME_SET_BTN_PRIMARY,
+  RENAME_SET_BTN_GHOST,
+  RENAME_SET_BTN_ICON,
+} from "./renameSetModalStyleHelpers";
 
 /**
  * Small focused modal for renaming a drawing set.
@@ -117,21 +122,6 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
   );
 }
 
-const btnPrimary = {
-  padding: "7px 18px", background: "var(--accent)", color: "var(--on-accent)",
-  border: "none", borderRadius: 2,
-  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-  letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",
-};
-const btnGhost = {
-  padding: "7px 16px", background: "transparent",
-  border: "1px solid var(--border-default)", borderRadius: 2,
-  color: "var(--text-muted)",
-  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-  letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",
-};
-const btnIcon = {
-  background: "transparent", border: "none",
-  color: "var(--text-muted)", cursor: "pointer", padding: 4,
-  display: "flex", alignItems: "center",
-};
+const btnPrimary = RENAME_SET_BTN_PRIMARY;
+const btnGhost = RENAME_SET_BTN_GHOST;
+const btnIcon = RENAME_SET_BTN_ICON;

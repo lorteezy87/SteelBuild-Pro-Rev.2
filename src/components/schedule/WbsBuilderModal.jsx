@@ -37,6 +37,8 @@ import {
   displayStyle as display,
   AI_ACCENT as AI,
   WBS_EXAMPLES as EXAMPLES,
+  IMPORT_BTN_PRIMARY,
+  IMPORT_BTN_GHOST,
 } from "./wbsBuilderModalHelpers";
 import {
   parseScope,
@@ -649,29 +651,5 @@ function ForecastTile({ label, value, sub }) {
   );
 }
 
-const btnPrimary = {
-  padding: "8px 22px",
-  background: AI,
-  color: "var(--on-accent)",
-  border: "none",
-  borderRadius: 2,
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
-const btnGhost = {
-  padding: "8px 18px",
-  background: "transparent",
-  border: "1px solid var(--border-default)",
-  borderRadius: 2,
-  color: "var(--text-muted)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
+const btnPrimary = IMPORT_BTN_PRIMARY;
+const btnGhost = IMPORT_BTN_GHOST;

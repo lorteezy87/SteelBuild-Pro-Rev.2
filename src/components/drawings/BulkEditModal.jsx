@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle } from "@/components/shared/PhoenixModal";
 import { STAGES, DISCIPLINES, mono } from "./drawingsConfig";
-import { labelStyle, BULK_EDIT_INITIAL as INITIAL } from "./bulkEditModalStyleHelpers";
+import { labelStyle, BULK_EDIT_INITIAL as INITIAL, bulkEditSelectStyle } from "./bulkEditModalStyleHelpers";
 
 /**
  * BulkEditModal — Apply field updates to multiple selected drawings at once.
@@ -10,7 +10,7 @@ import { labelStyle, BULK_EDIT_INITIAL as INITIAL } from "./bulkEditModalStyleHe
  * are left untouched on each drawing.
  */
 
-const selectStyle = { ...inputStyle, cursor: "pointer" };
+const selectStyle = bulkEditSelectStyle(inputStyle);
 
 export default function BulkEditModal({ open, onClose, onApply, selectedCount }) {
   const [form, setForm] = useState({ ...INITIAL });

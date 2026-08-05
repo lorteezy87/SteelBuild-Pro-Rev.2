@@ -31,7 +31,11 @@ import {
   voidSignoff,
   SIGNOFF_STAMP_TYPES,
 } from "@/lib/drawingHub";
-import { signoffQueryKey as QKEY } from "./signoffStampPanelHelpers";
+import {
+  signoffQueryKey as QKEY,
+  SIGNOFF_BTN_GHOST,
+  SIGNOFF_BTN_PRIMARY,
+} from "./signoffStampPanelHelpers";
 
 // Icon overlay keeps lucide components local to this presentational panel.
 const STAMP_ICONS = {
@@ -369,24 +373,5 @@ const inp = {
   boxSizing: "border-box",
 };
 
-const btnGhost = {
-  padding: "8px 14px",
-  background: "transparent",
-  border: "1px solid var(--border-default)",
-  color: "var(--text-muted)",
-  borderRadius: 6,
-  cursor: "pointer",
-  ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-  textTransform: "uppercase",
-};
-
-const btnPrimary = {
-  padding: "8px 16px",
-  background: "var(--accent)",
-  border: "none",
-  color: "var(--on-accent)",
-  borderRadius: 6,
-  cursor: "pointer",
-  ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-  textTransform: "uppercase",
-};
+const btnGhost = SIGNOFF_BTN_GHOST;
+const btnPrimary = SIGNOFF_BTN_PRIMARY;
