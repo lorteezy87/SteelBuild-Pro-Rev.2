@@ -137,3 +137,12 @@ export function filterAndSortConstraints(
       return 0;
     });
 }
+
+export const EMPTY_ENGINE_SOURCES = {
+  rfis: [],
+  submittals: [],
+  deliveries: [],
+  scheduleTasks: [],
+  drawings: [],
+  inspections: [],
+} as const;

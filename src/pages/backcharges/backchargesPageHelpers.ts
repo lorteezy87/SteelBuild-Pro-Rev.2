@@ -11,10 +11,5 @@ export function buildIdMap<T extends { id?: string | null }>(
   );
 }
 
-/** Currency display used by Backcharges form/detail panels. */
-export function formatUsd(n: unknown): string {
-  return `$${Number(n || 0).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
-}
+/** @deprecated Prefer `@/pages/shared/formatUsd`. */
+export { formatUsd } from "@/pages/shared/formatUsd";

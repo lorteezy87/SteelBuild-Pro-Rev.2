@@ -2,6 +2,7 @@
  * Pure helpers for Project Members page.
  */
 import { formatRole, isProjectAdminRole } from "@/lib/projectMembers";
+import { pruneSelectionToAllowed } from "@/pages/shared/selectionHelpers";
 
 export type MemberRowLike = {
   user_id?: string | null;
@@ -72,8 +73,7 @@ export function pruneSelectedIds(
   liveIds: Iterable<string>,
 ): Set<string> {
   const live = liveIds instanceof Set ? liveIds : new Set(liveIds);
-  const next = new Set([...previous].filter((id) => live.has(id)));
-  return next.size === previous.size ? previous : next;
+  return pruneSelectionToAllowed(previous, live);
 }
 
 export function allMembersSelected(

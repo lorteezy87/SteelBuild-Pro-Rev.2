@@ -47,3 +47,12 @@ export function computeContactStats(contacts: ContactLike[]) {
 /** @deprecated Prefer `@/pages/shared/findById` — re-export kept for local imports. */
 export { findById } from "@/pages/shared/findById";
 
+export const CONTACT_TYPE_COLORS: Record<string, string> = {
+  [CONTACT_TYPE.OWNER]: "var(--status-error)",
+  [CONTACT_TYPE.GC]: "var(--status-info)",
+  [CONTACT_TYPE.ENGINEER]: "var(--accent)",
+  [CONTACT_TYPE.SUBCONTRACTOR]: "var(--status-warning)",
+  [CONTACT_TYPE.SUPPLIER]: "var(--status-success)",
+  [CONTACT_TYPE.INSPECTOR]: "var(--text-muted)",
+  [CONTACT_TYPE.INTERNAL]: "var(--secondary)",
+};

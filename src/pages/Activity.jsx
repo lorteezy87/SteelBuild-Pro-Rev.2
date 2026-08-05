@@ -13,16 +13,10 @@ import {
   filterActivities,
   activityHasActiveFilters,
   buildActivityCsvRows, buildActivityCsvString, activityCsvFilename,
+  ACTIVITY_DATE_RANGES,
 } from "./activity/activityPageHelpers";
 import { downloadTextFile } from "@/lib/exports/fabRelease";
 
-const DATE_RANGES = [
-  { value: "all", label: "All Time" },
-  { value: "today", label: "Today" },
-  { value: "7d", label: "Last 7 Days" },
-  { value: "30d", label: "Last 30 Days" },
-  { value: "90d", label: "Last 90 Days" },
-];
 
 export default function ActivityPage() {
   const navigate = useNavigate();
@@ -187,7 +181,7 @@ export default function ActivityPage() {
               <SelectValue placeholder="All time" />
             </SelectTrigger>
             <SelectContent>
-              {DATE_RANGES.map((r) => (
+              {ACTIVITY_DATE_RANGES.map((r) => (
                 <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
               ))}
             </SelectContent>

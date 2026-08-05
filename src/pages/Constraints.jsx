@@ -28,6 +28,7 @@ import {
   mergeConstraints,
   computeConstraintKpis,
   filterAndSortConstraints,
+  EMPTY_ENGINE_SOURCES,
 } from "./constraints/constraintsPageHelpers";
 import KpiStrip from "./constraints/KpiStrip";
 import PriorityBar from "./constraints/PriorityBar";
@@ -45,14 +46,6 @@ import { deriveOperationalConstraints } from "@/services/constraintEngine";
 import { buildConstraintPrefillFromRfi } from "./constraints/rfiConstraintHandoff";
 
 import { findById } from "@/pages/shared/findById";
-const EMPTY_ENGINE_SOURCES = {
-  rfis: [],
-  submittals: [],
-  deliveries: [],
-  scheduleTasks: [],
-  drawings: [],
-  inspections: [],
-};
 
 export default function Constraints() {
   const qc = useQueryClient();
