@@ -155,3 +155,130 @@ export function filterLinkSearchRecords<
     )
     .slice(0, limit);
 }
+
+/** Safe JSON parse for string metadata blobs. */
+export function parseJsonSafe(value: unknown): unknown {
+  if (value == null) return null;
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+/** Outbound list-row label: first recipient (+N) or sender for inbound. */
+export function outboundDisplayName(message: {
+  direction?: string | null;
+  recipients?: unknown;
+  sender_name?: string | null;
+  sender_email?: string | null;
+}): string {
+  if (message.direction === "outbound") {
+    try {
+      const recips =
+        typeof message.recipients === "string"
+          ? JSON.parse(message.recipients)
+          : message.recipients || [];
+      const list = Array.isArray(recips) ? recips : [];
+      return list.length > 0
+        ? `To: ${list[0]}${list.length > 1 ? ` +${list.length - 1}` : ""}`
+        : "To: (unknown)";
+    } catch {
+      return "To: (unknown)";
+    }
+  }
+  return message.sender_name || message.sender_email || "Unknown";
+}
+
+/** Lightweight HTML → text scrub for list previews. */
+export function scrubHtmlToPreviewText(text: string): string {
+  let t = text || "";
+  if (/^\s*<|<html|<body|<div|<table/i.test(t)) {
+    t = t
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&/gi, "&")
+      .replace(/</gi, "<")
+      .replace(/>/gi, ">")
+      .replace(/"/gi, '"')
+      .replace(/&#39;/gi, "'");
+  }
+  return t.replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
+/** List-row body preview + optional AI summary from parsed_metadata.extracted. */
+export function messageBodyPreview(message: {
+  body_text?: string | null;
+  parsed_metadata?: unknown;
+}): { bodyPreview: string; aiSummary: string | null } {
+  let summary: string | null = null;
+  if (message.parsed_metadata) {
+    const meta = parseJsonSafe(message.parsed_metadata) as { extracted?: { summary?: string } } | null;
+    if (meta?.extracted?.summary) summary = meta.extracted.summary;
+  }
+  const preview = scrubHtmlToPreviewText(message.body_text || "");
+  return { bodyPreview: preview, aiSummary: summary };
+}
+
+/** Full plain-text fallback for body panel (structure-preserving newlines). */
+export function stripHtmlToPlainText(html: string): string {
+  return (html || "")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&/gi, "&")
+    .replace(/</gi, "<")
+    .replace(/>/gi, ">")
+    .replace(/"/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function resolveEmailPlainText(message: {
+  body_text?: string | null;
+  body_html?: string | null;
+}): string {
+  const rawHtml =
+    message.body_html
+    || (message.body_text && /^\s*<|<html|<body|<div|<table|<p[\s>]/i.test(message.body_text)
+      ? message.body_text
+      : null);
+  if (!rawHtml && message.body_text) return message.body_text;
+  if (rawHtml && !message.body_text) return stripHtmlToPlainText(rawHtml);
+  return message.body_text || "";
+}
+
+/**
+ * Extracted AI fields for CreateRecordModal / ExtractedFieldsStrip.
+ * When `requireHasData` is true, return null unless at least one field is present
+ * (strip UI). Modal only needs the extracted object (or null).
+ */
+export function parseExtractedFields(
+  metadata: unknown,
+  opts: { requireHasData?: boolean } = {},
+): Record<string, any> | null {
+  if (!metadata) return null;
+  const meta = parseJsonSafe(metadata) as { extracted?: Record<string, any> } | null;
+  if (!meta?.extracted) return null;
+  const e = meta.extracted;
+  if (!opts.requireHasData) return e;
+  const hasData =
+    e.summary
+    || e.rfi_number
+    || e.submittal_number
+    || (e.drawing_refs?.length > 0)
+    || e.due_date
+    || e.responsible_party
+    || e.priority
+    || (e.related_entities?.length > 0)
+    || e.action_required;
+  return hasData ? e : null;
+}

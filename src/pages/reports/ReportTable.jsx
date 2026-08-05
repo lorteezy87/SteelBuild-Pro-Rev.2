@@ -26,6 +26,7 @@
 
 import React, { useMemo, useState } from "react";
 import { mono, body, CARD, LABEL } from "./constants";
+import { sortReportTableRows } from "./reportTableHelpers";
 
 function defaultGridTemplate(columns) {
   return columns
@@ -58,25 +59,10 @@ export default function ReportTable({
     }
   };
 
-  const sortedRows = useMemo(() => {
-    if (!sortKey) return rows;
-    const col = columns.find((c) => c.key === sortKey);
-    const get = col?.sortValue || ((r) => r?.[sortKey]);
-    const copy = [...rows];
-    copy.sort((a, b) => {
-      let av = get(a);
-      let bv = get(b);
-      // Nulls sort last regardless of direction.
-      if (av === null || av === undefined || av === "") return 1;
-      if (bv === null || bv === undefined || bv === "") return -1;
-      if (typeof av === "string") av = av.toLowerCase();
-      if (typeof bv === "string") bv = bv.toLowerCase();
-      if (av < bv) return sortDir === "asc" ? -1 : 1;
-      if (av > bv) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
-    return copy;
-  }, [rows, sortKey, sortDir, columns]);
+  const sortedRows = useMemo(
+    () => sortReportTableRows(rows, columns, sortKey, sortDir),
+    [rows, sortKey, sortDir, columns],
+  );
 
   const gridCols = defaultGridTemplate(columns);
 

@@ -19,7 +19,7 @@ import {
   secondaryBtnStyle,
 } from "./constants";
 import type { EmailAttachment, EmailMessage, OutboundAttachment, ReplyMode } from "./types";
-import { filterLinkSearchRecords } from "./emailInboxHelpers";
+import { filterLinkSearchRecords, parseExtractedFields } from "./emailInboxHelpers";
 
 // design-system Modal is still .jsx — type it permissively at the boundary
 // until the design system is converted. Removable once it is typed.
@@ -58,13 +58,10 @@ interface CreateRecordModalProps {
 export function CreateRecordModal({ message, attachments, projectId, onClose, onSuccess }: CreateRecordModalProps) {
   const qc = useQueryClient();
 
-  const extracted = useMemo<any>(() => {
-    if (!message.parsed_metadata) return null;
-    const meta = typeof message.parsed_metadata === "string"
-      ? (() => { try { return JSON.parse(message.parsed_metadata as string); } catch { return null; } })()
-      : message.parsed_metadata;
-    return meta?.extracted || null;
-  }, [message.parsed_metadata]);
+  const extracted = useMemo<any>(
+    () => parseExtractedFields(message.parsed_metadata),
+    [message.parsed_metadata],
+  );
 
   const validTypes = ENTITY_TYPE_OPTIONS.map((o) => o.value);
   const parsedType = message.parsed_type ?? "";

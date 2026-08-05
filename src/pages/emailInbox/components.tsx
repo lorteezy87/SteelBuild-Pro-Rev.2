@@ -30,6 +30,12 @@ import {
   timeAgo,
 } from "./constants";
 import type { EmailAttachment, EmailMessage } from "./types";
+import {
+  outboundDisplayName,
+  messageBodyPreview,
+  resolveEmailPlainText,
+  parseExtractedFields,
+} from "./emailInboxHelpers";
 
 interface EmailRowProps {
   message: EmailMessage;
@@ -48,42 +54,15 @@ export function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, on
   const labels = Array.isArray(message.labels) ? message.labels : [];
 
   // For outbound messages, show first recipient instead of sender
-  const displayName = useMemo(() => {
-    if (isOutbound) {
-      try {
-        const recips = typeof message.recipients === "string" ? JSON.parse(message.recipients) : (message.recipients || []);
-        return recips.length > 0 ? `To: ${recips[0]}${recips.length > 1 ? ` +${recips.length - 1}` : ""}` : "To: (unknown)";
-      } catch { return "To: (unknown)"; }
-    }
-    return message.sender_name || message.sender_email || "Unknown";
-  }, [isOutbound, message.sender_name, message.sender_email, message.recipients]);
+  const displayName = useMemo(
+    () => outboundDisplayName(message),
+    [message],
+  );
 
-  const { bodyPreview, aiSummary } = useMemo(() => {
-    // Try AI summary first
-    let summary = null;
-    if (message.parsed_metadata) {
-      const meta = typeof message.parsed_metadata === "string"
-        ? (() => { try { return JSON.parse(message.parsed_metadata as string); } catch { return null; } })()
-        : message.parsed_metadata;
-      if (meta?.extracted?.summary) summary = meta.extracted.summary;
-    }
-
-    let text = message.body_text || "";
-    if (/^\s*<|<html|<body|<div|<table/i.test(text)) {
-      text = text
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;/gi, " ")
-        .replace(/&amp;/gi, "&")
-        .replace(/&lt;/gi, "<")
-        .replace(/&gt;/gi, ">")
-        .replace(/&quot;/gi, '"')
-        .replace(/&#39;/gi, "'");
-    }
-    const preview = text.replace(/\s+/g, " ").trim().slice(0, 120);
-    return { bodyPreview: preview, aiSummary: summary };
-  }, [message.body_text, message.parsed_metadata]);
+  const { bodyPreview, aiSummary } = useMemo(
+    () => messageBodyPreview(message),
+    [message],
+  );
 
   return (
     <div
@@ -509,27 +488,10 @@ export function EmailBodyContent({ message, attachments }: EmailBodyContentProps
     || (message.body_text && /^\s*<|<html|<body|<div|<table|<p[\s>]/i.test(message.body_text) ? message.body_text : null);
 
   // Strip HTML client-side for plain-text fallback
-  const plainText = useMemo(() => {
-    if (!rawHtml && message.body_text) return message.body_text;
-    if (rawHtml && !message.body_text) {
-      return rawHtml
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-        .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/<\/p>/gi, "\n\n")
-        .replace(/<\/div>/gi, "\n")
-        .replace(/<[^>]+>/g, "")
-        .replace(/&nbsp;/gi, " ")
-        .replace(/&amp;/gi, "&")
-        .replace(/&lt;/gi, "<")
-        .replace(/&gt;/gi, ">")
-        .replace(/&quot;/gi, '"')
-        .replace(/&#39;/gi, "'")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-    }
-    return message.body_text || "";
-  }, [rawHtml, message.body_text]);
+  const plainText = useMemo(
+    () => resolveEmailPlainText(message),
+    [message],
+  );
 
   // Resize iframe to fit content
   useEffect(() => {
@@ -700,16 +662,10 @@ interface ExtractedFieldsStripProps {
 }
 
 export function ExtractedFieldsStrip({ metadata, confidence }: ExtractedFieldsStripProps) {
-  const extracted = useMemo(() => {
-    if (!metadata) return null;
-    const meta = typeof metadata === "string" ? (() => { try { return JSON.parse(metadata); } catch { return null; } })() : metadata;
-    if (!meta?.extracted) return null;
-    const e = meta.extracted;
-    const hasData = e.summary || e.rfi_number || e.submittal_number
-      || (e.drawing_refs?.length > 0) || e.due_date || e.responsible_party
-      || e.priority || (e.related_entities?.length > 0) || e.action_required;
-    return hasData ? e : null;
-  }, [metadata]);
+  const extracted = useMemo(
+    () => parseExtractedFields(metadata, { requireHasData: true }),
+    [metadata],
+  );
 
   if (!extracted) return null;
 

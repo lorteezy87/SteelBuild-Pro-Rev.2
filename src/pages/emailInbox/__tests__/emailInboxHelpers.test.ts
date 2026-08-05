@@ -13,6 +13,11 @@ import {
   nextSelectedIdsForToggle,
   findMessageById,
   filterLinkSearchRecords,
+  outboundDisplayName,
+  messageBodyPreview,
+  stripHtmlToPlainText,
+  resolveEmailPlainText,
+  parseExtractedFields,
 } from "../emailInboxHelpers";
 import type { EmailMessage } from "../types";
 
@@ -125,4 +130,34 @@ describe("emailInboxHelpers", () => {
     expect(filterLinkSearchRecords(many, "", 5)).toHaveLength(5);
   });
 
+});
+
+describe("email body/meta parsers", () => {
+  it("formats outbound display name", () => {
+    expect(outboundDisplayName({ direction: "outbound", recipients: ["a@x.com", "b@x.com"] })).toBe("To: a@x.com +1");
+    expect(outboundDisplayName({ direction: "inbound", sender_name: "Ann" })).toBe("Ann");
+  });
+
+  it("previews body and AI summary", () => {
+    const { bodyPreview, aiSummary } = messageBodyPreview({
+      body_text: "<p>Hello & welcome world that is long enough to slice past one hundred twenty characters for the preview window testing</p>",
+      parsed_metadata: { extracted: { summary: "AI says hi" } },
+    });
+    expect(aiSummary).toBe("AI says hi");
+    expect(bodyPreview.length).toBeLessThanOrEqual(120);
+    expect(bodyPreview).toContain("Hello & welcome");
+  });
+
+  it("strips HTML to plain text and resolves body", () => {
+    expect(stripHtmlToPlainText("<p>Hi<br/>there</p>")).toContain("Hi");
+    expect(resolveEmailPlainText({ body_text: "plain only" })).toBe("plain only");
+    expect(resolveEmailPlainText({ body_html: "<div>X</div>", body_text: null as any })).toBe("X");
+  });
+
+  it("parses extracted fields with optional hasData gate", () => {
+    expect(parseExtractedFields(null)).toBeNull();
+    expect(parseExtractedFields({ extracted: { summary: "S" } })?.summary).toBe("S");
+    expect(parseExtractedFields({ extracted: {} }, { requireHasData: true })).toBeNull();
+    expect(parseExtractedFields(JSON.stringify({ extracted: { rfi_number: "12" } }), { requireHasData: true })?.rfi_number).toBe("12");
+  });
 });
