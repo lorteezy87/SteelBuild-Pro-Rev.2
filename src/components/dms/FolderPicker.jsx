@@ -19,48 +19,14 @@ export { collectFolderAndDescendants } from "./folderPickerHelpers";
 
 import React, { useMemo, useState } from "react";
 import { Folder, FolderOpen, ChevronRight, ChevronDown, X } from "lucide-react";
-import { buildTree } from "./folderPickerHelpers";
-
-const overlay = {
-  position: "fixed", inset: 0,
-  background: "color-mix(in srgb, var(--bg-page) 70%, transparent)",
-  zIndex: 2000,
-  display: "flex", alignItems: "center", justifyContent: "center",
-};
-
-const dialog = {
-  background: "var(--bg-surface-secondary)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 10,
-  width: "min(540px, 92vw)",
-  maxHeight: "min(720px, 90vh)",
-  display: "flex", flexDirection: "column",
-};
-
-const header = {
-  padding: "14px 18px",
-  borderBottom: "1px solid var(--border-default)",
-  display: "flex", alignItems: "center", justifyContent: "space-between",
-  flexShrink: 0,
-};
-
-const footer = {
-  padding: "12px 16px",
-  borderTop: "1px solid var(--border-default)",
-  display: "flex", justifyContent: "flex-end", gap: 8,
-  flexShrink: 0,
-};
-
-const btn = (variant = "secondary") => ({
-  padding: "8px 14px",
-  borderRadius: 6,
-  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-  letterSpacing: "0.08em", textTransform: "uppercase",
-  cursor: "pointer",
-  border: variant === "primary" ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-  background: variant === "primary" ? "var(--accent)" : "transparent",
-  color: variant === "primary" ? "var(--bg-base)" : "var(--text-primary)",
-});
+import {
+  buildTree,
+  FOLDER_PICKER_OVERLAY_STYLE as overlay,
+  FOLDER_PICKER_DIALOG_STYLE as dialog,
+  FOLDER_PICKER_HEADER_STYLE as header,
+  FOLDER_PICKER_FOOTER_STYLE as footer,
+  folderPickerBtnStyle as btn,
+} from "./folderPickerHelpers";
 
 /**
  * Build a tree from the flat folders array. `null` parent_folder_id
