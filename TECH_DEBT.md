@@ -94,37 +94,22 @@ follow-ups._
   + `customer.subscription.updated/deleted`. Still unverified: the **live
   Stripe-dashboard endpoint wiring + an end-to-end test** (0 `billing_events`; 1
   internal `enterprise` org) — same gap as the "Stripe go-live" item above.
-- **Storage backfill (app-files cross-project read residual)** — verified
-  2026-06-17: **775** legacy flat `app-files/uploads/<ts>-<rand>` objects predate
-  org-prefixing. The set is **frozen** — the uploader cut over cleanly (last flat
-  upload Jun 16 08:06; org-prefixed `<org_id>/uploads/...` uploads start 08:29, 32
-  so far), so the problem isn't growing. **Exposure:** the `app-files` SELECT
-  policy `auth_read` reads flat paths via the branch
-  `foldername[1] = 'uploads' AND user_is_org_member(founding_org_id())` — i.e. any
-  member of the **founding org** can read every legacy flat file regardless of
-  project membership. Org isolation already closed the cross-**org** hole, so this
-  is now **intra-founding-org cross-project** read of legacy files only (low
-  severity while S&H Steel is the sole org; matters before adding outside members
-  to the founding org). **Why deferred:** the remediation is a risk-bearing live
-  migration and can't be done from SQL/MCP (a `name` rename moves the row but not
-  the S3 bytes → broken links; needs the Storage API). **Remediation (needs a
-  service-role script, run by an owner):** (1) for each of the 775 objects,
-  Storage `copy`/`move` `uploads/<f>` → `<founding_org_id>/uploads/<f>`;
-  (2) backfill every DB `file_url` reference (audit all text columns holding
-  `uploads/...`, e.g. `drawings`, `uploaded_files`, `model_registry`,
-  attachment tables, then UPDATE the prefix); (3) verify every ref resolves;
-  (4) only then drop the `'uploads'` branch from the `auth_read` policy so the
-  flat paths become unreadable and the gap closes. Do copy-then-verify-then-cut
-  (reversible until step 4).
+- **Storage backfill (app-files cross-project read residual)** — ✅ **DONE in
+  production (2026-07-20):** all 775 legacy `uploads/…` objects were copied under
+  the founding-org prefix, DB references rewritten, and the legacy storage RLS
+  branch closed. Originals are retained as rollback material; deleting them is a
+  separate owner decision (see `docs/app-files-tenant-isolation-plan.md`).
 - **Org → project access model** — `user_has_project_access` now gates by org
   membership while `user_projects` still drives project *role*. Decide whether
   org members auto-see all org projects or stay per-project before onboarding
   teams (today a new member sees a project only once added to `user_projects`).
-- **Deprecated edge functions** — `sharepoint-proxy` / `bluebeam-proxy` are still
-  deployed but unused by the client; `supabase functions delete` them.
-- **Stale generated types** — `src/types/supabase.ts` lacks the org/billing
-  tables (and `vendors.org_id`, `*.client_op_id`). Untyped JS access works;
-  regenerate via the Supabase MCP on the next pass.
+- **Deprecated edge functions** — `sharepoint-proxy` / `bluebeam-proxy` /
+  orphan Stripe Sync functions may still be deployed remotely. Owner-run helper:
+  `npm run supabase:delete-deprecated-fns` (dry-run by default; `DRY_RUN=0` to
+  apply). CI opt-in drift job flags them when `SUPABASE_DRIFT_ENABLED=true`.
+- **Stale generated types** — org/billing tables were patched into
+  `src/types/supabase.ts` (2026-07-27). Full regen via `npm run types:db` still
+  needed for remaining gaps (`vendors.org_id`, `*.client_op_id`, etc.).
 
 ### Platform maturity (longer-running)
 
