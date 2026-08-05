@@ -43,3 +43,39 @@ export const FIELD_HUB_TAB_DEFS = [
 ] as const;
 
 export type FieldHubTabKey = (typeof FIELD_HUB_TAB_DEFS)[number]["key"];
+
+/** Pure URLSearchParams mutator for field_tab. */
+export function nextFieldTabParams(
+  prev: URLSearchParams | Record<string, string> | string,
+  key: string,
+): URLSearchParams {
+  const next = new URLSearchParams(prev as any);
+  if (key === "hub") next.delete("field_tab");
+  else next.set("field_tab", key);
+  next.delete("id");
+  return next;
+}
+
+/** Deep-link open record: set tab + id. */
+export function nextOpenRecordParams(
+  prev: URLSearchParams | Record<string, string> | string,
+  tabKey: string,
+  id: string,
+): URLSearchParams {
+  const next = new URLSearchParams(prev as any);
+  next.set("field_tab", tabKey);
+  next.set("id", id);
+  return next;
+}
+
+/** Open create flow on a register tab (`?new=1`). */
+export function nextNewRecordParams(
+  prev: URLSearchParams | Record<string, string> | string,
+  tabKey: string,
+): URLSearchParams {
+  const next = new URLSearchParams(prev as any);
+  next.set("field_tab", tabKey);
+  next.set("new", "1");
+  return next;
+}
+

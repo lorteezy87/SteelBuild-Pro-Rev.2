@@ -27,6 +27,9 @@ import {
   resolveProjectName,
   buildFieldHubVisibleTabs,
   FIELD_HUB_TAB_DEFS,
+  nextFieldTabParams,
+  nextOpenRecordParams,
+  nextNewRecordParams,
 } from "./fieldHub/fieldHubPageHelpers";
 
 const FieldTodayPage = lazyWithRetry(() => import("@/pages/FieldToday"));
@@ -156,14 +159,7 @@ export default function FieldHub() {
   // ── Tab state ──────────────────────────────────────────────────────────────
   const setTab = (key) =>
     setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("field_tab", key);
-        // Switching tabs by hand must not carry a record id along, or the
-        // destination register would open an unrelated record's editor.
-        next.delete("id");
-        return next;
-      },
+      (prev) => nextFieldTabParams(prev, key),
       { replace: true },
     );
 
@@ -173,12 +169,7 @@ export default function FieldHub() {
    */
   const openRecord = (tabKey) => (id) =>
     setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("field_tab", tabKey);
-        next.set("id", id);
-        return next;
-      },
+      (prev) => nextOpenRecordParams(prev, tabKey, id),
       { replace: false },
     );
 
@@ -200,12 +191,7 @@ export default function FieldHub() {
         can("create", "dailyLog")
           ? () =>
               setParams(
-                (prev) => {
-                  const next = new URLSearchParams(prev);
-                  next.set("field_tab", "dailylogs");
-                  next.set("new", "1");
-                  return next;
-                },
+                (prev) => nextNewRecordParams(prev, "dailylogs"),
                 { replace: false },
               )
           : null
