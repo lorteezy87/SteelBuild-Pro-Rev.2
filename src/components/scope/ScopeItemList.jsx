@@ -1,21 +1,12 @@
 import React from "react";
 import { Check, X, Info, FileText, Plus, Filter, Paperclip, Clock } from "lucide-react";
 import { formatLocalDate } from "@/utils/dates";
+import { CATEGORY_COLORS } from "./scopeItemListHelpers";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
   Exclusion:     { color: "var(--status-error)",   Icon: X },
   Clarification: { color: "var(--status-info)",    Icon: Info },
-};
-
-const CATEGORY_COLORS = {
-  Structural: "var(--accent)",
-  "Misc Metals": "var(--status-warning)",
-  Connections: "var(--status-info)",
-  Coatings: "var(--text-muted)",
-  Erection: "var(--status-success)",
-  Engineering: "var(--accent)",
-  Other: "var(--text-muted)",
 };
 
 export default function ScopeItemList({
