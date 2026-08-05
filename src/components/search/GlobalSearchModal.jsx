@@ -5,31 +5,18 @@ import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { Search } from "lucide-react";
 import { useProjectContext } from "@/components/shared/ProjectContext";
-import { filterQuickNavModules, buildSearchDisplayItems, runCachedGlobalSearch } from "./globalSearchHelpers";
+import {
+  filterQuickNavModules,
+  buildSearchDisplayItems,
+  runCachedGlobalSearch,
+  ICON_MAP,
+  COLOR_MAP,
+} from "./globalSearchHelpers";
 
 // Stable empty array — prevents infinite re-render loops from useCallback/useEffect
 // dependency chains when queries are disabled and would otherwise return new [] refs.
 const EMPTY = [];
 
-const ICON_MAP = {
-  Project: "▤",
-  RFI: "⚑",
-  Drawing: "▦",
-  WorkPackage: "☰",
-  ChangeOrder: "$",
-  Contact: "👤",
-  Module: "◈",
-};
-
-const COLOR_MAP = {
-  Project: "var(--accent)",
-  RFI: "var(--status-warning-bright)",
-  Drawing: "#0EA5E9",
-  WorkPackage: "var(--status-review)",
-  ChangeOrder: "var(--status-review)",
-  Contact: "#0D9488",
-  Module: "var(--accent)",
-};
 
 /* ── Quick-nav modules for empty-query state ────────────────────────────── */
 const QUICK_NAV = [

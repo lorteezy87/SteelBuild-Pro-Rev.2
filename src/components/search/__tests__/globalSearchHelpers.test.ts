@@ -3,6 +3,8 @@ import {
   filterQuickNavModules,
   buildSearchDisplayItems,
   runCachedGlobalSearch,
+  ICON_MAP,
+  COLOR_MAP,
 } from "../globalSearchHelpers";
 
 const NAV = [
@@ -124,5 +126,13 @@ describe("runCachedGlobalSearch", () => {
     expect(out).toHaveLength(1);
     expect(out[0].type).toBe("Contact");
     expect(out[0].title).toBe("Jane Doe");
+  });
+});
+
+describe("search chrome maps", () => {
+  it("icon and color maps", () => {
+    expect(ICON_MAP.RFI).toBe("⚑");
+    expect(COLOR_MAP.Drawing).toBe("#0EA5E9");
+    expect(COLOR_MAP.Module).toBe("var(--accent)");
   });
 });

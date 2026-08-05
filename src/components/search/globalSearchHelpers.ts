@@ -244,3 +244,23 @@ export function runCachedGlobalSearch(args: {
 
   return searchResults.slice(0, 12);
 }
+
+export const ICON_MAP: Record<string, string> = {
+  Project: "▤",
+  RFI: "⚑",
+  Drawing: "▦",
+  WorkPackage: "☰",
+  ChangeOrder: "$",
+  Contact: "👤",
+  Module: "◈",
+};
+
+export const COLOR_MAP: Record<string, string> = {
+  Project: "var(--accent)",
+  RFI: "var(--status-warning-bright)",
+  Drawing: "#0EA5E9",
+  WorkPackage: "var(--status-review)",
+  ChangeOrder: "var(--status-review)",
+  Contact: "#0D9488",
+  Module: "var(--accent)",
+};
