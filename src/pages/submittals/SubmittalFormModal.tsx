@@ -5,6 +5,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, 
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import DrawingSetSelectorRaw from "@/components/submittals/DrawingSetSelector";
 import { STATUSES, TYPES, BIC_CHOICES } from "./format";
+import {
+  buildSubmittalFormState,
+  toggleDrawingTypeInList,
+  isSubmittalSpinOffCreate,
+} from "./submittalsPageHelpers";
 import { DRAWING_TYPES, type DrawingType } from "@/lib/submittalComponents";
 import type { DrawingSet, Submittal } from "./types";
 
@@ -53,30 +58,14 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
   // Only treat this as a spin-off when creating a NEW submittal from a parent —
   // never when editing an existing row (even a child row keeps its lineage via
   // its own parent_submittal_id, edited through the normal path, not re-split).
-  const isSplit = !!parentSubmittal && !initial.id;
+  const isSplit = isSubmittalSpinOffCreate(parentSubmittal, initial);
   const [splitReason, setSplitReason] = useState<string>(initial.split_reason || "");
   // Phase 4: which drawing types to start tracking on this submittal. Only used
   // on CREATE (an edit manages component rows through the detail panel instead).
   const [drawingTypes, setDrawingTypes] = useState<DrawingType[]>([]);
-  const toggleDrawingType = (t: DrawingType) =>
-    setDrawingTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
-  const [form, setForm] = useState({
-    submittal_number: initial.submittal_number || "",
-    title:            initial.title            || "",
-    submittal_type:   initial.submittal_type   || "Shop Drawing",
-    discipline:       initial.discipline       || "",
-    spec_section:     initial.spec_section     || "",
-    revision:         initial.revision         || "0",
-    round_number:     initial.round_number     || 1,
-    submitted_date:   initial.submitted_date   || "",
-    required_date:    initial.required_date    || "",
-    status:           initial.status           || "Draft",
-    ball_in_court:    initial.ball_in_court    || "EOR",
-    submitted_by:     initial.submitted_by     || "",
-    reviewer:         initial.reviewer         || "",
-    notes:            initial.notes            || "",
-    drawing_set_ids:  Array.isArray(initial.drawing_set_ids) ? initial.drawing_set_ids : [],
-  });
+  const toggleDrawingType = (drawingType: DrawingType) =>
+    setDrawingTypes((prev) => toggleDrawingTypeInList(prev, drawingType) as DrawingType[]);
+  const [form, setForm] = useState(() => buildSubmittalFormState(initial));
 
   const setField = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
   const isEdit = !!initial.id;

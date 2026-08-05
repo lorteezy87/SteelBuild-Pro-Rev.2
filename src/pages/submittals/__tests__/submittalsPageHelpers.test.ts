@@ -83,3 +83,21 @@ describe("submittal detail pure helpers", () => {
     expect(riskTierChipColor("normal")).toContain("muted");
   });
 });
+
+import {
+  buildSubmittalFormState,
+  toggleDrawingTypeInList,
+  isSubmittalSpinOffCreate,
+} from "../submittalsPageHelpers";
+
+describe("submittal form pure helpers", () => {
+  it("builds defaults and toggles types", () => {
+    const form = buildSubmittalFormState({});
+    expect(form.status).toBe("Draft");
+    expect(form.revision).toBe("0");
+    expect(toggleDrawingTypeInList(["Shop"], "Erection")).toEqual(["Shop", "Erection"]);
+    expect(toggleDrawingTypeInList(["Shop"], "Shop")).toEqual([]);
+    expect(isSubmittalSpinOffCreate({ id: "p" }, {})).toBe(true);
+    expect(isSubmittalSpinOffCreate({ id: "p" }, { id: "c" })).toBe(false);
+  });
+});
