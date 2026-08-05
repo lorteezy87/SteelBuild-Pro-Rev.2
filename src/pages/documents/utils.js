@@ -91,3 +91,36 @@ export const LIST_STATUS_STYLES = {
 };
 
 export const FILETYPE_FALLBACK = { bg: "var(--bg-surface-high)", color: "var(--text-muted)" };
+
+/** Sort comparators for the Documents toolbar sort keys. */
+export const SORT_FNS = {
+  "name-asc":   (a, b) => (a.displayName || "").localeCompare(b.displayName || ""),
+  "name-desc":  (a, b) => (b.displayName || "").localeCompare(a.displayName || ""),
+  "date-desc":  (a, b) => new Date(b.uploadedDate || b.created_at || 0) - new Date(a.uploadedDate || a.created_at || 0),
+  "date-asc":   (a, b) => new Date(a.uploadedDate || a.created_at || 0) - new Date(b.uploadedDate || b.created_at || 0),
+  "status":     (a, b) => (a.status || "").localeCompare(b.status || ""),
+  "size-desc":  (a, b) => (Number(b.fileSizeKb) || 0) - (Number(a.fileSizeKb) || 0),
+  "size-asc":   (a, b) => (Number(a.fileSizeKb) || 0) - (Number(b.fileSizeKb) || 0),
+  "doc-num":    (a, b) => (a.documentNumber || "").localeCompare(b.documentNumber || "", undefined, { numeric: true }),
+};
+
+export function sortDocuments(docs, sortKey) {
+  const result = [...docs];
+  const fn = SORT_FNS[sortKey];
+  if (fn) result.sort(fn);
+  return result;
+}
+
+export function countReviewDocuments(docs) {
+  return (docs || []).filter((d) => d.status === "Under Review" || d.status === "Revise & Resubmit").length;
+}
+
+export function groupDocumentsByCategory(docs) {
+  const folders = {};
+  (docs || []).forEach((doc) => {
+    const cat = doc.category || "Uncategorized";
+    if (!folders[cat]) folders[cat] = [];
+    folders[cat].push(doc);
+  });
+  return Object.keys(folders).sort().map((name) => ({ name, docs: folders[name] }));
+}

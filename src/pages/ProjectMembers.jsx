@@ -1,4 +1,11 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
+import {
+  collectUniqueUserIds,
+  mergeMembersWithProfiles,
+  countAdminMembers,
+  filterSelectedMembers,
+  wouldLeaveProjectWithoutAdmin,
+} from "./projectMembers/projectMembersHelpers";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -118,7 +125,7 @@ function ProjectMembersContent() {
   // user_profiles.id mirrors auth.users.id, so a single .in() lookup
   // covers every UUID in the page-level member list.
   const userIds = useMemo(
-    () => Array.from(new Set(memberRows.map((m) => m.user_id).filter(Boolean))),
+    () => collectUniqueUserIds(memberRows),
     [memberRows],
   );
 
@@ -135,20 +142,12 @@ function ProjectMembersContent() {
   });
 
   const members = useMemo(
-    () =>
-      memberRows.map((row) => {
-        const profile = profilesById[row.user_id] || null;
-        return {
-          ...row,
-          email: profile?.email || null,
-          full_name: profile?.full_name || null,
-        };
-      }),
+    () => mergeMembersWithProfiles(memberRows, profilesById),
     [memberRows, profilesById],
   );
 
   const adminCount = useMemo(
-    () => members.filter((m) => m.role === "owner" || m.role === "admin").length,
+    () => countAdminMembers(members),
     [members],
   );
 
@@ -273,21 +272,15 @@ function ProjectMembersContent() {
   }, [members]);
 
   const selectedMembers = useMemo(
-    () => members.filter((member) => selectedMemberIds.has(member.id)),
+    () => filterSelectedMembers(members, selectedMemberIds),
     [members, selectedMemberIds],
   );
 
   const allMembersSelected =
     members.length > 0 && selectedMemberIds.size === members.length;
 
-  const wouldLeaveProjectWithoutAdmin = (targetMembers, nextRole) => {
-    if (isProjectAdminRole(nextRole)) return false;
-    const targetIds = new Set(targetMembers.map((member) => member.id));
-    const remainingAdminCount = members.filter(
-      (member) => isProjectAdminRole(member.role) && !targetIds.has(member.id),
-    ).length;
-    return remainingAdminCount === 0;
-  };
+  const wouldLeaveWithoutAdmin = (targetMembers, nextRole) =>
+    wouldLeaveProjectWithoutAdmin(members, targetMembers, nextRole);
 
   const toggleMemberSelection = (memberId, checked) => {
     setSelectedMemberIds((prev) => {
@@ -304,7 +297,7 @@ function ProjectMembersContent() {
 
   const handleRoleChange = (member, nextRole) => {
     if (nextRole === member.role) return;
-    if (wouldLeaveProjectWithoutAdmin([member], nextRole)) {
+    if (wouldLeaveWithoutAdmin([member], nextRole)) {
       toast.error("A project must keep at least one admin or owner.");
       return;
     }
@@ -328,7 +321,7 @@ function ProjectMembersContent() {
       toast.error("Select at least one member");
       return;
     }
-    if (wouldLeaveProjectWithoutAdmin(selectedMembers, bulkRole)) {
+    if (wouldLeaveWithoutAdmin(selectedMembers, bulkRole)) {
       toast.error("A project must keep at least one admin or owner.");
       return;
     }

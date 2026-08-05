@@ -31,8 +31,8 @@ import DocumentsControlCenter from "./documents/DocumentsControlCenter";
 import { filterDocuments, planFolderDeletion } from "./documents/documentsControlCenter.derive";
 
 import { STATUS_TABS } from "./documents/constants";
-import { normalizeDocument, exportDocsCsv } from "./documents/utils";
-import FolderSection from "./documents/FolderSection";
+import FolderView from "./documents/FolderView";
+import { normalizeDocument, exportDocsCsv, sortDocuments, countReviewDocuments } from "./documents/utils";
 import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
 import ListView from "./documents/ListView";
@@ -49,16 +49,6 @@ const UploadModal = lazyWithRetry(() => import("@/components/dms/UploadModal"));
 const DocumentEditModal = lazyWithRetry(() => import("@/components/dms/DocumentEditModal"));
 const BulkCreateFoldersModal = lazyWithRetry(() => import("./documents/BulkCreateFoldersModal"));
 
-const SORT_FNS = {
-  "name-asc":   (a, b) => (a.displayName || "").localeCompare(b.displayName || ""),
-  "name-desc":  (a, b) => (b.displayName || "").localeCompare(a.displayName || ""),
-  "date-desc":  (a, b) => new Date(b.uploadedDate || b.created_at || 0) - new Date(a.uploadedDate || a.created_at || 0),
-  "date-asc":   (a, b) => new Date(a.uploadedDate || a.created_at || 0) - new Date(b.uploadedDate || b.created_at || 0),
-  "status":     (a, b) => (a.status || "").localeCompare(b.status || ""),
-  "size-desc":  (a, b) => (Number(b.fileSizeKb) || 0) - (Number(a.fileSizeKb) || 0),
-  "size-asc":   (a, b) => (Number(a.fileSizeKb) || 0) - (Number(b.fileSizeKb) || 0),
-  "doc-num":    (a, b) => (a.documentNumber || "").localeCompare(b.documentNumber || "", undefined, { numeric: true }),
-};
 
 export default function Documents() {
   const { activeProject } = useProjectContext();
@@ -333,9 +323,7 @@ export default function Documents() {
       currentFolderId,
       activeFilters,
     });
-    const fn = SORT_FNS[sortKey];
-    if (fn) result.sort(fn);
-    return result;
+    return sortDocuments(result, sortKey);
   }, [allDocuments, searchQuery, activeFilters, categoryFilter, statusTab, sortKey, currentFolderId]);
 
   React.useEffect(() => {
@@ -347,7 +335,7 @@ export default function Documents() {
   }, [filteredDocs]);
 
   const reviewCount = useMemo(
-    () => allDocuments.filter((d) => d.status === "Under Review" || d.status === "Revise & Resubmit").length,
+    () => countReviewDocuments(allDocuments),
     [allDocuments]
   );
 
@@ -799,30 +787,3 @@ export default function Documents() {
 
   }
 
-function FolderView({ filteredDocs, selectedIds, onToggleSelect, onViewDoc, onDownloadDoc, onEditDoc, onDeleteDoc }) {
-  const folders = {};
-  filteredDocs.forEach((doc) => {
-    const cat = doc.category || "Uncategorized";
-    if (!folders[cat]) folders[cat] = [];
-    folders[cat].push(doc);
-  });
-  const folderNames = Object.keys(folders).sort();
-
-  return (
-    <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-      {folderNames.map((folder) => (
-        <FolderSection
-          key={folder}
-          name={folder}
-          docs={folders[folder]}
-          selectedIds={selectedIds}
-          onToggleSelect={onToggleSelect}
-          onViewDoc={onViewDoc}
-          onDownloadDoc={onDownloadDoc}
-          onEditDoc={onEditDoc}
-          onDeleteDoc={onDeleteDoc}
-        />
-      ))}
-    </div>
-  );
-}
