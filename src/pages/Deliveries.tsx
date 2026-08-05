@@ -54,6 +54,10 @@ import {
   filterDeliveries,
   groupDeliveriesByLane,
   nextSelectedIdsToggle,
+  selectionFromFiltered,
+  pruneSelectionToVisible,
+  selectDeliveriesByIds,
+  filterBlockedDeliveredIds,
 } from "./deliveries/deliveriesPageHelpers";
 import DeliveryControlCenter from "./deliveries/DeliveryControlCenter";
 
@@ -293,26 +297,10 @@ export default function Deliveries() {
     setSelectedIds((prev) => nextSelectedIdsToggle(prev, id));
 
   const toggleAll = (checked: boolean) =>
-    setSelectedIds(
-      checked
-        ? new Set(
-            filtered
-              .map((delivery) => delivery.id)
-              .filter((id): id is string => Boolean(id))
-          )
-        : new Set()
-    );
+    setSelectedIds(checked ? selectionFromFiltered(filtered) : new Set());
 
   useEffect(() => {
-    const visibleIds = new Set(
-      filtered
-        .map((delivery) => delivery.id)
-        .filter((id): id is string => Boolean(id))
-    );
-    setSelectedIds((previous) => {
-      const next = new Set([...previous].filter((id) => visibleIds.has(id)));
-      return next.size === previous.size ? previous : next;
-    });
+    setSelectedIds((previous) => pruneSelectionToVisible(previous, filtered));
   }, [filtered]);
 
   const handleProjectSelect = (value: string) => {
@@ -351,10 +339,12 @@ export default function Deliveries() {
     const ids = Array.from(selectedIds);
     if (!ids.length || bulkUpdateMut.isPending) return;
     if (status === "Delivered") {
-      const blocked = ids.filter((id) => {
-        const delivery = activeDeliveries.find((item) => item.id === id);
-        return delivery && !isFabComplete(delivery, workPackages);
-      });
+      const blocked = filterBlockedDeliveredIds(
+        ids,
+        activeDeliveries,
+        isFabComplete,
+        workPackages,
+      );
       if (blocked.length > 0) {
         toast.error(`${blocked.length} delivery(ies) blocked - linked work package fabrication is not complete`);
         return;
@@ -372,7 +362,7 @@ export default function Deliveries() {
   }
 
   const projectName = projectMap[projectId ?? ""] || activeProject?.name || "All Projects";
-  const selectedDeliveries = filtered.filter((delivery) => selectedIds.has(delivery.id));
+  const selectedDeliveries = selectDeliveriesByIds(filtered, selectedIds);
 
   // The page owns all modal state and mutation handlers; the control center only
   // supplies the route-level presentation around these workflows.

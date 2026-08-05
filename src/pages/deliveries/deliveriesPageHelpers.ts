@@ -146,3 +146,46 @@ export function nextSelectedIdsToggle(prev: Set<string>, id: string): Set<string
   else next.add(id);
   return next;
 }
+
+export function collectIds(
+  rows: Array<{ id?: string | null }>,
+): string[] {
+  return (rows || [])
+    .map((r) => r.id)
+    .filter((id): id is string => Boolean(id));
+}
+
+export function selectionFromFiltered(
+  rows: Array<{ id?: string | null }>,
+): Set<string> {
+  return new Set(collectIds(rows));
+}
+
+export function pruneSelectionToVisible(
+  previous: Set<string>,
+  rows: Array<{ id?: string | null }>,
+): Set<string> {
+  const visibleIds = new Set(collectIds(rows));
+  const next = new Set([...previous].filter((id) => visibleIds.has(id)));
+  return next.size === previous.size ? previous : next;
+}
+
+export function selectDeliveriesByIds<T extends { id?: string | null }>(
+  rows: T[],
+  selectedIds: Set<string>,
+): T[] {
+  return (rows || []).filter((d) => d?.id && selectedIds.has(d.id as string));
+}
+
+export function filterBlockedDeliveredIds(
+  ids: string[],
+  activeDeliveries: Array<{ id?: string | null; work_package_id?: string | null }>,
+  isFabComplete: (delivery: any, workPackages: any[]) => boolean,
+  workPackages: any[],
+): string[] {
+  return (ids || []).filter((id) => {
+    const delivery = activeDeliveries.find((item) => item.id === id);
+    return Boolean(delivery && !isFabComplete(delivery, workPackages));
+  });
+}
+

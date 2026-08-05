@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildIdNameMap,
+import {buildIdNameMap,
   buildWpLabelMap,
   filterActiveDeliveries,
   filterDeliveries,
   groupDeliveriesByLane,
-  nextSelectedIdsToggle,
-} from "../deliveriesPageHelpers";
+  nextSelectedIdsToggle, selectionFromFiltered, pruneSelectionToVisible, selectDeliveriesByIds, filterBlockedDeliveredIds} from "../deliveriesPageHelpers";
 
 describe("deliveriesPageHelpers", () => {
   it("builds maps and filters deleted", () => {
@@ -72,5 +70,24 @@ describe("deliveriesPageHelpers", () => {
     expect(groups.Scheduled).toHaveLength(1);
     expect(groups.Exceptions).toHaveLength(1);
     expect([...nextSelectedIdsToggle(new Set(["1"]), "2")].sort()).toEqual(["1", "2"]);
+  });
+});
+
+describe("deliveries selection helpers", () => {
+  const rows = [{ id: "a" }, { id: "b" }, { id: null }];
+  it("builds and prunes selection", () => {
+    expect([...selectionFromFiltered(rows)].sort()).toEqual(["a", "b"]);
+    const pruned = pruneSelectionToVisible(new Set(["a", "c"]), rows);
+    expect([...pruned]).toEqual(["a"]);
+    expect(selectDeliveriesByIds(rows, new Set(["b"])).map((r) => r.id)).toEqual(["b"]);
+  });
+  it("filters blocked delivered ids", () => {
+    const blocked = filterBlockedDeliveredIds(
+      ["a", "b"],
+      [{ id: "a" }, { id: "b" }],
+      (d) => d.id === "a",
+      [],
+    );
+    expect(blocked).toEqual(["b"]);
   });
 });
