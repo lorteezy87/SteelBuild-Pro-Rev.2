@@ -9,7 +9,6 @@ import {
 import { supabase } from "@/lib/supabase";
 import {
   DESKTOP_SESSION_ALGORITHM,
-  DesktopConnectQueryError,
   DesktopSessionCryptoError,
   DesktopSessionValidationError,
   buildDesktopCallbackUrl,
@@ -21,7 +20,7 @@ import {
   type DesktopSessionValidationField,
   type MinimalDesktopSession,
 } from "@/lib/desktopSessionHandoff";
-import { desktopConnectFailureMessage } from "./desktopConnect/desktopConnectPageHelpers";
+import { desktopConnectFailureMessage, classifyQueryFailure } from "./desktopConnect/desktopConnectPageHelpers";
 
 type BrowserSession = {
   access_token: string;
@@ -131,14 +130,6 @@ const defaultDependencies: DesktopConnectDependencies = {
 export function resolveDesktopConnectSearch(explicit?: string): string {
   if (explicit !== undefined) return explicit;
   return typeof window !== "undefined" ? window.location.search : "";
-}
-
-function classifyQueryFailure(error: unknown): DesktopConnectFailure {
-  if (error instanceof DesktopConnectQueryError) {
-    if (error.kind === "empty") return "query-empty";
-    if (error.kind === "missing") return "query-missing";
-  }
-  return "query";
 }
 
 export function DesktopConnect({

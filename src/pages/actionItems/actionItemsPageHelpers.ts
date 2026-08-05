@@ -157,3 +157,14 @@ export function shiftDate(dateStr: string | null | undefined, days: number): str
   const dd = String(dt.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+
+/** Serialize action-item CSV rows (header + data) to a downloadable string. */
+export function buildActionItemsCsvString(
+  items: Parameters<typeof buildActionItemsCsvRows>[0],
+): string {
+  const rows = [[...ACTION_ITEMS_CSV_HEADERS], ...buildActionItemsCsvRows(items)];
+  return rows
+    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+}
+

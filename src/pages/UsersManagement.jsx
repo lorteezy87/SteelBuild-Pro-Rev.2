@@ -13,20 +13,14 @@ import StatusBadge from "../components/shared/StatusBadge";
 import LoadingSkeleton from "../components/shared/LoadingSkeleton";
 import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
-import { getInitials, getAvatarColor } from "@/lib/avatars";
+import { getInitials } from "@/lib/avatars";
 import {
   getActivityStatus,
   filterUsersBySearch,
   countAdmins,
   countNonAdmins,
+  getUserAvatarColor,
 } from "./usersManagement/usersManagementPageHelpers";
-
-// Local wrapper preserves the existing call-site shape (`getAvatarColor(user)`)
-// while delegating to the shared seed-based helper. The seed is the display
-// name with email as fallback so the color follows the user's display, not
-// their UUID.
-const getUserAvatarColor = (user) =>
-  getAvatarColor(user?.full_name || user?.email);
 
 const activityDotColors = {
   active: "#10B981",

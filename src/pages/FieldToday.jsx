@@ -55,16 +55,6 @@ const URGENCY = {
   upcoming: { label: "UPCOMING", color: "var(--status-info)" },
 };
 
-function fmtShortDate(iso) {
-  if (!iso) return "TBD";
-  try {
-    const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
-    if (Number.isNaN(d.getTime())) return "TBD";
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch {
-    return "TBD";
-  }
-}
 
 export default function FieldToday() {
   const { activeProject } = useProjectContext();

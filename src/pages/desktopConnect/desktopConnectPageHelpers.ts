@@ -1,4 +1,5 @@
 /** Pure failure-message lookup for DesktopConnect page. */
+import { DesktopConnectQueryError } from "@/lib/desktopSessionHandoff";
 
 export type DesktopConnectFailure =
   | "query"
@@ -57,3 +58,13 @@ export function desktopConnectFailureMessage(
     DESKTOP_CONNECT_FAILURE_MESSAGES.query
   );
 }
+
+/** Map query parse errors to stable DesktopConnect failure codes. */
+export function classifyQueryFailure(error: unknown): DesktopConnectFailure {
+  if (error instanceof DesktopConnectQueryError) {
+    if (error.kind === "empty") return "query-empty";
+    if (error.kind === "missing") return "query-missing";
+  }
+  return "query";
+}
+

@@ -27,7 +27,7 @@ import { computeG702, lineFigures } from "@/lib/payapp/g702";
 import { PAY_APP_STATUSES, PAY_APP_STATUS_LABELS } from "@/lib/payapp/types";
 import { buildPayAppPdf, suggestPayAppFilename } from "@/lib/payapp/payAppPdf";
 import PayApplicationsControlCenter from "./payApplications/PayApplicationsControlCenter";
-import { buildPayAppContract, findById } from "./payApplications/payApplicationsPageHelpers";
+import { buildPayAppContract, findById, toFiniteNumber } from "./payApplications/payApplicationsPageHelpers";
 import { assertProjectId, toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
@@ -38,7 +38,6 @@ const input = { ...mono, boxSizing: "border-box", fontSize: 12, padding: "6px 8p
 const lbl = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: 4 };
 const btn = { ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "7px 14px", borderRadius: 3, border: "1px solid var(--border-default)", cursor: "pointer" };
 const btnP = { ...btn, background: "var(--accent-muted)", borderColor: "var(--accent)", color: "var(--accent)" };
-const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 function NewAppModal({ open, defaultRetainage, onClose, onCreate, busy }) {
   const [periodFrom, setFrom] = useState("");
@@ -57,7 +56,7 @@ function NewAppModal({ open, defaultRetainage, onClose, onCreate, busy }) {
         <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginBottom: 14 }}>Lines are drafted from this project&apos;s Schedule of Values; prior completed work carries forward.</div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button style={{ ...btn, background: "var(--bg-page)", color: "var(--text-muted)" }} onClick={onClose} disabled={busy}>Cancel</button>
-          <button style={btnP} disabled={busy} onClick={() => onCreate({ periodFrom: periodFrom || null, periodTo: periodTo || null, retainagePercent: num(retainage) })}>{busy ? "Creating…" : "Create"}</button>
+          <button style={btnP} disabled={busy} onClick={() => onCreate({ periodFrom: periodFrom || null, periodTo: periodTo || null, retainagePercent: toFiniteNumber(retainage) })}>{busy ? "Creating…" : "Create"}</button>
         </div>
       </div>
     </div>
@@ -104,9 +103,9 @@ export default function PayApplications() {
   const isDraft = selectedApp?.status === "draft";
   const { data: lines = [] } = useQuery({ queryKey: ["payapp_lines", selectedId], queryFn: () => listLines(selectedId), enabled: !!selectedId });
   const g702 = useMemo(() => (selectedApp ? computeG702({
-    contract: { originalContractSum: num(selectedApp.original_contract_sum), netChangeOrders: num(selectedApp.net_change_orders), retainagePercent: num(selectedApp.retainage_percent) },
+    contract: { originalContractSum: toFiniteNumber(selectedApp.original_contract_sum), netChangeOrders: toFiniteNumber(selectedApp.net_change_orders), retainagePercent: toFiniteNumber(selectedApp.retainage_percent) },
     lines,
-    lessPreviousCertificates: num(selectedApp.less_previous_certificates),
+    lessPreviousCertificates: toFiniteNumber(selectedApp.less_previous_certificates),
   }) : null), [selectedApp, lines]);
 
   const refresh = () => {
@@ -126,12 +125,12 @@ export default function PayApplications() {
     },
   });
   const lineMut = useMutation({
-    mutationFn: ({ line, edit }) => updateLine(line, edit, num(selectedApp?.retainage_percent)),
+    mutationFn: ({ line, edit }) => updateLine(line, edit, toFiniteNumber(selectedApp?.retainage_percent)),
     onSuccess: (_app, { line, edit }) => {
       // Audit every figure change (previously silently unlogged — §23).
       const desc = edit.percentComplete != null
-        ? `G703 line ${line.line_item_number ?? line.id}: % complete ${num(line.percent_complete)} → ${edit.percentComplete}`
-        : `G703 line ${line.line_item_number ?? line.id}: stored ${num(line.materials_stored)} → ${edit.materialsStored}`;
+        ? `G703 line ${line.line_item_number ?? line.id}: % complete ${toFiniteNumber(line.percent_complete)} → ${edit.percentComplete}`
+        : `G703 line ${line.line_item_number ?? line.id}: stored ${toFiniteNumber(line.materials_stored)} → ${edit.materialsStored}`;
       logActivity("pay_application", "updated", { id: selectedApp?.id, project_id: projectId, application_number: selectedApp?.application_number }, { projectId, description: desc });
       refresh();
     },
@@ -283,12 +282,12 @@ export default function PayApplications() {
                           <td style={{ padding: 4, color: "var(--text-muted)" }}>{formatMoney(l.work_completed_previous)}</td>
                           <td style={{ padding: 4, color: "var(--text-primary)" }}>{formatMoney(l.work_completed_this_period)}</td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft}
-                              onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.percent_complete)) lineMut.mutate({ line: l, edit: { percentComplete: v } }); }} />
+                            <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={toFiniteNumber(l.percent_complete)} disabled={!isDraft}
+                              onBlur={(e) => { const v = toFiniteNumber(e.target.value); if (v !== toFiniteNumber(l.percent_complete)) lineMut.mutate({ line: l, edit: { percentComplete: v } }); }} />
                           </td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft}
-                              onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.materials_stored)) lineMut.mutate({ line: l, edit: { materialsStored: v } }); }} />
+                            <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={toFiniteNumber(l.materials_stored)} disabled={!isDraft}
+                              onBlur={(e) => { const v = toFiniteNumber(e.target.value); if (v !== toFiniteNumber(l.materials_stored)) lineMut.mutate({ line: l, edit: { materialsStored: v } }); }} />
                           </td>
                           <td style={{ padding: 4, color: "var(--text-primary)", fontWeight: 700 }}>{formatMoney(f.totalCompletedStored)}</td>
                           <td style={{ padding: 4, color: "var(--text-muted)" }}>{formatMoney(f.balanceToFinish)}</td>

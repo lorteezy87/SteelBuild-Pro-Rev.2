@@ -32,32 +32,18 @@ import {
   pieceControlKeys,
 } from "@/lib/pieceControl/queryKeys";
 
+import { buildProductionStatusCsvString } from "./productionStatus/productionStatusPageHelpers";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
+
 /** CSV export — reuses the same field order as the control-center columns. */
 function exportProductionCSV(rows) {
-  const headers = ["Piece Mark", "Assembly", "Seq", "Area", "Stage", "% Complete", "Qty", "Ship Date", "Weight", "External Ref"];
-  const data = rows.map((p) => [
-    p.piece_mark,
-    p.assembly_mark || "",
-    p.sequence_number || "",
-    p.erection_area || "",
-    p.status || "",
-    p.percent_complete ?? "",
-    p.quantity ?? "",
-    p.ship_date || "",
-    p.weight ?? "",
-    p.external_ref || "",
-  ]);
-  const csv = [headers, ...data]
-    .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "production-status.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadTextFile(
+    buildProductionStatusCsvString(rows),
+    "production-status.csv",
+    "text/csv;charset=utf-8",
+  );
 }
+
 
 export default function ProductionStatus() {
   const projectId = useProjectId();

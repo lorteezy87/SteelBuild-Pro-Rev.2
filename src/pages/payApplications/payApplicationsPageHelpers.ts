@@ -37,3 +37,9 @@ export function findById<T extends { id?: string | null }>(
   if (!id) return null;
   return (rows || []).find((a) => a.id === id) || null;
 }
+
+/** Coerce form/input values to finite numbers (else 0). */
+export function toFiniteNumber(v: unknown): number {
+  return Number.isFinite(Number(v)) ? Number(v) : 0;
+}
+

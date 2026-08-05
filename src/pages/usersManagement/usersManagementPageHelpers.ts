@@ -1,3 +1,4 @@
+import { getAvatarColor } from "@/lib/avatars";
 /** Pure helpers for UsersManagement page shell. */
 
 export type UserLike = {
@@ -41,3 +42,9 @@ export function countAdmins(users: UserLike[]): number {
 export function countNonAdmins(users: UserLike[]): number {
   return (users || []).filter((u) => u.role !== "admin").length;
 }
+
+/** Avatar color seed: display name with email fallback (not UUID). */
+export function getUserAvatarColor(user: { full_name?: string | null; email?: string | null } | null | undefined): string {
+  return getAvatarColor(user?.full_name || user?.email);
+}
+

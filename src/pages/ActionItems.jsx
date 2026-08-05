@@ -20,10 +20,10 @@ import {
   filterActionItems,
   buildExecutionQueue,
   resolveToggleStatus,
-  buildActionItemsCsvRows,
-  ACTION_ITEMS_CSV_HEADERS,
+  buildActionItemsCsvString,
   shiftDate,
 } from "./actionItems/actionItemsPageHelpers";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 import { daysUntil } from "@/lib/dateMath";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ActionItemsControlCenter from "./actionItems/ActionItemsControlCenter";
@@ -34,18 +34,9 @@ import {
 
 /** Lightweight CSV export for the canonical presentation path. */
 function exportActionItemsToCSV(items) {
-  const rows = [[...ACTION_ITEMS_CSV_HEADERS], ...buildActionItemsCsvRows(items)];
-  const csv = rows
-    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "action-items.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadTextFile(buildActionItemsCsvString(items), "action-items.csv", "text/csv;charset=utf-8");
 }
+
 
 const priorities = [
   PRIORITY.CRITICAL,

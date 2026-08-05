@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {
-  splitSetupItems,
+import {splitSetupItems,
   computeSetupStats,
   collectKnownAssignees,
   computeActionItemStats,
   filterActionItems,
   buildExecutionQueue,
-  resolveToggleStatus,
-} from "../actionItemsPageHelpers";
+  resolveToggleStatus, buildActionItemsCsvString} from "../actionItemsPageHelpers";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 
 describe("actionItemsPageHelpers", () => {
@@ -49,5 +47,15 @@ describe("action items csv and shiftDate", () => {
     expect(ACTION_ITEMS_CSV_HEADERS).toHaveLength(9);
     expect(shiftDate("2026-08-05", 3)).toBe("2026-08-08");
     expect(shiftDate(null, 1)).toBeNull();
+  });
+});
+
+describe("buildActionItemsCsvString", () => {
+  it("includes headers and quoted cells", () => {
+    const csv = buildActionItemsCsvString([
+      { id: "1", title: 'Say "hi"', status: "Open" },
+    ]);
+    expect(csv.split("\n")[0]).toContain("Title");
+    expect(csv).toContain('"Say ""hi"""');
   });
 });
