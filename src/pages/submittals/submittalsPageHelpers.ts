@@ -96,7 +96,7 @@ export function findRowById<T extends { id?: string | null }>(
 }
 
 /** @deprecated Prefer `@/pages/shared/selectionHelpers`. */
-export { toggleSelectionId } from "@/pages/shared/selectionHelpers";
+export { toggleSelectionId, toggleSelectAllVisible } from "@/pages/shared/selectionHelpers";
 
 /** Statuses that allow spinning off a child submittal. */
 export const SPLIT_ELIGIBLE_STATUSES = new Set<string>([

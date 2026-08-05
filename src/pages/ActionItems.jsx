@@ -27,6 +27,10 @@ import { daysUntil } from "@/lib/dateMath";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ActionItemsControlCenter from "./actionItems/ActionItemsControlCenter";
 import {
+  applySelectionChecked,
+  selectAllOrNone,
+} from "@/pages/shared/selectionHelpers";
+import {
   buildActionItemAssignPatch,
   buildActionItemCreatePayload,
 } from "./actionItems/actionItemMutationHelpers";
@@ -63,20 +67,11 @@ export default function ActionItems() {
   }, []);
 
   const handleToggleSelect = useCallback((id, checked) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
+    setSelectedIds((prev) => applySelectionChecked(prev, id, checked));
   }, []);
 
   const handleSelectAll = useCallback((checked, items) => {
-    if (checked) {
-      setSelectedIds(new Set(items.map((item) => item.id)));
-    } else {
-      setSelectedIds(new Set());
-    }
+    setSelectedIds(selectAllOrNone(checked, items.map((item) => item.id)));
   }, []);
 
   // ─── Mutations ───────────────────────────────────────────────────────────

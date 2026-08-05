@@ -6,6 +6,8 @@ import {
   selectionFromIds,
   removeIdFromSelection,
   toggleIdInList,
+  applySelectionChecked,
+  toggleSelectAllVisible,
 } from "../selectionHelpers";
 
 describe("selectionHelpers", () => {
@@ -28,5 +30,27 @@ describe("selectionHelpers", () => {
     expect(removeIdFromSelection(new Set(["a"]), "z")).toEqual(new Set(["a"]));
     expect(toggleIdInList(["a"], "b")).toEqual(["a", "b"]);
     expect(toggleIdInList(["a"], "a")).toEqual([]);
+  });
+});
+
+
+describe("applySelectionChecked", () => {
+  it("adds and removes", () => {
+    const a = applySelectionChecked(new Set(["x"]), "y", true);
+    expect([...a].sort()).toEqual(["x", "y"]);
+    const b = applySelectionChecked(a, "x", false);
+    expect([...b]).toEqual(["y"]);
+  });
+});
+
+
+describe("toggleSelectAllVisible", () => {
+  it("clears when all visible selected; else adds visible", () => {
+    expect(toggleSelectAllVisible(new Set(["a", "b"]), ["a", "b"]).size).toBe(0);
+    expect([...toggleSelectAllVisible(new Set(["z"]), ["a", "b"])].sort()).toEqual([
+      "a",
+      "b",
+      "z",
+    ]);
   });
 });

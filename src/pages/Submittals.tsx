@@ -54,6 +54,7 @@ import {
   findRowById,
   buildSpinOffInitial,
   toggleSelectionId,
+  toggleSelectAllVisible,
 } from "./submittals/submittalsPageHelpers";
 
 /**
@@ -417,12 +418,12 @@ export default function Submittals() {
   // `r.id as string` bridge SubmittalVirtualList already uses.
   const { allSelected } = getVisibleSelectionState(filtered, selectedIds);
   const toggleAll = useCallback(() => {
-    setSelectedIds((prev) => {
-      if (filtered.length > 0 && filtered.every((r) => prev.has(r.id as string))) return new Set();
-      const next = new Set(prev);
-      filtered.forEach((r) => next.add(r.id as string));
-      return next;
-    });
+    setSelectedIds((prev) =>
+      toggleSelectAllVisible(
+        prev,
+        filtered.map((r) => r.id as string).filter(Boolean),
+      ),
+    );
   }, [filtered]);
 
   const newRoundSeed = showNewRound && selected

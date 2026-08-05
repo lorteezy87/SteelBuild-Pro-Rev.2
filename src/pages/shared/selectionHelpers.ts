@@ -45,3 +45,34 @@ export function removeIdFromSelection(prev: Set<string>, id: string): Set<string
 export function toggleIdInList(prev: string[], id: string): string[] {
   return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
 }
+
+/** Force-include or force-exclude one id (checkbox-driven). */
+export function applySelectionChecked(
+  prev: Set<string>,
+  id: string,
+  checked: boolean,
+): Set<string> {
+  const next = new Set(prev);
+  if (checked) next.add(id);
+  else next.delete(id);
+  return next;
+}
+
+/**
+ * If every visible id is already selected, clear selection entirely;
+ * otherwise add all visible ids (preserving any already selected).
+ * Matches register bulk-select-all toggles on Submittals etc.
+ */
+export function toggleSelectAllVisible(
+  prev: Set<string>,
+  visibleIds: string[],
+): Set<string> {
+  const ids = (visibleIds || []).filter(Boolean);
+  if (ids.length > 0 && ids.every((id) => prev.has(id))) {
+    return new Set();
+  }
+  const next = new Set(prev);
+  for (const id of ids) next.add(id);
+  return next;
+}
+

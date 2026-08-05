@@ -1,3 +1,4 @@
+import { toggleSelectionId } from "@/pages/shared/selectionHelpers";
 /**
  * FolderBar — sits above the documents list and renders:
  *   - Breadcrumb showing the path from "All Documents" → … → current folder
@@ -139,11 +140,7 @@ export default function FolderBar({
   };
 
   const toggleSelect = (id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) => toggleSelectionId(prev, id));
   };
 
   const handleBulkDelete = () => {

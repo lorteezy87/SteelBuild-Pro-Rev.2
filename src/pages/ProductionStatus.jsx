@@ -33,6 +33,10 @@ import {
 } from "@/lib/pieceControl/queryKeys";
 
 import { downloadProductionStatusCsv as exportProductionCSV } from "./productionStatus/productionStatusPageHelpers";
+import {
+  applySelectionChecked,
+  selectAllOrNone,
+} from "@/pages/shared/selectionHelpers";
 
 
 export default function ProductionStatus() {
@@ -121,20 +125,16 @@ export default function ProductionStatus() {
   });
 
   const onToggleRow = (id, next) => {
-    setSelectedIds((prev) => {
-      const n = new Set(prev);
-      if (next) n.add(id);
-      else n.delete(id);
-      return n;
-    });
+    setSelectedIds((prev) => applySelectionChecked(prev, id, next));
   };
 
   const onToggleAll = (selectAll) => {
-    if (!selectAll) {
-      setSelectedIds(new Set());
-      return;
-    }
-    setSelectedIds(new Set(filtered.map((p) => p.id).filter(Boolean)));
+    setSelectedIds(
+      selectAllOrNone(
+        selectAll,
+        filtered.map((p) => p.id).filter(Boolean),
+      ),
+    );
   };
 
   /** After CSV production-status import: bridge already wrote fab_status/lifecycle; refresh caches. */

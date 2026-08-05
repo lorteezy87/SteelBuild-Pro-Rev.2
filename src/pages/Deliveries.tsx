@@ -10,6 +10,7 @@ import { logActivity } from "@/services/auditLogger";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
+import { removeIdFromSelection } from "@/pages/shared/selectionHelpers";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
@@ -197,11 +198,9 @@ export default function Deliveries() {
       await invalidateDeliveries();
       if (detail?.id === deleteTarget?.id) setDetail(null);
       if (editing?.id === deleteTarget?.id) setEditing(null);
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (deleteTarget?.id) next.delete(deleteTarget.id);
-        return next;
-      });
+      setSelectedIds((prev) =>
+        deleteTarget?.id ? removeIdFromSelection(prev, deleteTarget.id) : prev,
+      );
       setDeleteTarget(null);
       toast.success("Delivery removed");
     },
