@@ -226,3 +226,12 @@ export function buildSubmittalFieldPatch(
   return { [field]: value === "" ? null : value };
 }
 
+/** Immutable form field patch for SubmittalFormModal. */
+export function nextSubmittalFormField<T extends Record<string, unknown>>(
+  prev: T,
+  field: keyof T | string,
+  value: unknown,
+): T {
+  return { ...prev, [field]: value };
+}
+

@@ -121,3 +121,14 @@ describe("submittal detail pure helpers", () => {
     expect(buildSubmittalFieldPatch({ title: "A" }, "title", "B")).toEqual({ title: "B" });
   });
 });
+
+import { nextSubmittalFormField } from "../submittalsPageHelpers";
+
+describe("nextSubmittalFormField", () => {
+  it("patches immutably", () => {
+    const prev = { title: "A", status: "Draft" };
+    const next = nextSubmittalFormField(prev, "title", "B");
+    expect(next).toEqual({ title: "B", status: "Draft" });
+    expect(prev.title).toBe("A");
+  });
+});

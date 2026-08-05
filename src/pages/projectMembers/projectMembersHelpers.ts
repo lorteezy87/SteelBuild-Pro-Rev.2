@@ -2,7 +2,11 @@
  * Pure helpers for Project Members page.
  */
 import { formatRole, isProjectAdminRole } from "@/lib/projectMembers";
-import { pruneSelectionToAllowed } from "@/pages/shared/selectionHelpers";
+import {
+  pruneSelectionToAllowed,
+  applySelectionChecked,
+  selectAllOrNone,
+} from "@/pages/shared/selectionHelpers";
 
 export type MemberRowLike = {
   user_id?: string | null;
@@ -83,24 +87,24 @@ export function allMembersSelected(
   return members.length > 0 && selectedIds.size === members.length;
 }
 
+/** @deprecated Prefer applySelectionChecked from shared selectionHelpers. */
 export function nextSelectedIdsToggle(
   previous: Set<string>,
   memberId: string,
   checked: boolean,
 ): Set<string> {
-  const next = new Set(previous);
-  if (checked) next.add(memberId);
-  else next.delete(memberId);
-  return next;
+  return applySelectionChecked(previous, memberId, checked);
 }
 
+/** @deprecated Prefer selectAllOrNone from shared selectionHelpers. */
 export function nextSelectedIdsAll(
   members: Array<{ id?: string | null }>,
   checked: boolean,
 ): Set<string> {
-  return checked
-    ? new Set(members.map((m) => String(m.id)).filter(Boolean))
-    : new Set();
+  return selectAllOrNone(
+    checked,
+    members.map((m) => String(m.id)).filter(Boolean),
+  );
 }
 
 export type ActivityLike = {

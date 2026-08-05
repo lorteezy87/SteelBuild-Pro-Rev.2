@@ -9,6 +9,7 @@ import {
   buildSubmittalFormState,
   toggleDrawingTypeInList,
   isSubmittalSpinOffCreate,
+  nextSubmittalFormField,
 } from "./submittalsPageHelpers";
 import { DRAWING_TYPES, type DrawingType } from "@/lib/submittalComponents";
 import type { DrawingSet, Submittal } from "./types";
@@ -67,7 +68,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
     setDrawingTypes((prev) => toggleDrawingTypeInList(prev, drawingType) as DrawingType[]);
   const [form, setForm] = useState(() => buildSubmittalFormState(initial));
 
-  const setField = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
+  const setField = (k: string, v: any) => setForm((p) => nextSubmittalFormField(p, k, v));
   const isEdit = !!initial.id;
   const submitInFlight = useRef(false);
 
