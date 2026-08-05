@@ -33,6 +33,10 @@ import {
   type FlatRisk,
   type RiskSignal,
 } from "./riskControlCenter.derive";
+import {
+  severityTone,
+  mitigationTone,
+} from "./riskControlCenterHelpers";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -48,20 +52,6 @@ function fmtMoney(n: number): string {
  * Uses "danger" for critical, "warn" for high, "neutral" for medium — mirrors
  * the RFI Control Center's use of priorityTone().
  */
-function severityTone(severity: FlatRisk["severity"]): "danger" | "warn" | "neutral" {
-  if (severity === "critical") return "danger";
-  if (severity === "high") return "warn";
-  return "neutral";
-}
-
-/** Map mitigationStatus to a Pill tone. */
-function mitigationTone(status: string | null): "good" | "warn" | "neutral" {
-  if (!status) return "neutral";
-  if (status === "In Progress") return "warn";
-  if (status === "Open") return "neutral";
-  return "neutral";
-}
-
 /** Smooth scroll to the table section. */
 function scrollToTable() {
   document.querySelector(".risk-cc .cmd-table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
