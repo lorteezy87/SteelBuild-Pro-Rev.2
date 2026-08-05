@@ -33,38 +33,15 @@ import {
 
 /* ─── Helpers ─────────────────────────────────────────────────────── */
 
+import {
+  gradeScore as grade,
+  gradeInverseScore as gradeInverse,
+  buildScorecardKpis,
+  computeOverallScorecardScore,
+} from "./financialScorecardHelpers";
+
 function healthColor(h) {
   return HEALTH_COLORS[h] || "var(--text-muted)";
-}
-
-function grade(value, thresholds) {
-  if (value == null) return { health: "neutral", label: "N/A" };
-  if (value >= thresholds.green[0] && value <= thresholds.green[1])
-    return { health: "good", label: "Good" };
-  if (value >= thresholds.amber[0] && value <= thresholds.amber[1])
-    return { health: "watch", label: "Watch" };
-  return { health: "risk", label: "At Risk" };
-}
-
-function gradeInverse(value, thresholds) {
-  // Lower is better (e.g. DSO, budget %)
-  if (value == null) return { health: "neutral", label: "N/A" };
-  if (value <= thresholds.green) return { health: "good", label: "Good" };
-  if (value <= thresholds.amber) return { health: "watch", label: "Watch" };
-  return { health: "risk", label: "At Risk" };
-}
-
-function latestCertifiedPerLineItem(sovItems) {
-  const map = new Map();
-  for (const s of sovItems) {
-    if (!["Certified", "Paid"].includes(s.status)) continue;
-    const key = `${s.project_id}::${s.line_item_number}`;
-    const existing = map.get(key);
-    if (!existing || (Number(s.application_number) || 0) > (Number(existing.application_number) || 0)) {
-      map.set(key, s);
-    }
-  }
-  return [...map.values()];
 }
 
 /* ─── KPI Card ────────────────────────────────────────────────────── */
@@ -197,162 +174,31 @@ export default function FinancialScorecard() {
   });
 
   /* ── Computed KPIs ── */
-  const kpis = useMemo(() => {
-    if (!project) return null;
-
-    const validExpenses = expenses.filter((e) => e.payment_status !== "Voided");
-    const cv = calcContractValue(project, changeOrders);
-    const evm = calcEVM(workPackages);
-    const wp = calcWpProgress(workPackages);
-    const labor = calcLaborBurn(workPackages);
-
-    // Budget
-    const totalBudget = computeCostCodeTotals(costCodes).budget;
-    const committed = validExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const paid = validExpenses
-      .filter((e) => e.payment_status === "Paid")
-      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const budgetUsedPct = cv.revised > 0 ? (committed / cv.revised) * 100 : null;
-    const costVariance = totalBudget > 0 ? totalBudget - committed : null;
-    const costVariancePct = totalBudget > 0 ? ((totalBudget - committed) / totalBudget) * 100 : null;
-    const committedVsBudget = totalBudget > 0 ? committed / totalBudget : null;
-
-    // Billing
-    const certLines = latestCertifiedPerLineItem(sovItems);
-    const billed = certLines.reduce(
-      (s, l) => s + (Number(l.scheduled_value) || 0) * ((Number(l.current_percent_complete) || 0) / 100),
-      0
-    );
-    const collected = certLines
-      .filter((l) => l.payment_received_date)
-      .reduce(
-        (s, l) => s + (Number(l.scheduled_value) || 0) * ((Number(l.current_percent_complete) || 0) / 100),
-        0
-      );
-    const retention = certLines.reduce(
-      (s, l) => {
-        const toDate = (Number(l.scheduled_value) || 0) * ((Number(l.current_percent_complete) || 0) / 100);
-        return s + toDate * ((Number(l.retainage_percent) || 0) / 100);
-      },
-      0
-    );
-    const billingRatio = committed > 0 ? billed / committed : null;
-    const retainagePct = billed > 0 ? (retention / billed) * 100 : null;
-
-    // DSO
-    const dsoValues = [];
-    for (const s of sovItems) {
-      if (s.submitted_date && s.payment_received_date && ["Certified", "Paid"].includes(s.status)) {
-        const days = Math.ceil(
-          (new Date(s.payment_received_date).getTime() - new Date(s.submitted_date).getTime()) / 86400000
-        );
-        if (days > 0) dsoValues.push(days);
-      }
-    }
-    const avgDSO = dsoValues.length > 0
-      ? Math.round(dsoValues.reduce((a, b) => a + b, 0) / dsoValues.length)
-      : null;
-
-    // Profitability
-    const marginPct = cv.revised > 0 ? ((cv.revised - committed) / cv.revised) * 100 : null;
-    const projectedMargin = cv.revised > 0 && evm.eac > 0
-      ? ((cv.revised - evm.eac) / cv.revised) * 100
-      : marginPct;
-    const coGrowthPct = cv.original > 0
-      ? (cv.approvedCOTotal / cv.original) * 100
-      : null;
-
-    // Risk
-    let riskExposure = 0;
-    try {
-      const riskResult = calculateMarginRisk({
-        rfis, submittals: [], workPackages, deliveries,
-        inspections, scheduleTasks, changeOrders,
-      });
-      riskExposure = riskResult.totalExposure || 0;
-    } catch {
-      riskExposure = 0;
-    }
-
-    return {
-      // EVM
-      cpi: evm.cpi,
-      spi: evm.spi,
-      eac: evm.eac,
-      bac: evm.bac,
-      vac: evm.vac,
-      tcpi: evm.tcpi,
-      ev: evm.ev,
-      ac: evm.ac,
-      // Budget
-      budgetUsedPct,
-      costVariance,
-      costVariancePct,
-      committedVsBudget,
-      totalBudget,
-      committed,
-      paid,
-      // Revenue
-      billingRatio,
-      avgDSO,
-      retainagePct,
-      billed,
-      collected,
-      retention,
-      // Profit
-      marginPct,
-      projectedMargin,
-      coGrowthPct,
-      // Contract
-      original: cv.original,
-      revised: cv.revised,
-      approvedCOs: cv.approvedCOTotal,
-      pendingCOs: cv.pendingCOValue,
-      pendingCOCount: cv.pendingCOCount,
-      // Risk
-      riskExposure,
-      laborBurnPct: labor.burnPct,
-      // Progress
-      wpPct: wp.pct,
-    };
-  }, [project, workPackages, expenses, changeOrders, sovItems, costCodes, rfis, deliveries, inspections, scheduleTasks]);
+  const kpis = useMemo(
+    () =>
+      buildScorecardKpis({
+        project,
+        workPackages,
+        expenses,
+        changeOrders,
+        sovItems,
+        costCodes,
+        rfis,
+        deliveries,
+        inspections,
+        scheduleTasks,
+        calcContractValue,
+        calcEVM,
+        calcWpProgress,
+        calcLaborBurn,
+        computeCostCodeTotals,
+        calculateMarginRisk,
+      }),
+    [project, workPackages, expenses, changeOrders, sovItems, costCodes, rfis, deliveries, inspections, scheduleTasks],
+  );
 
   /* ── Overall health score ── */
-  const overallScore = useMemo(() => {
-    if (!kpis) return null;
-    let score = 0;
-    let count = 0;
-    const check = (value, green, amber) => {
-      if (value == null) return;
-      count++;
-      if (value >= green) score += 3;
-      else if (value >= amber) score += 2;
-      else score += 1;
-    };
-    const checkInv = (value, green, amber) => {
-      if (value == null) return;
-      count++;
-      if (value <= green) score += 3;
-      else if (value <= amber) score += 2;
-      else score += 1;
-    };
-    check(kpis.cpi, 0.95, 0.85);
-    check(kpis.spi, 0.95, 0.85);
-    check(kpis.marginPct, 15, 5);
-    check(kpis.billingRatio, 0.9, 0.75);
-    checkInv(kpis.budgetUsedPct, 85, 95);
-    checkInv(kpis.avgDSO, 30, 45);
-    checkInv(kpis.coGrowthPct, 5, 10);
-    checkInv(kpis.laborBurnPct, 100, 110);
-
-    if (count === 0) return null;
-    const pct = (score / (count * 3)) * 100;
-    return {
-      pct: Math.round(pct),
-      label: pct >= 80 ? "Strong" : pct >= 60 ? "Moderate" : "Weak",
-      health: pct >= 80 ? "good" : pct >= 60 ? "watch" : "risk",
-    };
-  }, [kpis]);
+  const overallScore = useMemo(() => computeOverallScorecardScore(kpis), [kpis]);
 
   if (!projectId) {
     return (

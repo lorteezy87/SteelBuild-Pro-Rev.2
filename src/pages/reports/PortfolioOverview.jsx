@@ -51,6 +51,8 @@ import {
   computeTopRisks,
   computeWeeklyActivity,
   formatPortfolioDate,
+  buildUrgentPortfolioItems,
+  nextSortState,
 } from "./portfolioOverview/format";
 import {
   HeroKpiStrip,
@@ -212,11 +214,9 @@ export default function PortfolioOverview() {
   );
 
   const handleSort = (field) => {
-    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortField(field);
-      setSortDir("asc");
-    }
+    const next = nextSortState(sortField, sortDir, field);
+    setSortField(next.sortField);
+    setSortDir(next.sortDir);
   };
 
   const barChartData = useMemo(() => buildBarChartData(projectRows), [projectRows]);
@@ -224,41 +224,18 @@ export default function PortfolioOverview() {
   const driftRows = useMemo(() => buildDriftRows(projectRows), [projectRows]);
 
   const urgentItems = useMemo(() => {
-    const items = [];
-    overdueRFIs.slice(0, 6).forEach((r) => {
-      const proj = findById(projects, r.project_id);
-      items.push({
-        kind: "RFI",
-        title: r.rfi_number || r.title || "RFI",
-        subtitle: r.title || r.subject || r.question || "Overdue response",
-        severity: r.priority === "Critical" ? "critical" : r.priority === "High" ? "high" : "medium",
-        meta: proj ? proj.name : "",
-        onClick: () => navigate(createPageUrl("RFIs")),
-      });
+    const rows = buildUrgentPortfolioItems({
+      overdueRFIs,
+      pendingCOs,
+      lateDeliveries,
+      projects,
+      formatCurrencyShort,
+      findById,
     });
-    pendingCOs.slice(0, 4).forEach((c) => {
-      const proj = findById(projects, c.project_id);
-      items.push({
-        kind: "CO",
-        title: c.co_number || "CO",
-        subtitle: `${c.title || c.description || "Change order"} · ${formatCurrencyShort(c.co_amount)}`,
-        severity: (Number(c.co_amount) || 0) > 50000 ? "high" : "medium",
-        meta: proj ? proj.name : "",
-        onClick: () => navigate(createPageUrl("ChangeOrders")),
-      });
-    });
-    lateDeliveries.slice(0, 4).forEach((d) => {
-      const proj = findById(projects, d.project_id);
-      items.push({
-        kind: "DELIVERY",
-        title: d.po_number || d.vendor || "Delivery",
-        subtitle: d.description || d.vendor || "Late delivery",
-        severity: "high",
-        meta: proj ? proj.name : "",
-        onClick: () => navigate(createPageUrl("Deliveries")),
-      });
-    });
-    return items;
+    return rows.map((item) => ({
+      ...item,
+      onClick: () => navigate(createPageUrl(item.route)),
+    }));
   }, [overdueRFIs, pendingCOs, lateDeliveries, projects, navigate]);
 
   const topRisks = useMemo(() => computeTopRisks(openRisks), [openRisks]);

@@ -407,3 +407,91 @@ export function computeWeeklyActivity(input: {
     weekEnd: formatPortfolioDate(now),
   };
 }
+
+export type UrgentPortfolioItem = {
+  kind: string;
+  title: string;
+  subtitle: string;
+  severity: string;
+  meta: string;
+  route: string;
+};
+
+/** Pure urgent feed rows (navigate is attached on the page shell). */
+export function buildUrgentPortfolioItems(input: {
+  overdueRFIs: Array<Record<string, unknown>>;
+  pendingCOs: Array<Record<string, unknown>>;
+  lateDeliveries: Array<Record<string, unknown>>;
+  projects: Array<{ id?: string | null; name?: string | null }>;
+  formatCurrencyShort: (n: number | string | null | undefined) => string;
+  findById: <T extends { id?: string | null }>(
+    list: T[],
+    id: string | null | undefined,
+  ) => T | undefined;
+}): UrgentPortfolioItem[] {
+  const {
+    overdueRFIs,
+    pendingCOs,
+    lateDeliveries,
+    projects,
+    formatCurrencyShort,
+    findById,
+  } = input;
+  const items: UrgentPortfolioItem[] = [];
+
+  (overdueRFIs || []).slice(0, 6).forEach((r) => {
+    const proj = findById(projects, r.project_id as string);
+    items.push({
+      kind: "RFI",
+      title: String(r.rfi_number || r.title || "RFI"),
+      subtitle: String(r.title || r.subject || r.question || "Overdue response"),
+      severity:
+        r.priority === "Critical"
+          ? "critical"
+          : r.priority === "High"
+            ? "high"
+            : "medium",
+      meta: proj ? String(proj.name || "") : "",
+      route: "RFIs",
+    });
+  });
+
+  (pendingCOs || []).slice(0, 4).forEach((c) => {
+    const proj = findById(projects, c.project_id as string);
+    items.push({
+      kind: "CO",
+      title: String(c.co_number || "CO"),
+      subtitle: `${c.title || c.description || "Change order"} · ${formatCurrencyShort(c.co_amount as any)}`,
+      severity: (Number(c.co_amount) || 0) > 50000 ? "high" : "medium",
+      meta: proj ? String(proj.name || "") : "",
+      route: "ChangeOrders",
+    });
+  });
+
+  (lateDeliveries || []).slice(0, 4).forEach((d) => {
+    const proj = findById(projects, d.project_id as string);
+    items.push({
+      kind: "DELIVERY",
+      title: String(d.po_number || d.vendor || "Delivery"),
+      subtitle: String(d.description || d.vendor || "Late delivery"),
+      severity: "high",
+      meta: proj ? String(proj.name || "") : "",
+      route: "Deliveries",
+    });
+  });
+
+  return items;
+}
+
+/** Toggle sort field/dir for portfolio table header clicks. */
+export function nextSortState(
+  sortField: string,
+  sortDir: "asc" | "desc",
+  field: string,
+): { sortField: string; sortDir: "asc" | "desc" } {
+  if (sortField === field) {
+    return { sortField, sortDir: sortDir === "asc" ? "desc" : "asc" };
+  }
+  return { sortField: field, sortDir: "asc" };
+}
+

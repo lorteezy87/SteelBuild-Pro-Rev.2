@@ -6,6 +6,8 @@ import {
   filterNotDeleted,
   computeElapsedPct,
   buildProjectRows,
+  buildUrgentPortfolioItems,
+  nextSortState,
   computePortfolioContract,
   computePortfolioRevised,
   computeBudgetVariance,
@@ -254,5 +256,28 @@ describe("delivery and RFI filters", () => {
       { date_required: "2026-12-31" },
     ], now);
     expect(overdue).toHaveLength(1);
+  });
+});
+
+
+describe("buildUrgentPortfolioItems / nextSortState", () => {
+  it("builds urgent rows with routes", () => {
+    const items = buildUrgentPortfolioItems({
+      overdueRFIs: [{ project_id: "p1", rfi_number: "RFI-1", title: "Need detail", priority: "Critical" }],
+      pendingCOs: [{ project_id: "p1", co_number: "CO-1", title: "Extra steel", co_amount: 60000 }],
+      lateDeliveries: [{ project_id: "p1", po_number: "PO-9", description: "Late beam" }],
+      projects: [{ id: "p1", name: "Alpha" }],
+      formatCurrencyShort: (n) => `$${n}`,
+      findById: (list, id) => list.find((x) => x.id === id),
+    });
+    expect(items.map((i) => i.kind)).toEqual(["RFI", "CO", "DELIVERY"]);
+    expect(items[0].route).toBe("RFIs");
+    expect(items[1].severity).toBe("high");
+    expect(items[0].meta).toBe("Alpha");
+  });
+
+  it("toggles sort state", () => {
+    expect(nextSortState("name", "asc", "name")).toEqual({ sortField: "name", sortDir: "desc" });
+    expect(nextSortState("name", "asc", "value")).toEqual({ sortField: "value", sortDir: "asc" });
   });
 });
