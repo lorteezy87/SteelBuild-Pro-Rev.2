@@ -1,9 +1,9 @@
 /**
  * DrawingRegisterGridPanel — the on-skin Doc Control "Register" view (Slice 2c).
  *
- * Sheet-level register with:
+ * Sheet-level register (Doc Control clean table):
  *  - free-text + status + drawing-set filters
- *  - rows grouped under drawing set headers (collapsible)
+ *  - flat sheet rows by default; optional group-by-set
  *  - click sheet # / View to open DrawingViewer
  */
 import { useMemo, useState, type ReactNode } from "react";
@@ -72,8 +72,10 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [setFilter, setSetFilter] = useState("all");
-  /** Collapsed set keys: string set name, or SET_FILTER_NONE for unassigned. */
+  /** Collapsed set keys when group-by-set is on. */
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  /** Flat clean table by default (Doc Control look). Group headers optional. */
+  const [groupBySet, setGroupBySet] = useState(false);
   const { can } = usePermissions();
   const canRelease = can("approve", "drawing");
   const publish = usePublishRevision();
@@ -162,6 +164,98 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
 
   const colCount = canRelease ? 14 : 13;
 
+  const renderSheetRow = (r: DrawingRegisterRow) => {
+    const watched = !!watches?.has(r.drawing_id);
+    const href = viewerHref(r.drawing_id);
+    return (
+      <tr key={r.drawing_id}>
+        <td style={{ textAlign: "center" }}>
+          <button
+            type="button"
+            title={watched ? "Unwatch this sheet" : "Watch this sheet"}
+            aria-pressed={watched}
+            disabled={toggleWatch.isPending}
+            onClick={() => toggleWatch.mutate(
+              { drawingId: r.drawing_id, watched },
+              { onError: (e) => toast.error("Couldn't update watch: " + ((e as Error)?.message || "unknown")) }
+            )}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 0, color: watched ? "var(--cmd-gold)" : "var(--cmd-text-muted)" }}
+          >
+            <Star size={14} fill={watched ? "var(--cmd-gold)" : "none"} />
+          </button>
+        </td>
+        <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+          <Link
+            to={href}
+            style={{ color: "var(--cmd-accent, var(--accent))", textDecoration: "none" }}
+            title="Open in drawing viewer"
+          >
+            {r.sheet_number || "—"}
+          </Link>
+        </td>
+        <td style={{ color: "var(--cmd-text)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sheet_title || "—"}</td>
+        <td style={{ color: "var(--cmd-text-muted)" }}>{r.discipline || "—"}</td>
+        <td style={{ color: "var(--cmd-text-muted)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.drawing_set_name || "—"}</td>
+        <td style={{ fontVariantNumeric: "tabular-nums", color: "var(--cmd-text)", whiteSpace: "nowrap" }}>{r.current_revision || "—"}</td>
+        <td><StatusCell status={r.current_status} /></td>
+        <td style={{ textAlign: "center" }}><Count n={r.open_impact_count} danger /></td>
+        <td style={{ textAlign: "center" }}><Count n={r.pending_review_count} info /></td>
+        <td style={{ textAlign: "center" }}><Count n={r.rfi_count} /></td>
+        <td style={{ textAlign: "center" }}><Count n={r.work_package_count} /></td>
+        <td style={{ color: "var(--cmd-text-muted)", whiteSpace: "nowrap" }}>{r.last_activity ? fmtDate(r.last_activity) : "—"}</td>
+        <td style={{ textAlign: "center" }}>
+          <Link
+            to={href}
+            className="cmd-btn cmd-btn--ghost"
+            title={`View ${r.sheet_number || "sheet"}`}
+            aria-label={`View ${r.sheet_number || "sheet"}`}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              padding: "4px 8px", textDecoration: "none", fontSize: 11, gap: 4,
+            }}
+          >
+            <Eye size={14} />
+          </Link>
+        </td>
+        {canRelease && (
+          <td>
+            {r.current_revision_id ? (
+              <select
+                className="sbd-select"
+                value=""
+                disabled={publish.isPending}
+                onChange={(e) => {
+                  const v = e.target.value as ReleaseStatus;
+                  if (v) release(r, v);
+                  e.target.value = "";
+                }}
+                title="Release current revision"
+                style={{ fontSize: 11 }}
+              >
+                <option value="">Release…</option>
+                {RELEASE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ) : (
+              <button
+                type="button"
+                className="cmd-btn cmd-btn--ghost"
+                disabled={provisioning.has(r.drawing_id)}
+                onClick={() => provisionRevision(r)}
+                title="This sheet has no tracked revision yet. Set up release tracking to create its current revision so it can be released."
+                style={{ fontSize: 11, whiteSpace: "nowrap" }}
+              >
+                {provisioning.has(r.drawing_id) && <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />}
+                {provisioning.has(r.drawing_id) ? "Setting up…" : "Set up release tracking"}
+              </button>
+            )}
+          </td>
+        )}
+      </tr>
+    );
+  };
+
   if (!projectId) {
     return <div style={{ padding: 24, color: "var(--cmd-text-muted)", fontSize: 13 }}>Select a project to view its drawing register.</div>;
   }
@@ -182,18 +276,34 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
         <div>
           <h3 style={{ margin: 0, color: "var(--cmd-text)", fontSize: 16, fontWeight: 700 }}>Drawing Register</h3>
           <p style={{ margin: "4px 0 0", color: "var(--cmd-text-muted)", fontSize: 12 }}>
-            Sheets grouped by drawing set. Click a sheet number to open the drawing viewer.
+            Current revision + release status + downstream counts per sheet. Click a sheet to open the viewer.
           </p>
         </div>
-        <Link
-          to={createPageUrl("Drawings")}
-          className="cmd-btn cmd-btn--ghost"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", fontSize: 12 }}
-          title="Open the full Drawings editor for set upload, rename, bulk edit"
-        >
-          <ExternalLink size={13} />
-          Full editor
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            aria-pressed={groupBySet}
+            onClick={() => setGroupBySet((v) => !v)}
+            title="Optional: group sheet rows under drawing set headers"
+            style={{
+              fontSize: 12,
+              border: groupBySet ? "1px solid var(--cmd-accent, var(--accent))" : undefined,
+              color: groupBySet ? "var(--cmd-accent, var(--accent))" : undefined,
+            }}
+          >
+            {groupBySet ? "Grouped by set" : "Group by set"}
+          </button>
+          <Link
+            to={createPageUrl("Drawings")}
+            className="cmd-btn cmd-btn--ghost"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", fontSize: 12 }}
+            title="Open the full Drawings editor for set upload, rename, bulk edit"
+          >
+            <ExternalLink size={13} />
+            Full editor
+          </Link>
+        </div>
       </div>
 
       <div className="cmd-filterbar">
@@ -282,113 +392,25 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
               </tr>
             </thead>
             <tbody>
-              {groups.map((g) => {
-                const groupKey = g.setName ?? SET_FILTER_NONE;
-                const isCollapsed = collapsed.has(groupKey);
-                const label = g.setName || "Unassigned";
-                return (
-                  <GroupBlock
-                    key={groupKey}
-                    label={label}
-                    count={g.rows.length}
-                    collapsed={isCollapsed}
-                    onToggle={() => toggleGroup(groupKey)}
-                    colCount={colCount}
-                  >
-                    {g.rows.map((r) => {
-                      const watched = !!watches?.has(r.drawing_id);
-                      const href = viewerHref(r.drawing_id);
-                      return (
-                        <tr key={r.drawing_id}>
-                          <td style={{ textAlign: "center" }}>
-                            <button
-                              type="button"
-                              title={watched ? "Unwatch this sheet" : "Watch this sheet"}
-                              aria-pressed={watched}
-                              disabled={toggleWatch.isPending}
-                              onClick={() => toggleWatch.mutate(
-                                { drawingId: r.drawing_id, watched },
-                                { onError: (e) => toast.error("Couldn't update watch: " + ((e as Error)?.message || "unknown")) }
-                              )}
-                              style={{ background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 0, color: watched ? "var(--cmd-gold)" : "var(--cmd-text-muted)" }}
-                            >
-                              <Star size={14} fill={watched ? "var(--cmd-gold)" : "none"} />
-                            </button>
-                          </td>
-                          <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
-                            <Link
-                              to={href}
-                              style={{ color: "var(--cmd-accent, var(--accent))", textDecoration: "none" }}
-                              title="Open in drawing viewer"
-                            >
-                              {r.sheet_number || "—"}
-                            </Link>
-                          </td>
-                          <td style={{ color: "var(--cmd-text)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sheet_title || "—"}</td>
-                          <td style={{ color: "var(--cmd-text-muted)" }}>{r.discipline || "—"}</td>
-                          <td style={{ color: "var(--cmd-text-muted)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.drawing_set_name || "—"}</td>
-                          <td style={{ fontVariantNumeric: "tabular-nums", color: "var(--cmd-text)", whiteSpace: "nowrap" }}>{r.current_revision || "—"}</td>
-                          <td><StatusCell status={r.current_status} /></td>
-                          <td style={{ textAlign: "center" }}><Count n={r.open_impact_count} danger /></td>
-                          <td style={{ textAlign: "center" }}><Count n={r.pending_review_count} info /></td>
-                          <td style={{ textAlign: "center" }}><Count n={r.rfi_count} /></td>
-                          <td style={{ textAlign: "center" }}><Count n={r.work_package_count} /></td>
-                          <td style={{ color: "var(--cmd-text-muted)", whiteSpace: "nowrap" }}>{r.last_activity ? fmtDate(r.last_activity) : "—"}</td>
-                          <td style={{ textAlign: "center" }}>
-                            <Link
-                              to={href}
-                              className="cmd-btn cmd-btn--ghost"
-                              title={`View ${r.sheet_number || "sheet"}`}
-                              aria-label={`View ${r.sheet_number || "sheet"}`}
-                              style={{
-                                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                                padding: "4px 8px", textDecoration: "none", fontSize: 11, gap: 4,
-                              }}
-                            >
-                              <Eye size={14} />
-                            </Link>
-                          </td>
-                          {canRelease && (
-                            <td>
-                              {r.current_revision_id ? (
-                                <select
-                                  className="sbd-select"
-                                  value=""
-                                  disabled={publish.isPending}
-                                  onChange={(e) => {
-                                    const v = e.target.value as ReleaseStatus;
-                                    if (v) release(r, v);
-                                    e.target.value = "";
-                                  }}
-                                  title="Release current revision"
-                                  style={{ fontSize: 11 }}
-                                >
-                                  <option value="">Release…</option>
-                                  {RELEASE_OPTIONS.map((o) => (
-                                    <option key={o.value} value={o.value}>{o.label}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="cmd-btn cmd-btn--ghost"
-                                  disabled={provisioning.has(r.drawing_id)}
-                                  onClick={() => provisionRevision(r)}
-                                  title="This sheet has no tracked revision yet. Set up release tracking to create its current revision so it can be released."
-                                  style={{ fontSize: 11, whiteSpace: "nowrap" }}
-                                >
-                                  {provisioning.has(r.drawing_id) && <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />}
-                                  {provisioning.has(r.drawing_id) ? "Setting up…" : "Set up release tracking"}
-                                </button>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </GroupBlock>
-                );
-              })}
+              {groupBySet
+                ? groups.map((g) => {
+                    const groupKey = g.setName ?? SET_FILTER_NONE;
+                    const isCollapsed = collapsed.has(groupKey);
+                    const label = g.setName || "Unassigned";
+                    return (
+                      <GroupBlock
+                        key={groupKey}
+                        label={label}
+                        count={g.rows.length}
+                        collapsed={isCollapsed}
+                        onToggle={() => toggleGroup(groupKey)}
+                        colCount={colCount}
+                      >
+                        {g.rows.map(renderSheetRow)}
+                      </GroupBlock>
+                    );
+                  })
+                : rows.map(renderSheetRow)}
             </tbody>
           </table>
         </div>
