@@ -33,6 +33,15 @@ import {
   downloadTextFile,
 } from "@/lib/exports/fabRelease";
 
+import {
+  mono,
+  labelStyle,
+  btnBase,
+  KIND_CONFIG,
+  GATE_REASON_ICON,
+} from "./exportFabReleaseModalHelpers";
+
+
 /** Slice 8 — submittal + signoff evidence for IFC/Released readiness. */
 function useFabApprovalEvidence(open, projectId, drawings) {
   const [evidence, setEvidence] = useState({
@@ -86,49 +95,6 @@ function useFabApprovalEvidence(open, projectId, drawings) {
   return evidence;
 }
 
-const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
-
-const labelStyle = {
-  ...mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-  letterSpacing: "0.15em", color: "var(--text-muted)", display: "block", marginBottom: 6,
-};
-
-const btnBase = {
-  ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
-  padding: "8px 16px", borderRadius: 2, border: "1px solid var(--border-default)",
-  cursor: "pointer", textTransform: "uppercase",
-};
-
-const KIND_CONFIG = {
-  fab_release: {
-    title: "Export Fab Release Package",
-    eyebrow: "FABRICATION RELEASE",
-    description: "IFC / Released drawings (submittal-derived) bundled with a manifest CSV and a README listing the contents, ready to hand to the fabricator.",
-    filterLabel: "IFC / Released for fabrication",
-  },
-  turnover: {
-    title: "Export Turnover Package",
-    eyebrow: "TURNOVER",
-    description: "IFC / Released drawings with manifest and README, ready for owner turnover.",
-    filterLabel: "IFC / Released",
-  },
-  claims: {
-    title: "Export Claims Package",
-    eyebrow: "CLAIMS · LEGAL / INSURANCE",
-    description: "Everything in scope (drawings, RFIs, change orders, photos linked to drawings) grouped by date for legal / insurance documentation.",
-    filterLabel: "All (chronological)",
-  },
-};
-
-// Leading glyph per gate-reason kind for the "not ready for fab" panel.
-const GATE_REASON_ICON = {
-  open_rfis: "❓",
-  rejected_sheets: "⊘",
-  revision_conflict: "⟳",
-  unresolved_revision: "◎",
-  not_ifc_ready: "⊘",
-  missing_signoffs: "✍",
-};
 
 export default function ExportFabReleaseModal({
   open,
