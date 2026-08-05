@@ -11,11 +11,16 @@ import {
   matchPsrToProject,
   readPsrSpreadsheetFile,
 } from "@/lib/importPsrSpreadsheet";
-import { cardStyle } from "./psrSpreadsheetImportModalHelpers";
+import {
+  cardStyle,
+  mono,
+  AI,
+  selectStyle,
+  btnPrimary,
+  btnGhost,
+} from "./psrSpreadsheetImportModalHelpers";
 
-const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const AI = "var(--ai-accent, #22D3EE)";
 
 export default function PsrSpreadsheetImportModal({
   open,
@@ -534,41 +539,3 @@ function CenteredStatus({ icon, title, subtitle }) {
   );
 }
 
-const selectStyle = {
-  width: "100%",
-  padding: "6px 10px",
-  fontSize: 12,
-  background: "var(--bg-page)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 2,
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-};
-
-const btnPrimary = {
-  padding: "8px 22px",
-  background: AI,
-  color: "var(--on-accent)",
-  border: "none",
-  borderRadius: 2,
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
-
-const btnGhost = {
-  padding: "8px 18px",
-  background: "transparent",
-  border: "1px solid var(--border-default)",
-  borderRadius: 2,
-  color: "var(--text-muted)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
