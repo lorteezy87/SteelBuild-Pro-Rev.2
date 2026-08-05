@@ -3,6 +3,13 @@ import { Pin, GripVertical, Eye, EyeOff } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
 import { labelStyle, selectStyle } from './dashboardTabStyleHelpers';
+import {
+  AVAILABLE_KPIS,
+  KPI_IDS,
+  sanitizeKpis,
+  AVAILABLE_MODULES,
+  LANDING_PAGES,
+} from "./dashboardTabHelpers";
 
 const Toggle = ({ checked, onChange }) => (
   <div onClick={onChange} style={{
@@ -16,59 +23,6 @@ const Toggle = ({ checked, onChange }) => (
   </div>
 );
 
-// Available KPIs on the main dashboard. Ids + order match DASHBOARD_KPI_IDS in
-// useUserPrefs, and each maps to a real metric computed by the Dashboard header.
-const AVAILABLE_KPIS = [
-  { id: 'open_rfis',        label: 'Open RFIs' },
-  { id: 'pending_cos',      label: 'Pending Change Orders' },
-  { id: 'contract_value',   label: 'Contract Value' },
-  { id: 'work_packages',    label: 'Work Packages' },
-  { id: 'deliveries',       label: 'Upcoming Deliveries' },
-  { id: 'overdue_items',    label: 'Overdue Items' },
-  { id: 'open_submittals',  label: 'Open Submittals' },
-  { id: 'expenses',         label: 'Expenses' },
-  { id: 'rfis_blocking_fab', label: 'RFIs Blocking Fab' },
-];
-const KPI_IDS = AVAILABLE_KPIS.map((k) => k.id);
-// Drop any stale/unknown ids (the KPI set was revised); fall back to all.
-const sanitizeKpis = (arr) => {
-  const valid = Array.isArray(arr) ? arr.filter((id) => KPI_IDS.includes(id)) : [];
-  return valid.length ? valid : KPI_IDS;
-};
-
-// Pinnable navigation modules
-const AVAILABLE_MODULES = [
-  { id: 'Projects',      label: 'Projects' },
-  { id: 'Vendors',       label: 'Vendors' },
-  { id: 'Drawings',      label: 'Drawings' },
-  { id: 'RFIs',          label: 'RFIs' },
-  { id: 'ChangeOrders',  label: 'Change Orders' },
-  { id: 'Submittals',    label: 'Submittals' },
-  { id: 'Deliveries',    label: 'Deliveries' },
-  { id: 'DailyLogs',     label: 'Daily Logs' },
-  { id: 'Inspections',   label: 'Inspections' },
-  { id: 'WorkPackages',  label: 'Work Packages' },
-];
-
-// Pages offered as a "default landing". Each id MUST be a real route key
-// (see src/config/routes.js) so the index-route redirect resolves. Labels are
-// friendly so the dropdown doesn't show raw camelCase keys. The Detailing
-// Control Center (the moat hub) and Field Today are first-class options here so
-// users can pin them — and they're the same targets the role-aware default
-// landing falls back to when no explicit pick is saved.
-const LANDING_PAGES = [
-  { id: 'Dashboard',           label: 'Dashboard' },
-  { id: 'DrawingSubmittalHub', label: 'Detailing Control Center' },
-  { id: 'CommandCenter',       label: 'Command Center' },
-  { id: 'Projects',            label: 'Projects' },
-  { id: 'RFIs',                label: 'RFIs' },
-  { id: 'Drawings',            label: 'Drawings (Full Editor)' },
-  { id: 'FieldToday',          label: 'Field Today' },
-  { id: 'DailyLogs',           label: 'Daily Logs' },
-  { id: 'Deliveries',          label: 'Deliveries' },
-  { id: 'ChangeOrders',        label: 'Change Orders' },
-  { id: 'JobStatusReport',     label: 'Job Status Report' },
-];
 
 export default function DashboardTab({ preferences, onSave, isSaving }) {
   // Pull the project list once so the "Default project" dropdown

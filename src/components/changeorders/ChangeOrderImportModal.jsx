@@ -22,11 +22,14 @@ import { readChangeOrderCsvFile } from "@/lib/importChangeOrderCsv";
 import { batchProcess } from "@/utils/batchProcess";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-import { statusColor, formatMoney } from "./changeOrderImportHelpers";
+import {
+  statusColor,
+  formatMoney,
+  monoStyle as mono,
+  displayStyle as display,
+  AI_ACCENT as AI,
+} from "./changeOrderImportHelpers";
 
-const mono    = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const AI      = "var(--ai-accent, #22D3EE)";
 
 export default function ChangeOrderImportModal({
   open,

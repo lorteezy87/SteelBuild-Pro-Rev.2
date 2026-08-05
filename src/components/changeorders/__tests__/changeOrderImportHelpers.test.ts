@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { statusColor, formatMoney } from "../changeOrderImportHelpers";
+import {
+  statusColor,
+  formatMoney,
+  monoStyle,
+  displayStyle,
+  AI_ACCENT,
+} from "../changeOrderImportHelpers";
 
 describe("statusColor / formatMoney", () => {
   it("maps statuses", () => {
@@ -11,3 +17,12 @@ describe("statusColor / formatMoney", () => {
     expect(formatMoney(null)).toBe("—");
   });
 });
+
+describe("import chrome atoms", () => {
+  it("mono/display/AI", () => {
+    expect(monoStyle.fontFamily).toContain("mono");
+    expect(displayStyle.fontFamily).toContain("Space Grotesk");
+    expect(AI_ACCENT).toContain("ai-accent");
+  });
+});
+

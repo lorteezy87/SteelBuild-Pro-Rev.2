@@ -10,6 +10,7 @@ import {
   phaseFilterColor,
 } from "./utils";
 import UnscheduledTray from "./UnscheduledTray";
+import { RESOURCE_TYPES } from "./resourceSchedulingHelpers";
 
 export function ResourceGuruCommandStrip({ plan, focus, onFocusChange }) {
   const focusOptions = [
@@ -351,7 +352,6 @@ export function HoursSummaryStrip({ stats }: { stats: ScheduleStats }) {
   );
 }
 
-const RESOURCE_TYPES = ["Person", "Crew", "Labor", "Equipment", "Subcontractor", "Material", "Bay"];
 
 export function ResourcesSidebar({
   topLevelResources,

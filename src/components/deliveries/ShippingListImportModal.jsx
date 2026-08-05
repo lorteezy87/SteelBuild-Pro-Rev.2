@@ -25,10 +25,12 @@ import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
 import { resolveCanonicalShipTargets } from "@/lib/pieceControl/shippingCanonicalBridge";
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
 import { summarizeShippingListCommit } from "@/lib/deliveries/summarizeShippingListCommit";
+import {
+  monoStyle as mono,
+  displayStyle as display,
+  ACCENT,
+} from "./shippingListImportModalHelpers";
 
-const mono = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const ACCENT = "var(--accent, #3B82F6)";
 
 export default function ShippingListImportModal({ open, projectId, projectName, onClose, onImported }) {
   const trapRef = useFocusTrap(open);

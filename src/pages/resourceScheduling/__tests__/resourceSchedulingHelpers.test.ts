@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {filterTopLevelResources,
+import {
+  filterTopLevelResources,
   buildMembersByParentId,
   buildEffectiveCapacityById,
   buildDisplayResources,
@@ -17,7 +18,11 @@ import {filterTopLevelResources,
   isShopWorkPackage,
   toIsoDate,
   buildScheduleSummaryCards,
-  buildResourceSidebarGroups, computeResourceRowLoad, buildResourceRowDropStyle} from "../resourceSchedulingHelpers";
+  buildResourceSidebarGroups,
+  computeResourceRowLoad,
+  buildResourceRowDropStyle,
+  RESOURCE_TYPES,
+} from "../resourceSchedulingHelpers";
 
 describe("filterTopLevelResources / buildMembersByParentId / buildEffectiveCapacityById", () => {
   const resources: Array<{
@@ -550,3 +555,10 @@ describe("new resource form seed", () => {
     expect(empty.name).toBe("");
   });
 });
+
+describe("RESOURCE_TYPES", () => {
+  it("includes Bay", () => {
+    expect(RESOURCE_TYPES).toContain("Bay");
+  });
+});
+

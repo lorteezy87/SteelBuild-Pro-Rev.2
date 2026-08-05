@@ -853,3 +853,13 @@ export function nextNewResourceField<T extends Record<string, unknown>>(
   return { ...prev, [field]: value };
 }
 
+export const RESOURCE_TYPES = [
+  "Person",
+  "Crew",
+  "Labor",
+  "Equipment",
+  "Subcontractor",
+  "Material",
+  "Bay",
+] as const;
+
