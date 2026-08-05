@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
+import { DEFAULT_HERO_PHOTO } from "./pageHeroHelpers";
 
 export interface HeroChip { label: string; tone?: "neutral" | "good" | "warn" | "danger" | "info" }
 export interface HeroStat { value: ReactNode; label: string }
@@ -6,7 +7,6 @@ export interface HeroStat { value: ReactNode; label: string }
 // Shared hero background for every Control Center banner. The artwork contains
 // the SteelBuild Pro brand lockup while the command CSS preserves a readable
 // space for the page-specific title, status, and actions.
-const DEFAULT_HERO_PHOTO = "/photos/steelbuildpro-hero.svg";
 
 export function PageHero({
   Icon,

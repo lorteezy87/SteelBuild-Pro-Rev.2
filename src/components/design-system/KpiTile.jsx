@@ -23,14 +23,7 @@
 
 import React, { useEffect, useState } from "react";
 import Icon from "./Icon";
-import { formatRelative } from "./kpiTileHelpers";
-
-
-const CONFIDENCE_COLOR = {
-  high:   "var(--status-success)",
-  medium: "var(--status-warning)",
-  low:    "var(--status-error)",
-};
+import { formatRelative, CONFIDENCE_COLOR } from "./kpiTileHelpers";
 
 export default function KpiTile({
   label,

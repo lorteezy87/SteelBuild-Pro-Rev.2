@@ -14,13 +14,7 @@ import React from "react";
 import { parseUTCDate } from "@/components/shared/formatters";
 import { mono, BIC_COLORS } from "./constants";
 import { isClosed } from "./utils";
-
-const AGING_ROWS = [
-  { label: "< 7 days",    key: "fresh",    color: "var(--status-success)" },
-  { label: "7–14 days",   key: "aging",    color: "var(--status-warning)" },
-  { label: "15–30 days",  key: "stale",    color: "var(--status-error)"   },
-  { label: "> 30 days",   key: "critical", color: "var(--status-error)"   },
-];
+import { RFI_AGING_ROWS as AGING_ROWS } from "./leftSidebarHelpers";
 
 export default function LeftSidebar({
   bicCounts,

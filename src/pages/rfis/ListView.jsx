@@ -18,22 +18,10 @@ import React from "react";
 import { mono, PRIORITY_CFG, STATUS_CFG, BIC_COLORS } from "./constants";
 import { isOverdue, daysOpen } from "./utils";
 import { Pill } from "./subcomponents";
-
-const GRID_COLS = "28px 80px 2fr 90px 100px 110px 72px 52px 52px 90px";
-
-const actionBtn = {
-  border: "1px solid var(--border-default)",
-  background: "var(--bg-surface)",
-  borderRadius: 4,
-  padding: "4px 8px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 8,
-  fontWeight: 700,
-  minHeight: 28,
-  cursor: "pointer",
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-};
+import {
+  RFI_LIST_GRID_COLS as GRID_COLS,
+  RFI_LIST_ACTION_BTN as actionBtn,
+} from "./listViewHelpers";
 
 export default function ListView({
   filtered,

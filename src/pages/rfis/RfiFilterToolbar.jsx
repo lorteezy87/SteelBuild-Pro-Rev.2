@@ -6,15 +6,7 @@
 import { Icon } from "@/components/design-system";
 import SequenceFilter from "@/components/shared/SequenceFilter";
 import { DISCIPLINES, DENSITY_PRESETS } from "./constants";
-
-const STATUS_FILTERS = [
-  ["all", "All"],
-  ["open", "Open"],
-  ["review", "Under Review"],
-  ["incomplete", "Incomplete"],
-  ["answered", "Answered"],
-  ["closed", "Closed"],
-];
+import { RFI_STATUS_FILTERS as STATUS_FILTERS } from "./rfiFilterToolbarHelpers";
 
 export default function RfiFilterToolbar({
   search, onSearch,

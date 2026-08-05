@@ -31,22 +31,7 @@
 
 import React from "react";
 import PhaseIcon from "./PhaseIcon";
-
-/**
- * Map chevron-stage labels back to `PhaseIcon` keys for automatic
- * glyph rendering. Covers the 4 production-phase aliases used across
- * Dashboard, WP list, and WP board.
- */
-const CHEVRON_PHASE_MAP = {
-  DETAIL:      "Detailing",
-  DETAILING:   "Detailing",
-  FAB:         "Fabrication",
-  FABRICATION: "Fabrication",
-  SHIP:        "Delivery",
-  DELIVERY:    "Delivery",
-  ERECT:       "Erection",
-  ERECTION:    "Erection",
-};
+import { CHEVRON_PHASE_MAP } from "./phaseChevronHelpers";
 
 export default function PhaseChevron({ stages, activeIdx = 0, style = "chevron", showIcons = true }) {
   if (style === "dots") return <DotsStyle stages={stages} activeIdx={activeIdx} />;

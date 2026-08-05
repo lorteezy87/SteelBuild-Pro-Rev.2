@@ -3,16 +3,10 @@ import { Modal, Button, StatusPill, BicPill, PhaseChevron, Icon } from "@/compon
 import { daysOpen, isOverdue, formatRfiDate, rfiImpactValue } from "./utils";
 import RfiCopilotPanel from "@/components/rfis/RfiCopilotPanel";
 import { recommendedDownstreamActions } from "@/lib/rfiDownstream";
-
-const STAGE_INDEX = { Open: 0, "Under Review": 1, "Incomplete Response": 2, Answered: 3, Closed: 4 };
-
-const STAGES = [
-  { id: "open",  label: "OPEN",       color: "var(--status-warning)" },
-  { id: "rev",   label: "REVIEW",     color: "var(--status-review)" },
-  { id: "incmp", label: "INCOMPLETE", color: "var(--status-error)" },
-  { id: "ans",   label: "ANSWERED",   color: "var(--status-success)" },
-  { id: "cls",   label: "CLOSED",     color: "var(--text-muted)" },
-];
+import {
+  RFI_STAGE_INDEX as STAGE_INDEX,
+  RFI_DETAIL_STAGES as STAGES,
+} from "./rfiDetailModalHelpers";
 
 export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO, onDownstreamAction }) {
   if (!rfi) return null;

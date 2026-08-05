@@ -15,10 +15,11 @@ import { X, Upload, FileText, CheckCircle2, Factory } from "lucide-react";
 import { toast } from "sonner";
 import { parseProductionCsv } from "@/lib/importProductionStatus";
 import { commitProductionRows } from "@/lib/production/repository";
-
-const mono = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const ACCENT = "var(--accent, #3B82F6)";
+import {
+  PRODUCTION_IMPORT_MONO as mono,
+  PRODUCTION_IMPORT_DISPLAY as display,
+  PRODUCTION_IMPORT_ACCENT as ACCENT,
+} from "./productionStatusImportModalHelpers";
 
 export default function ProductionStatusImportModal({
   open,

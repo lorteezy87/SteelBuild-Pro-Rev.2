@@ -4,18 +4,13 @@
 import React from "react";
 import { mono } from "./drawingsConfig";
 import { STAGE_MAP, STAGE_ORDER } from "./drawingsConfig";
+import { AI_STATUS_META } from "./drawingsTableChromeHelpers";
 
 // ─── AI extraction / upload status badge ───────────────────────────────────
 //
 // Shown inline next to the sheet title so the user can see at a glance
 // whether a child row is mid-processing, needs review, or failed to extract.
 // Processed rows render nothing (no chrome) to keep the log clean.
-const AI_STATUS_META = {
-  Pending:     { label: "QUEUED",    color: "var(--text-muted)",     bg: "var(--bg-surface-high)",                                       border: "var(--border-default)",                                           title: "Queued for AI extraction" },
-  Extracting:  { label: "✦ READING", color: "var(--status-warning)", bg: "color-mix(in srgb, var(--status-warning) 12%, transparent)", border: "color-mix(in srgb, var(--status-warning) 35%, transparent)", title: "Claude is reading this sheet" },
-  NeedsReview: { label: "REVIEW",    color: "var(--status-review)",  bg: "color-mix(in srgb, var(--status-review) 12%, transparent)",  border: "color-mix(in srgb, var(--status-review) 35%, transparent)",  title: "AI finished but found something to verify" },
-  Failed:      { label: "✗ FAILED",  color: "var(--status-error)",   bg: "color-mix(in srgb, var(--status-error) 12%, transparent)",   border: "color-mix(in srgb, var(--status-error) 35%, transparent)",   title: "AI extraction failed — click to retry" },
-};
 
 export function AIStatusBadge({ status, uploadStatus, error }) {
   // Failed upload always wins — it's more severe than any AI state.

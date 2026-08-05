@@ -17,3 +17,10 @@ export function formatRelative(input: unknown, nowMs: number = Date.now()): stri
   if (days <= 30) return `${days}d ago`;
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
 }
+
+export const CONFIDENCE_COLOR: Record<string, string> = {
+  high: "var(--status-success)",
+  medium: "var(--status-warning)",
+  low: "var(--status-error)",
+};
+
