@@ -257,6 +257,8 @@ export default function PieceRelationshipManager({
       queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["model-elements", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["modelElements", projectId] }),
+      // Fab color map is pieces.lifecycle via model_elements.piece_id — refresh after link/assign.
+      queryClient.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["ifc", projectId] }),
     ]);
   };
