@@ -28,3 +28,24 @@ describe("qualityControlPageHelpers", () => {
     expect(s.passRate).toBe(67); // 2 of 3 conclusive
   });
 });
+
+import {
+  QC_TEST_TYPES,
+  hasActiveQcFilters,
+  resolveActiveQcCard,
+  createEmptyQcFilters,
+} from "../qualityControlPageHelpers";
+
+describe("qc filter pure helpers", () => {
+  it("tokens and active card", () => {
+    expect(QC_TEST_TYPES).toContain("Weld Test");
+    expect(hasActiveQcFilters(createEmptyQcFilters())).toBe(false);
+    expect(
+      hasActiveQcFilters({ ...createEmptyQcFilters(), filterType: "Weld Test" }),
+    ).toBe(true);
+    expect(resolveActiveQcCard({ filterStatus: "Pending", filterResult: "all" })).toBe(
+      "pending",
+    );
+    expect(resolveActiveQcCard({ filterStatus: null, filterResult: "Pass" })).toBe("passed");
+  });
+});

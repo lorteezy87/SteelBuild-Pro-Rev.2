@@ -9,7 +9,15 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-import { filterLiveRecords, filterQcRecords, computeQcStats } from "./qualityControl/qualityControlPageHelpers";
+import {
+  filterLiveRecords,
+  filterQcRecords,
+  computeQcStats,
+  QC_TEST_TYPES,
+  hasActiveQcFilters,
+  resolveActiveQcCard,
+  createEmptyQcFilters,
+} from "./qualityControl/qualityControlPageHelpers";
 
 import { findById } from "@/pages/shared/findById";
 export default function QualityControl() {
@@ -70,7 +78,7 @@ export default function QualityControl() {
 
   const selectedProject = findById(projects, projectId);
 
-  const hasActiveFilters = filterType !== "all" || filterResult !== "all" || filterStatus !== null || searchQuery.trim() !== "";
+  const hasActiveFilters = hasActiveQcFilters({ filterType, filterResult, filterStatus, searchQuery });
 
   const filtered = useMemo(
     () =>
@@ -86,30 +94,17 @@ export default function QualityControl() {
   const { passRate, total, passed, failed, conditional, pending } = computeQcStats(qcRecords);
   const stats = { total, passed, failed, conditional, pending };
 
-  const types = [
-    "Material Certificate",
-    "Tensile Test",
-    "Hardness Test",
-    "Impact Test",
-    "NDT - Ultrasonic",
-    "NDT - Radiography",
-    "Weld Test",
-    "Coating Test",
-  ];
+  const types = QC_TEST_TYPES;
 
   const clearFilters = () => {
-    setFilterType("all");
-    setFilterResult("all");
-    setFilterStatus(null);
-    setSearchQuery("");
+    const empty = createEmptyQcFilters();
+    setFilterType(empty.filterType);
+    setFilterResult(empty.filterResult);
+    setFilterStatus(empty.filterStatus);
+    setSearchQuery(empty.searchQuery);
   };
 
-  /* Determine which stat card is "active" */
-  const activeCard =
-    filterStatus === "Pending" ? "pending"
-    : filterResult === "Pass" && filterStatus === null ? "passed"
-    : filterResult === "Fail" && filterStatus === null ? "failed"
-    : null;
+  const activeCard = resolveActiveQcCard({ filterStatus, filterResult });
 
   return (
     <div

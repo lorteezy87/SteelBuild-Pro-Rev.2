@@ -58,3 +58,54 @@ export function computeQcStats(qcRecords: QcRecordLike[]) {
       : 0;
   return { ...stats, conclusiveCount, passRate };
 }
+
+export const QC_TEST_TYPES = [
+  "Material Certificate",
+  "Tensile Test",
+  "Hardness Test",
+  "Impact Test",
+  "NDT - Ultrasonic",
+  "NDT - Radiography",
+  "Weld Test",
+  "Coating Test",
+] as const;
+
+export function hasActiveQcFilters(opts: {
+  filterType: string;
+  filterResult: string;
+  filterStatus: string | null;
+  searchQuery: string;
+}): boolean {
+  return (
+    opts.filterType !== "all"
+    || opts.filterResult !== "all"
+    || opts.filterStatus !== null
+    || Boolean((opts.searchQuery || "").trim())
+  );
+}
+
+/** Which KPI card is currently driving the filter (for active highlight). */
+export function resolveActiveQcCard(opts: {
+  filterStatus: string | null;
+  filterResult: string;
+}): "pending" | "passed" | "failed" | null {
+  if (opts.filterStatus === "Pending") return "pending";
+  if (opts.filterResult === "Pass" && opts.filterStatus === null) return "passed";
+  if (opts.filterResult === "Fail" && opts.filterStatus === null) return "failed";
+  return null;
+}
+
+export function createEmptyQcFilters(): {
+  filterType: string;
+  filterResult: string;
+  filterStatus: string | null;
+  searchQuery: string;
+} {
+  return {
+    filterType: "all",
+    filterResult: "all",
+    filterStatus: null,
+    searchQuery: "",
+  };
+}
+
