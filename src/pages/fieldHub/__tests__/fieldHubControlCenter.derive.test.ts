@@ -3,7 +3,7 @@
  * No React, no network — pure function.
  */
 import { describe, it, expect, afterAll, vi } from "vitest";
-import { buildFieldHubSummary } from "../fieldHubControlCenter.derive";
+import { buildFieldHubSummary, filterFieldActivityRows } from "../fieldHubControlCenter.derive";
 import type { DailyLogRecord, InspectionRecord, SafetyIncidentRecord, PunchlistItemRecord } from "../fieldHubControlCenter.derive";
 
 // Pin today to a known date so date-sensitive KPIs are deterministic.
@@ -191,5 +191,27 @@ describe("buildFieldHubSummary — activity phase", () => {
     // No task index → falls back to deriving from the log's own text.
     expect(rows[0].phase).toBe("Fabrication");
     expect(rows[0].phaseSource).toBe("derived");
+  });
+});
+
+describe("filterFieldActivityRows", () => {
+  const rows = [
+    { activity: "Weld column", location: "Grid A", reportedBy: "Ann", type: "Daily Log", phase: "Fabrication" },
+    { activity: "Inspect bolts", location: "Grid B", reportedBy: "Bob", type: "Inspection", phase: "Erection" },
+    { activity: "Near miss", location: "Yard", reportedBy: "Ann", type: "Safety", phase: "Fabrication" },
+  ] as any[];
+
+  it("filters by type and phase", () => {
+    expect(filterFieldActivityRows(rows, { typeFilter: "Inspection" }).map((r) => r.activity)).toEqual(["Inspect bolts"]);
+    expect(filterFieldActivityRows(rows, { phaseFilter: "Fabrication" })).toHaveLength(2);
+  });
+
+  it("searches activity/location/reporter/type/phase", () => {
+    expect(filterFieldActivityRows(rows, { search: "yard" }).map((r) => r.type)).toEqual(["Safety"]);
+    expect(filterFieldActivityRows(rows, { search: "ann", typeFilter: "Daily Log" })).toHaveLength(1);
+  });
+
+  it("All / empty leaves rows intact", () => {
+    expect(filterFieldActivityRows(rows, { typeFilter: "All", phaseFilter: "All", search: "" })).toHaveLength(3);
   });
 });

@@ -369,3 +369,31 @@ export function buildFieldHubSummary(
     activityRows: allRows,
   };
 }
+
+/** Client-side activity table filter: type + phase + multi-field search. */
+export function filterFieldActivityRows<T extends FieldActivityRow>(
+  activityRows: T[] | null | undefined,
+  opts: { typeFilter?: string; phaseFilter?: string; search?: string } = {},
+): T[] {
+  let rows = activityRows || [];
+  const typeFilter = opts.typeFilter;
+  const phaseFilter = opts.phaseFilter;
+  if (typeFilter && typeFilter !== "All") {
+    rows = rows.filter((r) => r.type === typeFilter);
+  }
+  if (phaseFilter && phaseFilter !== "All") {
+    rows = rows.filter((r) => r.phase === phaseFilter);
+  }
+  if ((opts.search || "").trim()) {
+    const q = (opts.search || "").trim().toLowerCase();
+    rows = rows.filter(
+      (r) =>
+        r.activity.toLowerCase().includes(q) ||
+        r.location.toLowerCase().includes(q) ||
+        r.reportedBy.toLowerCase().includes(q) ||
+        r.type.toLowerCase().includes(q) ||
+        (r.phase ?? "").toLowerCase().includes(q),
+    );
+  }
+  return rows;
+}

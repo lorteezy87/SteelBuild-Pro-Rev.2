@@ -43,6 +43,7 @@ import {
   fmtHours,
   fmtPct,
   varianceTone,
+  enrichBudgetHourTableRows,
 } from "./budgetHoursControlCenter.derive";
 import type { BudgetHourRow, WorkPackageRow } from "./budgetHoursControlCenter.derive";
 import BhChartRow from "./BhChartRow";
@@ -136,42 +137,10 @@ export default function BudgetHoursControlCenter({
   const s = useMemo(() => buildBudgetHoursSummary(rows, wpsById), [rows, wpsById]);
 
   // Enrich filteredRows with derived columns for the DataTable
-  const tableRows: TableRow[] = useMemo(() => {
-    return filteredRows.map((r) => {
-      const linked = r.metadata?.linked_work_package_ids;
-      const isLinked = Array.isArray(linked) && linked.length > 0;
-      let shopActual = Number(r.shop_hours_actual) || 0;
-      let fieldActual = Number(r.field_hours_actual) || 0;
-      if (isLinked) {
-        shopActual = 0;
-        fieldActual = 0;
-        for (const id of linked) {
-          const wp = wpsById.get(id);
-          if (!wp) continue;
-          shopActual += Number(wp.shop_hours_actual) || 0;
-          fieldActual += Number(wp.field_hours_actual) || 0;
-        }
-      }
-      const shopBudget = Number(r.shop_hours_budget) || 0;
-      const fieldBudget = Number(r.field_hours_budget) || 0;
-      const totalBudget = shopBudget + fieldBudget;
-      const totalActual = shopActual + fieldActual;
-      const shopVarPct = shopBudget <= 0 ? (shopActual > 0 ? 100 : 0) : ((shopActual - shopBudget) / shopBudget) * 100;
-      const fieldVarPct = fieldBudget <= 0 ? (fieldActual > 0 ? 100 : 0) : ((fieldActual - fieldBudget) / fieldBudget) * 100;
-      const totalVarPct = totalBudget <= 0 ? (totalActual > 0 ? 100 : 0) : ((totalActual - totalBudget) / totalBudget) * 100;
-      return {
-        ...r,
-        _shopActual: shopActual,
-        _fieldActual: fieldActual,
-        _shopVarPct: shopVarPct,
-        _fieldVarPct: fieldVarPct,
-        _totalBudget: totalBudget,
-        _totalActual: totalActual,
-        _totalVarPct: totalVarPct,
-        _isLinked: isLinked,
-      };
-    });
-  }, [filteredRows, wpsById]);
+  const tableRows: TableRow[] = useMemo(
+    () => enrichBudgetHourTableRows(filteredRows, wpsById) as TableRow[],
+    [filteredRows, wpsById],
+  );
 
   // ── Hero chips ──
   const heroChips = [

@@ -28,7 +28,7 @@ import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import { FIELD_PHASES } from "@/lib/field/fieldPhase";
 import PhaseBadge from "@/components/field/PhaseBadge";
-import { buildFieldHubSummary } from "./fieldHubControlCenter.derive";
+import { buildFieldHubSummary, filterFieldActivityRows } from "./fieldHubControlCenter.derive";
 import type {
   DailyLogRecord,
   InspectionRecord,
@@ -197,27 +197,10 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
   ];
 
   // ── Filtered activity rows ─────────────────────────────────────────────────
-  const filtered: FieldActivityRow[] = useMemo(() => {
-    let rows = s.activityRows;
-    if (typeFilter && typeFilter !== "All") {
-      rows = rows.filter((r) => r.type === typeFilter);
-    }
-    if (phaseFilter && phaseFilter !== "All") {
-      rows = rows.filter((r) => r.phase === phaseFilter);
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      rows = rows.filter(
-        (r) =>
-          r.activity.toLowerCase().includes(q) ||
-          r.location.toLowerCase().includes(q) ||
-          r.reportedBy.toLowerCase().includes(q) ||
-          r.type.toLowerCase().includes(q) ||
-          (r.phase ?? "").toLowerCase().includes(q),
-      );
-    }
-    return rows;
-  }, [s.activityRows, typeFilter, phaseFilter, search]);
+  const filtered: FieldActivityRow[] = useMemo(
+    () => filterFieldActivityRows(s.activityRows, { typeFilter, phaseFilter, search }),
+    [s.activityRows, typeFilter, phaseFilter, search],
+  );
 
   // ── Row click dispatcher ───────────────────────────────────────────────────
   // Every row type must be represented here — a missing branch reads to the

@@ -195,6 +195,33 @@ export function effectiveActuals(
   return { shop, field, linked: true };
 }
 
+/** Enrich budget rows with derived actuals / variance columns for the DataTable. */
+export function enrichBudgetHourTableRows<T extends BudgetHourRow>(
+  filteredRows: T[] | null | undefined,
+  wpsById: Map<string, WorkPackageRow>,
+) {
+  return (filteredRows || []).map((r) => {
+    const eff = effectiveActuals(r, wpsById);
+    const shopActual = eff.shop;
+    const fieldActual = eff.field;
+    const shopBudget = Number(r.shop_hours_budget) || 0;
+    const fieldBudget = Number(r.field_hours_budget) || 0;
+    const totalBudget = shopBudget + fieldBudget;
+    const totalActual = shopActual + fieldActual;
+    return {
+      ...r,
+      _shopActual: shopActual,
+      _fieldActual: fieldActual,
+      _shopVarPct: variancePct(shopBudget, shopActual),
+      _fieldVarPct: variancePct(fieldBudget, fieldActual),
+      _totalBudget: totalBudget,
+      _totalActual: totalActual,
+      _totalVarPct: variancePct(totalBudget, totalActual),
+      _isLinked: eff.linked,
+    };
+  });
+}
+
 function toScopeItemPanelRow(
   row: BudgetHourRow,
   wpsById: Map<string, WorkPackageRow>,

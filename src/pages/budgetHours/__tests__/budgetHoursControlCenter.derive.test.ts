@@ -6,7 +6,9 @@ import { describe, it, expect } from "vitest";
 import {buildBudgetHoursSummary,
   variancePct,
   fmtPct,
-  varianceTone, buildBudgetHoursCsvString} from "../budgetHoursControlCenter.derive";
+  varianceTone, buildBudgetHoursCsvString,
+  enrichBudgetHourTableRows,
+  effectiveActuals} from "../budgetHoursControlCenter.derive";
 import type { BudgetHourRow } from "../budgetHoursControlCenter.derive";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -227,5 +229,34 @@ describe("buildBudgetHoursCsvString", () => {
     const csv = buildBudgetHoursCsvString([["a", "b"]]);
     expect(csv).toContain('"a"');
     expect(csv.split("\n").length).toBeGreaterThan(1);
+  });
+});
+
+describe("enrichBudgetHourTableRows", () => {
+  it("uses manual actuals when not linked", () => {
+    const rows = [makeRow({ shop_hours_actual: 10, field_hours_actual: 5, shop_hours_budget: 20, field_hours_budget: 10 })];
+    const enriched = enrichBudgetHourTableRows(rows, new Map());
+    expect(enriched[0]._shopActual).toBe(10);
+    expect(enriched[0]._fieldActual).toBe(5);
+    expect(enriched[0]._isLinked).toBe(false);
+    expect(enriched[0]._totalBudget).toBe(30);
+    expect(enriched[0]._totalActual).toBe(15);
+  });
+
+  it("rolls actuals from linked work packages", () => {
+    const rows = [makeRow({
+      shop_hours_actual: 999,
+      field_hours_actual: 999,
+      metadata: { linked_work_package_ids: ["wp1", "wp2"] },
+    })];
+    const wps = new Map([
+      ["wp1", { id: "wp1", shop_hours_actual: 3, field_hours_actual: 1 }],
+      ["wp2", { id: "wp2", shop_hours_actual: 2, field_hours_actual: 4 }],
+    ] as any);
+    const enriched = enrichBudgetHourTableRows(rows, wps);
+    expect(enriched[0]._shopActual).toBe(5);
+    expect(enriched[0]._fieldActual).toBe(5);
+    expect(enriched[0]._isLinked).toBe(true);
+    expect(effectiveActuals(rows[0], wps)).toEqual({ shop: 5, field: 5, linked: true });
   });
 });

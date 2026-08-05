@@ -35,6 +35,7 @@ import {
 import {
   downloadProductionStatusCsv as exportProductionCSV,
   filterProductionPieces,
+  computeDrawingCoverage,
 } from "./productionStatus/productionStatusPageHelpers";
 import {
   applySelectionChecked,
@@ -93,15 +94,10 @@ export default function ProductionStatus() {
     setSelectedIds(new Set());
   }, [search, stageFilter, projectId]);
 
-  const drawingCoverage = useMemo(() => {
-    const total = filtered.length;
-    if (!total) return { total: 0, linked: 0, pct: 0 };
-    let linked = 0;
-    for (const p of filtered) {
-      if (pieceDrawingMap.has(normalizePieceMark(p.piece_mark))) linked += 1;
-    }
-    return { total, linked, pct: Math.round((linked / total) * 100) };
-  }, [filtered, pieceDrawingMap]);
+  const drawingCoverage = useMemo(
+    () => computeDrawingCoverage(filtered, pieceDrawingMap, normalizePieceMark),
+    [filtered, pieceDrawingMap],
+  );
 
   const bulkStageMutation = useMutation({
     mutationFn: (stage) =>

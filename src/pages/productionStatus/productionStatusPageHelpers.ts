@@ -92,3 +92,21 @@ export function filterProductionPieces<
     );
   });
 }
+
+/** Drawing-link coverage for the filtered production piece list. */
+export function computeDrawingCoverage<
+  T extends { piece_mark?: string | null },
+>(
+  filtered: T[] | null | undefined,
+  pieceDrawingMap: Map<string, unknown> | { has: (key: string) => boolean },
+  normalizePieceMark: (mark: string | null | undefined) => string,
+): { total: number; linked: number; pct: number } {
+  const list = filtered || [];
+  const total = list.length;
+  if (!total) return { total: 0, linked: 0, pct: 0 };
+  let linked = 0;
+  for (const p of list) {
+    if (pieceDrawingMap.has(normalizePieceMark(p.piece_mark))) linked += 1;
+  }
+  return { total, linked, pct: Math.round((linked / total) * 100) };
+}
