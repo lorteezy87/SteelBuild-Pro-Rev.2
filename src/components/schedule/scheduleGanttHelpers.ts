@@ -437,6 +437,25 @@ export function ganttTint(color: string, percent: number): string {
 export const BAR_HEIGHT = 18;
 export const BAR_RADIUS = 4;
 
+/** Absolute shell for task bars (left/width/height placement). */
+export function ganttBarShellStyle(
+  leftPx: number,
+  widthPx: number,
+  height: number = BAR_HEIGHT,
+): Record<string, string | number> {
+  return {
+    position: "absolute",
+    left: leftPx,
+    width: widthPx,
+    height,
+    top: "50%",
+    transform: "translateY(-50%)",
+    overflow: "visible",
+    display: "flex",
+    alignItems: "center",
+  };
+}
+
 /** Header row height (px) for ScheduleGantt chrome. */
 export const HEAD_H = 40;
 

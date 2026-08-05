@@ -28,7 +28,7 @@ import {
   sanitizeTaskName,
   statusColor,
 } from "./scheduleTaskUtils";
-import { BAR_HEIGHT, BAR_RADIUS } from "./scheduleGanttHelpers";
+import { BAR_RADIUS, ganttBarShellStyle } from "./scheduleGanttHelpers";
 
 const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
@@ -318,17 +318,7 @@ export function TaskBar({ task, leftPx, widthPx }) {
   // is visible at shell level (so an outside label can paint past the
   // right edge); the colored fill inside has its own overflow:hidden
   // for clean rounded corners.
-  const shellStyle = {
-    position: "absolute",
-    left: leftPx,
-    width: w,
-    height: BAR_HEIGHT,
-    top: "50%",
-    transform: "translateY(-50%)",
-    overflow: "visible",
-    display: "flex",
-    alignItems: "center",
-  };
+  const shellStyle = ganttBarShellStyle(leftPx, w);
 
   if (task.status === "Complete") {
     const c = GANTT_STATUS_HEX.complete;

@@ -10,7 +10,7 @@ import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 
-const DELTA_LABEL = {
+export const DELTA_LABEL = {
   grid_shift: "grid shift", connection_change: "connection change",
   dimension_change: "dimension change", detail_revised: "detail revision",
   callout_added: "callout added", callout_removed: "callout removed",

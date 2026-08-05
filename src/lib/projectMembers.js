@@ -25,7 +25,7 @@ export const ASSIGNABLE_ROLES = ["admin", "pm", "field", "viewer"];
 // Default role assigned when adding a new member. Matches the DB DEFAULT.
 export const DEFAULT_ROLE = "pm";
 
-const ROLE_LABELS = {
+export const ROLE_LABELS = {
   owner: "Owner",
   admin: "Admin",
   pm: "PM",

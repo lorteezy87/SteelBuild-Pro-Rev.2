@@ -14,6 +14,7 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { usePermissions } from "@/services/permissions";
 import { AuthContext } from "@/lib/AuthContext";
 import { useDestructiveAudit } from './useDestructiveAudit';
+import { buildSecureDeleteStyles } from './secureDeleteDialogHelpers';
 
 export default function SecureDeleteDialog({
   open,
@@ -74,105 +75,7 @@ export default function SecureDeleteDialog({
     if (e.key === 'Enter' && canConfirm) handleConfirm();
   };
 
-  const S = {
-    overlay: {
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.70)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 16,
-    },
-    dialog: {
-      background: 'var(--bg-surface-secondary)',
-      border: '1px solid var(--danger-border)',
-      borderLeft: '4px solid var(--status-error)',
-      borderRadius: 12,
-      padding: '24px 28px',
-      width: 420,
-      maxWidth: '100%',
-      boxShadow: 'var(--shadow-lg)',
-    },
-    header: {
-      display: 'flex', alignItems: 'center',
-      gap: 10, marginBottom: 14,
-    },
-    headerText: {
-      fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
-      letterSpacing: '0.10em', color: 'var(--status-error)',
-      textTransform: 'uppercase',
-    },
-    desc: {
-      fontFamily: 'var(--font-body)', fontSize: 13,
-      color: 'var(--text-secondary)',
-      lineHeight: 1.5, marginBottom: 14,
-    },
-    ownerBox: {
-      background: 'var(--hover-bg)',
-      border: '1px solid var(--border-default)',
-      borderRadius: 6, padding: '8px 12px',
-      marginBottom: 14,
-    },
-    ownerLabel: {
-      fontFamily: 'var(--font-mono)', fontSize: 8,
-      color: 'var(--text-muted)', letterSpacing: '0.08em',
-      textTransform: 'uppercase',
-    },
-    ownerValue: {
-      fontFamily: 'var(--font-body)', fontSize: 12, marginTop: 3,
-      color: isOwner ? 'var(--status-success)' : 'var(--status-warning)',
-    },
-    blockBox: {
-      background: 'var(--danger-muted)',
-      border: '1px solid var(--danger-border)',
-      borderRadius: 6, padding: '8px 12px',
-      marginBottom: 14,
-    },
-    blockText: {
-      fontFamily: 'var(--font-body)', fontSize: 12,
-      color: 'var(--status-error)', lineHeight: 1.45,
-    },
-    typeLabel: {
-      fontFamily: 'var(--font-mono)', fontSize: 8,
-      color: 'var(--text-muted)', letterSpacing: '0.08em',
-      textTransform: 'uppercase', marginBottom: 6, display: 'block',
-    },
-    typeInput: {
-      width: '100%', boxSizing: 'border-box',
-      background: 'var(--bg-input)',
-      border: `1px solid ${typed === typedValue
-        ? 'var(--success-border)'
-        : 'var(--border-default)'}`,
-      borderRadius: 6, padding: '8px 12px',
-      fontFamily: 'var(--font-mono)', fontSize: 12,
-      color: 'var(--text-primary)', outline: 'none',
-      transition: 'border-color 0.15s',
-    },
-    actions: {
-      display: 'flex', gap: 10,
-      justifyContent: 'flex-end', marginTop: 20,
-    },
-    cancelBtn: {
-      background: 'var(--hover-bg)',
-      border: '1px solid var(--border-default)',
-      borderRadius: 6, padding: '8px 18px',
-      fontFamily: 'var(--font-body)', fontSize: 12,
-      color: 'var(--text-secondary)',
-      cursor: 'pointer',
-    },
-    deleteBtn: {
-      background: canConfirm
-        ? 'var(--status-error)'
-        : 'var(--hover-bg)',
-      border: 'none',
-      borderRadius: 6, padding: '8px 20px',
-      fontFamily: 'var(--font-mono)', fontSize: 10,
-      fontWeight: 700, letterSpacing: '0.08em',
-      color: canConfirm
-        ? 'white'
-        : 'var(--text-muted)',
-      cursor: canConfirm ? 'pointer' : 'not-allowed',
-      transition: 'background 0.15s',
-    },
-  };
+  const S = buildSecureDeleteStyles({ isOwner, typed, typedValue, canConfirm });
 
   return (
     <div style={S.overlay} onClick={onClose} onKeyDown={handleKey}>
