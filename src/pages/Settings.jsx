@@ -20,48 +20,10 @@ import SystemTab from "@/components/settings/SystemTab.jsx";
 import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
 import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
 import SettingsControlCenter from "./settings/SettingsControlCenter";
+import { TAB_GROUPS } from "./settings/settingsTabGroups";
+import { useIsMobile } from "./settings/useIsMobile";
 
 // Settings are grouped into three levels: personal, workspace, admin.
-const TAB_GROUPS = [
-  {
-    id: 'personal',
-    label: 'My Settings',
-    tabs: [
-      { id: 'profile',       label: 'Profile',       icon: '\u{1F464}', desc: 'Your account information' },
-      { id: 'display',       label: 'Display',       icon: '\u{1F3A8}', desc: 'Theme, accent, accessibility, locale' },
-      { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules, KPI order, default project' },
-      { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts, digests, and quiet hours' },
-      { id: 'shortcuts',     label: 'Shortcuts',     icon: '⌨',    desc: 'Keyboard reference card' },
-    ],
-  },
-  {
-    id: 'setup-help',
-    label: 'Setup & Help',
-    tabs: [
-      { id: 'setup', label: 'Setup & Admin', icon: '🧩', desc: 'Onboarding, data exchange, integrations, users, feature flags, help' },
-    ],
-  },
-  {
-    id: 'admin',
-    label: 'Workspace',
-    adminOnly: true,
-    tabs: [
-      { id: 'roles',      label: 'Roles',      icon: '\u{1F451}', desc: 'Permissions and access', adminOnly: true },
-      { id: 'costcodes',  label: 'Cost Codes', icon: '\u{1F4B0}', desc: 'Default budget codes for new projects', adminOnly: true },
-      { id: 'system',     label: 'System',     icon: '\u2699',    desc: 'Data and app management', adminOnly: true },
-    ],
-  },
-];
-
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [breakpoint]);
-  return isMobile;
-}
 
 export default function Settings() {
   const authCtx = useContext(AuthContext);
