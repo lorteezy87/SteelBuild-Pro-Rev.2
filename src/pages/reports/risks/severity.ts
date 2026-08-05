@@ -93,3 +93,16 @@ export function bucketByMatrix(risks) {
 export function isActiveRisk(r) {
   return r.status !== "Closed" && r.status !== "Mitigated";
 }
+
+/** Risks in the selected matrix cell (or empty). */
+export function matrixCellRisks(grid, selectedCell) {
+  if (!selectedCell || !grid) return [];
+  const { p, i } = selectedCell;
+  return grid[p]?.[i] || [];
+}
+
+/** Total risks placed into valid matrix cells. */
+export function countMatrixPlaced(grid) {
+  if (!grid) return 0;
+  return grid.flat().reduce((sum, cellArr) => sum + (cellArr?.length || 0), 0);
+}

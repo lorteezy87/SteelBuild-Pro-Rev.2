@@ -9,6 +9,9 @@ import {
   deltaDisplay,
   numOrZero,
   trimNumber,
+  resolveFractionParts,
+  validateFractionToDecimalInputs,
+  formatFeetInchesPreview,
 } from "./decimalFractionConverterHelpers";
 import {
   decimalFeetToFtIn,
@@ -238,25 +241,19 @@ export function FractionToDecimalPanel() {
   const [customNum, setCustomNum]   = useState("");
   const [customDen, setCustomDen]   = useState("16");
 
-  const fraction = useMemo(() => customMode
-    ? { num: parseFloat(customNum) || 0, den: parseFloat(customDen) || 1 }
-    : COMMON_FRACTIONS[fracIdx], [customMode, customNum, customDen, fracIdx]);
+  const fraction = useMemo(
+    () => resolveFractionParts(customMode, customNum, customDen, COMMON_FRACTIONS[fracIdx]),
+    [customMode, customNum, customDen, fracIdx],
+  );
 
   // Validation — collect bad fields so we can render them inline rather
   // than silently producing NaN.
-  const errors = useMemo(() => {
-    const e = [];
-    const f = numOrZero(feet);
-    const i = numOrZero(inches);
-    if (f < 0 || i < 0) e.push("Negative feet / inches are not allowed.");
-    if (customMode) {
-      const cn = parseFloat(customNum);
-      const cd = parseFloat(customDen);
-      if (customNum !== "" && (!Number.isFinite(cn) || cn < 0)) e.push("Numerator must be non-negative.");
-      if (!Number.isFinite(cd) || cd <= 0) e.push("Denominator must be a positive number.");
-    }
-    return e;
-  }, [feet, inches, customNum, customDen, customMode]);
+  const errors = useMemo(
+    () => validateFractionToDecimalInputs({
+      feet, inches, customMode, customNum, customDen, numOrZero,
+    }),
+    [feet, inches, customNum, customDen, customMode],
+  );
 
   const decFt = useMemo(() => {
     if (errors.length) return null;
@@ -271,15 +268,7 @@ export function FractionToDecimalPanel() {
   // Build a live preview of what the user typed, in inspector-friendly form
   const preview = useMemo(() => {
     if (errors.length) return null;
-    const f = numOrZero(feet);
-    const i = numOrZero(inches);
-    const frac = (fraction.num > 0 && fraction.den > 0)
-      ? `${fraction.num}/${fraction.den}`
-      : "";
-    const inchPart = frac
-      ? (i > 0 ? `${i} ${frac}"` : `${frac}"`)
-      : `${i}"`;
-    return `${f}'-${inchPart}`;
+    return formatFeetInchesPreview(feet, inches, fraction, numOrZero);
   }, [feet, inches, fraction, errors.length]);
 
   const copy = async (text) => {

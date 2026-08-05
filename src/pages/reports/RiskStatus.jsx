@@ -22,6 +22,8 @@ import {
   computeSeverity,
   severityColor,
   SEVERITIES,
+  matrixCellRisks,
+  countMatrixPlaced,
 } from "./risks/severity";
 import RiskFormModal from "@/components/risks/RiskFormModal";
 import { scopeRisksByProject } from "./risksDashboardHelpers";
@@ -48,18 +50,13 @@ export default function RiskStatus() {
   const grid = useMemo(() => bucketByMatrix(scoped), [scoped]);
 
   // Selected cell's risk list — used by the side panel below the matrix.
-  const cellRisks = useMemo(() => {
-    if (!selectedCell) return [];
-    const { p, i } = selectedCell;
-    return grid[p]?.[i] || [];
-  }, [selectedCell, grid]);
+  const cellRisks = useMemo(
+    () => matrixCellRisks(grid, selectedCell),
+    [selectedCell, grid],
+  );
 
   const total = scoped.length;
-  const placedCount = useMemo(
-    () =>
-      grid.flat().reduce((sum, cellArr) => sum + cellArr.length, 0),
-    [grid]
-  );
+  const placedCount = useMemo(() => countMatrixPlaced(grid), [grid]);
 
   return (
     <ReportShell

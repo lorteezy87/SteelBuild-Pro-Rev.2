@@ -41,3 +41,55 @@ export function trimNumber(n: number): string {
   const fixed = n.toFixed(6);
   return fixed.replace(/\.?0+$/, "");
 }
+
+export type FractionParts = { num: number; den: number };
+
+export function resolveFractionParts(
+  customMode: boolean,
+  customNum: string,
+  customDen: string,
+  common: FractionParts,
+): FractionParts {
+  if (customMode) {
+    return { num: parseFloat(customNum) || 0, den: parseFloat(customDen) || 1 };
+  }
+  return common;
+}
+
+export function validateFractionToDecimalInputs(opts: {
+  feet: unknown;
+  inches: unknown;
+  customMode: boolean;
+  customNum: string;
+  customDen: string;
+  numOrZero: (raw: unknown) => number;
+}): string[] {
+  const e: string[] = [];
+  const f = opts.numOrZero(opts.feet);
+  const i = opts.numOrZero(opts.inches);
+  if (f < 0 || i < 0) e.push("Negative feet / inches are not allowed.");
+  if (opts.customMode) {
+    const cn = parseFloat(opts.customNum);
+    const cd = parseFloat(opts.customDen);
+    if (opts.customNum !== "" && (!Number.isFinite(cn) || cn < 0)) e.push("Numerator must be non-negative.");
+    if (!Number.isFinite(cd) || cd <= 0) e.push("Denominator must be a positive number.");
+  }
+  return e;
+}
+
+export function formatFeetInchesPreview(
+  feet: unknown,
+  inches: unknown,
+  fraction: FractionParts,
+  numOrZero: (raw: unknown) => number,
+): string {
+  const f = numOrZero(feet);
+  const i = numOrZero(inches);
+  const frac = (fraction.num > 0 && fraction.den > 0)
+    ? `${fraction.num}/${fraction.den}`
+    : "";
+  const inchPart = frac
+    ? (i > 0 ? `${i} ${frac}"` : `${frac}"`)
+    : `${i}"`;
+  return `${f}'-${inchPart}`;
+}
