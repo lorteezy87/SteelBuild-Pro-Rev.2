@@ -1,13 +1,23 @@
 import React, { useState } from 'react';
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { differenceInDays } from 'date-fns';
-import { formatDate, formatDateShort, parseUTCDate } from '@/components/shared/formatters';
+import { formatDate, formatDateShort } from '@/components/shared/formatters';
 import { X, BarChart2, CheckSquare, Calendar, FileText, AlertTriangle, Package, DollarSign, ClipboardCheck, PauseCircle, PlayCircle, Archive } from 'lucide-react';
 import { formatCurrency } from '@/components/shared/formatters';
 import ProjectHandoffChecklist from '@/components/projects/ProjectHandoffChecklist';
 import { useProjectContext } from '@/components/shared/ProjectContext';
 import { toast } from 'sonner';
+import {
+  buildOverviewMetrics,
+  buildWorkPackageTabMetrics,
+  groupScheduleTasksByPhase,
+  buildCommercialMetrics,
+  buildDrawingsTabMetrics,
+  isDrawingOverdue,
+  buildRfisTabMetrics,
+  isRfiOverdue,
+  buildDeliveriesTabMetrics,
+} from '@/components/projects/projectDetailViewHelpers';
 
 const mono = { fontFamily: 'JetBrains Mono, monospace' };
 
@@ -87,16 +97,16 @@ function OverviewTab({ project, workPackages, rfis, changeOrders, deliveries }) 
   const phase  = PHASE_CONFIG[project.phase] || PHASE_CONFIG.Detailing;
   const health = HEALTH_CONFIG[project.health_status] || HEALTH_CONFIG['On Track'];
 
-  const completeWPs = workPackages.filter(w => w.status === 'Complete').length;
-  const wpPct = workPackages.length > 0 ? Math.round((completeWPs / workPackages.length) * 100) : 0;
-  const openRFIs = rfis.filter(r => ['Open','Under Review'].includes(r.status)).length;
-  const overdueRFIs = rfis.filter(r => r.due_date && parseUTCDate(r.due_date) < new Date() && !['Answered','Closed'].includes(r.status)).length;
-  const pendingCOs = changeOrders.filter(c => ['Submitted','Under Review'].includes(c.status)).length;
-  const approvedCOVal = changeOrders.filter(c => c.status === 'Approved').reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-  const pendingDeliveries = deliveries.filter(d => !['Delivered','Cancelled','Rejected'].includes(d.status)).length;
-
-  const target = project.target_completion_date ? parseUTCDate(project.target_completion_date) : null;
-  const daysLeft = target ? differenceInDays(target, new Date()) : null;
+  const {
+    completeWPs,
+    wpPct,
+    openRFIs,
+    overdueRFIs,
+    pendingCOs,
+    approvedCOVal,
+    pendingDeliveries,
+    daysLeft,
+  } = buildOverviewMetrics({ workPackages, rfis, changeOrders, deliveries, project });
 
   return (
     <div>
@@ -178,8 +188,7 @@ function WorkPackagesTab({ workPackages }) {
 
   if (!workPackages.length) return <EmptyState label="No Work Packages" />;
 
-  const done = workPackages.filter(w => w.status === 'Complete').length;
-  const inProg = workPackages.filter(w => w.status === 'In Progress').length;
+  const { done, inProg, totalTonnage } = buildWorkPackageTabMetrics(workPackages);
 
   return (
     <div>
@@ -187,7 +196,7 @@ function WorkPackagesTab({ workPackages }) {
         { label: 'Total', value: workPackages.length },
         { label: 'Complete', value: done, color: 'var(--status-success)' },
         { label: 'In Progress', value: inProg, color: 'var(--accent)' },
-        { label: 'Total Tonnage', value: `${workPackages.reduce((s,w) => s+(Number(w.tonnage)||0),0).toFixed(1)}T` },
+        { label: 'Total Tonnage', value: `${totalTonnage.toFixed(1)}T` },
       ]} />
       <SectionCard>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 80px 70px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
@@ -235,12 +244,7 @@ function ScheduleTab({ scheduleTasks }) {
 
   if (!scheduleTasks.length) return <EmptyState label="No Schedule Tasks" />;
 
-  const byPhase = scheduleTasks.reduce((acc, t) => {
-    const p = t.phase || 'General';
-    if (!acc[p]) acc[p] = [];
-    acc[p].push(t);
-    return acc;
-  }, {});
+  const byPhase = groupScheduleTasksByPhase(scheduleTasks);
 
   return (
     <div>
@@ -281,14 +285,14 @@ function DrawingsTab({ drawings }) {
 
   if (!drawings.length) return <EmptyState label="No Drawings" />;
 
-  const overdue = drawings.filter(d => d.due_date && parseUTCDate(d.due_date) < new Date() && d.stage !== 'Released').length;
+  const { overdue, released, inReview } = buildDrawingsTabMetrics(drawings);
 
   return (
     <div>
       <KpiStrip items={[
         { label: 'Total', value: drawings.length },
-        { label: 'Released', value: drawings.filter(d => d.stage === 'Released').length, color: 'var(--status-success)' },
-        { label: 'In Review', value: drawings.filter(d => ['IFA','OFA','BFA','OFS','IFC'].includes(d.stage)).length, color: 'var(--accent)' },
+        { label: 'Released', value: released, color: 'var(--status-success)' },
+        { label: 'In Review', value: inReview, color: 'var(--accent)' },
         { label: 'Overdue', value: overdue, color: overdue > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
       ]} />
       <SectionCard>
@@ -298,7 +302,7 @@ function DrawingsTab({ drawings }) {
           ))}
         </div>
         {drawings.map(d => {
-          const od = d.due_date && parseUTCDate(d.due_date) < new Date() && d.stage !== 'Released';
+          const od = isDrawingOverdue(d);
           return (
             <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 80px 80px', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: od ? '3px solid var(--status-error)' : '3px solid transparent' }}>
               <div style={{ ...mono, fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>{d.sheet_number || '—'}</div>
@@ -331,8 +335,7 @@ function RFIsTab({ rfis }) {
 
   if (!rfis.length) return <EmptyState label="No RFIs" />;
 
-  const open = rfis.filter(r => ['Open','Under Review'].includes(r.status)).length;
-  const overdue = rfis.filter(r => r.due_date && parseUTCDate(r.due_date) < new Date() && !['Answered','Closed'].includes(r.status)).length;
+  const { open, overdue, answered } = buildRfisTabMetrics(rfis);
 
   return (
     <div>
@@ -340,7 +343,7 @@ function RFIsTab({ rfis }) {
         { label: 'Total', value: rfis.length },
         { label: 'Open', value: open, color: 'var(--status-warning)' },
         { label: 'Overdue', value: overdue, color: overdue > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
-        { label: 'Answered', value: rfis.filter(r => r.status === 'Answered').length, color: 'var(--status-success)' },
+        { label: 'Answered', value: answered, color: 'var(--status-success)' },
       ]} />
       <SectionCard>
         <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 70px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
@@ -349,7 +352,7 @@ function RFIsTab({ rfis }) {
           ))}
         </div>
         {rfis.map(r => {
-          const od = r.due_date && parseUTCDate(r.due_date) < new Date() && !['Answered','Closed'].includes(r.status);
+          const od = isRfiOverdue(r);
           return (
             <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 70px 80px 80px', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: od ? '3px solid var(--status-error)' : `3px solid ${PRIO_COLOR[r.priority] || 'transparent'}` }}>
               <div style={{ ...mono, fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>{r.rfi_number || '—'}</div>
@@ -377,8 +380,7 @@ function DeliveriesTab({ deliveries }) {
 
   if (!deliveries.length) return <EmptyState label="No Deliveries" />;
 
-  const open = deliveries.filter(d => !['Delivered','Rejected'].includes(d.status)).length;
-  const delivered = deliveries.filter(d => d.status === 'Delivered').length;
+  const { open, delivered } = buildDeliveriesTabMetrics(deliveries);
 
   return (
     <div>
@@ -419,11 +421,14 @@ function CommercialTab({ project, changeOrders, costCodes }) {
     Void:          'var(--text-muted)',
   };
 
-  const totalBudget  = costCodes.reduce((s,c) => s+(Number(c.budget_amount)||0), 0);
-  const totalActual  = costCodes.reduce((s,c) => s+(Number(c.actual_cost)||0), 0);
-  const totalCommit  = costCodes.reduce((s,c) => s+(Number(c.committed_cost)||0), 0);
-  const approvedCOVal = changeOrders.filter(c=>c.status==='Approved').reduce((s,c)=>s+(Number(c.co_amount)||0),0);
-  const pendingCOVal  = changeOrders.filter(c=>['Submitted','Under Review'].includes(c.status)).reduce((s,c)=>s+(Number(c.co_amount)||0),0);
+  const {
+    totalBudget,
+    totalActual,
+    totalCommit,
+    approvedCOVal,
+    pendingCOVal,
+    revisedContract,
+  } = buildCommercialMetrics({ project, changeOrders, costCodes });
 
   return (
     <div>
@@ -431,7 +436,7 @@ function CommercialTab({ project, changeOrders, costCodes }) {
         { label: 'Original Contract', value: formatCurrency(Number(project.original_contract_value)||0) },
         { label: 'Approved COs', value: formatCurrency(approvedCOVal), color: approvedCOVal >= 0 ? 'var(--status-success)' : 'var(--status-error)' },
         { label: 'Pending COs', value: formatCurrency(pendingCOVal), color: pendingCOVal > 0 ? 'var(--status-warning)' : 'var(--text-muted)' },
-        { label: 'Revised Contract', value: formatCurrency((Number(project.original_contract_value)||0) + approvedCOVal) },
+        { label: 'Revised Contract', value: formatCurrency(revisedContract) },
       ]} />
 
       {costCodes.length > 0 && (
