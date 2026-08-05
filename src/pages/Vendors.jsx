@@ -10,6 +10,13 @@ import { exportToCSV } from "@/lib/csv";
 import { batchProcess } from "@/utils/batchProcess";
 import VendorControlCenter from "./vendors/VendorControlCenter";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import {
+  buildPerVendorStats,
+  filterVendors,
+  uniqueVendorTypes,
+  buildVendorCsvRows,
+  VENDOR_CSV_HEADERS,
+} from "./vendors/vendorsPageHelpers";
 
 export default function Vendors() {
   const qc = useQueryClient();
@@ -62,62 +69,10 @@ export default function Vendors() {
   });
 
   // ── Compute per-vendor stats from project data ──
-  const vendorStats = useMemo(() => {
-    const stats = {};
-    const normalize = (name) => (name || "").trim().toLowerCase();
-
-    // Deliveries by vendor
-    for (const d of deliveries) {
-      const key = normalize(d.vendor);
-      if (!key) continue;
-      if (!stats[key]) stats[key] = { deliveryCount: 0, onTimeCount: 0, lateCount: 0, deliveries: [], coCount: 0, coValue: 0, totalSpend: 0 };
-      stats[key].deliveryCount += 1;
-      stats[key].deliveries.push(d);
-      if (d.status === "Delivered") {
-        const scheduled = d.scheduled_date ? new Date(d.scheduled_date) : null;
-        const actual = d.actual_date ? new Date(d.actual_date) : null;
-        if (scheduled && actual) {
-          if (actual <= scheduled) stats[key].onTimeCount += 1;
-          else stats[key].lateCount += 1;
-        }
-      }
-    }
-
-    // COs by vendor (matching vendor field or description)
-    for (const co of changeOrders) {
-      // Try matching CO to vendor via reason/description or title
-      // COs don't have a direct vendor field, so we check if vendor name appears in title/description
-      for (const vendorName of Object.keys(stats)) {
-        if (normalize(co.title).includes(vendorName) || normalize(co.description).includes(vendorName)) {
-          stats[vendorName].coCount += 1;
-          stats[vendorName].coValue += Number(co.co_amount) || 0;
-        }
-      }
-    }
-
-    // Expenses by vendor
-    for (const exp of expenses) {
-      const key = normalize(exp.vendor);
-      if (!key) continue;
-      if (!stats[key]) stats[key] = { deliveryCount: 0, onTimeCount: 0, lateCount: 0, deliveries: [], coCount: 0, coValue: 0, totalSpend: 0 };
-      stats[key].totalSpend += Number(exp.amount) || 0;
-    }
-
-    // Compute on-time rates
-    for (const key of Object.keys(stats)) {
-      const s = stats[key];
-      const delivered = s.onTimeCount + s.lateCount;
-      s.onTimeRate = delivered > 0 ? Math.round((s.onTimeCount / delivered) * 100) : null;
-    }
-
-    // Map back to company_name (original casing)
-    const result = {};
-    for (const v of vendors) {
-      const key = normalize(v.company_name);
-      if (stats[key]) result[v.company_name] = stats[key];
-    }
-    return result;
-  }, [vendors, deliveries, changeOrders, expenses]);
+  const vendorStats = useMemo(
+    () => buildPerVendorStats(vendors, deliveries, changeOrders, expenses),
+    [vendors, deliveries, changeOrders, expenses],
+  );
 
   // ── Mutations ──
   const createMut = useMutation({
@@ -212,27 +167,16 @@ export default function Vendors() {
     setSelectedIds(checked ? new Set(filtered.map((v) => v.id)) : new Set());
 
   // ── Filters ──
-  const filtered = useMemo(() => vendors.filter(v => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || v.company_name?.toLowerCase().includes(q) || v.contact_person?.toLowerCase().includes(q) || v.vendor_type?.toLowerCase().includes(q);
-    const matchStatus = statusFilter === "all" || v.status === statusFilter;
-    const matchType = typeFilter === "all" || v.vendor_type === typeFilter;
-    return matchSearch && matchStatus && matchType;
-  }), [vendors, search, statusFilter, typeFilter]);
+  const filtered = useMemo(
+    () => filterVendors(vendors, { search, statusFilter, typeFilter }),
+    [vendors, search, statusFilter, typeFilter],
+  );
 
-  const types = [...new Set(vendors.map(v => v.vendor_type).filter(Boolean))].sort();
+  const types = useMemo(() => uniqueVendorTypes(vendors), [vendors]);
 
   const exportCSV = () => {
-    const headers = ["Company", "Type", "Contact", "Phone", "Email", "Status", "Preferred", "Deliveries", "On-Time %", "COs", "Spend"];
-    const rows = filtered.map(v => {
-      const stats = vendorStats[v.company_name] || {};
-      return [
-        v.company_name, v.vendor_type, v.contact_person, v.phone, v.email,
-        v.status, v.is_preferred ? "Yes" : "No",
-        stats.deliveryCount || 0, stats.onTimeRate != null ? `${stats.onTimeRate}%` : "N/A",
-        stats.coCount || 0, stats.totalSpend || 0,
-      ];
-    });
+    const headers = [...VENDOR_CSV_HEADERS];
+    const rows = buildVendorCsvRows(filtered, vendorStats);
     exportToCSV({ filename: "vendors.csv", headers, rows });
   };
 

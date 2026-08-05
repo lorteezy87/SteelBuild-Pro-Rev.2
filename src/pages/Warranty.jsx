@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import StatCard from "@/components/shared/StatCard";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
+import { filterWarranties, computeWarrantyStats } from "./warranty/warrantyPageHelpers";
 
 export default function Warranty() {
   const projectId = useProjectId();
@@ -88,41 +89,8 @@ export default function Warranty() {
     }
   };
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const filtered = warranties.filter((w) => {
-    const typeMatch = filterType === "all" || w.warranty_type === filterType;
-    let statusMatch = true;
-    if (filterStatus !== "all") {
-      if (!w.expiration_date) return false;
-      const expDate = new Date(w.expiration_date);
-      const daysUntilExpiry = Math.floor((expDate - today) / (1000 * 60 * 60 * 24));
-      if (filterStatus === "active") statusMatch = w.is_active && daysUntilExpiry > 0;
-      if (filterStatus === "expiring") statusMatch = w.is_active && daysUntilExpiry > 0 && daysUntilExpiry <= 90;
-      if (filterStatus === "expired") statusMatch = daysUntilExpiry <= 0;
-    }
-    return typeMatch && statusMatch;
-  });
-
-  const stats = {
-    total: warranties.length,
-    active: warranties.filter((w) => {
-      if (!w.expiration_date) return false;
-      const expDate = new Date(w.expiration_date);
-      return w.is_active && expDate > today;
-    }).length,
-    expiring: warranties.filter((w) => {
-      if (!w.expiration_date) return false;
-      const expDate = new Date(w.expiration_date);
-      const daysUntilExpiry = Math.floor((expDate - today) / (1000 * 60 * 60 * 24));
-      return w.is_active && daysUntilExpiry > 0 && daysUntilExpiry <= 90;
-    }).length,
-    expired: warranties.filter((w) => {
-      if (!w.expiration_date) return false;
-      const expDate = new Date(w.expiration_date);
-      return expDate <= today;
-    }).length,
-  };
+  const filtered = filterWarranties(warranties, { filterType, filterStatus });
+  const stats = computeWarrantyStats(warranties);
 
   const types = ["Material", "Structural Steel", "Connections", "Coating", "Welds", "Installation", "Equipment", "Other"];
 

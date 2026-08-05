@@ -49,3 +49,12 @@ export function filterRowsByLiveProjectIds<T extends RowWithProject>(
     (row) => row?.project_id && liveProjectIds.has(row.project_id),
   );
 }
+
+
+/** Project-scoped rows, optionally excluding soft-deleted. */
+export function filterRowsByProjectIdExcludingDeleted<
+  T extends RowWithProject & { is_deleted?: boolean | null },
+>(rows: T[], projectId: string | null | undefined): T[] {
+  if (!projectId) return [];
+  return (rows || []).filter((r) => r.project_id === projectId && !r.is_deleted);
+}

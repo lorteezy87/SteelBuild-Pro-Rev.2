@@ -12,6 +12,7 @@ import {
   buildLiveProjectIdSet,
   scopePortfolioRows as scopePortfolioRowsHelper,
   filterRowsByProjectId,
+  filterRowsByProjectIdExcludingDeleted,
 } from "./dashboard/dashboardPageHelpers";
 // Canonical control-center loading uses the same query set for all project views.
 const DashboardControlCenter = lazyWithRetry(() => import("./dashboardCC/DashboardControlCenter"));
@@ -221,22 +222,16 @@ export default function Dashboard() {
   const expenses   = useMemo(() => filterRowsByProjectId(allExpenses, pid), [allExpenses, pid]);
   const actionItems = useMemo(() => filterRowsByProjectId(allActionItems, pid), [allActionItems, pid]);
   const submittals    = useMemo(() => filterRowsByProjectId(allSubmittals, pid), [allSubmittals, pid]);
-  const drawings      = useMemo(() => (pid ? allDrawings.filter((d) => d.project_id === pid && !d.is_deleted) : []), [allDrawings, pid]);
-  const sovItems      = useMemo(() => (pid ? allSovItems.filter((s) => s.project_id === pid) : []), [allSovItems, pid]);
-  const scheduleTasks = useMemo(
-    () => (pid ? allScheduleTasks.filter((t) => t.project_id === pid) : []),
-    [allScheduleTasks, pid],
-  );
-  const drawingActivity = useMemo(
-    () => (pid ? allDrawingActivity.filter((a) => a.project_id === pid) : []),
-    [allDrawingActivity, pid],
-  );
-  const dailyLogs        = useMemo(() => (pid ? allDailyLogs.filter((r) => r.project_id === pid)        : []), [allDailyLogs, pid]);
-  const photosForProject = useMemo(() => (pid ? allPhotos.filter((r) => r.project_id === pid)           : []), [allPhotos, pid]);
-  const punchlistItems   = useMemo(() => (pid ? allPunchlist.filter((r) => r.project_id === pid)        : []), [allPunchlist, pid]);
-  const inspections      = useMemo(() => (pid ? allInspections.filter((r) => r.project_id === pid)      : []), [allInspections, pid]);
-  const safetyIncidents  = useMemo(() => (pid ? allSafetyIncidents.filter((r) => r.project_id === pid)  : []), [allSafetyIncidents, pid]);
-  const qualityRecords   = useMemo(() => (pid ? allQualityRecords.filter((r) => r.project_id === pid)   : []), [allQualityRecords, pid]);
+  const drawings      = useMemo(() => filterRowsByProjectIdExcludingDeleted(allDrawings, pid), [allDrawings, pid]);
+  const sovItems      = useMemo(() => filterRowsByProjectId(allSovItems, pid), [allSovItems, pid]);
+  const scheduleTasks = useMemo(() => filterRowsByProjectId(allScheduleTasks, pid), [allScheduleTasks, pid]);
+  const drawingActivity = useMemo(() => filterRowsByProjectId(allDrawingActivity, pid), [allDrawingActivity, pid]);
+  const dailyLogs        = useMemo(() => filterRowsByProjectId(allDailyLogs, pid), [allDailyLogs, pid]);
+  const photosForProject = useMemo(() => filterRowsByProjectId(allPhotos, pid), [allPhotos, pid]);
+  const punchlistItems   = useMemo(() => filterRowsByProjectId(allPunchlist, pid), [allPunchlist, pid]);
+  const inspections      = useMemo(() => filterRowsByProjectId(allInspections, pid), [allInspections, pid]);
+  const safetyIncidents  = useMemo(() => filterRowsByProjectId(allSafetyIncidents, pid), [allSafetyIncidents, pid]);
+  const qualityRecords   = useMemo(() => filterRowsByProjectId(allQualityRecords, pid), [allQualityRecords, pid]);
 
   const isLoading = projectsLoading || rfisLoading;
 

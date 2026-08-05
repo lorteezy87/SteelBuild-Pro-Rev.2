@@ -14,6 +14,12 @@ import LoadingSkeleton from "../components/shared/LoadingSkeleton";
 import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
 import { getInitials, getAvatarColor } from "@/lib/avatars";
+import {
+  getActivityStatus,
+  filterUsersBySearch,
+  countAdmins,
+  countNonAdmins,
+} from "./usersManagement/usersManagementPageHelpers";
 
 // Local wrapper preserves the existing call-site shape (`getAvatarColor(user)`)
 // while delegating to the shared seed-based helper. The seed is the display
@@ -21,18 +27,6 @@ import { getInitials, getAvatarColor } from "@/lib/avatars";
 // their UUID.
 const getUserAvatarColor = (user) =>
   getAvatarColor(user?.full_name || user?.email);
-
-function getActivityStatus(user) {
-  if (user.status === "invited" || user.status === "pending") {
-    return "pending";
-  }
-  const lastDate = user.last_active || user.last_login;
-  if (lastDate) {
-    const diff = Date.now() - new Date(lastDate).getTime();
-    if (diff < 7 * 24 * 60 * 60 * 1000) return "active";
-  }
-  return "inactive";
-}
 
 const activityDotColors = {
   active: "#10B981",
@@ -53,18 +47,13 @@ function UsersManagementContent() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const filteredUsers = useMemo(() => {
-    if (!searchTerm.trim()) return users;
-    const term = searchTerm.toLowerCase();
-    return users.filter((u) =>
-      (u.email || "").toLowerCase().includes(term) ||
-      (u.full_name || "").toLowerCase().includes(term) ||
-      (u.role || "").toLowerCase().includes(term)
-    );
-  }, [users, searchTerm]);
+  const filteredUsers = useMemo(
+    () => filterUsersBySearch(users, searchTerm),
+    [users, searchTerm],
+  );
 
-  const adminCount = useMemo(() => users.filter((u) => u.role === "admin").length, [users]);
-  const userCount = useMemo(() => users.filter((u) => u.role !== "admin").length, [users]);
+  const adminCount = useMemo(() => countAdmins(users), [users]);
+  const userCount = useMemo(() => countNonAdmins(users), [users]);
 
   const deleteUserMut = useMutation({
     mutationFn: (userId) => entities.User.delete(userId),

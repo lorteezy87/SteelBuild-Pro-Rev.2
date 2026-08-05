@@ -5,6 +5,7 @@ import {
   scopePortfolioRows,
   filterRowsByProjectId,
   filterRowsByLiveProjectIds,
+  filterRowsByProjectIdExcludingDeleted,
 } from "../dashboardPageHelpers";
 
 describe("dashboardPageHelpers", () => {
@@ -32,3 +33,13 @@ describe("dashboardPageHelpers", () => {
     expect(filterRowsByLiveProjectIds(rows, live).map((r) => r.id)).toEqual([1, 3]);
   });
 });
+
+
+  it("excludes soft-deleted drawings", () => {
+    const rows = [
+      { id: 1, project_id: "a", is_deleted: false },
+      { id: 2, project_id: "a", is_deleted: true },
+      { id: 3, project_id: "b" },
+    ];
+    expect(filterRowsByProjectIdExcludingDeleted(rows, "a").map((r) => r.id)).toEqual([1]);
+  });

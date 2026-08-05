@@ -12,6 +12,7 @@ import { Plus } from "lucide-react";
 import { CHANGE_REQUEST_STATUS, PRIORITY } from "@/lib/enums";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
+import { filterChangeRequests, computeChangeRequestStats } from "./changeRequests/changeRequestsPageHelpers";
 
 export default function ChangeRequests() {
   const projectId = useProjectId();
@@ -46,19 +47,9 @@ export default function ChangeRequests() {
     ? projects.find((p) => p.id === projectId)
     : null;
 
-  const filtered = changeRequests.filter((cr) => {
-    const statusMatch = filterStatus === "all" || cr.status === filterStatus;
-    const priorityMatch = filterPriority === "all" || cr.priority === filterPriority;
-    return statusMatch && priorityMatch;
-  });
+  const filtered = filterChangeRequests(changeRequests, { filterStatus, filterPriority });
 
-  const stats = {
-    total: changeRequests.length,
-    submitted: changeRequests.filter((c) => c.status === CHANGE_REQUEST_STATUS.SUBMITTED).length,
-    approved: changeRequests.filter((c) => c.status === CHANGE_REQUEST_STATUS.APPROVED).length,
-    rejected: changeRequests.filter((c) => c.status === CHANGE_REQUEST_STATUS.REJECTED).length,
-    totalCostImpact: changeRequests.reduce((sum, c) => sum + (c.estimated_cost_impact || 0), 0),
-  };
+  const stats = computeChangeRequestStats(changeRequests, CHANGE_REQUEST_STATUS);
 
   const createMut = useMutation({
     mutationFn: (data) => entities.ChangeRequest.create(withProjectId(data, projectId)),
