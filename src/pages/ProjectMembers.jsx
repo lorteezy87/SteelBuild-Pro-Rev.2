@@ -5,32 +5,35 @@ import {
   countAdminMembers,
   filterSelectedMembers,
   wouldLeaveProjectWithoutAdmin,
+  pruneSelectedIds,
+  allMembersSelected as computeAllMembersSelected,
+  nextSelectedIdsToggle,
+  nextSelectedIdsAll,
+  commandBarSubtitle,
+  bulkUpdateSuccessMessage,
+  removeMemberDescription,
 } from "./projectMembers/projectMembersHelpers";
+import {
+  MembersCommandBar,
+  ProjectPicker,
+  AccessCheckingBanner,
+  AccessDeniedBanner,
+  MembersKpiStrip,
+  AddMemberForm,
+  BulkRoleBar,
+  MembersTable,
+  MemberActivityPanel,
+} from "./projectMembers/ProjectMembersUi";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CommandBar, KpiTile, Button as DSButton } from "@/components/design-system";
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import LoadingSkeleton from "../components/shared/LoadingSkeleton";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import { ProjectContext } from "@/components/shared/ProjectContext";
 import { useAuth } from "@/lib/AuthContext";
 import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
-import { RefreshCw, Plus, Trash2, Users, History } from "lucide-react";
 import { toast } from "sonner";
 import {
   DEFAULT_ROLE,
-  formatRole,
-  getRoleOptions,
-  isCurrentUser,
   isProjectAdminRole,
   isValidEmail,
 } from "@/lib/projectMembers";
@@ -54,25 +57,6 @@ import {
  * Email invites stay blocked until email infrastructure exists. This page
  * only adds existing user_profiles rows.
  */
-
-// ── small style helpers (mirrors FeatureFlagsAdmin idiom) ─────────────
-const inputStyle = {
-  background: "var(--bg-surface-low)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 8,
-  padding: "7px 10px",
-  fontSize: 12,
-  color: "var(--text-primary)",
-  outline: "none",
-  fontFamily: "var(--font-body)",
-};
-
-const cellLabelStyle = {
-  color: "var(--text-primary)",
-  fontWeight: 700,
-  fontSize: 11,
-  letterSpacing: "0.05em",
-};
 
 function ProjectMembersContent() {
   const qc = useQueryClient();
@@ -211,11 +195,7 @@ function ProjectMembersContent() {
     onSuccess: (changedCount) => {
       invalidate();
       setSelectedMemberIds(new Set());
-      toast.success(
-        changedCount === 1
-          ? "Updated 1 member"
-          : `Updated ${changedCount} members`,
-      );
+      toast.success(bulkUpdateSuccessMessage(changedCount));
     },
     onError: (err) => {
       toast.error(err?.message || "Failed to update selected members");
@@ -266,8 +246,7 @@ function ProjectMembersContent() {
   useEffect(() => {
     setSelectedMemberIds((prev) => {
       const liveIds = new Set(members.map((member) => member.id));
-      const next = new Set([...prev].filter((id) => liveIds.has(id)));
-      return next.size === prev.size ? prev : next;
+      return pruneSelectedIds(prev, liveIds);
     });
   }, [members]);
 
@@ -276,23 +255,17 @@ function ProjectMembersContent() {
     [members, selectedMemberIds],
   );
 
-  const allMembersSelected =
-    members.length > 0 && selectedMemberIds.size === members.length;
+  const allMembersSelected = computeAllMembersSelected(members, selectedMemberIds);
 
   const wouldLeaveWithoutAdmin = (targetMembers, nextRole) =>
     wouldLeaveProjectWithoutAdmin(members, targetMembers, nextRole);
 
   const toggleMemberSelection = (memberId, checked) => {
-    setSelectedMemberIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(memberId);
-      else next.delete(memberId);
-      return next;
-    });
+    setSelectedMemberIds((prev) => nextSelectedIdsToggle(prev, memberId, checked));
   };
 
   const toggleAllMembers = (checked) => {
-    setSelectedMemberIds(checked ? new Set(members.map((member) => member.id)) : new Set());
+    setSelectedMemberIds(nextSelectedIdsAll(members, checked));
   };
 
   const handleRoleChange = (member, nextRole) => {
@@ -337,482 +310,77 @@ function ProjectMembersContent() {
     removeMemberMut.mutate(removeTarget.id);
   };
 
-  const formatActivityEvent = (activity) => {
-    const target = activity.target_email || activity.target_user_id || "Member";
-    if (activity.event_type === "member_added") {
-      return `${target} added as ${formatRole(activity.new_role)}`;
-    }
-    if (activity.event_type === "role_changed") {
-      return `${target} changed from ${formatRole(activity.old_role)} to ${formatRole(activity.new_role)}`;
-    }
-    if (activity.event_type === "member_removed") {
-      return `${target} removed from the project`;
-    }
-    return `${target} updated`;
-  };
-
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
   return (
     <div className="sb-dashboard-reference-page">
-      <CommandBar
-        eyebrow="ADMIN · WORKSPACE"
-        title="Project Members"
-        count={members.length}
-        unit=" · MEMBERS"
-        subtitle={
-          selectedProject
-            ? `${selectedProject.name} · ${adminCount} admin${adminCount === 1 ? "" : "s"}`
-            : "Pick a project to manage its members"
-        }
-      >
-        <DSButton variant="secondary" onClick={refetch} disabled={!selectedProjectId || !canManageSelectedProject} title="Refresh">
-          <RefreshCw size={12} /> Refresh
-        </DSButton>
-      </CommandBar>
+      <MembersCommandBar
+        memberCount={members.length}
+        subtitle={commandBarSubtitle(selectedProject, adminCount)}
+        onRefresh={refetch}
+        refreshDisabled={!selectedProjectId || !canManageSelectedProject}
+      />
 
-      {/* Project picker */}
-      <div
-        style={{
-          background: "var(--bg-surface-low)",
-          border: "1px solid var(--border-default)",
-          borderRadius: 12,
-          padding: 14,
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          alignItems: "center",
+      <ProjectPicker
+        selectedProjectId={selectedProjectId}
+        onChange={(value) => {
+          setSelectedProjectId(value);
+          setSelectedMemberIds(new Set());
         }}
-      >
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            color: "var(--text-muted)",
-            textTransform: "uppercase",
-          }}
-        >
-          Project
-        </span>
-        <select
-          value={selectedProjectId}
-          onChange={(e) => {
-            setSelectedProjectId(e.target.value);
-            setSelectedMemberIds(new Set());
-          }}
-          disabled={projectsLoading}
-          style={{ ...inputStyle, minWidth: 280 }}
-          aria-label="Select project to manage members for"
-        >
-          <option value="">— Pick a project —</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name || p.id}
-            </option>
-          ))}
-        </select>
-      </div>
+        projects={projects}
+        projectsLoading={projectsLoading}
+      />
 
-      {selectedProjectId && accessCheckLoading && (
-        <div
-          style={{
-            background: "var(--bg-surface-low)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 12,
-            padding: 18,
-            color: "var(--text-secondary)",
-            fontSize: 13,
-          }}
-        >
-          Checking project role...
-        </div>
-      )}
+      {selectedProjectId && accessCheckLoading && <AccessCheckingBanner />}
 
       {selectedProjectId && !accessCheckLoading && !canManageSelectedProject && (
-        <div
-          style={{
-            background: "var(--bg-surface-low)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 12,
-            padding: 18,
-          }}
-        >
-          <div
-            style={{
-              color: "var(--danger)",
-              fontWeight: 700,
-              fontSize: 14,
-              marginBottom: 6,
-            }}
-          >
-            Project admin access required
-          </div>
-          <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-            Select a project where your role is Admin or Owner.
-          </div>
-        </div>
+        <AccessDeniedBanner />
       )}
 
       {!membersLoading && selectedProjectId && canManageSelectedProject && members.length > 0 && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: 10,
-          }}
-        >
-          <KpiTile compact label="Total" value={members.length} color="var(--accent)" />
-          <KpiTile compact label="Admins / Owners" value={adminCount} color="var(--phase-detailing)" />
-          <KpiTile
-            compact
-            label="Standard"
-            value={members.length - adminCount}
-            color="var(--phase-fabrication)"
-          />
-        </div>
+        <MembersKpiStrip total={members.length} adminCount={adminCount} />
       )}
 
-      {/* Add-member form */}
       {selectedProjectId && canManageSelectedProject && (
-        <div
-          style={{
-            background: "var(--bg-surface-low)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 12,
-            padding: 14,
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Add member
-          </span>
-          <input
-            type="email"
-            placeholder="user@example.com"
-            value={newMemberEmail}
-            onChange={(e) => setNewMemberEmail(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleAddMember();
-            }}
-            style={{ ...inputStyle, flex: 1, minWidth: 240 }}
-          />
-          <Button
-            onClick={handleAddMember}
-            disabled={addMemberMut.isPending || !newMemberEmail.trim()}
-          >
-            <Plus size={14} style={{ marginRight: 4 }} />
-            Add member
-          </Button>
-        </div>
+        <AddMemberForm
+          email={newMemberEmail}
+          onEmailChange={setNewMemberEmail}
+          onSubmit={handleAddMember}
+          isPending={addMemberMut.isPending}
+        />
       )}
 
       {selectedProjectId && canManageSelectedProject && members.length > 0 && (
-        <div
-          style={{
-            background: "var(--bg-surface-low)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 12,
-            padding: 14,
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Bulk role
-          </span>
-          <select
-            value={bulkRole}
-            onChange={(e) => setBulkRole(e.target.value)}
-            style={{ ...inputStyle, minWidth: 140 }}
-            aria-label="Bulk role"
-          >
-            {getRoleOptions(DEFAULT_ROLE).map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <Button
-            onClick={handleBulkRoleUpdate}
-            disabled={bulkRoleMut.isPending || selectedMembers.length === 0}
-          >
-            Apply to {selectedMembers.length || 0}
-          </Button>
-        </div>
-      )}
-
-      {/* Members table */}
-      {selectedProjectId && canManageSelectedProject && (
-        <div
-          style={{
-            background: "var(--bg-surface-low)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 12,
-            overflow: "hidden",
-          }}
-        >
-          <Table>
-            <TableHeader>
-              <TableRow
-                style={{
-                  background: "var(--bg-surface-low)",
-                  borderBottom: "1px solid var(--border-default)",
-                }}
-              >
-                <TableHead style={{ ...cellLabelStyle, width: 44 }}>
-                  <input
-                    type="checkbox"
-                    checked={allMembersSelected}
-                    onChange={(e) => toggleAllMembers(e.target.checked)}
-                    aria-label="Select all members"
-                  />
-                </TableHead>
-                <TableHead style={cellLabelStyle}>Email</TableHead>
-                <TableHead style={cellLabelStyle}>Name</TableHead>
-                <TableHead style={cellLabelStyle}>Role</TableHead>
-                <TableHead style={cellLabelStyle}>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {membersLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} style={{ padding: 0 }}>
-                    <LoadingSkeleton variant="table" rows={4} />
-                  </TableCell>
-                </TableRow>
-              ) : members.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    style={{ textAlign: "center", padding: "48px 0", color: "var(--text-muted)" }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <Users className="w-10 h-10" style={{ opacity: 0.18 }} />
-                      <span
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        No members yet
-                      </span>
-                      <span style={{ fontSize: 12 }}>
-                        Add one above to get started.
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                members.map((member) => {
-                  const isSelf = isCurrentUser(member.user_id, currentUser?.id);
-                  const isLastAdmin =
-                    isProjectAdminRole(member.role) && adminCount <= 1;
-                  const options = getRoleOptions(member.role);
-                  return (
-                    <TableRow
-                      key={member.id}
-                      style={{ borderBottom: "1px solid var(--hover-bg)" }}
-                    >
-                      <TableCell>
-                        <input
-                          type="checkbox"
-                          checked={selectedMemberIds.has(member.id)}
-                          onChange={(e) =>
-                            toggleMemberSelection(member.id, e.target.checked)
-                          }
-                          aria-label={`Select ${member.email || member.user_id}`}
-                        />
-                      </TableCell>
-                      <TableCell
-                        style={{
-                          fontFamily: "var(--font-body)",
-                          color: "var(--text-primary)",
-                          fontSize: 12,
-                          fontWeight: 500,
-                        }}
-                      >
-                        {member.email || (
-                          <span
-                            title={`user_id: ${member.user_id}`}
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            (no profile)
-                          </span>
-                        )}
-                        {isSelf && (
-                          <span
-                            style={{
-                              marginLeft: 8,
-                              fontSize: 10,
-                              fontFamily: "var(--font-mono)",
-                              color: "var(--text-muted)",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.08em",
-                            }}
-                          >
-                            (you)
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell
-                        style={{ fontSize: 12, color: "var(--text-secondary)" }}
-                      >
-                        {member.full_name || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <select
-                          value={member.role}
-                          onChange={(e) => handleRoleChange(member, e.target.value)}
-                          disabled={updateRoleMut.isPending}
-                          aria-label={`Role for ${member.email || member.user_id}`}
-                          style={{ ...inputStyle, padding: "6px 8px" }}
-                        >
-                          {options.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </TableCell>
-                      <TableCell>
-                        <button
-                          onClick={() => setRemoveTarget(member)}
-                          disabled={isSelf || isLastAdmin}
-                          title={
-                            isSelf
-                              ? "You can't remove yourself"
-                              : isLastAdmin
-                                ? "A project must keep at least one admin or owner"
-                              : `Remove ${member.email || member.user_id}`
-                          }
-                          style={{
-                            background: "none",
-                            border: "1px solid var(--border-default)",
-                            color: isSelf || isLastAdmin
-                              ? "var(--text-muted)"
-                              : "var(--danger)",
-                            borderRadius: "var(--radius-btn)",
-                            padding: "6px 10px",
-                            cursor: isSelf || isLastAdmin ? "not-allowed" : "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 10,
-                            fontWeight: 700,
-                            letterSpacing: "0.08em",
-                            textTransform: "uppercase",
-                            opacity: isSelf || isLastAdmin ? 0.5 : 1,
-                          }}
-                        >
-                          <Trash2 size={12} /> Remove
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <BulkRoleBar
+          bulkRole={bulkRole}
+          onBulkRoleChange={setBulkRole}
+          onApply={handleBulkRoleUpdate}
+          isPending={bulkRoleMut.isPending}
+          selectedCount={selectedMembers.length}
+        />
       )}
 
       {selectedProjectId && canManageSelectedProject && (
-        <div
-          style={{
-            background: "var(--bg-surface-low)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 12,
-            padding: 14,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 12,
-              color: "var(--text-primary)",
-              fontWeight: 700,
-              fontSize: 13,
-            }}
-          >
-            <History size={14} />
-            Recent member activity
-          </div>
-          {activityLoading ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
-              Loading activity...
-            </div>
-          ) : memberActivity.length === 0 ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
-              No membership changes logged yet.
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {memberActivity.map((activity) => (
-                <div
-                  key={activity.id}
-                  style={{
-                    borderTop: "1px solid var(--hover-bg)",
-                    paddingTop: 8,
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 1fr) auto",
-                    gap: 12,
-                    alignItems: "start",
-                  }}
-                >
-                  <div>
-                    <div style={{ color: "var(--text-primary)", fontSize: 12 }}>
-                      {formatActivityEvent(activity)}
-                    </div>
-                    <div style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                      By {activity.actor_email || "system"}
-                    </div>
-                  </div>
-                  <div style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                    {activity.created_at
-                      ? new Date(activity.created_at).toLocaleString()
-                      : ""}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <MembersTable
+          members={members}
+          membersLoading={membersLoading}
+          selectedMemberIds={selectedMemberIds}
+          allMembersSelected={allMembersSelected}
+          onToggleAll={toggleAllMembers}
+          onToggleMember={toggleMemberSelection}
+          onRoleChange={handleRoleChange}
+          onRemove={setRemoveTarget}
+          currentUserId={currentUser?.id}
+          adminCount={adminCount}
+          roleUpdatePending={updateRoleMut.isPending}
+        />
+      )}
+
+      {selectedProjectId && canManageSelectedProject && (
+        <MemberActivityPanel
+          activityLoading={activityLoading}
+          memberActivity={memberActivity}
+        />
       )}
 
       <DeleteDialog
@@ -820,11 +388,7 @@ function ProjectMembersContent() {
         onClose={() => setRemoveTarget(null)}
         onConfirm={handleRemoveMember}
         title="Remove member"
-        description={
-          removeTarget
-            ? `Remove ${removeTarget.email || removeTarget.user_id} (${formatRole(removeTarget.role)}) from this project? They will lose all access immediately. This cannot be undone, but you can re-add them.`
-            : ""
-        }
+        description={removeMemberDescription(removeTarget)}
       />
     </div>
   );

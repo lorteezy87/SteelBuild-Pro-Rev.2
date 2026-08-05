@@ -1,7 +1,7 @@
 /**
  * Pure helpers for Project Members page.
  */
-import { isProjectAdminRole } from "@/lib/projectMembers";
+import { formatRole, isProjectAdminRole } from "@/lib/projectMembers";
 
 export type MemberRowLike = {
   user_id?: string | null;
@@ -65,4 +65,84 @@ export function wouldLeaveProjectWithoutAdmin(
     (member) => isProjectAdminRole(member.role) && !targetIds.has(member.id),
   ).length;
   return remainingAdminCount === 0;
+}
+
+export function pruneSelectedIds(
+  previous: Set<string>,
+  liveIds: Iterable<string>,
+): Set<string> {
+  const live = liveIds instanceof Set ? liveIds : new Set(liveIds);
+  const next = new Set([...previous].filter((id) => live.has(id)));
+  return next.size === previous.size ? previous : next;
+}
+
+export function allMembersSelected(
+  members: Array<{ id?: string | null }>,
+  selectedIds: Set<string>,
+): boolean {
+  return members.length > 0 && selectedIds.size === members.length;
+}
+
+export function nextSelectedIdsToggle(
+  previous: Set<string>,
+  memberId: string,
+  checked: boolean,
+): Set<string> {
+  const next = new Set(previous);
+  if (checked) next.add(memberId);
+  else next.delete(memberId);
+  return next;
+}
+
+export function nextSelectedIdsAll(
+  members: Array<{ id?: string | null }>,
+  checked: boolean,
+): Set<string> {
+  return checked
+    ? new Set(members.map((m) => String(m.id)).filter(Boolean))
+    : new Set();
+}
+
+export type ActivityLike = {
+  event_type?: string | null;
+  target_email?: string | null;
+  target_user_id?: string | null;
+  old_role?: string | null;
+  new_role?: string | null;
+};
+
+export function formatActivityEvent(activity: ActivityLike): string {
+  const target = activity.target_email || activity.target_user_id || "Member";
+  if (activity.event_type === "member_added") {
+    return `${target} added as ${formatRole(activity.new_role)}`;
+  }
+  if (activity.event_type === "role_changed") {
+    return `${target} changed from ${formatRole(activity.old_role)} to ${formatRole(activity.new_role)}`;
+  }
+  if (activity.event_type === "member_removed") {
+    return `${target} removed from the project`;
+  }
+  return `${target} updated`;
+}
+
+export function commandBarSubtitle(
+  selectedProject: { name?: string | null } | null | undefined,
+  adminCount: number,
+): string {
+  return selectedProject
+    ? `${selectedProject.name} · ${adminCount} admin${adminCount === 1 ? "" : "s"}`
+    : "Pick a project to manage its members";
+}
+
+export function bulkUpdateSuccessMessage(changedCount: number): string {
+  return changedCount === 1
+    ? "Updated 1 member"
+    : `Updated ${changedCount} members`;
+}
+
+export function removeMemberDescription(
+  removeTarget: { email?: string | null; user_id?: string | null; role?: string | null } | null,
+): string {
+  if (!removeTarget) return "";
+  return `Remove ${removeTarget.email || removeTarget.user_id} (${formatRole(removeTarget.role)}) from this project? They will lose all access immediately. This cannot be undone, but you can re-add them.`;
 }
