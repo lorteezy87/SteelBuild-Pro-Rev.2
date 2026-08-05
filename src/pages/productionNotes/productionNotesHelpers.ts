@@ -1,6 +1,8 @@
 /**
  * Pure helpers for Production Notes page.
  */
+import { buildIdMap } from "@/pages/shared/buildIdMap";
+
 
 export function toISODate(d: Date | string | number): string {
   const dt = d instanceof Date ? d : new Date(d);
@@ -39,14 +41,11 @@ export function shiftDate(iso: string, days: number): string {
   return toISODate(dt);
 }
 
+/** @deprecated Prefer buildIdMap from shared. */
 export function indexProjectsById<T extends { id?: string }>(
   projects: T[] | null | undefined,
 ): Map<string, T> {
-  const map = new Map<string, T>();
-  for (const p of projects || []) {
-    if (p?.id) map.set(p.id, p);
-  }
-  return map;
+  return buildIdMap(projects);
 }
 
 export type NoteLike = {
