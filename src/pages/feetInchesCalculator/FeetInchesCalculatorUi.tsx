@@ -3,7 +3,7 @@
  */
 // @ts-nocheck
 import React, { useMemo, useState } from "react";
-import { parseLength, formatLength } from "@/utils/lengthMath";
+import { parseLength, formatLength, TICKS_PER_FOOT } from "@/utils/lengthMath";
 import { optimizeCutList } from "@/utils/cutListOptimizer";
 
 const mono = { fontFamily: "var(--font-mono)" };
