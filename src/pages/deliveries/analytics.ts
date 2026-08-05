@@ -257,5 +257,3 @@ export function deliveryLane(delivery) {
   if (["Scheduled", "Loading", "In Transit", "Delivered"].includes(status)) return status;
   return "Exceptions";
 }
-
-export { STATUS_ORDER };
