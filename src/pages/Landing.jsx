@@ -14,6 +14,13 @@ import {
   C, F, HERO_STRIP, LOGO_IMG, NAV_LINKS, EXEC_METRICS, VALUE_CARDS, MODULES, WORKFLOW, PROOF_POINTS, monoLabel, Reveal, BrandMark, ProductMockup,
 } from "./landing/LandingUi";
 
+import {
+  canSubmitCredentials,
+  canSubmitEmailOnly,
+  buildDemoPayload,
+  isScrolledPast,
+} from "./landing/landingPageHelpers";
+
 export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitting, loginError }) {
   const [showLogin, setShowLogin] = useState(false);
   const [authMode, setAuthMode] = useState("signin"); // "signin" | "signup" | "forgot"
@@ -43,7 +50,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
   };
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 30);
+    const onScroll = () => setScrolled(isScrolledPast(window.scrollY));
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
@@ -90,14 +97,14 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!email.trim() || !password) return;
+    if (!canSubmitCredentials(email, password)) return;
     await onLogin?.({ email: email.trim(), password });
   };
 
   const handleSignUp = async (e) => {
     e.preventDefault();
     setSignupError(null);
-    if (!email.trim() || !password) return;
+    if (!canSubmitCredentials(email, password)) return;
     if (!termsAccepted) {
       setSignupError("Please accept the Terms of Service and Privacy Policy to create an account.");
       return;
@@ -126,7 +133,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
   const handleForgot = async (e) => {
     e.preventDefault();
     setForgotError(null);
-    if (!email.trim()) return;
+    if (!canSubmitEmailOnly(email)) return;
     setForgotBusy(true);
     const res = await onForgotPassword?.(email.trim());
     setForgotBusy(false);
@@ -146,11 +153,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
     setDemoSubmitting(true);
     try {
       const { error } = await supabase.from("demo_requests").insert({
-        name: demoForm.name.trim(),
-        email: demoForm.email.trim(),
-        company: demoForm.company.trim() || null,
-        tonnage: demoForm.tonnage.trim() || null,
-        message: demoForm.message.trim() || null,
+        ...buildDemoPayload(demoForm),
       });
       if (error) throw error;
       setDemoSent(true);

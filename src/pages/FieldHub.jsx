@@ -21,6 +21,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { usePermissions } from "@/services/permissions";
 import FieldHubControlCenter from "./fieldHub/FieldHubControlCenter";
+import {
+  filterLiveFieldRecords,
+  resolveFieldHubTabKey,
+  resolveProjectName,
+  buildFieldHubVisibleTabs,
+} from "./fieldHub/fieldHubPageHelpers";
 
 const FieldTodayPage = lazyWithRetry(() => import("@/pages/FieldToday"));
 const FieldOverview = lazyWithRetry(() => import("@/pages/Field"));
@@ -50,11 +56,11 @@ export default function FieldHub() {
   const { can } = usePermissions();
 
   const visibleTabs = useMemo(
-    () => [{ key: "hub", label: "Command Center", Component: null }, ...TABS],
+    () => buildFieldHubVisibleTabs(TABS),
     [],
   );
   const param = params.get("field_tab");
-  const activeKey = visibleTabs.some((t) => t.key === param) ? param : "hub";
+  const activeKey = resolveFieldHubTabKey(param, visibleTabs.map((t) => t.key));
   const Active = TABS.find((t) => t.key === activeKey)?.Component ?? null;
   const hubActive = activeKey === "hub";
 
@@ -127,13 +133,13 @@ export default function FieldHub() {
   );
 
   // Soft-delete filter — mirrors the pattern used in DailyLogs / Inspections / Safety.
-  const logs = useMemo(() => rawLogs.filter((r) => !r.is_deleted), [rawLogs]);
-  const inspections = useMemo(() => rawInspections.filter((r) => !r.is_deleted), [rawInspections]);
-  const incidents = useMemo(() => rawIncidents.filter((r) => !r.is_deleted), [rawIncidents]);
-  const punchlistItems = useMemo(() => rawPunchlist.filter((r) => !r.is_deleted), [rawPunchlist]);
+  const logs = useMemo(() => filterLiveFieldRecords(rawLogs), [rawLogs]);
+  const inspections = useMemo(() => filterLiveFieldRecords(rawInspections), [rawInspections]);
+  const incidents = useMemo(() => filterLiveFieldRecords(rawIncidents), [rawIncidents]);
+  const punchlistItems = useMemo(() => filterLiveFieldRecords(rawPunchlist), [rawPunchlist]);
 
   const projectName = useMemo(
-    () => projects.find((p) => p.id === projectId)?.name || "All Projects",
+    () => resolveProjectName(projects, projectId),
     [projects, projectId],
   );
 

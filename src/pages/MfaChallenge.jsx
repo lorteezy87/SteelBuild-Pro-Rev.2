@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
+import { normalizeMfaCode, isMfaCodeReady } from "./mfa/mfaChallengeHelpers";
 
 /**
  * MfaChallenge — the login step-up screen (H23). Shown at top precedence by
@@ -18,8 +19,8 @@ export default function MfaChallenge() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    const clean = code.replace(/\s/g, "");
-    if (clean.length < 6) {
+    const clean = normalizeMfaCode(code);
+    if (!isMfaCodeReady(code)) {
       setError("Enter the 6-digit code from your authenticator app.");
       return;
     }

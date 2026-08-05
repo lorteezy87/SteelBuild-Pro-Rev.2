@@ -5,6 +5,11 @@ import { auth } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import {
+  filterVisibleSettingsGroups,
+  countVisibleSettingsTabs,
+  mergeUserPrefs,
+} from "./settings/settingsPageHelpers";
 import UserSettingsTab from "@/components/settings/UserSettingsTab.jsx";
 import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
 import DisplayTab from "@/components/settings/DisplayTab.jsx";
@@ -95,7 +100,7 @@ export default function Settings() {
   });
 
   const handleSavePrefs = useCallback((prefs) => {
-    setUserPrefs((prev) => ({ ...prev, ...prefs }));
+    setUserPrefs((prev) => mergeUserPrefs(prev, prefs));
     updatePrefsMut.mutate(prefs);
   }, [updatePrefsMut]);
 
@@ -107,13 +112,7 @@ export default function Settings() {
   // (the user must be authenticated to reach this route; the guard is in the router).
 
   const isAdmin = user?.role === 'admin';
-  const visibleGroups = TAB_GROUPS
-    .filter(group => !group.adminOnly || isAdmin)
-    .map(group => ({
-      ...group,
-      tabs: group.tabs.filter(tab => !tab.adminOnly || isAdmin),
-    }))
-    .filter(group => group.tabs.length > 0);
+  const visibleGroups = filterVisibleSettingsGroups(TAB_GROUPS, isAdmin);
 
   // SettingsControlCenter is the canonical shell.
   // All settings forms and mutations stay in Settings.jsx so behavior cannot diverge.
@@ -252,7 +251,7 @@ export default function Settings() {
     <SettingsControlCenter
       user={user}
       prefs={userPrefs}
-      visibleSectionCount={visibleGroups.reduce((count, group) => count + group.tabs.length, 0)}
+      visibleSectionCount={countVisibleSettingsTabs(visibleGroups)}
     >
       {settingsBody}
     </SettingsControlCenter>

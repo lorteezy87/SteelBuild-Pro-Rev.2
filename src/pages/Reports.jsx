@@ -17,23 +17,12 @@ import PageLoader from "@/boot/PageLoader";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 import { mono, body, CARD, LABEL } from "./reports/constants";
 import { REPORTS, REPORT_CATEGORIES, REPORTS_BY_SLUG } from "./reports/registry";
+import { categoryAccent, reportsForCategory } from "./reports/reportsPageHelpers";
 import { ChevronRight } from "lucide-react";
 
-const CATEGORY_ACCENT = {
-  Portfolio: "var(--status-info)",
-  Financial: "var(--status-info)",
-  Risk: "var(--status-error)",
-  Schedule: "var(--accent)",
-  Cost: "var(--status-success)",
-  // Team uses a fixed teal so it's visually distinct from --accent and
-  // --status-info regardless of which theme is active. (--secondary
-  // aliases to --accent in tokens.css, so it would collide with
-  // Schedule.) No purple/pink per CLAUDE.md.
-  Team: "var(--accent-light)",
-};
-
 function ReportCard({ entry, onClick }) {
-  const accent = CATEGORY_ACCENT[entry.category] || "var(--accent)";
+  // Team uses accent-light so it's visually distinct from --accent / --status-info.
+  const accent = categoryAccent(entry.category);
   return (
     <button
       onClick={onClick}
@@ -134,7 +123,7 @@ function ReportsHub() {
       />
 
       {REPORT_CATEGORIES.map((cat) => {
-        const cards = REPORTS.filter((r) => r.category === cat);
+        const cards = reportsForCategory(REPORTS, cat);
         if (!cards.length) return null;
         return (
           <section
