@@ -32,6 +32,7 @@ import { ensureCurrentRevision } from "@/lib/drawingHub";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
 import {
+import { buildRevisionCompareCandidates } from "./revisionCompareHelpers";
   generateRevisionDiff,
   setDeltaDismissed,
   sortDeltasBySeverity,
@@ -184,28 +185,10 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
   // Comparable versions: the live drawing row ("Current") + every history
   // row that captured a file snapshot. Non-current rows only — the current
   // revision row mirrors the drawing itself.
-  const candidates = useMemo(() => {
-    if (!drawing) return [];
-    const list = [];
-    if (drawing.file_url) {
-      list.push({
-        key: "current",
-        label: `Current — Rev ${drawing.revision_number ?? "—"}`,
-        fileUrl: drawing.file_url,
-        pdfPage: drawing.pdf_page || 1,
-      });
-    }
-    for (const rev of revisionRows) {
-      if (!rev?.file_url || rev.is_current) continue;
-      list.push({
-        key: rev.id,
-        label: `Rev ${rev.revision_code}${rev.issued_at ? ` · ${String(rev.issued_at).slice(0, 10)}` : ` · v${rev.version_number}`}`,
-        fileUrl: rev.file_url,
-        pdfPage: rev.pdf_page || 1,
-      });
-    }
-    return list;
-  }, [drawing, revisionRows]);
+  const candidates = useMemo(
+    () => buildRevisionCompareCandidates(drawing, revisionRows),
+    [drawing, revisionRows],
+  );
 
   const [oldKey, setOldKey] = useState(null);
   const [newKey, setNewKey] = useState(null);

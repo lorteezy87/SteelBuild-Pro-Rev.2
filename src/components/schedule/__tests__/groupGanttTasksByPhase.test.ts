@@ -45,3 +45,21 @@ describe("groupGanttTasksByPhase", () => {
     expect(g[0].phase.key).toBe("Uncategorized");
   });
 });
+
+import { filterGroupedTasksByVisibleIds } from "../scheduleGanttHelpers";
+
+describe("filterGroupedTasksByVisibleIds", () => {
+  it("returns original when no filter set", () => {
+    const grouped = [{ phase: { key: "A" }, tasks: [{ id: "1" }] }];
+    expect(filterGroupedTasksByVisibleIds(grouped as any, null)).toBe(grouped);
+  });
+  it("filters tasks and drops empty phases", () => {
+    const grouped = [
+      { phase: { key: "A" }, tasks: [{ id: "1" }, { id: "2" }] },
+      { phase: { key: "B" }, tasks: [{ id: "3" }] },
+    ];
+    const out = filterGroupedTasksByVisibleIds(grouped as any, new Set(["2"]));
+    expect(out).toHaveLength(1);
+    expect(out[0].tasks.map((t: any) => t.id)).toEqual(["2"]);
+  });
+});

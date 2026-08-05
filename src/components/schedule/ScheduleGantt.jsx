@@ -40,6 +40,7 @@ import {
   getTaskMetadata, getTaskBaseline, hasBaselineDrift, isCriticalTask,
   pluralize, taskOwner, isUnassignedTask, hasLogicGapTask,
   groupGanttTasksByPhase,
+  filterGroupedTasksByVisibleIds,
 } from "./scheduleGanttHelpers";
 import {
   WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
@@ -507,15 +508,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     ],
   );
 
-  const visibleGrouped = useMemo(() => {
-    if (!visibleTaskIds) return grouped;
-    return grouped
-      .map(({ phase, tasks }) => ({
-        phase,
-        tasks: tasks.filter((task) => visibleTaskIds.has(task.id)),
-      }))
-      .filter(({ tasks }) => tasks.length > 0);
-  }, [grouped, visibleTaskIds]);
+  const visibleGrouped = useMemo(
+    () => filterGroupedTasksByVisibleIds(grouped, visibleTaskIds),
+    [grouped, visibleTaskIds],
+  );
 
   const visibleTaskCount = visibleTaskIds ? allTasks.filter((task) => visibleTaskIds.has(task.id)).length : totalTasks;
 

@@ -30,6 +30,7 @@ import { formatShortDate } from "@/utils/dates";
 // SUBMITTAL-governed dues switch to working days when `useWorkdays` is on. Shares
 // the SAME tested engine as the Control Board / Approval Matrix so all three agree.
 import { dueInfoFor } from "@/pages/drawingSubmittalHub/format";
+import { bucketBoardItemsByStage, summarizeBoardItems } from "./submittalVisualBoardHelpers";
 
 const surfaceLow = "var(--bg-surface-low)";
 const surfaceHigh = "var(--bg-surface-high)";
@@ -260,23 +261,12 @@ export default function SubmittalVisualBoard({
     [allItems, filter, search],
   );
 
-  const stageBuckets = useMemo(() => {
-    const buckets = Object.fromEntries(WORKFLOW_STAGE_ORDER.map((stage) => [stage, []]));
-    for (const item of boardItems) {
-      const key = WORKFLOW_STAGE_ORDER.includes(item.stage) ? item.stage : "Not Started";
-      buckets[key].push(item);
-    }
-    return buckets;
-  }, [boardItems]);
+  const stageBuckets = useMemo(
+    () => bucketBoardItemsByStage(boardItems, WORKFLOW_STAGE_ORDER, "Not Started"),
+    [boardItems],
+  );
 
-  const summary = useMemo(() => ({
-    total: allItems.length,
-    overdue: allItems.filter((item) => item.due.overdue).length,
-    dueSoon: allItems.filter((item) => item.due.dueSoon).length,
-    needsAction: allItems.filter((item) => item.needsAction).length,
-    unlinked: allItems.filter((item) => !item.linked).length,
-    released: allItems.filter((item) => item.stage === "Released").length,
-  }), [allItems]);
+  const summary = useMemo(() => summarizeBoardItems(allItems), [allItems]);
 
   if (isLoading) return <LoadingSkeleton />;
 

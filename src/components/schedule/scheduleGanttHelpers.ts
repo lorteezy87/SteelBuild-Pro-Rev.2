@@ -281,3 +281,19 @@ export function groupGanttTasksByPhase<T extends { id?: string }>(
   }
   return ordered;
 }
+
+export function filterGroupedTasksByVisibleIds<
+  T extends { id?: string },
+  G extends { phase: unknown; tasks: T[] },
+>(
+  grouped: G[],
+  visibleTaskIds: Set<string> | null | undefined,
+): G[] {
+  if (!visibleTaskIds) return grouped;
+  return grouped
+    .map((g) => ({
+      ...g,
+      tasks: g.tasks.filter((task) => task.id && visibleTaskIds.has(task.id)),
+    }))
+    .filter((g) => g.tasks.length > 0) as G[];
+}
