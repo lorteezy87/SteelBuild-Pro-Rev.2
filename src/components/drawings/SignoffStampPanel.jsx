@@ -35,6 +35,8 @@ import {
   signoffQueryKey as QKEY,
   SIGNOFF_BTN_GHOST,
   SIGNOFF_BTN_PRIMARY,
+  SIGNOFF_LABEL_STYLE,
+  SIGNOFF_INPUT_STYLE,
 } from "./signoffStampPanelHelpers";
 
 // Icon overlay keeps lucide components local to this presentational panel.
@@ -354,24 +356,8 @@ function Row({ label, value, multiline = false }) {
 }
 
 
-const lbl = {
-  ...mono, fontSize: 9, color: "var(--text-muted)",
-  letterSpacing: "0.08em", textTransform: "uppercase",
-  display: "block", marginBottom: 4,
-};
-
-const inp = {
-  width: "100%",
-  padding: "8px 10px",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  background: "var(--bg-input)",
-  color: "var(--text-primary)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  outline: "none",
-  boxSizing: "border-box",
-};
+const lbl = SIGNOFF_LABEL_STYLE;
+const inp = SIGNOFF_INPUT_STYLE;
 
 const btnGhost = SIGNOFF_BTN_GHOST;
 const btnPrimary = SIGNOFF_BTN_PRIMARY;

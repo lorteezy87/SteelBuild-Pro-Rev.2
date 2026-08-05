@@ -87,7 +87,7 @@ export function taskUrgency(task, todayIso) {
   return "active";
 }
 
-const URGENCY_RANK = {
+export const FIELD_TASK_URGENCY_RANK = {
   overdue: 0,
   "due-today": 1,
   active: 2,
@@ -95,6 +95,7 @@ const URGENCY_RANK = {
   upcoming: 4,
   done: 5,
 };
+const URGENCY_RANK = FIELD_TASK_URGENCY_RANK;
 
 function compareTasks(a, b, todayIso) {
   const ra = URGENCY_RANK[taskUrgency(a, todayIso)] ?? 9;

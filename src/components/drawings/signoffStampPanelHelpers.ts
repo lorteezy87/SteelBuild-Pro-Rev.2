@@ -37,3 +37,26 @@ export const SIGNOFF_BTN_PRIMARY: Record<string, string | number> = {
   letterSpacing: "0.08em",
   textTransform: "uppercase",
 };
+
+export const SIGNOFF_LABEL_STYLE: Record<string, string | number> = {
+  ...mono,
+  fontSize: 9,
+  color: "var(--text-muted)",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  display: "block",
+  marginBottom: 4,
+};
+
+export const SIGNOFF_INPUT_STYLE: Record<string, string | number> = {
+  width: "100%",
+  padding: "8px 10px",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  background: "var(--bg-input)",
+  color: "var(--text-primary)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 6,
+  outline: "none",
+  boxSizing: "border-box",
+};

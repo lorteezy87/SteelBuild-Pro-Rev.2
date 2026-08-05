@@ -21,6 +21,7 @@ import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseModelElementsCsv } from "@/lib/importModelElements";
 import {
+import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
   mono,
   display,
   ACCENT,
@@ -366,12 +367,8 @@ export default function ModelElementImportModal({
   );
 }
 
-const th = {
-  textAlign: "left", padding: "8px 10px", fontFamily: "var(--font-mono)",
-  fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase",
-  color: "var(--text-muted)", borderBottom: "1px solid var(--divider)",
-};
-const td = { padding: "7px 10px", borderBottom: "1px solid var(--divider)", color: "var(--text-secondary)" };
+const th = IMPORT_TABLE_TH_STYLE;
+const td = IMPORT_TABLE_TD_STYLE;
 
 function StatChip({ label, value, tone }) {
   return (
