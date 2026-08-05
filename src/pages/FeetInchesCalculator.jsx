@@ -36,7 +36,12 @@ import CalcKey from "@/components/calculators/CalcKey";
 import CalcTape from "@/components/calculators/CalcTape";
 import useCalcTape from "@/components/calculators/useCalcTape";
 import "@/components/calculators/calc.css";
-import { OPS, applyOp, fracLabel, parseFeetInchesEntry } from "./feetInchesCalculator/feetInchesCalculatorHelpers";
+import {
+  OPS,
+  fracLabel,
+  computeFeetInchesCommit,
+  createEmptyFeetInchesState,
+} from "./feetInchesCalculator/feetInchesCalculatorHelpers";
 import {
   CutListOptimizerPanel,
   ConversionRow,
@@ -67,45 +72,35 @@ export default function FeetInchesCalculator() {
 
   // ── Entry parsing ─────────
   // When pendingOp is × or ÷, we expect a bare number.
-  const parseEntry = () => parseFeetInchesEntry(entry, mulDivMode);
-
   const commit = (nextOp /* optional; if set, op continues */) => {
-    const value = parseEntry();
-    if (value == null && entry.trim() !== "") {
-      toast.error("Couldn't parse that length.");
+    const result = computeFeetInchesCommit({
+      entry,
+      mulDivMode,
+      accum,
+      pendingOp,
+      precision,
+      nextOp,
+      formatLength,
+    });
+    if (!result.ok) {
+      toast.error(result.error);
       return;
     }
-    let nextAccum = accum;
-    let exprLine = "";
-    if (pendingOp && value != null) {
-      nextAccum = applyOp(accum, pendingOp, value);
-      if (nextAccum == null) {
-        toast.error(pendingOp === OPS.DIV ? "Divide by zero" : "Bad op");
-        return;
-      }
-      const rhsText = mulDivMode ? String(value) : formatLength(value, precision);
-      exprLine = `${formatLength(accum, precision)} ${pendingOp} ${rhsText}`;
-    } else if (value != null) {
-      // First entry — just load the value
-      nextAccum = value;
-      exprLine = "load";
-    }
-    if (exprLine) {
-      pushTape({ expr: exprLine, value: formatLength(nextAccum, precision), ticks: nextAccum });
-    }
-    setAccum(nextAccum);
+    if (result.tape) pushTape(result.tape);
+    setAccum(result.nextAccum);
     setEntry("");
-    setPendingOp(nextOp || null);
-    setMulDivMode(nextOp === OPS.MUL || nextOp === OPS.DIV);
+    setPendingOp(result.pendingOp);
+    setMulDivMode(result.mulDivMode);
   };
 
   const equals = () => commit(null);
 
   const clear = () => {
-    setAccum(0);
-    setPendingOp(null);
-    setEntry("");
-    setMulDivMode(false);
+    const empty = createEmptyFeetInchesState();
+    setAccum(empty.accum);
+    setPendingOp(empty.pendingOp);
+    setEntry(empty.entry);
+    setMulDivMode(empty.mulDivMode);
   };
 
   const clearEntry = () => setEntry("");
