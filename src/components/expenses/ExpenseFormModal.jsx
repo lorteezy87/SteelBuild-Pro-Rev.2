@@ -4,6 +4,7 @@ import { COST_CODES, COST_CODES_GROUPED } from '../shared/costCodes';
 import { getCostCodeSummary } from '../shared/budgetCalculations';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import FormField from '@/components/shared/FormField';
+import { iStyle, labelStyle, sectionLabel, triggerStyle } from './expenseFormModalStyleHelpers';
 
 const EXPENSE_TYPES = ['Labor', 'Materials', 'Equipment', 'Subcontractor', 'Misc.', 'Overhead'];
 const PAYMENT_STATUSES = ['Unpaid', 'Paid', 'Pending Approval', 'Disputed', 'Voided'];
@@ -20,50 +21,6 @@ const empty = {
   expense_date: new Date().toISOString().split('T')[0],
   submitted_by: '', approved_by: '', approved_date: null,
   notes: '', receipt_url: '', tags: '',
-};
-
-const iStyle = {
-  width: '100%',
-  background: 'var(--bg-surface-low)',
-  border: '1px solid var(--border-default)',
-  borderRadius: 6,
-  padding: '7px 11px',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 12,
-  boxSizing: 'border-box',
-  outline: 'none',
-  transition: 'border-color 0.15s',
-};
-
-const labelStyle = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 8,
-  letterSpacing: '0.14em',
-  color: 'var(--text-muted)',
-  textTransform: 'uppercase',
-  marginBottom: 5,
-  display: 'block',
-};
-
-const sectionLabel = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 8,
-  fontWeight: 700,
-  letterSpacing: '0.16em',
-  color: 'var(--accent)',
-  textTransform: 'uppercase',
-  marginBottom: 12,
-  paddingBottom: 6,
-  borderBottom: '1px solid var(--divider)',
-};
-
-const triggerStyle = {
-  background: 'var(--bg-surface-low)',
-  border: '1px solid var(--border-default)',
-  borderRadius: 6,
-  color: 'var(--text-primary)',
-  height: 34,
 };
 
 export default function ExpenseFormModal({
