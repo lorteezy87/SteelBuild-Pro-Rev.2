@@ -21,6 +21,7 @@ import {
 } from "./urgencyEngine";
 import { applyEffectiveDates } from "@/services/scheduleCascade";
 import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
+import { FEED_AGG_URGENCY_RANK as URGENCY_RANK } from "./commandCenterCatalogHelpers";
 
 // ── Effective-date overlay for schedule tasks ───────────────────────────
 //
@@ -63,8 +64,6 @@ function overlayScheduleTaskEffectiveDates(tasks) {
 //
 // Sheets missing a drawing_set_name fall back to their per-sheet item so
 // orphans still surface; they're flagged by the validation layer anyway.
-
-const URGENCY_RANK = { overdue: 5, blocking: 4, "due-soon": 3, awaiting: 2, normal: 1 };
 
 const normalizeSetName = (s) =>
   (s || "").toString().trim().replace(/\s+/g, " ");

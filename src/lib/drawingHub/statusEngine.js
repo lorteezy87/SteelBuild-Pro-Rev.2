@@ -9,6 +9,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { STATUS_THRESHOLDS } from "./statusEngineHelpers";
 
 // ────────────────────────────────────────────────────────────────────
 // Status rule engine (V1.5)
@@ -27,12 +28,6 @@ import { supabase } from "@/lib/supabase";
 // the user can see "RFI-012 overdue 3 days" next to the red chip
 // instead of just a bare color.
 // ────────────────────────────────────────────────────────────────────
-
-const STATUS_THRESHOLDS = {
-  RFI_DUE_SOON_DAYS:       3,
-  DELIVERY_DUE_SOON_DAYS:  2,
-  AI_WARN_CONFIDENCE:      0.80,
-};
 
 // Match whatever set of status strings your existing RFI / WP /
 // Inspection / Delivery models use. Stay permissive — string comparison

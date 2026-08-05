@@ -17,18 +17,11 @@
  */
 
 import { rfiUrgency } from "./urgencyEngine";
-
-const AGENDA_URGENCIES = new Set(["overdue", "blocking", "due-soon", "awaiting"]);
-
-// Lower rank = leads the agenda.
-const RANK = { overdue: 0, blocking: 1, "due-soon": 2, awaiting: 3 };
-
-const GROUP_LABEL = {
-  overdue: "Overdue",
-  blocking: "Blocking",
-  "due-soon": "Due Soon",
-  awaiting: "Awaiting Response",
-};
+import {
+  RFI_AGENDA_URGENCIES as AGENDA_URGENCIES,
+  RFI_AGENDA_URGENCY_RANK as RANK,
+  RFI_AGENDA_GROUP_LABEL as GROUP_LABEL,
+} from "./commandCenterCatalogHelpers";
 
 // Stable display order of the grouped buckets.
 export const AGENDA_GROUPS = ["Overdue", "Blocking", "Due Soon", "Awaiting Response"];

@@ -9,13 +9,7 @@
  *   5. Normal, by daysValue descending (oldest first)
  */
 
-const URGENCY_RANK = {
-  overdue:  0,
-  blocking: 1,
-  "due-soon": 2,
-  awaiting: 3,
-  normal:   4,
-};
+import { FEED_SORT_URGENCY_RANK as URGENCY_RANK } from "./commandCenterCatalogHelpers";
 
 /**
  * Compare two feed items for sorting.
