@@ -5,16 +5,8 @@
  * structural steel shapes. Sits alongside FeetInchesCalculator in the
  * PM Tools menu.
  *
- * The length input reuses the feet-inches parsing from
- * FeetInchesCalculator (parseLength + ticksToDecimalFeet) so the field
- * crew can type "12'-6 1/2"" or "150" (inches) or "8.25ft" exactly the
- * same way they do in the sister calculator.
- *
- * Calculations are local (no Supabase round-trips). The running total
- * + cost rate are persisted to localStorage so a reload doesn't lose a
- * takeoff in progress.
- *
- * Shape data lives in src/data/aiscShapes.js (AISC Manual 15th Ed.).
+ * Pure helpers → steelWeightCalculator/steelWeightCalculatorHelpers.ts
+ * Presentational tokens/rows → steelWeightCalculator/SteelWeightCalculatorUi.tsx
  */
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -24,120 +16,35 @@ import {
   findShape,
   computeDynamicLbPerFt,
 } from "@/data/aiscShapes";
-import {
-  parseLength,
-  ticksToDecimalFeet,
-  formatLength,
-} from "@/utils/lengthMath";
+import { formatLength, parseLength } from "@/utils/lengthMath";
 import { pieceCost, rollupCost, COST_UNITS } from "@/utils/steelCost";
 import CalcKey from "@/components/calculators/CalcKey";
 import CalcDisplay from "@/components/calculators/CalcDisplay";
-
-const mono = { fontFamily: "var(--font-mono)" };
-const body = { fontFamily: "var(--font-body)" };
-
-// ── localStorage keys ──────────────────────────────────────────────
-const LS_RATE = "calc:steelweight:rate";
-const LS_UNIT = "calc:steelweight:unit";
-const LS_ROWS = "calc:steelweight:rows";
-
-// USD formatter for cost cells / result card.
-const usd = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-// Card + input style tokens mirror FeetInchesCalculator so both tools
-// feel visually identical.
-const cardStyle = {
-  background: "var(--bg-surface)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 8,
-  overflow: "hidden",
-};
-const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  padding: "10px 12px",
-  color: "var(--text-primary)",
-  fontSize: 14,
-  ...mono,
-  outline: "none",
-  boxSizing: "border-box",
-};
-const selectStyle = {
-  ...inputStyle,
-  padding: "9px 12px",
-  cursor: "pointer",
-};
-const labelStyle = {
-  ...mono,
-  fontSize: 9,
-  color: "var(--text-muted)",
-  letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  marginBottom: 6,
-  display: "block",
-};
-
-// ── Length input modes ─────────────────────────────────────────────
-// The user toggles between "ft-in" (jobsite shorthand like 12'-6 1/2")
-// and "decimal" (plain feet, e.g. 12.5). Both resolve to a feet number
-// that feeds the weight math.
-const LENGTH_MODES = {
-  FT_IN:   "ft-in",
-  DECIMAL: "decimal",
-};
-
-function parseLengthFeet(raw, mode) {
-  if (raw == null || String(raw).trim() === "") return null;
-  if (mode === LENGTH_MODES.DECIMAL) {
-    const n = parseFloat(raw);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }
-  // Default: feet-inches mode. parseLength returns 32nd-inch ticks.
-  const ticks = parseLength(raw);
-  if (ticks == null || ticks <= 0) return null;
-  return ticksToDecimalFeet(ticks);
-}
-
-// ── localStorage helpers (SSR/quota safe) ───────────────────────────
-function readLS(key, fallback) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw == null ? fallback : raw;
-  } catch {
-    return fallback;
-  }
-}
-function writeLS(key, value) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    /* quota / private-mode — ignore */
-  }
-}
-function readRows() {
-  try {
-    const raw = window.localStorage.getItem(LS_ROWS);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-// CSV-cell escaping: wrap in quotes + double any embedded quotes when
-// the value contains a comma, quote, or newline.
-function csvCell(value) {
-  const s = String(value ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
+import {
+  LS_RATE,
+  LS_UNIT,
+  LS_ROWS,
+  LENGTH_MODES,
+  usd,
+  parseLengthFeet,
+  readLS,
+  writeLS,
+  readRows,
+  parsePositiveRate,
+  computeWeightTotals,
+  buildTakeoffCsv,
+} from "./steelWeightCalculator/steelWeightCalculatorHelpers";
+import {
+  mono,
+  body,
+  cardStyle,
+  inputStyle,
+  selectStyle,
+  labelStyle,
+  ResultRow,
+  tdLeft,
+  tdRight,
+} from "./steelWeightCalculator/SteelWeightCalculatorUi";
 
 export default function SteelWeightCalculator() {
   const [familyKey, setFamilyKey] = useState(SHAPE_FAMILIES[0].key);
@@ -183,10 +90,7 @@ export default function SteelWeightCalculator() {
     }
   }, [runningTotal]);
 
-  const rateNum = useMemo(() => {
-    const n = parseFloat(rate);
-    return Number.isFinite(n) && n > 0 ? n : 0;
-  }, [rate]);
+  const rateNum = useMemo(() => parsePositiveRate(rate), [rate]);
 
   // ── Derived helpers ────────────────────────────────────────────
   const family = useMemo(
@@ -299,8 +203,7 @@ export default function SteelWeightCalculator() {
       return;
     }
 
-    const piece = lbPerFt * lengthFt;
-    const total = piece * qtyN;
+    const { piece, total } = computeWeightTotals(lbPerFt, lengthFt, qtyN);
     // Cost is computed off the TOTAL weight (piece × qty) at the
     // current rate/unit; 0 when no rate has been entered.
     const totalCost = pieceCost(total, rateNum, costUnit);
@@ -370,19 +273,7 @@ export default function SteelWeightCalculator() {
   // Columns: shape, qty, length, lb_per_ft, weight_lb, cost.
   const copyTakeoffCsv = async () => {
     if (!runningTotal.length) return;
-    const header = ["shape", "qty", "length", "lb_per_ft", "weight_lb", "cost"];
-    const lines = [header.join(",")];
-    for (const r of runningTotal) {
-      lines.push([
-        csvCell(r.shape),
-        csvCell(r.qty),
-        csvCell(r.lengthDisplay),
-        csvCell((r.lbPerFt ?? 0).toFixed(3)),
-        csvCell(r.totalWeight.toFixed(2)),
-        csvCell((Number(r.cost) || 0).toFixed(2)),
-      ].join(","));
-    }
-    const csv = lines.join("\n");
+    const csv = buildTakeoffCsv(runningTotal);
     try {
       await navigator.clipboard.writeText(csv);
       toast.success("Takeoff copied (CSV)");
@@ -918,36 +809,3 @@ export default function SteelWeightCalculator() {
 }
 
 // ── Sub-components ──────────────────────────────────────────────
-function ResultRow({ label, value, emphasize, highlight }) {
-  return (
-    <div style={{
-      display: "flex", alignItems: "baseline", justifyContent: "space-between",
-      marginBottom: 6,
-      gap: 12,
-    }}>
-      <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-        {label}
-      </span>
-      <span style={{
-        ...mono,
-        fontSize: emphasize ? 18 : 12,
-        fontWeight: emphasize ? 800 : 600,
-        color: highlight ? "var(--accent)" : "var(--text-primary)",
-        fontVariantNumeric: "tabular-nums",
-      }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-const tdBase = {
-  ...mono,
-  fontSize: 11,
-  color: "var(--text-primary)",
-  padding: "8px 12px",
-  borderBottom: "1px solid var(--divider)",
-  fontVariantNumeric: "tabular-nums",
-};
-const tdLeft  = { ...tdBase, textAlign: "left"  };
-const tdRight = { ...tdBase, textAlign: "right" };
