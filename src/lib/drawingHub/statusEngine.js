@@ -9,7 +9,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
-import { STATUS_THRESHOLDS } from "./statusEngineHelpers";
+import { STATUS_THRESHOLDS, HEATMAP_WEIGHTS, READINESS_DRAWING_STAGE_SCORES } from "./statusEngineHelpers";
 
 // ────────────────────────────────────────────────────────────────────
 // Status rule engine (V1.5)
@@ -220,16 +220,6 @@ function _hydratedToArray(h) {
 // the resulting density value is easy to reason about in the debugger.
 // Returns 0 for a zone with no links — the heatmap renders those as
 // fully transparent (cool).
-const HEATMAP_WEIGHTS = {
-  rfiOverdue:     5,
-  inspFailed:     4,
-  wpBlocked:      4,
-  delLate:        3,
-  rfiOpen:        2,
-  delPending:     1,
-  wpActive:       1,
-  otherActivity:  0.25,
-};
 
 export function computeZoneDensity(hydrated) {
   const items = _hydratedToArray(hydrated).filter(
@@ -292,15 +282,6 @@ export function computeZoneDensity(hydrated) {
 // Erection:    the composite — min(Fab, Delivery) capped further by
 //              any failed inspection or blocked work package. If a
 //              zone has no installation-phase signal, returns null.
-const READINESS_DRAWING_STAGE_SCORES = {
-  Released: 100,
-  IFC:      100, // alias for Released per elsewhere in app
-  OFS:       60,
-  BFA:       40,
-  OFA:       20,
-  IFA:       10,
-  "Not Started": 0,
-};
 
 function _recordStage(rec) {
   // Drawings use `stage`; work packages use `status`. We look at both

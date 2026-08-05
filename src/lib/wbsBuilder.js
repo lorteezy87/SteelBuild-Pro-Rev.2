@@ -54,7 +54,7 @@ const VALID_ABBREVS = new Set(Object.values(PHASE_ABBREV));
 // classifiers below. Both lists are kept small and readable; priority
 // of classifiers determines which type a line resolves to when the
 // text could match multiple.
-const SCOPE_TYPES = {
+export const SCOPE_TYPES = {
   // ─ Main structural frame ────────────────────────────────────────
   column: {
     label: "Columns",

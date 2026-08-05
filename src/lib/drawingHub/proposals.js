@@ -15,6 +15,7 @@ import { ensureCurrentRevision } from "./revisions";
 import { createZone } from "./zones";
 import { listLinksForZones, hydrateLinks } from "./links";
 import { recomputeAndPersistZoneStatus } from "./statusEngine";
+import { FINDING_TYPE_TO_ZONE_TYPE, SEVERITY_WEIGHTS } from "./proposalsHelpers";
 
 // ────────────────────────────────────────────────────────────────────
 // Drawing Hub V3.0 — Analyzer→Zones bridge
@@ -39,25 +40,7 @@ import { recomputeAndPersistZoneStatus } from "./statusEngine";
 
 // Heuristic mapping from finding_type → suggested zone_type.
 // Used as the proposal's default; PM can override on accept.
-const FINDING_TYPE_TO_ZONE_TYPE = {
-  coordination_conflict: "area",
-  callout_issue:         "detail",
-  aess_concern:          "member_group",
-  dimension_concern:     "detail",
-  missing_info:          "area",
-  revision_delta:        "area",
-};
-
-// Severity → confidence weight, applied per finding then averaged
-// for a cluster. Mirrors drawing_findings.severity CHECK
-// (critical/high/medium/low/info).
-const SEVERITY_WEIGHTS = {
-  critical: 0.95,
-  high:     0.90,
-  medium:   0.70,
-  low:      0.50,
-  info:     0.40,
-};
+// Catalog: proposalsHelpers (FINDING_TYPE_TO_ZONE_TYPE, SEVERITY_WEIGHTS).
 
 // Append a timeline entry to a proposal's metadata.timeline array.
 // Pure helper — caller passes the existing metadata object; we return
