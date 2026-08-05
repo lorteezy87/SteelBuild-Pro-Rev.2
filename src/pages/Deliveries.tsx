@@ -38,7 +38,7 @@ import {
   getDeliveryDisplayName,
   sortDeliveriesForDispatch,
 } from "./deliveries/analytics";
-import { LANE_ORDER, todayIso } from "./deliveries/format";
+import { todayIso } from "./deliveries/format";
 import {
   DeliveryDetailModal,
   DispatchBoard,
