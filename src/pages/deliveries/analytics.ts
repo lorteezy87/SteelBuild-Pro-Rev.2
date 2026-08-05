@@ -2,7 +2,7 @@
 const STATUS_ORDER = ["Scheduled", "Loading", "In Transit", "Partial", "Delayed", "Rejected", "Delivered"];
 const CLOSED_STATUSES = new Set(["delivered", "complete", "completed", "closed", "cancelled", "canceled"]);
 const ISSUE_STATUSES = new Set(["partial", "rejected", "delayed"]);
-const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
+export const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function num(value) {

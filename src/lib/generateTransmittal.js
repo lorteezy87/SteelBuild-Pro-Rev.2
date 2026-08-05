@@ -5,29 +5,12 @@
  */
 import { jsPDF } from "jspdf";
 import { formatLocalDate } from "@/utils/dates";
+import {
+  TRANSMITTAL_PDF_COLORS as C,
+  TRANSMITTAL_STATUS_COLOR as STATUS_COLOR,
+} from "./generateTransmittalHelpers";
 
 // ── Color palette (RGB) ──────────────────────────────────────────────────────
-const C = {
-  black:      [15,  17,  24],
-  accent:     [0,  175, 215],   // steel blue
-  muted:      [100, 110, 130],
-  border:     [210, 215, 225],
-  rowEven:    [245, 247, 250],
-  rowOdd:     [255, 255, 255],
-  errorFill:  [254, 242, 242],
-  warnFill:   [255, 251, 235],
-  successFill:[240, 253, 244],
-  white:      [255, 255, 255],
-};
-
-const STATUS_COLOR = {
-  "Approved":          [22, 163, 74],
-  "Approved as Noted": [22, 163, 74],
-  "Under Review":      [37, 99, 235],
-  "Revise & Resubmit": [202, 138, 4],
-  "Rejected":          [220, 38, 38],
-  "Draft":             [100, 116, 139],
-};
 
 function statusColor(s) { return STATUS_COLOR[s] || C.muted; }
 

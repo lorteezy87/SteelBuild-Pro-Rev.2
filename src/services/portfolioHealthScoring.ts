@@ -42,7 +42,7 @@ export interface PortfolioHealthScoringResult {
 
 const CLOSED_RFI_STATUSES = new Set(["answered", "closed", "void"]);
 const CLOSED_ACTION_STATUSES = new Set(["complete", "cancelled", "closed"]);
-const DEFAULT_HEALTH_THRESHOLDS = { onTrack: 76, watch: 52 };
+export const DEFAULT_HEALTH_THRESHOLDS = { onTrack: 76, watch: 52 };
 
 function n(value: unknown): number {
   const num = Number(value);

@@ -53,7 +53,7 @@ export interface HealthContext {
   today?: string; // local YYYY-MM-DD; defaults to today
 }
 
-const WEIGHTS = {
+export const DRAWING_HEALTH_WEIGHTS = {
   openRfis: 20,
   revisionRisk: 18,
   approval: 16,
@@ -63,14 +63,18 @@ const WEIGHTS = {
   missingSheets: 8,
 } as const;
 
+const WEIGHTS = DRAWING_HEALTH_WEIGHTS;
+
 const TERMINAL_APPROVED = new Set(["Approved", "Approved as Noted", "Released for Fabrication"]);
 
-const BANDS: Record<BandKey, { label: string; color: string }> = {
+export const DRAWING_HEALTH_BANDS: Record<BandKey, { label: string; color: string }> = {
   excellent: { label: "Excellent", color: "#2EA043" },
   good: { label: "Good", color: "#7DBE3C" },
   at_risk: { label: "At Risk", color: "#D29922" },
   critical: { label: "Critical", color: "#F85149" },
 };
+
+const BANDS = DRAWING_HEALTH_BANDS;
 
 function gradeFor(score: number): Grade {
   if (score >= 90) return "A";

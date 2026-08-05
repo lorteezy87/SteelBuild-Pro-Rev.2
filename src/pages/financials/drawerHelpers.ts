@@ -127,3 +127,20 @@ export const SOV_STATUS_COLORS: Record<string, string> = {
   Certified: "var(--accent)",
   Paid: "var(--status-success)",
 };
+
+/** Table cell chrome for financial KPI drawer tables. */
+export const drawerTd: Record<string, string | number> = {
+  fontFamily: "var(--font-body)",
+  fontSize: 11,
+  color: "var(--text-primary)",
+  padding: "7px 6px",
+  borderBottom: "1px solid var(--divider)",
+  whiteSpace: "nowrap",
+};
+
+export const drawerTdRight: Record<string, string | number> = {
+  ...drawerTd,
+  textAlign: "right",
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+};

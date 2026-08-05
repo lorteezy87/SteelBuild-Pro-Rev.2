@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import { mono, body } from "./utils";
+import { mono } from "./utils";
 
 /**
  * FinancialDrawer — right-side sheet shared by BillingDrawer, COImpactDrawer,
@@ -135,13 +135,4 @@ export function ChartLegend({ color, label }) {
   );
 }
 
-export const drawerTd = {
-  ...body,
-  fontSize: 11,
-  color: "var(--text-primary)",
-  padding: "7px 6px",
-  borderBottom: "1px solid var(--divider)",
-  whiteSpace: "nowrap",
-};
-
-export const drawerTdRight = { ...drawerTd, textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11 };
+export { drawerTd, drawerTdRight } from "./drawerHelpers";
