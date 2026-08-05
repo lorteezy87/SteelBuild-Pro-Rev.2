@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState } from "react";
 import type { ComponentType, Dispatch, PropsWithChildren, SetStateAction } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, Link2, Paperclip, Plus, Reply, ReplyAll, Send, X } from "lucide-react";
+import { FileText, Link2, Paperclip, Reply, ReplyAll, Send, X } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { Modal as ModalRaw } from "@/components/design-system";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { sendEmail, buildReplyDefaults } from "@/services/emailSendService";
 import {
   ENTITY_TYPE_OPTIONS,
@@ -65,7 +66,8 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
   }, [message.parsed_metadata]);
 
   const validTypes = ENTITY_TYPE_OPTIONS.map((o) => o.value);
-  const defaultType = validTypes.includes(message.parsed_type) ? message.parsed_type : "action_item";
+  const parsedType = message.parsed_type ?? "";
+  const defaultType = validTypes.includes(parsedType) ? parsedType : "action_item";
 
   const [entityType, setEntityType] = useState(defaultType);
   const [title, setTitle] = useState(message.subject || "");
@@ -86,32 +88,35 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
       const aiPriority = extracted?.priority ? (priorityMap[extracted.priority] || "Medium") : "Medium";
 
       if (entityType === "rfi") {
-        createdRecord = await entities.RFI.create({
-          project_id: projectId, subject: title, question: description,
+        createdRecord = await entities.RFI.create(withProjectId({
+          subject: title, question: description,
           status: "Open", priority: aiPriority,
           ...(extracted?.rfi_number ? { rfi_number: extracted.rfi_number } : {}),
           ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
           ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
-        } as any);
+        }, projectId) as any);
         invalidateEntity(qc, "rfi", projectId);
       } else if (entityType === "action_item") {
-        createdRecord = await entities.ActionItem.create({
-          project_id: projectId, title, description, status: "Open", priority: aiPriority,
+        createdRecord = await entities.ActionItem.create(withProjectId({
+          title, description, status: "Open", priority: aiPriority,
           ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
           ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
-        } as any);
+        }, projectId) as any);
         invalidateEntity(qc, "action_item", projectId);
       } else if (entityType === "submittal") {
-        createdRecord = await entities.Submittal.create({
-          project_id: projectId, title, description, status: "Open",
+        createdRecord = await entities.Submittal.create(withProjectId({
+          // "Draft" is the canonical not-yet-submitted status. ("Open" is valid
+          // for RFI/ActionItem above but is rejected by submittals_status_check,
+          // which previously made this create always throw.)
+          title, description, status: "Draft",
           ...(extracted?.submittal_number ? { submittal_number: extracted.submittal_number } : {}),
-        } as any);
+        }, projectId) as any);
         invalidateEntity(qc, "submittal", projectId);
       } else if (entityType === "change_order") {
-        createdRecord = await entities.ChangeOrder.create({
-          project_id: projectId, title, description, status: "Pending",
+        createdRecord = await entities.ChangeOrder.create(withProjectId({
+          title, description, status: "Pending",
           ...(extracted?.due_date ? { response_due: extracted.due_date } : {}),
-        } as any);
+        }, projectId) as any);
         invalidateEntity(qc, "change_order", projectId);
       }
       if (createdRecord) {
@@ -129,13 +134,16 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
             try {
               const ext = (att.filename || "").split(".").pop()?.toLowerCase() || "other";
               const knownTypes = ["pdf","dwg","dxf","ifc","rvt","jpg","jpeg","png","xlsx","xls","docx","doc","csv","zip"];
-              await entities.Document.create({
-                project_id: projectId,
+              await entities.Document.create(withProjectId({
                 display_name: att.filename,
                 description: `Filed from email: ${message.subject || "(no subject)"}\nFrom: ${message.sender_name || message.sender_email}`,
                 file_name: att.filename,
+                // Bucket-prefixed storage path — resolveFileUrl signs it against
+                // the private email-attachments bucket on display. A bare
+                // /storage/v1/object/ URL would be fetched with no auth header
+                // and is blocked by the bucket's project-scoped RLS.
                 file_url: att.storage_path
-                  ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/email-attachments/${att.storage_path}`
+                  ? `email-attachments/${att.storage_path}`
                   : null,
                 file_type: knownTypes.includes(ext) ? ext : "other",
                 file_size_kb: att.size_bytes ? Math.round(att.size_bytes / 1024) : 0,
@@ -148,7 +156,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
                 uploaded_date: today,
                 source_type: "email",
                 source_id: message.id,
-              } as any);
+              }, projectId) as any);
               filedCount++;
             } catch (docErr) {
               console.error(`[EmailInbox] Failed to file attachment ${att.filename}:`, docErr);
@@ -164,7 +172,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
       toast.success(`${typeName} created from email${attMsg}`);
       onSuccess();
     } catch (err: any) {
-      toast.error("Failed: " + (err?.message || "Unknown error"));
+      toast.error(`Failed: ${toUserErrorMessage(err)}`);
     } finally { setSaving(false); }
   };
 
@@ -269,11 +277,11 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {att.filename}
                   </span>
-                  {att.size_bytes && (
+                  {att.size_bytes ? (
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
                       {formatBytes(att.size_bytes)}
                     </span>
-                  )}
+                  ) : null}
                 </label>
               ))}
             </div>
@@ -335,7 +343,7 @@ export function LinkToExistingModal({ message, projectId, onClose, onSuccess }: 
       toast.success("Email linked to existing record");
       onSuccess();
     } catch (err: any) {
-      toast.error("Failed: " + (err?.message || "Unknown error"));
+      toast.error(`Failed: ${toUserErrorMessage(err)}`);
     } finally { setSaving(false); }
   };
 

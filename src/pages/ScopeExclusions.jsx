@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
 import { Check, X, Info, Search, Upload } from "lucide-react";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -47,7 +48,7 @@ export default function ScopeExclusions() {
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.ScopeItem.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item updated"); setShowForm(false); setEditing(null); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // Lightweight checkbox toggle — does not open the form modal. Writes the
@@ -61,7 +62,7 @@ export default function ScopeExclusions() {
         ...(is_completed ? { in_progress: false, in_progress_at: null } : {}),
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // Toggle the in-progress flag. If the row is complete, this is a no-op at
@@ -73,13 +74,13 @@ export default function ScopeExclusions() {
         in_progress_at: in_progress ? new Date().toISOString() : null,
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.ScopeItem.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item deleted"); setDeleteTarget(null); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const handleSave = (data) => {
@@ -102,12 +103,13 @@ export default function ScopeExclusions() {
     if (selectedIds.size === 0) return;
     setBulkActionBusy(true);
     try {
-      await Promise.all([...selectedIds].map(id => entities.ScopeItem.update(id, patch)));
+      // Identical `patch` across every selected id → one chunked .in('id', ids) update.
+      await entities.ScopeItem.bulkUpdate([...selectedIds], patch);
       qc.invalidateQueries({ queryKey: ["scope-items"] });
       toast.success(`Updated ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();
     } catch (e) {
-      toast.error("Bulk update failed: " + (e?.message || "Unknown error"));
+      toast.error(`Bulk update failed: ${toUserErrorMessage(e, "Unknown error")}`);
     } finally {
       setBulkActionBusy(false);
     }
@@ -118,12 +120,13 @@ export default function ScopeExclusions() {
     if (!window.confirm(`Delete ${selectedIds.size} selected scope item${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`)) return;
     setBulkActionBusy(true);
     try {
-      await Promise.all([...selectedIds].map(id => entities.ScopeItem.delete(id)));
+      // One chunked .in('id', ids) delete instead of N single-row round-trips.
+      await entities.ScopeItem.bulkDelete([...selectedIds]);
       qc.invalidateQueries({ queryKey: ["scope-items"] });
       toast.success(`Deleted ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();
     } catch (e) {
-      toast.error("Bulk delete failed: " + (e?.message || "Unknown error"));
+      toast.error(`Bulk delete failed: ${toUserErrorMessage(e, "Unknown error")}`);
     } finally {
       setBulkActionBusy(false);
     }
@@ -163,7 +166,7 @@ export default function ScopeExclusions() {
   const openCreate = () => { setEditing(null); setShowForm(true); };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
         title="Scope & Exclusions"

@@ -1,0 +1,244 @@
+import { describe, it, expect, vi } from "vitest";
+import {
+  loadQueue,
+  saveQueue,
+  enqueueOp,
+  makeProgressOp,
+  makePunchCreateOp,
+  makeDailyLogCreateOp,
+  makePhotoCreateOp,
+  newClientOpId,
+  flushQueue,
+  isLikelyOfflineError,
+  isUniqueViolation,
+  OP_SCHEDULE_PROGRESS,
+  OP_PUNCH_CREATE,
+  OP_DAILYLOG_CREATE,
+  OP_PHOTO_CREATE,
+} from "../offlineQueue";
+
+// In-memory storage adapter for deterministic persistence tests.
+function memStorage(initial = null) {
+  let value = initial;
+  return {
+    read: () => value,
+    write: (v) => {
+      value = v;
+    },
+    _raw: () => value,
+  };
+}
+
+describe("makeProgressOp", () => {
+  it("builds an idempotent op keyed by task", () => {
+    const op = makeProgressOp("task-1", 50, 1000);
+    expect(op).toMatchObject({
+      type: OP_SCHEDULE_PROGRESS,
+      coalesceKey: "schedule-progress:task-1",
+      payload: { id: "task-1", pct: 50 },
+      createdAt: 1000,
+    });
+  });
+});
+
+describe("enqueueOp coalescing", () => {
+  it("replaces an earlier op for the same task (last value wins)", () => {
+    let q = [];
+    q = enqueueOp(q, makeProgressOp("a", 25, 1));
+    q = enqueueOp(q, makeProgressOp("b", 10, 2));
+    q = enqueueOp(q, makeProgressOp("a", 75, 3)); // supersedes a@25
+
+    expect(q).toHaveLength(2);
+    const a = q.find((o) => o.payload.id === "a");
+    expect(a.payload.pct).toBe(75);
+  });
+
+  it("preserves FIFO order of distinct tasks", () => {
+    let q = [];
+    q = enqueueOp(q, makeProgressOp("a", 1, 1));
+    q = enqueueOp(q, makeProgressOp("b", 2, 2));
+    q = enqueueOp(q, makeProgressOp("c", 3, 3));
+    expect(q.map((o) => o.payload.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("is pure (does not mutate the input array)", () => {
+    const original = [];
+    const next = enqueueOp(original, makeProgressOp("a", 1, 1));
+    expect(original).toHaveLength(0);
+    expect(next).toHaveLength(1);
+  });
+});
+
+describe("loadQueue / saveQueue", () => {
+  it("round-trips through storage", () => {
+    const storage = memStorage();
+    const q = enqueueOp([], makeProgressOp("a", 40, 1));
+    saveQueue(q, storage);
+    expect(loadQueue(storage)).toEqual(q);
+  });
+
+  it("returns [] for empty or corrupt storage", () => {
+    expect(loadQueue(memStorage(null))).toEqual([]);
+    expect(loadQueue(memStorage("not json"))).toEqual([]);
+    expect(loadQueue(memStorage('{"not":"an array"}'))).toEqual([]);
+  });
+});
+
+describe("flushQueue", () => {
+  it("replays every op in order on success and drains the queue", async () => {
+    const seen = [];
+    const handlers = {
+      [OP_SCHEDULE_PROGRESS]: async (payload) => {
+        seen.push(payload.id);
+      },
+    };
+    const q = [
+      makeProgressOp("a", 10, 1),
+      makeProgressOp("b", 20, 2),
+      makeProgressOp("c", 30, 3),
+    ];
+    const result = await flushQueue(q, handlers);
+    expect(seen).toEqual(["a", "b", "c"]);
+    expect(result.synced).toBe(3);
+    expect(result.remaining).toHaveLength(0);
+    expect(result.failed).toBeNull();
+  });
+
+  it("stops at the first failure and keeps that op + the remainder", async () => {
+    const handler = vi
+      .fn()
+      .mockResolvedValueOnce(undefined) // a ok
+      .mockRejectedValueOnce(new Error("Failed to fetch")); // b fails
+    const handlers = { [OP_SCHEDULE_PROGRESS]: handler };
+    const q = [
+      makeProgressOp("a", 10, 1),
+      makeProgressOp("b", 20, 2),
+      makeProgressOp("c", 30, 3),
+    ];
+    const result = await flushQueue(q, handlers);
+    expect(result.synced).toBe(1);
+    expect(result.failed.payload.id).toBe("b");
+    expect(result.remaining.map((o) => o.payload.id)).toEqual(["b", "c"]); // nothing lost
+    expect(handler).toHaveBeenCalledTimes(2); // didn't attempt c
+  });
+
+  it("discards unknown op types instead of wedging the queue", async () => {
+    const handlers = { [OP_SCHEDULE_PROGRESS]: async () => {} };
+    const q = [
+      { id: "x", type: "retired-op", payload: {} },
+      makeProgressOp("a", 10, 2),
+    ];
+    const result = await flushQueue(q, handlers);
+    expect(result.remaining).toHaveLength(0);
+    expect(result.synced).toBe(1);
+  });
+
+  it("never throws on empty/garbage input", async () => {
+    await expect(flushQueue(null, {})).resolves.toMatchObject({ synced: 0 });
+    await expect(flushQueue(undefined, {})).resolves.toMatchObject({ remaining: [] });
+  });
+});
+
+describe("isLikelyOfflineError", () => {
+  it("treats fetch/network failures as offline", () => {
+    expect(isLikelyOfflineError(new TypeError("Failed to fetch"))).toBe(true);
+    expect(isLikelyOfflineError({ message: "NetworkError when attempting to fetch resource" })).toBe(true);
+    expect(isLikelyOfflineError({ message: "Load failed" })).toBe(true);
+  });
+
+  it("does NOT treat a server/RLS rejection as offline", () => {
+    expect(isLikelyOfflineError({ name: "PostgrestError", message: "new row violates row-level security policy" })).toBe(false);
+    expect(isLikelyOfflineError({ message: "permission denied" })).toBe(false);
+  });
+
+  it("is false for no error", () => {
+    expect(isLikelyOfflineError(null)).toBe(false);
+  });
+});
+
+describe("makePunchCreateOp", () => {
+  it("uses the client_op_id as the op id and carries the payload", () => {
+    const record = { description: "Missing weld", project_id: "p1", client_op_id: "cid-1" };
+    const op = makePunchCreateOp(record, "cid-1", 500);
+    expect(op).toMatchObject({ id: "cid-1", type: OP_PUNCH_CREATE, payload: record, createdAt: 500 });
+    expect(op.coalesceKey).toBeUndefined(); // creates must never coalesce
+  });
+});
+
+describe("makeDailyLogCreateOp", () => {
+  it("uses the client_op_id as the op id and carries the payload, never coalescing", () => {
+    const record = { date: "2026-07-12", project_id: "p1", headcount: 6, client_op_id: "cid-7" };
+    const op = makeDailyLogCreateOp(record, "cid-7", 900);
+    expect(op).toMatchObject({ id: "cid-7", type: OP_DAILYLOG_CREATE, payload: record, createdAt: 900 });
+    expect(op.coalesceKey).toBeUndefined(); // distinct logs must never collapse
+  });
+
+  it("keeps two distinct logs as two ops in the queue (id de-dup only drops exact repeats)", () => {
+    let q = [];
+    q = enqueueOp(q, makeDailyLogCreateOp({ date: "d1" }, "cid-a", 1));
+    q = enqueueOp(q, makeDailyLogCreateOp({ date: "d2" }, "cid-b", 2));
+    q = enqueueOp(q, makeDailyLogCreateOp({ date: "d1-retry" }, "cid-a", 3)); // same id → replaces
+    expect(q).toHaveLength(2);
+    expect(q.map((o) => o.id)).toEqual(["cid-b", "cid-a"]);
+  });
+});
+
+describe("makePhotoCreateOp", () => {
+  it("keys the op + blob by the client_op_id and carries the create meta", () => {
+    const meta = { project_id: "p1", category: "Progress", file_name: "shot.jpg" };
+    const op = makePhotoCreateOp("cid-9", meta, 700);
+    expect(op).toMatchObject({
+      id: "cid-9",
+      type: OP_PHOTO_CREATE,
+      payload: { blobKey: "cid-9", meta },
+      createdAt: 700,
+    });
+    expect(op.coalesceKey).toBeUndefined();
+  });
+});
+
+describe("newClientOpId", () => {
+  it("returns a non-empty, unique string", () => {
+    const a = newClientOpId();
+    const b = newClientOpId();
+    expect(typeof a).toBe("string");
+    expect(a.length).toBeGreaterThan(0);
+    expect(a).not.toBe(b);
+  });
+});
+
+describe("enqueueOp id de-dup (creates)", () => {
+  it("never queues the same create (same id) twice", () => {
+    let q = [];
+    q = enqueueOp(q, makePunchCreateOp({ a: 1 }, "cid-1", 1));
+    q = enqueueOp(q, makePunchCreateOp({ a: 2 }, "cid-1", 2)); // same id -> replaces, not appends
+    expect(q).toHaveLength(1);
+  });
+
+  it("keeps distinct creates (different ids)", () => {
+    let q = [];
+    q = enqueueOp(q, makePunchCreateOp({ a: 1 }, "cid-1", 1));
+    q = enqueueOp(q, makePunchCreateOp({ a: 2 }, "cid-2", 2));
+    expect(q).toHaveLength(2);
+  });
+
+  it("lets progress and punch ops coexist in order", () => {
+    let q = [];
+    q = enqueueOp(q, makeProgressOp("t1", 50, 1));
+    q = enqueueOp(q, makePunchCreateOp({ a: 1 }, "cid-1", 2));
+    expect(q.map((o) => o.type)).toEqual([OP_SCHEDULE_PROGRESS, OP_PUNCH_CREATE]);
+  });
+});
+
+describe("isUniqueViolation", () => {
+  it("detects a Postgres unique violation (replayed create that already landed)", () => {
+    expect(isUniqueViolation({ code: "23505" })).toBe(true);
+    expect(isUniqueViolation({ message: 'duplicate key value violates unique constraint "uq_x"' })).toBe(true);
+  });
+
+  it("is false for other errors", () => {
+    expect(isUniqueViolation({ code: "23503" })).toBe(false); // FK violation
+    expect(isUniqueViolation({ message: "Failed to fetch" })).toBe(false);
+    expect(isUniqueViolation(null)).toBe(false);
+  });
+});

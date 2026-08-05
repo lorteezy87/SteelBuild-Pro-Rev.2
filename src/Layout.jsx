@@ -6,7 +6,7 @@
  *  - Desktop sidebar navigation
  *  - Mobile hamburger drawer
  *  - Content area with error banner
- *  - Global search modal, quick-add FAB, toast notifications
+ *  - Global search modal and toast notifications
  *
  * All data definitions live in src/config/moduleRegistry.js.
  * All sub-components live in src/components/nav/.
@@ -15,11 +15,13 @@
 import React, { Suspense, useState, useEffect, useContext } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
+import { ChevronDown, Search } from "lucide-react";
 import { createPageUrl } from "@/utils";
 
 // Nav components (extracted from Layout)
 import BellDropdown from "./components/nav/BellDropdown";
 import HamburgerMenu from "./components/nav/HamburgerMenu";
+import { BrandLogo } from "./components/nav/BrandLogo";
 import ThemeToggleButton from "./components/nav/ThemeToggleButton";
 import HighContrastToggleButton from "./components/nav/HighContrastToggleButton";
 import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
@@ -36,28 +38,19 @@ import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRo
 
 // Shared components — use lazyWithRetry so stale-chunk 404s after a deploy
 // trigger a single page reload instead of a hard "LOAD ERROR" crash.
-const ModulesDropdown = lazyWithRetry(() => import("./components/nav/ModulesDropdown"));
+const ModuleLauncherGrid = lazyWithRetry(() => import("./components/nav/ModuleLauncherGrid"));
 const GlobalSearchModal = lazyWithRetry(() => import("./components/search/GlobalSearchModal"));
 const MobileDrawer = lazyWithRetry(() => import("./components/nav/MobileDrawer"));
 const Toaster = lazyWithRetry(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
 const SidebarNav = lazyWithRetry(() => import("./components/nav/SidebarNav"));
-// QuickAddFAB intentionally not imported — the floating "+" shortcut at
-// bottom-right was hidden per user request. Component file is preserved
-// in src/components/shared/QuickAddFAB.jsx; uncomment this import + its
-// render below to re-enable.
-// import QuickAddFAB from "./components/shared/QuickAddFAB";
-// AiAssistantLauncher intentionally not imported — the floating "Ask AI"
-// launcher and its Cmd/Ctrl+K shortcut were hidden site-wide because the
-// schedule-assistant edge function isn't reliably returning answers yet.
-// The component, drawer, hook, and edge-function call site are all still
-// in the repo — uncomment this import + its render below to re-enable.
-// import AiAssistantLauncher from "./components/ai-assistant/AiAssistantLauncher";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 
 // Context
 import { useProjectContext } from "./components/shared/ProjectContext";
 import { AuthContext } from "@/lib/AuthContext";
 import { useTheme } from "@/components/shared/ThemeContext";
+import { REFERENCE_CHROME_PAGES } from "@/config/dashboardChromePages";
+import "./pages/dashboard/dashboardTheme.css";
 
 // ─────────────────────────────────────────────────────────────────────
 function sidebarFallbackWidth() {
@@ -84,7 +77,8 @@ export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const isDarkTheme = theme === "dark";
-  const appShellClassName = `app-shell ${isDarkTheme ? "steelbuild-dark " : ""}sbd-mesh-bg`;
+  const isDashboardPage = REFERENCE_CHROME_PAGES.has(currentPageName);
+  const appShellClassName = `app-shell ${isDashboardPage ? "dashboard-reference-shell " : ""}sbd-mesh-bg`;
 
   // Auth
   const authCtx = useContext(AuthContext);
@@ -95,7 +89,8 @@ export default function Layout({ children, currentPageName }) {
   const [gridOpen, setGridOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const isMobile = useResponsiveBreakpoint();
+  const { band, isPhone, isTablet } = useResponsiveBreakpoint();
+  const useDashboardChrome = isDashboardPage && !isPhone;
 
   // Density preference
   useDensityRestore();
@@ -113,9 +108,8 @@ export default function Layout({ children, currentPageName }) {
   const {
     unreadAlerts,
     unreadCount,
-    alertCounts,
     markAllRead,
-  } = useLayoutNavData(activeProjectId, { includeModuleCounts: gridOpen });
+  } = useLayoutNavData(activeProjectId, { includeModuleCounts: false });
 
   // Page tracking (non-critical)
   useEffect(() => {
@@ -132,22 +126,34 @@ export default function Layout({ children, currentPageName }) {
 
   // ── Navigation handlers ──────────────────────────────────────────
   const handleNavigate = (page) => navigate(createPageUrl(page));
+  const userName = user?.full_name || user?.email || "User";
+  const userInitials = String(userName)
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
 
   // ── Render ───────────────────────────────────────────────────────
   // The theme class is scoped here so light mode can use the reference
   // grid-and-panel styling without inheriting dark overlay tokens.
   return (
-    <div className={appShellClassName} data-mobile-shell={isMobile ? "true" : "false"} style={{
+    <div
+      className={appShellClassName}
+      data-viewport={band}
+      data-mobile-shell={isPhone ? "true" : "false"}
+      style={{
       minHeight: "100vh", width: "100%",
       display: "flex", alignItems: "flex-start", justifyContent: "center",
       padding: 0, background: "var(--bg-base)",
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-    }}>
+    }}
+    >
       {/* Skip-to-main-content link — first focusable element on the page */}
       <SkipToMainContentLink />
 
       {/* Mobile Drawer */}
-      {isMobile && (
+      {isPhone && (
         <Suspense fallback={null}>
           <MobileDrawer
             open={mobileOpen}
@@ -171,28 +177,128 @@ export default function Layout({ children, currentPageName }) {
           zIndex: 200, opacity: isDarkTheme ? 0.6 : 0, display: isDarkTheme ? "block" : "none",
         }} />
 
+        {useDashboardChrome ? (
+          <div className="app-body sb-dashboard-shell-body" style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <Suspense fallback={<SidebarNavFallback />}>
+              <SidebarNav
+                currentPageName={currentPageName}
+                onNavigate={handleNavigate}
+                visible
+                variant="dashboard"
+                forceRail={isTablet}
+              />
+            </Suspense>
+
+            <div className="sb-dashboard-shell-content">
+              <nav aria-label="Primary" className="app-topbar nav-glass sbd-topbar sb-dashboard-topbar" style={{
+                height: 68,
+                minHeight: 68,
+                padding: "0 22px",
+                display: "grid",
+                gridTemplateColumns: "260px minmax(320px, 1fr) auto",
+                alignItems: "center",
+                gap: 22,
+                flexShrink: 0,
+                position: "relative",
+                zIndex: 100,
+              }}>
+                <ProjectPillDropdown align="left" variant="dashboard" />
+
+                <div className="sb-dashboard-topbar__search">
+                  <TopBarSearchButton onClick={() => setSearchOpen(true)} variant="dashboard" />
+                </div>
+
+                <div className="sb-dashboard-topbar__actions">
+                  <ThemeToggleButton />
+                  <HighContrastToggleButton />
+                  <button
+                    type="button"
+                    className="sb-dashboard-topbar__icon"
+                    aria-label="Open search"
+                    onClick={() => setSearchOpen(true)}
+                  >
+                    <Search size={18} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="sb-dashboard-topbar__icon"
+                      aria-label="All modules"
+                      title="All Modules"
+                      onClick={() => setGridOpen((o) => !o)}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+                        <rect x="0" y="0" width="6" height="6" rx="1.5" />
+                        <rect x="8" y="0" width="6" height="6" rx="1.5" />
+                        <rect x="0" y="8" width="6" height="6" rx="1.5" />
+                        <rect x="8" y="8" width="6" height="6" rx="1.5" />
+                      </svg>
+                    </button>
+                    {gridOpen && (
+                      <Suspense fallback={null}>
+                        <ModuleLauncherGrid
+                          open={gridOpen}
+                          onClose={() => setGridOpen(false)}
+                          onNavigate={handleNavigate}
+                        />
+                      </Suspense>
+                    )}
+                  </div>
+                  <BellDropdown
+                    alerts={unreadAlerts}
+                    unreadCount={unreadCount}
+                    onMarkAllRead={markAllRead}
+                    onViewAll={() => handleNavigate("AlertsCenter")}
+                  />
+                  <button
+                    type="button"
+                    className="sb-dashboard-topbar__user"
+                    title={`${userName} · sign out`}
+                    onClick={logout}
+                  >
+                    <span className="sb-dashboard-topbar__avatar">{userInitials.slice(0, 2)}</span>
+                    <span>{userInitials.slice(0, 2)}</span>
+                    <ChevronDown size={15} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                </div>
+              </nav>
+
+              <main id="main-content" className="app-main-content sb-dashboard-main-content" aria-label="Main content" tabIndex={-1} style={{
+                flex: 1, overflowY: "auto", padding: 0,
+                background: "var(--bg-base)", color: "var(--text-primary)",
+                display: "flex", flexDirection: "column",
+              }}>
+                <ProjectErrorBanner />
+                {children}
+              </main>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* ── TOP UTILITY BAR ─────────────────────────────────────── */}
         <nav aria-label="Primary" className="app-topbar nav-glass sbd-topbar" style={{
-          height: isMobile ? 52 : 36,
-          minHeight: isMobile ? 52 : 36,
-          padding: isMobile
+          height: isPhone ? 52 : 36,
+          minHeight: isPhone ? 52 : 36,
+          padding: isPhone
             ? "0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left))"
             : "0 12px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          flexShrink: 0, position: "relative", zIndex: 100, gap: isMobile ? 6 : 8,
+          flexShrink: 0, position: "relative", zIndex: 100, gap: isPhone ? 6 : 8,
         }}>
           {/* LEFT: Brand + Hamburger */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
-            {/* Topbar is now identical in light + dark: logo → divider → project
-                selector → current-page eyebrow. (Branding previously lived in the
-                light sidebar; it now sits in the topbar for both themes.) */}
-            <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
-              <img src="/logo.png" alt="SteelBuild Pro" style={{ height: isMobile ? 30 : 26, width: "auto", objectFit: "contain" }} />
-            </div>
-            {!isMobile && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
-            {!isMobile && <ProjectPillDropdown align="left" />}
-            {!isMobile && (
+            {isPhone && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
+            {/* Brand lives in the sidebar on desktop (SidebarNav) and in the
+                drawer on mobile. The top bar only carries the logo on mobile —
+                where the sidebar is off-canvas — so desktop shows it once, not
+                twice. The leading divider went with it. */}
+            {isPhone && (
+              <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
+                <BrandLogo height={30} title="SteelBuild Pro" style={{ display: "block" }} />
+              </div>
+            )}
+            {!isPhone && <ProjectPillDropdown align="left" />}
+            {!isPhone && (
               <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 {currentPageName?.replace(/([A-Z])/g, " $1").trim() || "Dashboard"}
               </span>
@@ -201,11 +307,11 @@ export default function Layout({ children, currentPageName }) {
 
           {/* RIGHT: Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            {/* Search trigger \u2014 see TopBarSearchButton for context. */}
-            <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isMobile} />
+            {/* Search trigger — see TopBarSearchButton for context. */}
+            <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isPhone} />
 
             {/* Density toggle + Modules grid — desktop only */}
-            {!isMobile && (
+            {!isPhone && (
               <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
                 <DensityToggle />
 
@@ -232,12 +338,10 @@ export default function Layout({ children, currentPageName }) {
 
                 {gridOpen && (
                   <Suspense fallback={null}>
-                    <ModulesDropdown
+                    <ModuleLauncherGrid
                       open={gridOpen}
                       onClose={() => setGridOpen(false)}
                       onNavigate={handleNavigate}
-                      userRole={user?.role}
-                      alertCounts={alertCounts}
                     />
                   </Suspense>
                 )}
@@ -245,8 +349,8 @@ export default function Layout({ children, currentPageName }) {
             )}
 
             {/* Theme + Contrast Toggles */}
-            {!isMobile && <ThemeToggleButton />}
-            {!isMobile && <HighContrastToggleButton />}
+            {!isPhone && <ThemeToggleButton />}
+            {!isPhone && <HighContrastToggleButton />}
 
             {/* Bell */}
             <BellDropdown
@@ -257,22 +361,23 @@ export default function Layout({ children, currentPageName }) {
             />
 
             {/* User + Sign Out */}
-            {!isMobile && <UserSignOutBlock user={user} onLogout={logout} />}
+            {!isPhone && <UserSignOutBlock user={user} onLogout={logout} />}
 
             {/* Project pill dropdown — mobile keeps it on the right (compact);
                 desktop renders it on the left in both themes (see above). */}
-            {isMobile && <ProjectPillDropdown compact />}
+            {isPhone && <ProjectPillDropdown compact />}
           </div>
         </nav>
 
         {/* ── SIDEBAR + CONTENT ───────────────────────────────────── */}
         <div className="app-body" style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
-          {!isMobile && (
+          {!isPhone && (
             <Suspense fallback={<SidebarNavFallback />}>
               <SidebarNav
                 currentPageName={currentPageName}
                 onNavigate={handleNavigate}
-                visible={!isMobile}
+                visible={!isPhone}
+                forceRail={isTablet}
               />
             </Suspense>
           )}
@@ -288,6 +393,8 @@ export default function Layout({ children, currentPageName }) {
             </main>
           </div>
         </div>
+          </>
+        )}
 
         {/* ── OVERLAYS ────────────────────────────────────────────── */}
         {searchOpen && (
@@ -295,13 +402,6 @@ export default function Layout({ children, currentPageName }) {
             <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
           </Suspense>
         )}
-        {/* QuickAddFAB removed per user request — the bottom-right "+"
-            shortcut was hidden site-wide. Re-enable by restoring the
-            import at the top of this file and the <QuickAddFAB /> render
-            here. The component file itself is preserved unchanged. */}
-        {/* <AiAssistantLauncher /> — hidden until the schedule-assistant
-            edge function returns reliable answers. Underlying code kept
-            in src/components/ai-assistant/* for re-enable. */}
         <Suspense fallback={null}>
           <Toaster
             theme={isDarkTheme ? "dark" : "light"}
@@ -310,9 +410,9 @@ export default function Layout({ children, currentPageName }) {
             position="bottom-right"
             toastOptions={{
               style: {
-                background: "var(--bg-elevated, var(--sbd-bg-elevated, rgba(15,22,38,0.95)))",
-                border: "1px solid var(--border-strong, var(--sbd-border, rgba(255,255,255,0.08)))",
-                color: "var(--text-primary, var(--sbd-text, rgba(255,255,255,0.95)))",
+                background: "var(--bg-elevated, var(--sbd-bg-elevated))",
+                border: "1px solid var(--border-strong, var(--sbd-border))",
+                color: "var(--text-primary, var(--sbd-text))",
                 fontFamily: "'Inter', sans-serif",
                 fontSize: 13, borderRadius: 10,
                 boxShadow: "var(--shadow-lg)",

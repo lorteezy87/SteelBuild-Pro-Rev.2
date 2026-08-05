@@ -84,6 +84,55 @@ export function derivePhaseFromHierarchy(task: ParsedMppTask, allParsed: ParsedM
   return null;
 }
 
+/**
+ * Second-pass dependency derivation for MPP import. Given the parsed tasks and
+ * a UID → DB-id map (built after all tasks are created), produce the per-task
+ * predecessor-link objects to persist.
+ *
+ * MS Project encodes link type as Type (0=FF, 1=FS, 2=SF, 3=SS) and LinkLag as
+ * tenths of minutes (positive = lag, negative = lead). We persist the full link
+ * object — { id, type, lag_days } — so the cascade picks up the right semantics
+ * on first render instead of assuming FS+1 for everything imported.
+ *
+ * Lag conversion: tenths-of-minutes → whole days, rounded so a typical 1-day
+ * lag (4800 tenths = 8h workday) lands on lag_days = 1.
+ *
+ * Predecessor UIDs that miss the id map (absent/empty key) are discarded, and a
+ * task with no resolvable predecessor links is omitted entirely — same as the
+ * inline logic this replaces.
+ */
+export function deriveMppDependencies(
+  allParsed: ParsedMppTask[],
+  uidToDbId: Record<string, string>,
+): Array<{ dbId: string; predLinks: Array<{ id: string; type: string; lag_days: number }> }> {
+  const MS_LINK_TYPE: Record<string, string> = { "0": "FF", "1": "FS", "2": "SF", "3": "SS" };
+  const TENTHS_PER_DAY = 10 * 60 * 8; // tenths of minutes in an 8h workday
+  const depItems: Array<{ dbId: string; predLinks: Array<{ id: string; type: string; lag_days: number }> }> = [];
+  allParsed.forEach((t) => {
+    if (t.preds && t.preds.length > 0) {
+      const dbId = uidToDbId[t.uid];
+      const predLinks = t.preds
+        .map((p) => {
+          // predUid may be null/undefined; an absent/empty key misses the
+          // map and is discarded by the !id guard below — same as before.
+          const id = uidToDbId[p.predUid ?? ""];
+          if (!id) return null;
+          const type = MS_LINK_TYPE[p.linkType] || "FS";
+          // Convert tenths-of-minutes to whole days; round so a
+          // typical 1-day lag (4800 tenths) lands on lag_days=1.
+          const lagTenths = Number(p.lagDuration) || 0;
+          const lag_days = Math.round(lagTenths / TENTHS_PER_DAY);
+          return { id, type, lag_days };
+        })
+        .filter(Boolean) as Array<{ id: string; type: string; lag_days: number }>;
+      if (dbId && predLinks.length > 0) {
+        depItems.push({ dbId, predLinks });
+      }
+    }
+  });
+  return depItems;
+}
+
 export function inferTaskType(name: string, isSummary: boolean, isMilestone: boolean): string {
   if (isMilestone) return "Milestone";
   if (isSummary) return "Task";

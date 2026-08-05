@@ -44,7 +44,7 @@ interface EmailRowProps {
 export function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, attachmentCount }: EmailRowProps) {
   const isUnread = !message.is_read;
   const isOutbound = message.direction === "outbound";
-  const typeInfo = TYPE_STYLES[message.parsed_type] || TYPE_STYLES.unknown;
+  const typeInfo = TYPE_STYLES[message.parsed_type ?? "unknown"] || TYPE_STYLES.unknown;
   const labels = Array.isArray(message.labels) ? message.labels : [];
 
   // For outbound messages, show first recipient instead of sender
@@ -169,7 +169,7 @@ export function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, on
           lineHeight: 1.35,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           marginTop: 2,
-          fontStyle: aiSummary ? "normal" : "normal",
+          fontStyle: "normal",
         }}>
           {aiSummary || bodyPreview || "No content"}
         </div>
@@ -252,8 +252,8 @@ export function EmailDetail({
   labelDropdownOpen, onToggleLabelDropdown, onReply, onReplyAll,
 }: EmailDetailProps) {
   const [customLabel, setCustomLabel] = useState("");
-  const status = STATUS_STYLES[message.import_status] || STATUS_STYLES.pending;
-  const typeInfo = TYPE_STYLES[message.parsed_type] || TYPE_STYLES.unknown;
+  const status = STATUS_STYLES[message.import_status ?? "pending"] || STATUS_STYLES.pending;
+  const typeInfo = TYPE_STYLES[message.parsed_type ?? "unknown"] || TYPE_STYLES.unknown;
   const labels = Array.isArray(message.labels) ? message.labels : [];
 
   return (
@@ -425,7 +425,7 @@ export function EmailDetail({
                     style={{
                       height: 24, padding: "0 6px", background: "var(--accent)",
                       border: "none", borderRadius: 4, cursor: "pointer",
-                      color: "var(--text-on-accent, #fff)", fontSize: 10,
+                      color: "var(--on-accent)", fontSize: 10,
                     }}
                   >
                     <Plus size={10} />
@@ -619,11 +619,11 @@ export function EmailBodyContent({ message, attachments }: EmailBodyContentProps
                 }}>
                   {att.filename}
                 </span>
-                {att.size_bytes && (
+                {att.size_bytes ? (
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
                     {formatBytes(att.size_bytes)}
                   </span>
-                )}
+                ) : null}
               </div>
             ))}
           </div>

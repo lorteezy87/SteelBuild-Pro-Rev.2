@@ -37,14 +37,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 // STATUS_PRIORITY); the rendered colour is teal so we stay inside the
 // project's no-purple/no-pink industrial palette.
 const STATUS_COLORS = {
-  green:   { fill: "rgba(34,197,94,0.14)",   border: "#22C55E" },
-  blue:    { fill: "rgba(59,130,246,0.14)",  border: "#3B82F6" },
-  amber:   { fill: "rgba(245,158,11,0.16)",  border: "#F59E0B" },
-  red:     { fill: "rgba(239,68,68,0.16)",   border: "#EF4444" },
-  purple:  { fill: "rgba(13,148,136,0.14)",  border: "#0d9488" },
-  neutral: { fill: "rgba(148,163,184,0.12)", border: "#94A3B8" },
+  green:   { fill: "rgba(34,197,94,0.14)",   border: "var(--status-success)" },
+  blue:    { fill: "rgba(59,130,246,0.14)",  border: "var(--status-info)" },
+  amber:   { fill: "rgba(245,158,11,0.16)",  border: "var(--status-warning)" },
+  red:     { fill: "rgba(239,68,68,0.16)",   border: "var(--status-error)" },
+  purple:  { fill: "rgba(13,148,136,0.14)",  border: "var(--accent)" },
+  neutral: { fill: "rgba(148,163,184,0.12)", border: "var(--text-muted)" },
 };
-const DRAFT_COLOR = { fill: "rgba(0,229,255,0.14)", border: "#00E5FF" };
+const DRAFT_COLOR = { fill: "rgba(0,229,255,0.14)", border: "var(--accent)" };
 
 const MIN_PX       = 8;  // don't let a stray click create a 1px rectangle zone
 const CLOSE_RADIUS = 10; // px tolerance for "click back on first vertex to close"
@@ -349,7 +349,7 @@ export default function ZoneLayer({
         width:  canvasWidth,
         height: canvasHeight,
         pointerEvents: svgPointerEvents,
-        cursor: mode === "draw" ? (drawShape === "polygon" ? "crosshair" : "crosshair") : "default",
+        cursor: mode === "draw" ? "crosshair" : "default",
         zIndex: mode === "draw" ? 25 : 15,
       }}
       onMouseDown={onMouseDown}
@@ -464,10 +464,10 @@ export default function ZoneLayer({
             const w = Math.max(0, (p.x_max - p.x_min)) * canvasWidth;
             const h = Math.max(0, (p.y_max - p.y_min)) * canvasHeight;
             const colorByStatus = {
-              pending:  { fill: "rgba(0,229,255,0.10)",  border: "#00E5FF" },
-              accepted: { fill: "rgba(34,197,94,0.10)",  border: "#22C55E" },
-              rejected: { fill: "rgba(148,163,184,0.08)", border: "#94A3B8" },
-              merged:   { fill: "rgba(13,148,136,0.10)", border: "#0d9488" },
+              pending:  { fill: "rgba(0,229,255,0.10)",  border: "var(--accent)" },
+              accepted: { fill: "rgba(34,197,94,0.10)",  border: "var(--status-success)" },
+              rejected: { fill: "rgba(148,163,184,0.08)", border: "var(--text-muted)" },
+              merged:   { fill: "rgba(13,148,136,0.10)", border: "var(--accent)" },
             };
             const palette = colorByStatus[p.status] || colorByStatus.pending;
             return (

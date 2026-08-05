@@ -1,8 +1,67 @@
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
+import * as Sentry from '@sentry/react';
+import { toast } from 'sonner';
+import { normalizeThrownQueryError } from '@/lib/postgrestErrors';
 
 type MaybeStatusError = { status?: number; response?: { status?: number } } | null | undefined;
 
+// ── Global query error surface (H21/M16) ──────────────────────────────────────
+// Before this, a failed query reported nothing to the user or to Sentry — the
+// screen just sat empty. The QueryCache onError below closes both gaps:
+//   • always report the failure to Sentry (tagged so react-query errors are
+//     filterable, with the query key for triage);
+//   • only INTERRUPT the user with an error toast when there's no cached data to
+//     fall back on (query.state.data === undefined) — a failed background
+//     refetch over data we already have gets a quieter, throttled notice instead
+//     of a blocking error, so transient blips don't spam the UI.
+let lastBackgroundToastAt = 0;
+const BACKGROUND_TOAST_THROTTLE_MS = 30 * 1000;
+
+const queryCache = new QueryCache({
+	onError: (error, query) => {
+		// Supabase often rejects with a plain `{ code, message, ... }` object.
+		// Normalize so Sentry and presenters keep the real PostgREST text.
+		const normalized = normalizeThrownQueryError(error);
+		Sentry.captureException(normalized, {
+			tags: { source: 'react-query' },
+			extra: { queryKey: query.queryKey },
+		});
+
+		if (query.state.data === undefined) {
+			// No cached data — the user is staring at an empty view; tell them.
+			toast.error('Could not load data. Please try again.');
+		} else {
+			// A background refetch failed but we still have prior data on screen;
+			// nudge quietly, at most once per ~30s, so blips don't spam.
+			const now = Date.now();
+			if (now - lastBackgroundToastAt > BACKGROUND_TOAST_THROTTLE_MS) {
+				lastBackgroundToastAt = now;
+				toast('Showing last loaded data — could not refresh.');
+			}
+		}
+	},
+});
+
+// ── Global mutation error surface ─────────────────────────────────────────────
+// Mutations almost always define a local `onError` toast. Always report to
+// Sentry; only toast globally when the call site did NOT handle the failure
+// (avoids double toasts on the happy path of existing mutation UX).
+const mutationCache = new MutationCache({
+	onError: (error, _variables, _context, mutation) => {
+		const normalized = normalizeThrownQueryError(error);
+		Sentry.captureException(normalized, {
+			tags: { source: 'react-query-mutation' },
+			extra: { mutationKey: mutation.options.mutationKey },
+		});
+		if (typeof mutation.options.onError === 'function') return;
+		if (mutation.meta?.suppressGlobalErrorToast) return;
+		toast.error('Something went wrong. Please try again.');
+	},
+});
+
 export const queryClientInstance = new QueryClient({
+	queryCache,
+	mutationCache,
 	defaultOptions: {
 		queries: {
 			refetchOnWindowFocus: false,

@@ -66,6 +66,16 @@ describe("isMilestoneTask", () => {
     expect(isMilestoneTask({ start_date: "2026-04-01", end_date: "2026-04-01" })).toBe(false);
     expect(isMilestoneTask(null)).toBe(false);
   });
+
+  it("flags milestones authored via task_type or is_milestone", () => {
+    // task_type === "Milestone" is the field AddTaskModal actually writes;
+    // is_milestone is set by importers. Both must count, alongside the legacy
+    // `milestone` boolean — this is the regression the tracker fix addressed.
+    expect(isMilestoneTask({ task_type: "Milestone" })).toBe(true);
+    expect(isMilestoneTask({ is_milestone: true })).toBe(true);
+    expect(isMilestoneTask({ task_type: "Task" })).toBe(false);
+    expect(isMilestoneTask({ is_milestone: false })).toBe(false);
+  });
 });
 
 describe("sanitizeTaskName", () => {

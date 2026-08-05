@@ -13,7 +13,7 @@ import { readRfiCsvFile } from "@/lib/importRfiCsv";
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const AI      = "var(--ai-accent, #22D3EE)";
+const AI      = "var(--ai-accent, var(--status-info))";
 
 /**
  * RFI log import wizard: upload PDF → AI extract → preview → confirm.
@@ -140,7 +140,7 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1200 }} />
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 65%, transparent)", zIndex: 1200 }} />
       <div
         ref={trapRef}
         onKeyDown={(e) => { if (e.key === "Escape" && step !== "committing") onClose(); }}
@@ -452,7 +452,7 @@ function DarkProjectSelect({ value, options, onChange }) {
 }
 
 const btnPrimary = {
-  padding: "8px 22px", background: AI, color: "#000",
+  padding: "8px 22px", background: AI, color: "var(--bg-base)",
   border: "none", borderRadius: 2,
   fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
   letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",
@@ -495,7 +495,7 @@ const projectSelectMenuStyle = {
   background: "var(--bg-surface-secondary)",
   border: `1px solid color-mix(in srgb, ${AI} 38%, var(--border-default))`,
   borderRadius: 8,
-  boxShadow: "0 18px 46px rgba(0,0,0,0.74), inset 0 1px 0 rgba(255,255,255,0.06)",
+  boxShadow: "0 18px 46px color-mix(in srgb, var(--bg-base) 74%, transparent), inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent)",
 };
 
 const projectSelectOptionStyle = (active) => ({

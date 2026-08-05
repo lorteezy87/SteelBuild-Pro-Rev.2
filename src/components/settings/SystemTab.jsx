@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/components/shared/OrgContext';
+import { exportWorkspace, downloadWorkspaceExport } from '@/lib/workspaceExport';
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -19,33 +22,75 @@ const ActionBtn = ({ onClick, disabled, color, children }) => (
 );
 
 export default function SystemTab({ user }) {
+  const { currentOrg } = useOrg();
   const [isExporting, setIsExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState('');
 
+  // Real workspace backup: pull every project in the active org and export
+  // each through the RLS-scoped, audited `project-export` Edge Function, then
+  // bundle them into one downloadable JSON. (Replaces a placeholder that
+  // downloaded only a list of table names — no actual data.)
+  //
+  // We query the raw client (not entities.Project.list()) on purpose: list()
+  // silently drops on-hold/paused projects and isn't org-scoped, so a backup
+  // labeled "every project in <org>" would omit paused projects and, for a
+  // multi-org user, mix in projects from their other orgs. Scoping by
+  // currentOrg.id and including on-hold rows makes the backup match its label.
   const handleExportData = async () => {
     setIsExporting(true);
+    setExportMsg('Gathering projects…');
     try {
-      const timestamp = new Date().toISOString().split('T')[0];
-      const data = { exportDate: new Date().toISOString(), appVersion: '1.0.0', dataTypes: ['projects', 'work_packages', 'rfis', 'drawings', 'deliveries', 'expenses'] };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `steelbuild-export-${timestamp}.json`; a.click();
-      URL.revokeObjectURL(url);
-      toast.success('Data export started');
+      let query = supabase
+        .from('projects')
+        .select('id, name')
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+      // currentOrg should always be set; if a transient null slips through, RLS
+      // still limits the result to projects the user can access.
+      if (currentOrg?.id) query = query.eq('org_id', currentOrg.id);
+      const { data: projects, error } = await query;
+      if (error) throw error;
+      if (!projects?.length) {
+        toast.error('No projects to export yet.');
+        return;
+      }
+      const bundle = await exportWorkspace(projects, {
+        workspaceName: currentOrg?.name,
+        onProgress: (done, total, name) =>
+          setExportMsg(name ? `Exporting ${Math.min(done + 1, total)} of ${total}: ${name}…` : 'Packaging backup…'),
+      });
+      downloadWorkspaceExport(bundle);
+      const skipped = bundle.failures.length;
+      toast.success(
+        `Exported ${bundle.project_count} project${bundle.project_count === 1 ? '' : 's'} · ` +
+        `${bundle.total_rows.toLocaleString()} rows` +
+        (skipped ? ` · ${skipped} skipped` : ''),
+      );
     } catch (err) {
-      toast.error('Export failed');
+      toast.error('Export failed: ' + (err?.message || String(err)));
     } finally {
       setIsExporting(false);
+      setExportMsg('');
     }
   };
 
   const handleClearCache = () => {
     try {
       if ('caches' in window) caches.keys().then(names => names.forEach(n => caches.delete(n)));
-      // Preserve auth/preference keys while clearing cache data
-      const preserve = ['current_user_email', 'current_user_id', 'activeProjectId', 'sbp-theme', 'supabase.auth.token'];
+      // Preserve preferences + real Supabase session keys only. Never preserve
+      // stale Base44-era identity keys (current_user_*), and don't rely on the
+      // obsolete `supabase.auth.token` name — supabase-js stores
+      // `sb-<project-ref>-auth-token`.
+      const preserve = ['activeProjectId', 'sbp-theme'];
       const saved = {};
       preserve.forEach(k => { const v = localStorage.getItem(k); if (v !== null) saved[k] = v; });
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && /^sb-.*-auth-token$/.test(key)) {
+          const v = localStorage.getItem(key);
+          if (v !== null) saved[key] = v;
+        }
+      }
       localStorage.clear();
       Object.entries(saved).forEach(([k, v]) => localStorage.setItem(k, v));
       sessionStorage.clear();
@@ -74,10 +119,13 @@ export default function SystemTab({ user }) {
         <label style={labelStyle}>Data Management</label>
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Export Your Data</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>Download a JSON export of your projects, work packages, RFIs, and other records.</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>Download a complete JSON backup of every project in your workspace — drawings, submittals, RFIs, change orders, schedule, costs, and more. Each export is recorded in your activity log.</div>
           <ActionBtn onClick={handleExportData} disabled={isExporting} color="info">
-            {isExporting ? 'Exporting...' : '📥 Export Data'}
+            {isExporting ? 'Exporting…' : '📥 Export Data'}
           </ActionBtn>
+          {isExporting && exportMsg && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>{exportMsg}</div>
+          )}
         </div>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Clear Cache</div>

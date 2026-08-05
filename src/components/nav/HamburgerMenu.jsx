@@ -3,9 +3,12 @@ import React from "react";
 export default function HamburgerMenu({ open, onToggle }) {
   return (
     <button
+      type="button"
       onClick={onToggle}
+      aria-label={open ? "Close navigation" : "Open navigation"}
+      aria-expanded={open}
       style={{
-        width: 40, height: 40, borderRadius: 10,
+        width: 44, height: 44, borderRadius: 10,
         background: "var(--hover-bg)", border: "1px solid var(--border)",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         gap: 4, cursor: "pointer", flexShrink: 0,

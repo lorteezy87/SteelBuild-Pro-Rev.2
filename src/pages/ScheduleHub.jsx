@@ -1,9 +1,9 @@
 /**
  * ScheduleHub — consolidates the schedule surfaces under one nav entry
  * (module-consolidation). Schedule (schedule_tasks authority), the Look-Ahead
- * planner and its Gantt (LookAhead entity), and the multi-entity Project
- * Calendar were four separate nav entries spread across the PM/Production
- * groups; this puts them side-by-side as tabs.
+ * planner (LookAhead entity), and the multi-entity Project Calendar were three
+ * separate nav entries spread across the PM/Production groups; this puts them
+ * side-by-side as tabs.
  *
  * Thin tab shell (the DrawingSubmittalHub / FieldHub / CostHub pattern): each
  * tab lazy-loads the existing page unchanged; all stay independently routable.
@@ -17,13 +17,11 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 const SchedulePage = lazyWithRetry(() => import("@/pages/Schedule"));
 const LookAheadPage = lazyWithRetry(() => import("@/pages/LookAheadSchedule"));
-const GanttPage = lazyWithRetry(() => import("@/pages/GanttChart"));
 const CalendarPage = lazyWithRetry(() => import("@/pages/ProjectCalendar"));
 
 const TABS = [
   { key: "schedule", label: "Schedule", Component: SchedulePage },
   { key: "lookahead", label: "Look-Ahead", Component: LookAheadPage },
-  { key: "gantt", label: "Gantt", Component: GanttPage },
   { key: "calendar", label: "Calendar", Component: CalendarPage },
 ];
 
@@ -43,7 +41,10 @@ export default function ScheduleHub() {
     );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div
+      className="sb-dashboard-reference-page"
+      style={{ display: "flex", flexDirection: "column", minHeight: 0 }}
+    >
       <div
         role="tablist"
         aria-label="Schedule"

@@ -22,67 +22,61 @@ import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
-import { lockSet } from "@/lib/drawingHub";
+import { logTransition } from "@/services/auditLogger";
+import {
+  CLOSED_SUBMITTAL_STATUSES,
+  submittalStatusToStage,
+} from "@/lib/submittalStageMapping";
+import { validateSubmittalTransition } from "@/lib/submittalTransitions";
+import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
+import { bumpRevision as nextRevision } from "@/lib/submittalRevision";
+import { evaluateRrResubmitGate } from "@/lib/rrResubmitGate";
+import {
+  evaluateOfsIfcGate,
+  evaluateOfsToOfaGate,
+  evaluateSkipOfsReleaseGate,
+  type OfsChecklistState,
+} from "@/lib/ofsCompletionGate";
+import {
+  evaluateCommentDispositionGate,
+  type CommentDispositionLike,
+} from "@/lib/commentDispositionGate";
+import { roundRevision } from "@/lib/submittalCycles";
+import { supabase } from "@/lib/supabase";
+import {
+  FabReleaseBlockedError,
+  isFabReleaseBlocked,
+  parseBlockedRfiNumbers,
+} from "@/lib/fabRelease/releaseStatus";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import {
+  applyOptimisticRowPatch,
+  shouldRollbackOptimistic,
+} from "@/lib/mutations/optimisticCache";
 
-const lockDrawingSet = lockSet as unknown as (args: {
-  setId: string;
-  reason?: string | null;
-  userId?: string | null;
+const runStatusTriggers = runSubmittalStatusTriggers as unknown as (args: {
+  submittal: Partial<Submittal> | null | undefined;
+  prevStatus?: string | null;
+  nextStatus?: string | null;
 }) => Promise<unknown>;
 
 export type Submittal = RowWithAliases<"submittals">;
 export type SubmittalRound = RowWithAliases<"submittal_rounds">;
 
-// ── Lock-on-approval: submittals are the workflow source of truth ──
-// When a submittal transitions to a terminal-approved status, every
-// drawing set linked via submittal.drawing_set_ids is locked from edits.
-// Document-side flows (SetApprovalModal) no longer trigger locks; this
-// is the single trigger path.
-//
-// Exported for testing — see src/hooks/__tests__/useSubmittals.test.ts.
+// Terminal-approved statuses used by document/register rollups (e.g. Drawings
+// page grouping). Approval no longer auto-locks linked drawing sets.
 export const TERMINAL_APPROVED_STATUSES = new Set([
   "Approved",
   "Approved as Noted",
   "Released for Fabrication",
 ]);
 
-export async function lockLinkedSetsIfApproved(
-  submittal: Partial<Submittal> | null | undefined,
-): Promise<void> {
-  if (!submittal || !submittal.status) return;
-  if (!TERMINAL_APPROVED_STATUSES.has(submittal.status as string)) return;
-  const setIds = Array.isArray(submittal.drawing_set_ids)
-    ? (submittal.drawing_set_ids as string[]).filter(Boolean)
-    : [];
-  if (!setIds.length) return;
-  const tag =
-    (submittal as Record<string, unknown>).submittal_number ||
-    submittal.id ||
-    "";
-  const reason = `Auto-locked: submittal ${tag} reached "${submittal.status}"`.trim();
-  for (const setId of setIds) {
-    try {
-      await lockDrawingSet({ setId, reason });
-    } catch (err) {
-      // Don't fail the submittal write on a lock failure — the workflow
-      // status update is the user-visible outcome; lock is a side effect.
-      // Surface to console for ops awareness.
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[useSubmittals] Failed to lock drawing set ${setId} after approval:`,
-        err,
-      );
-    }
-  }
-}
-
 /**
  * The single AUDITED write path for a submittal workflow move. Atomically:
  *   1. inserts a `submittal_rounds` row (the audit event),
  *   2. patches the submittal (status / ball_in_court / current_round_id /
  *      total_rounds, optional submitted/returned dates, optional revision bump
- *      on a Revise-and-Resubmit), and
- *   3. runs the terminal-approval auto-lock (§20 moat).
+ *      on a Revise-and-Resubmit).
  *
  * Every status move (verb CTA, inline select, Kanban drag) should funnel
  * through this so the round log can never drift from the current status — which
@@ -97,45 +91,386 @@ export interface AddRoundInput {
     drawing_set_ids?: string[] | null;
     total_rounds?: number | null;
     round_number?: number | null;
+    /** The submittal's current sent date — fallback when opening a cycle's round. */
+    submitted_date?: string | null;
+    /** Status BEFORE this move — lets the smart triggers detect the transition. */
+    status?: string | null;
+    /** Ball-in-court BEFORE this move — required for derived-stage OFS gates. */
+    ball_in_court?: string | null;
+    /** Current text revision ('0','A','Rev 2'…) — read when auto-bumping it. */
+    revision?: string | null;
+    /** Existing metadata — merged when stamping ofs_checklist. */
+    metadata?: Record<string, unknown> | null;
   };
   status: string;
   ball_in_court?: string | null;
   submitted_date?: string | null;
   returned_date?: string | null;
   notes?: string | null;
+  /**
+   * Target workflow stage for this move (from nextSubmittalAction). Used by
+   * the OFS→IFC checklist gate when status alone cannot distinguish OFS/IFC
+   * (both are Approved/AAN with different BICs).
+   */
+  nextStage?: string | null;
+  /** OFS→IFC scrub completion checklist (Slice 4). */
+  ofsChecklist?: OfsChecklistState | null;
+  /**
+   * Audited override reason for OFS gates (skip checklist / OFS→OFA /
+   * skip-OFS release). Distinct from fabReleaseOverrideReason but either
+   * satisfies the skip-OFS release gate when releasing for fab.
+   */
+  ofsOverrideReason?: string | null;
+  /**
+   * Optional preloaded comment dispositions for Slice 5 gates. When omitted
+   * on a gated move (OFS→IFC / R&R→OFA), addSubmittalRound loads them.
+   */
+  commentDispositions?: CommentDispositionLike[] | null;
+  /** Audited override for unresolved required comment dispositions. */
+  commentOverrideReason?: string | null;
   /** Bump the submittal's revision round_number (true on Revise & Resubmit). */
   bumpRevision?: boolean;
+  /**
+   * Auto-advance the submittal's TEXT `revision` column to its next value
+   * (Phase 2, flag-gated by `submittal_revision_autobump`). Distinct from
+   * `bumpRevision` above, which increments the numeric `round_number` column.
+   * The caller decides when this is true (flag ON && genuine resubmit — see
+   * shouldBumpRevisionOnResubmit); when false/absent the revision is left
+   * exactly as-is (today's manual behavior).
+   */
+  bumpTextRevision?: boolean;
+  /**
+   * The current text revision to bump from. Falls back to
+   * `input.submittal.revision` when omitted. Only consulted when
+   * `bumpTextRevision` is true.
+   */
+  currentRevision?: string | null;
+  /** Extra fields to persist with the same patch (e.g. approval_chain_step
+   * when the move follows a custom routing chain). */
+  extraPatch?: Record<string, unknown> | null;
+  /** PM override reason to release past the fab-release gate when open RFIs
+   * reference the submittal's sheets. Only consulted on a move to
+   * 'Released for Fabrication'; persisted to submittals.fab_release_override_reason
+   * so the server trigger allows the transition (and audits why). */
+  fabReleaseOverrideReason?: string | null;
+}
+
+// ── Round model: a round = one submit→return CYCLE, not a per-event row ──
+// Sending out (Submitted / Under Review) opens a cycle; a verdict (Approved /
+// Approved as Noted / R&R / Rejected / Released) closes it. Within-cycle moves
+// UPDATE the open round in place; a resubmit (a send on a closed round) opens
+// the NEXT cycle. So `submittal_rounds.round_number` + `total_rounds` count
+// resubmission cycles the way a PM thinks ("on round 2"), not status events.
+export const SENT_STATUSES = new Set<string>(["Submitted", "Under Review"]);
+
+export interface CurrentRoundLite {
+  id: string;
+  round_number?: number | null;
+  status?: string | null;
+  ball_in_court?: string | null;
+  submitted_date?: string | null;
+  returned_date?: string | null;
+  /** Cycle stamp — carries `revision` (the text revision submitted). */
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface RoundWritePlan {
+  action: "update" | "insert";
+  roundId: string | null;
+  /** Resulting cycle number (= the round's round_number / the submittal's total_rounds). */
+  roundNumber: number;
+  setSubmitted: boolean;
+  setReturned: boolean;
+}
+
+/**
+ * Decide whether a status move UPDATES the current open round (same cycle) or
+ * OPENS a new one (a resubmission cycle). Pure — unit-tested.
+ *
+ *  - Sending out on a closed/absent round opens the next cycle; on an already-
+ *    open round it just advances that cycle (e.g. Submitted → Under Review).
+ *  - A verdict closes the open cycle (UPDATE, stamping returned_date); with no
+ *    open cycle it opens-and-closes one (defensive — e.g. a status set inline
+ *    on a fresh submittal).
+ */
+export function planRoundWrite(
+  currentRound: CurrentRoundLite | null | undefined,
+  status: string,
+): RoundWritePlan {
+  const curr = currentRound || null;
+  const isOpen = !!curr && !curr.returned_date;
+  const currNum = Number(curr?.round_number) || 0;
+
+  if (SENT_STATUSES.has(status)) {
+    if (isOpen) {
+      return { action: "update", roundId: curr!.id, roundNumber: currNum, setSubmitted: !curr!.submitted_date, setReturned: false };
+    }
+    return { action: "insert", roundId: null, roundNumber: currNum + 1, setSubmitted: true, setReturned: false };
+  }
+  if (isOpen) {
+    return { action: "update", roundId: curr!.id, roundNumber: currNum, setSubmitted: false, setReturned: true };
+  }
+  return { action: "insert", roundId: null, roundNumber: currNum + 1, setSubmitted: true, setReturned: true };
 }
 
 export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal> {
   const s = input.submittal;
-  const eventRound = (Number(s.total_rounds) || 0) + 1;
+  const fabOverride = (input.fabReleaseOverrideReason || "").trim() || null;
+  const isFabRelease = input.status === "Released for Fabrication";
 
-  const round = await entities.SubmittalRound.create({
-    project_id: s.project_id,
-    submittal_id: s.id,
-    round_number: eventRound,
-    status: input.status,
-    ball_in_court: input.ball_in_court ?? null,
-    submitted_date: input.submitted_date ?? null,
-    returned_date: input.returned_date ?? null,
-    response_notes: input.notes ?? null,
-    drawing_set_ids: Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [],
-    metadata: {},
-  } as Insert<"submittal_rounds">);
+  const transition = validateSubmittalTransition(s.status, input.status);
+  if (transition.ok === false) {
+    throw new Error(transition.reason);
+  }
 
+  // Server-arbitrated fab-release gate (Option C): a submittal cannot reach
+  // 'Released for Fabrication' while open RFIs / rejected / superseded sheets
+  // remain on its package. Pre-check BEFORE touching the round so a blocked
+  // release never orphans/mutates a round row; the DB trigger is the
+  // authoritative backstop (mapped below if it fires on a race).
+  if (isFabRelease && !fabOverride) {
+    // `submittal_blocking_rfis` is a SECURITY DEFINER RPC not yet in the
+    // generated DB types — cast the call (the result is handled defensively).
+    // NOTE: bind to the client — extracting `supabase.rpc` unbound loses `this`,
+    // and Supabase's rpc() dereferences `this.rest` → "Cannot read properties of
+    // undefined (reading 'rest')" at runtime (the fab-release gate failed for
+    // every "Released for Fabrication" advance until this bind was added).
+    const callRpc = supabase.rpc.bind(supabase) as unknown as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ data: Array<{ rfi_number?: string }> | null; error: { message?: string } | null }>;
+    const { data: blocking, error: gateErr } = await callRpc("submittal_blocking_rfis", {
+      p_submittal_id: s.id,
+    });
+    if (!gateErr && Array.isArray(blocking) && blocking.length > 0) {
+      const nums = (blocking as Array<{ rfi_number?: string }>)
+        .map((b) => b?.rfi_number)
+        .filter(Boolean) as string[];
+      throw new FabReleaseBlockedError(
+        `FAB_RELEASE_BLOCKED: ${nums.length} open RFI(s) reference sheets in this submittal's package (${nums.join(", ")}). Resolve them or release with an override reason.`,
+        nums,
+      );
+    }
+  }
+
+  // Round = one submit→return cycle. Fetch the latest round for this submittal to
+  // decide whether this move continues/closes the open cycle or opens a new one.
+  const existing = (await entities.SubmittalRound.filter(
+    { submittal_id: s.id },
+    "-round_number",
+    1,
+  )) as unknown as CurrentRoundLite[] | null;
+  const currentRound = (Array.isArray(existing) ? existing[0] : null) || null;
+  const plan = planRoundWrite(currentRound, input.status);
+
+  // The text revision in effect FOR THIS MOVE — computed once so the round's
+  // cycle stamp and the submittal patch can never diverge. Bumped when the
+  // caller requested it (genuine resubmit + flag), else the current value.
+  // Stamped into `submittal_rounds.metadata.revision` at cycle-open so each
+  // approval cycle permanently records WHICH revision was submitted
+  // (Slice 2 — see src/lib/submittalCycles.ts).
+  const cycleRevision: string | null = input.bumpTextRevision
+    ? nextRevision(input.currentRevision ?? s.revision ?? null)
+    : (typeof s.revision === "string" && s.revision.trim() ? s.revision.trim() : null);
+
+  // R&R → OFA transmission-evidence gate (Slice 3): a package returned
+  // Revise-and-Resubmit / Rejected stays in R&R until the revised set is
+  // ACTUALLY retransmitted — a resubmission send requires the actual
+  // submission date, the recipient, and (when the returned cycle's revision
+  // is known) the next revision. The DB trigger backstops date + recipient.
+  const rrGate = evaluateRrResubmitGate({
+    priorStatus: s.status,
+    nextStatus: input.status,
+    submittedDate: input.submitted_date ?? null,
+    recipient: input.ball_in_court ?? null,
+    revision: cycleRevision,
+    priorCycleRevision: roundRevision(currentRound),
+  });
+  if (rrGate.ok === false) {
+    throw new Error(rrGate.reason);
+  }
+
+  // OFS workflow gates (Slice 4): Out for Scrub is post-approval cleanup —
+  // not a resubmittal — and IFC issue requires the scrub checklist (or an
+  // audited override). Fab-release override also satisfies skip-OFS release.
+  const ofsOverride =
+    (input.ofsOverrideReason || input.fabReleaseOverrideReason || "").trim() || null;
+  const derivedNextStage =
+    input.nextStage ??
+    submittalStatusToStage(input.status, input.ball_in_court ?? null, null);
+  const ofsToOfa = evaluateOfsToOfaGate({
+    priorStatus: s.status,
+    priorBallInCourt: s.ball_in_court,
+    nextStatus: input.status,
+    overrideReason: ofsOverride,
+  });
+  if (ofsToOfa.ok === false) {
+    throw new Error(ofsToOfa.reason);
+  }
+  const ofsIfc = evaluateOfsIfcGate({
+    priorStatus: s.status,
+    priorBallInCourt: s.ball_in_court,
+    nextStage: derivedNextStage,
+    checklist: input.ofsChecklist,
+    overrideReason: ofsOverride,
+  });
+  if (ofsIfc.ok === false) {
+    throw new Error(ofsIfc.reason);
+  }
+  const skipOfs = evaluateSkipOfsReleaseGate({
+    priorStatus: s.status,
+    priorBallInCourt: s.ball_in_court,
+    nextStatus: input.status,
+    overrideReason: ofsOverride,
+  });
+  if (skipOfs.ok === false) {
+    throw new Error(skipOfs.reason);
+  }
+
+  // Comment-disposition gates (Slice 5): OFS→IFC and R&R→OFA require all
+  // required returned comments to be resolved (or an audited override).
+  // Callers may pass dispositions; otherwise we load live rows for the package.
+  const priorStageForComments = submittalStatusToStage(
+    s.status,
+    s.ball_in_court,
+    null,
+  );
+  let dispositions = input.commentDispositions ?? null;
+  const needsCommentGate =
+    (derivedNextStage === "IFC" && priorStageForComments === "OFS") ||
+    (["Revise and Resubmit", "Rejected"].includes(String(s.status ?? "")) &&
+      ["Submitted", "Under Review"].includes(input.status));
+  if (needsCommentGate && dispositions == null) {
+    try {
+      dispositions = (await entities.SubmittalCommentDisposition.filter({
+        submittal_id: s.id,
+      })) as CommentDispositionLike[];
+    } catch {
+      dispositions = [];
+    }
+  }
+  if (needsCommentGate) {
+    const commentOverride =
+      (input.commentOverrideReason || ofsOverride || "").trim() || null;
+    const ofsCommentGate = evaluateCommentDispositionGate({
+      kind: "ofs_to_ifc",
+      dispositions,
+      nextStage: derivedNextStage,
+      priorStage: priorStageForComments,
+      overrideReason: commentOverride,
+    });
+    if (ofsCommentGate.ok === false) throw new Error(ofsCommentGate.reason);
+    const rrCommentGate = evaluateCommentDispositionGate({
+      kind: "rr_to_ofa",
+      dispositions,
+      nextStatus: input.status,
+      priorStatus: s.status,
+      overrideReason: commentOverride,
+    });
+    if (rrCommentGate.ok === false) throw new Error(rrCommentGate.reason);
+  }
+
+  let round: { id?: string } | null;
+  if (plan.action === "update" && plan.roundId) {
+    const upd: Record<string, unknown> = {
+      status: input.status,
+      ball_in_court: input.ball_in_court ?? null,
+    };
+    if (plan.setSubmitted && input.submitted_date) upd.submitted_date = input.submitted_date;
+    if (plan.setReturned) upd.returned_date = input.returned_date ?? null;
+    if (input.notes) upd.response_notes = input.notes;
+    round = await entities.SubmittalRound.update(plan.roundId, upd as Update<"submittal_rounds">);
+  } else {
+    round = await entities.SubmittalRound.create({
+      project_id: s.project_id,
+      submittal_id: s.id,
+      round_number: plan.roundNumber,
+      status: input.status,
+      ball_in_court: input.ball_in_court ?? null,
+      submitted_date: plan.setSubmitted ? (input.submitted_date ?? s.submitted_date ?? null) : null,
+      returned_date: plan.setReturned ? (input.returned_date ?? null) : null,
+      response_notes: input.notes ?? null,
+      drawing_set_ids: Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [],
+      metadata: cycleRevision ? { revision: cycleRevision } : {},
+    } as Insert<"submittal_rounds">);
+  }
+
+  // On a COMPLETED status (Released for Fabrication / Void) the cycle is done,
+  // so clear the submittal's ball-in-court (the UI shows "Closed"). The round
+  // row's ball_in_court (the reviewer who closed it) is left untouched above so
+  // cycle-time reviewer attribution survives — see submittalAnalytics. NARROW
+  // set on purpose: Approved / Approved as Noted are mid-flow and keep their BIC.
   const patch: Record<string, unknown> = {
     status: input.status,
-    ball_in_court: input.ball_in_court ?? null,
+    ball_in_court: CLOSED_SUBMITTAL_STATUSES.has(input.status)
+      ? null
+      : (input.ball_in_court ?? null),
     current_round_id: round?.id,
-    total_rounds: eventRound,
+    total_rounds: plan.roundNumber,
+    ...(input.extraPatch || {}),
   };
-  if (input.submitted_date) patch.submitted_date = input.submitted_date;
-  if (input.returned_date) patch.returned_date = input.returned_date;
+  if (input.submitted_date && plan.setSubmitted) patch.submitted_date = input.submitted_date;
+  if (input.returned_date && plan.setReturned) patch.returned_date = input.returned_date;
   if (input.bumpRevision) patch.round_number = (Number(s.round_number) || 1) + 1;
+  // Phase 2 (flag-gated at the caller): auto-advance the TEXT `revision` column
+  // when a resubmit opens a new round. Uses the same `cycleRevision` stamped on
+  // the round row so the cycle history and the live revision agree.
+  if (input.bumpTextRevision) {
+    patch.revision = cycleRevision;
+  }
+  if (isFabRelease) patch.fab_release_override_reason = fabOverride;
+  // Stamp scrub checklist / override into metadata when leaving OFS for IFC
+  // so the completion evidence survives on the submittal row.
+  if (derivedNextStage === "IFC" && (input.ofsChecklist || ofsOverride)) {
+    const priorMeta =
+      s.metadata && typeof s.metadata === "object" && !Array.isArray(s.metadata)
+        ? { ...s.metadata }
+        : {};
+    patch.metadata = {
+      ...priorMeta,
+      ofs_checklist: input.ofsChecklist ?? priorMeta.ofs_checklist ?? null,
+      workflow_substatus: "ifc_issued",
+      ...(ofsOverride ? { ofs_override_reason: ofsOverride } : {}),
+    };
+  }
 
-  const updated = await entities.Submittal.update(s.id, patch as Update<"submittals">);
-  await lockLinkedSetsIfApproved(updated);
+  let updated: unknown;
+  try {
+    updated = await entities.Submittal.update(s.id, patch as Update<"submittals">);
+  } catch (err) {
+    // Backstop: the trigger blocked the transition (e.g. an RFI opened between
+    // the pre-check and this write). Undo what we did to the round so it can't
+    // drift from the (unchanged) submittal status — delete a freshly-inserted
+    // round, or revert an in-place update to its pre-write state.
+    if (isFabReleaseBlocked(err)) {
+      const msg = (err as { message?: string })?.message || "Fab release blocked by open RFIs";
+      try {
+        if (plan.action === "insert" && round?.id) {
+          await entities.SubmittalRound.delete(round.id as string);
+        } else if (plan.action === "update" && currentRound?.id) {
+          await entities.SubmittalRound.update(currentRound.id, {
+            status: currentRound.status ?? null,
+            ball_in_court: currentRound.ball_in_court ?? null,
+            returned_date: currentRound.returned_date ?? null,
+          } as Update<"submittal_rounds">);
+        }
+      } catch {
+        /* best-effort cleanup */
+      }
+      throw new FabReleaseBlockedError(msg, parseBlockedRfiNumbers(msg));
+    }
+    throw err;
+  }
+  // Smart triggers: a move into Rejected / R&R / Approved-as-Noted queues a
+  // draft detailing task (deduped, never throws — see submittalSmartTriggers).
+  await runStatusTriggers({
+    submittal: (updated as Partial<Submittal>) || (s as Partial<Submittal>),
+    prevStatus: s.status ?? null,
+    nextStatus: input.status,
+  });
+  // Await the audit write so the caller does not report a fully settled move
+  // before the transition record has been attempted.
+  await logTransition("submittal", (updated as Submittal) || s, s.status ?? "—", input.status, { projectId: s.project_id });
   return updated as Submittal;
 }
 
@@ -290,9 +625,11 @@ export function useSubmittals(projectId: string | null | undefined) {
 
   // ── Invalidation helper ──────────────────────────────────────────
   const invalidateAll = async () => {
+    // action_item included because status moves can auto-queue a detailing
+    // task (submittalSmartTriggers) — keep the Action Items views fresh.
     await invalidateEntities(
       qc,
-      ["submittal", "submittal_round", "submittal_activity", "drawing"],
+      ["submittal", "submittal_round", "submittal_activity", "drawing", "action_item"],
       projectId
     );
   };
@@ -317,7 +654,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       toast.success("Submittal created");
     },
     onError: (err) => {
-      toast.error(`Failed to create submittal: ${err.message}`);
+      toast.error(`Failed to create submittal: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -326,26 +663,33 @@ export function useSubmittals(projectId: string | null | undefined) {
   const updateMut = useMutation<Submittal, Error, UpdateInput, { previous: Submittal[] | undefined }>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
+      const prevStatus = submittals.find((s) => s.id === id)?.status ?? null;
       const updated = await entities.Submittal.update(
         id,
         data as Update<"submittals">
       );
-      await lockLinkedSetsIfApproved(updated);
+      if (typeof (data as { status?: unknown }).status === "string") {
+        await runStatusTriggers({
+          submittal: updated,
+          prevStatus,
+          nextStatus: (data as { status: string }).status,
+        });
+      }
       return updated;
     },
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey });
       const previous = qc.getQueryData<Submittal[]>(queryKey);
       qc.setQueryData<Submittal[]>(queryKey, (old) =>
-        (old || []).map((s) =>
-          s.id === vars.id ? { ...s, ...vars } : s
-        )
+        applyOptimisticRowPatch(old, vars.id, vars as Partial<Submittal>),
       );
       return { previous };
     },
     onError: (err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(queryKey, context.previous);
-      toast.error(`Failed to update submittal: ${err.message}`);
+      if (shouldRollbackOptimistic(context?.previous)) {
+        qc.setQueryData(queryKey, context.previous);
+      }
+      toast.error(`Failed to update submittal: ${toUserErrorMessage(err)}`);
     },
     onSettled: async () => {
       await invalidateAll();
@@ -367,7 +711,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       toast.success("Submittal deleted");
     },
     onError: (err) => {
-      toast.error(`Failed to delete submittal: ${err.message}`);
+      toast.error(`Failed to delete submittal: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -404,7 +748,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       toast.success("Round created");
     },
     onError: (err) => {
-      toast.error(`Failed to create round: ${err.message}`);
+      toast.error(`Failed to create round: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -423,7 +767,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       toast.success("Round updated");
     },
     onError: (err) => {
-      toast.error(`Failed to update round: ${err.message}`);
+      toast.error(`Failed to update round: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -435,37 +779,15 @@ export function useSubmittals(projectId: string | null | undefined) {
   const bulkUpdateMut = useMutation<BulkResult, Error, BulkUpdateVars>({
     mutationFn: async ({ ids, patch }) => {
       const results: BulkResult = { succeeded: 0, failed: [] };
-      const patchStatus = (patch as { status?: string }).status;
-      const isApprovingPatch =
-        !!patchStatus && TERMINAL_APPROVED_STATUSES.has(patchStatus);
-      // Look up existing rows in the cached list so we have drawing_set_ids
-      // for the lock pass without an extra round trip.
-      const submittalsById: Record<string, Submittal> = {};
-      if (isApprovingPatch) {
-        for (const s of submittals) submittalsById[s.id as string] = s;
-      }
       for (const id of ids) {
         try {
-          const updated = await entities.Submittal.update(
+          await entities.Submittal.update(
             id,
             patch as Update<"submittals">
           );
           results.succeeded++;
-          if (isApprovingPatch) {
-            // Prefer the freshly updated row, fall back to the cached
-            // copy so drawing_set_ids resolves even if the update RPC
-            // returns a thin payload.
-            const merged = {
-              ...(submittalsById[id] || {}),
-              ...(updated || {}),
-              status: patchStatus,
-            } as Partial<Submittal>;
-            await lockLinkedSetsIfApproved(merged);
-          }
         } catch (err: unknown) {
-          const msg =
-            (err as { message?: string } | undefined)?.message ?? String(err);
-          results.failed.push({ id, error: msg });
+          results.failed.push({ id, error: toUserErrorMessage(err) });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
@@ -485,7 +807,7 @@ export function useSubmittals(projectId: string | null | undefined) {
     },
     onError: (err) => {
       invalidateAll();
-      toast.error(`Bulk update failed: ${err.message}`);
+      toast.error(`Bulk update failed: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -498,9 +820,7 @@ export function useSubmittals(projectId: string | null | undefined) {
           await entities.Submittal.delete(id);
           results.succeeded++;
         } catch (err: unknown) {
-          const msg =
-            (err as { message?: string } | undefined)?.message ?? String(err);
-          results.failed.push({ id, error: msg });
+          results.failed.push({ id, error: toUserErrorMessage(err) });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
@@ -520,7 +840,7 @@ export function useSubmittals(projectId: string | null | undefined) {
     },
     onError: (err) => {
       invalidateAll();
-      toast.error(`Bulk delete failed: ${err.message}`);
+      toast.error(`Bulk delete failed: ${toUserErrorMessage(err)}`);
     },
   });
 

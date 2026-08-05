@@ -18,7 +18,7 @@ export const TYPE_STYLES: Record<string, TypeStyle> = {
   submittal:    { color: "var(--accent)",     label: "Submittal" },
   action_item:  { color: "var(--warning)",    label: "Action Item" },
   transmittal:  { color: "var(--success)",    label: "Transmittal" },
-  change_order: { color: "#F97316",          label: "Change Order" },
+  change_order: { color: "var(--status-review)",          label: "Change Order" },
   general:      { color: "var(--text-muted)", label: "General" },
   unknown:      { color: "var(--text-muted)", label: "Unknown" },
 };
@@ -128,7 +128,7 @@ export const inputStyle: CSSProperties = {
 export const primaryBtnStyle: CSSProperties = {
   padding: "8px 18px", background: "var(--accent)", border: "1px solid var(--accent-border)",
   borderRadius: 8, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
-  color: "var(--text-on-accent, #fff)", cursor: "pointer", transition: "all 120ms",
+  color: "var(--on-accent)", cursor: "pointer", transition: "all 120ms",
 };
 
 export const secondaryBtnStyle: CSSProperties = {

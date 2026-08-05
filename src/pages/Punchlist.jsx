@@ -8,8 +8,13 @@ import PunchlistList from "@/components/punchlist/PunchlistList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, ProgressBar, BulkActionBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
+import { useOutbox } from "@/lib/field/OutboxContext";
+import { makePunchCreateOp, newClientOpId, isLikelyOfflineError } from "@/lib/field/offlineQueue";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
 export default function Punchlist() {
   const projectId = useProjectId();
@@ -18,6 +23,7 @@ export default function Punchlist() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const qc = useQueryClient();
+  const { enqueue: enqueueOutbox, flush: flushOutbox } = useOutbox();
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   // C4 — multi-select + signed close-out
@@ -35,7 +41,13 @@ export default function Punchlist() {
   };
   const clearSelection = () => setSelectedIds([]);
 
-  const { data: rawPunchlist = [] } = useQuery({
+  const {
+    data: rawPunchlist = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
@@ -46,6 +58,13 @@ export default function Punchlist() {
   useRealtimeInvalidation("punchlist_items", projectId, [["punchlist", projectId]]);
 
   const punchlist = React.useMemo(() => rawPunchlist.filter((r) => !r.is_deleted), [rawPunchlist]);
+
+  // Field Hub rows deep-link here with ?id=<item>; open it for edit/close.
+  useAutoOpenEdit(
+    punchlist,
+    (item) => { setEditing(item); setShowForm(true); },
+    { enabled: !isLoading },
+  );
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -58,8 +77,7 @@ export default function Punchlist() {
     : null;
 
   const createMut = useMutation({
-    mutationFn: (data) =>
-      entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.PunchlistItem.create(withProjectId(data, projectId)),
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
@@ -69,8 +87,28 @@ export default function Punchlist() {
         projectId,
         description: created?.description?.slice(0, 80) || "",
       });
+      flushOutbox(); // online write succeeded → drain any offline backlog
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err, data) => {
+      // No signal? Queue the create for replay instead of dropping it. The
+      // client_op_id (minted in handleSave) rides both this attempt and the
+      // retry, so a lost-response replay can't mint a duplicate (punchlist_items
+      // has a partial-unique index on client_op_id — see baseline schema).
+      if (isLikelyOfflineError(err)) {
+        try {
+          const record = withProjectId(data, projectId);
+          enqueueOutbox(makePunchCreateOp(record, record.client_op_id, Date.now()));
+          setShowForm(false);
+          setEditing(null);
+          toast.message("Saved offline — will sync when you're back online");
+          return;
+        } catch (scopeErr) {
+          toast.error(scopeErr.message || err.message);
+          return;
+        }
+      }
+      toast.error(toUserErrorMessage(err, "Create failed"));
+    },
   });
 
   // Update mutation receives { ...data, id, _prevStatus } so we can fire a
@@ -101,7 +139,7 @@ export default function Punchlist() {
         logActivity("punchlist_item", "updated", updated, { projectId });
       }
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -116,7 +154,7 @@ export default function Punchlist() {
       toast.success("Item deleted");
       logActivity("punchlist_item", "deleted", { id: deletedId }, { projectId });
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   // C4 — Batch close-out with text signature.
@@ -160,14 +198,16 @@ export default function Punchlist() {
       setCloseoutSignature("");
       setSelectedIds([]);
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Close-out failed")),
   });
 
   const handleSave = (data) => {
     if (editing) {
       updateMut.mutate({ ...data, id: editing.id, _prevStatus: editing.status });
     } else {
-      createMut.mutate(data);
+      // Mint the idempotency key up front so it rides BOTH the online create and
+      // any offline retry (dedup'd server-side on replay).
+      createMut.mutate({ ...data, client_op_id: newClientOpId() });
     }
   };
 
@@ -194,7 +234,10 @@ export default function Punchlist() {
   const priorities = ["Critical", "High", "Medium", "Low"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div
+      className="sb-dashboard-reference-page"
+      style={{ display: "flex", flexDirection: "column", gap: 16 }}
+    >
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
         title="Punchlist"
@@ -268,13 +311,31 @@ export default function Punchlist() {
       {showForm && <PunchlistFormModal projectId={projectId} item={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Punchlist */}
-      <PunchlistList
-        items={filtered}
-        selectedIds={selectedIds}
-        onToggleSelect={toggleSelect}
-        onEdit={(item) => { setEditing(item); setShowForm(true); }}
-        onDelete={setDeleteTarget}
-      />
+      <RegisterFetchBody
+        isLoading={isLoading}
+        isError={isError}
+        errorMessage={toUserErrorMessage(error, "Failed to load punchlist")}
+        onRetry={() => refetch()}
+        totalCount={punchlist.length}
+        filteredCount={filtered.length}
+        emptyTitle="No punchlist items yet"
+        emptyBody="Track punch items and close them out as work completes."
+        emptyActionLabel="+ New Item"
+        onEmptyAction={() => { setEditing(null); setShowForm(true); }}
+        onClearFilters={() => {
+          setFilterStatus("all");
+          setFilterCategory("all");
+          setFilterPriority("all");
+        }}
+      >
+        <PunchlistList
+          items={filtered}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onEdit={(item) => { setEditing(item); setShowForm(true); }}
+          onDelete={setDeleteTarget}
+        />
+      </RegisterFetchBody>
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Item" description="Delete this record? This cannot be undone." />

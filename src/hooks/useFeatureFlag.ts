@@ -13,6 +13,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
+import { type FeatureFlagKey } from "@/config/featureFlags";
 
 const STALE_TIME = 60_000;
 
@@ -82,7 +83,8 @@ export function useAllFlags() {
 }
 
 /** True if the named flag is enabled for the current user (defaults to false on load). */
-export function useFlag(key: string): boolean {
-  const { data } = useAllFlags();
+export function useFlag(key: FeatureFlagKey): boolean {
+  const { data, isSuccess } = useAllFlags();
+  if (!isSuccess) return false;
   return data?.get(key) === true;
 }

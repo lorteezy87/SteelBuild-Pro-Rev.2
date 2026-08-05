@@ -1,5 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
+import PieceRelationshipManager from "@/components/pieceControl/PieceRelationshipManager";
+import CanonicalFabReleasePanel from "@/components/pieceControl/CanonicalFabReleasePanel";
+import { PieceProductionControl } from "@/components/pieceControl/PieceProductionControl";
+import { PieceLogisticsControl } from "@/components/pieceControl/PieceLogisticsControl";
+import { useProjectContext } from "@/components/shared/ProjectContext";
+import "@/styles/piece-control-command.css";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -29,6 +35,7 @@ const STAGE_STYLES = {
 
 export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onEdit }) {
   const [tab, setTab] = useState("overview");
+  const { activeProject } = useProjectContext();
 
   const drawingMap = useMemo(() => {
     const m = {};
@@ -44,12 +51,16 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
 
   return (
     <>
-      <div
+      <button
+        type="button"
+        aria-label="Close work package details"
         onClick={onClose}
         style={{
           position: "fixed",
           inset: 0,
           background: "rgba(0,0,0,0.35)",
+          border: 0,
+          padding: 0,
           zIndex: 999,
         }}
       />
@@ -90,6 +101,8 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
               </div>
             </div>
             <button
+              type="button"
+              aria-label="Close"
               onClick={onClose}
               style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 22, cursor: "pointer" }}
             >
@@ -99,7 +112,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
         </div>
 
         <div style={{ display: "flex", gap: 10, padding: "10px 16px", borderBottom: "1px solid var(--divider)" }}>
-          {["overview", "drawings", "hours", "notes"].map((t) => (
+          {["overview", "piece control", "drawings", "hours", "notes"].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -142,7 +155,46 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-          {tab === "overview" && <OverviewTab wp={wp} phaseColor={phaseColor} statusColor={statusColorVal} percent={percent} />}
+          {tab === "overview" && <OverviewTab wp={wp} phaseColor={phaseColor} percent={percent} />}
+          {tab === "piece control" && (
+            <div
+              className="work-package-piece-control-drawer"
+              data-skin="command"
+            >
+              <PieceRelationshipManager
+                projectId={wp.project_id}
+                focusedWorkPackageId={wp.id}
+                compact
+              />
+              <PieceProductionControl
+                projectId={wp.project_id}
+                workPackageId={wp.id}
+                pieceControlMode={
+                  activeProject?.id === wp.project_id
+                    ? String(activeProject?.piece_control_mode ?? "off")
+                    : "off"
+                }
+              />
+              <PieceLogisticsControl
+                projectId={wp.project_id}
+                workPackageId={wp.id}
+                pieceControlMode={
+                  activeProject?.id === wp.project_id
+                    ? String(activeProject?.piece_control_mode ?? "off")
+                    : "off"
+                }
+              />
+              <CanonicalFabReleasePanel
+                projectId={wp.project_id}
+                workPackageId={wp.id}
+                pieceControlMode={
+                  activeProject?.id === wp.project_id
+                    ? String(activeProject?.piece_control_mode ?? "off")
+                  : "off"
+                }
+              />
+            </div>
+          )}
           {tab === "drawings" && <DrawingsTab wp={wp} drawingMap={drawingMap} />}
           {tab === "hours" && <HoursTab wp={wp} />}
           {tab === "notes" && <NotesTab notes={wp.notes} />}
@@ -152,7 +204,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
   );
 }
 
-function OverviewTab({ wp, phaseColor, statusColor, percent }) {
+function OverviewTab({ wp, phaseColor, percent }) {
   const formatDate = (d) =>
     d
       ? formatLocalDate(`${d}T00:00:00Z`, "en-US", { month: "short", day: "numeric", year: "numeric" })

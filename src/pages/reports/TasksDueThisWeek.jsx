@@ -21,6 +21,7 @@ import { FilterBar, SearchInput, ToggleGroup } from "./ReportFilters";
 import KPICard from "./KPICard";
 import { exportTableCSV, formatDate } from "./utils";
 import { mono, body } from "./constants";
+import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -54,8 +55,12 @@ export default function TasksDueThisWeek() {
   );
 
   const enriched = useMemo(() => {
+    // Exclude summary/parent rows: their end_date merely spans their children,
+    // so a late child already surfaces on its own row. Counting the parent too
+    // would double-count on the overdue/due-this-week KPIs and the table.
+    const parentIds = buildParentIdSet(tasks);
     return tasks
-      .filter((t) => t.end_date && t.status !== "Complete")
+      .filter((t) => t.end_date && t.status !== "Complete" && !isSummaryTask(t, parentIds))
       .map((t) => {
         const proj = projectsById.get(t.project_id);
         const due = new Date(t.end_date);

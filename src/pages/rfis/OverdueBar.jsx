@@ -14,12 +14,12 @@ import { mono, BIC_COLORS } from "./constants";
 export default function OverdueBar({ overdueList, overdueCount, onSelect }) {
   if (!overdueList?.length) return null;
   return (
-    <div style={{ background: "linear-gradient(90deg, rgba(255,61,61,0.14) 0%, rgba(255,61,61,0.06) 100%)", borderBottom: "2px solid rgba(255,61,61,0.35)", padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, overflowX: "auto", flexShrink: 0 }}>
+    <div style={{ background: "linear-gradient(90deg, var(--danger-muted) 0%, color-mix(in srgb, var(--status-error) 6%, transparent) 100%)", borderBottom: "2px solid var(--danger-border)", padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, overflowX: "auto", flexShrink: 0 }}>
       <div style={{ ...mono, fontSize: 9, fontWeight: 800, color: "var(--status-error)", letterSpacing: "0.10em", textTransform: "uppercase", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "var(--status-error)", animation: "gentlePulse 2s ease-in-out infinite" }} />
         {overdueCount} OVERDUE
       </div>
-      <div style={{ width: 1, height: 20, background: "rgba(255,61,61,0.3)", flexShrink: 0 }} />
+      <div style={{ width: 1, height: 20, background: "var(--danger-border)", flexShrink: 0 }} />
       {overdueList.map((r) => {
         const due = r.date_required ? parseUTCDate(r.date_required) : null;
         const lateDays = due ? Math.abs(Math.ceil((due - new Date()) / 86400000)) : 0;
@@ -29,8 +29,8 @@ export default function OverdueBar({ overdueList, overdueCount, onSelect }) {
             key={r.id}
             onClick={() => onSelect(r)}
             style={{
-              background: "rgba(255,61,61,0.10)",
-              border: "1px solid rgba(255,61,61,0.30)",
+              background: "var(--danger-muted)",
+              border: "1px solid var(--danger-border)",
               borderRadius: "var(--radius-badge, 6px)",
               padding: "6px 12px",
               cursor: "pointer",
@@ -40,8 +40,8 @@ export default function OverdueBar({ overdueList, overdueCount, onSelect }) {
               gap: 8,
               transition: "background 0.15s",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,61,61,0.20)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,61,61,0.10)")}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "color-mix(in srgb, var(--status-error) 20%, transparent)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--danger-muted)")}
           >
             <span style={{ ...mono, fontSize: 10, fontWeight: 800, color: "var(--status-error)" }}>{r.rfi_number}</span>
             <span style={{ ...mono, fontSize: 9, color: "var(--text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</span>

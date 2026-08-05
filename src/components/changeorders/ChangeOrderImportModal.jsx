@@ -19,6 +19,9 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { readChangeOrderCsvFile } from "@/lib/importChangeOrderCsv";
+import { batchProcess } from "@/utils/batchProcess";
+import { invalidateEntity } from "@/services/cacheRegistry";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -102,7 +105,7 @@ export default function ChangeOrderImportModal({
 
       setStep("preview");
     } catch (e) {
-      setErr(e?.message || String(e));
+      setErr(toUserErrorMessage(e, String(e)));
       setStep("upload");
     }
   };
@@ -150,8 +153,7 @@ export default function ChangeOrderImportModal({
         const displayNumber = /^\d+$/.test(r.co_number)
           ? `CO-${r.co_number.padStart(3, "0")}`
           : r.co_number;
-        toInsert.push({
-          project_id:           chosenProjectId,
+        toInsert.push(withProjectId({
           project_name:         projLabel,
           co_number:            displayNumber,
           title:                r.title || null,
@@ -165,26 +167,40 @@ export default function ChangeOrderImportModal({
           notes:                r.notes,
           schedule_impact_days: r.schedule_impact_days,
           margin_percent:       r.margin_percent,
-        });
+        }, chosenProjectId));
       }
 
-      let created = 0;
-      for (const row of toInsert) {
-         
-        await entities.ChangeOrder.create(row);
-        created += 1;
+      // One bad row must not abort the rest of the import. This loop used to
+      // let the first rejected INSERT throw straight out, leaving a partial
+      // import with no indication of where it stopped.
+      const { succeeded, failed } = await batchProcess(toInsert, (row) =>
+        entities.ChangeOrder.create(row),
+      );
+      const created = succeeded.length;
+
+      setLastResult({ created, skipped, failed: failed.length });
+      if (failed.length > 0) {
+        toast.warning(
+          `${created} imported, ${failed.length} failed` +
+          `${skipped ? `, ${skipped} skipped (already in project)` : ""}` +
+          ` — first error: ${failed[0].error}`,
+        );
+      } else {
+        toast.success(`${created} change order${created === 1 ? "" : "s"} imported${skipped ? `, ${skipped} skipped (already in project)` : ""}`);
       }
 
-      setLastResult({ created, skipped });
-      toast.success(`${created} change order${created === 1 ? "" : "s"} imported${skipped ? `, ${skipped} skipped (already in project)` : ""}`);
-      qc.invalidateQueries({ queryKey: ["cos-all"] });
-      qc.invalidateQueries({ queryKey: ["change-orders"] });
-      qc.invalidateQueries({ queryKey: ["change-orders", chosenProjectId] });
-      onCreated?.({ created, skipped });
+      // invalidateEntity fans out to every registered change_order query family
+      // (the hand-rolled list here missed change-orders-global / -dash /
+      // all-cos-portfolio). Approved COs also move a project's revised contract
+      // value, so ["projects"] has to go too.
+      await invalidateEntity(qc, "change_order", chosenProjectId);
+      qc.invalidateQueries({ queryKey: ["projects"] });
+
+      onCreated?.({ created, skipped, failed: failed.length });
       setStep("done");
       setTimeout(() => { reset(); onClose(); }, 1500);
     } catch (e) {
-      setErr(e?.message || String(e));
+      setErr(toUserErrorMessage(e, String(e)));
       setStep("preview");
     }
   };
@@ -462,6 +478,9 @@ export default function ChangeOrderImportModal({
               {lastResult && (
                 <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
                   {lastResult.created} new · {lastResult.skipped} skipped
+                  {lastResult.failed > 0 && (
+                    <span style={{ color: "var(--status-error)" }}> · {lastResult.failed} failed</span>
+                  )}
                 </div>
               )}
             </div>
@@ -543,7 +562,7 @@ function Td({ children, mono: isMono, accent, success, align = "left" }) {
 }
 
 const btnPrimary = {
-  padding: "8px 22px", background: AI, color: "#000",
+  padding: "8px 22px", background: AI, color: "var(--on-accent)",
   border: "none", borderRadius: 2,
   fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
   letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",

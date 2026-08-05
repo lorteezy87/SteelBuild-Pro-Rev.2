@@ -85,7 +85,7 @@ export default function KpiTile({
       : "var(--border-default)";
   const topBorderColor = active
     ? color
-    : "color-mix(in srgb, var(--border-default) 80%, white 20%)";
+    : "color-mix(in srgb, var(--border-default) 80%, var(--border-strong) 20%)";
 
   return (
     <div
@@ -98,7 +98,7 @@ export default function KpiTile({
       onMouseEnter={() => clickable && setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 90%, #000 10%) 0%, color-mix(in srgb, var(--bg-surface-low) 84%, #000 16%) 100%)",
+        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 90%, var(--bg-surface-low) 10%) 0%, color-mix(in srgb, var(--bg-surface-low) 84%, var(--bg-void) 16%) 100%)",
         backdropFilter: "blur(20px) saturate(150%)",
         WebkitBackdropFilter: "blur(20px) saturate(150%)",
         borderRadius: 16,
@@ -117,10 +117,10 @@ export default function KpiTile({
         padding: compact ? "12px 14px" : "18px 18px 16px",
         cursor: clickable ? "pointer" : "default",
         boxShadow: active
-          ? `0 0 18px color-mix(in srgb, ${color} 18%, transparent), 0 14px 34px rgba(0,0,0,0.34)`
+          ? `0 0 18px color-mix(in srgb, ${color} 18%, transparent), var(--shadow-lg)`
           : hover && clickable
-          ? "0 12px 30px rgba(0,0,0,0.36)"
-          : "inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px rgba(0,0,0,0.26)",
+          ? "var(--shadow-lg)"
+          : "inset 0 1px 0 var(--glass-border), var(--shadow-card)",
         transform: hover && clickable && !active ? "translateY(-1px)" : "none",
         transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease",
         position: "relative",

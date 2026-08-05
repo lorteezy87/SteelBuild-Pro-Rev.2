@@ -557,7 +557,7 @@ const selectStyle = {
 const btnPrimary = {
   padding: "8px 22px",
   background: AI,
-  color: "#000",
+  color: "var(--on-accent)",
   border: "none",
   borderRadius: 2,
   fontFamily: "var(--font-mono)",

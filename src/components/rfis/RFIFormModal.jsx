@@ -8,6 +8,9 @@ import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksC
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import { RFI_TYPES, buildRfiPreflight } from "@/lib/rfiPreflight";
 import { findDuplicateRfis } from "@/lib/rfiDedup";
+import FormField from "@/components/shared/FormField";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { buildRfiCreatePayload } from "@/pages/rfis/rfiMutationHelpers";
 
 /** @type {import('react').CSSProperties} */
 const iStyle = {
@@ -31,7 +34,7 @@ const Field = ({ label, span = 1, children }) => (
   </div>
 );
 
-// Deterministic RFI preflight scorecard (flag-gated). Renders the checks
+// Deterministic RFI preflight scorecard (always on). Renders the checks
 // from buildRfiPreflight() with a score; required failures read as blockers.
 const PreflightScorecard = ({ result }) => {
   if (!result) return null;
@@ -67,7 +70,7 @@ const PreflightScorecard = ({ result }) => {
   );
 };
 
-// Non-blocking duplicate-RFI warning (flag-gated). Surfaces likely prior RFIs
+// Non-blocking duplicate-RFI warning (always on). Surfaces likely prior RFIs
 // so the author links instead of re-asking (the RFI 007/008 pain).
 const DuplicateWarning = ({ matches }) => {
   if (!matches || matches.length === 0) return null;
@@ -97,7 +100,7 @@ const DuplicateWarning = ({ matches }) => {
   );
 };
 
-export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "" }) {
+export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "", prefill = null }) {
   const qc = useQueryClient();
   const trapRef = useFocusTrap(true);
   const pdfInputRef = useRef(null);
@@ -133,6 +136,12 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     //   piece_marks  → affected piece marks (comma/space separated)
     fab_hold: false,
     piece_marks: "",
+    // Qualitative impact flags (metadata-held like the fields above) — beyond the
+    // cost/schedule columns; shown on the RFI and used as answer-time triggers.
+    fab_impact: false,
+    erection_impact: false,
+    drawing_revision_required: false,
+    change_order_likely: false,
   };
 
   // Seed the workflow-backbone fields from metadata when editing an existing
@@ -144,26 +153,41 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     proposed_solution: r?.metadata?.proposed_solution || "",
     fab_hold: !!r?.metadata?.fab_hold,
     piece_marks: r?.metadata?.piece_marks || "",
+    fab_impact: !!r?.metadata?.fab_impact,
+    erection_impact: !!r?.metadata?.erection_impact,
+    drawing_revision_required: !!r?.metadata?.drawing_revision_required,
+    change_order_likely: !!r?.metadata?.change_order_likely,
   });
 
   // Pre-fill drawing_reference when the modal is opened for a NEW
   // RFI (rfi === null) — used by the drawing-hub "Create RFI from
   // zone" flow so the user sees the sheet + zone context baked in
   // before they start typing. Still editable, just not blank.
+  // `prefill` (optional) seeds a brand-new RFI with values carried in from
+  // another screen — e.g. the "Create RFI from revision delta" flow. The user
+  // still reviews/edits before saving; project_id always wins last so the RFI
+  // lands on the right project regardless of what prefill carries.
   const seedEmpty = {
     ...empty,
-    project_id: projectId || empty.project_id,
     drawing_reference: initialDrawingReference || empty.drawing_reference,
+    ...(prefill || {}),
+    project_id: projectId || empty.project_id,
   };
   const [formData, setFormData] = useState(rfi ? seedFromRfi(rfi) : seedEmpty);
   const [pendingPdfFiles, setPendingPdfFiles] = useState([]);
+  // Preflight override — when required checks fail, the author can still submit
+  // by acknowledging and giving a reason (logged to metadata.preflight_override).
+  const [overrideAck, setOverrideAck] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
 
   useEffect(() => {
     setFormData(rfi
       ? seedFromRfi(rfi)
-      : { ...empty, project_id: projectId || "", drawing_reference: initialDrawingReference || "" });
+      : { ...empty, drawing_reference: initialDrawingReference || "", ...(prefill || {}), project_id: projectId || "" });
     setPendingPdfFiles([]);
-  }, [rfi, projectId, initialDrawingReference]);
+    setOverrideAck(false);
+    setOverrideReason("");
+  }, [rfi, projectId, initialDrawingReference, prefill]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -214,7 +238,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     staleTime: 60_000,
   });
 
-  // Fallback internal mutation — only used when parent does NOT supply onSave
+  // Shared-entry mutation used only when the parent does not supply onSave.
   const internalMutation = useMutation({
     mutationFn: async (data) => {
       // Coerce empty-string numeric fields to null so Postgres doesn't reject them
@@ -226,26 +250,17 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       if (rfi) {
         return entities.RFI.update(rfi.id, clean);
       }
-      let rfiNumber;
-      if (clean.project_id) {
-        rfiNumber = await getNextFormattedNumber({
-          projectId: clean.project_id,
-          recordType: "RFI",
-          entityName: "RFI",
-          fieldName: "rfi_number",
-          prefix: "RFI #",
-        });
-      } else {
-        // No project — scan ALL RFIs to find the global max number
-        const allRFIs = await entities.RFI.list();
-        const maxNum = (allRFIs || []).reduce((max, r) => {
-          const m = String(r.rfi_number || "").match(/(\d+)(?!.*\d)/);
-          return m ? Math.max(max, Number(m[1])) : max;
-        }, 0);
-        rfiNumber = `RFI #${String(maxNum + 1).padStart(3, "0")}`;
-      }
+      const scoped = buildRfiCreatePayload(clean, projectId || clean.project_id);
+      const rfiNumber = await getNextFormattedNumber({
+        projectId: scoped.project_id,
+        recordType: "RFI",
+        entityName: "RFI",
+        fieldName: "rfi_number",
+        prefix: "RFI #",
+      });
+      if (!rfiNumber) throw new Error("RFI number allocation failed. The RFI was not saved.");
       return entities.RFI.create({
-        ...clean,
+        ...scoped,
         rfi_number: rfiNumber,
       });
     },
@@ -257,8 +272,10 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       onClose();
     },
     onError: (err) =>
-      toast.error("Failed to save RFI: " + (err?.message || "Unknown error")),
+      toast.error(`Failed to save RFI: ${toUserErrorMessage(err, "Unknown error")}`),
   });
+
+  const submitInFlightRef = useRef(false);
 
   const quickStatusMut = useMutation({
     mutationFn: (status) => entities.RFI.update(rfi.id, { status }),
@@ -268,7 +285,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       toast.success(`Status set to ${status}`);
       setFormData((f) => ({ ...f, status }));
     },
-    onError: () => toast.error("Status update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Status update failed")),
   });
 
   // Whether save is in progress — prefer parent's flag, fall back to internal
@@ -317,11 +334,12 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     window.open(resolvedUrl, "_blank", "noopener,noreferrer");
   };
 
-  const buildPayload = () => {
+  const buildPayload = (pf, overrideReasonText = null) => {
     // rfi_type / proposed_solution are local-only fields — fold them into the
     // existing metadata JSON and strip the top-level keys so we never send a
-    // non-column (no schema dependency).
-    const { rfi_type, proposed_solution, fab_hold, piece_marks, ...rest } = formData;
+    // non-column (no schema dependency). The preflight score + any override
+    // reason are recorded the same way — queryable, no migration.
+    const { rfi_type, proposed_solution, fab_hold, piece_marks, fab_impact, erection_impact, drawing_revision_required, change_order_likely, ...rest } = formData;
     return {
       ...rest,
       metadata: {
@@ -330,6 +348,14 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
         proposed_solution,
         fab_hold: !!fab_hold,
         piece_marks: (piece_marks || "").trim(),
+        fab_impact: !!fab_impact,
+        erection_impact: !!erection_impact,
+        drawing_revision_required: !!drawing_revision_required,
+        change_order_likely: !!change_order_likely,
+        preflight_score: pf ? pf.score : (formData.metadata?.preflight_score ?? null),
+        preflight_override: overrideReasonText
+          ? { reason: overrideReasonText, score: pf?.score ?? null, blockers: (pf?.blockers || []).map((b) => b.key), at: new Date().toISOString() }
+          : (formData.metadata?.preflight_override ?? null),
       },
     };
   };
@@ -338,28 +364,46 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     e.preventDefault();
     if (!formData.title?.trim()) return toast.error("Title is required");
 
-    // Preflight gate — block submission on required failures so
-    // under-specified RFIs don't ship. Soft checks never block.
+    // Preflight gate — required-check failures block submission so
+    // under-specified RFIs don't ship. The author can still submit by
+    // acknowledging the override and giving a reason (logged). Soft checks
+    // never block.
     const pf = buildRfiPreflight(formData);
     if (!pf.passed) {
-      return toast.error(`Preflight: resolve ${pf.blockers.map((b) => b.label).join("; ")}`);
+      if (!overrideAck) {
+        return toast.error(`Preflight: resolve ${pf.blockers.map((b) => b.label).join("; ")} — or check "Submit anyway" and give a reason`);
+      }
+      if (!overrideReason.trim()) {
+        return toast.error("Enter a reason to override the preflight and submit");
+      }
     }
 
-    const payload = buildPayload();
+    const payload = buildPayload(pf, !pf.passed ? overrideReason.trim() : null);
 
-    // If parent supplied onSave, delegate to it (parent handles persistence + cache)
+    // If parent supplied onSave, delegate to it (parent handles persistence + cache).
     if (typeof onSave === "function") {
-      onSave(payload, pendingPdfFiles);
+      if (submitInFlightRef.current) return;
+      submitInFlightRef.current = true;
+      Promise.resolve()
+        .then(() => onSave(payload, pendingPdfFiles))
+        .then(
+          () => { submitInFlightRef.current = false; },
+          () => { submitInFlightRef.current = false; },
+        );
       return;
     }
 
-    // Otherwise use our internal mutation as fallback
-    internalMutation.mutate(payload);
+    // Otherwise use the same RPC-backed mutation for shared entry points.
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
+    internalMutation.mutate(payload, {
+      onSettled: () => { submitInFlightRef.current = false; },
+    });
   };
 
   const statusBtnStyle = (s) => ({
     background: formData.status === s ? "var(--accent)" : "var(--bg-surface)",
-    color: formData.status === s ? "white" : "var(--text-muted)",
+    color: formData.status === s ? "var(--on-accent)" : "var(--text-muted)",
     border: `1px solid ${formData.status === s ? "var(--accent)" : "var(--border-default)"}`,
     borderRadius: 6, padding: "4px 10px", fontFamily: "var(--font-mono)",
     fontSize: 8, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
@@ -374,8 +418,8 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   const duplicateMatches = findDuplicateRfis(formData, existingRfis);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={trapRef} className="sbd-card-strong" style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", maxWidth: 780, width: "96%", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.8)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 65%, transparent)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={trapRef} className="sbd-card-strong" style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", maxWidth: 780, width: "96%", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px color-mix(in srgb, var(--bg-base) 80%, transparent)" }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 24px 12px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", flexShrink: 0 }}>
           <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.10em" }}>{title}</h2>
@@ -403,9 +447,11 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 options={projects.map((p) => ({ value: p.id, label: p.name || p.project_number || "Unnamed project" }))}
               />
             </Field>
-            <Field label="Title *" span={3}>
-              <input style={iStyle} value={formData.title} onChange={(e) => set("title", e.target.value)} required />
-            </Field>
+            <FormField label="Title *" labelStyle={labelStyle} style={{ gridColumn: "span 3" }}>
+              {({ id }) => (
+                <input id={id} style={iStyle} value={formData.title} onChange={(e) => set("title", e.target.value)} required />
+              )}
+            </FormField>
             <Field label="RFI Type" span={3}>
               <DarkSelect
                 value={formData.rfi_type || ""}
@@ -423,7 +469,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                   style={iStyle}
                   value={formData.rfi_number || ""}
                   onChange={(e) => set("rfi_number", e.target.value)}
-                  placeholder="RFI #001"
+                  placeholder="RFI 001"
                 />
               ) : (
                 <input
@@ -434,12 +480,16 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 />
               )}
             </Field>
-            <Field label="Drawing Reference" span={2}>
-              <input style={iStyle} value={formData.drawing_reference} onChange={(e) => set("drawing_reference", e.target.value)} placeholder="e.g. Sheet A-2.3" />
-            </Field>
-            <Field label="Spec Section" span={1}>
-              <input style={iStyle} value={formData.spec_section} onChange={(e) => set("spec_section", e.target.value)} placeholder="e.g. 05120" />
-            </Field>
+            <FormField label="Drawing Reference" labelStyle={labelStyle} style={{ gridColumn: "span 2" }}>
+              {({ id }) => (
+                <input id={id} style={iStyle} value={formData.drawing_reference} onChange={(e) => set("drawing_reference", e.target.value)} placeholder="e.g. Sheet A-2.3" />
+              )}
+            </FormField>
+            <FormField label="Spec Section" labelStyle={labelStyle} style={{ gridColumn: "span 1" }}>
+              {({ id }) => (
+                <input id={id} style={iStyle} value={formData.spec_section} onChange={(e) => set("spec_section", e.target.value)} placeholder="e.g. 05120" />
+              )}
+            </FormField>
             <Field label="Discipline" span={3}>
               <DarkSelect
                 value={formData.discipline || ""}
@@ -523,17 +573,41 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
               <input style={iStyle} value={formData.area_sequence || ""} onChange={(e) => set("area_sequence", e.target.value)} placeholder="e.g. Area A, Seq 3" />
             </Field>
 
-            <Field label="Description" span={3}>
-              <textarea style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.description} onChange={(e) => set("description", e.target.value)} />
-            </Field>
-            <Field label="Question / Issue" span={3}>
-              <textarea style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.question} onChange={(e) => set("question", e.target.value)} />
-            </Field>
-            <Field label="Proposed Resolution" span={3}>
-              <textarea style={{ ...iStyle, minHeight: 56, resize: "vertical" }} value={formData.proposed_solution} onChange={(e) => set("proposed_solution", e.target.value)} placeholder="Your recommended answer — speeds review and documents intent." />
-            </Field>
+            <FormField label="Description" labelStyle={labelStyle} style={{ gridColumn: "span 3" }}>
+              {({ id }) => (
+                <textarea id={id} style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.description} onChange={(e) => set("description", e.target.value)} />
+              )}
+            </FormField>
+            <FormField label="Question / Issue" labelStyle={labelStyle} style={{ gridColumn: "span 3" }}>
+              {({ id }) => (
+                <textarea id={id} style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.question} onChange={(e) => set("question", e.target.value)} />
+              )}
+            </FormField>
+            <FormField label="Proposed Resolution" labelStyle={labelStyle} style={{ gridColumn: "span 3" }}>
+              {({ id }) => (
+                <textarea id={id} style={{ ...iStyle, minHeight: 56, resize: "vertical" }} value={formData.proposed_solution} onChange={(e) => set("proposed_solution", e.target.value)} placeholder="Your recommended answer — speeds review and documents intent." />
+              )}
+            </FormField>
             {duplicateMatches.length > 0 && <DuplicateWarning matches={duplicateMatches} />}
             <PreflightScorecard result={preflight} />
+            {!preflight.passed && (
+              <div style={{ gridColumn: "span 3", border: "1px solid var(--status-error)", borderRadius: 6, padding: 12, background: "var(--danger-muted)" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: overrideAck ? 8 : 0 }}>
+                  <input type="checkbox" checked={overrideAck} onChange={(e) => setOverrideAck(e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer", flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 700 }}>
+                    Submit anyway — override {preflight.blockers.length} unresolved required item{preflight.blockers.length === 1 ? "" : "s"}
+                  </span>
+                </label>
+                {overrideAck && (
+                  <textarea
+                    style={{ ...iStyle, minHeight: 48, resize: "vertical" }}
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value)}
+                    placeholder="Reason for overriding preflight (required, logged with the RFI)"
+                  />
+                )}
+              </div>
+            )}
 
             {/* Section 3 — Routing */}
             <SectionLabel>Routing</SectionLabel>
@@ -616,6 +690,19 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                   />
                 )}
               </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                {[
+                  ["drawing_revision_required", "Drawing revision required"],
+                  ["change_order_likely", "Change order likely"],
+                  ["fab_impact", "Fabrication impact"],
+                  ["erection_impact", "Erection impact"],
+                ].map(([key, lbl]) => (
+                  <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
+                    <input type="checkbox" checked={!!formData[key]} onChange={(e) => set(key, e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer" }} />
+                    {lbl}
+                  </label>
+                ))}
+              </div>
             </div>
 
             <SectionLabel>PDF Attachments</SectionLabel>
@@ -687,7 +774,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
           <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Cancel
           </button>
-          <button type="submit" form="rfi-form" disabled={isSaving} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.6 : 1 }}>
+          <button type="submit" form="rfi-form" disabled={isSaving} style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.6 : 1 }}>
             {isSaving ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
           </button>
         </div>
@@ -793,7 +880,7 @@ const darkSelectMenuStyle = {
   background: "var(--bg-surface-secondary)",
   border: "1px solid color-mix(in srgb, var(--accent) 32%, var(--border-default))",
   borderRadius: 10,
-  boxShadow: "0 18px 46px rgba(0,0,0,0.74), inset 0 1px 0 rgba(255,255,255,0.06)",
+  boxShadow: "0 18px 46px color-mix(in srgb, var(--bg-base) 74%, transparent), inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent)",
 };
 
 const darkSelectOptionStyle = (active) => ({
@@ -818,7 +905,7 @@ const attachmentDropStyle = {
   padding: 14,
   border: "1px dashed color-mix(in srgb, var(--accent) 45%, var(--border-default))",
   borderRadius: 12,
-  background: "linear-gradient(135deg, rgba(86,176,255,0.08), rgba(255,255,255,0.025))",
+  background: "linear-gradient(135deg, var(--info-muted), var(--bg-surface-low))",
 };
 
 const uploadButtonStyle = {
@@ -844,13 +931,13 @@ const attachmentRowStyle = {
   padding: "9px 10px",
   border: "1px solid var(--border-default)",
   borderRadius: 9,
-  background: "rgba(255,255,255,0.035)",
+  background: "var(--hover-bg)",
 };
 
 const attachmentActionStyle = {
   border: "1px solid var(--border-default)",
   borderRadius: 7,
-  background: "rgba(255,255,255,0.04)",
+  background: "var(--bg-hover)",
   color: "var(--accent)",
   padding: "5px 8px",
   fontFamily: "var(--font-mono)",

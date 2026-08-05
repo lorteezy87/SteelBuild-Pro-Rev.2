@@ -1,0 +1,128 @@
+/**
+ * ifcRosterImport.js — persist an extracted IFC piece roster (extractIfcRoster)
+ * into model_registry + model_elements. This is what backfills
+ * model_elements.element_guid (IFC GlobalId), so summarizeElementStatuses can
+ * build guidsByStatus and the 3D viewer can color geometry by fab status.
+ *
+ * Replace-on-import (MVP is one IFC model per project): any prior active IFC
+ * model is superseded and its roster soft-deleted, then the new model + roster
+ * are written. CSV-sourced model_elements are left untouched (only source='ifc'
+ * rows are replaced).
+ */
+import { supabase } from "@/lib/supabase";
+import { entities } from "@/api/supabaseClient";
+
+const CHUNK = 500;
+
+/**
+ * @param {object} args
+ * @param {string} args.projectId
+ * @param {string} args.fileName
+ * @param {string} [args.schema]      IFC schema (stored as coordinate_system label)
+ * @param {string} [args.fileUrl]     Storage path of the uploaded .ifc (so the
+ *                                     viewer can auto-load it next visit)
+ * @param {Array}  args.rows          extractIfcRoster().rows
+ * @returns {Promise<{ modelId: string, created: number }>}
+ */
+export async function importIfcRoster({ projectId, fileName, schema, fileUrl, rows }) {
+  if (!projectId) throw new Error("No active project.");
+  const safeRows = rows || []; // a model with no marks still persists (file_url only)
+  const now = new Date().toISOString();
+
+  // 1. Replace any prior IFC model for this project.
+  const { error: supErr } = await supabase
+    .from("model_registry")
+    .update({ status: "superseded", updated_at: now })
+    .eq("project_id", projectId)
+    .eq("file_type", "IFC")
+    .eq("status", "active");
+  if (supErr) throw supErr;
+
+  const { error: delErr } = await supabase
+    .from("model_elements")
+    .update({ is_deleted: true, deleted_at: now })
+    .eq("project_id", projectId)
+    .eq("source", "ifc")
+    .eq("is_deleted", false);
+  if (delErr) throw delErr;
+
+  // 2. Create the model anchor.
+  const { data: reg, error: regErr } = await supabase
+    .from("model_registry")
+    .insert({
+      project_id: projectId,
+      file_name: fileName,
+      file_url: fileUrl || null,
+      file_type: "IFC",
+      source: "local",
+      status: "active",
+      coordinate_system: schema || null,
+      upload_date: now,
+      revision_number: 1,
+      metadata: { parts: safeRows.length, imported_from: "ifc_roster" },
+    })
+    .select("id")
+    .single();
+  if (regErr) throw regErr;
+  const modelId = reg.id;
+
+  // 3. Bulk-insert the roster. Each row carries the IFC GlobalId (element_guid)
+  //    + the assembly mark (piece_mark) — the geometry↔status join.
+  const records = safeRows.map((r) => ({
+    project_id: projectId,
+    model_id: modelId,
+    source: "ifc",
+    element_guid: r.element_guid,
+    piece_mark: r.piece_mark,
+    assembly_mark: r.assembly_mark || null,
+    sequence_number: r.sequence_number || null,
+    quantity: r.quantity ?? 1,
+    metadata: { part_mark: r.part_mark || null, ifc_type: r.ifc_type || null, name: r.name || null },
+  }));
+
+  let created = 0;
+  for (let i = 0; i < records.length; i += CHUNK) {
+    const chunk = records.slice(i, i + CHUNK);
+    await entities.ModelElement.bulkCreate(chunk);
+    created += chunk.length;
+  }
+
+  // Lot-aware mark → canonical piece link (no-op / error if piece control off).
+  let linkSummary = null;
+  try {
+    const { data, error } = await supabase.rpc("link_model_elements_to_pieces", {
+      p_project_id: projectId,
+    });
+    if (!error) linkSummary = data;
+  } catch {
+    /* link is best-effort after import */
+  }
+
+  return { modelId, created, linkSummary };
+}
+
+/**
+ * Remove the project's active IFC model — soft-deletes the model_registry row(s)
+ * and the IFC-sourced model_elements, so the viewer returns to the upload state.
+ * CSV-sourced elements are left alone.
+ */
+export async function removeProjectModel(projectId) {
+  if (!projectId) throw new Error("No active project.");
+  const now = new Date().toISOString();
+
+  const { error: regErr } = await supabase
+    .from("model_registry")
+    .update({ is_deleted: true, deleted_at: now, status: "archived" })
+    .eq("project_id", projectId)
+    .eq("file_type", "IFC")
+    .eq("is_deleted", false);
+  if (regErr) throw regErr;
+
+  const { error: elErr } = await supabase
+    .from("model_elements")
+    .update({ is_deleted: true, deleted_at: now })
+    .eq("project_id", projectId)
+    .eq("source", "ifc")
+    .eq("is_deleted", false);
+  if (elErr) throw elErr;
+}

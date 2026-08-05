@@ -4,7 +4,8 @@
  * Writes to entities.Activity so the Activity page + ActivityFeed
  * component actually have data to display.
  *
- * Called automatically by useCrudMutation after every successful create/update/delete.
+ * Call logActivity / logTransition after a successful create/update/delete
+ * (schedule, submittals, daily logs, drawing sets, budget hours, … all do).
  * Fire-and-forget — audit failures never block the primary operation.
  *
  * The `activities` table stores columns in snake_case (entity_type, entity_name,
@@ -12,6 +13,7 @@
  * mirrors them to the legacy camelCase that legacy feed UI still reads.
  */
 
+import * as Sentry from "@sentry/react";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 
@@ -29,12 +31,15 @@ const ENTITY_LABELS: Record<string, string> = {
   drawing:        "Drawing",
   delivery:       "Delivery",
   rfi:            "RFI",
+  submittal:      "Submittal",
+  pay_application: "PayApplication",
   change_order:   "ChangeOrder",
   expense:        "Expense",
   cost_code:      "CostCode",
   work_package:   "WorkPackage",
   schedule_task:  "ScheduleTask",
   sov_item:       "SOVItem",
+  budget_hour_item: "BudgetHourItem",
   alert:          "Alert",
   project:        "Project",
   daily_log:      "DailyLog",
@@ -49,8 +54,11 @@ function getEntityName(entityType: string, record: EntityRecord | null | undefin
   return (
     record.name ||
     record.title ||
+    record.scope_item ||
     record.sheet_number ||
     record.rfi_number ||
+    record.submittal_number ||
+    record.application_number ||
     record.co_number ||
     record.delivery_number ||
     record.delivery_title ||
@@ -146,8 +154,17 @@ export async function logActivity(
 
     await entities.Activity.create(activityRecord);
   } catch (err: any) {
-    // Never block the primary operation — audit is best-effort
-    console.warn("[auditLogger] Failed to log activity:", err?.message);
+    // Never block the primary operation — audit is best-effort. But a failed
+    // audit write is invisible otherwise, so surface it to Sentry (L17): a
+    // systemic break (e.g. an RLS regression or schema drift) would silently
+    // gut the audit trail without this signal.
+    const message = err?.message;
+    console.warn("[auditLogger] Failed to log activity:", message);
+    Sentry.captureMessage("audit write failed", {
+      level: "warning",
+      tags: { entity_type: entityType, action },
+      extra: { message },
+    });
   }
 }
 

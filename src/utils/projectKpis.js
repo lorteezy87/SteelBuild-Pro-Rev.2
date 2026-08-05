@@ -6,6 +6,8 @@
  * to test and reuse without React dependencies.
  */
 
+import { computeRevisedContractValue } from "@/services/costRollup";
+
 /**
  * Work-package progress for a single project.
  * @param {object[]} workPackages - WPs already filtered to this project
@@ -41,10 +43,13 @@ export function calcLaborBurn(workPackages = []) {
  * @returns {{ original, approvedCOTotal, revised, pendingCOCount, pendingCOValue }}
  */
 export function calcContractValue(project, changeOrders = []) {
-  const original       = Number(project?.original_contract_value) || 0;
-  const approvedCOs    = changeOrders.filter(c => c.status === "Approved");
-  const approvedCOTotal = approvedCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-  const revised        = original + approvedCOTotal;
+  const original = Number(project?.original_contract_value) || 0;
+  // Delegate the revised value to the single source of truth (costRollup) so this
+  // Projects-page KPI can't drift from Financials / ContractManagement — that helper
+  // trims the CO status, catching an "Approved " with stray whitespace that an exact
+  // === would silently miss (and would otherwise show a smaller contract here).
+  const revised = computeRevisedContractValue(project, changeOrders);
+  const approvedCOTotal = revised - original;
   const pendingCOs     = changeOrders.filter(c => ["Submitted", "Under Review"].includes(c.status));
   const pendingCOCount = pendingCOs.length;
   const pendingCOValue = pendingCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);

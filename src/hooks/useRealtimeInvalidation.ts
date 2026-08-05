@@ -42,20 +42,34 @@ export function useRealtimeInvalidation(
 
     const filter = projectId ? `project_id=eq.${projectId}` : undefined;
 
+    // Coalesce a burst of row events (e.g. a bulk update that fires N
+    // postgres_changes callbacks) into ONE invalidation cycle via a ~300ms
+    // trailing debounce. Without this, a bulk op invalidated the query keys
+    // N times, each triggering a refetch. The keys are read from the ref at
+    // FLUSH time so a key change mid-debounce still invalidates the latest set.
+    const DEBOUNCE_MS = 300;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleInvalidate = () => {
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        for (const key of queryKeysRef.current) {
+          qc.invalidateQueries({ queryKey: key });
+        }
+      }, DEBOUNCE_MS);
+    };
+
     const channel = supabase
       .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table, filter },
-        () => {
-          for (const key of queryKeysRef.current) {
-            qc.invalidateQueries({ queryKey: key });
-          }
-        },
+        scheduleInvalidate,
       )
       .subscribe();
 
     return () => {
+      if (flushTimer) clearTimeout(flushTimer);
       supabase.removeChannel(channel);
     };
   }, [table, projectId, qc]);

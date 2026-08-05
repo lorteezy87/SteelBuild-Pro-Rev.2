@@ -7,6 +7,9 @@ import ProjectCloseoutForm from "@/components/closeout/ProjectCloseoutForm";
 import ProjectCloseoutChecklist from "@/components/closeout/ProjectCloseoutChecklist";
 import ProjectCloseoutSummary from "@/components/closeout/ProjectCloseoutSummary";
 import { CommandBar } from "@/components/design-system";
+import { buildCloseoutDbPayload } from "@/lib/closeout/closeoutPayload";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
 export default function ProjectCloseout() {
   const projectId = useProjectId();
@@ -18,8 +21,15 @@ export default function ProjectCloseout() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: closeouts = [] } = useQuery({
-    queryKey: ["closeouts", projectId],
+  const closeoutQueryKey = ["closeouts", projectId];
+  const {
+    data: closeouts = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: closeoutQueryKey,
     queryFn: () =>
       projectId
         ? entities.ProjectCloseout.filter({ project_id: projectId })
@@ -34,29 +44,49 @@ export default function ProjectCloseout() {
   const qc = useQueryClient();
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.ProjectCloseout.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.ProjectCloseout.create(withProjectId(data, projectId)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["closeouts", projectId] });
+      qc.invalidateQueries({ queryKey: closeoutQueryKey });
       toast.success("Closeout record created");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const updateMut = useMutation({
-    mutationFn: (data) => entities.ProjectCloseout.update(data.id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["closeouts", projectId] });
+    mutationFn: ({ id, patch }) => entities.ProjectCloseout.update(id, patch),
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: closeoutQueryKey });
+      const previous = qc.getQueryData(closeoutQueryKey);
+      qc.setQueryData(closeoutQueryKey, (current = []) =>
+        current.map((row) => row.id === id ? { ...row, ...patch } : row),
+      );
+      return { previous };
+    },
+    onError: (err, _variables, context) => {
+      if (context?.previous) qc.setQueryData(closeoutQueryKey, context.previous);
+      toast.error(toUserErrorMessage(err, "Update failed"));
+    },
+    onSuccess: (updated) => {
+      qc.setQueryData(closeoutQueryKey, (current = []) =>
+        current.map((row) => row.id === updated.id ? updated : row),
+      );
       toast.success("Closeout updated");
     },
-    onError: (err) => toast.error(err.message),
+    onSettled: () => qc.invalidateQueries({ queryKey: closeoutQueryKey }),
   });
 
-  const handleSave = (data) => {
+  const handleSave = async (data) => {
     if (projectCloseout) {
-      updateMut.mutate({ ...data, id: projectCloseout.id });
+      await updateMut.mutateAsync({ id: projectCloseout.id, patch: data });
     } else {
-      createMut.mutate(data);
+      await createMut.mutateAsync(data);
     }
+  };
+
+  const handleChecklistUpdate = async (uiPatch) => {
+    if (!projectCloseout) return;
+    const patch = buildCloseoutDbPayload(uiPatch, projectCloseout);
+    await updateMut.mutateAsync({ id: projectCloseout.id, patch });
   };
 
   const tabs = [
@@ -66,14 +96,24 @@ export default function ProjectCloseout() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "SELECT PROJECT"}
         title="Project Closeout"
         subtitle="Handover checklist · final billing summary · lessons learned"
       />
 
-      {!projectCloseout ? (
+      {isLoading || isError ? (
+        <RegisterFetchBody
+          isLoading={isLoading}
+          isError={isError}
+          errorMessage={toUserErrorMessage(error, "Failed to load closeout")}
+          onRetry={() => refetch()}
+          totalCount={0}
+          filteredCount={0}
+          emptyTitle="No closeout record"
+        />
+      ) : !projectCloseout ? (
         <ProjectCloseoutForm projectId={projectId} onSave={handleSave} />
       ) : (
         <>
@@ -104,8 +144,19 @@ export default function ProjectCloseout() {
           </div>
 
           {/* Content */}
-          {activeTab === "checklist" && <ProjectCloseoutChecklist closeout={projectCloseout} onUpdate={(data) => updateMut.mutate({ ...data, id: projectCloseout.id })} />}
-          {activeTab === "summary" && <ProjectCloseoutSummary closeout={projectCloseout} onUpdate={(data) => updateMut.mutate({ ...data, id: projectCloseout.id })} />}
+          {activeTab === "checklist" && (
+            <ProjectCloseoutChecklist
+              closeout={projectCloseout}
+              isUpdating={updateMut.isPending}
+              onUpdate={handleChecklistUpdate}
+            />
+          )}
+          {activeTab === "summary" && (
+            <ProjectCloseoutSummary
+              closeout={projectCloseout}
+              onUpdate={handleChecklistUpdate}
+            />
+          )}
           {activeTab === "lessons" && <ProjectCloseoutLessons closeout={projectCloseout} />}
         </>
       )}

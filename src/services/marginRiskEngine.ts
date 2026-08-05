@@ -8,6 +8,8 @@
  * Every score is explainable — no ML, no hidden formulas.
  */
 
+import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
+
 type SourceRecord = Record<string, any>;
 type Severity = "critical" | "high" | "medium";
 
@@ -231,8 +233,13 @@ function scoreInspectionRisk(inspections: SourceRecord[] = []): RiskSignal {
 function scoreScheduleSlipRisk(scheduleTasks: SourceRecord[] = []): RiskSignal {
   const items: RiskItem[] = [];
   let totalExposure = 0;
+  // Summary/parent tasks roll their end_date up from children, so a slipped
+  // parent is just a reflection of a slipped child that's already scored on its
+  // own row. Excluding parents prevents double-counting LD exposure.
+  const parentIds = buildParentIdSet(scheduleTasks);
   for (const task of scheduleTasks) {
     if (!task || task.is_deleted) continue;
+    if (isSummaryTask(task, parentIds)) continue;
     const status = normalize(task.status);
     if (["complete", "completed", "closed"].includes(status)) continue;
 

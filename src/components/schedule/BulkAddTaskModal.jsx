@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { PHASES } from "../../utils/phases";
 import DateOrTbdInput from "./DateOrTbdInput";
+import { addDaysIso } from "../../services/scheduleCascade";
 
 const TASK_TYPES = ["Task", "Fabrication", "Delivery", "Install", "Submittal", "RFI", "Milestone"];
 const STATUSES   = ["Not Started", "In Progress", "Complete", "On Hold", "Cancelled"];
@@ -11,10 +12,9 @@ const today = () => new Date().toISOString().split("T")[0];
 /** Add `days` calendar days to a YYYY-MM-DD string. Returns YYYY-MM-DD. */
 function addDays(dateStr, days) {
   if (!dateStr || !Number.isFinite(days)) return null;
-  const d = new Date(dateStr + "T00:00:00");
-  if (isNaN(d)) return null;
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
+  // UTC-safe: local-parse (new Date(str+"T00:00:00")) + toISOString() shifts the
+  // day under a non-zero UTC offset. addDaysIso does the arithmetic in UTC.
+  return addDaysIso(dateStr, days);
 }
 
 /** Compute the day-count between two YYYY-MM-DD strings. */
@@ -57,7 +57,7 @@ const INPUT_STYLE = {
   boxSizing: "border-box",
   background: "var(--bg-input)",
   border: "1px solid var(--border-default)",
-  borderRadius: 6,
+  borderRadius: 2,
   outline: "none",
   color: "var(--text-primary)",
   fontFamily: "var(--font-body)",
@@ -73,18 +73,26 @@ const SELECT_STYLE = {
   boxSizing: "border-box",
   background: "var(--bg-input)",
   border: "1px solid var(--border-default)",
-  borderRadius: 6,
+  borderRadius: 2,
   color: "var(--text-primary)",
   fontFamily: "var(--font-mono)",
-  fontSize: 10,
+  fontSize: 11,
   lineHeight: "16px",
   padding: "0 8px",
   cursor: "pointer",
   outline: "none",
 };
 
-const COL_WIDTHS = "40px minmax(220px, 1.3fr) 108px 132px 150px 68px 150px 120px 100px 140px 160px 54px";
-const GRID_MIN_WIDTH = 1512;
+// Column widths are tuned so the grid's intrinsic width (≈1346px) fits inside
+// the modal's inner content box with NO horizontal scroll at desktop widths
+// (>=1440px viewport → inner ≈1364px, ~18px slack). At wider viewports the
+// task-name flex column absorbs the extra space up to the modal's 1688px inner
+// cap. START/END DATE get 158px so the full MM/DD/YYYY + the TBD control shows
+// without clipping; the selects get room for their longest option text
+// ("Not Started", "Fabrication", etc.). GRID_MIN_WIDTH is only a small-screen
+// fallback floor below which a horizontal scrollbar appears gracefully.
+const COL_WIDTHS = "40px minmax(200px, 1.4fr) 94px 126px 158px 60px 158px 112px 92px 124px 132px 50px";
+const GRID_MIN_WIDTH = 1346;
 const ROW_BG = "var(--bg-surface)";
 const ROW_ALT_BG = "var(--bg-surface-low)";
 const ROW_ERROR_BG = "var(--danger-muted)";
@@ -224,12 +232,12 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
 
   return (
     <>
-      <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.74)", backdropFilter: "blur(6px)", zIndex: 998 }} />
+      <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--sbd-gantt-bg) 74%, transparent)", backdropFilter: "blur(6px)", zIndex: 998 }} />
       <div style={{
         position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-        width: "min(1420px, 96vw)", maxHeight: "88vh",
+        width: "min(1720px, 97vw)", maxHeight: "88vh",
         background: PANEL_BG, border: "1px solid var(--accent-border)",
-        borderRadius: 14, boxShadow: "var(--shadow-lg)", zIndex: 999,
+        borderRadius: 2, boxShadow: "var(--shadow-lg)", zIndex: 999,
         display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
         {/* Header */}
@@ -274,10 +282,10 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                 style={{
                   display: "grid", gridTemplateColumns: COL_WIDTHS,
                   minWidth: GRID_MIN_WIDTH,
-                  alignItems: "center", height: 42,
+                  alignItems: "center", height: 46,
                   borderBottom: "1px solid var(--hover-bg)",
                   background: hasErr ? ROW_ERROR_BG : idx % 2 === 1 ? ROW_ALT_BG : ROW_BG,
-                  border: hasErr ? "1px solid rgba(255,59,59,0.25)" : undefined,
+                  border: hasErr ? "1px solid var(--danger-border)" : undefined,
                   padding: "0 16px",
                 }}
               >
@@ -291,7 +299,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   <input
                     value={row.task_name}
                     onChange={(e) => updateRow(row._id, "task_name", e.target.value)}
-                    onFocus={(e) => e.target.style.background = "rgb(18,25,38)"}
+                    onFocus={(e) => e.target.style.background = "var(--bg-surface-high)"}
                     onBlur={(e) => e.target.style.background = INPUT_STYLE.background}
                     onKeyDown={handleCellKeyDown}
                     data-row={idx}
@@ -324,7 +332,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                     onKeyDown={handleCellKeyDown}
                     data-row={idx}
                     data-col="start_date"
-                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, padding: "7px 8px" }}
+                    inputStyle={{ ...INPUT_STYLE, fontSize: 12, padding: "7px 6px" }}
                   />
                 </div>
 
@@ -352,7 +360,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                     onKeyDown={handleCellKeyDown}
                     data-row={idx}
                     data-col="end_date"
-                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, padding: "7px 8px" }}
+                    inputStyle={{ ...INPUT_STYLE, fontSize: 12, padding: "7px 6px" }}
                   />
                 </div>
 
@@ -410,7 +418,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   <button
                     onClick={() => removeRow(row._id)}
                     title="Remove row"
-                    style={{ background: "none", border: "none", color: "rgba(255,80,80,0.35)", cursor: "pointer", fontSize: 13, padding: 2, lineHeight: 1 }}
+                    style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", fontSize: 13, padding: 2, lineHeight: 1 }}
                   >✕</button>
                 </div>
               </div>
@@ -423,14 +431,14 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
             style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "8px 24px", cursor: "pointer",
-              color: "rgba(200,155,32,0.50)", fontFamily: "var(--font-mono)", fontSize: 10,
+              color: "color-mix(in srgb, var(--accent) 50%, transparent)", fontFamily: "var(--font-mono)", fontSize: 10,
               letterSpacing: "0.08em", fontWeight: 700,
               borderBottom: "1px solid var(--hover-bg)",
               background: "var(--bg-surface-low)",
               transition: "color 0.12s",
             }}
             onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
-            onMouseLeave={(e) => e.currentTarget.style.color = "rgba(200,155,32,0.50)"}
+            onMouseLeave={(e) => e.currentTarget.style.color = "color-mix(in srgb, var(--accent) 50%, transparent)"}
           >
             + ADD ROW
           </div>
@@ -451,7 +459,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
               onClick={handleClose}
               style={{
                 background: "transparent", border: "1px solid var(--border-default)",
-                borderRadius: 6, padding: "7px 18px", color: "var(--text-muted)",
+                borderRadius: 2, padding: "7px 18px", color: "var(--text-muted)",
                 fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer",
                 letterSpacing: "0.09em", textTransform: "uppercase",
               }}
@@ -462,9 +470,9 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
               onClick={handleSave}
               disabled={isSaving}
               style={{
-                background: isSaving ? "rgba(200,155,32,0.5)" : "var(--accent)",
-                border: "none", borderRadius: 6, padding: "7px 22px",
-                color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10,
+                background: isSaving ? "color-mix(in srgb, var(--accent) 50%, transparent)" : "var(--accent)",
+                border: "none", borderRadius: 2, padding: "7px 22px",
+                color: "var(--on-accent)", fontFamily: "var(--font-mono)", fontSize: 10,
                 fontWeight: 800, cursor: isSaving ? "not-allowed" : "pointer",
                 letterSpacing: "0.09em", textTransform: "uppercase",
                 transition: "background 0.15s",

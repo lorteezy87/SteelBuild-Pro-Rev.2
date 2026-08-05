@@ -62,6 +62,15 @@ export function buildRfiPreflight(form: Record<string, any> = {}): PreflightResu
   const questionMarks = (question.match(/\?/g) || []).length;
   const proposed = String(form.proposed_solution || "").trim();
   const scanText = `${form.title || ""} ${question}`;
+  // Impact can be quantified (cost/schedule) OR qualitative (the slice-3 flags).
+  // Form fields are top-level while composing; fall back to metadata for a saved RFI.
+  const m = form.metadata || {};
+  const hasImpact = Boolean(
+    form.cost_impact || form.schedule_impact ||
+    form.fab_impact || form.erection_impact ||
+    form.drawing_revision_required || form.change_order_likely ||
+    m.fab_impact || m.erection_impact || m.drawing_revision_required || m.change_order_likely,
+  );
 
   const checks: PreflightCheck[] = [
     {
@@ -108,10 +117,10 @@ export function buildRfiPreflight(form: Record<string, any> = {}): PreflightResu
     },
     {
       key: "impact",
-      label: "Cost / schedule impact assessed",
-      pass: Boolean(form.cost_impact || form.schedule_impact),
+      label: "Impact assessed",
+      pass: hasImpact,
       required: false,
-      hint: "Flag cost or schedule impact if this affects price or the critical path.",
+      hint: "Flag any cost, schedule, fabrication, erection, drawing-revision, or change-order impact.",
     },
     {
       key: "not_means_methods",

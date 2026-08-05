@@ -8,7 +8,8 @@
  */
 
 import React, { useState } from "react";
-import { MousePointer2, Pencil, Square, ArrowUpRight, StickyNote, Highlighter, Ruler, Scaling, Trash2, X } from "lucide-react";
+import { MousePointer2, Pencil, Square, ArrowUpRight, StickyNote, Highlighter, Ruler, Scaling, Trash2, X, Cloud, Stamp } from "lucide-react";
+import { STAMP_TYPES } from "./AnnotationLayer";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -25,6 +26,8 @@ export const MARKUP_TOOLS = [
   { key: "select",    label: "Select",     shortcut: "V", icon: MousePointer2 },
   { key: "pen",       label: "Redline",    shortcut: "P", icon: Pencil },
   { key: "rect",      label: "Rect",       shortcut: "B", icon: Square },
+  // Revision cloud — drags like rect, renders the classic scalloped border.
+  { key: "cloud",     label: "Cloud",      shortcut: "C", icon: Cloud },
   // Highlight drags like rect but commits with a translucent fill and
   // no stroke — lets users mark up large areas without obscuring the PDF.
   { key: "highlight", label: "Highlight",  shortcut: "H", icon: Highlighter },
@@ -38,6 +41,9 @@ export const MARKUP_TOOLS = [
   // measurement reads that scale to render real feet-inches.
   { key: "calibrate", label: "Calibrate",  shortcut: "K", icon: Scaling },
   { key: "note",      label: "Note",       shortcut: "T", icon: StickyNote },
+  // Review stamp — click to place APPROVED / REJECTED / etc. The stamp
+  // type picker appears below the tools while this tool is active.
+  { key: "stamp",     label: "Stamp",      shortcut: "S", icon: Stamp },
 ];
 
 export default function AnnotationToolbar({
@@ -45,6 +51,8 @@ export default function AnnotationToolbar({
   onToolChange,
   activeColor,
   onColorChange,
+  activeStamp,
+  onStampChange,
   markupCount,
   onClearPage,
   saving,
@@ -180,6 +188,32 @@ export default function AnnotationToolbar({
           <X size={14} />
         </button>
       </div>
+
+      {/* Stamp type picker — only while the stamp tool is active */}
+      {activeTool === "stamp" && onStampChange && (
+        <select
+          value={activeStamp || STAMP_TYPES[0].key}
+          onChange={(e) => onStampChange(e.target.value)}
+          aria-label="Stamp type"
+          style={{
+            ...mono,
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            background: "var(--bg-surface-low)",
+            color: STAMP_TYPES.find((s) => s.key === activeStamp)?.color || "var(--text-primary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 4,
+            padding: "5px 6px",
+            outline: "none",
+            cursor: "pointer",
+          }}
+        >
+          {STAMP_TYPES.map((s) => (
+            <option key={s.key} value={s.key}>{s.label}</option>
+          ))}
+        </select>
+      )}
 
       {/* Color swatches */}
       <div style={{ display: "flex", gap: 4, alignItems: "center", padding: "2px 0" }}>

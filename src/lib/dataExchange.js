@@ -107,15 +107,25 @@ export function makeExportFilename({ project, target, extension, exportedAt = ne
 }
 
 export async function bulkCreateWithFallback(entity, records, logPrefix = "data-exchange") {
-  if (!records.length) return [];
+  if (!records.length) return { created: [], skipped: 0 };
   try {
-    return await entity.bulkCreate(records);
+    const created = await entity.bulkCreate(records);
+    return { created: Array.isArray(created) ? created : [], skipped: 0 };
   } catch (err) {
     console.warn(`[${logPrefix}] bulkCreate failed, falling back to row creates`, err);
     const created = [];
+    let skipped = 0;
     for (const record of records) {
-      created.push(await entity.create(record));
+      try {
+        created.push(await entity.create(record));
+      } catch (rowErr) {
+        // Skip the failing row (e.g. a duplicate unique key on re-import)
+        // rather than aborting the whole batch and leaving an unhandled
+        // promise rejection. The caller still gets every row that DID create.
+        skipped += 1;
+        console.warn(`[${logPrefix}] row create skipped:`, rowErr?.message || rowErr);
+      }
     }
-    return created;
+    return { created, skipped };
   }
 }

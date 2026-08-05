@@ -524,6 +524,29 @@ describe("margin risk engine", () => {
       expect(items.find(i => i.entityId === "b").severity).toBe("high");
       expect(items.find(i => i.entityId === "c").severity).toBe("critical");
     });
+
+    it("excludes summary/parent tasks from schedule-slip exposure (no double-count)", () => {
+      // A late parent whose date merely spans its late child must NOT be scored
+      // — only the child (the real work item) counts. Cover both the is_summary
+      // flag and the parent_task_id-linkage detection.
+      const result = calculateMarginRisk({
+        scheduleTasks: [
+          // Flagged summary parent, overdue — must be skipped.
+          { id: "parent-flag", status: "In Progress", percent_complete: 40, end_date: daysAgo(10), is_summary: true },
+          // Unflagged parent detected only by linkage (has a child) — must be skipped.
+          { id: "parent-linkage", status: "In Progress", percent_complete: 40, end_date: daysAgo(10) },
+          // The real leaf work items — these are the ones that should score.
+          { id: "leaf-1", status: "In Progress", percent_complete: 40, end_date: daysAgo(10), parent_task_id: "parent-linkage" },
+          { id: "leaf-2", status: "In Progress", percent_complete: 40, end_date: daysAgo(5) },
+        ],
+      });
+
+      const items = result.signals[5].items;
+      const ids = items.map((i) => i.entityId).sort();
+      expect(ids).toEqual(["leaf-1", "leaf-2"]);
+      expect(items.find((i) => i.entityId === "parent-flag")).toBeUndefined();
+      expect(items.find((i) => i.entityId === "parent-linkage")).toBeUndefined();
+    });
   });
 
   describe("change order risk", () => {

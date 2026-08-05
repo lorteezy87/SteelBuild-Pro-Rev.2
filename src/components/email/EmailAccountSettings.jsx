@@ -2,7 +2,7 @@
  * EmailAccountSettings.jsx — per-project email account management.
  *
  * Shows connected email accounts for the current project with controls
- * for adding new sources (manual forward or OAuth) and toggling state.
+ * for adding new sources (manual forward or Power Automate) and toggling state.
  * Designed to be embedded on the Integrations page or rendered as a
  * standalone settings drawer.
  */
@@ -14,8 +14,10 @@ import { toast } from "sonner";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import {
   Mail, Plus, Trash2, Power, PowerOff, Clock, Copy,
-  Check, AlertTriangle,
+  Check,
 } from "lucide-react";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 // ── Time helper ────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -46,7 +48,7 @@ export default function EmailAccountSettings({ projectId }) {
 
   // ── Mutations ────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => entities.EmailAccount.create(data),
+    mutationFn: (data) => entities.EmailAccount.create(withProjectId(data, projectId)),
     onSuccess: () => {
       invalidateEntity(qc, "email_account", projectId);
       toast.success("Email account added");
@@ -54,7 +56,7 @@ export default function EmailAccountSettings({ projectId }) {
       setNewEmail("");
       setNewDisplayName("");
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to add email account")),
   });
 
   const updateMut = useMutation({
@@ -62,7 +64,7 @@ export default function EmailAccountSettings({ projectId }) {
     onSuccess: () => {
       invalidateEntity(qc, "email_account", projectId);
     },
-    onError: (e) => toast.error("Update failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -71,7 +73,7 @@ export default function EmailAccountSettings({ projectId }) {
       invalidateEntity(qc, "email_account", projectId);
       toast.success("Email account removed");
     },
-    onError: (e) => toast.error("Delete failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to remove email account")),
   });
 
   // ── Handlers ─────────────────────────────────────────────────────────
@@ -181,13 +183,6 @@ export default function EmailAccountSettings({ projectId }) {
               label="Power Automate"
               active={addType === "power_automate"}
               onClick={() => setAddType("power_automate")}
-            />
-            <TypeButton
-              label="Outlook OAuth"
-              active={addType === "oauth"}
-              onClick={() => setAddType("oauth")}
-              disabled
-              tooltip="Coming Soon — requires Azure AD app registration"
             />
           </div>
 
@@ -317,33 +312,14 @@ export default function EmailAccountSettings({ projectId }) {
             </>
           )}
 
-          {/* ── Outlook OAuth (disabled) ────────────────────────────── */}
-          {addType === "oauth" && (
-            <div style={{
-              padding: 20, textAlign: "center", color: "var(--text-muted)",
-              fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.5,
-            }}>
-              <AlertTriangle size={20} strokeWidth={1.5} style={{ marginBottom: 8, color: "var(--warning)" }} />
-              <br />
-              Direct Outlook OAuth connection requires Azure AD app registration.
-              <br />
-              Use <strong>Power Automate</strong> for the fastest path to live email ingestion.
-            </div>
-          )}
         </div>
       )}
 
       {/* Account list */}
       <div style={{ padding: accounts.length > 0 ? 0 : "20px 18px" }}>
         {isLoading ? (
-          <div style={{
-            textAlign: "center",
-            padding: 20,
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-body)",
-            fontSize: 12,
-          }}>
-            Loading accounts...
+          <div style={{ padding: "12px 18px" }}>
+            <LoadingSkeleton variant="table" rows={3} />
           </div>
         ) : accounts.length === 0 ? (
           <div style={{
@@ -561,7 +537,7 @@ const primaryBtnStyle = {
   fontFamily: "var(--font-body)",
   fontSize: 11,
   fontWeight: 600,
-  color: "var(--text-on-accent, #fff)",
+  color: "var(--on-accent)",
   cursor: "pointer",
 };
 

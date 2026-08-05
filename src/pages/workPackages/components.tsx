@@ -92,7 +92,16 @@ import {
   watchTitleStyle,
   wpNumberStyle,
 } from "./styles";
-import type { PhaseRollupRow, WorkPackage, WorkPackageMetrics } from "./types";
+import type { PhaseRollupRow, WorkPackage, WorkPackageMetrics, WorkPackageSignals } from "./types";
+
+/**
+ * A WorkPackage after buildWorkPackageMetrics has attached its computed
+ * `_signals` block. The view/card components below only ever receive enriched
+ * rows (everything routed through metrics.enriched / the risk arrays), so
+ * `_signals` is guaranteed present here even though it is optional on the base
+ * WorkPackage type (which also models raw, pre-enrichment stubs elsewhere).
+ */
+type EnrichedWorkPackage = WorkPackage & { _signals: WorkPackageSignals };
 
 // design-system primitives are still .jsx; cast at the boundary
 // (removable once the shared layer is typed).
@@ -271,10 +280,12 @@ interface ExceptionPanelProps {
 }
 
 export function ExceptionPanel({ metrics, onRiskFilter, onStatusFilter, onPhaseFilter, onOpen }: ExceptionPanelProps) {
+  // metrics.highRisk / mediumRisk come straight from buildWorkPackageMetrics,
+  // so every element carries `_signals` — narrow to the enriched shape.
   const watchList = [
     ...metrics.highRisk,
     ...metrics.mediumRisk.filter((wp) => !metrics.highRisk.some((h) => h.id === wp.id)),
-  ].slice(0, 6);
+  ].slice(0, 6) as EnrichedWorkPackage[];
 
   return (
     <aside style={sideRailStyle}>
@@ -326,7 +337,7 @@ export function ExceptionPanel({ metrics, onRiskFilter, onStatusFilter, onPhaseF
 }
 
 interface PhaseFlowViewProps {
-  rows: WorkPackage[];
+  rows: EnrichedWorkPackage[];
   phaseRollup: PhaseRollupRow[];
   onOpen: WPHandler;
   onEdit: WPActionHandler;
@@ -369,8 +380,8 @@ export function PhaseFlowView({ rows, phaseRollup, onOpen, onEdit, onDelete, sel
                   selected={selectedWPs.has(wp.id as string)}
                   onToggle={() => onToggleSelect(wp.id as string)}
                   onOpen={() => onOpen(wp)}
-                  onEdit={() => onEdit(wp)}
-                  onDelete={() => onDelete(wp)}
+                  onEdit={() => onEdit?.(wp)}
+                  onDelete={() => onDelete?.(wp)}
                 />
               ))}
               {!items.length && <div style={laneEmptyStyle}>No packages in this phase</div>}
@@ -383,7 +394,7 @@ export function PhaseFlowView({ rows, phaseRollup, onOpen, onEdit, onDelete, sel
 }
 
 interface StatusBoardViewProps {
-  rows: WorkPackage[];
+  rows: EnrichedWorkPackage[];
   onOpen: WPHandler;
   onEdit: WPActionHandler;
   onDelete: WPActionHandler;
@@ -405,7 +416,7 @@ export function StatusBoardView({ rows, onOpen, onEdit, onDelete }: StatusBoardV
             </div>
             <div style={{ display: "grid", gap: 9 }}>
               {items.map((wp) => (
-                <CompactPackageCard key={wp.id} wp={wp} onOpen={() => onOpen(wp)} onEdit={() => onEdit(wp)} onDelete={() => onDelete(wp)} />
+                <CompactPackageCard key={wp.id} wp={wp} onOpen={() => onOpen(wp)} onEdit={() => onEdit?.(wp)} onDelete={() => onDelete?.(wp)} />
               ))}
               {!items.length && <div style={laneEmptyStyle}>No packages</div>}
             </div>
@@ -417,7 +428,7 @@ export function StatusBoardView({ rows, onOpen, onEdit, onDelete }: StatusBoardV
 }
 
 interface RegisterViewProps {
-  rows: WorkPackage[];
+  rows: EnrichedWorkPackage[];
   selectedWPs: Set<string>;
   onToggleSelect: (id: string) => void;
   onOpen: WPHandler;
@@ -460,7 +471,7 @@ export function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit
           <ProgressBar value={wp._signals.progress} color={phaseColor(wp._signals.phase)} height={4} sub={`${wp._signals.progress}%`} />
           <Readiness value={wp._signals.readinessScore} />
           <span style={laborLabelStyle(wp._signals.hourBurn)}>{wp._signals.totalBudgetHours ? `${wp._signals.hourBurn}%` : "-"}</span>
-          <RowActions onEdit={(event) => { event.stopPropagation(); onEdit(wp); }} onDelete={(event) => { event.stopPropagation(); onDelete(wp); }} />
+          <RowActions onEdit={(event) => { event.stopPropagation(); onEdit?.(wp); }} onDelete={(event) => { event.stopPropagation(); onDelete?.(wp); }} />
         </div>
       ))}
     </section>
@@ -468,7 +479,7 @@ export function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit
 }
 
 interface WorkPackageCardProps {
-  wp: WorkPackage;
+  wp: EnrichedWorkPackage;
   selected: boolean;
   onToggle: () => void;
   onOpen: () => void;
@@ -513,7 +524,7 @@ function WorkPackageCard({ wp, selected, onToggle, onOpen, onEdit, onDelete }: W
 }
 
 interface CompactPackageCardProps {
-  wp: WorkPackage;
+  wp: EnrichedWorkPackage;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;

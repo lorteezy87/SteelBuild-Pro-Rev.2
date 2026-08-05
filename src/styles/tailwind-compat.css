@@ -18,6 +18,26 @@
 .text-gray-600, .text-slate-600 { color: var(--text-secondary) !important; }
 .text-gray-400, .text-slate-400 { color: var(--text-muted) !important; }
 .border-gray-200, .border-slate-200 { border-color: rgba(255,255,255,0.07) !important; }
+.border-gray-300, .border-slate-300 { border-color: var(--border-strong, rgba(255,255,255,0.14)) !important; }
+.text-slate-700, .text-slate-800, .text-slate-950 { color: var(--text-primary) !important; }
+/* Soft pastel fills → semantic muted surfaces (dark-safe) */
+.bg-amber-50, .bg-yellow-50, .bg-orange-50 { background: var(--warning-muted) !important; }
+.bg-rose-50, .bg-red-50, .bg-pink-50 { background: var(--danger-muted) !important; }
+.bg-emerald-50, .bg-green-50, .bg-teal-50 { background: var(--success-muted) !important; }
+.bg-blue-50, .bg-sky-50, .bg-cyan-50, .bg-indigo-50 { background: var(--info-muted) !important; }
+.bg-rose-100, .bg-red-100 { background: var(--danger-muted) !important; }
+.bg-amber-100, .bg-yellow-100 { background: var(--warning-muted) !important; }
+.bg-emerald-100, .bg-green-100 { background: var(--success-muted) !important; }
+.border-amber-200, .border-amber-300, .border-yellow-200, .border-orange-200 { border-color: var(--warning-border) !important; }
+.border-rose-200, .border-rose-300, .border-red-200 { border-color: var(--danger-border) !important; }
+.border-emerald-200, .border-green-200 { border-color: var(--success-border) !important; }
+.text-amber-900, .text-amber-950, .text-yellow-900, .text-orange-900 { color: var(--status-warning) !important; }
+.text-rose-700, .text-rose-800, .text-rose-900, .text-red-700, .text-red-800, .text-red-900 { color: var(--status-error) !important; }
+.text-emerald-700, .text-emerald-800, .text-emerald-900, .text-green-700, .text-green-800, .text-green-900 { color: var(--status-success) !important; }
+.bg-amber-500, .bg-amber-400 { background: var(--status-warning) !important; }
+.bg-rose-700, .bg-red-700, .bg-rose-600 { background: var(--status-error) !important; }
+.bg-emerald-700, .bg-green-700, .bg-emerald-600 { background: var(--status-success) !important; }
+
 .text-slate-50, .text-slate-100 { color: var(--text-primary) !important; }
 .text-slate-300 { color: var(--text-secondary) !important; }
 .text-slate-500 { color: var(--text-muted) !important; }
@@ -68,6 +88,9 @@
 [data-theme="light"] .bg-rose-100, [data-theme="light"] .bg-rose-400, [data-theme="light"] .bg-rose-500, [data-theme="light"] .bg-rose-600,
 [data-theme="light"] .bg-fuchsia-100, [data-theme="light"] .bg-fuchsia-400, [data-theme="light"] .bg-fuchsia-500, [data-theme="light"] .bg-fuchsia-600 { background: var(--status-error) !important; }
 [data-theme="light"] .border-gray-200, [data-theme="light"] .border-slate-200 { border-color: var(--border-default) !important; }
+[data-theme="light"] .border-gray-300, [data-theme="light"] .border-slate-300 { border-color: var(--border-strong) !important; }
+[data-theme="light"] .text-slate-700, [data-theme="light"] .text-slate-800, [data-theme="light"] .text-slate-950 { color: var(--text-primary) !important; }
+
 
 /* ═══════════════════════════════════════════════════════════════
    shadcn/ui HSL variable bridge
@@ -139,6 +162,41 @@
                                             we can't use rgba)
    Executive gold accent = #C89B20 ≈ hsl(43 73% 45%)
    ═══════════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 38 92% 50%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --tw-accent: 38 92% 50%;
+  --tw-accent-foreground: 222 47% 11%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 214 32% 84%;
+  --input: 214 32% 91%;
+  --ring: 38 92% 50%;
+  --chart-1: 38 92% 50%;
+  --chart-2: 217 91% 60%;
+  --chart-3: 142 71% 45%;
+  --chart-4: 173 80% 32%;
+  --chart-5: 0 72% 51%;
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-primary: 38 92% 50%;
+  --sidebar-primary-foreground: 222 47% 11%;
+  --sidebar-accent: 38 92% 50% / 0.12;
+  --sidebar-accent-foreground: 38 92% 40%;
+  --sidebar-border: 214 32% 88%;
+  --sidebar-ring: 38 92% 50%;
+}
+
 html.steelbuild-dark,
 .steelbuild-dark {
   --background: 222 56% 4% !important;

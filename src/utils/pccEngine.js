@@ -133,8 +133,10 @@ export function recommendNextAction(item) {
     return "REVIEW";
   }
   if (type === "ChangeOrder") {
-    if (s === "pending") return "PRICE CO";
-    if (s === "submitted") return "FOLLOW UP";
+    // change_orders.status vocabulary: Draft / Submitted / Under Review /
+    // Approved / Rejected / Void (there is no "pending").
+    if (s === "draft") return "PRICE CO";
+    if (s === "submitted" || s === "under review") return "FOLLOW UP";
     return "REVIEW";
   }
   if (type === "Submittal") {
@@ -147,7 +149,9 @@ export function recommendNextAction(item) {
   if (type === "ScheduleTask") {
     if (blocksPhase === "Delivery") return "CLEAR RELEASE GATE";
     if (blocksPhase === "Erection") return "VERIFY FIELD READY";
-    if (s === "blocked" || s === "on hold") return "RESOLVE BLOCKER";
+    // schedule_tasks.status vocabulary is On Hold / Delayed (no "blocked");
+    // keep "blocked" as a harmless legacy alias.
+    if (s === "blocked" || s === "on hold" || s === "delayed") return "RESOLVE BLOCKER";
     if (s === "not started") return "ASSIGN OWNER";
     return "REVIEW TASK";
   }
@@ -167,14 +171,17 @@ export function scoreItem(item) {
   let score = 0;
   const reasons = [];
   const tags = [];
+  // Record each reason with the point value it contributed, so the reason
+  // list can be ranked by impact (not push order) before it is truncated.
+  const note = (points, text) => reasons.push({ points, text });
 
-  const today = new Date();
-  const overdueDays = item.due_date
-    ? Math.max(0, Math.ceil((today - new Date(item.due_date + "T00:00:00Z")) / 86400000))
-    : 0;
-  const dueSoonDays = item.due_date && !overdueDays
-    ? Math.ceil((new Date(item.due_date + "T00:00:00Z") - today) / 86400000)
-    : null;
+  // Overdue / due-soon on the SAME local-calendar-day basis as
+  // daysFromToday/dateValue, so the two date paths never disagree and scoring
+  // is stable across the day (no wall-clock time-of-day drift). daysFromToday
+  // returns whole days: negative = past (overdue), 0 = today, positive = future.
+  const dueDelta = daysFromToday(item.due_date);
+  const overdueDays = dueDelta !== null && dueDelta < 0 ? -dueDelta : 0;
+  const dueSoonDays = dueDelta !== null && dueDelta >= 0 ? dueDelta : null;
 
   // 1. Base score by type priority
   const typeBase = {
@@ -192,24 +199,24 @@ export function scoreItem(item) {
   // 2. Overdue logic — primary driver
   if (overdueDays > 14) {
     score += 50;
-    reasons.push(`${overdueDays}d overdue`);
+    note(50, `${overdueDays}d overdue`);
     tags.push("BLOCKS_FAB");
   } else if (overdueDays > 7) {
     score += 35;
-    reasons.push(`${overdueDays}d overdue`);
+    note(35, `${overdueDays}d overdue`);
   } else if (overdueDays > 0) {
     score += 20;
-    reasons.push(`${overdueDays}d overdue`);
+    note(20, `${overdueDays}d overdue`);
   }
 
   // 3. Due soon logic
   if (dueSoonDays !== null) {
     if (dueSoonDays <= 3) {
       score += 18;
-      reasons.push(`Due in ${dueSoonDays}d`);
+      note(18, `Due in ${dueSoonDays}d`);
     } else if (dueSoonDays <= 7) {
       score += 10;
-      reasons.push(`Due in ${dueSoonDays}d`);
+      note(10, `Due in ${dueSoonDays}d`);
     }
   }
 
@@ -220,13 +227,14 @@ export function scoreItem(item) {
       .map(([, label]) => label);
 
     if (missing.length > 0) {
-      score += Math.min(45, missing.length * 12);
+      const gatePoints = Math.min(45, missing.length * 12);
+      score += gatePoints;
       tags.push("RELEASE_GATE");
-      reasons.push(missing[0]);
+      note(gatePoints, missing[0]);
       if (targetDays !== null && targetDays <= 2) {
         score += 25;
         tags.push("BLOCKS_DELIVERY");
-        reasons.push("48-hour release gate");
+        note(25, "48-hour release gate");
       }
     }
   }
@@ -234,14 +242,14 @@ export function scoreItem(item) {
   if (!ownerOf(item)) {
     score += 10;
     tags.push("OWNER_MISSING");
-    reasons.push("No owner assigned");
+    note(10, "No owner assigned");
   }
 
-  if (item.impact_area === "Fabrication") { score += 25; tags.push("BLOCKS_FAB"); reasons.push("Fabrication impact"); }
-  if (item.impact_area === "Shipping")    { score += 20; tags.push("BLOCKS_DELIVERY"); reasons.push("Shipping impact"); }
-  if (item.impact_area === "Erection")    { score += 25; tags.push("BLOCKS_ERECTION"); reasons.push("Erection impact"); }
-  if (item.impact_area === "Cost")        { score += 20; tags.push("COST_EXPOSURE"); reasons.push("Cost exposure"); }
-  if (item.impact_area === "GC Approval") { score += 15; tags.push("EXTERNAL_WAIT"); reasons.push("GC approval impact"); }
+  if (item.impact_area === "Fabrication") { score += 25; tags.push("BLOCKS_FAB"); note(25, "Fabrication impact"); }
+  if (item.impact_area === "Shipping")    { score += 20; tags.push("BLOCKS_DELIVERY"); note(20, "Shipping impact"); }
+  if (item.impact_area === "Erection")    { score += 25; tags.push("BLOCKS_ERECTION"); note(25, "Erection impact"); }
+  if (item.impact_area === "Cost")        { score += 20; tags.push("COST_EXPOSURE"); note(20, "Cost exposure"); }
+  if (item.impact_area === "GC Approval") { score += 15; tags.push("EXTERNAL_WAIT"); note(15, "GC approval impact"); }
 
   // Normalize status/stage/priority once for case-insensitive comparisons
   const itemStatus = norm(item.status || item.stage);
@@ -249,69 +257,72 @@ export function scoreItem(item) {
 
   // 4. RFI-specific scoring
   if (item.type === "RFI") {
-    if (item.affects_fabrication) { score += 25; tags.push("BLOCKS_FAB"); reasons.push("Affects fabrication"); }
-    if (item.affects_drawings)    { score += 15; tags.push("BLOCKS_DETAILING"); reasons.push("Affects drawings"); }
-    if (item.affects_erection)    { score += 20; tags.push("BLOCKS_ERECTION"); reasons.push("Affects erection"); }
-    if (itemPriority === "critical" || itemPriority === "high") { score += 15; reasons.push("High priority"); }
+    if (item.affects_fabrication) { score += 25; tags.push("BLOCKS_FAB"); note(25, "Affects fabrication"); }
+    if (item.affects_drawings)    { score += 15; tags.push("BLOCKS_DETAILING"); note(15, "Affects drawings"); }
+    if (item.affects_erection)    { score += 20; tags.push("BLOCKS_ERECTION"); note(20, "Affects erection"); }
+    if (itemPriority === "critical" || itemPriority === "high") { score += 15; note(15, "High priority"); }
   }
 
   // 5a. Drawing scoring
   if (item.type === "Drawing") {
     const stageN = norm(item.stage);
-    if (stageN === "ofa" || stageN === "bfa") { score += 10; reasons.push("Pending engineer review"); tags.push("BLOCKS_DETAILING"); }
-    if (item.priority_flag) { score += 12; reasons.push("Priority flagged"); }
+    if (stageN === "ofa" || stageN === "bfa") { score += 10; note(10, "Pending engineer review"); tags.push("BLOCKS_DETAILING"); }
+    if (item.priority_flag) { score += 12; note(12, "Priority flagged"); }
   }
 
   // 5b. Submittal scoring (review engine integration)
   if (item.type === "Submittal") {
-    if (item.review_risk === "critical") { score += 25; reasons.push("Critical review flags"); tags.push("BLOCKS_FAB"); }
-    else if (item.review_risk === "warning") { score += 12; reasons.push("Review warnings"); }
-    if (item.review_flag_count > 3) { score += 8; reasons.push(`${item.review_flag_count} review flags`); }
-    if (itemStatus === "revise and resubmit") { score += 15; tags.push("BLOCKS_DETAILING"); reasons.push("R&R — needs detailer action"); }
-    if (itemStatus === "rejected") { score += 18; tags.push("BLOCKS_DETAILING"); reasons.push("Rejected — needs resubmission"); }
-    if (itemStatus === "under review") { score += 5; tags.push("EXTERNAL_WAIT"); reasons.push("Under external review"); }
-    if (item.round_friction) { score += 10; reasons.push(`${item.round_count} rounds — review friction`); }
+    if (item.review_risk === "critical") { score += 25; note(25, "Critical review flags"); tags.push("BLOCKS_FAB"); }
+    else if (item.review_risk === "warning") { score += 12; note(12, "Review warnings"); }
+    if (item.review_flag_count > 3) { score += 8; note(8, `${item.review_flag_count} review flags`); }
+    if (itemStatus === "revise and resubmit") { score += 15; tags.push("BLOCKS_DETAILING"); note(15, "R&R — needs detailer action"); }
+    if (itemStatus === "rejected") { score += 18; tags.push("BLOCKS_DETAILING"); note(18, "Rejected — needs resubmission"); }
+    if (itemStatus === "under review") { score += 5; tags.push("EXTERNAL_WAIT"); note(5, "Under external review"); }
+    if (item.round_friction) { score += 10; note(10, `${item.round_count} rounds — review friction`); }
   }
 
   // 6. Work package scoring
   if (item.type === "WorkPackage") {
-    if (itemStatus === "on hold") { score += 20; reasons.push("On hold — blocker"); tags.push("BLOCKS_FAB"); }
-    if (item.percent_complete < 20 && overdueDays > 3) { score += 10; reasons.push("Low progress, overdue"); }
+    if (itemStatus === "on hold") { score += 20; note(20, "On hold — blocker"); tags.push("BLOCKS_FAB"); }
+    if (item.percent_complete < 20 && overdueDays > 3) { score += 10; note(10, "Low progress, overdue"); }
     const phaseN = norm(item.phase);
     if (phaseN === "erection" || phaseN === "installation") { score += 8; tags.push("BLOCKS_ERECTION"); }
   }
 
   // 7. Delivery scoring
   if (item.type === "Delivery") {
-    if (itemStatus === "delayed") { score += 30; tags.push("BLOCKS_DELIVERY"); reasons.push("Delivery delayed"); }
-    if (itemPriority === "critical") { score += 20; reasons.push("Critical delivery"); }
+    if (itemStatus === "delayed") { score += 30; tags.push("BLOCKS_DELIVERY"); note(30, "Delivery delayed"); }
+    if (itemPriority === "critical") { score += 20; note(20, "Critical delivery"); }
   }
 
   // 8. Change order scoring
   if (item.type === "ChangeOrder") {
     const exposure = parseFloat(item.amount) || 0;
-    if (exposure > 50000) { score += 20; tags.push("COST_EXPOSURE"); reasons.push(`$${(exposure / 1000).toFixed(0)}k exposure`); }
-    else if (exposure > 10000) { score += 10; tags.push("COST_EXPOSURE"); reasons.push(`$${(exposure / 1000).toFixed(0)}k exposure`); }
-    if (itemStatus === "pending") { score += 12; reasons.push("Unsigned CO"); }
+    if (exposure > 50000) { score += 20; tags.push("COST_EXPOSURE"); note(20, `$${(exposure / 1000).toFixed(0)}k exposure`); }
+    else if (exposure > 10000) { score += 10; tags.push("COST_EXPOSURE"); note(10, `$${(exposure / 1000).toFixed(0)}k exposure`); }
+    // change_orders.status has no "pending"; any non-terminal CO (Draft /
+    // Submitted / Under Review) is unsigned cost risk.
+    if (itemStatus === "draft" || itemStatus === "submitted" || itemStatus === "under review") { score += 12; note(12, "Unsigned CO"); }
   }
 
   // 9. Schedule task scoring
   if (item.type === "ScheduleTask") {
-    if (item.task_kind === "Gate") { score += 18; tags.push("RELEASE_GATE"); reasons.push("Gate item"); }
-    if (item.task_kind === "Milestone") { score += 12; tags.push("SCHEDULE_RISK"); reasons.push("Milestone"); }
-    if (itemStatus === "blocked" || itemStatus === "on hold") { score += 25; tags.push("SCHEDULE_RISK"); reasons.push("Blocked task"); }
+    if (item.task_kind === "Gate") { score += 18; tags.push("RELEASE_GATE"); note(18, "Gate item"); }
+    if (item.task_kind === "Milestone") { score += 12; tags.push("SCHEDULE_RISK"); note(12, "Milestone"); }
+    // schedule_tasks.status vocabulary is On Hold / Delayed (no "blocked").
+    if (itemStatus === "blocked" || itemStatus === "on hold" || itemStatus === "delayed") { score += 25; tags.push("SCHEDULE_RISK"); note(25, "Blocked task"); }
   }
 
   if (item.type === "ActionItem") {
-    if (itemPriority === "critical") { score += 24; reasons.push("Critical action"); }
-    else if (itemPriority === "high") { score += 16; reasons.push("High priority action"); }
-    if (item.created_from === "production_meeting_parser") { score += 8; reasons.push("Generated from meeting"); }
-    if (itemStatus === "in progress") { score += 6; reasons.push("In progress"); }
+    if (itemPriority === "critical") { score += 24; note(24, "Critical action"); }
+    else if (itemPriority === "high") { score += 16; note(16, "High priority action"); }
+    if (item.created_from === "production_meeting_parser") { score += 8; note(8, "Generated from meeting"); }
+    if (itemStatus === "in progress") { score += 6; note(6, "In progress"); }
   }
 
   const externalWait = item.external_wait_days || 0;
-  if (externalWait > 14) { score += 20; tags.push("EXTERNAL_WAIT"); reasons.push(`${externalWait}d waiting on external`); }
-  else if (externalWait > 7) { score += 10; tags.push("EXTERNAL_WAIT"); reasons.push(`${externalWait}d external wait`); }
+  if (externalWait > 14) { score += 20; tags.push("EXTERNAL_WAIT"); note(20, `${externalWait}d waiting on external`); }
+  else if (externalWait > 7) { score += 10; tags.push("EXTERNAL_WAIT"); note(10, `${externalWait}d external wait`); }
 
   // 10. Determine severity band
   let severityKey = "LOW";
@@ -320,7 +331,19 @@ export function scoreItem(item) {
   else if (score >= 35) severityKey = "MEDIUM";
 
   const uniqueTags = [...new Set(tags)];
-  const uniqueReasons = [...new Set(reasons)].slice(0, 3);
+  // Rank reasons by point contribution (desc), de-dupe by text, keep top 3 —
+  // so the dominant scoring factor is never crowded out of the "explainable"
+  // list by earlier, lower-value reasons. Array.sort is stable, so ties keep
+  // their original push order.
+  const seenReasons = new Set();
+  const uniqueReasons = [];
+  reasons
+    .slice()
+    .sort((a, b) => b.points - a.points)
+    .forEach((r) => {
+      if (!seenReasons.has(r.text)) { seenReasons.add(r.text); uniqueReasons.push(r.text); }
+    });
+  const topReasons = uniqueReasons.slice(0, 3);
 
   return {
     ...item,
@@ -328,7 +351,7 @@ export function scoreItem(item) {
     severity: SEVERITY[severityKey],
     severityKey,
     tags: uniqueTags,
-    reasons: uniqueReasons,
+    reasons: topReasons,
     overdueDays,
     dueSoonDays,
     nextAction: recommendNextAction({
@@ -337,6 +360,11 @@ export function scoreItem(item) {
       overdueDays,
       waitingOnExternal: externalWait > 7,
       blocksPhase: tags.includes("BLOCKS_ERECTION") ? "Erection" : tags.includes("BLOCKS_DELIVERY") ? "Delivery" : tags.includes("BLOCKS_FAB") ? "Fabrication" : null,
+      // Pass through fields recommendNextAction reads directly, so Submittal
+      // follow-ups use the real ball_in_court / review recommendation instead
+      // of the generic "reviewer" fallback.
+      waiting_on: item.waiting_on,
+      review_recommendation: item.review_recommendation,
     }),
   };
 }
@@ -344,7 +372,7 @@ export function scoreItem(item) {
 // ─── Map raw entity records to normalized PCC items ─────────────────────────
 export function mapRFIsToPCCItems(rfis) {
   const RFI_TERMINAL = new Set(["answered", "closed", "complete", "completed", "cancelled", "canceled", "void"]);
-  return rfis
+  return (rfis || [])
     .filter((r) => !RFI_TERMINAL.has(norm(r.status)))
     .map((r) => {
       // External wait: only meaningful for RFIs actively waiting on an
@@ -353,9 +381,11 @@ export function mapRFIsToPCCItems(rfis) {
       const ns = norm(r.status);
       const isWaiting = ns === "under review" || ns === "open";
       const waitStart = isWaiting ? (r.date_submitted || r.created_date) : null;
-      const externalWait = waitStart
-        ? Math.max(0, Math.ceil((Date.now() - new Date(waitStart).getTime()) / 86400000))
-        : 0;
+      // Days waited so far = how far in the past the wait started. daysFromToday
+      // is local-midnight anchored (stable within a day, unlike Date.now()) and
+      // returns null for missing/unparseable dates, so bad input yields 0 not NaN.
+      const waitDelta = daysFromToday(waitStart);
+      const externalWait = waitDelta !== null && waitDelta < 0 ? -waitDelta : 0;
       return {
         id: `rfi-${r.id}`,
         entityId: r.id,
@@ -379,7 +409,7 @@ export function mapRFIsToPCCItems(rfis) {
 
 export function mapDrawingsToPCCItems(drawings) {
   const DRAWING_TERMINAL = new Set(["released", "void", "cancelled", "canceled"]);
-  return drawings
+  return (drawings || [])
     .filter((d) => !DRAWING_TERMINAL.has(norm(d.stage)))
     .map((d) => ({
       id: `dwg-${d.id}`,
@@ -398,18 +428,29 @@ export function mapDrawingsToPCCItems(drawings) {
     }));
 }
 
-export function mapSubmittalsToPCCItems(submittals) {
+/**
+ * Basic submittal → PCC mapper (no review-engine scoring).
+ *
+ * NOTE: scoreItem's Submittal branch scores on review_risk / review_flag_count
+ * and recommendNextAction reads review_recommendation — fields this mapper does
+ * NOT populate. For review-driven scoring use the review-aware
+ * mapSubmittalsToPCCItems exported from src/lib/submittalReviewEngine.js. This
+ * one is suffixed *Basic to avoid the duplicate-export name collision.
+ */
+export function mapSubmittalsToPCCItemsBasic(submittals) {
   const SUB_TERMINAL = new Set([
     "approved", "approved as noted", "released for fabrication",
     "void", "cancelled", "canceled",
   ]);
-  return submittals
+  return (submittals || [])
     .filter((s) => !SUB_TERMINAL.has(norm(s.status)))
     .map((s) => {
-      const isOverdue = s.required_date && new Date(s.required_date) < new Date();
+      const requiredDelta = daysFromToday(s.required_date);
+      const isOverdue = requiredDelta !== null && requiredDelta < 0;
       const isRejected = norm(s.status) === "rejected" || norm(s.status) === "revise and resubmit";
       const rounds = Number(s.total_rounds) || 0;
       const roundFriction = rounds >= 3;
+      const text = `${s.title || ""} ${s.description || ""}`;
 
       return {
         id: `sub-${s.id}`,
@@ -423,8 +464,12 @@ export function mapSubmittalsToPCCItems(submittals) {
         priority: isRejected ? "High" : isOverdue ? "High" : roundFriction ? "Medium" : s.priority,
         assigned_to: s.ball_in_court,
         waiting_on: s.ball_in_court,
-        impact_area: /\b(erect|install|field|crane)\b/i.test(`${s.title || ""} ${s.description || ""}`) ? "Erection"
-          : /\b(fab|shop|galv|paint)\b/i.test(`${s.title || ""} ${s.description || ""}`) ? "Fabrication"
+        impact_area: /\b(erect|install|field|crane)\b/i.test(text) ? "Erection"
+          // "shop" → Fabrication, but NOT "shop drawing(s)/dwg" (the document
+          // itself, present in nearly every shop-drawing submittal title).
+          // Lookahead allows space/slash/hyphen separators: "Shop-Drawings",
+          // "Shop/Dwg", "Shop Drawings" all suppressed.
+          : (/\b(fab|galv|paint)\b/i.test(text) || /\bshop\b(?![\s/-]*(draw|dwg))/i.test(text)) ? "Fabrication"
           : "GC Approval",
         round_count: rounds,
         round_friction: roundFriction,
@@ -437,7 +482,7 @@ export function mapSubmittalsToPCCItems(submittals) {
 
 export function mapWorkPackagesToPCCItems(wps) {
   const WP_TERMINAL = new Set(["complete", "completed", "cancelled", "canceled", "void"]);
-  return wps
+  return (wps || [])
     .filter((w) => !WP_TERMINAL.has(norm(w.status)))
     .map((w) => {
       const targetDate = w.ship_date || w.delivery_date || w.install_date || w.released_date;
@@ -449,10 +494,10 @@ export function mapWorkPackagesToPCCItems(wps) {
       // active WPs, which would make every released WP "overdue").
       const dueDate = w.ship_date || w.delivery_date || w.install_date || null;
 
-      // Release-gate confirmations only matter when the WP has explicitly
-      // populated gate fields OR is within 14 days of its target date.
-      // Applying gates universally inflates scores because most WPs have
-      // no gate fields set → all 7 gates read as missing → +45 score.
+      // Release-gate confirmations only apply when the WP actually participates
+      // in gating (>=1 gate field populated). Applying gates universally — or on
+      // mere proximity to the target date — inflates scores because most WPs have
+      // no gate fields set → all 7 gates would read as missing → +45.
       const hasAnyGateField = !!(
         w.vif_confirmed || w.field_dimensions_confirmed ||
         w.shop_drawing_revision_checked || w.current_drawing_revision_checked ||
@@ -461,7 +506,10 @@ export function mapWorkPackagesToPCCItems(wps) {
         w.sequence_aligned || w.erection_sequence_aligned ||
         w.site_ready || w.drawings_approved
       );
-      const gateApplicable = phaseNeedsGate && (hasAnyGateField || (targetDays !== null && targetDays <= 14 && targetDays >= 0));
+      // Gate only WPs that participate in gating (>=1 gate field set); the old
+      // `|| within-14-days` branch defeated hasAnyGateField and inflated every
+      // untracked near-term WP by +45 (and spawned 7 phantom action drafts).
+      const gateApplicable = phaseNeedsGate && hasAnyGateField;
 
       return {
         id: `wp-${w.id}`,
@@ -478,8 +526,8 @@ export function mapWorkPackagesToPCCItems(wps) {
         waiting_on: null,
         impact_area: w.phase === "Delivery" ? "Shipping" : w.phase === "Erection" || w.phase === "Installation" ? "Erection" : "Fabrication",
         confirmations: gateApplicable ? {
-          vif_confirmed: !!(w.vif_confirmed || w.field_dimensions_confirmed),
-          field_dimensions_confirmed: !!(w.field_dimensions_confirmed || w.vif_confirmed),
+          vif_confirmed: !!w.vif_confirmed,
+          field_dimensions_confirmed: !!w.field_dimensions_confirmed,
           shop_drawing_revision_checked: !!(w.shop_drawing_revision_checked || w.current_drawing_revision_checked || w.drawings_approved),
           e_sheet_checked: !!(w.e_sheet_checked || w.erection_sheet_checked),
           load_list_complete: !!(w.load_list_complete || w.load_list_completed),
@@ -495,7 +543,7 @@ export function mapWorkPackagesToPCCItems(wps) {
 export function mapScheduleTasksToPCCItems(tasks) {
   const TASK_TERMINAL = new Set(["complete", "completed", "cancelled", "canceled", "closed", "done", "void"]);
   const SUMMARY_TYPES = new Set(["summary", "phase"]);
-  return tasks
+  return (tasks || [])
     .filter((t) => {
       const metadata = t.metadata || {};
       const isSummary = t.is_summary || metadata.is_summary || SUMMARY_TYPES.has(norm(t.task_type));
@@ -512,11 +560,14 @@ export function mapScheduleTasksToPCCItems(tasks) {
       const taskType = t.task_type || "Task";
       const isGate = taskType === "Gate" || /gate|release check|48-hour/i.test(t.task_name || "");
       const isMilestone = taskType === "Milestone" || t.is_milestone;
+      const searchText = `${phase} ${taskType} ${t.task_name || ""}`;
       const impactArea =
-        /deliver|ship|load/i.test(`${phase} ${taskType} ${t.task_name || ""}`) ? "Shipping"
-        : /erect|install|field|crane/i.test(`${phase} ${taskType} ${t.task_name || ""}`) ? "Erection"
-        : /co|change|cost/i.test(`${phase} ${taskType} ${t.task_name || ""}`) ? "Cost"
-        : /fab|shop|release/i.test(`${phase} ${taskType} ${t.task_name || ""}`) ? "Fabrication"
+        /deliver|ship|load/i.test(searchText) ? "Shipping"
+        : /erect|install|field|crane/i.test(searchText) ? "Erection"
+        // `\bco\b` so the change-order abbrev doesn't match inside
+        // coordination / column / concrete / connection.
+        : (/\bco\b/i.test(searchText) || /change|cost/i.test(searchText)) ? "Cost"
+        : /fab|shop|release/i.test(searchText) ? "Fabrication"
         : null;
 
       return {
@@ -532,14 +583,17 @@ export function mapScheduleTasksToPCCItems(tasks) {
         waiting_on: t.ball_in_court || null,
         task_kind: isGate ? "Gate" : isMilestone ? "Milestone" : taskType,
         impact_area: impactArea,
+        // Unset gate fields read as MISSING (!!), consistent with the WorkPackage
+        // and Delivery mappers — setting release_gate opts this task into gating,
+        // so every unconfirmed field should surface.
         confirmations: metadata.release_gate ? {
-          vif_confirmed: metadata.release_gate.vif_confirmed !== false,
-          field_dimensions_confirmed: metadata.release_gate.field_dimensions_confirmed !== false,
-          shop_drawing_revision_checked: metadata.release_gate.shop_drawing_revision_checked !== false,
-          e_sheet_checked: metadata.release_gate.e_sheet_checked !== false,
-          load_list_complete: metadata.release_gate.load_list_complete !== false,
-          sequence_aligned: metadata.release_gate.sequence_aligned !== false,
-          site_ready: metadata.release_gate.site_ready !== false,
+          vif_confirmed: !!metadata.release_gate.vif_confirmed,
+          field_dimensions_confirmed: !!metadata.release_gate.field_dimensions_confirmed,
+          shop_drawing_revision_checked: !!metadata.release_gate.shop_drawing_revision_checked,
+          e_sheet_checked: !!metadata.release_gate.e_sheet_checked,
+          load_list_complete: !!metadata.release_gate.load_list_complete,
+          sequence_aligned: !!metadata.release_gate.sequence_aligned,
+          site_ready: !!metadata.release_gate.site_ready,
         } : null,
         project_id: t.project_id,
         project_name: t.project_name,
@@ -549,20 +603,19 @@ export function mapScheduleTasksToPCCItems(tasks) {
 
 export function mapDeliveriesToPCCItems(deliveries) {
   const DEL_TERMINAL = new Set(["delivered", "received", "complete", "completed", "cancelled", "canceled", "void"]);
-  return deliveries
+  return (deliveries || [])
     .filter((d) => !DEL_TERMINAL.has(norm(d.status)))
     .map((d) => {
-      // Only score release gates when the delivery has explicitly set
-      // gate fields OR is within 14 days of scheduled date. Without
-      // this, every delivery gets 7 missing gates → +45 score.
-      const daysOut = daysFromToday(d.scheduled_date);
+      // Gate only deliveries that participate in gating (>=1 gate field set),
+      // consistent with WorkPackages — so untracked deliveries neither inflate
+      // from mere proximity nor silently pass with every gate read as confirmed.
       const hasAnyGateField = !!(
         d.vif_confirmed || d.field_dimensions_confirmed ||
         d.shop_drawing_revision_checked || d.e_sheet_checked ||
         d.load_list_complete || d.load_list_completed || d.items_confirmed ||
         d.sequence_aligned || d.site_ready
       );
-      const gateApplicable = hasAnyGateField || (daysOut !== null && daysOut <= 14 && daysOut >= 0);
+      const gateApplicable = hasAnyGateField;
 
       return {
         id: `del-${d.id}`,
@@ -578,13 +631,13 @@ export function mapDeliveriesToPCCItems(deliveries) {
         waiting_on: d.vendor || d.supplier,
         impact_area: "Shipping",
         confirmations: gateApplicable ? {
-          vif_confirmed: d.vif_confirmed !== false,
-          field_dimensions_confirmed: d.field_dimensions_confirmed !== false,
-          shop_drawing_revision_checked: d.shop_drawing_revision_checked !== false,
-          e_sheet_checked: d.e_sheet_checked !== false,
+          vif_confirmed: !!d.vif_confirmed,
+          field_dimensions_confirmed: !!d.field_dimensions_confirmed,
+          shop_drawing_revision_checked: !!d.shop_drawing_revision_checked,
+          e_sheet_checked: !!d.e_sheet_checked,
           load_list_complete: !!(d.load_list_complete || d.load_list_completed || d.items_confirmed),
-          sequence_aligned: d.sequence_aligned !== false,
-          site_ready: d.site_ready !== false,
+          sequence_aligned: !!d.sequence_aligned,
+          site_ready: !!d.site_ready,
         } : null,
         project_id: d.project_id,
         project_name: d.project_name,
@@ -594,7 +647,7 @@ export function mapDeliveriesToPCCItems(deliveries) {
 
 export function mapChangeOrdersToPCCItems(cos) {
   const CO_TERMINAL = new Set(["approved", "rejected", "complete", "completed", "cancelled", "canceled", "void"]);
-  return cos
+  return (cos || [])
     .filter((c) => !CO_TERMINAL.has(norm(c.status)))
     .map((c) => ({
       id: `co-${c.id}`,
@@ -604,7 +657,9 @@ export function mapChangeOrdersToPCCItems(cos) {
       subtitle: `Change Order`,
       status: c.status,
       due_date: c.due_date || c.required_by,
-      amount: c.amount || c.estimated_cost || 0,
+      // Real column is change_orders.co_amount (dollars). amount/estimated_cost
+      // kept only as forward-compat fallbacks; co_amount is authoritative.
+      amount: c.co_amount ?? c.amount ?? c.estimated_cost ?? 0,
       assigned_to: c.assigned_to,
       waiting_on: c.owner || c.gc_name,
       project_id: c.project_id,
@@ -614,8 +669,8 @@ export function mapChangeOrdersToPCCItems(cos) {
 
 // ─── Build scored + sorted priority feed ─────────────────────────────────────
 export function mapActionItemsToPCCItems(actionItems) {
-  const AI_TERMINAL = new Set(["complete", "completed", "done", "cancelled", "canceled", "closed", "void"]);
-  return actionItems
+  const AI_TERMINAL = new Set(["complete", "completed", "done", "resolved", "cancelled", "canceled", "closed", "void"]);
+  return (actionItems || [])
     .filter((a) => !AI_TERMINAL.has(norm(a.status)))
     .map((a) => {
       const metadata = a.metadata || {};
@@ -650,20 +705,21 @@ export function mapActionItemsToPCCItems(actionItems) {
 }
 
 export function buildPriorityFeed(allItems) {
-  return allItems
+  return (allItems || [])
     .map(scoreItem)
     .sort((a, b) => b.score - a.score);
 }
 
 // ─── Build signal card KPIs from scored feed ──────────────────────────────────
-export function buildSignalKPIs(scoredItems, allDeliveries) {
-  const critical   = scoredItems.filter((i) => i.severityKey === "CRITICAL").length;
-  const highRisk   = scoredItems.filter((i) => i.severityKey === "HIGH").length;
-  const external   = scoredItems.filter((i) => i.tags.includes("EXTERNAL_WAIT")).length;
-  const overdueAll = scoredItems.filter((i) => i.overdueDays > 0).length;
-  const blocksFab  = scoredItems.filter((i) => i.tags.includes("BLOCKS_FAB")).length;
-  const blocksErec = scoredItems.filter((i) => i.tags.includes("BLOCKS_ERECTION")).length;
-  const coExposure = scoredItems
+export function buildSignalKPIs(scoredItems) {
+  const items = scoredItems || [];
+  const critical   = items.filter((i) => i.severityKey === "CRITICAL").length;
+  const highRisk   = items.filter((i) => i.severityKey === "HIGH").length;
+  const external   = items.filter((i) => i.tags.includes("EXTERNAL_WAIT")).length;
+  const overdueAll = items.filter((i) => i.overdueDays > 0).length;
+  const blocksFab  = items.filter((i) => i.tags.includes("BLOCKS_FAB")).length;
+  const blocksErec = items.filter((i) => i.tags.includes("BLOCKS_ERECTION")).length;
+  const coExposure = items
     .filter((i) => i.type === "ChangeOrder")
     .reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
 
@@ -672,7 +728,7 @@ export function buildSignalKPIs(scoredItems, allDeliveries) {
 
 // ─── Build waiting-on board ───────────────────────────────────────────────────
 export function buildWaitingOnBoard(scoredItems) {
-  const external = scoredItems.filter((i) => i.tags.includes("EXTERNAL_WAIT") || i.external_wait_days > 3);
+  const external = (scoredItems || []).filter((i) => i.tags.includes("EXTERNAL_WAIT") || i.external_wait_days > 3);
   const grouped = {};
   external.forEach((item) => {
     const party = item.waiting_on || "Unknown";
@@ -685,11 +741,14 @@ export function buildWaitingOnBoard(scoredItems) {
 }
 
 export function buildExecutionWindows(scoredItems) {
-  const withWindow = scoredItems
+  const items = scoredItems || [];
+  const withWindow = items
     .map((item) => ({ ...item, daysOut: daysFromToday(item.target_date || item.due_date) }))
     .filter((item) => item.daysOut !== null);
 
-  const today = scoredItems
+  // dueSoonDays === 0 now correctly matches due-today items (scoreItem anchors
+  // overdue/due-soon on the same local-calendar-day basis as daysFromToday).
+  const today = items
     .filter((item) => item.overdueDays > 0 || item.dueSoonDays === 0 || item.severityKey === "CRITICAL")
     .slice(0, 12);
 
@@ -713,7 +772,7 @@ export function buildExecutionWindows(scoredItems) {
 
 export function buildOwnerLoad(scoredItems) {
   const grouped = {};
-  scoredItems.forEach((item) => {
+  (scoredItems || []).forEach((item) => {
     const owner = ownerOf(item) || "Unassigned";
     if (!grouped[owner]) {
       grouped[owner] = {
@@ -748,14 +807,15 @@ export function buildOwnerLoad(scoredItems) {
 }
 
 export function buildDailyBriefing(scoredItems, executionWindows, waitingBoard) {
+  const items = scoredItems || [];
   const isHighSignal = (item) => item.severityKey === "CRITICAL" || item.severityKey === "HIGH";
   const hasAnyTag = (item, tags) => tags.some((tag) => item.tags.includes(tag));
 
-  const criticalReleases = scoredItems
+  const criticalReleases = items
     .filter((item) => isHighSignal(item) && hasAnyTag(item, ["RELEASE_GATE", "BLOCKS_DELIVERY", "BLOCKS_FAB", "BLOCKS_ERECTION"]))
     .slice(0, 6);
 
-  const waitingOn = waitingBoard
+  const waitingOn = (waitingBoard || [])
     .flatMap((group) => group.items.map((item) => ({ ...item, waitingParty: group.party })))
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
@@ -764,11 +824,11 @@ export function buildDailyBriefing(scoredItems, executionWindows, waitingBoard) 
     .filter((item) => isHighSignal(item) || hasAnyTag(item, ["RELEASE_GATE", "BLOCKS_DELIVERY", "BLOCKS_FAB", "BLOCKS_ERECTION"]))
     .slice(0, 8);
 
-  const scheduleRisk = scoredItems
+  const scheduleRisk = items
     .filter((item) => hasAnyTag(item, ["SCHEDULE_RISK", "OWNER_MISSING"]) || item.type === "ScheduleTask")
     .slice(0, 8);
 
-  const costExposure = scoredItems
+  const costExposure = items
     .filter((item) => hasAnyTag(item, ["COST_EXPOSURE"]))
     .slice(0, 6);
 

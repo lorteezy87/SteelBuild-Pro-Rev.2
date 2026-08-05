@@ -47,6 +47,14 @@
 //   ANTHROPIC_API_KEY, OPENAI_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY,
 //   SUPABASE_SERVICE_ROLE_KEY (the last is for telemetry inserts).
 //
+// Optional secrets:
+//   ALLOWED_ORIGINS            — exact comma-separated origin allowlist. Unset
+//                                preserves legacy permissive behavior; configured
+//                                values are authoritative and reject all others.
+//   LLM_KILL_SWITCH            — "1"/"true" halts ALL LLM calls (break-glass).
+//   LLM_DAILY_COST_LIMIT_USD   — per-user rolling-24h spend cap (see quota.ts).
+//   LLM_DAILY_REQUEST_LIMIT    — per-user rolling-24h request cap.
+//
 // Deploy:
 //   supabase functions deploy llm-proxy --no-verify-jwt
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,8 +66,11 @@ import type { LLMResponse, ProviderClient } from "./providers/types.ts";
 import { LLMError } from "./providers/types.ts";
 import { anthropicClient } from "./providers/anthropic.ts";
 import { openaiClient }    from "./providers/openai.ts";
-import { computeCostUsd }  from "./providers/cost.ts";
+import { computeCostUsd, isModelPriced } from "./providers/cost.ts";
 import { getProviderForUseCase } from "./router.ts";
+import { checkUserQuota } from "./quota.ts";
+import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { reportError } from "../_shared/reportError.ts";
 
 // Protocol versions:
 //   v3 = verify_jwt disabled
@@ -75,40 +86,26 @@ const PROVIDER_REGISTRY: Record<string, ProviderClient> = {
   openai:    openaiClient,
 };
 
-function allowedOrigins(): string[] {
-  const raw = Deno.env.get("ALLOWED_ORIGINS") || "";
-  return raw
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+function isTruthy(v: string | undefined): boolean {
+  if (!v) return false;
+  return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
 }
 
-function corsHeaders(req?: Request): Record<string, string> {
-  const configured = allowedOrigins();
-  if (!req || configured.length === 0 || configured.includes("*")) {
-    return {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-    };
-  }
-
-  const origin = req?.headers.get("Origin") || "";
-  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-  const allowOrigin = configured.includes(origin) || isLocalhost ? origin : "null";
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
-}
+// Use-cases that send large document/image inputs (high per-call cost). For
+// these the quota check fails CLOSED when usage can't be verified, so a usage-
+// read outage can't be exploited to bypass the spend cap on the costly calls.
+// Cheap chat/extraction calls stay fail-open (telemetry never breaks the request).
+const EXPENSIVE_USE_CASES = new Set([
+  "drawing-analysis",
+  "revision-compare",
+  "sheet-extraction",
+  "photo-ocr",
+  "shipping-ticket-import",
+  "rfi-log-import",
+]);
 
 function json(body: unknown, status = 200, req?: Request): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-  });
+  return jsonResponse(body, status, req);
 }
 
 async function authenticateRequest(req: Request): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
@@ -243,6 +240,19 @@ async function handle(req: Request): Promise<Response> {
   const auth = await authenticateRequest(req);
   if (!auth.ok) return auth.response;
 
+  // Global kill switch — break-glass to halt ALL LLM spend without a redeploy.
+  if (isTruthy(Deno.env.get("LLM_KILL_SWITCH"))) {
+    return json(
+      { error: "AI features are temporarily disabled. Please try again later.", protocol_version: PROTOCOL_VERSION },
+      503,
+      req,
+    );
+  }
+
+  // NOTE: the per-user spend/volume quota is checked AFTER the routing decision
+  // (below), so it can fail CLOSED for expensive use-cases. Body parse + routing
+  // are cheap; the provider call (the thing being gated) is still well after it.
+
   let body: any;
   try {
     body = await req.json();
@@ -250,6 +260,7 @@ async function handle(req: Request): Promise<Response> {
     return json(
       { error: `Invalid JSON body: ${err instanceof Error ? err.message : String(err)}`, protocol_version: PROTOCOL_VERSION },
       400,
+      req,
     );
   }
 
@@ -280,7 +291,44 @@ async function handle(req: Request): Promise<Response> {
     return json(
       { error: `Unknown provider: "${provider}". Use "anthropic" or "openai".`, protocol_version: PROTOCOL_VERSION },
       400,
+      req,
     );
+  }
+
+  // ── Model allowlist (cost + abuse control) ──────────────────────────────
+  // Callers may override provider/model (above), so gate the RESOLVED model to
+  // the rate card: allowed ≡ priced. Without this an unpriced/expensive model
+  // could be requested directly and would log cost_usd = NULL, silently escaping
+  // spend tracking. To allow a model, price it in providers/cost.ts.
+  if (!isModelPriced(provider, model)) {
+    return json(
+      { error: `Model not allowed: "${provider}/${model}". The gateway only serves models priced in its rate card.`, protocol_version: PROTOCOL_VERSION },
+      400,
+      req,
+    );
+  }
+
+  // ── Clamp output tokens (cost/abuse control) ────────────────────────────
+  // maxTokens is the main lever on a single call's output cost; clamp a
+  // caller-supplied value to a ceiling generous enough for every real caller
+  // (observed max is 8000 across extraction/import/copilot) yet tight enough
+  // that one request can't run away. Refine per-useCase here if ever needed.
+  const OUTPUT_TOKEN_CEILING = 16000;
+  if (typeof body?.maxTokens === "number" && body.maxTokens > OUTPUT_TOKEN_CEILING) {
+    console.warn(`[llm-proxy] clamping maxTokens ${body.maxTokens} -> ${OUTPUT_TOKEN_CEILING} (useCase=${useCase})`);
+    body.maxTokens = OUTPUT_TOKEN_CEILING;
+  }
+
+  // ── Per-user daily spend/volume guard ───────────────────────────────────
+  // No-op unless a cap secret is set. Now that the use-case is known, expensive
+  // (document/image) use-cases fail CLOSED if usage can't be verified; cheap
+  // calls stay fail-open. Checked before the provider call so a throttled user
+  // never reaches a provider.
+  const quota = await checkUserQuota(auth.userId, { failClosed: EXPENSIVE_USE_CASES.has(useCase) });
+  if (!quota.ok) {
+    const res = json({ error: quota.error, protocol_version: PROTOCOL_VERSION }, quota.status, req);
+    res.headers.set("Retry-After", String(quota.retryAfterSeconds));
+    return res;
   }
 
   // ── Diagnostic log (matches v7 format so existing log searches keep working)
@@ -339,7 +387,7 @@ async function handle(req: Request): Promise<Response> {
       },
     });
 
-    return json(toWireEnvelope(result));
+    return json(toWireEnvelope(result), 200, req);
   } catch (err) {
     const latencyMs = Math.round(performance.now() - t0);
     const isLLMError = err instanceof LLMError;
@@ -379,6 +427,7 @@ async function handle(req: Request): Promise<Response> {
     return json(
       { error: `${provider} handler: ${message}`, protocol_version: PROTOCOL_VERSION },
       status,
+      req,
     );
   }
 }
@@ -389,16 +438,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch (err) {
     const name = err instanceof Error ? err.name : "Error";
     const message = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error && err.stack ? err.stack : null;
-    // Log the stack server-side only — do NOT return it to the client (it can
-    // disclose internal file paths / structure). Surface a generic message.
-    console.error(`[llm-proxy] Unhandled ${name}: ${message}`, stack || "");
+    // Log (+ Sentry when EDGE_SENTRY_DSN is set). Do NOT return the stack to
+    // the client — it can disclose internal file paths / structure.
+    await reportError(err, "llm-proxy", { unhandled: true });
     return json(
       {
         error: `Unhandled ${name}: ${message}`,
         protocol_version: PROTOCOL_VERSION,
       },
       500,
+      req,
     );
   }
 });

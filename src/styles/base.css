@@ -25,7 +25,7 @@ h1, h2, h3, h4 {
   letter-spacing: 0.01em;
 }
 
-button { cursor: pointer; outline: none; }
+button { cursor: pointer; }
 
 /* ── Typography utilities ── */
 .tech-label {
@@ -80,6 +80,39 @@ input::placeholder, textarea::placeholder {
   color: var(--text-muted) !important;
 }
 
+/* Landing / marketing page inputs must stay dark-on-white regardless of app theme.
+   Global input !important rules above otherwise make typed credentials unreadable
+   on the executive-light login modal. */
+.lp-page input.lp-input,
+.lp-page textarea.lp-input {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #101827 !important;
+  -webkit-text-fill-color: #101827 !important;
+  caret-color: #101827 !important;
+  box-shadow: none !important;
+}
+.lp-page input.lp-input:focus,
+.lp-page textarea.lp-input:focus {
+  border-color: #F5A800 !important;
+  box-shadow: 0 0 0 4px rgba(245, 168, 0, 0.16) !important;
+}
+.lp-page input.lp-input::placeholder,
+.lp-page textarea.lp-input::placeholder {
+  color: #8491A6 !important;
+  -webkit-text-fill-color: #8491A6 !important;
+  opacity: 1 !important;
+}
+.lp-page input.lp-input:-webkit-autofill,
+.lp-page input.lp-input:-webkit-autofill:hover,
+.lp-page input.lp-input:-webkit-autofill:focus,
+.lp-page textarea.lp-input:-webkit-autofill {
+  -webkit-text-fill-color: #101827 !important;
+  caret-color: #101827 !important;
+  box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+  transition: background-color 99999s ease-in-out 0s;
+}
+
 /* ── Light theme element overrides ──
  *
  * HD pass (Apr 2026):
@@ -112,6 +145,78 @@ select option:disabled {
 .steelbuild-dark select optgroup {
   background-color: #07111f !important;
   color: #f3f7ff !important;
+}
+
+/* LIGHT surfaces (light theme + the canonical light presentation): option panels must
+   be LIGHT too. The global `select option { background:#07111f }` rule above is
+   for dark dropdowns, but on Chrome/Windows that dark <option> background leaks
+   into the closed control when it's hovered — on a light page that paints the
+   select black-on-black (unreadable, doesn't revert). These higher-specificity
+   rules keep options light wherever the surface is light. */
+/* Light surfaces only — do NOT force white options under SteelBuild Dark.
+   Dark command skins are handled below (incl. nested data-skin descendants). */
+[data-theme="light"] select option,
+[data-theme="light"] select optgroup,
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select option,
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select optgroup,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select option,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select optgroup {
+  background: #ffffff !important;
+  color: #16203a !important;
+}
+[data-theme="light"] select option:checked,
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select option:checked,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select option:checked {
+  background: #e8edf3 !important;
+  color: #16203a !important;
+}
+[data-theme="light"] select option:disabled,
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select option:disabled,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select option:disabled {
+  color: #94a3b8 !important;
+}
+
+/* Dark command skins — cover nested data-skin="command" (Piece Register, etc.)
+   as well as the html-level skin from useCommandSkin(). Without the descendant
+   forms, the light `[data-skin="command"] select option { background:#fff }`
+   rule wins inside nested skins under SteelBuild Dark. */
+html.steelbuild-dark[data-skin="command"] select,
+html.steelbuild-dark[data-skin="command"] select option,
+html.steelbuild-dark[data-skin="command"] select optgroup,
+html.steelbuild-dark [data-skin="command"] select,
+html.steelbuild-dark [data-skin="command"] select option,
+html.steelbuild-dark [data-skin="command"] select optgroup,
+.steelbuild-dark[data-skin="command"] select,
+.steelbuild-dark[data-skin="command"] select option,
+.steelbuild-dark[data-skin="command"] select optgroup,
+.steelbuild-dark [data-skin="command"] select,
+.steelbuild-dark [data-skin="command"] select option,
+.steelbuild-dark [data-skin="command"] select optgroup,
+[data-theme="dark"][data-skin="command"] select,
+[data-theme="dark"][data-skin="command"] select option,
+[data-theme="dark"][data-skin="command"] select optgroup,
+[data-theme="dark"] [data-skin="command"] select,
+[data-theme="dark"] [data-skin="command"] select option,
+[data-theme="dark"] [data-skin="command"] select optgroup {
+  background: var(--cmd-surface, #121820) !important;
+  color: var(--cmd-text, #f3f7ff) !important;
+}
+html.steelbuild-dark[data-skin="command"] select option:checked,
+html.steelbuild-dark [data-skin="command"] select option:checked,
+.steelbuild-dark[data-skin="command"] select option:checked,
+.steelbuild-dark [data-skin="command"] select option:checked,
+[data-theme="dark"][data-skin="command"] select option:checked,
+[data-theme="dark"] [data-skin="command"] select option:checked {
+  background: var(--cmd-row-hover, rgba(255,255,255,0.08)) !important;
+  color: var(--cmd-text, #f3f7ff) !important;
+}
+html.steelbuild-dark[data-skin="command"] select option:disabled,
+html.steelbuild-dark [data-skin="command"] select option:disabled,
+.steelbuild-dark[data-skin="command"] select option:disabled,
+.steelbuild-dark [data-skin="command"] select option:disabled,
+[data-theme="dark"][data-skin="command"] select option:disabled,
+[data-theme="dark"] [data-skin="command"] select option:disabled {
+  color: var(--cmd-text-muted, rgba(255,255,255,0.45)) !important;
 }
 
 [data-theme="light"] body,
@@ -157,12 +262,15 @@ select option:disabled {
 [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 [data-theme="light"] ::-webkit-scrollbar-corner { background: var(--bg-surface-low); }
 
-/* Focus ring for buttons and other interactive non-input elements in light mode —
-   browsers' blue default outlines look cheap against the industrial gold palette. */
-[data-theme="light"] button:focus-visible,
-[data-theme="light"] a:focus-visible,
-[data-theme="light"] [role="button"]:focus-visible,
-[data-theme="light"] [tabindex]:focus-visible {
+/* Focus ring for buttons and other interactive non-input elements —
+   browsers' blue default outlines look cheap against the industrial gold palette.
+   Applies in BOTH themes (dark is the default): the button reset above no longer
+   kills `outline`, and :focus-visible only fires for keyboard focus, so mouse
+   clicks stay ring-free. This is what makes keyboard focus visible app-wide. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px !important;
 }

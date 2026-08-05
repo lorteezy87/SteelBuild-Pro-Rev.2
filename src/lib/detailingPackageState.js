@@ -21,8 +21,8 @@
  * isPackageSuperseded() — it is not part of the linear effective-state pipeline.
  */
 
-import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
-import { derivedSetStage, submittalStatusToStage } from "@/lib/submittalStageMapping";
+import { WORKFLOW_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+import { derivedSetStage, submittalStatusToStage, isRRStatus, pickMostRecentSubmittal } from "@/lib/submittalStageMapping";
 
 /** Manual upstream (pre-submittal) drafting states. */
 export const DRAFTING_STATES = ["In Detailing", "Internal Review", "Ready to Submit"];
@@ -32,16 +32,17 @@ export const RELEASE_STATES = ["Partially Released", "Released for Erection"];
 
 /**
  * Full operational pipeline order (left = earliest). Splices the manual
- * drafting states before the canonical submittal STAGE_ORDER and the release
- * states after it. 'Superseded' is intentionally excluded (orthogonal).
+ * drafting states before the canonical WORKFLOW_STAGE_ORDER (the derived
+ * submittal stages, R&R included) and the release states after it.
+ * 'Superseded' is intentionally excluded (orthogonal).
  *   ["Not Started","In Detailing","Internal Review","Ready to Submit",
- *    "IFA","OFA","BFA","OFS","IFC","Released",
+ *    "IFA","OFA","BFA","R&R","OFS","IFC","Released",
  *    "Partially Released","Released for Erection"]
  */
 export const DETAILING_STATE_ORDER = [
   "Not Started",
   ...DRAFTING_STATES,
-  ...STAGE_ORDER.filter((s) => s !== "Not Started"),
+  ...WORKFLOW_STAGE_ORDER.filter((s) => s !== "Not Started"),
   ...RELEASE_STATES,
 ];
 
@@ -76,7 +77,7 @@ export function hasGoverningSubmittal(submittalsForSet) {
 /**
  * The package's effective operational state.
  *
- * @param {{ detailing_state?: string|null }} pkg — the drawing_set row
+ * @param {{ detailing_state?: string|null }|null|undefined} pkg — the drawing_set row (null when the package has no parent set)
  * @param {Array} submittalsForSet — submittals whose drawing_set_ids includes the set
  * @param {Array} [sheetsForSet]   — drawings belonging to the set (legacy fallback)
  * @returns {string} a value in DETAILING_STATE_ORDER
@@ -112,6 +113,30 @@ export function isPackageSuperseded(sheetsForSet) {
     (s) => s && !s.is_deleted,
   );
   return sheets.length > 0 && sheets.every((s) => s.is_superseded === true);
+}
+
+/**
+ * Orthogonal "R&R" signal: true when the package's GOVERNING submittal (the
+ * most-recent active one — the same submittal `derivedSetStage` maps) carries a
+ * Revise-and-Resubmit / Rejected outcome.
+ *
+ * Since 2026-07-25 R&R derives to the first-class "R&R" stage (see
+ * submittalStatusToStage), so the effective state itself reads R&R. This flag
+ * remains for surfaces that badge R&R alongside a non-stage display (e.g. a
+ * literal status row) — callers should skip the badge when the state chip
+ * already reads "R&R". Returns false once the governing submittal advances
+ * past R&R (e.g. it's resubmitted, approved, or released).
+ *
+ * @param {Array} submittalsForSet
+ * @returns {boolean}
+ */
+export function isPackageRR(submittalsForSet) {
+  const usable = (Array.isArray(submittalsForSet) ? submittalsForSet : []).filter(
+    (s) => s && !s.is_deleted &&
+      submittalStatusToStage(s.status, s.ball_in_court, s.approved_date) !== null,
+  );
+  const governing = pickMostRecentSubmittal(usable);
+  return !!governing && isRRStatus(governing.status);
 }
 
 /**

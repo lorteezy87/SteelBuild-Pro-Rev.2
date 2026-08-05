@@ -1,4 +1,4 @@
-import { buildGateMap, type GateOptions, type TaskGate } from "./scheduleGatekeeper";
+import { buildGateMap, type GateOptions } from "./scheduleGatekeeper";
 
 // Module-scoped set of cycle keys that have already been warned about.
 // Persists across calls to computeEffectiveDates so the same cycle
@@ -88,9 +88,21 @@ export function toDateOnly(s: any): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
 }
 
-function addDaysIso(iso: any, n: number): string | null {
+/**
+ * Add `n` whole days to a YYYY-MM-DD (or ISO) date and return a canonical
+ * YYYY-MM-DD string, or null if the input is unparseable. UTC-based on purpose:
+ * parsing as UTC midnight and doing the arithmetic in UTC keeps the result
+ * timezone-independent, so callers never hit the local-parse / UTC-serialize
+ * off-by-one that `new Date(str + "T00:00:00")` + `.toISOString()` produces
+ * under a non-zero UTC offset. Reused by Schedule bulk-duration math.
+ */
+export function addDaysIso(iso: any, n: number): string | null {
   const d = parseDateUTC(iso);
   if (!d) return null;
+  // A non-finite offset (NaN/Infinity) would make the Date invalid and throw in
+  // toISOString(); treat it like an unparseable input. Negative integers are
+  // valid (fast-tracking lag), so only reject non-finite values.
+  if (!Number.isFinite(n)) return null;
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
@@ -227,13 +239,13 @@ function applyLink(
     const minStart = addDaysIso(predResolved.end, lag);
     if (minStart && minStart > candStart) {
       candStart = minStart;
-      candEnd = addDaysIso(candStart, dur);
+      candEnd = addDaysIso(candStart, dur) || candEnd;
     }
   } else if (type === "SS") {
     const minStart = addDaysIso(predResolved.start, lag);
     if (minStart && minStart > candStart) {
       candStart = minStart;
-      candEnd = addDaysIso(candStart, dur);
+      candEnd = addDaysIso(candStart, dur) || candEnd;
     }
   } else if (type === "FF") {
     const minEnd = addDaysIso(predResolved.end, lag);

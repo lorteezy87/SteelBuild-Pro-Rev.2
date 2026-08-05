@@ -2,7 +2,7 @@
 /**
  * Submittals smoke test — renders the real Submittals page with router,
  * QueryClient, and a synthetic active project. entity reads
- * are mocked to empty arrays so the page renders its empty CommandBar
+ * are mocked to empty arrays so the page renders its empty canonical register
  * state without network traffic.
  */
 
@@ -83,14 +83,18 @@ function renderSubmittals() {
 }
 
 describe("Submittals page (smoke)", () => {
-  it("renders without crashing and shows the CommandBar title", () => {
+  it("renders without crashing and shows the canonical register title", () => {
     renderSubmittals();
     expect(screen.getByText("Submittal Register")).toBeInTheDocument();
   });
 
   it("renders the project-scoped eyebrow", () => {
     renderSubmittals();
-    // Eyebrow text contains "SUBMITTALS"
-    expect(screen.getByText(/SUBMITTALS/)).toBeInTheDocument();
+    expect(screen.getByText(/Submittals/)).toBeInTheDocument();
+  });
+
+  it("renders the canonical filter and search surface", () => {
+    renderSubmittals();
+    expect(screen.getByPlaceholderText("Search # / title / spec section")).toBeInTheDocument();
   });
 });

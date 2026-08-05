@@ -124,7 +124,12 @@ export default function ReportShell({
       <style>{`
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         @media print {
-          body { background: #fff !important; color: #000 !important; }
+          body {
+            --report-print-background: white;
+            --report-print-text: black;
+            background: var(--report-print-background) !important;
+            color: var(--report-print-text) !important;
+          }
           button, input, select { display: none !important; }
         }
       `}</style>

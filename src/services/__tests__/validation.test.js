@@ -102,55 +102,10 @@ describe("RFI validation", () => {
   });
 });
 
-// ─── Change Order validation ────────────────────────────────────────────
-
-describe("Change Order validation", () => {
-  const validCO = {
-    project_id: "p1",
-    title: "Differing conditions",
-    co_amount: 15000,
-  };
-
-  it("passes with required fields", () => {
-    expect(validate("change_order", validCO)).toEqual([]);
-  });
-
-  it("fails with NaN amount", () => {
-    const errors = validate("change_order", { ...validCO, co_amount: "abc" });
-    expect(errors.some((e) => e.field === "co_amount")).toBe(true);
-  });
-
-  it("requires approved_by when status is Approved", () => {
-    const errors = validate("change_order", { ...validCO, status: "Approved" });
-    expect(errors.some((e) => e.field === "approved_by")).toBe(true);
-    expect(errors.some((e) => e.field === "approved_date")).toBe(true);
-  });
-});
-
-// ─── Expense validation ─────────────────────────────────────────────────
-
-describe("Expense validation", () => {
-  const validExpense = {
-    project_id: "p1",
-    amount: 2500,
-    vendor: "Steel Supply Co",
-    expense_type: "Material",
-  };
-
-  it("passes with required fields", () => {
-    expect(validate("expense", validExpense)).toEqual([]);
-  });
-
-  it("fails with zero amount", () => {
-    const errors = validate("expense", { ...validExpense, amount: 0 });
-    expect(errors.some((e) => e.field === "amount")).toBe(true);
-  });
-
-  it("fails with negative amount", () => {
-    const errors = validate("expense", { ...validExpense, amount: -100 });
-    expect(errors.some((e) => e.field === "amount")).toBe(true);
-  });
-});
+// The `change_order` and `expense` rules were removed 2026-07-10 (unreachable —
+// their only callers, useFinancials' expenseCrud/changeOrderCrud, had no
+// consumers). Those two entity keys now fall through to the "Unknown entity"
+// path covered below. Expenses/COs are validated by their own form modals.
 
 // ─── Work Package validation ────────────────────────────────────────────
 

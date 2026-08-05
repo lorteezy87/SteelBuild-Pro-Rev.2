@@ -47,12 +47,12 @@ if (typeof window !== "undefined") {
       observe() {}
       unobserve() {}
       disconnect() {}
-      takeRecords() {
+      takeRecords(): IntersectionObserverEntry[] {
         return [];
       }
-      root = null;
+      root: Element | null = null;
       rootMargin = "";
-      thresholds = [];
+      thresholds: number[] = [];
     };
   }
 }

@@ -24,7 +24,9 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { toast } from "sonner";
-import { KpiTile as KpiTileRaw, Modal as ModalRaw, BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { KpiTile as KpiTileRaw, Modal as ModalRaw, BulkActionBar as BulkActionBarRaw, Button as ButtonRaw } from "@/components/design-system";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import {
   Archive, Clock, Eye, Inbox, Mail, PenSquare, Search, Send, Settings, Star, XCircle,
 } from "lucide-react";
@@ -44,6 +46,7 @@ type AnyProps = PropsWithChildren<Record<string, unknown>>;
 const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const Modal = ModalRaw as unknown as ComponentType<AnyProps>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
+const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 
 export default function EmailInbox() {
   const projectId = useProjectId();
@@ -70,7 +73,13 @@ export default function EmailInbox() {
   // ── Data fetching ──────────────────────────────────────────────────
   // the generated generated row types lag the live schema (missing labels/direction/
   // is_read/etc.), so cast to the local EmailMessage/EmailAttachment shapes.
-  const { data: messagesData = [], isLoading, error } = useQuery({
+  const {
+    data: messagesData = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["email-messages", projectId],
     queryFn: () => entities.EmailMessage.filter({ project_id: projectId }, "-received_at"),
     enabled: !!projectId,
@@ -95,8 +104,10 @@ export default function EmailInbox() {
   const attachmentsByMessage = useMemo(() => {
     const map: Record<string, any[]> = {};
     attachments.forEach((att) => {
-      if (!map[att.message_id]) map[att.message_id] = [];
-      map[att.message_id].push(att);
+      const messageId = att.message_id;
+      if (messageId == null) return;
+      if (!map[messageId]) map[messageId] = [];
+      map[messageId].push(att);
     });
     return map;
   }, [attachments]);
@@ -107,18 +118,19 @@ export default function EmailInbox() {
     onSuccess: () => {
       invalidateEntity(qc, "email_message", projectId);
     },
-    onError: (e: any) => toast.error("Update failed: " + (e?.message || "Unknown error")),
+    onError: (e: unknown) => toast.error(`Update failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, data }: { ids: string[]; data: any }) => {
-      await Promise.all(ids.map((id) => entities.EmailMessage.update(id, data)));
+      // Identical `data` patch across all ids → one chunked .in('id', ids) update.
+      await entities.EmailMessage.bulkUpdate(ids, data);
     },
     onSuccess: () => {
       invalidateEntity(qc, "email_message", projectId);
       setSelectedIds(new Set());
     },
-    onError: (e: any) => toast.error("Bulk update failed: " + (e?.message || "Unknown error")),
+    onError: (e: unknown) => toast.error(`Bulk update failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // ── Collect all labels used across messages ────────────────────────
@@ -265,7 +277,7 @@ export default function EmailInbox() {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* KPI strip */}
       <div style={{ padding: "16px 20px 0", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -285,7 +297,7 @@ export default function EmailInbox() {
               background: "var(--accent)", border: "1px solid var(--accent-border)",
               borderRadius: 8, cursor: "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600,
-              color: "var(--text-on-accent, #fff)", flexShrink: 0,
+              color: "var(--on-accent)", flexShrink: 0,
             }}
           >
             <PenSquare size={12} strokeWidth={2} />
@@ -308,7 +320,7 @@ export default function EmailInbox() {
             active={activeFolder === "inbox"} onClick={() => { setActiveFolder("inbox"); setActiveLabelFilter(null); }} />
           <KpiTile compact label="Unread" value={stats.unread} icon={<Mail size={14} />} color="var(--warning)"
             onClick={() => { setActiveFolder("inbox"); setActiveLabelFilter(null); }} />
-          <KpiTile compact label="Starred" value={stats.starred} icon={<Star size={14} />} color="#F59E0B"
+          <KpiTile compact label="Starred" value={stats.starred} icon={<Star size={14} />} color="var(--status-warning)"
             active={activeFolder === "starred"} onClick={() => { setActiveFolder("starred"); setActiveLabelFilter(null); }} />
           <KpiTile compact label="Sent" value={stats.sent} icon={<Send size={14} />} color="var(--accent)"
             active={activeFolder === "sent"} onClick={() => { setActiveFolder("sent"); setActiveLabelFilter(null); }} />
@@ -492,12 +504,25 @@ export default function EmailInbox() {
           {/* Email rows */}
           <div style={{ flex: 1, overflowY: "auto" }}>
             {isLoading ? (
-              <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)", fontFamily: "var(--font-body)", fontSize: 12 }}>
-                Loading emails...
+              <div style={{ padding: 16 }}>
+                <LoadingSkeleton variant="table" rows={8} />
               </div>
-            ) : error ? (
-              <div style={{ textAlign: "center", padding: 40, color: "var(--status-error)", fontFamily: "var(--font-body)", fontSize: 12 }}>
-                Failed to load: {(error as any)?.message || "Unknown"}
+            ) : isError ? (
+              <div style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "40px 24px",
+                gap: 12,
+              }}>
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+                  Couldn’t load emails
+                </p>
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 280 }}>
+                  {toUserErrorMessage(error, "Something went wrong. Try again.")}
+                </p>
+                <Button variant="outline" onClick={() => refetch()}>Retry</Button>
               </div>
             ) : filtered.length === 0 ? (
               <div style={{ textAlign: "center", padding: 40 }}>
@@ -621,7 +646,7 @@ export default function EmailInbox() {
         <CreateRecordModal
           message={createModal}
           attachments={attachmentsByMessage[createModal.id] || []}
-          projectId={projectId}
+          projectId={projectId ?? ""}
           onClose={() => setCreateModal(null)}
           onSuccess={() => {
             setCreateModal(null);
@@ -634,7 +659,7 @@ export default function EmailInbox() {
       {linkModal && (
         <LinkToExistingModal
           message={linkModal}
-          projectId={projectId}
+          projectId={projectId ?? ""}
           onClose={() => setLinkModal(null)}
           onSuccess={() => {
             setLinkModal(null);
@@ -646,7 +671,7 @@ export default function EmailInbox() {
       {/* Compose Modal */}
       {composeModal && (
         <ComposeEmailModal
-          projectId={projectId}
+          projectId={projectId ?? ""}
           onClose={() => setComposeModal(false)}
           onSent={() => {
             setComposeModal(false);
@@ -658,7 +683,7 @@ export default function EmailInbox() {
       {/* Reply Modal */}
       {replyState && (
         <ReplyEmailModal
-          projectId={projectId}
+          projectId={projectId ?? ""}
           originalMessage={replyState.message}
           mode={replyState.mode}
           currentUserEmail={currentUserEmail}

@@ -1,23 +1,31 @@
-﻿# CI — lint + typecheck + test + build on every push and PR.
+# CI + gated deploy — lint, typecheck, test, build, then ship.
 #
-# What runs here:
-#   1. Install (cached node_modules via actions/setup-node)
-#   2. ESLint (warnings allowed, errors fail the build)
-#   3. TypeScript checks for both .ts (tsconfig) and .js/.jsx (jsconfig)
-#   4. Vitest unit tests (the full unit suite — `npm test`)
-#   5. Production Vite build (catches dead-imports / runtime-only refs
-#      that the lint + typecheck passes don't notice)
+# Jobs (defined below):
+#   - ci:        ESLint + TypeScript (.ts via tsconfig, .js/.jsx via jsconfig)
+#                + Vitest unit suite + production Vite build. Runs on EVERY push
+#                and pull request to any branch, so contributors get green/red
+#                feedback before merge.
+#   - deploy:    production deploy to Vercel via the Vercel CLI (prebuilt output).
+#                GATED on `ci` and ONLY on a push to main. This GitHub Action is
+#                the SOLE production deploy path: Vercel's own git auto-deploy is
+#                turned OFF (vercel.json `git.deploymentEnabled.main=false`), so a
+#                red lint/typecheck/test/build can no longer reach
+#                steelbuild-pro.com — only a green push to main deploys.
+#   - e2e-smoke: Playwright smoke AFTER deploy, NON-BLOCKING (it is not in
+#                `deploy.needs`, so it can never gate or roll back prod). Opt-in
+#                via the E2E_ENABLED repo variable. See e2e/README.md.
+#   - staging-e2e-readonly: authenticated read-only Playwright smoke after the
+#                staging deploy, opt-in via STAGING_E2E_ENABLED. Its credentials
+#                and Supabase target are staging-specific and cannot target prod.
+#   - dependency-audit: `npm audit` over production deps, ADVISORY (not in
+#                `deploy.needs`, so a newly disclosed CVE alarms the run without
+#                blocking the release train).
 #
 # What does NOT run here:
-#   - End-to-end tests (no Playwright/E2E suite committed to this repo yet —
-#     `npm run test:e2e` will be wired in as a non-blocking job once it lands)
-#   - Lighthouse / a11y / bundle-size budgets (queued for later)
-#   - Deploy — Vercel handles that on push to main
-#
-# This workflow runs against EVERY push and pull request to any branch
-# so contributors see green/red feedback before merging into deploy.
-# The deploy branch (main) gets the same gates plus
-# Vercel's own build, so a regression has two chances to be caught.
+#   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
+#   - Secret scanning (gitleaks) / SAST — queued; needs an owner decision on
+#     tooling (see ENTERPRISE_READINESS_AUDIT.md L13).
+#   - Lighthouse / a11y / bundle-size budgets (queued for later).
 
 name: CI
 
@@ -26,17 +34,27 @@ on:
     branches:
       - main
       - master
+      - staging
       - "claude/**"
   pull_request:
     branches:
       - main
       - master
+      - staging
 
 # Cancel any in-progress runs for the same branch when a new push comes in.
 # Avoids piling up redundant CI for rapid iteration on a feature branch.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel redundant runs on feature branches only — NEVER cancel a main OR
+  # staging run: a cancelled green run would skip its deploy and leave that
+  # environment stale. (M8, H3)
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/staging' }}
+
+# Least-privilege default for the ambient GITHUB_TOKEN (M12/H6). The deploy job
+# authenticates to Vercel with its own VERCEL_* secrets, not GITHUB_TOKEN.
+permissions:
+  contents: read
 
 jobs:
   ci:
@@ -53,12 +71,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
@@ -70,6 +88,12 @@ jobs:
         # the existing warnings down.
         run: npm run lint
 
+      - name: No new JavaScript under src/
+        # Phase 1 of docs/architecture/typescript-standard.md — blocks new
+        # .js/.jsx additions vs origin/main (existing JS may remain until
+        # intentionally converted with real types).
+        run: npm run check:no-new-js
+
       - name: Typecheck (TypeScript)
         # Blocking: guards Supabase table names, hook contracts,
         # and TS/TSX integration points before Vercel receives a deploy.
@@ -79,6 +103,23 @@ jobs:
         # Blocking: parses JS/JSX and verifies module resolution while the
         # remaining business logic migrates toward TypeScript coverage.
         run: npm run typecheck:js
+
+      - name: Typecheck (strictNullChecks ratchet)
+        # Blocking: enforces strictNullChecks on every .ts/.tsx EXCEPT the
+        # grandfathered files listed in scripts/strict-typecheck.mjs. New code
+        # and all already-clean files are strict-null by default; a new null
+        # error fails CI unless the file is explicitly added to the ignore list.
+        # Shrink that list as the two remaining schedule/gantt pages are cleaned.
+        # See docs/superpowers/specs/2026-06-22-strictnullchecks-ratchet-design.md
+        run: npm run typecheck:strict
+
+      - name: Typecheck (noImplicitAny ratchet)
+        # Blocking: enforces noImplicitAny on every .ts/.tsx EXCEPT the
+        # grandfathered files in scripts/noimplicitany-typecheck.mjs. New code
+        # and all already-clean files may not introduce an untyped `any`. Shrink
+        # that list as the 13 heavy schedule/gantt/procurement/etc. pages are
+        # cleaned. Shares the filter with the strict-null gate (scripts/lib/).
+        run: npm run typecheck:noimplicitany
 
       - name: Run Vitest tests
         run: npm test
@@ -97,3 +138,337 @@ jobs:
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+  # ── Dependency audit (ADVISORY — never blocks a deploy) ──────────────────
+  # `npm audit` over PRODUCTION dependencies, failing on high+ advisories.
+  # Deliberately NOT in `deploy.needs`: a CVE disclosed overnight in a
+  # transitive dep should alarm the run (red job, red run), but must not stop
+  # an unrelated fix from shipping. Works straight off the lockfile — no
+  # `npm ci` needed. Baseline at introduction: 0 vulnerabilities. (Audit L13,
+  # dependency-audit slice; gitleaks/SAST still queued.)
+  dependency-audit:
+    name: Dependency audit (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Audit production dependencies (high+)
+        run: npm audit --omit=dev --audit-level=high
+
+  # ── Gated production deploy ──────────────────────────────────────────────
+  # Deploys to Vercel ONLY after the `ci` job above passes, on a push to main —
+  # so a red lint / typecheck / test / build can no longer reach
+  # steelbuild-pro.com. Paired with vercel.json `git.deploymentEnabled.main=false`
+  # (Vercel's own git auto-deploy is turned off) so this Action is the SOLE
+  # production deploy path. `vercel pull` fetches the real production env
+  # (VITE_SUPABASE_*) before building, then we ship the prebuilt output.
+  deploy:
+    name: Deploy to Vercel (production)
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Serialize production deploys and never cancel one mid-flight — an
+    # interrupted `vercel deploy` wastes minutes and can leave a half-deploy. (M8)
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Pull Vercel project + production env
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build (production)
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # Stamp the commit as the Sentry release so instrument.js and the vite
+          # plugin share one release name, and upload source maps when the token
+          # is set (the plugin no-ops if SENTRY_AUTH_TOKEN is empty). (M9/H8)
+          VITE_APP_VERSION: ${{ github.sha }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+      - name: Deploy prebuilt output (production)
+        # --meta stamps the commit onto the Vercel deployment record so an
+        # on-call engineer can answer "which commit is live?" (M9).
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --meta githubCommitSha=${{ github.sha }} --meta githubCommitRef=${{ github.ref_name }} --meta githubRunId=${{ github.run_id }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Post-deploy health check
+        # Fail the run loudly if the just-deployed app doesn't serve 200 (M10).
+        # -L follows the apex->canonical 308 redirect (bare / returns 308, the
+        # final page is 200). Retries absorb CDN propagation; prod stays on the
+        # last good build if this is red (deploy already promoted at this point).
+        run: |
+          set -e
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sL -o /dev/null -w '%{http_code}' https://steelbuild-pro.com/)
+            if [ "$code" = "200" ]; then echo "healthy ($code)"; exit 0; fi
+            echo "attempt $i: HTTP $code"; sleep 10
+          done
+          echo "::error::production health check failed after deploy"; exit 1
+
+  # ── Gated STAGING deploy (H3) ────────────────────────────────────────────
+  # Deploys the `staging` branch to a SEPARATE Vercel project wired to a separate
+  # staging Supabase project, so schema/edge/RLS changes and DR restores can be
+  # rehearsed off-prod. Reuses the SAME `ci` gate job as production (no drift).
+  #
+  # INERT until you opt in: it only runs when the `STAGING_ENABLED` repo VARIABLE
+  # is "true" (a variable, not a secret — `secrets.*` is unreliable in a job-level
+  # `if`, same pattern as e2e-smoke). Until then this job is skipped, never red.
+  # Provisioning + secret names are in docs/runbooks/staging-setup.md.
+  deploy-staging:
+    name: Deploy to Vercel (staging)
+    needs: ci
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Serialize staging deploys and never cancel one mid-flight (mirrors prod).
+    concurrency:
+      group: staging-deploy
+      cancel-in-progress: false
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Pull Vercel project + staging env
+        # Pulls the STAGING Vercel project's env (its VITE_SUPABASE_* point at the
+        # staging Supabase project — never at prod).
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+
+      - name: Build (staging)
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+          VITE_APP_VERSION: ${{ github.sha }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+      - name: Deploy prebuilt output (staging)
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --meta githubCommitSha=${{ github.sha }} --meta githubCommitRef=${{ github.ref_name }} --meta githubRunId=${{ github.run_id }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+
+      - name: Post-deploy health check (staging)
+        # Only runs when STAGING_BASE_URL is configured; otherwise skipped so the
+        # job stays green while you finish DNS/domain setup.
+        if: ${{ vars.STAGING_BASE_URL != '' }}
+        run: |
+          set -e
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sL -o /dev/null -w '%{http_code}' "${{ vars.STAGING_BASE_URL }}")
+            if [ "$code" = "200" ]; then echo "staging healthy ($code)"; exit 0; fi
+            echo "attempt $i: HTTP $code"; sleep 10
+          done
+          echo "::error::staging health check failed after deploy"; exit 1
+
+  # ── Authenticated STAGING smoke (read-only, post-deploy) ─────────────────
+  # Runs only the browser navigation specs; no mutation-aware spec is selected.
+  # This job starts after deploy-staging completes, so it cannot block or cancel
+  # the deployment. Environment guardrails additionally reject the production
+  # hostname or a Supabase URL that is not the documented staging project.
+  staging-e2e-readonly:
+    name: E2E smoke (staging, read-only)
+    needs: deploy-staging
+    if: ${{ vars.STAGING_E2E_ENABLED == 'true' && vars.STAGING_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authenticated read-only staging smoke
+        run: npm run test:e2e:staging:readonly
+        env:
+          E2E_TARGET: staging
+          E2E_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          E2E_EXPECTED_SUPABASE_REF: abbeavtbifuddtrifvae
+          E2E_USER: ${{ secrets.STAGING_E2E_USER }}
+          E2E_PASS: ${{ secrets.STAGING_E2E_PASS }}
+          E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+
+      - name: Upload staging Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: staging-playwright-readonly-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Mutation specs are a separate job and require three independent opt-ins:
+  # the job variable, E2E_MUTATIONS_ENABLED, and the disposable fixture marker.
+  # They are staging-only and are never selected by staging-e2e-readonly.
+  staging-e2e-mutations:
+    name: E2E gates (staging, disposable mutations)
+    needs: deploy-staging
+    if: ${{ vars.STAGING_E2E_MUTATIONS_ENABLED == 'true' && vars.STAGING_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run staging mutation gates against disposable fixtures
+        run: npm run test:e2e:staging:mutations
+        env:
+          E2E_TARGET: staging
+          E2E_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          E2E_EXPECTED_SUPABASE_REF: abbeavtbifuddtrifvae
+          E2E_MUTATIONS_ENABLED: "true"
+          E2E_MUTATION_FIXTURE_KIND: disposable
+          E2E_USER: ${{ secrets.STAGING_E2E_USER }}
+          E2E_PASS: ${{ secrets.STAGING_E2E_PASS }}
+          E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+          E2E_VIEWER_USER: ${{ secrets.STAGING_E2E_VIEWER_USER }}
+          E2E_VIEWER_PASS: ${{ secrets.STAGING_E2E_VIEWER_PASS }}
+          E2E_FAB_PROJECT_ID: ${{ secrets.STAGING_E2E_FAB_PROJECT_ID }}
+          E2E_BLOCKED_DRAWING_ID: ${{ secrets.STAGING_E2E_BLOCKED_DRAWING_ID }}
+          E2E_CLEAN_DRAWING_ID: ${{ secrets.STAGING_E2E_CLEAN_DRAWING_ID }}
+          E2E_PIECE_PROJECT_ID: ${{ secrets.STAGING_E2E_PIECE_PROJECT_ID }}
+          E2E_PIECE_OTHER_TENANT_PROJECT_ID: ${{ secrets.STAGING_E2E_PIECE_OTHER_TENANT_PROJECT_ID }}
+          E2E_PIECE_FULL_WORKFLOW: ${{ vars.STAGING_E2E_PIECE_FULL_WORKFLOW }}
+          E2E_PIECE_WORK_PACKAGE_ID: ${{ secrets.STAGING_E2E_PIECE_WORK_PACKAGE_ID }}
+          E2E_PIECE_APPROVED_DRAWING_ID: ${{ secrets.STAGING_E2E_PIECE_APPROVED_DRAWING_ID }}
+          E2E_PIECE_EXCEPTION_WORK_PACKAGE_ID: ${{ secrets.STAGING_E2E_PIECE_EXCEPTION_WORK_PACKAGE_ID }}
+
+      - name: Upload staging mutation Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: staging-playwright-mutation-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ── E2E smoke (post-deploy, NON-BLOCKING) ────────────────────────────────
+  # The "unit tests pass != it works" layer: signs in with a real session and
+  # asserts the daily-driver workflow (drawings -> submittals -> RFIs) plus the
+  # server-arbitrated fab-release gate against the JUST-DEPLOYED app.
+  #
+  # Deploy-safety: this runs AFTER `deploy`, and `deploy` does NOT list it in
+  # `needs`, so a flaky or failing E2E run can NEVER block or roll back a
+  # production deploy. It is observe-only.
+  #
+  # Opt-in: only runs when the `E2E_ENABLED` repo VARIABLE is "true" (a variable,
+  # not a secret — `secrets.*` is unreliable in a job-level `if`). Until you set
+  # it, this job is skipped (never red). Set it once the dedicated test account +
+  # secrets exist (see e2e/README.md). Each spec ALSO self-skips when its own
+  # fixture env is unset, so you can enable the read-only smoke first and add the
+  # mutation-aware fab-release gate later by setting the E2E_FAB_* secrets — the
+  # gate spec WRITES to fab_release_log, so point it at a TEST org only.
+  e2e-smoke:
+    name: E2E smoke (post-deploy, non-blocking)
+    needs: deploy
+    if: ${{ vars.E2E_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E suite
+        run: npm run test:e2e
+        env:
+          E2E_BASE_URL: https://steelbuild-pro.com
+          # Sign-in: global-setup (browser session) + the API fixtures. The
+          # passwords are secrets; the anon key is browser-public but stored as a
+          # secret for one consistent place.
+          E2E_USER: ${{ secrets.E2E_USER }}
+          E2E_PASS: ${{ secrets.E2E_PASS }}
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          # Optional viewer account -> enables the fab-gate RLS-deny assertion.
+          E2E_VIEWER_USER: ${{ secrets.E2E_VIEWER_USER }}
+          E2E_VIEWER_PASS: ${{ secrets.E2E_VIEWER_PASS }}
+          # Fab-release gate fixture (TEST org ONLY — the spec WRITES one append-
+          # only row per run). Leave unset to skip that spec and run only the
+          # read-only smoke. Verify the two drawing ids with the gate's own fn:
+          #   select * from fab_release_blocking_rfis(array['<uuid>']::uuid[]);
+          E2E_FAB_PROJECT_ID: ${{ secrets.E2E_FAB_PROJECT_ID }}
+          E2E_BLOCKED_DRAWING_ID: ${{ secrets.E2E_BLOCKED_DRAWING_ID }}
+          E2E_CLEAN_DRAWING_ID: ${{ secrets.E2E_CLEAN_DRAWING_ID }}
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

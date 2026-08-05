@@ -11,7 +11,10 @@ import { Copy } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { useOutbox } from "@/lib/field/OutboxContext";
+import { makeDailyLogCreateOp, newClientOpId, isLikelyOfflineError } from "@/lib/field/offlineQueue";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -19,6 +22,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import { localToday } from "@/utils/dates";
 
@@ -53,6 +57,7 @@ export default function DailyLogs() {
   const [dateRange, setDateRange] = useState("all");
 
   const qc = useQueryClient();
+  const { enqueue: enqueueOutbox, flush: flushOutbox } = useOutbox();
 
   useAutoOpenCreate(() => {
     setEditing(null);
@@ -61,7 +66,13 @@ export default function DailyLogs() {
 
   const dailyLogQueryKeys = [["daily-logs", projectId]];
 
-  const { data: rawLogs = [], isLoading } = useQuery({
+  const {
+    data: rawLogs = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["daily-logs", projectId],
     queryFn: () =>
       projectId
@@ -75,6 +86,13 @@ export default function DailyLogs() {
   // at fetch time, but a stale cache from before the migration could still
   // surface deleted rows. Mirrors the BudgetHours / Procurement pattern.
   const logs = useMemo(() => rawLogs.filter((r) => !r.is_deleted), [rawLogs]);
+
+  // Field Hub rows deep-link here with ?id=<log>; open it for edit.
+  useAutoOpenEdit(
+    logs,
+    (log) => { setEditing(log); setShowForm(true); },
+    { enabled: !isLoading },
+  );
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -133,7 +151,7 @@ export default function DailyLogs() {
   }, [filteredLogs]);
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.DailyLog.create(data),
+    mutationFn: (data) => entities.DailyLog.create(withProjectId(data, projectId)),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, dailyLogQueryKeys, created);
       toast.success("Daily log created");
@@ -145,8 +163,22 @@ export default function DailyLogs() {
         projectId,
         description: `Daily log for ${created?.date || "today"}`,
       });
+      flushOutbox(); // online write succeeded → drain any offline backlog
     },
-    onError: (err) => toastCrudError(err, "Failed to create daily log"),
+    onError: (err, data) => {
+      // No signal at end of day? Queue the log instead of losing it. The
+      // client_op_id (minted in handleSave) rides both this attempt and the
+      // replay, dedup'd against daily_logs.uq_daily_logs_client_op_id. Photos
+      // in the log are online-only — an offline log syncs its text/manning data.
+      if (isLikelyOfflineError(err)) {
+        enqueueOutbox(makeDailyLogCreateOp(data, data.client_op_id, Date.now()));
+        setShowForm(false);
+        setEditing(null);
+        toast.message("Saved offline — will sync when you're back online");
+        return;
+      }
+      toastCrudError(err, "Failed to create daily log");
+    },
   });
 
   const updateMut = useMutation({
@@ -185,7 +217,9 @@ export default function DailyLogs() {
     if (editing) {
       updateMut.mutate({ id: editing.id, data });
     } else {
-      createMut.mutate(data);
+      // Mint the idempotency key up front so it rides BOTH the online create and
+      // any offline retry (dedup'd server-side on replay).
+      createMut.mutate({ ...data, client_op_id: newClientOpId() });
     }
   };
 
@@ -238,7 +272,7 @@ export default function DailyLogs() {
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
         title="Daily Logs"
@@ -308,9 +342,22 @@ export default function DailyLogs() {
         />
       )}
 
-      {/* Logs List */}
+      {/* Logs List — gate loading/error so empty chrome does not flash */}
       {isLoading ? (
         <LoadingSkeleton variant="table" rows={4} />
+      ) : isError ? (
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
+        }}>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+            Couldn’t load daily logs
+          </p>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+            {toUserErrorMessage(error, "Something went wrong. Try again.")}
+          </p>
+          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+        </div>
       ) : (
         <DailyLogsList
           logs={filteredLogs}
@@ -334,3 +381,4 @@ export default function DailyLogs() {
     </div>
   );
 }
+

@@ -6,7 +6,7 @@
  * and what is ready for logistics.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -14,9 +14,11 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { logActivity } from "@/services/auditLogger";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { invalidateEntity, getQueryKey } from "@/services/cacheRegistry";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -25,36 +27,38 @@ import {
 } from "@/components/shared/crudFeedback";
 import { usePermissions } from "@/services/permissions";
 import { getNextNumber } from "@/components/shared/numberSequencing";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
-import WPFormModal from "@/components/workpackages/WPFormModal";
+import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
+import WPFormModalRaw from "@/components/workpackages/WPFormModal";
 import { Button as ButtonRaw, EmptyState as EmptyStateRaw } from "@/components/design-system";
-import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
+import SequenceFilterRaw from "@/components/shared/SequenceFilter";
 import {
   BOARD_LANES,
-  FAB_STAGES,
   STATUS_ORDER,
   buildFabReleaseMetrics,
   fabReleaseLane,
   getWorkPackageDisplayName,
-  sortFabPackagesForRelease,
 } from "./fabRelease/analytics";
-import { STAGE_FILTERS, VIEW_OPTIONS, stageMeta } from "./fabRelease/format";
+import { STAGE_FILTERS, VIEW_OPTIONS } from "./fabRelease/format";
 import { exportFabReleaseCSV } from "./fabRelease/exportCsv";
 import { FAB_RELEASE_STYLES } from "./fabRelease/styles";
+import { filterFabReleasePackages } from "./fabRelease/filter";
+import { canStartFabPackageCreation, reserveFabReleaseNumber } from "./fabRelease/creation";
+import { normalizeFabReleaseStage, normalizeFabReleaseView } from "./fabRelease/view";
 import {
   BoardView,
   DetailPanel,
   ExceptionRail,
   FlowView,
-  Hero,
   HoursView,
   RegisterView,
   StageFlowStrip,
-  SummaryStrip,
   Toolbar,
   ViewHeader,
 } from "./fabRelease/components";
 import type { EnrichedWorkPackage } from "./fabRelease/types";
+import FabReleaseControlCenter from "./fabRelease/FabReleaseControlCenter";
 
 // The design-system primitives and LoadingSkeleton are still .jsx, so TS infers
 // all of their destructured props as required when consumed from .tsx. Until
@@ -63,6 +67,11 @@ type AnyProps = PropsWithChildren<Record<string, unknown>>;
 const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 const EmptyState = EmptyStateRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
+// WPFormModal and SequenceFilter are still .jsx; their untyped default-valued
+// array props (`projects`, `allDrawings`, `items`) infer as `never[]` when
+// consumed from .tsx. Treat them as permissive components until they are typed.
+const WPFormModal = WPFormModalRaw as unknown as ComponentType<AnyProps>;
+const SequenceFilter = SequenceFilterRaw as unknown as ComponentType<AnyProps>;
 
 export default function FabRelease() {
   const [searchParams] = useSearchParams();
@@ -80,6 +89,15 @@ export default function FabRelease() {
   const [editingWP, setEditingWP] = useState<Record<string, unknown> | null>(null);
   const [wpModalOpen, setWPModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<EnrichedWorkPackage | null>(null);
+  const allocationInFlightRef = useRef(false);
+  const [isAllocatingNumber, setIsAllocatingNumber] = useState(false);
+
+  useResetOnProjectChange(projectId, () => {
+    setDetailWP(null);
+    setEditingWP(null);
+    setWPModalOpen(false);
+    setDeleteTarget(null);
+  });
 
   useEffect(() => {
     const savedView = localStorage.getItem("fabReleaseView");
@@ -89,18 +107,12 @@ export default function FabRelease() {
 
     const urlView = searchParams.get("view");
     const urlStage = searchParams.get("stage");
-    const normalizedView = urlView === "pipeline" ? "flow" : urlView === "list" ? "register" : urlView;
-    if (normalizedView && VIEW_OPTIONS.some((option) => option.id === normalizedView)) {
+    const normalizedView = normalizeFabReleaseView(urlView);
+    if (normalizedView) {
       setView(normalizedView);
     }
-    if (urlStage) {
-      const matched = urlStage === "all"
-        ? "all"
-        : FAB_STAGES.find((stage) =>
-            stage.id === urlStage || stage.short.toLowerCase() === urlStage.toLowerCase()
-          )?.id;
-      if (matched) setStageFilter(matched);
-    }
+    const normalizedStage = normalizeFabReleaseStage(urlStage);
+    if (normalizedStage) setStageFilter(normalizedStage);
   }, [searchParams]);
 
   const { data: workPackages = [], isLoading: wpLoading } = useQuery({
@@ -152,7 +164,11 @@ export default function FabRelease() {
   });
 
   const project = projects.find((item) => item.id === projectId) || activeProject || null;
-  const projectName = project?.project_name || project?.name || "Project";
+  // `projects` rows expose `name`; some legacy callers still carry a `project_name`
+  // alias. Read the legacy key through a loose view so the original `||` fallback
+  // order (legacy alias → canonical name → "Project") is preserved unchanged.
+  const projectLegacyName = (project as Record<string, unknown> | null)?.project_name as string | undefined;
+  const projectName = projectLegacyName || project?.name || "Project";
 
   const wpQueryKeys = [["work-packages", projectId], ["work_packages", projectId], getQueryKey("work_package", projectId)];
   useRealtimeInvalidation("work_packages", projectId, wpQueryKeys);
@@ -160,8 +176,11 @@ export default function FabRelease() {
   const invalidateWorkPackages = () => invalidateEntity(qc, "work_package", projectId);
 
   const createWPMut = useMutation({
-    mutationFn: (data: any) => entities.WorkPackage.create(data),
+    mutationFn: (data: any) => entities.WorkPackage.create(
+      withProjectId(data as Record<string, unknown>, projectId),
+    ),
     onSuccess: async (created) => {
+      logActivity("work_package", "created", created, { projectId });
       appendRecordToCaches(qc, wpQueryKeys, created, ((record: any, key: any) => !key[1] || record.project_id === key[1]) as unknown as () => boolean);
       await invalidateWorkPackages();
       setWPModalOpen(false);
@@ -174,6 +193,8 @@ export default function FabRelease() {
   const updateWPMut = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => entities.WorkPackage.update(id, data),
     onSuccess: async (updated, variables) => {
+      if (variables.data?.status) logActivity("work_package", "status_changed", updated, { projectId });
+      else logActivity("work_package", "updated", updated, { projectId });
       replaceRecordInCaches(qc, wpQueryKeys, updated);
       await invalidateWorkPackages();
       setWPModalOpen(false);
@@ -187,6 +208,7 @@ export default function FabRelease() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => entities.WorkPackage.delete(id),
     onSuccess: async (_, deletedId) => {
+      logActivity("work_package", "deleted", deleteTarget || { id: deletedId, project_id: projectId }, { projectId });
       removeRecordFromCaches(qc, wpQueryKeys, deletedId);
       await invalidateWorkPackages();
       setDetailWP((prev) => (prev?.id === deletedId ? null : prev));
@@ -203,6 +225,7 @@ export default function FabRelease() {
         percent_complete: 100,
       }),
     onSuccess: async (updated, id) => {
+      logActivity("work_package", "status_changed", updated, { projectId });
       replaceRecordInCaches(qc, wpQueryKeys, updated);
       await invalidateWorkPackages();
       setDetailWP((prev) => (prev?.id === id ? null : prev));
@@ -252,33 +275,11 @@ export default function FabRelease() {
   );
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return metrics.enriched
-      .filter((wp) => {
-        const signals = wp._signals;
-        if (stageFilter !== "all" && signals.stage !== stageFilter) return false;
-        if (riskFilter !== "all" && signals.risk !== riskFilter) return false;
-        if (!matchesSequenceFilter(wp, seqFilter)) return false;
-        if (!q) return true;
-        const haystack = [
-          wp.wp_number,
-          wp.name,
-          wp.project_name,
-          wp.crew,
-          wp.status,
-          wp.phase,
-          wp.notes,
-          stageMeta(signals.stage).label,
-          ...signals.drawing.packageNames,
-          ...signals.flags.map((flag) => flag.label),
-        ].join(" ").toLowerCase();
-        return haystack.includes(q);
-      })
-      .sort(sortFabPackagesForRelease);
+    return filterFabReleasePackages(metrics.enriched, { stageFilter, riskFilter, seqFilter, search });
   }, [metrics.enriched, riskFilter, search, seqFilter, stageFilter]);
 
   const laneGroups = useMemo(() => {
-    const groups = Object.fromEntries(BOARD_LANES.map((lane) => [lane, []]));
+    const groups: Record<string, EnrichedWorkPackage[]> = Object.fromEntries(BOARD_LANES.map((lane) => [lane, []]));
     for (const wp of filtered) {
       const lane = fabReleaseLane(wp);
       if (groups[lane]) groups[lane].push(wp);
@@ -288,7 +289,7 @@ export default function FabRelease() {
   }, [filtered]);
 
   const statusGroups = useMemo(() => {
-    const groups = Object.fromEntries(STATUS_ORDER.map((status) => [status, []]));
+    const groups: Record<string, EnrichedWorkPackage[]> = Object.fromEntries(STATUS_ORDER.map((status) => [status, []]));
     for (const wp of filtered) {
       const status = STATUS_ORDER.includes(wp._signals.status) ? wp._signals.status : "Not Started";
       groups[status].push(wp);
@@ -306,29 +307,38 @@ export default function FabRelease() {
     localStorage.setItem("fabReleaseStage", nextStage);
   };
 
+  const canCreate = can("create", "work_package");
+  const canEdit = can("edit", "work_package");
+  const canDelete = can("delete", "work_package");
+
   const handleOpenCreate = async () => {
-    if (!projectId) return;
-    let wpNumber = "";
+    if (!projectId || !canStartFabPackageCreation({
+      projectId,
+      allocationInFlight: allocationInFlightRef.current,
+      modalOpen: wpModalOpen,
+      editing: editingWP,
+    })) return;
+
+    allocationInFlightRef.current = true;
+    setIsAllocatingNumber(true);
     try {
-      const nextNumber = await getNextNumber(projectId, "wp_number");
-      wpNumber = `WP-${String(nextNumber).padStart(3, "0")}`;
+      const wpNumber = await reserveFabReleaseNumber(projectId, getNextNumber);
+      setDetailWP(null);
+      setEditingWP({
+        wp_number: wpNumber,
+        project_id: projectId,
+        project_name: projectName,
+        phase: "Fabrication",
+        status: "Not Started",
+      });
+      setWPModalOpen(true);
     } catch (err) {
-      console.warn("[FabRelease] getNextNumber fallback:", err?.message);
-      const maxNumber = workPackages
-        .map((wp) => parseInt(String(wp.wp_number || "").replace(/\D/g, ""), 10))
-        .filter((value) => !Number.isNaN(value))
-        .reduce((max, value) => Math.max(max, value), 0);
-      wpNumber = `WP-${String(maxNumber + 1).padStart(3, "0")}`;
+      console.warn("[FabRelease] getNextNumber failed:", err?.message);
+      toast.error("Unable to reserve a work package number. Please retry.");
+    } finally {
+      allocationInFlightRef.current = false;
+      setIsAllocatingNumber(false);
     }
-    setDetailWP(null);
-    setEditingWP({
-      wp_number: wpNumber,
-      project_id: projectId,
-      project_name: projectName,
-      phase: "Fabrication",
-      status: "Not Started",
-    });
-    setWPModalOpen(true);
   };
 
   const handleEdit = (wp) => {
@@ -357,7 +367,7 @@ export default function FabRelease() {
 
   if (!projectId) {
     return (
-      <div className="fab-release-page">
+      <div className="sb-dashboard-reference-page fab-release-page">
         <style>{FAB_RELEASE_STYLES}</style>
         <EmptyState
           icon="wp"
@@ -370,122 +380,16 @@ export default function FabRelease() {
 
   if (wpLoading || drawingLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
   }
 
-  return (
-    <div className="fab-release-page">
-      <style>{FAB_RELEASE_STYLES}</style>
-
-      <Hero
-        projectName={projectName}
-        metrics={metrics}
-        view={view}
-        onViewChange={handleViewChange}
-        onExport={() => exportFabReleaseCSV(filtered)}
-        onCreate={can("create", "work_package") ? handleOpenCreate : null}
-      />
-
-      <SummaryStrip metrics={metrics} onStageFilter={handleStageFilter} stageFilter={stageFilter} />
-
-      <StageFlowStrip
-        metrics={metrics}
-        stageFilter={stageFilter}
-        onStageFilter={handleStageFilter}
-      />
-
-      <Toolbar
-        search={search}
-        onSearch={setSearch}
-        stageFilter={stageFilter}
-        onStageFilter={handleStageFilter}
-        riskFilter={riskFilter}
-        onRiskFilter={setRiskFilter}
-        view={view}
-        onViewChange={handleViewChange}
-        filteredCount={filtered.length}
-        totalCount={metrics.totalCount}
-        onClear={clearFilters}
-      />
-
-      <SequenceFilter items={workPackages} value={seqFilter} onChange={setSeqFilter} />
-
-      <section className="fab-release-layout">
-        <ExceptionRail
-          metrics={metrics}
-          onOpen={setDetailWP}
-          onFilterRisk={setRiskFilter}
-          onFilterStage={handleStageFilter}
-        />
-
-        <main className="fab-release-main">
-          <ViewHeader
-            view={view}
-            filteredCount={filtered.length}
-            totalCount={metrics.totalCount}
-            onClear={clearFilters}
-          />
-
-          {view === "flow" && (
-            <FlowView
-              rows={filtered}
-              stageRollup={metrics.stageRollup}
-              onOpen={setDetailWP}
-              onEdit={handleEdit}
-              onComplete={(wp) => completeMut.mutate(wp.id)}
-              isCompleting={completeMut.isPending}
-            />
-          )}
-
-          {view === "board" && (
-            <BoardView
-              laneGroups={laneGroups}
-              onOpen={setDetailWP}
-              onEdit={handleEdit}
-              onComplete={(wp) => completeMut.mutate(wp.id)}
-              isCompleting={completeMut.isPending}
-            />
-          )}
-
-          {view === "register" && (
-            <RegisterView
-              rows={filtered}
-              onOpen={setDetailWP}
-              onEdit={handleEdit}
-              onComplete={(wp) => completeMut.mutate(wp.id)}
-              isCompleting={completeMut.isPending}
-            />
-          )}
-
-          {view === "hours" && (
-            <HoursView
-              rows={filtered}
-              metrics={metrics}
-              statusGroups={statusGroups}
-              onOpen={setDetailWP}
-            />
-          )}
-
-          {filtered.length === 0 && (
-            <div className="fab-empty-shell">
-              <EmptyState
-                icon="wp"
-                title={metrics.totalCount === 0 ? "No fab packages tracked" : "No packages match this view"}
-                body={
-                  metrics.totalCount === 0
-                    ? "Create a fabrication work package and link drawings so release readiness can be tracked."
-                    : "Clear filters or adjust the search to bring packages back into view."
-                }
-                cta={metrics.totalCount === 0 && can("create", "work_package") ? <Button variant="primary" icon="plus" onClick={handleOpenCreate}>New Package</Button> : null}
-              />
-            </div>
-          )}
-        </main>
-      </section>
-
+  // Shared modals remain owned by this page so canonical presentation cannot
+  // diverge from the existing mutation, permission, and audit behavior.
+  const modals = (
+    <>
       {detailWP && (
         <DetailPanel
           wp={detailWP}
@@ -509,6 +413,7 @@ export default function FabRelease() {
           projects={projects}
           nextNumber={editingWP?.wp_number || ""}
           allDrawings={drawings}
+          defaultProjectId={projectId || ""}
         />
       )}
 
@@ -519,6 +424,125 @@ export default function FabRelease() {
         title="Delete Fab Package"
         description={`Delete "${getWorkPackageDisplayName(deleteTarget || {})}"? This action cannot be undone.`}
       />
+    </>
+  );
+
+  const workflowBody = view === "flow" ? (
+    <FlowView
+      rows={filtered}
+      stageRollup={metrics.stageRollup}
+      onOpen={setDetailWP}
+      onEdit={canEdit ? handleEdit : null}
+      onComplete={(wp) => completeMut.mutate(wp.id)}
+      isCompleting={completeMut.isPending}
+    />
+  ) : view === "board" ? (
+    <BoardView
+      laneGroups={laneGroups}
+      onOpen={setDetailWP}
+      onEdit={canEdit ? handleEdit : null}
+      onComplete={(wp) => completeMut.mutate(wp.id)}
+      isCompleting={completeMut.isPending}
+    />
+  ) : view === "register" ? (
+    <RegisterView
+      rows={filtered}
+      onOpen={setDetailWP}
+      onEdit={canEdit ? handleEdit : null}
+      onComplete={(wp) => completeMut.mutate(wp.id)}
+      isCompleting={completeMut.isPending}
+    />
+  ) : (
+    <HoursView
+      rows={filtered}
+      metrics={metrics}
+      statusGroups={statusGroups}
+      onOpen={setDetailWP}
+    />
+  );
+
+  const emptyState = filtered.length === 0 ? (
+    <div className="fab-empty-shell">
+      <EmptyState
+        icon="wp"
+        title={metrics.totalCount === 0 ? "No fab packages tracked" : "No packages match this view"}
+        body={
+          metrics.totalCount === 0
+            ? "Create a fabrication work package and link drawings so release readiness can be tracked."
+            : "Clear filters or adjust the search to bring packages back into view."
+        }
+        cta={metrics.totalCount === 0 && canCreate ? (
+          <Button variant="primary" icon="plus" onClick={handleOpenCreate} disabled={isAllocatingNumber}>
+            New Package
+          </Button>
+        ) : null}
+      />
+    </div>
+  ) : null;
+
+  return (
+    <div className="sb-dashboard-reference-page fab-release-page">
+      <style>{FAB_RELEASE_STYLES}</style>
+      <div style={{ padding: "0 24px" }}>
+        <ListTruncationNotice count={workPackages.length} label="fab packages" />
+      </div>
+      <FabReleaseControlCenter
+        projectName={projectName}
+        metrics={metrics}
+        stageFilter={stageFilter}
+        onStageFilter={handleStageFilter}
+        riskFilter={riskFilter}
+        onRiskFilter={setRiskFilter}
+        onOpenWP={setDetailWP}
+        toolbar={(
+          <Toolbar
+            search={search}
+            onSearch={setSearch}
+            stageFilter={stageFilter}
+            onStageFilter={handleStageFilter}
+            riskFilter={riskFilter}
+            onRiskFilter={setRiskFilter}
+            view={view}
+            onViewChange={handleViewChange}
+            filteredCount={filtered.length}
+            totalCount={metrics.totalCount}
+            onClear={clearFilters}
+            onExport={() => exportFabReleaseCSV(filtered)}
+            onCreate={canCreate ? handleOpenCreate : null}
+            createPending={isAllocatingNumber}
+            sequenceFilterActive={Boolean(seqFilter)}
+          />
+        )}
+        sequenceFilter={(
+          <SequenceFilter items={workPackages} value={seqFilter} onChange={setSeqFilter} />
+        )}
+        stageFlow={(
+          <StageFlowStrip
+            metrics={metrics}
+            stageFilter={stageFilter}
+            onStageFilter={handleStageFilter}
+          />
+        )}
+        exceptionRail={(
+          <ExceptionRail
+            metrics={metrics}
+            onOpen={setDetailWP}
+            onFilterRisk={setRiskFilter}
+            onFilterStage={handleStageFilter}
+          />
+        )}
+        viewHeader={(
+          <ViewHeader
+            view={view}
+            filteredCount={filtered.length}
+            totalCount={metrics.totalCount}
+            onClear={clearFilters}
+          />
+        )}
+        workflowBody={workflowBody}
+        emptyState={emptyState}
+      />
+      {modals}
     </div>
   );
 }

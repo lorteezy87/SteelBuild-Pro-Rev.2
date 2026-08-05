@@ -23,6 +23,7 @@ import {
   computeSeverity,
   severityColor,
 } from "@/pages/reports/risks/severity";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const inputStyle = {
   width: "100%",
@@ -161,7 +162,7 @@ export default function RiskFormModal({
       if (isEdit) {
         return entities.Risk.update(initial.id, payload);
       }
-      return entities.Risk.create(payload);
+      return entities.Risk.create(withProjectId(payload, projectId || form.project_id));
     },
     onSuccess: (saved) => {
       qc.invalidateQueries({ queryKey: ["risks"] });
@@ -169,7 +170,7 @@ export default function RiskFormModal({
       onSaved?.(saved);
       onClose?.();
     },
-    onError: (err) => setError(err?.message || "Failed to save risk."),
+    onError: (err) => setError(toUserErrorMessage(err, "Failed to save risk.")),
   });
 
   const handleDelete = useMutation({
@@ -182,7 +183,7 @@ export default function RiskFormModal({
       qc.invalidateQueries({ queryKey: ["risks-by-project", form.project_id] });
       onClose?.();
     },
-    onError: (err) => setError(err?.message || "Failed to delete risk."),
+    onError: (err) => setError(toUserErrorMessage(err, "Failed to delete risk.")),
   });
 
   return (

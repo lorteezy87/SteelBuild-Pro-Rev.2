@@ -1,33 +1,30 @@
 /**
- * PortfolioHub — consolidates the two portfolio-level analytics cockpits,
- * "Portfolio Overview" (AIInsights) and "Executive View" (ExecutiveView), under
- * one nav entry (module-consolidation Phase 2). Both compute portfolio rollups
- * over the same entity set, so they belong side-by-side rather than as two
- * separate modules.
- *
- * Thin tab shell (the DrawingSubmittalHub / ResourceHub / FieldHub pattern):
- * each tab lazy-loads the existing page unchanged; both stay independently
- * routable. `?pf_tab=` drives the active tab.
+ * PortfolioHub — canonical Portfolio Overview shell with Executive View compatibility.
+ * `?pf_tab=` drives the active tab.
  */
-import { Suspense } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Suspense, useState, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { entities } from "@/api/supabaseClient";
+import { createPageUrl } from "@/utils";
+import PortfolioControlCenter from "./portfolio/PortfolioControlCenter";
 
-const PortfolioOverview = lazyWithRetry(() => import("@/pages/AIInsights"));
 const ExecutiveView = lazyWithRetry(() => import("@/pages/ExecutiveView"));
 
 const TABS = [
-  { key: "overview", label: "Portfolio Overview", Component: PortfolioOverview },
-  { key: "executive", label: "Executive View", Component: ExecutiveView },
+  { key: "overview", label: "Portfolio Overview" },
+  { key: "executive", label: "Executive View" },
 ];
 
 export default function PortfolioHub() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const param = params.get("pf_tab");
   const activeKey = TABS.some((t) => t.key === param) ? param : "overview";
-  const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
   const setTab = (key) =>
     setParams(
       (prev) => {
@@ -38,8 +35,90 @@ export default function PortfolioHub() {
       { replace: true },
     );
 
+  const [search, setSearch] = useState("");
+  const [healthFilter, setHealthFilter] = useState("All");
+
+  const fetchForCC = activeKey === "overview";
+
+  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => entities.Project.listAll(),
+    staleTime: 5 * 60 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: changeOrders = [] } = useQuery({
+    queryKey: ["portfolio-cos"],
+    queryFn: () => entities.ChangeOrder.listAll(),
+    staleTime: 60 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["portfolio-wps"],
+    queryFn: () => entities.WorkPackage.listAll(),
+    staleTime: 30 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: costCodes = [] } = useQuery({
+    queryKey: ["portfolio-codes"],
+    queryFn: () => entities.CostCode.listAll(),
+    staleTime: 60 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["portfolio-rfis"],
+    queryFn: () => entities.RFI.listAll(),
+    staleTime: 30 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ["portfolio-deliveries"],
+    queryFn: () => entities.Delivery.listAll(),
+    staleTime: 30 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: actionItems = [] } = useQuery({
+    queryKey: ["portfolio-action-items"],
+    queryFn: () => entities.ActionItem.listAll(),
+    staleTime: 30 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: scheduleTasks = [] } = useQuery({
+    queryKey: ["portfolio-schedule-tasks"],
+    queryFn: () => entities.ScheduleTask.listAll("-start_date"),
+    staleTime: 60 * 1000,
+    enabled: fetchForCC,
+  });
+
+  const related = useMemo(
+    () => ({ changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks }),
+    [changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks],
+  );
+
+  // Navigate to the project dashboard when a row is clicked
+  const handleOpenProject = (project) => {
+    navigate(`${createPageUrl("Dashboard")}?project=${project.id}`);
+  };
+
+  if (activeKey === "overview") {
+    if (projectsLoading) {
+      return <LoadingSkeleton variant="page" />;
+    }
+
+    return (
+      <PortfolioControlCenter
+        projects={projects}
+        related={related}
+        search={search}
+        onSearch={setSearch}
+        healthFilter={healthFilter}
+        onHealthFilter={setHealthFilter}
+        onOpenProject={handleOpenProject}
+      />
+    );
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div
         role="tablist"
         aria-label="Portfolio"
@@ -84,11 +163,13 @@ export default function PortfolioHub() {
       </div>
 
       <div style={{ minHeight: 0, position: "relative" }}>
-        <ErrorBoundary label="Portfolio">
-          <Suspense fallback={<LoadingSkeleton variant="page" />}>
-            <Active />
-          </Suspense>
-        </ErrorBoundary>
+        {activeKey === "executive" ? (
+          <ErrorBoundary label="Portfolio">
+            <Suspense fallback={<LoadingSkeleton variant="page" />}>
+              <ExecutiveView />
+            </Suspense>
+          </ErrorBoundary>
+        ) : null}
       </div>
     </div>
   );

@@ -37,7 +37,14 @@ export function usePublishRevision() {
       // Refresh the register (+ drawing families) for the affected project;
       // fall back to a prefix invalidation when the project id isn't returned.
       const pid = data?.project_id ?? undefined;
-      if (pid) invalidateEntity(qc, "drawing", pid);
+      if (pid) {
+        invalidateEntity(qc, "drawing", pid);
+        // publish_drawing_revision flips is_current, so the authoritative
+        // current revision changed: also invalidate the drawing_revision
+        // family (["drawing-revisions"] powers the hub "Rev" column, which the
+        // "drawing" family alone does not cover).
+        invalidateEntity(qc, "drawing_revision", pid);
+      }
       qc.invalidateQueries({ queryKey: ["drawing-register"] });
     },
   });

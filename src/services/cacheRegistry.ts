@@ -42,7 +42,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
     primary:  (pid) => ["projects"],
     families: (pid) => [
       ["projects"],
-      ["project", pid],           // ProjectDetail.jsx single-project fetch
     ],
   },
 
@@ -133,6 +132,17 @@ const REGISTRY: Record<string, EntityRegistration> = {
     ],
   },
 
+  model_element: {
+    primary:  (pid) => ["model-elements", pid],
+    families: (pid) => [
+      ["model-elements", pid],
+      ["model-elements"],
+      // Production Status drawing-link map (slim projection — separate key so it
+      // does not thrash the full-row model-elements cache used by Hub/3D).
+      ["production-model-elements", pid],
+    ],
+  },
+
   rfi: {
     primary:  (pid) => ["rfis", pid],
     families: (pid) => [
@@ -159,7 +169,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["sched-detail", pid],        // ProjectDetailView.jsx
       ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
       ["lookahead", pid],           // LookAheadSchedule.jsx
-      ["lookahead-gantt", pid],     // GanttChart.jsx
+      ["lookahead-gantt", pid],     // GanttChart (retired — key kept for cache invalidation parity)
     ],
   },
 
@@ -185,6 +195,14 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["sov-items", pid],
       ["sov-items"],
       ["sovs-cost", pid],           // CostDashboard.jsx
+    ],
+  },
+
+  budget_hour_item: {
+    primary:  (pid) => ["budget-hour-items", pid],
+    families: (pid) => [
+      ["budget-hour-items", pid],   // BudgetHours.jsx
+      ["budget-hour-items"],
     ],
   },
 
@@ -347,22 +365,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
     ],
   },
 
-  decision: {
-    primary:  (pid) => ["decisions", pid],
-    families: (pid) => [
-      ["decisions", pid],
-      ["decisions"],
-    ],
-  },
-
-  assumption: {
-    primary:  (pid) => ["assumptions", pid],
-    families: (pid) => [
-      ["assumptions", pid],
-      ["assumptions"],
-    ],
-  },
-
   activity: {
     primary:  (pid) => ["activities"],
     families: (pid) => [
@@ -403,6 +405,15 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["submittal-activity", pid],
       ["submittal-activity"],
+    ],
+  },
+
+  // Phase 4 submittal-logic: per-drawing-type (Shop/Erection/Part) components.
+  submittal_component: {
+    primary:  (pid) => ["submittal-components", pid],
+    families: (pid) => [
+      ["submittal-components", pid],
+      ["submittal-components"],
     ],
   },
 
@@ -447,6 +458,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["drawing-revisions", pid],
       ["drawing-revisions"],
       ["drawings", pid],
+      ["drawing-register", pid],   // Doc Control register reads current revision from drawing_register_view
     ],
   },
 

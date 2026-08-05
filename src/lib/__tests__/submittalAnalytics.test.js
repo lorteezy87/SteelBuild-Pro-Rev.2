@@ -151,6 +151,25 @@ describe("computeOneCycleTime", () => {
     });
     expect(out.reviewer).toBe("Unassigned");
   });
+  it("reads the reviewer from the latest round when the submittal BIC is cleared on release", () => {
+    // A released submittal has its ball_in_court nulled (cycle closed), so the
+    // reviewer attribution must come from the latest round, not collapse to
+    // "Unassigned".
+    const out = computeOneCycleTime(
+      {
+        status: "Released for Fabrication",
+        submitted_date: day(12),
+        returned_date: day(2),
+        ball_in_court: null,
+      },
+      [
+        { round_number: 1, ball_in_court: "EOR" },
+        { round_number: 2, ball_in_court: "GC" }, // latest closing reviewer
+      ],
+    );
+    expect(out.days).toBe(10);
+    expect(out.reviewer).toBe("GC");
+  });
   it("returns null on null input", () => {
     expect(computeOneCycleTime(null)).toBeNull();
   });
@@ -184,6 +203,27 @@ describe("computeCycleTime", () => {
       { status: "Approved", submitted_date: day(10), returned_date: day(0), ball_in_court: "X", is_deleted: true },
     ]);
     expect(out.overall.count).toBe(0);
+  });
+  it("groups by the round reviewer when the released submittal's BIC is cleared", () => {
+    // The released submittal's ball_in_court was nulled on close; without the
+    // rounds map it would group under "Unassigned". Passing roundsBySubmittal
+    // restores the closing reviewer (GC) for the per-reviewer breakdown.
+    const subs = [
+      { id: "s1", status: "Released for Fabrication", submitted_date: day(10), returned_date: day(0), ball_in_court: null },
+    ];
+    const roundsBySubmittal = {
+      s1: [
+        { round_number: 1, ball_in_court: "EOR" },
+        { round_number: 2, ball_in_court: "GC" },
+      ],
+    };
+    const out = computeCycleTime(subs, { roundsBySubmittal });
+    expect(out.overall.count).toBe(1);
+    expect(out.byReviewer).toHaveLength(1);
+    expect(out.byReviewer[0].reviewer).toBe("GC");
+    // Without the rounds map it falls back to "Unassigned" (cleared BIC).
+    const fallback = computeCycleTime(subs);
+    expect(fallback.byReviewer[0].reviewer).toBe("Unassigned");
   });
 });
 

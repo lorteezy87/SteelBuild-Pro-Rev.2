@@ -1,31 +1,44 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
-import { lockLinkedSetsIfApproved, addSubmittalRound } from "@/hooks/useSubmittals";
+import { ensureCriticalAgingActionItems } from "@/lib/submittalAgingTriggers";
 import { localToday } from "@/utils/dates";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
-  CommandBar as CommandBarRaw,
-  KpiTile as KpiTileRaw,
-  Button as ButtonRaw,
   BulkActionBar as BulkActionBarRaw,
 } from "@/components/design-system";
-import { PhoenixPanel as PhoenixPanelRaw } from "@/components/shared/PhoenixPanel";
 import { toast } from "sonner";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { daysUntil } from "@/lib/dateMath";
 import SubmittalBulkEditModal from "@/components/submittals/SubmittalBulkEditModal";
 import SubmittalBulkAddModal from "@/components/submittals/SubmittalBulkAddModal";
-import NewRoundModal from "@/components/submittals/NewRoundModal";
-import SheetResponseGrid from "@/components/submittals/SheetResponseGrid";
-import { batchProcess } from "@/utils/batchProcess";
+import NewRoundModalRaw from "@/components/submittals/NewRoundModal";
+import ReleaseGateOverrideModalRaw from "@/components/submittals/ReleaseGateOverrideModal";
+import SheetResponseGridRaw from "@/components/submittals/SheetResponseGrid";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import {
+  splitCreateSubmittalPayload,
+} from "./submittals/submittalMutationHelpers";
+import {
+  buildNewRoundCarrySeed,
+  buildStatusChangeWrite,
+  buildVerbCtaAdvanceInput,
+} from "./submittals/submittalAdvanceHelpers";
+import { forecastPortfolio } from "@/lib/submittalForecast";
 import { usePermissions } from "@/services/permissions";
-import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
-import { Dialog, DialogContent, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./submittals/uiCompat";
-import { SubmittalDetail, SubmittalVirtualList } from "./submittals/components";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import { useSubmittalComponents } from "@/hooks/useSubmittalComponents";
+import { isMissingSchemaObjectError } from "@/lib/postgrestErrors";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
+import type { DrawingType } from "@/lib/submittalComponents";
+import { Dialog, DialogContent } from "./submittals/uiCompat";
+import { SubmittalVirtualList } from "./submittals/components";
+import { SubmittalDetail } from "./submittals/SubmittalDetail";
+import SubmittalRegisterPanel from "./submittals/SubmittalRegisterPanel";
+import { computeSubmittalStats, filterAndSortSubmittals, getVisibleSelectionState } from "./submittals/submittalRegister.derive";
 import SubmittalFormModal from "./submittals/SubmittalFormModal";
-import type { DrawingSet, DrawingSetsById } from "./submittals/types";
+import { useSubmittalsPageMutations } from "./submittals/useSubmittalsPageMutations";
+import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types";
 
 /**
  * Submittals — formal transmittal register.
@@ -35,19 +48,18 @@ import type { DrawingSet, DrawingSetsById } from "./submittals/types";
  * sent, when, to whom, which round, current status, who the ball is
  * with.
  *
- * Layout mirrors the RFI page — list on the left, detail panel on the
- * right, stage pills across the top. Comment thread is embedded in the
- * detail panel.
+ * The SubmittalRegisterPanel is the canonical route presentation. The page
+ * remains the owner of queries, workflow flags, and detail panels; mutations
+ * live in useSubmittalsPageMutations (ID 21).
  */
 
-// The design-system primitives + PhoenixPanel are still .jsx; these casts
-// are removable once the shared layer is typed.
+// These modals and the bulk action bar are still .jsx, so TS infers their array
+// props from [] defaults; casts keep the typed parent boundary explicit.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
-const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
-const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
-const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
-const PhoenixPanel = PhoenixPanelRaw as unknown as ComponentType<AnyProps>;
+const NewRoundModal = NewRoundModalRaw as unknown as ComponentType<AnyProps>;
+const ReleaseGateOverrideModal = ReleaseGateOverrideModalRaw as unknown as ComponentType<AnyProps>;
+const SheetResponseGrid = SheetResponseGridRaw as unknown as ComponentType<AnyProps>;
 
 export default function Submittals() {
   const qc = useQueryClient();
@@ -58,6 +70,9 @@ export default function Submittals() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Phase 3 splitting: when set, the create form opens as a "spin off child"
+  // with this submittal as the parent (project + drawing sets prefilled).
+  const [spinOffParentId, setSpinOffParentId] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterBIC, setFilterBIC] = useState("all");
@@ -70,8 +85,12 @@ export default function Submittals() {
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showNewRound, setShowNewRound] = useState(false);
+  // Pending "Release for Fabrication" move blocked by open RFIs — drives the
+  // override dialog (the server gate refused; PM can release with a reason).
+  const [releaseBlock, setReleaseBlock] = useState<{ input: any; rfis: string[] } | null>(null);
   const [showSheetResponse, setShowSheetResponse] = useState<any>(null); // round object or null
 
+  // Key ["submittals", projectId] matches getQueryKey("submittal", projectId) in useSubmittals.ts — React Query dedupes; no second fetch when embedded in the DCC hub.
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["submittals", projectId],
     queryFn: () => projectId
@@ -80,6 +99,23 @@ export default function Submittals() {
     enabled: !!projectId,
     staleTime: 30_000,
   });
+  useAutoOpenEdit(rows, (submittal) => setSelectedId(submittal.id), {
+    enabled: !isLoading,
+    param: "recordId",
+  });
+
+  // Slice 7: draft ActionItems for Critical R&R/OFS/BFA aging (deduped).
+  // Honest path — never invents Alerts Center rows / generate-alerts.
+  useEffect(() => {
+    if (!projectId || isLoading || rows.length === 0) return;
+    void ensureCriticalAgingActionItems(
+      rows.map((row: any) => ({
+        ...row,
+        project_id: row.project_id || projectId,
+        project_name: activeProject?.name || activeProject?.project_name || null,
+      })),
+    );
+  }, [projectId, isLoading, rows, activeProject?.name, activeProject?.project_name]);
 
   // Drawing sets for the active project — used by the "Linked drawing
   // sets" picker on the detail panel. Read-only here (the Drawings page
@@ -94,9 +130,13 @@ export default function Submittals() {
   });
 
   const drawingSetsById: DrawingSetsById = useMemo(() => {
+    // Bridge the generated DB row to the page's domain `DrawingSet` view (same
+    // data, nullable columns modeled as optional). Cast preserves runtime; the
+    // map only ever holds real drawing-set rows. Removable once `types` models
+    // the nullable columns directly.
     const map = new Map<string, DrawingSet>();
     for (const set of drawingSets) {
-      if (set?.id) map.set(set.id, set);
+      if (set?.id) map.set(set.id, set as DrawingSet);
     }
     return map;
   }, [drawingSets]);
@@ -132,7 +172,7 @@ export default function Submittals() {
     staleTime: 60_000,
   });
 
-  // ── Schedule tasks for linked-entity picker ─────────────────────��─
+  // ── Schedule tasks for linked-entity picker ────────────────────────
   const { data: allTasks = [] } = useQuery({
     queryKey: ["schedule-tasks", projectId],
     queryFn: () => projectId
@@ -162,234 +202,149 @@ export default function Submittals() {
     staleTime: 30_000,
   });
 
-  const invalidate = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ["submittals", projectId] });
-    qc.invalidateQueries({ queryKey: ["submittal-rounds", projectId] });
-    qc.invalidateQueries({ queryKey: ["sheet-responses", projectId] });
-  }, [qc, projectId]);
-
-  const createMut = useMutation({
-    mutationFn: (data: any) => entities.Submittal.create(data),
-    onSuccess: (row) => { invalidate(); setSelectedId(row?.id || null); toast.success("Submittal created"); },
-    onError: (err: any) => toast.error(`Create failed: ${err.message}`),
-  });
-  const updateMut = useMutation({
-    // Lock-aware: terminal-approved statuses auto-lock the linked drawing sets
-    // (§20 moat). Routes through the canonical lockLinkedSetsIfApproved so this
-    // page's inline status edits + the verb CTA can't release a package to fab
-    // without locking it. (Previously this page's update bypassed the lock.)
-    mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
-      const updated = await entities.Submittal.update(id, data);
-      await lockLinkedSetsIfApproved(updated as any);
-      return updated;
-    },
-    onSuccess: () => { invalidate(); toast.success("Updated"); },
-    onError: (err: any) => toast.error(`Update failed: ${err.message}`),
-  });
-  // Verb CTA → the single audited write path: logs a submittal_rounds row +
-  // patches + auto-locks, atomically (activates the previously-empty round log).
-  const advanceMut = useMutation({
-    mutationFn: (input: Parameters<typeof addSubmittalRound>[0]) => addSubmittalRound(input),
-    onSuccess: () => { invalidate(); toast.success("Round logged"); },
-    onError: (err: any) => toast.error(`Advance failed: ${err.message}`),
-  });
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => entities.Submittal.delete(id),
-    onSuccess: () => { invalidate(); setSelectedId(null); setToDelete(null); toast.success("Deleted"); },
-    onError: (err: any) => toast.error(`Delete failed: ${err.message}`),
-  });
-
-  // ── Bulk mutations ────────────────────────────────────────────────
-  // Bulk update — handles the special "__notes_append" sentinel from
-  // SubmittalBulkEditModal. When present, we read each row's existing
-  // notes off the cache and append the new text per row instead of
-  // overwriting. Every other field is a flat patch applied uniformly.
-  const bulkUpdateMut = useMutation({
-    mutationFn: async ({ ids, data }: { ids: string[]; data: any }) => {
-      const { __notes_append: notesAppend, ...patch } = data || {};
-      // Snapshot the current cache once — avoids N reads per row.
-      const cached = (qc.getQueryData(["submittals", projectId]) || []) as any[];
-      const byId = new Map(cached.map((r) => [r.id, r]));
-      return batchProcess(ids, (id) => {
-        const existing = byId.get(id);
-        const rowPatch: Record<string, any> = { ...patch };
-        if (notesAppend) {
-          const prior = (existing?.notes || "").trimEnd();
-          rowPatch.notes = prior ? `${prior}\n\n${notesAppend}` : notesAppend;
-        }
-        return entities.Submittal.update(id, rowPatch);
-      });
-    },
-    onSuccess: (results) => {
-      invalidate();
-      setSelectedIds(new Set());
-      const ok = results.succeeded.length;
-      if (results.failed.length > 0) {
-        toast.warning(`${ok} updated, ${results.failed.length} failed`);
-      } else {
-        toast.success(`Updated ${ok} submittal${ok === 1 ? "" : "s"}`);
-      }
-    },
-    onError: (err: any) => toast.error(`Bulk update failed: ${err.message}`),
-  });
-
-  const bulkDeleteMut = useMutation({
-    mutationFn: async (ids: string[]) => batchProcess(ids, (id) => entities.Submittal.delete(id)),
-    onSuccess: (results) => {
-      invalidate();
-      const ok = results.succeeded.length;
-      if (selectedId && [...selectedIds].includes(selectedId)) setSelectedId(null);
-      setSelectedIds(new Set());
-      setShowBulkDelete(false);
-      if (results.failed.length > 0) {
-        toast.warning(`${ok} deleted, ${results.failed.length} failed`);
-      } else {
-        toast.success(`Deleted ${ok} submittal${ok === 1 ? "" : "s"}`);
-      }
-    },
-    onError: (err: any) => toast.error(`Bulk delete failed: ${err.message}`),
-  });
-
-  const bulkCreateMut = useMutation({
-    mutationFn: async (newRows: any[]) => batchProcess(newRows, (row) =>
-      entities.Submittal.create({
-        project_id: projectId,
-        project_name: activeProject?.project_name || activeProject?.name || "",
-        round_number: 1,
-        ...row,
-      }),
-    ),
-    onSuccess: (results) => {
-      invalidate();
-      setShowBulkAdd(false);
-      const ok = results.succeeded.length;
-      if (results.failed.length > 0) {
-        toast.warning(`${ok} added, ${results.failed.length} failed`);
-      } else {
-        toast.success(`Added ${ok} submittal${ok === 1 ? "" : "s"}`);
-      }
-    },
-    onError: (err: any) => toast.error(`Bulk add failed: ${err.message}`),
-  });
-
-  // ── Round mutations ───────────────────────────────────────────────
-  const createRoundMut = useMutation({
-    mutationFn: async (data: any) => {
-      const round = await entities.SubmittalRound.create({
-        ...data,
-        project_id: projectId,
-      });
-      // Update parent submittal
-      if (round?.id && data.submittal_id) {
-        await entities.Submittal.update(data.submittal_id, {
-          current_round_id: round.id,
-          total_rounds: data.round_number || 1,
-          status: "Submitted",
-          ball_in_court: data.ball_in_court || "EOR",
-          submitted_date: data.submitted_date || new Date().toISOString().split("T")[0],
+  // Returned-comment dispositions (Slice 5) — gate OFS→IFC / R&R→OFA.
+  // Soft-fail when the migration is not applied yet (prod PGRST205) so the
+  // Submittals register still loads; checklist simply stays empty.
+  const { data: allCommentDispositions = [] } = useQuery({
+    queryKey: ["comment-dispositions", projectId],
+    queryFn: async () => {
+      if (!projectId) return [];
+      try {
+        return await entities.SubmittalCommentDisposition.filter({
+          project_id: projectId,
         });
-      }
-      return round;
-    },
-    onSuccess: () => { invalidate(); toast.success("Round created — submittal resubmitted"); setShowNewRound(false); },
-    onError: (err: any) => toast.error(`Failed to create round: ${err.message}`),
-  });
-
-  // ── Sheet response mutations ──────────────────────────────────────
-  const saveSheetResponsesMut = useMutation({
-    mutationFn: async ({ roundId, responses }: { roundId: string; responses: any[] }) => {
-      const results = { succeeded: 0, failed: 0 };
-      for (const resp of responses) {
-        try {
-          if (resp.id) {
-            await entities.SubmittalSheetResponse.update(resp.id, {
-              response_status: resp.response_status,
-              reviewer_comment: resp.reviewer_comment || null,
-            });
-          } else {
-            await entities.SubmittalSheetResponse.create({
-              project_id: projectId,
-              submittal_round_id: roundId,
-              drawing_id: resp.drawing_id || null,
-              drawing_set_id: resp.drawing_set_id || null,
-              sheet_number: resp.sheet_number || null,
-              response_status: resp.response_status,
-              reviewer_comment: resp.reviewer_comment || null,
-            });
-          }
-          results.succeeded++;
-        } catch {
-          results.failed++;
+      } catch (error) {
+        if (isMissingSchemaObjectError(error)) {
+          console.warn(
+            "[submittals] comment dispositions unavailable — apply pending migration",
+            error,
+          );
+          return [];
         }
-      }
-      return results;
-    },
-    onSuccess: (results) => {
-      invalidate();
-      setShowSheetResponse(null);
-      if (results.failed > 0) {
-        toast.warning(`${results.succeeded} saved, ${results.failed} failed`);
-      } else {
-        toast.success(`${results.succeeded} sheet response(s) saved`);
+        throw error;
       }
     },
-    onError: (err: any) => toast.error(`Failed to save responses: ${err.message}`),
+    enabled: !!projectId,
+    staleTime: 30_000,
+  });
+  const invalidateCommentDispositions = () =>
+    qc.invalidateQueries({ queryKey: ["comment-dispositions", projectId] });
+
+  // Opt-in routing correction: when on, a BFA "Approved" flows through the
+  // detailer scrub (OFS → IFC → Released) exactly like "Approved as Noted".
+  // Flag defaults ON since Slice 4 — verb CTA routes Approved through OFS.
+  const approvedRoutesToScrub = useFlag("submittal_approved_to_scrub");
+
+  // Phase 2 opt-in: when on, opening a NEW round because the prior disposition
+  // was Revise & Resubmit / Rejected auto-advances the submittal's text
+  // `revision` ('0'→'1', 'A'→'B', 'Rev 2'→'Rev 3'). Default off — revision
+  // stays a manual field, unchanged for anyone without the flag.
+  const revisionAutoBump = useFlag("submittal_revision_autobump");
+
+  // Phase 3 opt-in: when on, an approved submittal can be "split" into child
+  // submittals that link back via parent_submittal_id, with lineage shown in the
+  // detail panel + children grouped under the parent in the register. Default
+  // off — the register renders flat and no spin-off/lineage UI appears.
+  const splittingEnabled = useFlag("submittal_splitting");
+
+  // Phase 4 opt-in: when on, each submittal tracks its drawing types
+  // (Shop/Erection/Part) independently — per-type received + released dates via
+  // the submittal_components table, with S/E/P chips + a per-type section in the
+  // detail panel. Default off — no components query fires and no UI renders.
+  // Release-per-type is INDEPENDENT of submittals.status and the fab-release gate.
+  const drawingTypesEnabled = useFlag("submittal_drawing_types");
+
+  // Phase 5 opt-in: when on, a move OUT to someone with a clock — into OFA (Out
+  // For Approval; ball → EOR/GC) or OFS (Out For Scrub; ball → detailer) —
+  // auto-stamps submittals.required_date = today + the project's turnaround lead
+  // counted in WORKING days (Mon–Fri), and the hub shows a working-day-aware
+  // countdown. Default off — required_date stays manual and the calendar-day
+  // display is unchanged. The learned forecast (submittalForecast) is untouched.
+  const workdayDuesEnabled = useFlag("submittal_workday_dues");
+
+  const {
+    bySubmittal: componentsBySubmittal,
+    setReceived: setComponentReceived,
+    setReleased: setComponentReleased,
+    addType: addComponentType,
+    remove: removeComponentMut,
+  } = useSubmittalComponents(projectId, drawingTypesEnabled);
+
+  const {
+    createMut,
+    updateMut,
+    advanceMut,
+    runAdvance,
+    deleteMut,
+    bulkUpdateMut,
+    bulkDeleteMut,
+    bulkCreateMut,
+    createRoundMut,
+    saveSheetResponsesMut,
+  } = useSubmittalsPageMutations({
+    projectId,
+    rows: rows as any[],
+    activeProject,
+    selectedId,
+    setSelectedId,
+    setToDelete,
+    setReleaseBlock,
+    setSelectedIds,
+    setShowBulkEdit,
+    setShowBulkDelete,
+    setShowBulkAdd,
+    setShowNewRound,
+    setShowSheetResponse,
   });
 
   // ── Filter/search ──────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    // KPI cards filter by GROUPED status (matching their stat counts); the
-    // status dropdown filters by an EXACT status. Group keys expand to the same
-    // status sets the counts use — fixes "Pending/Approved show nothing" and
-    // "Rejected counts 2 but lists 1" (the count grouped statuses the exact
-    // filter didn't). See the `stats` memo for the matching count definitions.
-    const STATUS_GROUPS: Record<string, string[]> = {
-      __pending: ["Submitted", "Under Review"],
-      __approved: ["Approved", "Approved as Noted", "Released for Fabrication"],
-      __rejected: ["Rejected", "Revise and Resubmit"],
-    };
-    let list = rows;
-    if (filterStatus !== "all") {
-      const group = STATUS_GROUPS[filterStatus];
-      list = group
-        ? list.filter((r) => group.includes(r.status))
-        : list.filter((r) => r.status === filterStatus);
-    }
-    if (filterBIC !== "all") list = list.filter((r) => r.ball_in_court === filterBIC);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((r) =>
-        (r.submittal_number || "").toLowerCase().includes(q) ||
-        (r.title || "").toLowerCase().includes(q) ||
-        (r.spec_section || "").toLowerCase().includes(q),
-      );
-    }
-    return list
-      .slice()
-      .sort((a, b) => compareSubmittalsByDrawingSet(a, b, drawingSetsById));
-  }, [rows, filterStatus, filterBIC, search, drawingSetsById]);
+  // Pure filter+sort extracted to submittalRegister.derive (Slice 2b, TDD) —
+  // byte-identical to the former inline memo (status-group / BIC / search then
+  // drawing-set sort). Domain-view bridge cast: same rows, nullable columns
+  // modeled as optional — no runtime change.
+  const filtered = useMemo(
+    () => filterAndSortSubmittals(rows as Submittal[], { filterStatus, filterBIC, search }, drawingSetsById),
+    [rows, filterStatus, filterBIC, search, drawingSetsById],
+  );
 
-  const stats = useMemo(() => {
-    const total = rows.length;
-    const pending = rows.filter((r) => ["Submitted", "Under Review"].includes(r.status)).length;
-    // Match the useSubmittals hook's `approved` definition — anything past
-    // the BFA gate counts (Approved / Approved as Noted / Released for Fab).
-    const approved = rows.filter((r) =>
-      r.status === "Approved" ||
-      r.status === "Approved as Noted" ||
-      r.status === "Released for Fabrication"
-    ).length;
-    const rejected = rows.filter((r) => ["Rejected", "Revise and Resubmit"].includes(r.status)).length;
-    const overdue = rows.filter((r) => {
-      if (!r.required_date) return false;
-      if (["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(r.status)) return false;
-      return daysUntil(r.required_date) < 0;
-    }).length;
-    return { total, pending, approved, rejected, overdue };
-  }, [rows]);
+  // KPI counts — same pure derive. `today` is local-today; overdue is identical
+  // in sign to the former `daysUntil(required_date) < 0` check.
+  const stats = useMemo(() => computeSubmittalStats(rows as Submittal[], localToday()), [rows]);
 
-  const selected = selectedId ? rows.find((r) => r.id === selectedId) : null;
-  const editing = editingId ? rows.find((r) => r.id === editingId) : null;
+  // Review-return forecast across all submittals — learns the shop's cycle
+  // time from history (rounds + completed submittals) and projects each pending
+  // review's return + late risk. Stats reused by the detail panel's forecast.
+  const today = localToday();
+  const reviewForecast = useMemo(
+    () => forecastPortfolio({ submittals: rows, rounds: allRounds, today }),
+    [rows, allRounds, today],
+  );
+  const reviewsAtRisk = reviewForecast.summary.atRisk + reviewForecast.summary.late;
+
+  const selected = (selectedId ? rows.find((r) => r.id === selectedId) : null) ?? null;
+  const editing = (editingId ? rows.find((r) => r.id === editingId) : null) ?? null;
+  // Phase 3 splitting: the parent being spun off from (if any), and the child's
+  // prefilled seed — carry the parent's project + drawing sets so the child
+  // starts scoped to the same package; everything else (number/title) is fresh.
+  const spinOffParent = (spinOffParentId ? rows.find((r) => r.id === spinOffParentId) : null) ?? null;
+  const spinOffInitial: Partial<Submittal> = spinOffParent
+    ? {
+        discipline: spinOffParent.discipline ?? undefined,
+        drawing_set_ids: Array.isArray(spinOffParent.drawing_set_ids) ? spinOffParent.drawing_set_ids : [],
+      }
+    : {};
+
+  // Domain-view bridges for the typed child components. The queries yield
+  // generated DB rows (nullable string columns); the child props use the page's
+  // `Submittal`/`DrawingSet` interfaces, which model those same columns as
+  // optional. These casts bridge that null↔undefined representation gap only —
+  // identical data, no runtime change, null preserved. Removable once
+  // `./submittals/types` models the nullable columns directly.
+  const rowsView = rows as Submittal[];
+  const filteredView = filtered as Submittal[];
+  const drawingSetsView = drawingSets as DrawingSet[];
+  const selectedView = selected as Submittal | null;
+  const editingView = editing as Submittal | null;
 
   // ── Selection helpers ─────────────────────────────────────────────
   const toggleSelect = useCallback((id: string) => {
@@ -402,18 +357,206 @@ export default function Submittals() {
   // toggleAll uses the *filtered* list, not all rows — matches the
   // RFI pattern. Without this, "select all" while a status filter
   // was active would silently grab hidden rows too.
-  const allSelected = filtered.length > 0 && filtered.every((r) => selectedIds.has(r.id));
+  // `filtered` is the domain `Submittal[]` view (id modeled optional); rows
+  // always carry an id at runtime, so cast at the Set boundary — the same
+  // `r.id as string` bridge SubmittalVirtualList already uses.
+  const { allSelected } = getVisibleSelectionState(filtered, selectedIds);
   const toggleAll = useCallback(() => {
     setSelectedIds((prev) => {
-      if (filtered.length > 0 && filtered.every((r) => prev.has(r.id))) return new Set();
+      if (filtered.length > 0 && filtered.every((r) => prev.has(r.id as string))) return new Set();
       const next = new Set(prev);
-      filtered.forEach((r) => next.add(r.id));
+      filtered.forEach((r) => next.add(r.id as string));
       return next;
     });
   }, [filtered]);
 
+  const newRoundSeed = showNewRound && selected
+    ? buildNewRoundCarrySeed({
+        submittalId: selected.id,
+        submittalRounds: roundsBySubmittal[selected.id] || [],
+        allSheetResponses,
+        allCommentDispositions,
+      })
+    : null;
+
+  // ── Canonical register list + detail elements ───────────────────────────
+  // The canonical panel owns presentation; these elements retain the complete
+  // operational list/detail behavior — splitting, lineage, type chips,
+  // working-day due display, revision, and workflow actions.
+  const listEl = (
+    <SubmittalVirtualList
+      filtered={filteredView}
+      isLoading={isLoading}
+      rows={rowsView}
+      selectedId={selectedId}
+      selectedIds={selectedIds}
+      toggleSelect={toggleSelect}
+      setSelectedId={setSelectedId}
+      drawingSetsById={drawingSetsById}
+      groupByLineage={splittingEnabled}
+      showTypeChips={drawingTypesEnabled}
+      componentsBySubmittal={componentsBySubmittal}
+    />
+  );
+
+  const detailEl = (
+    <SubmittalDetail
+      approvedRoutesToScrub={approvedRoutesToScrub}
+      splittingEnabled={splittingEnabled}
+      drawingTypesEnabled={drawingTypesEnabled}
+      components={selected ? (componentsBySubmittal[selected.id] || []) : []}
+      onComponentSetReceived={(args) => {
+        if (!selected?.id || !selected?.project_id) return;
+        setComponentReceived({
+          submittalId: selected.id,
+          projectId: selected.project_id,
+          drawingType: args.drawingType,
+          existing: args.existing,
+          date: args.date,
+        });
+      }}
+      onComponentSetReleased={(args) => {
+        if (!selected?.id || !selected?.project_id) return;
+        setComponentReleased({
+          submittalId: selected.id,
+          projectId: selected.project_id,
+          drawingType: args.drawingType,
+          existing: args.existing,
+          released: args.released,
+        });
+      }}
+      onComponentAddType={(drawingType) => {
+        if (!selected?.id || !selected?.project_id) return;
+        addComponentType({ submittalId: selected.id, projectId: selected.project_id, drawingType });
+      }}
+      onComponentRemoveType={(component) => {
+        if (component.id) removeComponentMut.mutate(component.id);
+      }}
+      onSpinOff={() => selected && setSpinOffParentId(selected.id)}
+      onSelectSubmittal={(id) => setSelectedId(id)}
+      submittal={selectedView}
+      allSubmittals={rowsView}
+      drawingSets={drawingSetsView}
+      rounds={selected ? (roundsBySubmittal[selected.id] || []) : []}
+      sheetResponses={
+        selected
+          ? allSheetResponses.filter((r: any) =>
+              (roundsBySubmittal[selected.id] || []).some(
+                (rd: any) => rd.id === r.submittal_round_id,
+              ),
+            )
+          : []
+      }
+      commentDispositions={
+        selected
+          ? allCommentDispositions.filter((d: any) => d.submittal_id === selected.id)
+          : []
+      }
+      onCommentDispositionAdd={async (draft) => {
+        if (!selected?.id || !selected.project_id) return;
+        const rounds = roundsBySubmittal[selected.id] || [];
+        const roundId = rounds.at(-1)?.id;
+        if (!roundId) {
+          toast.error("Add an approval cycle before tracking returned comments.");
+          return;
+        }
+        try {
+          await entities.SubmittalCommentDisposition.create(
+            withProjectId({
+              submittal_id: selected.id,
+              submittal_round_id: roundId,
+              comment_number: draft.comment_number,
+              source: draft.source,
+              location: draft.location || null,
+              comment_text: draft.comment_text,
+              is_required: draft.is_required,
+              status: "Unreviewed",
+            }, selected.project_id || projectId),
+          );
+          await invalidateCommentDispositions();
+          toast.success("Returned comment added");
+        } catch (err: any) {
+          toast.error(`Could not add comment: ${toUserErrorMessage(err)}`);
+        }
+      }}
+      onCommentDispositionStatus={async (id, status) => {
+        try {
+          const patch: Record<string, unknown> = { status };
+          if (status === "Complete" || status === "Incorporated" || status === "Not Applicable") {
+            patch.completed_at = new Date().toISOString();
+          }
+          await entities.SubmittalCommentDisposition.update(id, patch as any);
+          await invalidateCommentDispositions();
+        } catch (err: any) {
+          toast.error(`Could not update disposition: ${err?.message || err}`);
+        }
+      }}
+      onCommentDispositionResolution={async (id, resolution) => {
+        try {
+          await entities.SubmittalCommentDisposition.update(id, { resolution } as any);
+          await invalidateCommentDispositions();
+        } catch (err: any) {
+          toast.error(`Could not save resolution: ${err?.message || err}`);
+        }
+      }}
+      drawings={allDrawings}
+      cycleStats={reviewForecast.stats}
+      today={today}
+      allRfis={allRfis as any}
+      allTasks={allTasks}
+      projectName={activeProject?.project_name || activeProject?.name || "Project"}
+      project={activeProject}
+      onClose={() => setSelectedId(null)}
+      onEdit={() => selected && setEditingId(selected.id)}
+      onDelete={() => selected && setToDelete(selected.id)}
+      onStatusChange={(status) => {
+        if (!selected) return;
+        const write = buildStatusChangeWrite({
+          selected: selected as any,
+          status,
+          today: localToday(),
+          revisionAutoBump,
+          workdayDuesEnabled,
+          projectMeta: activeProject?.metadata ?? null,
+        });
+        if (write.kind === "advance") runAdvance(write.input);
+        else if (write.kind === "update") updateMut.mutate(write.patch as any);
+      }}
+      onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
+      // Verb CTA — advance via the audited write path: logs a round +
+      // patches atomically. Stamps the submitted date when
+      // sending out (→OFA) and the returned date when logging a return
+      // (→BFA); never a fake date otherwise (§22).
+      onAdvance={(action) => {
+        if (!selected) return;
+        const input = buildVerbCtaAdvanceInput({
+          selected: selected as any,
+          action,
+          today: localToday(),
+          revisionAutoBump,
+          workdayDuesEnabled,
+          projectMeta: activeProject?.metadata ?? null,
+          commentDispositions: allCommentDispositions.filter(
+            (d: any) => d.submittal_id === selected.id,
+          ),
+        });
+        if (input) runAdvance(input);
+      }}
+      // Inline-edit hook — every editable cell in the detail
+      // panel calls this with a single-field patch so we don't
+      // need to round-trip through the modal for trivial fixes
+      // like "fix the date" or "rename this submittal".
+      onFieldChange={(patch) => selected && updateMut.mutate({ id: selected.id, ...patch })}
+      onNewRound={() => setShowNewRound(true)}
+      onReturnRound={(roundId) => {
+        const round = allRounds.find((r) => r.id === roundId);
+        if (round) setShowSheetResponse(round);
+      }}
+    />
+  );
+
   if (!projectId) return (
-    <div style={{ padding: 40, textAlign: "center" }}>
+    <div className="submittals-page" style={{ textAlign: "center" }}>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>
         Select a project to view Submittals
       </div>
@@ -421,158 +564,93 @@ export default function Submittals() {
   );
 
   return (
-    <div style={{ padding: "10px 24px 24px", display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
-      <CommandBar
-        eyebrow={`${activeProject?.project_name || "PROJECT"} · SUBMITTALS`}
-        title="Submittal Register"
-        count={filtered.length}
-        unit={filtered.length !== rows.length ? ` OF ${rows.length}` : ""}
-        subtitle={stats.overdue > 0
-          ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
-          : `${stats.pending} awaiting review · ${stats.approved} approved`}
-      >
-        {can("create", "submittal") && (
-          <Button variant="secondary" icon="upload" onClick={() => setShowBulkAdd(true)}>
-            BULK ADD
-          </Button>
-        )}
-        {can("create", "submittal") && (
-          <Button variant="primary" icon="plus" onClick={() => setShowCreate(true)}>
-            NEW SUBMITTAL
-          </Button>
-        )}
-      </CommandBar>
+    <div className="submittals-page" style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
+      <SubmittalRegisterPanel
+        filtered={filteredView}
+        rows={rowsView}
+        stats={stats}
+        reviewsAtRisk={reviewsAtRisk}
+        filterStatus={filterStatus}
+        filterBIC={filterBIC}
+        search={search}
+        onFilterStatus={setFilterStatus}
+        onFilterBIC={setFilterBIC}
+        onSearch={setSearch}
+        selectedIds={selectedIds}
+        allSelected={allSelected}
+        toggleAll={toggleAll}
+        projectLabel={activeProject?.project_name || "Project"}
+        canCreate={can("create", "submittal")}
+        onNewSubmittal={() => setShowCreate(true)}
+        onBulkAdd={() => setShowBulkAdd(true)}
+        list={listEl}
+        detail={detailEl}
+      />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-        <KpiTile compact label="Total"   value={stats.total}    color="var(--accent)"
-          active={filterStatus === "all" && filterBIC === "all"}
-          onClick={() => { setFilterStatus("all"); setFilterBIC("all"); }} />
-        <KpiTile compact label="Pending" value={stats.pending}  color="var(--status-warning)"
-          active={filterStatus === "__pending"}
-          onClick={() => setFilterStatus("__pending")} />
-        <KpiTile compact label="Approved" value={stats.approved} color="var(--status-success)"
-          active={filterStatus === "__approved"}
-          onClick={() => setFilterStatus("__approved")} />
-        <KpiTile compact label="Rejected" value={stats.rejected} color="var(--status-error)"
-          active={filterStatus === "__rejected"}
-          onClick={() => setFilterStatus("__rejected")} />
-        <KpiTile compact label="Overdue" value={stats.overdue} color="var(--status-error)" />
-      </div>
-
-      <PhoenixPanel style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Filter bar */}
-        <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--divider)", background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 76%, #000 24%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)", alignItems: "center", backdropFilter: "blur(14px) saturate(145%)", WebkitBackdropFilter: "blur(14px) saturate(145%)" }}>
-          {/* Master checkbox — operates on the *filtered* list so it
-              respects the active status / BIC filters. The
-              indeterminate state is set imperatively because <input>
-              doesn't expose it as a controllable React prop. */}
-          <input
-            type="checkbox"
-            aria-label="Select all visible submittals"
-            ref={(el) => {
-              if (!el) return;
-              const some = filtered.some((r) => selectedIds.has(r.id));
-              el.indeterminate = some && !allSelected;
-            }}
-            checked={allSelected}
-            onChange={toggleAll}
-            disabled={filtered.length === 0}
-            style={{ margin: 0, marginRight: 4, cursor: filtered.length === 0 ? "not-allowed" : "pointer", accentColor: "var(--accent)" }}
-          />
-          <input
-            className="sbd-input"
-            placeholder="Search # / title / spec section"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, maxWidth: 360, padding: "8px 12px", fontSize: 12, borderRadius: 999 }}
-          />
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterBIC} onValueChange={setFilterBIC}>
-            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="Ball-in-court" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Any Ball-in-Court</SelectItem>
-              {BIC_CHOICES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
-          {/* List */}
-          <SubmittalVirtualList
-            filtered={filtered}
-            isLoading={isLoading}
-            rows={rows}
-            selectedId={selectedId}
-            selectedIds={selectedIds}
-            toggleSelect={toggleSelect}
-            setSelectedId={setSelectedId}
-            drawingSetsById={drawingSetsById}
-          />
-
-          {/* Detail panel */}
-          <SubmittalDetail
-            submittal={selected}
-            allSubmittals={rows}
-            drawingSets={drawingSets}
-            rounds={selected ? (roundsBySubmittal[selected.id] || []) : []}
-            allRfis={allRfis}
-            allTasks={allTasks}
-            projectName={activeProject?.project_name || activeProject?.name || "Project"}
-            onClose={() => setSelectedId(null)}
-            onEdit={() => selected && setEditingId(selected.id)}
-            onDelete={() => selected && setToDelete(selected.id)}
-            onStatusChange={(status) => selected && updateMut.mutate({ id: selected.id, status })}
-            onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
-            // Verb CTA — advance via the audited write path: logs a round +
-            // patches + auto-locks atomically. Stamps the submitted date when
-            // sending out (→OFA) and the returned date when logging a return
-            // (→BFA); never a fake date otherwise (§22).
-            onAdvance={(action) => {
-              if (!selected || !action.nextStatus) return;
-              const today = localToday();
-              advanceMut.mutate({
-                submittal: selected as any,
-                status: action.nextStatus,
-                ball_in_court: action.nextBallInCourt,
-                submitted_date: action.nextStage === "OFA" ? today : undefined,
-                returned_date: action.nextStage === "BFA" ? today : undefined,
-              });
-            }}
-            // Inline-edit hook — every editable cell in the detail
-            // panel calls this with a single-field patch so we don't
-            // need to round-trip through the modal for trivial fixes
-            // like "fix the date" or "rename this submittal".
-            onFieldChange={(patch) => selected && updateMut.mutate({ id: selected.id, ...patch })}
-            onNewRound={() => setShowNewRound(true)}
-            onReturnRound={(roundId) => {
-              const round = allRounds.find((r) => r.id === roundId);
-              if (round) setShowSheetResponse(round);
-            }}
-          />
-        </div>
-      </PhoenixPanel>
-
-      {(showCreate || editing) && (
+      {(showCreate || editing || spinOffParent) && (
         <SubmittalFormModal
-          open={showCreate || !!editing}
-          initial={editing || {}}
+          open={showCreate || !!editing || !!spinOffParent}
+          // Spin-off: seed from the parent (project + drawing sets carried over).
+          // Edit: the row being edited. Plain create: empty.
+          initial={editingView || (spinOffParent ? (spinOffInitial as Submittal) : {})}
           projectId={projectId}
           projectName={activeProject?.project_name || activeProject?.name || ""}
-          availableSets={drawingSets}
+          availableSets={drawingSetsView}
           allDrawings={allDrawings}
-          allRfis={allRfis}
-          onClose={() => { setShowCreate(false); setEditingId(null); }}
+          allRfis={allRfis as any}
+          parentSubmittal={spinOffParent as Submittal | null}
+          drawingTypesEnabled={drawingTypesEnabled}
+          saving={createMut.isPending || updateMut.isPending}
+          existingNumbers={new Set(
+            rows
+              .filter((r: any) => r.id !== editing?.id)
+              .map((r: any) => String(r.submittal_number || "").trim())
+              .filter(Boolean),
+          )}
+          onClose={() => { setShowCreate(false); setEditingId(null); setSpinOffParentId(null); }}
           onSubmit={async (data) => {
-            if (editing) await updateMut.mutateAsync({ id: editing.id, ...data });
-            else await createMut.mutateAsync(data);
+            if (editing) {
+              await updateMut.mutateAsync({ id: editing.id, ...data });
+            } else {
+              // Phase 4: `drawing_types` is a UI-only key (the types to start
+              // tracking) — split it off the record so it never hits the
+              // submittals insert as a phantom column. Component rows are created
+              // after the submittal insert (need its id + project_id).
+              const { chosenTypes, submittalData } = splitCreateSubmittalPayload(
+                data as { drawing_types?: DrawingType[] } & Record<string, unknown>,
+              );
+              // Covers both a plain create and a spin-off child (the record
+              // already carries parent_submittal_id + split_reason when split).
+              const created = await createMut.mutateAsync(submittalData);
+              let componentWriteAttempted = false;
+              // Jump the detail panel to the freshly-created child so its lineage
+              // is immediately visible (createMut also selects it, belt+braces).
+              if (created?.id) {
+                setSelectedId(created.id);
+                if (drawingTypesEnabled && Array.isArray(chosenTypes) && chosenTypes.length > 0) {
+                  const pid = (created.project_id as string) || projectId;
+                  if (pid) {
+                    componentWriteAttempted = true;
+                    const componentResults = await Promise.allSettled(
+                      chosenTypes.map((t) => addComponentType({ submittalId: created.id, projectId: pid, drawingType: t })),
+                    );
+                    const failedComponents = componentResults.filter((result) => result.status === "rejected").length;
+                    if (failedComponents > 0) {
+                      toast.warning(`Submittal created, but ${failedComponents} drawing type component${failedComponents === 1 ? "" : "s"} failed. Add them from the detail panel.`);
+                    }
+                    if (failedComponents < chosenTypes.length) {
+                      toast.success(`Submittal created with ${chosenTypes.length - failedComponents} drawing type component${chosenTypes.length - failedComponents === 1 ? "" : "s"}`);
+                    }
+                  }
+                }
+              }
+              if (!componentWriteAttempted) {
+                toast.success("Submittal created");
+              }
+            }
             setShowCreate(false);
             setEditingId(null);
+            setSpinOffParentId(null);
           }}
         />
       )}
@@ -581,7 +659,8 @@ export default function Submittals() {
         <DeleteDialog
           open={!!toDelete}
           onClose={() => setToDelete(null)}
-          onConfirm={() => deleteMut.mutate(toDelete)}
+          busy={deleteMut.isPending}
+          onConfirm={() => deleteMut.mutateAsync(toDelete)}
           title="Delete submittal"
           description="This submittal and its comment thread will be soft-deleted. This cannot be undone from the UI."
         />
@@ -612,22 +691,24 @@ export default function Submittals() {
         open={showBulkEdit}
         count={selectedIds.size}
         onCancel={() => setShowBulkEdit(false)}
-        onSubmit={(data) => {
-          bulkUpdateMut.mutate({ ids: [...selectedIds], data });
-          setShowBulkEdit(false);
+        busy={bulkUpdateMut.isPending}
+        onSubmit={async (data) => {
+          await bulkUpdateMut.mutateAsync({ ids: [...selectedIds], data });
         }}
       />
 
       <SubmittalBulkAddModal
         open={showBulkAdd}
         onCancel={() => setShowBulkAdd(false)}
+        busy={bulkCreateMut.isPending}
         onSubmit={(newRows) => bulkCreateMut.mutate(newRows)}
       />
 
       <DeleteDialog
         open={showBulkDelete}
         onClose={() => setShowBulkDelete(false)}
-        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        busy={bulkDeleteMut.isPending}
+        onConfirm={() => bulkDeleteMut.mutateAsync([...selectedIds])}
         title={`Delete ${selectedIds.size} submittal${selectedIds.size === 1 ? "" : "s"}`}
         description={`Soft-delete ${selectedIds.size} selected submittal${selectedIds.size === 1 ? "" : "s"}? This cannot be undone from the UI.`}
       />
@@ -635,19 +716,31 @@ export default function Submittals() {
       {/* New Round modal — creates a new submittal round for the
           selected submittal. Carries forward drawing sets and
           increments the round number automatically. */}
-      {showNewRound && selected && (
+      {showNewRound && selected && newRoundSeed && (
         <NewRoundModal
           open={showNewRound}
           submittal={selected}
-          previousRound={
-            (roundsBySubmittal[selected.id] || []).length > 0
-              ? (roundsBySubmittal[selected.id] || []).at(-1)
-              : null
-          }
+          previousRound={newRoundSeed.previousRound}
+          carryItems={newRoundSeed.carryItems}
+          carryFromRound={newRoundSeed.carryFromRound}
+          seededNotes={newRoundSeed.seededNotes}
+          busy={createRoundMut.isPending}
           onClose={() => setShowNewRound(false)}
-          onSubmit={(data) => createRoundMut.mutate(data)}
+          onSubmit={(data) => createRoundMut.mutateAsync(data)}
         />
       )}
+
+      {/* Fab-release gate override — a "Release for Fabrication" move blocked by
+          open RFIs reopens here so a PM can release with a recorded reason. */}
+      <ReleaseGateOverrideModal
+        open={!!releaseBlock}
+        blockingRfiNumbers={releaseBlock?.rfis || []}
+        busy={advanceMut.isPending}
+        onClose={() => setReleaseBlock(null)}
+        onConfirm={(reason: string) =>
+          releaseBlock && runAdvance({ ...releaseBlock.input, fabReleaseOverrideReason: reason })
+        }
+      />
 
       {/* Sheet response grid — per-sheet response entry when a round
           is returned by the reviewer. Opens when "Mark Returned" is
@@ -665,11 +758,12 @@ export default function Submittals() {
                 (r) => r.submittal_round_id === showSheetResponse.id
               )}
               onSave={(responses) =>
-                saveSheetResponsesMut.mutate({
+                saveSheetResponsesMut.mutateAsync({
                   roundId: showSheetResponse.id,
                   responses,
                 })
               }
+              saving={saveSheetResponsesMut.isPending}
               onClose={() => setShowSheetResponse(null)}
             />
           </DialogContent>

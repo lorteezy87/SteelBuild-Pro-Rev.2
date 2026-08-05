@@ -32,3 +32,40 @@ export const toolBtn = {
 // cross-references. Uppercases, strips spaces / dashes / underscores / dots
 // so "S-201", "s201", "S 201" and "S_201" all collapse to "S201".
 export const normalizeSN = (s) => String(s || "").toUpperCase().replace(/[\s\-_.]/g, "");
+
+// Rect-vs-polygon shape discriminator extracted from
+// handleZoneDrawComplete. Given the payload emitted by ZoneLayer.onDrawComplete,
+// returns the geometry-bearing subset of args that createZone expects, so the
+// handler only has to spread it alongside the shared project/drawing/revision
+// fields. Behaviour is byte-identical to the inline branch it replaces:
+//   - "polygon" → { shapeType: "polygon", polygonPoints: payload.points }
+//   - anything else (the MVP rect path) → { xMin, yMin, xMax, yMax } from bbox
+export function parseZonePayload(payload) {
+  if (payload?.shape === "polygon") {
+    return {
+      shapeType: "polygon",
+      polygonPoints: payload.points,
+    };
+  }
+  return {
+    xMin: payload.xMin, yMin: payload.yMin,
+    xMax: payload.xMax, yMax: payload.yMax,
+  };
+}
+
+// Adapt a DMS document (opened via ?docId=) into the drawing record shape
+// the PDF viewer expects — sheet_number/title fields align with Drawing rows.
+export function documentToViewerDrawing(doc) {
+  return {
+    id: doc.id,
+    project_id: doc.project_id,
+    sheet_number: doc.document_number,
+    title: doc.display_name,
+    file_name: doc.file_name,
+    file_url: doc.file_url,
+    revision_number: doc.revision_number,
+    pdf_page: 1,
+    drawing_set_id: null,
+    viewer_source: "document",
+  };
+}

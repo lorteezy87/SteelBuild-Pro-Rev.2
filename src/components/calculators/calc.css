@@ -1,0 +1,296 @@
+/* ═══════════════════════════════════════════════════════════════
+   SteelBuild Pro — Calculator Design Kit
+   All values reference CSS custom-property tokens; no hard-coded
+   colours or font stacks.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Shell ───────────────────────────────────────────────────── */
+.sbd-calc-shell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+}
+
+/* ── Display ─────────────────────────────────────────────────── */
+.sbd-calc-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--bg-surface-low, var(--bg-surface));
+  border: 1px solid var(--border-default, var(--border-strong));
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  min-height: 56px;
+}
+
+.sbd-calc-display__expr {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-height: 16px;
+}
+
+.sbd-calc-display__value {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* ── Keypad ──────────────────────────────────────────────────── */
+.sbd-calc-keypad {
+  display: grid;
+  gap: 8px;
+}
+
+/* ── Key — base ──────────────────────────────────────────────── */
+.sbd-calc-key {
+  position: relative;
+  min-height: 48px;
+  min-width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 var(--border-strong),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: transform 0.04s, background 0.12s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sbd-calc-key:active {
+  transform: translateY(1px);
+}
+
+.sbd-calc-key:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sbd-calc-key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Key — variants ─────────────────────────────────────────── */
+.sbd-calc-key--op {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.sbd-calc-key--fn {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.sbd-calc-key--accent {
+  background: var(--accent);
+  color: var(--accent-text, #04121f);
+  border-color: var(--accent);
+}
+
+.sbd-calc-key--danger {
+  color: var(--status-error);
+  border-color: var(--danger-border, var(--status-error));
+}
+
+/* ── Key — layout modifiers ──────────────────────────────────── */
+.sbd-calc-key--wide {
+  grid-column: span 2;
+}
+
+/* ── Shell header ───────────────────────────────────────────── */
+.sbd-calc-shell__header {
+  display: flex;
+  align-items: center;
+  padding: 0 4px 4px;
+}
+
+.sbd-calc-shell__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Tool rail ──────────────────────────────────────────────── */
+.sbd-calc-tool-rail {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.sbd-calc-tool-rail__btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sbd-calc-tool-rail__btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.sbd-calc-tool-rail__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sbd-calc-tool-rail__btn--active {
+  background: var(--accent);
+  color: var(--accent-text, #04121f);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Shell body ─────────────────────────────────────────────── */
+.sbd-calc-shell__body {
+  padding: 16px;
+}
+
+/* ── Key — inner elements ────────────────────────────────────── */
+.sbd-calc-key__sec {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.sbd-calc-key__label {
+  line-height: 1;
+}
+
+/* ── Tape ────────────────────────────────────────────────────── */
+.sbd-calc-tape {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--bg-surface-low, var(--bg-surface));
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  min-width: 180px;
+  max-height: 320px;
+  overflow: hidden;
+}
+
+.sbd-calc-tape__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sbd-calc-tape__title {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sbd-calc-tape__clear {
+  font-size: 11px;
+  min-height: 24px;
+  min-width: auto;
+  padding: 0 8px;
+}
+
+.sbd-calc-tape__empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin: 0;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.sbd-calc-tape__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sbd-calc-tape__item {
+  display: block;
+}
+
+.sbd-calc-tape__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.sbd-calc-tape__row:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
+}
+
+.sbd-calc-tape__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sbd-calc-tape__expr {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 55%;
+}
+
+.sbd-calc-tape__value {
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+}

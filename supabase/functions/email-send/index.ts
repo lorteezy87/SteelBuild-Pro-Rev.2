@@ -26,6 +26,13 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { reportError } from "../_shared/reportError.ts";
+import {
+  isDangerousAttachment,
+  MAX_ATTACHMENT_BYTES,
+  sanitizeAttachmentName,
+} from "../_shared/attachments.ts";
+import { normalizeRecipients } from "./recipients.ts";
 
 // Max combined raw (decoded) size of outbound attachments. base64 inflates
 // the payload ~33%, so the actual request body stays well under typical
@@ -104,22 +111,11 @@ async function checkProjectAccess(
   supabaseUrl: string,
   serviceKey: string,
 ): Promise<boolean> {
-  try {
-    const resp = await fetch(
-      `${supabaseUrl}/rest/v1/user_projects?user_id=eq.${userId}&project_id=eq.${projectId}&select=id&limit=1`,
-      {
-        headers: {
-          "apikey": serviceKey,
-          "Authorization": `Bearer ${serviceKey}`,
-        },
-      },
-    );
-    if (!resp.ok) return false;
-    const rows = await resp.json();
-    return Array.isArray(rows) && rows.length > 0;
-  } catch {
-    return false;
-  }
+  // Mirrors the RLS helper user_has_project_access: a user_projects row OR org
+  // owner/admin standing both grant access. getProjectRole() resolves both, so a
+  // non-null effective role means the user has access — this fixes org owners/admins
+  // who manage a project without a user_projects row being wrongly 403'd.
+  return (await getProjectRole(userId, projectId, supabaseUrl, serviceKey)) !== null;
 }
 
 // ── Project Role Check ──────────────────────────────────────────────────────────
@@ -135,21 +131,37 @@ async function getProjectRole(
   supabaseUrl: string,
   serviceKey: string,
 ): Promise<string | null> {
+  const headers = { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` };
   try {
+    // 1. Direct project membership role.
     const resp = await fetch(
       `${supabaseUrl}/rest/v1/user_projects?user_id=eq.${userId}&project_id=eq.${projectId}&select=role&limit=1`,
-      {
-        headers: {
-          "apikey": serviceKey,
-          "Authorization": `Bearer ${serviceKey}`,
-        },
-      },
+      { headers },
     );
-    if (!resp.ok) return null;
-    const rows = await resp.json();
-    if (!Array.isArray(rows) || rows.length === 0) return null;
-    const role = rows[0]?.role;
-    return typeof role === "string" ? role.toLowerCase() : null;
+    if (resp.ok) {
+      const rows = await resp.json();
+      const role = Array.isArray(rows) && rows.length ? rows[0]?.role : null;
+      if (typeof role === "string" && role) return role.toLowerCase();
+    }
+    // 2. Org owner/admin fallback — mirrors get_my_project_role: an org owner or
+    //    admin has an effective project role even without a user_projects row.
+    const projResp = await fetch(
+      `${supabaseUrl}/rest/v1/projects?id=eq.${projectId}&select=org_id&limit=1`,
+      { headers },
+    );
+    if (!projResp.ok) return null;
+    const projRows = await projResp.json();
+    const orgId = Array.isArray(projRows) && projRows.length ? projRows[0]?.org_id : null;
+    if (!orgId) return null;
+    const omResp = await fetch(
+      `${supabaseUrl}/rest/v1/organization_members?org_id=eq.${orgId}&user_id=eq.${userId}&select=role&limit=1`,
+      { headers },
+    );
+    if (!omResp.ok) return null;
+    const omRows = await omResp.json();
+    const orgRole = Array.isArray(omRows) && omRows.length ? String(omRows[0]?.role || "").toLowerCase() : null;
+    if (orgRole === "owner" || orgRole === "admin") return orgRole;
+    return null;
   } catch {
     return null;
   }
@@ -341,7 +353,10 @@ async function storeSentAttachments(
       const bytes = base64ToBytes(att.content_base64);
       const contentType = att.content_type || "application/octet-stream";
       const contentHash = await hashContent(bytes);
-      const storagePath = `${projectId}/${messageId}/${att.filename}`;
+      // Sanitize the (user-supplied) filename before it enters the storage path —
+      // a name like "../x" or "a/b" would otherwise escape the message prefix.
+      const safeName = sanitizeAttachmentName(att.filename);
+      const storagePath = `${projectId}/${messageId}/${safeName}`;
 
       const uploadResp = await fetch(
         `${supabaseUrl}/storage/v1/object/email-attachments/${storagePath}`,
@@ -366,7 +381,7 @@ async function storeSentAttachments(
       const attRow = {
         message_id: messageId,
         project_id: projectId,
-        filename: att.filename,
+        filename: safeName,
         content_type: contentType,
         size_bytes: bytes.length,
         content_hash: contentHash,
@@ -475,54 +490,92 @@ async function storeSentMessage(
 // ── Main Handler ──────────────────────────────────────────────────────────────
 
 async function handle(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return errorResponse(405, "Method not allowed");
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
+  if (req.method !== "POST") return errorResponse(405, "Method not allowed", req);
 
   // Authenticate
   const user = await verifyJwt(req);
-  if (!user) return errorResponse(401, "Unauthorized — valid JWT required");
+  if (!user) return errorResponse(401, "Unauthorized — valid JWT required", req);
 
   // Parse body
   let body: SendEmailRequest;
   try {
     body = await req.json();
   } catch {
-    return errorResponse(400, "Invalid JSON body");
+    return errorResponse(400, "Invalid JSON body", req);
   }
 
   // Validate required fields
-  if (!body.project_id) return errorResponse(400, "project_id is required");
-  if (!body.to || body.to.length === 0) return errorResponse(400, "to is required (array of email addresses)");
-  if (!body.subject) return errorResponse(400, "subject is required");
-  if (!body.body_text) return errorResponse(400, "body_text is required");
+  if (!body.project_id) return errorResponse(400, "project_id is required", req);
+  if (!body.to || body.to.length === 0) return errorResponse(400, "to is required (array of email addresses)", req);
+  if (!body.subject) return errorResponse(400, "subject is required", req);
+  if (!body.body_text) return errorResponse(400, "body_text is required", req);
 
-  // Validate + size-guard attachments (base64 inflates ~33%; cap on raw bytes)
+  // Normalize + format-validate recipients at the boundary so malformed
+  // addresses fail fast instead of surfacing as opaque provider errors.
+  const toRecipients = normalizeRecipients(body.to);
+  const ccRecipients = normalizeRecipients(body.cc ?? []);
+  const bccRecipients = normalizeRecipients(body.bcc ?? []);
+  const invalidAddresses = [
+    ...toRecipients.invalid,
+    ...ccRecipients.invalid,
+    ...bccRecipients.invalid,
+  ];
+  if (invalidAddresses.length > 0) {
+    return errorResponse(
+      400,
+      `Invalid email address(es): ${invalidAddresses.slice(0, 5).join(", ")}`,
+      req,
+    );
+  }
+  if (toRecipients.valid.length === 0) {
+    return errorResponse(
+      400,
+      "to must contain at least one valid email address",
+      req,
+    );
+  }
+  body.to = toRecipients.valid;
+  body.cc = ccRecipients.valid;
+  body.bcc = bccRecipients.valid;
+
+  // Validate + size-guard attachments (base64 inflates ~33%; cap on raw bytes).
+  // Mirror the inbound email-ingest guards (_shared/attachments.ts): reject
+  // executable/script extensions and per-file oversize BEFORE sending or storing,
+  // so the outbound path can't push a dangerous or unbounded file into storage.
   const attachments = body.attachments ?? [];
   let attachmentBytes = 0;
   for (const att of attachments) {
     if (!att.filename || !att.content_base64) {
-      return errorResponse(400, "Each attachment requires filename and content_base64");
+      return errorResponse(400, "Each attachment requires filename and content_base64", req);
     }
-    attachmentBytes += Math.floor(att.content_base64.length * 0.75);
+    if (isDangerousAttachment(att.filename)) {
+      return errorResponse(400, `Attachment type not allowed: ${att.filename}`, req);
+    }
+    const fileBytes = Math.floor(att.content_base64.length * 0.75);
+    if (fileBytes > MAX_ATTACHMENT_BYTES) {
+      return errorResponse(413, `Attachment "${att.filename}" exceeds the 25 MB per-file limit`, req);
+    }
+    attachmentBytes += fileBytes;
   }
   if (attachmentBytes > MAX_ATTACHMENT_TOTAL_BYTES) {
-    return errorResponse(413, "Attachments exceed the 20 MB total limit");
+    return errorResponse(413, "Attachments exceed the 20 MB total limit", req);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceKey) return errorResponse(500, "Edge function not configured");
+  if (!supabaseUrl || !serviceKey) return errorResponse(500, "Edge function not configured", req);
 
   // Verify project access
   const hasAccess = await checkProjectAccess(user.userId, body.project_id, supabaseUrl, serviceKey);
-  if (!hasAccess) return errorResponse(403, "No access to this project");
+  if (!hasAccess) return errorResponse(403, "No access to this project", req);
 
   // Verify project role. Membership alone is not enough to send outbound email —
   // per the RBAC contract, mutating/outbound actions require owner/admin/pm.
   // A viewer or field user is a member but must not be able to send.
   const projectRole = await getProjectRole(user.userId, body.project_id, supabaseUrl, serviceKey);
   if (!projectRole || !SEND_ALLOWED_ROLES.has(projectRole)) {
-    return errorResponse(403, "Your project role does not permit sending email");
+    return errorResponse(403, "Your project role does not permit sending email", req);
   }
 
   // Determine the from address. A caller-supplied from_email must be one of the
@@ -550,7 +603,7 @@ async function handle(req: Request): Promise<Response> {
       (a) => (a.email_address || "").toLowerCase() === fromEmail.toLowerCase(),
     );
     if (!match) {
-      return errorResponse(403, "from_email is not an active sending account for this project");
+      return errorResponse(403, "from_email is not an active sending account for this project", req);
     }
     fromName = fromName || match.display_name || "";
   } else if (activeAccounts.length > 0) {
@@ -559,7 +612,7 @@ async function handle(req: Request): Promise<Response> {
   }
 
   if (!fromEmail) {
-    return errorResponse(400, "No from_email provided and no active email account configured for this project");
+    return errorResponse(400, "No from_email provided and no active email account configured for this project", req);
   }
 
   const fromFormatted = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
@@ -582,7 +635,7 @@ async function handle(req: Request): Promise<Response> {
   if (msClientId && msClientSecret && msTenantId) {
     // Prefer Microsoft Graph when configured — sends as the actual shared mailbox
     const token = await getMsGraphToken(msTenantId, msClientId, msClientSecret);
-    if (!token) return errorResponse(502, "Failed to obtain Microsoft Graph token");
+    if (!token) return errorResponse(502, "Failed to obtain Microsoft Graph token", req);
 
     result = await sendViaMsGraph(
       token, fromEmail, body.to, body.cc || [], body.bcc || [],
@@ -596,7 +649,7 @@ async function handle(req: Request): Promise<Response> {
       threadingHeaders, attachments,
     );
   } else {
-    return errorResponse(503, "No email send provider configured. Set RESEND_API_KEY or MS_GRAPH_* secrets.");
+    return errorResponse(503, "No email send provider configured. Set RESEND_API_KEY or MS_GRAPH_* secrets.", req);
   }
 
   if (!result.success) {
@@ -605,7 +658,7 @@ async function handle(req: Request): Promise<Response> {
       success: false,
       provider: result.provider,
       error: result.error,
-    }, 502);
+    }, 502, req);
   }
 
   // Store the sent message
@@ -631,7 +684,7 @@ async function handle(req: Request): Promise<Response> {
     provider: result.provider,
     message_id: storedId,
     provider_message_id: result.provider_message_id,
-  });
+  }, 200, req);
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -639,7 +692,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return await handle(req);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[email-send] Unhandled: ${message}`);
-    return errorResponse(500, `Internal error: ${message}`);
+    await reportError(err, "email-send", { unhandled: true });
+    return errorResponse(500, `Internal error: ${message}`, req);
   }
 });

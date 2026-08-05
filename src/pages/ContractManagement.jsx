@@ -3,11 +3,13 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getQueryKey } from "@/services/cacheRegistry";
+import { computeRevisedContractValue } from "@/services/costRollup";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { formatDate, formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import SOVFormModal from "@/components/sov/SOVFormModal";
 import { Pencil, Trash2 } from "lucide-react";
 import {
@@ -17,6 +19,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 
 // Local aliases so the ~30 call sites below don't need to change. Both
@@ -85,7 +88,7 @@ const TabButton = ({ label, active, onClick }) => (
     onClick={onClick}
     style={{
       background: active ? "var(--accent)" : "transparent",
-      color: active ? "#fff" : "var(--text-muted)",
+      color: active ? "var(--bg-base)" : "var(--text-muted)",
       border: active ? "1px solid var(--accent)" : "1px solid var(--border-default)",
       borderRadius: "var(--radius-btn)",
       padding: "6px 16px",
@@ -251,7 +254,7 @@ function ContractOverviewPanel({ project, approvedCOTotal, pendingCOTotal, revis
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               letterSpacing: "0.10em", textTransform: "uppercase",
               padding: "6px 16px", background: "var(--accent)",
-              color: "#fff", border: "none",
+              color: "var(--bg-base)", border: "none",
               borderRadius: "var(--radius-btn)", cursor: isSaving ? "wait" : "pointer",
               opacity: isSaving ? 0.6 : 1,
             }}
@@ -368,8 +371,8 @@ function BillingSOVTab({ sovItems, expenses, onAddSOV, onEditSOV, onDeleteSOV })
     let scheduled = 0, billed = 0, retainage = 0;
     for (const item of items) {
       const sv = Number(item.scheduled_value) || 0;
-      const prog = Math.min(100, Math.max(0, Number(item.progress_pct) || 0)) / 100;
-      const ret = Math.min(100, Math.max(0, Number(item.retainage_pct) || 0)) / 100;
+      const prog = Math.min(100, Math.max(0, Number(item.current_percent_complete) || 0)) / 100;
+      const ret = Math.min(100, Math.max(0, Number(item.retainage_percent) || 0)) / 100;
       const billedAmt = sv * prog;
       const retainageAmt = billedAmt * ret;
       scheduled += sv;
@@ -417,8 +420,8 @@ function BillingSOVTab({ sovItems, expenses, onAddSOV, onEditSOV, onDeleteSOV })
               )}
               {items.map((item, i) => {
                 const sv = Number(item.scheduled_value) || 0;
-                const prog = Math.min(100, Math.max(0, Number(item.progress_pct) || 0));
-                const ret = Math.min(100, Math.max(0, Number(item.retainage_pct) || 0)) / 100;
+                const prog = Math.min(100, Math.max(0, Number(item.current_percent_complete) || 0));
+                const ret = Math.min(100, Math.max(0, Number(item.retainage_percent) || 0)) / 100;
                 const billedAmt = sv * (prog / 100);
                 const retainageAmt = billedAmt * ret;
                 const balance = sv - billedAmt;
@@ -509,7 +512,7 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
   const sovTotal = useMemo(() => (sovItems || []).reduce((sum, item) => sum + (Number(item.scheduled_value) || 0), 0), [sovItems]);
   const billedTotal = useMemo(() => (sovItems || []).reduce((sum, item) => {
     const sv = Number(item.scheduled_value) || 0;
-    const prog = Math.min(100, Math.max(0, Number(item.progress_pct) || 0)) / 100;
+    const prog = Math.min(100, Math.max(0, Number(item.current_percent_complete) || 0)) / 100;
     return sum + sv * prog;
   }, 0), [sovItems]);
 
@@ -661,7 +664,13 @@ export default function ContractManagement() {
   const [contractForm, setContractForm] = useState({});
 
   // ── Queries ───────────────────────────────────────────────────────────────
-  const { data: project, isLoading: projectLoading } = useQuery({
+  const {
+    data: project,
+    isLoading: projectLoading,
+    isError: projectError,
+    error: projectErrorValue,
+    refetch: refetchProject,
+  } = useQuery({
     queryKey: getQueryKey("project", projectId),
     queryFn: () => entities.Project.list(),
     enabled: !!projectId,
@@ -669,21 +678,39 @@ export default function ContractManagement() {
     select: (projects) => (projects || []).find((p) => p.id === projectId),
   });
 
-  const { data: changeOrders = [], isLoading: cosLoading } = useQuery({
+  const {
+    data: changeOrders = [],
+    isLoading: cosLoading,
+    isError: cosError,
+    error: cosErrorValue,
+    refetch: refetchCos,
+  } = useQuery({
     queryKey: getQueryKey("change_order", projectId),
     queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: sovItems = [], isLoading: sovLoading } = useQuery({
+  const {
+    data: sovItems = [],
+    isLoading: sovLoading,
+    isError: sovError,
+    error: sovErrorValue,
+    refetch: refetchSov,
+  } = useQuery({
     queryKey: getQueryKey("sov_item", projectId),
     queryFn: () => entities.SOVItem.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: expenses = [], isLoading: expensesLoading } = useQuery({
+  const {
+    data: expenses = [],
+    isLoading: expensesLoading,
+    isError: expensesError,
+    error: expensesErrorValue,
+    refetch: refetchExpenses,
+  } = useQuery({
     queryKey: getQueryKey("expense", projectId),
     queryFn: () => entities.Expense.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -700,7 +727,7 @@ export default function ContractManagement() {
 
   // ── SOV Item Mutations ───────────────────────────────────────────────────
   const createSOVMut = useMutation({
-    mutationFn: (data) => entities.SOVItem.create({ ...data, project_id: projectId }),
+    mutationFn: (data) => entities.SOVItem.create(withProjectId(data, projectId)),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, sovQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       await invalidateCrudQueries(qc, sovQueryKeys);
@@ -795,40 +822,70 @@ export default function ContractManagement() {
   );
 
   const originalValue = Number(project?.original_contract_value) || 0;
-  const revisedValue = Number(project?.revised_contract_value) || (originalValue + approvedCOTotal);
+  // No revised_contract_value column exists — derive via the one shared definition.
+  const revisedValue = computeRevisedContractValue(project, changeOrders);
 
   const isLoading = projectLoading || cosLoading || sovLoading || expensesLoading;
+  const isError = projectError || cosError || sovError || expensesError;
+  const loadError = projectErrorValue || cosErrorValue || sovErrorValue || expensesErrorValue;
+  const refetchAll = () => {
+    refetchProject();
+    refetchCos();
+    refetchSov();
+    refetchExpenses();
+  };
 
   // ── No project selected ───────────────────────────────────────────────────
   if (!projectId) return (
-    <div style={{ textAlign: "center", padding: "80px 24px" }}>
+    <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>{"\u{1F4CB}"}</div>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>Select a project</div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
     </div>
   );
 
-  // ── Loading ───────────────────────────────────────────────────────────────
-  if (isLoading) return (
-    <div style={{ padding: "24px 28px" }}>
-      <CommandBar
-        eyebrow="CONTRACT"
-        title="Contract Management"
-        subtitle="Loading..."
-      />
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
-        {[1, 2, 3].map(i => (
-          <div key={i} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", height: 80, animation: "pulse 1.5s ease-in-out infinite", opacity: 0.5 }} />
-        ))}
+  // ── Loading / error ───────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: "24px 28px" }}>
+        <CommandBar
+          eyebrow="CONTRACT"
+          title="Contract Management"
+          subtitle="Loading contract data"
+        />
+        <div style={{ marginTop: 20 }}>
+          <LoadingSkeleton variant="table" rows={8} />
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load contract data
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(loadError, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={refetchAll}>Retry</Button>
+      </div>
+    );
+  }
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
   const TABS = ["CHANGE ORDERS", "BILLING & SOV", "CONTRACT SUMMARY"];
 
   return (
-    <div style={{ padding: "24px 28px", background: "var(--bg-page)", minHeight: "100vh" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: "24px 28px", background: "var(--bg-page)", minHeight: "100vh" }}>
       <CommandBar
         eyebrow={project?.name || activeProject?.name || "PROJECT"}
         title="Contract Management"
@@ -844,7 +901,7 @@ export default function ContractManagement() {
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               letterSpacing: "0.10em", textTransform: "uppercase",
               padding: "6px 16px", background: "var(--accent)",
-              color: "#fff", border: "none",
+              color: "var(--bg-base)", border: "none",
               borderRadius: "var(--radius-btn)", cursor: "pointer",
             }}
           >

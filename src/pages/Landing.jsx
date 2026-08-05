@@ -1,255 +1,309 @@
 /**
  * Landing — public marketing page for steelbuild-pro.com.
  *
- * Multi-section marketing site shown to unauthenticated visitors.
- * Includes inline sign-in modal and demo-request form.
- *
- * Sections:
- *   Nav → Hero → Pain Points → Stats → Features → Workflow →
- *   Pricing → Testimonials → Demo CTA → Footer
- *
- * Receives `onLogin`, `isSubmitting`, and `loginError` from
- * AuthenticatedApp so the sign-in modal works without leaving the page.
+ * Executive Light redesign: a clean, professional SaaS landing page that uses
+ * the light SteelBuild Pro module mockups as visual direction — crisp white
+ * cards, restrained navy typography, amber command accents, product-first
+ * screenshots, and a boardroom-ready narrative for steel contractors.
  */
 
 import React, { useState, useRef, useEffect } from "react";
+import { PLANS } from "@/lib/billing/plans";
+import { supabase } from "@/lib/supabase";
 
-/* ─── Data ────────────────────────────────────────────────────── */
+const C = {
+  // Dual-theme hex allowlist: public landing uses a fixed executive-light brand palette.
+  base: "#F5F7FA",
+  surface: "#FFFFFF",
+  surfaceSoft: "#F8FAFC",
+  ink: "#101827",
+  navy: "#172033",
+  body: "#536179",
+  muted: "#8491A6",
+  line: "#E2E8F0",
+  line2: "#CBD5E1",
+  amber: "#F5A800",
+  amberDark: "#C47D00",
+  blue: "#2563EB",
+  green: "#059669",
+  red: "#DC2626",
+};
 
-const PAIN_POINTS = [
+const F = {
+  body: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+  display: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+  mono: "'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace",
+};
+
+const HERO_STRIP = "/steelbuild-hero.svg";
+const LOGO_IMG = "/steelbuild-pro-logo.jpg";
+
+const NAV_LINKS = [
+  { label: "Platform", target: "platform" },
+  { label: "Modules", target: "modules" },
+  { label: "Workflow", target: "workflow" },
+  { label: "Pricing", target: "pricing" },
+  { label: "Demo", target: "demo" },
+];
+
+const EXEC_METRICS = [
+  { value: "8", label: "Featured modules" },
+  { value: "1", label: "Source of truth" },
+  { value: "24/7", label: "Project visibility" },
+  { value: "0", label: "Spreadsheet handoffs" },
+];
+
+const VALUE_CARDS = [
   {
-    icon: "📋",
-    pain: "Mill certs buried in someone's inbox",
-    reality: "Your CWI needs the MTR for W14x90 heat number 84726 — but it's in a forwarded email from three weeks ago. Nobody knows which attachment is current.",
+    kicker: "Executive control",
+    title: "Portfolio health without waiting for status meetings.",
+    body: "See open RFIs, schedule exposure, cost pressure, field blockers, and production status in one command view.",
   },
   {
-    icon: "📱",
-    pain: "Field photos with no context",
-    reality: "200 bolt-up photos on a foreman's phone. No piece marks. No grid lines. No connection IDs. Useless for the turnover package.",
+    kicker: "Steel-first execution",
+    title: "Built around the way steel moves.",
+    body: "Detailing, release, fabrication, deliveries, erection, change orders, pay apps, and closeout stay connected by project.",
   },
   {
-    icon: "📊",
-    pain: "RFIs dying in spreadsheet purgatory",
-    reality: "Your RFI log is 14 tabs deep. The GC says they responded to RFI-047 last Tuesday. Your PM says they never got it. The EOR is waiting on both of you.",
-  },
-  {
-    icon: "🔧",
-    pain: "Shop drawings marked up on paper",
-    reality: "The detailer sent Rev. C but the shop floor is fabricating Rev. B. The approval stamp is on a PDF in a folder called 'FINAL_FINAL_v2.'",
-  },
-  {
-    icon: "⚠️",
-    pain: "NCRs that live on sticky notes",
-    reality: "A flange was welded on the wrong side of the connection plate. The welder knows. The foreman knows. But the NCR won't exist until someone finds time to write it up — if ever.",
-  },
-  {
-    icon: "💰",
-    pain: "Change orders you can't prove",
-    reality: "The GC added 47 embed plates that weren't in the original scope. You have the email somewhere. Good luck finding it when they dispute your CO.",
+    kicker: "Commercial confidence",
+    title: "Evidence stays attached to the work.",
+    body: "RFIs, photos, documents, budget hours, backcharges, and change orders stay organized for faster decisions and stronger backup.",
   },
 ];
 
-const STATS = [
-  { value: "3.2×", label: "Faster RFI Cycles", detail: "12-day average → under 4 days" },
-  { value: "100%", label: "MTR Traceability", detail: "Heat # to piece mark to erection grid" },
-  { value: "67%", label: "Less Admin Time", detail: "PMs spend time managing steel, not spreadsheets" },
-  { value: "0", label: "Lost Close-out Docs", detail: "Digital turnover packages, every time" },
-];
-
-const FEATURES = [
-  {
-    icon: "🔩",
-    title: "Fabrication Tracking",
-    body: "Track every piece from detailing through CNC, fit-up, welding, coating, and load-out. Weld maps, NDT reports, and coating DFTs linked to piece marks — not buried in folders.",
-    tag: "SHOP",
-    details: ["CNC file management & nesting", "Weld procedure tracking (WPS/PQR)", "Coating inspection & DFT logs", "Bundle & load-out sequencing"],
-  },
-  {
-    icon: "🏗️",
-    title: "Erection Management",
-    body: "Erection sequences, crane pick plans, and bolt-up logs tied to the actual model. Know what's shaken out, what's plumbed, and what's punched — by grid line, by floor, by sequence.",
-    tag: "FIELD",
-    details: ["Shake-out & plumb-up tracking", "High-strength bolt inspection logs", "Crane pick planning & sequencing", "OSHA safety checkpoint gates"],
-  },
-  {
-    icon: "✅",
-    title: "QA/QC & Inspections",
-    body: "CWI inspection reports, torque logs, and weld visual records with geo-tagged photos linked to connection IDs. Build the turnover package as you go — not in a panic at close-out.",
-    tag: "QUALITY",
-    details: ["AWS D1.1 / D1.8 compliance tracking", "Torque & tension inspection logs", "Photo documentation with piece marks", "Automated turnover package assembly"],
-  },
-  {
-    icon: "📐",
-    title: "Drawing & Submittal Control",
-    body: "Version-controlled shop drawing sets with automated approval routing. AI extracts piece marks, quantities, and connection details from submittals — so your log is always current.",
-    tag: "DOCUMENTS",
-    details: ["Automatic rev control & distribution", "AI-powered drawing data extraction", "Submittal routing with EOR/GC tracking", "Mark-up overlay comparison tools"],
-  },
-  {
-    icon: "💰",
-    title: "Commercial & Cost Control",
-    body: "SOV progress tied to actual field completion — not guesses. Change order backup assembled from RFIs, drawing deltas, and field directives. Your money trail is airtight.",
-    tag: "COMMERCIAL",
-    details: ["SOV linked to erection progress", "Change order evidence packaging", "Cost code tracking by work package", "Subcontractor pay app management"],
-  },
-  {
-    icon: "📊",
-    title: "Schedule & Risk Intelligence",
-    body: "Gantt charts with predecessor logic built for steel delivery — not generic construction scheduling. AI flags when a late approval will cascade into an erection delay before it happens.",
-    tag: "SCHEDULE",
-    details: ["Steel-specific milestone templates", "Approval-to-fabrication lead time tracking", "Critical path risk alerts (AI-driven)", "Look-ahead reports by erection sequence"],
-  },
+const MODULES = [
+  { name: "Command Center", desc: "Executive workload, risk, and decision queue", stat: "86% clear", tone: "blue" },
+  { name: "Portfolio", desc: "Multi-project performance and exposure", stat: "$58.4M", tone: "green" },
+  { name: "RFIs", desc: "Ownership, aging, and response control", stat: "47 open", tone: "red" },
+  { name: "Detailing", desc: "Drawings, models, approvals, and release", stat: "156 dwgs", tone: "blue" },
+  { name: "Schedule", desc: "Critical path, delivery, and field impacts", stat: "72%", tone: "amber" },
+  { name: "Fab Release", desc: "Shop release readiness and blockers", stat: "142", tone: "green" },
+  { name: "Field Today", desc: "Crew, issues, inspections, and photos", stat: "32 issues", tone: "amber" },
+  { name: "Budget Control", desc: "Cost, hours, COs, and pay applications", stat: "-2.4%", tone: "green" },
 ];
 
 const WORKFLOW = [
-  {
-    step: "01",
-    title: "Award → Detailing",
-    text: "Contract hits. Import the scope, set up drawing sets, assign detailers. Submittal packages route automatically — with deadlines the GC can't ignore.",
-    milestone: "SUBMITTALS OUT",
-  },
-  {
-    step: "02",
-    title: "Shop → Fab",
-    text: "Approved drawings release to CNC. Track every piece through fit-up, welding, NDT, coating, and bundling. Nothing ships without QC sign-off.",
-    milestone: "LOAD-OUT READY",
-  },
-  {
-    step: "03",
-    title: "Delivery → Erection",
-    text: "Shipping tickets auto-match to erection sequences. Field crews log shake-out, plumb-up, bolt-up, and inspection with photos — by connection, by grid line.",
-    milestone: "TOPPED OUT",
-  },
-  {
-    step: "04",
-    title: "Punch → Close-out",
-    text: "Punch lists, final inspections, and as-built mark-ups flow into a sealed turnover package. MTRs, weld records, bolt logs, and NDT — all in one deliverable.",
-    milestone: "TURNOVER COMPLETE",
-  },
+  { step: "01", title: "Plan", body: "Set up the project, team, schedule, budgets, and drawing controls." },
+  { step: "02", title: "Coordinate", body: "Move RFIs, detailing, procurement, and work packages through ownership lanes." },
+  { step: "03", title: "Execute", body: "Track fabrication, deliveries, field work, resources, issues, and photos." },
+  { step: "04", title: "Control", body: "Protect margin with budget hours, change orders, SOVs, pay apps, and reports." },
 ];
 
-const PRICING = [
-  {
-    tier: "Shop",
-    price: "$49",
-    period: "/user/mo",
-    description: "For fab shops running 1–5 active projects. Get off spreadsheets.",
-    features: [
-      "Up to 10 active projects",
-      "Drawing management & rev control",
-      "RFI tracking & routing",
-      "Photo documentation",
-      "Basic schedule & task management",
-      "Mobile field access (iOS & Android)",
-    ],
-    cta: "Start Free Trial",
-    highlight: false,
-  },
-  {
-    tier: "Contractor",
-    price: "$89",
-    period: "/user/mo",
-    description: "Full platform for steel contractors running fab + erection.",
-    features: [
-      "Unlimited projects",
-      "Everything in Shop, plus:",
-      "Fabrication & erection tracking",
-      "QA/QC inspection module",
-      "AI schedule risk alerts",
-      "Submittal automation & AI extraction",
-      "Financial control & SOV",
-      "Custom dashboards & reports",
-    ],
-    cta: "Start Free Trial",
-    highlight: true,
-  },
-  {
-    tier: "Enterprise",
-    price: "Custom",
-    period: "",
-    description: "For large fabricators, GCs, and multi-shop operations.",
-    features: [
-      "Everything in Contractor, plus:",
-      "Multi-shop / multi-yard support",
-      "SSO & advanced security",
-      "ERP & BIM integrations (Tekla, SDS/2)",
-      "Dedicated success engineer",
-      "Custom SLA & priority support",
-      "On-site onboarding & training",
-    ],
-    cta: "Contact Sales",
-    highlight: false,
-  },
+const PROOF_POINTS = [
+  "Project dashboard modeled after real steel PM workflows",
+  "Light, executive interface aligned with the attached module mockups",
+  "Module-by-module visibility without burying users in navigation",
+  "Designed to feel credible in owner, GC, and leadership conversations",
 ];
 
-const TESTIMONIALS = [
-  {
-    quote: "We were running a 4,200-ton hospital job on spreadsheets and Bluebeam markups. Switched to SteelBuild Pro mid-project and our RFI turnaround went from 12 days to 3. The GC actually commented on it.",
-    name: "Mike R.",
-    role: "Project Manager",
-    company: "Regional Steel Fabricator — Phoenix, AZ",
-    project: "4,200-ton healthcare facility",
-  },
-  {
-    quote: "Close-out used to take us 3 weeks of digging through email for mill certs and weld records. Now the turnover package builds itself as we go. Our last project closed out in 2 days.",
-    name: "Sarah T.",
-    role: "Quality Manager",
-    company: "Structural Steel Erector — Denver, CO",
-    project: "Multi-story office complex",
-  },
-  {
-    quote: "My foremen hated the old paper bolt-up logs. Now they snap a photo, tag the connection, and it's done. The CWI can pull every inspection record by grid line from his truck.",
-    name: "James K.",
-    role: "Field Superintendent",
-    company: "Steel Erection Contractor — Dallas, TX",
-    project: "12-story mixed-use tower",
-  },
-];
+const monoLabel = (extra = {}) => ({
+  fontFamily: F.mono,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  color: C.muted,
+  ...extra,
+});
 
-const NAV_LINKS = [
-  { label: "Features", target: "features" },
-  { label: "How It Works", target: "workflow" },
-  { label: "Pricing", target: "pricing" },
-  { label: "Contact", target: "demo" },
-];
+function Reveal({ children, delay = 0, as: Tag = "div", className = "", style }) {
+  const ref = useRef(null);
+  const [shown, setShown] = useState(false);
 
-/* ─── Component ───────────────────────────────────────────────── */
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (reduce) {
+      setShown(true);
+      return undefined;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShown(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
-export default function Landing({ onLogin, isSubmitting, loginError }) {
+  return (
+    <Tag
+      ref={ref}
+      className={`lp-reveal ${shown ? "is-in" : ""} ${className}`}
+      style={{ transitionDelay: `${delay}ms`, ...style }}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+function BrandMark({ size = 38 }) {
+  return (
+    <div
+      className="lp-brand-mark"
+      style={{ width: size, height: size, minWidth: size, borderRadius: Math.max(10, size * 0.26) }}
+    >
+      SB
+    </div>
+  );
+}
+
+function ProductMockup() {
+  const rows = [
+    ["RFI-129", "Beam connection clarification", "In Progress", "Level 2 / Grid B-12", "May 21"],
+    ["SUB-103", "Mechanical sleeve locations", "Waiting", "Mechanical", "May 20"],
+    ["CO-008", "Add steel for rooftop screen", "Under Review", "Structural", "May 19"],
+  ];
+
+  return (
+    <div className="lp-product-shell" aria-label="SteelBuild Pro product preview">
+      <div className="lp-product-sidebar">
+        <div className="lp-product-brand"><BrandMark size={28} /><span>SteelBuild Pro</span></div>
+        {["Dashboard", "Command Center", "Portfolio", "Projects", "Action Items", "RFIs", "Detailing", "Schedule", "Field Today", "Budget Control"].map((item, idx) => (
+          <div key={item} className={`lp-product-nav ${idx === 0 ? "active" : ""}`}>
+            <span />{item}
+          </div>
+        ))}
+      </div>
+      <div className="lp-product-main">
+        <div className="lp-product-topbar">
+          <div className="lp-project-pill">Rivergate Logistics Center <span>Project ID: DEMO-001</span></div>
+          <div className="lp-product-search">Search drawings, submittals, RFIs, or documents...</div>
+          <div className="lp-product-user">JM</div>
+        </div>
+        <div className="lp-product-hero">
+          <div>
+            <div className="lp-product-title">Dashboard</div>
+            <div className="lp-product-subtitle">Project overview and quick access to SteelBuild Pro modules.</div>
+            <div className="lp-product-tags"><span>13 Buildings</span><span>156 Drawings</span><span>123 RFIs Open</span></div>
+          </div>
+          <div className="lp-health-block"><strong>78</strong><span>Project Health</span></div>
+          <div className="lp-health-block"><strong>42%</strong><span>Complete</span></div>
+        </div>
+        <div className="lp-product-kpis">
+          {[
+            ["Project Health", "78", "Good", "amber"],
+            ["Open RFIs", "47", "8 need action", "red"],
+            ["Schedule Health", "72%", "On Track", "green"],
+            ["Cost Health", "-2.4%", "Under Budget", "green"],
+          ].map(([label, value, sub, tone]) => (
+            <div key={label} className="lp-product-kpi">
+              <span className={`lp-kpi-icon ${tone}`} />
+              <div><p>{label}</p><strong>{value}</strong><small>{sub}</small></div>
+            </div>
+          ))}
+        </div>
+        <div className="lp-product-grid">
+          <div className="lp-product-card modules">
+            <div className="lp-product-card-head"><strong>SteelBuild Modules</strong><span>View all</span></div>
+            <div className="lp-mini-modules">
+              {["RFIs", "Detailing", "Schedule", "Field Hub", "Budget", "Change Orders"].map((name, idx) => (
+                <div key={name} className="lp-mini-module" style={{ backgroundImage: `linear-gradient(180deg, rgba(16,24,39,.12), rgba(16,24,39,.78)), url(${HERO_STRIP})` }}>
+                  <strong>{name}</strong>
+                  <span>{idx % 2 ? "Active" : "Open"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="lp-product-card alerts">
+            <div className="lp-product-card-head"><strong>Critical Alerts</strong><span>View all</span></div>
+            {[
+              ["Overdue Drawings", "6 items past due", "High"],
+              ["RFIs Overdue", "3 waiting on response", "High"],
+              ["Activities At Risk", "14 schedule items", "Medium"],
+              ["Field Issues", "5 require attention", "Low"],
+            ].map(([title, sub, sev]) => (
+              <div key={title} className="lp-alert-row"><div><strong>{title}</strong><span>{sub}</span></div><em>{sev}</em></div>
+            ))}
+          </div>
+        </div>
+        <div className="lp-product-table">
+          <div className="lp-table-filter">Search dashboard...</div>
+          <table>
+            <thead><tr><th>ID</th><th>Description</th><th>Status</th><th>Related To</th><th>Updated</th></tr></thead>
+            <tbody>{rows.map((r) => <tr key={r[0]}>{r.map((c, i) => <td key={c} className={i === 2 ? "status" : ""}>{c}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitting, loginError }) {
   const [showLogin, setShowLogin] = useState(false);
+  const [authMode, setAuthMode] = useState("signin"); // "signin" | "signup" | "forgot"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [signupBusy, setSignupBusy] = useState(false);
+  const [signupError, setSignupError] = useState(null);
+  const [signupNotice, setSignupNotice] = useState(null);
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotError, setForgotError] = useState(null);
+  const [forgotNotice, setForgotNotice] = useState(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-
-  // Demo form state
-  const [demoForm, setDemoForm] = useState({ name: "", email: "", company: "", phone: "", tonnage: "", message: "" });
+  const [demoForm, setDemoForm] = useState({ name: "", email: "", company: "", tonnage: "", message: "" });
   const [demoSent, setDemoSent] = useState(false);
+  const [demoError, setDemoError] = useState(null);
+  const [demoSubmitting, setDemoSubmitting] = useState(false);
 
   const sectionRefs = {
-    pain: useRef(null),
-    features: useRef(null),
+    platform: useRef(null),
+    modules: useRef(null),
     workflow: useRef(null),
     pricing: useRef(null),
     demo: useRef(null),
   };
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
+    const onScroll = () => setScrolled(window.scrollY > 30);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Close login modal on Escape
   useEffect(() => {
-    if (!showLogin) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.background;
+    const prevBody = body.style.background;
+    html.style.background = C.base;
+    body.style.background = C.base;
+    return () => {
+      html.style.background = prevHtml;
+      body.style.background = prevBody;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showLogin) return undefined;
     const handler = (e) => { if (e.key === "Escape") setShowLogin(false); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [showLogin]);
 
+  useEffect(() => {
+    if (showLogin) {
+      setSignupNotice(null);
+      setSignupError(null);
+    }
+  }, [showLogin]);
+
   const scrollTo = (key) => {
     sectionRefs[key]?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setMobileNav(false);
+  };
+
+  const openAuth = (mode) => {
+    setAuthMode(mode);
+    setSignupError(null);
+    setSignupNotice(null);
+    setShowLogin(true);
     setMobileNav(false);
   };
 
@@ -259,799 +313,464 @@ export default function Landing({ onLogin, isSubmitting, loginError }) {
     await onLogin?.({ email: email.trim(), password });
   };
 
-  const handleDemoSubmit = (e) => {
+  const handleSignUp = async (e) => {
     e.preventDefault();
-    // In production this would POST to an API / edge function.
-    setDemoSent(true);
+    setSignupError(null);
+    if (!email.trim() || !password) return;
+    if (password.length < 8) {
+      setSignupError("Use at least 8 characters for your password.");
+      return;
+    }
+    setSignupBusy(true);
+    const res = await onSignUp?.({ email: email.trim(), password, fullName: fullName.trim() || undefined });
+    setSignupBusy(false);
+    if (res?.success) {
+      if (res.needsConfirmation) {
+        setSignupNotice(`We sent a confirmation link to ${email.trim()}. Click it to activate your account, then sign in.`);
+      }
+    } else if (res?.error) {
+      setSignupError(res.error.message);
+    }
+  };
+
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    setForgotError(null);
+    if (!email.trim()) return;
+    setForgotBusy(true);
+    const res = await onForgotPassword?.(email.trim());
+    setForgotBusy(false);
+    // Neutral confirmation regardless of whether the account exists — never
+    // disclose account existence via this surface.
+    if (!res || res.success) {
+      setForgotNotice(`If an account exists for ${email.trim()}, we've sent a password reset link. Check your email.`);
+    } else {
+      setForgotError(res.error || "Could not send the reset email. Try again.");
+    }
+  };
+
+  const handleDemoSubmit = async (e) => {
+    e.preventDefault();
+    if (demoSubmitting) return;
+    setDemoError(null);
+    setDemoSubmitting(true);
+    try {
+      const { error } = await supabase.from("demo_requests").insert({
+        name: demoForm.name.trim(),
+        email: demoForm.email.trim(),
+        company: demoForm.company.trim() || null,
+        tonnage: demoForm.tonnage.trim() || null,
+        message: demoForm.message.trim() || null,
+      });
+      if (error) throw error;
+      setDemoSent(true);
+    } catch {
+      setDemoError("Something went wrong sending your request. Please email support@steelbuild-pro.com or try again.");
+    } finally {
+      setDemoSubmitting(false);
+    }
   };
 
   return (
-    <div style={{ background: "#060810", color: "#E6EDF3", minHeight: "100vh", fontFamily: "'Inter', 'Barlow', sans-serif", overflowX: "hidden" }}>
+    <div className="lp-page">
       <style>{`
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes sparks {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+        @keyframes lpFloat { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(0,-10px,0); } }
+        @keyframes lpShine { 0% { transform: translateX(-120%); } 100% { transform: translateX(220%); } }
+        @keyframes lpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .lp-page { min-height: 100vh; background: ${C.base}; color: ${C.body}; font-family: ${F.body}; overflow-x: hidden; position: relative; }
+        .lp-wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; position: relative; }
+        .lp-sec { padding: 104px 0; position: relative; }
+        .lp-reveal { opacity: 0; transform: translateY(20px); transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1); }
+        .lp-reveal.is-in { opacity: 1; transform: translateY(0); }
+        .lp-brand-mark { display: grid; place-items: center; background: linear-gradient(180deg, #FFF7DE, #FFFFFF); border: 2px solid ${C.amber}; color: ${C.amberDark}; font-weight: 900; font-size: 12px; letter-spacing: .02em; box-shadow: 0 12px 24px rgba(245,168,0,.15); }
+        .lp-kicker { display: inline-flex; align-items: center; gap: 10px; font-family: ${F.mono}; font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: ${C.amberDark}; }
+        .lp-kicker::before { content: ''; width: 28px; height: 2px; border-radius: 999px; background: linear-gradient(90deg, transparent, ${C.amber}); }
+        .lp-h1 { font-family: ${F.display}; font-size: clamp(46px, 6.4vw, 84px); line-height: .96; letter-spacing: -.06em; color: ${C.ink}; margin: 20px 0 0; font-weight: 900; }
+        .lp-h2 { font-family: ${F.display}; font-size: clamp(34px, 4.6vw, 60px); line-height: 1; letter-spacing: -.05em; color: ${C.ink}; margin: 16px 0 0; font-weight: 900; }
+        .lp-sub { font-size: 18px; line-height: 1.68; color: ${C.body}; margin: 18px 0 0; }
+        .lp-btn { appearance: none; border: 1px solid transparent; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 12px 22px; font-size: 14px; font-weight: 800; letter-spacing: -.01em; cursor: pointer; transition: transform .16s, box-shadow .16s, border-color .16s, background .16s, opacity .16s; }
+        .lp-btn:hover { transform: translateY(-2px); }
+        .lp-btn-primary { color: #1F1600; background: linear-gradient(180deg, #FFC94D, ${C.amber}); box-shadow: 0 12px 28px rgba(245,168,0,.28), inset 0 1px 0 rgba(255,255,255,.55); border-color: #E7A116; }
+        .lp-btn-secondary { color: ${C.navy}; background: #FFFFFF; border-color: ${C.line2}; box-shadow: 0 10px 24px rgba(15,23,42,.08); }
+        .lp-btn-secondary:hover { border-color: ${C.amber}; box-shadow: 0 14px 28px rgba(15,23,42,.11); }
+        .lp-card { background: rgba(255,255,255,.86); border: 1px solid ${C.line}; border-radius: 24px; box-shadow: 0 18px 54px rgba(15,23,42,.08); }
+        .lp-navlink { border: none; background: none; padding: 8px 2px; color: ${C.body}; font: inherit; font-size: 14px; font-weight: 750; cursor: pointer; }
+        .lp-navlink:hover { color: ${C.ink}; }
+        .lp-mobile-toggle { display: none; border: 1px solid ${C.line}; background: #FFFFFF; border-radius: 12px; color: ${C.ink}; font-size: 20px; padding: 6px 10px; cursor: pointer; }
+        .lp-input { width: 100%; box-sizing: border-box; padding: 13px 14px; border: 1px solid ${C.line2}; border-radius: 12px; background: #FFFFFF; color: ${C.ink}; font-family: ${F.body}; font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s; }
+        .lp-input:focus { border-color: ${C.amber}; box-shadow: 0 0 0 4px rgba(245,168,0,.16); }
+        .lp-input::placeholder { color: ${C.muted}; }
+        .lp-grid-bg { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(23,32,51,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(23,32,51,.05) 1px, transparent 1px); background-size: 46px 46px; mask-image: radial-gradient(80% 60% at 50% 0%, #000, transparent 76%); -webkit-mask-image: radial-gradient(80% 60% at 50% 0%, #000, transparent 76%); }
+
+        .lp-product-shell { width: min(760px, 100%); display: grid; grid-template-columns: 150px minmax(0,1fr); background: #F8FAFC; border: 1px solid ${C.line}; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 80px rgba(15,23,42,.18); animation: lpFloat 9s ease-in-out infinite; position: relative; }
+        .lp-product-shell::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,.18) 46%, transparent 62%); transform: translateX(-120%); animation: lpShine 8s ease-in-out infinite; }
+        .lp-product-sidebar { background: #FFFFFF; border-right: 1px solid ${C.line}; padding: 16px 12px; }
+        .lp-product-brand { display: flex; align-items: center; gap: 8px; color: ${C.ink}; font-weight: 900; font-size: 13px; margin-bottom: 16px; }
+        .lp-product-nav { display: flex; align-items: center; gap: 8px; min-height: 26px; padding: 0 8px; border-radius: 8px; color: ${C.body}; font-size: 10px; font-weight: 800; margin-bottom: 3px; }
+        .lp-product-nav span { width: 8px; height: 8px; border-radius: 3px; border: 1px solid ${C.line2}; }
+        .lp-product-nav.active { background: #FFF4D5; color: ${C.ink}; }
+        .lp-product-nav.active span { border-color: ${C.amber}; background: ${C.amber}; }
+        .lp-product-main { min-width: 0; padding: 14px; }
+        .lp-product-topbar { display: grid; grid-template-columns: 190px 1fr 34px; gap: 10px; align-items: center; margin-bottom: 12px; }
+        .lp-project-pill, .lp-product-search, .lp-product-user { background: #FFFFFF; border: 1px solid ${C.line}; border-radius: 12px; color: ${C.body}; box-shadow: 0 6px 14px rgba(15,23,42,.04); }
+        .lp-project-pill { padding: 9px 12px; color: ${C.ink}; font-weight: 900; font-size: 12px; }
+        .lp-project-pill span { display: block; color: ${C.muted}; font-weight: 650; font-size: 10px; margin-top: 2px; }
+        .lp-product-search { height: 38px; display: flex; align-items: center; padding: 0 12px; font-size: 11px; }
+        .lp-product-user { height: 34px; width: 34px; display: grid; place-items: center; color: #FFFFFF; background: ${C.navy}; border-radius: 999px; font-weight: 900; font-size: 11px; }
+        .lp-product-hero { display: grid; grid-template-columns: 1fr 72px 72px; gap: 10px; align-items: center; min-height: 104px; border: 1px solid ${C.line}; border-radius: 18px; padding: 18px; background-image: linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.88) 48%, rgba(255,255,255,.66) 100%), url(${HERO_STRIP}); background-size: cover; background-position: center; }
+        .lp-product-title { color: ${C.ink}; font-size: 25px; font-weight: 950; letter-spacing: -.05em; }
+        .lp-product-subtitle { color: ${C.body}; font-size: 12px; margin-top: 2px; }
+        .lp-product-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+        .lp-product-tags span { border: 1px solid ${C.line}; background: #FFFFFF; border-radius: 8px; padding: 5px 8px; font-size: 10px; font-weight: 900; color: ${C.body}; }
+        .lp-health-block { background: rgba(255,255,255,.9); border: 1px solid ${C.line}; border-radius: 14px; padding: 10px; text-align: center; }
+        .lp-health-block strong { display: block; color: ${C.ink}; font-size: 20px; line-height: 1; }
+        .lp-health-block span { display: block; color: ${C.body}; font-size: 9px; margin-top: 5px; }
+        .lp-product-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+        .lp-product-kpi { background: #FFFFFF; border: 1px solid ${C.line}; border-radius: 14px; padding: 12px; display: flex; gap: 10px; align-items: center; }
+        .lp-kpi-icon { width: 24px; height: 24px; border-radius: 999px; background: #FFF4D5; box-shadow: inset 0 0 0 1px rgba(245,168,0,.26); flex: 0 0 24px; }
+        .lp-kpi-icon.green { background: #DCFCE7; box-shadow: inset 0 0 0 1px rgba(5,150,105,.24); }
+        .lp-kpi-icon.red { background: #FEE2E2; box-shadow: inset 0 0 0 1px rgba(220,38,38,.22); }
+        .lp-kpi-icon.blue { background: #DBEAFE; box-shadow: inset 0 0 0 1px rgba(37,99,235,.22); }
+        .lp-product-kpi p { margin: 0 0 2px; color: ${C.body}; font-size: 10px; font-weight: 850; }
+        .lp-product-kpi strong { display: block; color: ${C.ink}; font-size: 20px; line-height: 1; }
+        .lp-product-kpi small { display: block; color: ${C.muted}; font-size: 9px; margin-top: 3px; }
+        .lp-product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .lp-product-card { background: #FFFFFF; border: 1px solid ${C.line}; border-radius: 16px; padding: 12px; min-width: 0; }
+        .lp-product-card-head { display: flex; justify-content: space-between; color: ${C.ink}; font-size: 12px; margin-bottom: 10px; }
+        .lp-product-card-head span { color: ${C.blue}; font-size: 10px; font-weight: 900; }
+        .lp-mini-modules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+        .lp-mini-module { min-height: 70px; border-radius: 12px; padding: 9px; background-size: cover; background-position: center; color: #FFFFFF; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
+        .lp-mini-module strong { font-size: 11px; line-height: 1; }
+        .lp-mini-module span { color: #FFC94D; font-size: 9px; font-weight: 900; margin-top: 4px; }
+        .lp-alert-row { display: flex; justify-content: space-between; gap: 8px; align-items: center; border-top: 1px solid ${C.line}; padding: 8px 0; }
+        .lp-alert-row:first-of-type { border-top: 0; padding-top: 0; }
+        .lp-alert-row strong { display: block; color: ${C.ink}; font-size: 11px; }
+        .lp-alert-row span { display: block; color: ${C.muted}; font-size: 9px; margin-top: 2px; }
+        .lp-alert-row em { font-style: normal; color: ${C.red}; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 4px 6px; font-size: 9px; font-weight: 900; }
+        .lp-product-table { background: #FFFFFF; border: 1px solid ${C.line}; border-radius: 16px; margin-top: 10px; overflow: hidden; }
+        .lp-table-filter { height: 34px; display: flex; align-items: center; border-bottom: 1px solid ${C.line}; color: ${C.muted}; font-size: 11px; padding: 0 12px; }
+        .lp-product-table table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .lp-product-table th { text-align: left; color: ${C.muted}; padding: 8px 12px; background: #F8FAFC; font-weight: 900; }
+        .lp-product-table td { color: ${C.body}; padding: 9px 12px; border-top: 1px solid ${C.line}; white-space: nowrap; }
+        .lp-product-table td:first-child { color: ${C.blue}; font-weight: 900; }
+        .lp-product-table td.status { color: ${C.amberDark}; font-weight: 900; }
+        .lp-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15,23,42,.56); backdrop-filter: blur(10px); animation: lpFadeIn .18s ease; }
+        .lp-footlink { background: none; border: none; padding: 0; text-align: left; color: ${C.body}; font: inherit; font-size: 13.5px; cursor: pointer; text-decoration: none; }
+        .lp-footlink:hover { color: ${C.ink}; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .lp-reveal, .lp-product-shell { opacity: 1 !important; transform: none !important; transition: none !important; animation: none !important; }
+          .lp-product-shell::after { animation: none !important; display: none !important; }
+          .lp-btn:hover { transform: none !important; }
         }
-        .lp-fade { animation: fadeInUp 0.7s ease both; }
-        .lp-fade-d1 { animation-delay: 0.1s; }
-        .lp-fade-d2 { animation-delay: 0.2s; }
-        .lp-fade-d3 { animation-delay: 0.3s; }
-        .lp-card:hover { transform: translateY(-4px); box-shadow: 0 20px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(200,155,32,0.15) !important; }
-        .lp-card { transition: transform 0.25s ease, box-shadow 0.25s ease; }
-        .lp-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(200,155,32,0.4) !important; }
-        .lp-btn-ghost:hover { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.2) !important; }
-        .lp-nav-link:hover { color: #C89B20 !important; }
-        .lp-price-highlight { border-color: #C89B20 !important; box-shadow: 0 0 40px rgba(200,155,32,0.12), 0 20px 48px rgba(0,0,0,0.5) !important; }
-        .lp-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; }
-        .lp-input { width: 100%; padding: 12px 14px; background: #0E1116; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #E6EDF3; font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.2s; }
-        .lp-input:focus { border-color: #C89B20; }
-        .lp-input::placeholder { color: rgba(230,237,243,0.3); }
-        .lp-pain-card:hover { border-color: rgba(239,68,68,0.3) !important; background: rgba(239,68,68,0.03) !important; }
-        .lp-pain-card { transition: border-color 0.3s, background 0.3s; }
-        .lp-feature-detail { transition: max-height 0.3s ease, opacity 0.3s ease; }
-        .lp-hero-accent {
-          background: linear-gradient(90deg, #C89B20, #E0B030, #C89B20);
-          background-size: 200% auto;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          animation: sparks 3s ease-in-out infinite;
-        }
-        .lp-divider-line {
-          height: 2px;
-          background: linear-gradient(90deg, transparent, rgba(200,155,32,0.3), transparent);
-        }
-        @media (max-width: 768px) {
+        @media (max-width: 1060px) {
           .lp-hero-grid { grid-template-columns: 1fr !important; }
+          .lp-product-shell { margin: 0 auto; }
+          .lp-c3 { grid-template-columns: 1fr 1fr !important; }
+          .lp-demo-grid, .lp-proof-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 760px) {
+          .lp-wrap { padding: 0 20px; }
+          .lp-sec { padding: 78px 0; }
           .lp-nav-links { display: none !important; }
-          .lp-mobile-toggle { display: flex !important; }
-          .lp-stats-grid { grid-template-columns: 1fr 1fr !important; }
-          .lp-features-grid { grid-template-columns: 1fr !important; }
-          .lp-pricing-grid { grid-template-columns: 1fr !important; }
-          .lp-workflow-grid { grid-template-columns: 1fr !important; }
-          .lp-testimonials-grid { grid-template-columns: 1fr !important; }
-          .lp-pain-grid { grid-template-columns: 1fr !important; }
-          .lp-footer-grid { grid-template-columns: 1fr !important; text-align: center; }
+          .lp-mobile-toggle { display: inline-flex !important; }
+          .lp-stat-grid, .lp-c2, .lp-c3, .lp-c4, .lp-module-grid, .lp-plan-grid { grid-template-columns: 1fr !important; }
+          .lp-product-shell { grid-template-columns: 1fr; border-radius: 22px; }
+          .lp-product-sidebar { display: none; }
+          .lp-product-topbar { grid-template-columns: 1fr 34px; }
+          .lp-product-search { display: none; }
+          .lp-product-hero { grid-template-columns: 1fr; }
+          .lp-product-kpis { grid-template-columns: 1fr 1fr; }
+          .lp-product-grid { grid-template-columns: 1fr; }
+          .lp-product-table { display: none; }
+          .lp-footer-main { flex-direction: column !important; }
+        }
+        @media (max-width: 520px) {
+          .lp-product-kpis, .lp-mini-modules { grid-template-columns: 1fr 1fr; }
+          .lp-h1 { font-size: clamp(40px, 14vw, 58px); }
         }
       `}</style>
 
-      {/* ══════════════ NAV ══════════════ */}
-      <nav style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 50,
-        padding: "0 28px", height: 64,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: scrolled ? "rgba(6,8,16,0.92)" : "transparent",
-        backdropFilter: scrolled ? "blur(20px) saturate(150%)" : "none",
-        borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "1px solid transparent",
-        transition: "background 0.3s, border-color 0.3s, backdrop-filter 0.3s",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 8,
-            background: "linear-gradient(135deg, #C89B20, #E0B030)",
-            display: "grid", placeItems: "center",
-            color: "#0B0E11", fontWeight: 900, fontSize: 14, letterSpacing: "0.06em",
-            boxShadow: "0 4px 16px rgba(200,155,32,0.3)",
-          }}>SB</div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: "0.14em", lineHeight: 1.2 }}>STEELBUILD PRO</div>
-            <div style={{ fontSize: 10, color: "rgba(230,237,243,0.45)", letterSpacing: "0.08em" }}>STEEL DELIVERY PLATFORM</div>
+      <div style={{ height: 4, background: `linear-gradient(90deg, ${C.amber}, #FFD466, ${C.blue})` }} />
+      <nav style={{ position: "sticky", top: 0, zIndex: 50, background: scrolled ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.68)", backdropFilter: "blur(18px)", borderBottom: `1px solid ${scrolled ? C.line : "transparent"}`, transition: "background .2s, border-color .2s" }}>
+        <div className="lp-wrap" style={{ height: 74, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18 }}>
+          <button type="button" onClick={() => scrollTo("platform")} style={{ display: "flex", alignItems: "center", gap: 12, border: 0, background: "none", padding: 0, cursor: "pointer" }}>
+            <BrandMark />
+            <span style={{ color: C.ink, fontWeight: 950, letterSpacing: "-.04em", fontSize: 20 }}>SteelBuild Pro</span>
+          </button>
+          <div className="lp-nav-links" style={{ display: "flex", alignItems: "center", gap: 28 }}>
+            {NAV_LINKS.map(({ label, target }) => <button key={target} className="lp-navlink" onClick={() => scrollTo(target)}>{label}</button>)}
+            <button className="lp-navlink" style={{ color: C.ink }} onClick={() => openAuth("signin")}>Sign in</button>
+            <button className="lp-btn lp-btn-primary" onClick={() => openAuth("signup")}>Start free</button>
           </div>
+          <button className="lp-mobile-toggle" aria-label={mobileNav ? "Close menu" : "Open menu"} onClick={() => setMobileNav(!mobileNav)}>{mobileNav ? "✕" : "☰"}</button>
         </div>
-
-        <div className="lp-nav-links" style={{ display: "flex", gap: 28, alignItems: "center" }}>
-          {NAV_LINKS.map(({ label, target }) => (
-            <button key={target} className="lp-nav-link" onClick={() => scrollTo(target)} style={{
-              background: "none", border: "none", color: "rgba(230,237,243,0.7)",
-              fontSize: 13, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer",
-              transition: "color 0.2s", padding: 0, fontFamily: "inherit",
-            }}>{label}</button>
-          ))}
-          <button onClick={() => setShowLogin(true)} style={{
-            background: "none", border: "1px solid rgba(255,255,255,0.15)",
-            color: "#E6EDF3", padding: "8px 16px", borderRadius: 6,
-            fontSize: 13, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em",
-            transition: "border-color 0.2s, background 0.2s", fontFamily: "inherit",
-          }}>Sign In</button>
-          <button className="lp-btn-primary" onClick={() => scrollTo("demo")} style={{
-            background: "linear-gradient(135deg, #C89B20, #E0B030)",
-            color: "#0B0E11", padding: "8px 18px", border: "none", borderRadius: 6,
-            fontSize: 13, fontWeight: 800, cursor: "pointer", letterSpacing: "0.06em",
-            boxShadow: "0 4px 16px rgba(200,155,32,0.3)",
-            transition: "transform 0.2s, box-shadow 0.2s", fontFamily: "inherit",
-          }}>Request Demo</button>
-        </div>
-
-        {/* Mobile hamburger */}
-        <button className="lp-mobile-toggle" onClick={() => setMobileNav(!mobileNav)} style={{
-          display: "none", background: "none", border: "none", color: "#E6EDF3",
-          fontSize: 24, cursor: "pointer", padding: 4,
-        }}>{mobileNav ? "✕" : "☰"}</button>
+        {mobileNav && (
+          <div className="lp-wrap" style={{ paddingTop: 14, paddingBottom: 20, display: "flex", flexDirection: "column", gap: 12, borderTop: `1px solid ${C.line}`, background: "rgba(255,255,255,.96)" }}>
+            {NAV_LINKS.map(({ label, target }) => <button key={target} className="lp-navlink" style={{ textAlign: "left", fontSize: 16 }} onClick={() => scrollTo(target)}>{label}</button>)}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 4 }}>
+              <button className="lp-btn lp-btn-secondary" onClick={() => openAuth("signin")}>Sign in</button>
+              <button className="lp-btn lp-btn-primary" onClick={() => openAuth("signup")}>Start free</button>
+            </div>
+          </div>
+        )}
       </nav>
 
-      {/* Mobile nav dropdown */}
-      {mobileNav && (
-        <div style={{
-          position: "fixed", top: 64, left: 0, right: 0, zIndex: 49,
-          background: "rgba(6,8,16,0.96)", backdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
-          padding: "16px 28px", display: "flex", flexDirection: "column", gap: 12,
-        }}>
-          {NAV_LINKS.map(({ label, target }) => (
-            <button key={target} onClick={() => scrollTo(target)} style={{
-              background: "none", border: "none", color: "rgba(230,237,243,0.8)",
-              fontSize: 15, fontWeight: 600, cursor: "pointer", textAlign: "left",
-              padding: "8px 0", fontFamily: "inherit",
-            }}>{label}</button>
+      <section ref={sectionRefs.platform} style={{ padding: "84px 0 88px", position: "relative", overflow: "hidden" }}>
+        <div className="lp-grid-bg" />
+        <div style={{ position: "absolute", width: 680, height: 680, borderRadius: "50%", right: "-22%", top: "-22%", background: "radial-gradient(circle, rgba(245,168,0,.20), transparent 68%)", pointerEvents: "none" }} />
+        <div className="lp-wrap lp-hero-grid" style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr", gap: 56, alignItems: "center" }}>
+          <Reveal>
+            <span className="lp-kicker">Executive project control for steel</span>
+            <h1 className="lp-h1">A sharper operating system for structural steel teams.</h1>
+            <p className="lp-sub" style={{ maxWidth: 570, fontSize: 20 }}>
+              SteelBuild Pro gives owners, PMs, detailers, shop leaders, and field teams one polished command layer for project health, RFIs, detailing, schedule, field work, cost, documents, and closeout.
+            </p>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 34 }}>
+              <button className="lp-btn lp-btn-primary" style={{ minHeight: 50, padding: "14px 28px" }} onClick={() => openAuth("signup")}>Start free</button>
+              <button className="lp-btn lp-btn-secondary" style={{ minHeight: 50, padding: "14px 26px" }} onClick={() => scrollTo("demo")}>Request executive demo</button>
+            </div>
+            <div className="lp-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12, marginTop: 38 }}>
+              {EXEC_METRICS.map((s) => (
+                <div key={s.label} className="lp-card" style={{ padding: "18px 16px", borderRadius: 18, boxShadow: "0 12px 30px rgba(15,23,42,.06)" }}>
+                  <div style={{ color: C.ink, fontWeight: 950, fontSize: 24, letterSpacing: "-.04em" }}>{s.value}</div>
+                  <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.35, marginTop: 4 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+          <Reveal delay={120}>
+            <ProductMockup />
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="lp-sec" style={{ paddingTop: 22 }}>
+        <div className="lp-wrap lp-c3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+          {VALUE_CARDS.map((card, i) => (
+            <Reveal key={card.kicker} delay={i * 80}>
+              <div className="lp-card" style={{ height: "100%", padding: 28, borderRadius: 24 }}>
+                <div style={monoLabel({ color: C.amberDark })}>{card.kicker}</div>
+                <h3 style={{ color: C.ink, fontSize: 25, lineHeight: 1.08, letterSpacing: "-.04em", margin: "14px 0 10px", fontWeight: 900 }}>{card.title}</h3>
+                <p style={{ color: C.body, fontSize: 15, lineHeight: 1.62, margin: 0 }}>{card.body}</p>
+              </div>
+            </Reveal>
           ))}
-          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-            <button onClick={() => { setShowLogin(true); setMobileNav(false); }} style={{
-              flex: 1, background: "none", border: "1px solid rgba(255,255,255,0.15)",
-              color: "#E6EDF3", padding: "10px", borderRadius: 6,
-              fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-            }}>Sign In</button>
-            <button onClick={() => { scrollTo("demo"); }} style={{
-              flex: 1, background: "#C89B20", color: "#0B0E11", padding: "10px",
-              border: "none", borderRadius: 6, fontSize: 13, fontWeight: 800,
-              cursor: "pointer", fontFamily: "inherit",
-            }}>Request Demo</button>
+        </div>
+      </section>
+
+      <section ref={sectionRefs.modules} className="lp-sec" style={{ background: C.surface, borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
+        <div className="lp-wrap">
+          <Reveal style={{ maxWidth: 760, marginBottom: 42 }}>
+            <span className="lp-kicker">Module suite</span>
+            <h2 className="lp-h2">A complete steel command center, not another generic task app.</h2>
+            <p className="lp-sub">The attached reference mockups show the direction: clean light modules, clear KPIs, fast filters, and decision-ready cards on every page.</p>
+          </Reveal>
+          <div className="lp-module-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+            {MODULES.map((m, i) => (
+              <Reveal key={m.name} delay={(i % 4) * 65}>
+                <div className="lp-card" style={{ padding: 20, borderRadius: 20, height: "100%", boxShadow: "0 12px 32px rgba(15,23,42,.06)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 12, background: m.tone === "green" ? "#DCFCE7" : m.tone === "red" ? "#FEE2E2" : m.tone === "blue" ? "#DBEAFE" : "#FFF4D5", border: `1px solid ${C.line}` }} />
+                    <span style={{ color: m.tone === "green" ? C.green : m.tone === "red" ? C.red : m.tone === "blue" ? C.blue : C.amberDark, fontWeight: 950, fontSize: 13 }}>{m.stat}</span>
+                  </div>
+                  <h3 style={{ color: C.ink, fontSize: 18, letterSpacing: "-.03em", margin: "18px 0 8px", fontWeight: 900 }}>{m.name}</h3>
+                  <p style={{ color: C.body, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>{m.desc}</p>
+                </div>
+              </Reveal>
+            ))}
           </div>
         </div>
-      )}
+      </section>
 
-      {/* ══════════════ HERO ══════════════ */}
-      <section style={{
-        paddingTop: 120, paddingBottom: 64, paddingLeft: 28, paddingRight: 28,
-        position: "relative", overflow: "hidden",
-        background: "radial-gradient(ellipse 80% 60% at 20% 10%, rgba(200,155,32,0.14), transparent 50%), radial-gradient(ellipse 60% 50% at 80% 20%, rgba(239,68,68,0.04), transparent 40%), #060810",
-      }}>
-        {/* Diagonal hazard stripe accent */}
-        <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, height: 4,
-          background: "repeating-linear-gradient(90deg, #C89B20 0px, #C89B20 20px, transparent 20px, transparent 40px)",
-          opacity: 0.6,
-        }} />
-
-        {/* Grid overlay */}
-        <div style={{
-          position: "absolute", inset: 0, opacity: 0.03,
-          backgroundImage: "linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-          pointerEvents: "none",
-        }} />
-
-        <div className="lp-hero-grid" style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 48, alignItems: "center", position: "relative" }}>
-          <div className="lp-fade">
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              padding: "6px 14px", borderRadius: 999,
-              background: "rgba(200,155,32,0.1)", border: "1px solid rgba(200,155,32,0.25)",
-              marginBottom: 24,
-            }}>
-              <span style={{ width: 6, height: 6, borderRadius: 3, background: "#22C55E", animation: "pulse 2s ease infinite" }} />
-              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#C89B20", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                Built by steel people
-              </span>
-            </div>
-
-            <h1 style={{
-              fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900,
-              fontSize: "clamp(40px, 5.5vw, 72px)", lineHeight: 1.0,
-              margin: "0 0 12px", letterSpacing: "-0.02em",
-            }}>
-              Your steel is only as good as<br />
-              <span className="lp-hero-accent">the system behind it.</span>
-            </h1>
-
-            <p style={{
-              fontFamily: "'IBM Plex Mono', monospace", fontSize: 15, fontWeight: 600,
-              color: "rgba(239,68,68,0.8)", letterSpacing: "0.02em",
-              margin: "0 0 16px", lineHeight: 1.5,
-            }}>
-              Still chasing mill certs through email? Tracking bolt-up on paper? Losing RFIs in spreadsheet tabs?
-            </p>
-
-            <p style={{ fontSize: 17, color: "rgba(230,237,243,0.6)", lineHeight: 1.65, margin: "0 0 32px", maxWidth: 540 }}>
-              SteelBuild Pro is the project delivery platform built for structural steel fabricators and erectors.
-              From detailing approval to turnover package — every piece mark, every heat number, every weld record.
-              One system. Zero excuses.
-            </p>
-
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 32 }}>
-              <button className="lp-btn-primary" onClick={() => scrollTo("demo")} style={{
-                background: "linear-gradient(135deg, #C89B20, #E0B030)", color: "#0B0E11",
-                padding: "14px 28px", border: "none", borderRadius: 8,
-                fontSize: 14, fontWeight: 800, cursor: "pointer",
-                letterSpacing: "0.08em", textTransform: "uppercase",
-                boxShadow: "0 4px 24px rgba(200,155,32,0.35)",
-                transition: "transform 0.2s, box-shadow 0.2s", fontFamily: "inherit",
-              }}>See It With Your Data</button>
-
-              <button className="lp-btn-ghost" onClick={() => scrollTo("pain")} style={{
-                background: "transparent", color: "#E6EDF3",
-                padding: "14px 28px", border: "1px solid rgba(255,255,255,0.12)",
-                borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer",
-                letterSpacing: "0.06em", textTransform: "uppercase",
-                transition: "background 0.2s, border-color 0.2s", fontFamily: "inherit",
-              }}>Sound Familiar? &darr;</button>
-            </div>
-
-            {/* Trust badges */}
-            <div style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
-              {["AISC Certified Fabricators", "AWS D1.1 Compliant", "OSHA Record-Ready"].map((badge) => (
-                <span key={badge} style={{
-                  fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700,
-                  color: "rgba(230,237,243,0.35)", letterSpacing: "0.1em", textTransform: "uppercase",
-                  padding: "4px 10px", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 4,
-                }}>{badge}</span>
-              ))}
-            </div>
-          </div>
-
-          {/* Mock interface card */}
-          <div className="lp-fade lp-fade-d2" style={{
-            background: "linear-gradient(180deg, rgba(22,27,34,0.95), rgba(14,17,22,0.98))",
-            border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16,
-            padding: 24, boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
-            position: "relative", overflow: "hidden",
-          }}>
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, #C89B20, #E0B030, #C89B20)", opacity: 0.8 }} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#C89B20", letterSpacing: "0.12em", textTransform: "uppercase" }}>Project Command Center</span>
-              <div style={{ display: "flex", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 4, background: "#22C55E" }} />
-                <span style={{ width: 8, height: 8, borderRadius: 4, background: "#C89B20" }} />
-                <span style={{ width: 8, height: 8, borderRadius: 4, background: "rgba(255,255,255,0.2)" }} />
-              </div>
-            </div>
-
-            {/* Project header */}
-            <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(200,155,32,0.06)", border: "1px solid rgba(200,155,32,0.12)", marginBottom: 14 }}>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "rgba(230,237,243,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 2 }}>ACTIVE PROJECT</div>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 16, color: "#E6EDF3" }}>24426 — Capstone Medical Center</div>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(230,237,243,0.35)" }}>3,847 tons &middot; 428 pieces &middot; Phase 2 Erection</div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-              {[
-                { label: "Fab Released", value: "89%", color: "#C89B20" },
-                { label: "Erected", value: "62%", color: "#22C55E" },
-                { label: "Open RFIs", value: "7", color: "#56B0FF" },
-                { label: "NCRs Open", value: "2", color: "#EF4444" },
-              ].map(({ label, value, color }) => (
-                <div key={label} style={{
-                  padding: 12, borderRadius: 8,
-                  background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)",
-                }}>
-                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fontWeight: 700, color: "rgba(230,237,243,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 26, color, lineHeight: 1 }}>{value}</div>
+      <section ref={sectionRefs.workflow} className="lp-sec" style={{ overflow: "hidden" }}>
+        <div className="lp-wrap lp-proof-grid" style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr", gap: 44, alignItems: "start" }}>
+          <Reveal>
+            <span className="lp-kicker">From project kickoff to closeout</span>
+            <h2 className="lp-h2">Keep leadership, shop, and field aligned on the same facts.</h2>
+            <p className="lp-sub">SteelBuild Pro presents operations with the visual clarity executives expect and the workflow detail project teams need.</p>
+            <div style={{ marginTop: 30, display: "grid", gap: 12 }}>
+              {PROOF_POINTS.map((point) => (
+                <div key={point} style={{ display: "flex", gap: 12, alignItems: "flex-start", color: C.body, fontSize: 14.5, lineHeight: 1.45 }}>
+                  <span style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(245,168,0,.14)", border: `1px solid rgba(245,168,0,.45)`, flex: "0 0 18px", marginTop: 1 }} />
+                  {point}
                 </div>
               ))}
             </div>
-
-            {/* Phase progress */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {[
-                { label: "Detailing", pct: 100, color: "#22C55E" },
-                { label: "Fabrication", pct: 89, color: "#C89B20" },
-                { label: "Erection", pct: 62, color: "#56B0FF" },
-                { label: "Close-out", pct: 15, color: "rgba(230,237,243,0.3)" },
-              ].map(({ label, pct, color }) => (
-                <div key={label}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "rgba(230,237,243,0.45)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
-                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color, fontWeight: 700 }}>{pct}%</span>
-                  </div>
-                  <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.05)" }}>
-                    <div style={{ height: "100%", borderRadius: 2, width: `${pct}%`, background: color, transition: "width 1s ease" }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Recent activity */}
-            <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 8, background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.04)" }}>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fontWeight: 700, color: "rgba(230,237,243,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>LATEST ACTIVITY</div>
-              {[
-                { time: "2m ago", text: "Bolt inspection — Grid L4/E, Conn. #247", color: "#22C55E" },
-                { time: "18m ago", text: "RFI-052 response received from EOR", color: "#56B0FF" },
-                { time: "1h ago", text: "Truck #14 shake-out complete — 12 pcs", color: "#C89B20" },
-              ].map(({ time, text, color }) => (
-                <div key={text} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-                  <span style={{ width: 4, height: 4, borderRadius: 2, background: color, marginTop: 5, flexShrink: 0 }} />
+          </Reveal>
+          <div style={{ display: "grid", gap: 16 }}>
+            {WORKFLOW.map((item, i) => (
+              <Reveal key={item.step} delay={i * 80}>
+                <div className="lp-card" style={{ display: "grid", gridTemplateColumns: "76px 1fr", gap: 18, alignItems: "center", padding: 22, borderRadius: 22 }}>
+                  <div style={{ fontFamily: F.mono, color: C.amberDark, background: "rgba(245,168,0,.14)", border: `1px solid rgba(245,168,0,.38)`, borderRadius: 16, height: 58, display: "grid", placeItems: "center", fontWeight: 950, fontSize: 16 }}>{item.step}</div>
                   <div>
-                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(230,237,243,0.55)" }}>{text}</span>
-                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "rgba(230,237,243,0.25)", marginLeft: 6 }}>{time}</span>
+                    <h3 style={{ margin: "0 0 5px", color: C.ink, fontWeight: 950, fontSize: 21, letterSpacing: "-.04em" }}>{item.title}</h3>
+                    <p style={{ margin: 0, color: C.body, lineHeight: 1.55, fontSize: 14.5 }}>{item.body}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════ PAIN POINTS — "SOUND FAMILIAR?" ══════════════ */}
-      <section ref={sectionRefs.pain} id="pain" style={{
-        padding: "80px 28px",
-        background: "linear-gradient(180deg, rgba(22,27,34,0.5), rgba(14,17,22,0.3))",
-        borderTop: "1px solid rgba(239,68,68,0.1)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        position: "relative",
-      }}>
-        <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, height: 2,
-          background: "linear-gradient(90deg, transparent, rgba(239,68,68,0.2), transparent)",
-        }} />
-
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#EF4444", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 12 }}>Sound Familiar?</div>
-            <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(28px, 4vw, 48px)", margin: "0 0 12px" }}>
-              This is how steel projects fail.
-            </h2>
-            <p style={{ fontSize: 16, color: "rgba(230,237,243,0.5)", maxWidth: 620, margin: "0 auto", lineHeight: 1.6 }}>
-              Not in one big disaster — in a thousand small gaps. Documents that can't be found. Inspections that weren't recorded. Evidence that doesn't exist when you need it.
-            </p>
-          </div>
-
-          <div className="lp-pain-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-            {PAIN_POINTS.map((p) => (
-              <div key={p.pain} className="lp-pain-card" style={{
-                padding: 22, borderRadius: 12,
-                background: "rgba(14,17,22,0.6)",
-                border: "1px solid rgba(239,68,68,0.08)",
-                cursor: "default",
-              }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
-                  <span style={{ fontSize: 22, flexShrink: 0, marginTop: -2 }}>{p.icon}</span>
-                  <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 18, margin: 0, color: "#EF4444", lineHeight: 1.2 }}>{p.pain}</h3>
-                </div>
-                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "rgba(230,237,243,0.5)", fontStyle: "italic" }}>
-                  {p.reality}
-                </p>
-              </div>
+              </Reveal>
             ))}
           </div>
-
-          {/* Transition CTA */}
-          <div style={{ textAlign: "center", marginTop: 48 }}>
-            <div className="lp-divider-line" style={{ maxWidth: 200, margin: "0 auto 24px" }} />
-            <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "clamp(20px, 3vw, 32px)", color: "#C89B20", marginBottom: 8 }}>
-              SteelBuild Pro was built to kill every one of these problems.
-            </p>
-            <p style={{ fontSize: 14, color: "rgba(230,237,243,0.45)", marginBottom: 20 }}>
-              Not with generic PM features. With tools designed for structural steel from the ground up.
-            </p>
-            <button className="lp-btn-primary" onClick={() => scrollTo("features")} style={{
-              background: "linear-gradient(135deg, #C89B20, #E0B030)", color: "#0B0E11",
-              padding: "12px 24px", border: "none", borderRadius: 8,
-              fontSize: 13, fontWeight: 800, cursor: "pointer",
-              letterSpacing: "0.08em", textTransform: "uppercase",
-              boxShadow: "0 4px 16px rgba(200,155,32,0.3)",
-              transition: "transform 0.2s, box-shadow 0.2s", fontFamily: "inherit",
-            }}>See How &darr;</button>
-          </div>
         </div>
       </section>
 
-      {/* ══════════════ STATS ══════════════ */}
-      <section style={{
-        padding: "48px 28px",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        background: "rgba(22,27,34,0.3)",
-      }}>
-        <div className="lp-stats-grid" style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
-          {STATS.map(({ value, label, detail }) => (
-            <div key={label} style={{ textAlign: "center", padding: "12px 8px" }}>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 42, color: "#C89B20", lineHeight: 1, marginBottom: 6 }}>{value}</div>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, color: "rgba(230,237,243,0.7)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-              <div style={{ fontSize: 12, color: "rgba(230,237,243,0.4)" }}>{detail}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ══════════════ FEATURES ══════════════ */}
-      <section ref={sectionRefs.features} id="features" style={{ padding: "96px 28px", background: "#060810" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#C89B20", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 12 }}>Platform Modules</div>
-            <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(28px, 4vw, 48px)", margin: "0 0 14px" }}>
-              Built for steel. Not adapted from generic PM.
-            </h2>
-            <p style={{ fontSize: 16, color: "rgba(230,237,243,0.5)", maxWidth: 640, margin: "0 auto", lineHeight: 1.6 }}>
-              Every module speaks the language of structural steel — piece marks, heat numbers, connection IDs, grid lines, erection sequences. Because a foreman shouldn't have to translate.
-            </p>
-          </div>
-
-          <div className="lp-features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
-            {FEATURES.map((f) => (
-              <div key={f.title} className="lp-card" style={{
-                padding: 24, borderRadius: 14,
-                background: "linear-gradient(180deg, rgba(22,27,34,0.9), rgba(14,17,22,0.95))",
-                border: "1px solid rgba(255,255,255,0.07)",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-                cursor: "default", display: "flex", flexDirection: "column",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                  <span style={{ fontSize: 28 }}>{f.icon}</span>
-                  <span style={{
-                    fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fontWeight: 700,
-                    color: "#C89B20", letterSpacing: "0.14em", textTransform: "uppercase",
-                    padding: "4px 8px", borderRadius: 4,
-                    background: "rgba(200,155,32,0.1)", border: "1px solid rgba(200,155,32,0.2)",
-                  }}>{f.tag}</span>
-                </div>
-                <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 22, margin: "0 0 8px" }}>{f.title}</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.65, color: "rgba(230,237,243,0.55)", flex: 1 }}>{f.body}</p>
-
-                {/* Capability list */}
-                <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 12 }}>
-                  {f.details.map((d) => (
-                    <div key={d} style={{ display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 6 }}>
-                      <span style={{ color: "#C89B20", fontSize: 10, lineHeight: 1.5, flexShrink: 0, fontWeight: 700 }}>+</span>
-                      <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(230,237,243,0.45)", lineHeight: 1.4 }}>{d}</span>
+      <section ref={sectionRefs.pricing} className="lp-sec" style={{ background: "linear-gradient(180deg, #FFFFFF, #F8FAFC)", borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
+        <div className="lp-wrap">
+          <Reveal style={{ textAlign: "center", maxWidth: 760, margin: "0 auto 44px" }}>
+            <span className="lp-kicker">Pricing</span>
+            <h2 className="lp-h2">Start lean. Scale when the team is ready.</h2>
+            <p className="lp-sub">Create a workspace free in minutes. Upgrade to Pro or Business from Billing when you are ready to roll it out across projects.</p>
+          </Reveal>
+          <div className="lp-plan-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, alignItems: "stretch" }}>
+            {PLANS.map((p, i) => {
+              const featured = !!p.highlight;
+              return (
+                <Reveal key={p.key} delay={i * 90}>
+                  <div className="lp-card" style={{ height: "100%", padding: 30, borderRadius: 24, display: "flex", flexDirection: "column", borderColor: featured ? "rgba(245,168,0,.65)" : C.line, boxShadow: featured ? "0 24px 62px rgba(245,168,0,.16), 0 18px 54px rgba(15,23,42,.08)" : "0 18px 54px rgba(15,23,42,.07)", position: "relative" }}>
+                    {featured && <span style={{ position: "absolute", top: -12, left: 28, background: C.ink, color: "var(--on-accent)", borderRadius: 999, padding: "6px 12px", fontSize: 11, fontWeight: 900 }}>Most popular</span>}
+                    <div style={monoLabel({ color: C.amberDark })}>{p.name}</div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "16px 0 6px" }}>
+                      <span style={{ color: C.ink, fontWeight: 950, fontSize: 48, letterSpacing: "-.06em", lineHeight: 1 }}>{p.priceMonthly === 0 ? "Free" : `$${p.priceMonthly}`}</span>
+                      {p.priceMonthly > 0 && <span style={{ color: C.muted, fontSize: 14 }}>/workspace · mo</span>}
                     </div>
-                  ))}
+                    <p style={{ color: C.body, fontSize: 14, lineHeight: 1.55, minHeight: 44, margin: "0 0 20px" }}>{p.blurb}</p>
+                    <div style={{ display: "grid", gap: 10, marginBottom: 24, flex: 1 }}>
+                      {p.features.map((feat) => (
+                        <div key={feat} style={{ display: "flex", gap: 10, color: C.body, fontSize: 13.5, lineHeight: 1.45 }}>
+                          <span style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(5,150,105,.14)", border: "1px solid rgba(5,150,105,.30)", flex: "0 0 16px", marginTop: 1 }} />
+                          {feat}
+                        </div>
+                      ))}
+                    </div>
+                    <button className={`lp-btn ${featured ? "lp-btn-primary" : "lp-btn-secondary"}`} onClick={() => openAuth("signup")}>Start free</button>
+                  </div>
+                </Reveal>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section ref={sectionRefs.demo} className="lp-sec">
+        <div className="lp-wrap lp-demo-grid" style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr", gap: 52, alignItems: "center" }}>
+          <Reveal>
+            <span className="lp-kicker">Executive walkthrough</span>
+            <h2 className="lp-h2">See the light-command interface on a real steel workflow.</h2>
+            <p className="lp-sub">Bring the project that is hardest to control. We will show how the module layout, dashboards, filters, and evidence trail keep the team aligned.</p>
+            <div style={{ marginTop: 28, borderRadius: 24, padding: 24, backgroundImage: `linear-gradient(90deg, rgba(16,24,39,.84), rgba(16,24,39,.48)), url(${HERO_STRIP})`, backgroundSize: "cover", backgroundPosition: "center", color: "var(--on-accent)" }}>
+              <div style={monoLabel({ color: "var(--cmd-gold, var(--accent-light))" })}>What you will review</div>
+              <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+                {["Dashboard and command center", "Module-by-module execution flow", "Project risk and commercial controls", "User onboarding and rollout plan"].map((item) => (
+                  <div key={item} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: C.amber }} />{item}</div>
+                ))}
+              </div>
+            </div>
+          </Reveal>
+          <Reveal delay={100}>
+            {demoSent ? (
+              <div className="lp-card" style={{ padding: 44, textAlign: "center" }}>
+                <h3 style={{ color: C.ink, margin: "0 0 10px", fontSize: 30, letterSpacing: "-.04em" }}>Request received.</h3>
+                <p style={{ color: C.body, lineHeight: 1.6, margin: 0 }}>We will reach out within one business day to schedule your walkthrough.</p>
+              </div>
+            ) : (
+              <form className="lp-card" onSubmit={handleDemoSubmit} style={{ padding: 30, borderRadius: 24 }}>
+                <div className="lp-c2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                  <div><label style={monoLabel({ display: "block", marginBottom: 7 })}>Name</label><input className="lp-input" type="text" placeholder="Jane Smith" value={demoForm.name} onChange={(e) => setDemoForm({ ...demoForm, name: e.target.value })} required /></div>
+                  <div><label style={monoLabel({ display: "block", marginBottom: 7 })}>Work email</label><input className="lp-input" type="email" placeholder="jane@steelco.com" value={demoForm.email} onChange={(e) => setDemoForm({ ...demoForm, email: e.target.value })} required /></div>
+                  <div><label style={monoLabel({ display: "block", marginBottom: 7 })}>Company</label><input className="lp-input" type="text" placeholder="Redfield Steel" value={demoForm.company} onChange={(e) => setDemoForm({ ...demoForm, company: e.target.value })} required /></div>
+                  <div><label style={monoLabel({ display: "block", marginBottom: 7 })}>Annual tonnage</label><input className="lp-input" type="text" placeholder="8,000" value={demoForm.tonnage} onChange={(e) => setDemoForm({ ...demoForm, tonnage: e.target.value })} /></div>
                 </div>
-              </div>
-            ))}
-          </div>
+                <div style={{ marginBottom: 18 }}>
+                  <label style={monoLabel({ display: "block", marginBottom: 7 })}>What should the walkthrough focus on?</label>
+                  <textarea className="lp-input" rows={4} placeholder="RFIs, detailing, field issues, change orders, reports..." value={demoForm.message} onChange={(e) => setDemoForm({ ...demoForm, message: e.target.value })} style={{ resize: "vertical" }} />
+                </div>
+                {demoError && <p style={{ fontSize: 13, color: C.red, lineHeight: 1.5, margin: "0 0 12px" }}>{demoError}</p>}
+                <button className="lp-btn lp-btn-primary" type="submit" disabled={demoSubmitting} style={{ width: "100%", opacity: demoSubmitting ? .65 : 1, cursor: demoSubmitting ? "wait" : "pointer" }}>{demoSubmitting ? "Sending…" : "Request my walkthrough"}</button>
+              </form>
+            )}
+          </Reveal>
         </div>
       </section>
 
-      {/* ══════════════ WORKFLOW ══════════════ */}
-      <section ref={sectionRefs.workflow} id="workflow" style={{
-        padding: "96px 28px",
-        background: "linear-gradient(180deg, rgba(22,27,34,0.4), #060810)",
-        borderTop: "1px solid rgba(255,255,255,0.06)",
-      }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#C89B20", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 12 }}>Steel Delivery Lifecycle</div>
-            <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(28px, 4vw, 48px)", margin: "0 0 14px" }}>
-              Award to turnover. Every piece tracked.
-            </h2>
-            <p style={{ fontSize: 16, color: "rgba(230,237,243,0.5)", maxWidth: 580, margin: "0 auto", lineHeight: 1.6 }}>
-              SteelBuild Pro follows the actual lifecycle of a steel project — not a generic "plan, build, close" framework.
-            </p>
-          </div>
-
-          <div className="lp-workflow-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18 }}>
-            {WORKFLOW.map(({ step, title, text, milestone }) => (
-              <div key={step} className="lp-card" style={{
-                padding: 24, borderRadius: 14,
-                background: "linear-gradient(180deg, rgba(22,27,34,0.9), rgba(14,17,22,0.95))",
-                border: "1px solid rgba(255,255,255,0.07)",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-                position: "relative", overflow: "hidden",
-                display: "flex", flexDirection: "column",
-              }}>
-                <div style={{
-                  position: "absolute", top: 12, right: 16,
-                  fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 56,
-                  color: "rgba(200,155,32,0.06)", lineHeight: 1,
-                }}>{step}</div>
-                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#C89B20", letterSpacing: "0.12em", marginBottom: 8 }}>PHASE {step}</div>
-                <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 24, margin: "0 0 10px" }}>{title}</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.65, color: "rgba(230,237,243,0.55)", flex: 1 }}>{text}</p>
-
-                {/* Milestone badge */}
-                <div style={{
-                  fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fontWeight: 800,
-                  color: "#22C55E", letterSpacing: "0.12em", textTransform: "uppercase",
-                  padding: "6px 10px", borderRadius: 4,
-                  background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.15)",
-                  textAlign: "center",
-                }}>{milestone}</div>
-              </div>
-            ))}
-          </div>
+      <section style={{ padding: "92px 0", background: C.ink, color: "var(--on-accent)", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, opacity: .18, backgroundImage: `url(${HERO_STRIP})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+        <div className="lp-wrap" style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 860 }}>
+          <Reveal>
+            <span className="lp-kicker" style={{ color: "var(--cmd-gold, var(--accent-light))" }}>Boardroom polish. Jobsite utility.</span>
+            <h2 style={{ color: "var(--on-accent)", fontSize: "clamp(38px, 6vw, 72px)", lineHeight: .98, letterSpacing: "-.06em", margin: "18px 0 0", fontWeight: 950 }}>Give your steel operation a page that looks as serious as the work.</h2>
+            <p style={{ color: "rgba(255,255,255,.74)", fontSize: 18, lineHeight: 1.65, maxWidth: 640, margin: "22px auto 34px" }}>Start with a clean workspace, then bring the team into a platform designed around steel project delivery.</p>
+            <div style={{ display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
+              <button className="lp-btn lp-btn-primary" onClick={() => openAuth("signup")}>Start free</button>
+              <button className="lp-btn lp-btn-secondary" onClick={() => scrollTo("demo")}>Request a demo</button>
+            </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* ══════════════ DIFFERENTIATOR CALLOUT ══════════════ */}
-      <section style={{
-        padding: "64px 28px",
-        background: "rgba(200,155,32,0.04)",
-        borderTop: "1px solid rgba(200,155,32,0.1)",
-        borderBottom: "1px solid rgba(200,155,32,0.1)",
-      }}>
-        <div style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
-          <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(24px, 3.5vw, 40px)", margin: "0 0 20px", lineHeight: 1.15 }}>
-            "We tried Procore. We tried Fieldwire.<br />
-            <span style={{ color: "#C89B20" }}>Neither one speaks steel."</span>
-          </h2>
-          <p style={{ fontSize: 15, color: "rgba(230,237,243,0.5)", lineHeight: 1.65, maxWidth: 680, margin: "0 auto 24px" }}>
-            General construction software forces steel contractors to build workarounds. SteelBuild Pro was designed from day one
-            for the way structural steel projects actually work — piece-level tracking, connection-based QC, and the real
-            approval workflows that EORs, GCs, and fabricators deal with every day.
-          </p>
-          <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap" }}>
+      <footer style={{ background: C.surface, borderTop: `1px solid ${C.line}`, padding: "54px 0 34px" }}>
+        <div className="lp-wrap lp-footer-main" style={{ display: "flex", justifyContent: "space-between", gap: 34, flexWrap: "wrap" }}>
+          <div style={{ maxWidth: 330 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}><BrandMark /><span style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.04em" }}>SteelBuild Pro</span></div>
+            <p style={{ color: C.body, lineHeight: 1.6, margin: 0, fontSize: 13.5 }}>A professional project delivery platform built for structural steel teams.</p>
+          </div>
+          <div style={{ display: "flex", gap: 58, flexWrap: "wrap" }}>
             {[
-              { label: "Piece Mark Tracking", sub: "Not generic tasks" },
-              { label: "Connection-Based QC", sub: "Not punchlists" },
-              { label: "Heat Number Traceability", sub: "Not just material logs" },
-              { label: "Erection Sequence Logic", sub: "Not Gantt-only scheduling" },
-            ].map(({ label, sub }) => (
-              <div key={label} style={{ textAlign: "center" }}>
-                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#C89B20", letterSpacing: "0.06em" }}>{label}</div>
-                <div style={{ fontSize: 11, color: "rgba(230,237,243,0.35)", marginTop: 2 }}>{sub}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════ PRICING ══════════════ */}
-      <section ref={sectionRefs.pricing} id="pricing" style={{
-        padding: "96px 28px", background: "#060810",
-      }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#C89B20", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 12 }}>Pricing</div>
-            <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(28px, 4vw, 48px)", margin: "0 0 14px" }}>Plans that scale with your yard.</h2>
-            <p style={{ fontSize: 16, color: "rgba(230,237,243,0.5)", maxWidth: 520, margin: "0 auto", lineHeight: 1.6 }}>
-              Start free for 14 days. No credit card. Cancel anytime.
-            </p>
-          </div>
-
-          <div className="lp-pricing-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, alignItems: "stretch" }}>
-            {PRICING.map((p) => (
-              <div key={p.tier} className={`lp-card ${p.highlight ? "lp-price-highlight" : ""}`} style={{
-                padding: 28, borderRadius: 16,
-                background: "linear-gradient(180deg, rgba(22,27,34,0.95), rgba(14,17,22,0.98))",
-                border: p.highlight ? "2px solid #C89B20" : "1px solid rgba(255,255,255,0.07)",
-                boxShadow: p.highlight
-                  ? "0 0 40px rgba(200,155,32,0.12), 0 20px 48px rgba(0,0,0,0.5)"
-                  : "0 8px 32px rgba(0,0,0,0.3)",
-                display: "flex", flexDirection: "column", position: "relative",
-              }}>
-                {p.highlight && (
-                  <div style={{
-                    position: "absolute", top: -1, left: "50%", transform: "translateX(-50%)",
-                    fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fontWeight: 800,
-                    color: "#0B0E11", background: "#C89B20", padding: "4px 14px",
-                    borderRadius: "0 0 6px 6px", letterSpacing: "0.12em", textTransform: "uppercase",
-                  }}>Most Popular</div>
-                )}
-                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "rgba(230,237,243,0.5)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 12, marginTop: p.highlight ? 12 : 0 }}>{p.tier}</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 44, color: "#E6EDF3" }}>{p.price}</span>
-                  {p.period && <span style={{ fontSize: 14, color: "rgba(230,237,243,0.4)" }}>{p.period}</span>}
-                </div>
-                <p style={{ fontSize: 14, color: "rgba(230,237,243,0.5)", lineHeight: 1.5, marginBottom: 24, minHeight: 42 }}>{p.description}</p>
-
-                <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
-                  {p.features.map((feat) => (
-                    <li key={feat} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "rgba(230,237,243,0.65)", lineHeight: 1.4 }}>
-                      <span style={{ color: "#C89B20", fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>{"✓"}</span>
-                      {feat}
-                    </li>
-                  ))}
-                </ul>
-
-                <button className="lp-btn-primary" onClick={() => scrollTo("demo")} style={{
-                  width: "100%", padding: "12px 0", border: "none", borderRadius: 8,
-                  background: p.highlight ? "linear-gradient(135deg, #C89B20, #E0B030)" : "rgba(255,255,255,0.06)",
-                  color: p.highlight ? "#0B0E11" : "#E6EDF3",
-                  fontSize: 13, fontWeight: 800, cursor: "pointer", letterSpacing: "0.08em",
-                  textTransform: "uppercase", transition: "transform 0.2s, box-shadow 0.2s",
-                  fontFamily: "inherit",
-                }}>{p.cta}</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════ TESTIMONIALS ══════════════ */}
-      <section style={{
-        padding: "96px 28px",
-        background: "linear-gradient(180deg, rgba(22,27,34,0.4), #060810)",
-        borderTop: "1px solid rgba(255,255,255,0.06)",
-      }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#C89B20", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 12 }}>From the Field</div>
-            <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(28px, 4vw, 44px)", margin: 0 }}>Steel people. Real projects. Actual results.</h2>
-          </div>
-
-          <div className="lp-testimonials-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
-            {TESTIMONIALS.map((t) => (
-              <div key={t.name} className="lp-card" style={{
-                padding: 24, borderRadius: 14,
-                background: "linear-gradient(180deg, rgba(22,27,34,0.9), rgba(14,17,22,0.95))",
-                border: "1px solid rgba(255,255,255,0.07)",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-                display: "flex", flexDirection: "column",
-              }}>
-                <div style={{ fontSize: 28, color: "rgba(200,155,32,0.25)", marginBottom: 8, lineHeight: 1 }}>"</div>
-                <p style={{ fontSize: 14, lineHeight: 1.65, color: "rgba(230,237,243,0.65)", margin: "0 0 16px", fontStyle: "italic", flex: 1 }}>{t.quote}</p>
-                <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 14 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#E6EDF3" }}>{t.name}</div>
-                  <div style={{ fontSize: 12, color: "rgba(230,237,243,0.45)" }}>{t.role}</div>
-                  <div style={{ fontSize: 11, color: "rgba(230,237,243,0.35)", marginTop: 2 }}>{t.company}</div>
-                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(200,155,32,0.5)", marginTop: 4 }}>{t.project}</div>
+              { head: "Platform", links: [["Modules", "modules"], ["Workflow", "workflow"], ["Pricing", "pricing"]] },
+              { head: "Company", links: [["Executive demo", "demo"], ["Start free", "platform"]] },
+            ].map((col) => (
+              <div key={col.head}>
+                <div style={monoLabel({ color: C.amberDark, marginBottom: 14 })}>{col.head}</div>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {col.links.map(([label, target]) => <button key={label} className="lp-footlink" onClick={() => scrollTo(target)}>{label}</button>)}
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════ DEMO REQUEST ══════════════ */}
-      <section ref={sectionRefs.demo} id="demo" style={{
-        padding: "96px 28px",
-        background: "radial-gradient(ellipse 70% 50% at 50% 50%, rgba(200,155,32,0.06), transparent 60%), #060810",
-        borderTop: "1px solid rgba(255,255,255,0.06)",
-      }}>
-        <div style={{ maxWidth: 640, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, color: "#C89B20", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 12 }}>Get Started</div>
-            <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(28px, 4vw, 44px)", margin: "0 0 12px" }}>See your steel project in SteelBuild Pro.</h2>
-            <p style={{ fontSize: 15, color: "rgba(230,237,243,0.55)", lineHeight: 1.6 }}>
-              Book a 30-minute walkthrough. We'll load your actual project data — your drawing sets, your RFI log, your erection sequences. No canned demo. Real steel.
-            </p>
-          </div>
-
-          {demoSent ? (
-            <div style={{
-              padding: 32, borderRadius: 16, textAlign: "center",
-              background: "linear-gradient(180deg, rgba(22,27,34,0.9), rgba(14,17,22,0.95))",
-              border: "1px solid rgba(34,197,94,0.3)",
-            }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>{"✓"}</div>
-              <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 24, marginBottom: 8 }}>Request received.</h3>
-              <p style={{ color: "rgba(230,237,243,0.6)", fontSize: 14 }}>We'll reach out within one business day to schedule your walkthrough.</p>
+            <div>
+              <div style={monoLabel({ color: C.amberDark, marginBottom: 14 })}>Legal</div>
+              <div style={{ display: "grid", gap: 10 }}>{["Privacy", "Terms", "Security", "Subprocessors"].map((l) => <a key={l} href={`/${l}`} className="lp-footlink">{l}</a>)}</div>
             </div>
-          ) : (
-            <form onSubmit={handleDemoSubmit} style={{
-              padding: 32, borderRadius: 16,
-              background: "linear-gradient(180deg, rgba(22,27,34,0.95), rgba(14,17,22,0.98))",
-              border: "1px solid rgba(255,255,255,0.08)",
-              boxShadow: "0 16px 48px rgba(0,0,0,0.4)",
-              display: "flex", flexDirection: "column", gap: 16,
-            }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                <div>
-                  <label style={{ display: "block", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 6 }}>Name</label>
-                  <input className="lp-input" type="text" placeholder="John Smith" value={demoForm.name} onChange={(e) => setDemoForm({ ...demoForm, name: e.target.value })} required />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 6 }}>Email</label>
-                  <input className="lp-input" type="email" placeholder="john@company.com" value={demoForm.email} onChange={(e) => setDemoForm({ ...demoForm, email: e.target.value })} required />
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                <div>
-                  <label style={{ display: "block", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 6 }}>Company</label>
-                  <input className="lp-input" type="text" placeholder="Acme Steel Fabrication" value={demoForm.company} onChange={(e) => setDemoForm({ ...demoForm, company: e.target.value })} required />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 6 }}>Annual Tonnage (approx.)</label>
-                  <input className="lp-input" type="text" placeholder="e.g. 5,000 tons" value={demoForm.tonnage} onChange={(e) => setDemoForm({ ...demoForm, tonnage: e.target.value })} />
-                </div>
-              </div>
-              <div>
-                <label style={{ display: "block", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 6 }}>What's your biggest pain right now?</label>
-                <textarea className="lp-input" rows={3} placeholder="e.g. Close-out packages take us 3 weeks. RFIs get lost. Our GC hates our submittals." value={demoForm.message} onChange={(e) => setDemoForm({ ...demoForm, message: e.target.value })} style={{ resize: "vertical" }} />
-              </div>
-              <button className="lp-btn-primary" type="submit" style={{
-                width: "100%", padding: "14px 0", border: "none", borderRadius: 8,
-                background: "linear-gradient(135deg, #C89B20, #E0B030)", color: "#0B0E11",
-                fontSize: 14, fontWeight: 800, cursor: "pointer", letterSpacing: "0.08em",
-                textTransform: "uppercase", transition: "transform 0.2s, box-shadow 0.2s",
-                fontFamily: "inherit",
-              }}>Request Walkthrough &rarr;</button>
-              <p style={{ textAlign: "center", fontSize: 12, color: "rgba(230,237,243,0.35)", margin: 0 }}>
-                No commitment. No credit card. 30-minute session with an actual steel project engineer — not a sales rep.
-              </p>
-            </form>
-          )}
-        </div>
-      </section>
-
-      {/* ══════════════ FOOTER ══════════════ */}
-      <footer style={{
-        padding: "48px 28px 32px",
-        borderTop: "1px solid rgba(255,255,255,0.06)",
-        background: "rgba(14,17,22,0.6)",
-      }}>
-        <div className="lp-footer-grid" style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 32, marginBottom: 40 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 6,
-                background: "linear-gradient(135deg, #C89B20, #E0B030)",
-                display: "grid", placeItems: "center",
-                color: "#0B0E11", fontWeight: 900, fontSize: 12,
-              }}>SB</div>
-              <span style={{ fontWeight: 800, fontSize: 13, letterSpacing: "0.12em" }}>STEELBUILD PRO</span>
-            </div>
-            <p style={{ fontSize: 13, color: "rgba(230,237,243,0.4)", lineHeight: 1.6, maxWidth: 300 }}>
-              The project delivery platform for structural steel fabricators and erectors. Built in Phoenix, AZ by people who've run steel projects.
-            </p>
-          </div>
-          <div>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 16 }}>Platform</div>
-            {["Features", "Pricing", "Integrations", "Security"].map((l) => (
-              <div key={l} style={{ marginBottom: 10 }}><button onClick={() => scrollTo(l === "Pricing" ? "pricing" : "features")} style={{ background: "none", border: "none", color: "rgba(230,237,243,0.55)", fontSize: 13, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>{l}</button></div>
-            ))}
-          </div>
-          <div>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 16 }}>Company</div>
-            {["About", "Careers", "Contact", "Blog"].map((l) => (
-              <div key={l} style={{ marginBottom: 10 }}><button onClick={() => scrollTo("demo")} style={{ background: "none", border: "none", color: "rgba(230,237,243,0.55)", fontSize: 13, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>{l}</button></div>
-            ))}
-          </div>
-          <div>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 16 }}>Legal</div>
-            {["Privacy Policy", "Terms of Service", "EULA"].map((l) => (
-              <div key={l} style={{ marginBottom: 10 }}><span style={{ color: "rgba(230,237,243,0.55)", fontSize: 13 }}>{l}</span></div>
-            ))}
           </div>
         </div>
-
-        <div style={{ maxWidth: 1200, margin: "0 auto", paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-          <span style={{ fontSize: 12, color: "rgba(230,237,243,0.3)" }}>&copy; {new Date().getFullYear()} SteelBuild Pro. All rights reserved.</span>
-          <span style={{ fontSize: 12, color: "rgba(230,237,243,0.3)" }}>Phoenix, AZ &middot; Built for structural steel contractors nationwide</span>
+        <div className="lp-wrap" style={{ marginTop: 42, paddingTop: 20, borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <span style={{ fontFamily: F.mono, fontSize: 11, color: C.muted }}>© {new Date().getFullYear()} SteelBuild Pro</span>
+          <span style={{ fontFamily: F.mono, fontSize: 11, color: C.muted }}>Executive-grade project controls for structural steel.</span>
         </div>
       </footer>
 
-      {/* ══════════════ SIGN IN MODAL ══════════════ */}
       {showLogin && (
         <div className="lp-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowLogin(false); }}>
-          <div style={{
-            width: "100%", maxWidth: 420, padding: 32,
-            background: "linear-gradient(180deg, #161B22, #0E1116)",
-            border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16,
-            boxShadow: "0 32px 80px rgba(0,0,0,0.7)",
-            position: "relative",
-          }}>
-            <button onClick={() => setShowLogin(false)} style={{
-              position: "absolute", top: 16, right: 16,
-              background: "none", border: "none", color: "rgba(230,237,243,0.4)",
-              fontSize: 20, cursor: "pointer", padding: 4, lineHeight: 1,
-            }}>{"✕"}</button>
-
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, color: "#C89B20", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 8 }}>STEELBUILD PRO</div>
-              <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 28, margin: "0 0 6px" }}>Sign In</h2>
-              <p style={{ fontSize: 13, color: "rgba(230,237,243,0.45)", margin: 0 }}>Access your projects and data.</p>
+          <div role="dialog" aria-modal="true" aria-label={authMode === "signup" ? "Create account" : "Sign in"} className="lp-card" style={{ width: "100%", maxWidth: 438, padding: 32, borderRadius: 24, position: "relative", boxShadow: "0 34px 90px rgba(15,23,42,.28)" }}>
+            <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "var(--bg-surface-low)", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+              <img src={LOGO_IMG} alt="SteelBuild Pro" onError={(e) => { e.currentTarget.style.display = "none"; }} style={{ width: 54, height: 54, objectFit: "cover", borderRadius: 14, border: `1px solid ${C.line}` }} />
+              <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.04em" }}>SteelBuild Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Project controls for steel</div></div>
             </div>
-
-            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <label style={{ display: "block", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 6 }}>Email</label>
-                <input className="lp-input" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            {(signupNotice || forgotNotice) ? (
+              <div style={{ display: "grid", gap: 18 }}>
+                <div><h2 style={{ color: C.ink, margin: "0 0 8px", fontSize: 30, letterSpacing: "-.04em" }}>Check your email</h2><p style={{ color: C.body, margin: 0, lineHeight: 1.55, fontSize: 14 }}>{signupNotice || forgotNotice}</p></div>
+                <button type="button" onClick={() => { setSignupNotice(null); setForgotNotice(null); setAuthMode("signin"); setPassword(""); }} className="lp-btn lp-btn-primary">Back to sign in</button>
               </div>
-              <div>
-                <label style={{ display: "block", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(230,237,243,0.5)", marginBottom: 6 }}>Password</label>
-                <input className="lp-input" type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
-
-              {loginError && (
-                <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, fontSize: 13, color: "#FCA5A5" }}>
-                  {loginError}
+            ) : (
+              <>
+                <div style={{ marginBottom: 22 }}>
+                  <h2 style={{ color: C.ink, margin: "0 0 6px", fontSize: 32, letterSpacing: "-.05em", fontWeight: 950 }}>{authMode === "signup" ? "Create your account" : authMode === "forgot" ? "Reset your password" : "Sign in"}</h2>
+                  <p style={{ color: C.body, margin: 0, fontSize: 14 }}>{authMode === "signup" ? "Start a free workspace for your team." : authMode === "forgot" ? "Enter your account email and we'll send a reset link." : "Access your projects and modules."}</p>
                 </div>
-              )}
-
-              <button type="submit" disabled={isSubmitting} className="lp-btn-primary" style={{
-                width: "100%", padding: "12px 0", border: "none", borderRadius: 8,
-                background: "linear-gradient(135deg, #C89B20, #E0B030)", color: "#0B0E11",
-                fontSize: 13, fontWeight: 800, cursor: isSubmitting ? "not-allowed" : "pointer",
-                opacity: isSubmitting ? 0.6 : 1, letterSpacing: "0.08em",
-                textTransform: "uppercase", transition: "transform 0.2s, box-shadow 0.2s",
-                fontFamily: "inherit",
-              }}>
-                {isSubmitting ? "Signing in..." : "Sign In →"}
-              </button>
-            </form>
+                <form onSubmit={authMode === "signup" ? handleSignUp : authMode === "forgot" ? handleForgot : handleLogin} style={{ display: "grid", gap: 15 }}>
+                  {authMode === "signup" && <div><label htmlFor="auth-fullname" style={monoLabel({ display: "block", marginBottom: 6 })}>Full name</label><input id="auth-fullname" className="lp-input" type="text" autoComplete="name" placeholder="Jane Smith" value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>}
+                  <div><label htmlFor="auth-email" style={monoLabel({ display: "block", marginBottom: 6 })}>Email</label><input id="auth-email" className="lp-input" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                  {authMode !== "forgot" && <div><label htmlFor="auth-password" style={monoLabel({ display: "block", marginBottom: 6 })}>Password</label><input id="auth-password" className="lp-input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder={authMode === "signup" ? "At least 8 characters" : "Password"} value={password} onChange={(e) => setPassword(e.target.value)} /></div>}
+                  {authMode === "signin" && <div style={{ textAlign: "right", marginTop: -6 }}><button type="button" onClick={() => { setAuthMode("forgot"); setForgotError(null); setForgotNotice(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 800, cursor: "pointer", font: "inherit", fontSize: 12.5 }}>Forgot password?</button></div>}
+                  {(authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError) && <div style={{ padding: "10px 13px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 12, color: C.red, fontSize: 13 }} role="alert">{authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError}</div>}
+                  <button type="submit" disabled={authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", opacity: (authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting) ? .65 : 1, cursor: (authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting) ? "not-allowed" : "pointer" }}>{authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : authMode === "forgot" ? (forgotBusy ? "Sending…" : "Send reset link") : (isSubmitting ? "Signing in…" : "Sign in")}</button>
+                  {authMode === "signup" && <p style={{ fontSize: 12, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>By creating an account you agree to the <a href="/terms" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Terms</a> and <a href="/privacy" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Privacy Policy</a>.</p>}
+                </form>
+                <div style={{ marginTop: 18, textAlign: "center", fontSize: 13.5, color: C.body }}>
+                  {authMode === "signup" ? <>Already have an account? <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Sign in</button></> : authMode === "forgot" ? <>Remembered it? <button type="button" onClick={() => { setAuthMode("signin"); setForgotError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Back to sign in</button></> : <>New to SteelBuild Pro? <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Create an account</button></>}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

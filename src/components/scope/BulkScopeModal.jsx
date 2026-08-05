@@ -65,7 +65,7 @@ export default function BulkScopeModal({ projectId, onClose, onCreated }) {
       // Upload the shared PDF once if present
       let file_url = null, storage_path = null, file_name = null;
       if (file) {
-        const up = await integrations.Core.UploadFile({ file });
+        const up = await integrations.Core.UploadFile({ file, workflow: "attachment" });
         file_url     = up.file_url || null;
         storage_path = up.path || null;
         file_name    = file.name;
@@ -378,7 +378,7 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 const btnPrimary = {
-  padding: "8px 24px", background: "var(--accent)", color: "#fff",
+  padding: "8px 24px", background: "var(--accent)", color: "var(--on-accent)",
   border: "none", borderRadius: 2,
   fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
   letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",

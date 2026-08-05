@@ -96,8 +96,8 @@ export default function ProjectStatusMatrix({
 }
 
 function Row({ row, navigate }) {
-  const rowBg = row.health === "risk" ? "rgba(239,68,68,0.03)" : "transparent";
-  const hoverBg = row.health === "risk" ? "rgba(239,68,68,0.06)" : "var(--bg-row-hover)";
+  const rowBg = row.health === "risk" ? "color-mix(in srgb, var(--status-error) 3%, transparent)" : "transparent";
+  const hoverBg = row.health === "risk" ? "color-mix(in srgb, var(--status-error) 6%, transparent)" : "var(--bg-row-hover)";
   const leftBorder =
     row.health === "risk"  ? "3px solid var(--status-error)"
     : row.health === "watch" ? "3px solid var(--status-warning)"
@@ -176,7 +176,7 @@ function Row({ row, navigate }) {
         onClick={row.openCOs > 0 ? () => navigate(createPageUrl("ChangeOrders")) : undefined}
         style={{
           ...mono, fontSize: 11, textAlign: "center", fontWeight: row.openCOs > 0 ? 700 : 400,
-          color: row.openCOs > 0 ? "#F97316" : "var(--text-muted)",
+          color: row.openCOs > 0 ? "var(--status-review)" : "var(--text-muted)",
           cursor: row.openCOs > 0 ? "pointer" : "default",
           textDecoration: row.openCOs > 0 ? "underline" : "none",
           textDecorationStyle: "dotted",
@@ -193,7 +193,7 @@ function Row({ row, navigate }) {
         onClick={() => navigate(createPageUrl("Projects") + `?id=${row.id}`)}
         style={{
           background: "var(--accent)",
-          color: "#fff",
+          color: "var(--accent-text)",
           border: "none",
           borderRadius: "var(--radius-btn)",
           padding: "4px 10px",
@@ -230,7 +230,7 @@ function EmptyTable({ kpiFilter, search, navigate }) {
           onClick={() => navigate(createPageUrl("Projects"))}
           style={{
             background: "var(--accent)",
-            color: "#fff",
+            color: "var(--accent-text)",
             border: "none",
             borderRadius: "var(--radius-btn)",
             padding: "8px 18px",

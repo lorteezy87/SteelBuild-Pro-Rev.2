@@ -1,0 +1,245 @@
+// stripe-billing — Stripe Checkout + customer portal + webhook for the org
+// subscription model (multi-tenant SaaS).
+//
+// Deploy with verify_jwt = false: the webhook is called by Stripe (no JWT), and
+// the checkout/portal actions verify the caller's JWT themselves. Price ids + the
+// webhook signing secret are read from the service-role-only public.billing_config
+// table (provisioned via the Stripe API), falling back to env (STRIPE_PRICE_PRO /
+// STRIPE_PRICE_BUSINESS / STRIPE_WEBHOOK_SECRET). The client only passes a plan KEY.
+//
+// The Stripe client KEY is chosen by billing_config.livemode: live (the default and
+// the current prod state) uses STRIPE_SECRET_KEY; livemode=false uses STRIPE_SK_TEST.
+// This lets an owner run a test-mode checkout E2E by flipping billing_config alone
+// (livemode + test price ids + test webhook secret) WITHOUT overwriting the live
+// secret key — Stripe never re-reveals a live secret key, so overwriting it would be
+// unrecoverable. The client is built per-invocation so the choice is always current.
+//
+// Required edge-function secrets:
+//   STRIPE_SECRET_KEY (live), STRIPE_SK_TEST (test E2E)   (SUPABASE_URL / SERVICE_ROLE_KEY / ANON_KEY injected)
+
+import Stripe from "https://esm.sh/stripe@17?target=deno";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
+import { reportError } from "../_shared/reportError.ts";
+import { type BillingConfig, checkoutOrgUpdate, subscriptionOrgUpdate } from "./webhookLogic.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+// service-role client: bypasses RLS + the billing-tamper trigger (auth.role()='service_role').
+const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+// Built per-invocation. livemode (the default + current prod) uses STRIPE_SECRET_KEY,
+// so the live billing path is UNCHANGED. Only an explicit billing_config.livemode=false
+// selects STRIPE_SK_TEST — so a test-mode E2E never overwrites the live key. Falls back
+// to STRIPE_SECRET_KEY if the test key isn't set.
+function stripeClient(livemode: boolean): Stripe {
+  const key = livemode
+    ? (Deno.env.get("STRIPE_SECRET_KEY") ?? "")
+    : (Deno.env.get("STRIPE_SK_TEST") ?? Deno.env.get("STRIPE_SECRET_KEY") ?? "");
+  return new Stripe(key, { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
+}
+
+const json = (obj: unknown, status = 200, req?: Request) =>
+  new Response(JSON.stringify(obj), { status, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
+
+// BillingConfig + the pure webhook->org mapping live in ./webhookLogic.ts (unit-tested).
+
+// Config (price ids + webhook secret) lives in the service-role-only billing_config
+// table so it can be provisioned via the Stripe API without writing env secrets at
+// runtime. Env is the fallback.
+async function loadConfig(): Promise<BillingConfig> {
+  let row: Record<string, unknown> | null = null;
+  try {
+    const { data } = await admin
+      .from("billing_config")
+      .select("stripe_price_pro, stripe_price_business, stripe_webhook_secret, livemode")
+      .eq("scope", "default")
+      .maybeSingle();
+    row = data as Record<string, unknown> | null;
+  } catch (_e) { /* fall back to env */ }
+  return {
+    pricePro: (row?.stripe_price_pro as string) || Deno.env.get("STRIPE_PRICE_PRO") || "",
+    priceBusiness: (row?.stripe_price_business as string) || Deno.env.get("STRIPE_PRICE_BUSINESS") || "",
+    webhookSecret: (row?.stripe_webhook_secret as string) || Deno.env.get("STRIPE_WEBHOOK_SECRET") || "",
+    // Default to LIVE unless billing_config.livemode is explicitly false — a missing
+    // row or read error must never silently select the test key for live traffic.
+    livemode: row?.livemode !== false,
+  };
+}
+
+// deno-lint-ignore no-explicit-any
+async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
+  if (event.type === "checkout.session.completed") {
+    const s = event.data.object;
+    // Retrieve the subscription (side effect stays here); the org-update payload
+    // computation is the unit-tested pure logic in webhookLogic.ts.
+    const sub = s.subscription ? await stripe.subscriptions.retrieve(s.subscription) : null;
+    const res = checkoutOrgUpdate(s, sub, cfg);
+    if (!res) return;
+    await admin.from("organizations").update(res.update).eq("id", res.orgId);
+  } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+    const evtSub = event.data.object;
+    let orgId = evtSub.metadata?.org_id;
+    if (!orgId) {
+      const { data: org } = await admin.from("organizations").select("id").eq("stripe_customer_id", evtSub.customer).maybeSingle();
+      orgId = org?.id;
+    }
+    if (!orgId) return;
+    // Out-of-order guard: re-fetch the LIVE subscription and apply its CURRENT
+    // state instead of trusting the (possibly stale / out-of-order) event payload.
+    // Without this, a late customer.subscription.updated arriving AFTER a .deleted
+    // would re-grant a canceled paid plan. On re-fetch a canceled sub reports
+    // status="canceled", so we still downgrade.
+    //
+    // If the retrieve FAILS we must NOT fall back to the (possibly stale/out-of-
+    // order) event payload — doing so would defeat the guard and could re-grant a
+    // canceled plan. Instead we throw, so the webhook returns 500, Stripe retries
+    // the delivery, and the guard runs again with a fresh live fetch. The event is
+    // NOT marked processed on the throw (handleEvent is called before the marker
+    // insert), so the retry re-runs cleanly.
+    let sub;
+    try {
+      sub = await stripe.subscriptions.retrieve(evtSub.id);
+    } catch (e) {
+      throw new Error(
+        `subscription retrieve failed for out-of-order guard (${evtSub.id}): ${(e as Error).message}`,
+      );
+    }
+    const TERMINAL = ["canceled", "incomplete_expired", "unpaid"];
+    const deleted = event.type === "customer.subscription.deleted" || TERMINAL.includes(sub.status);
+    const update = subscriptionOrgUpdate(sub, cfg, { deleted });
+    await admin.from("organizations").update(update).eq("id", orgId);
+  }
+}
+
+Deno.serve(async (req) => {
+  try {
+    return await handleRequest(req);
+  } catch (e) {
+    // Every other browser-facing function wraps its handler so an unhandled error
+    // returns the standard JSON error envelope WITH CORS headers. Without this,
+    // an uncaught throw returned a CORS-less 500 that surfaced in the browser as
+    // an opaque CORS failure rather than a readable error. NOTE: the webhook path
+    // (Stripe, no browser) handles its own errors above and returns before this;
+    // any escape here is an app-action or config failure where CORS matters.
+    await reportError(e, "stripe-billing", { unhandled: true });
+    const message = e instanceof Error ? e.message : String(e);
+    return json({ error: `Internal error: ${message}` }, 500, req);
+  }
+});
+
+async function handleRequest(req: Request): Promise<Response> {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
+  const url = new URL(req.url);
+  // Load config FIRST so the Stripe client uses the correct key (live vs test) —
+  // billing_config is the single source of truth for the live/test environment.
+  const cfg = await loadConfig();
+  const stripe = stripeClient(cfg.livemode !== false);
+
+  // ── Stripe webhook (signature-verified; no JWT) ──
+  if (url.pathname.endsWith("/webhook")) {
+    const sig = req.headers.get("stripe-signature");
+    const raw = await req.text();
+    let event;
+    try {
+      event = await stripe.webhooks.constructEventAsync(raw, sig ?? "", cfg.webhookSecret);
+    } catch (e) {
+      return new Response(`Webhook signature verification failed: ${(e as Error).message}`, { status: 400 });
+    }
+    // Idempotency: short-circuit only if a PRIOR delivery FULLY processed this
+    // event. The marker is written AFTER handleEvent succeeds (below), so a
+    // transient handler failure no longer permanently drops the event — Stripe's
+    // retry re-runs it instead of short-circuiting on a premature marker.
+    const { data: seen } = await admin
+      .from("billing_events")
+      .select("stripe_event_id")
+      .eq("stripe_event_id", event.id)
+      .maybeSingle();
+    if (seen) return new Response("ok (already processed)", { status: 200 });
+
+    // Best-effort org id for the audit row (object is a Checkout session or a
+    // subscription). Typed cast keeps it deno-check-clean over the Stripe union.
+    const obj = (event.data?.object ?? {}) as { metadata?: { org_id?: string }; client_reference_id?: string };
+    const eventOrgId = obj.metadata?.org_id ?? obj.client_reference_id ?? null;
+
+    try {
+      await handleEvent(stripe, event, cfg);
+    } catch (e) {
+      await reportError(e, "stripe-billing", { path: "/webhook", eventType: event.type });
+      // NOT marked processed → Stripe's retry re-runs handleEvent. That's the fix.
+      return new Response("handler error", { status: 500 });
+    }
+
+    // Mark processed ONLY after success. A concurrent double-delivery loses the
+    // race on the UNIQUE stripe_event_id and is ignored (handleEvent is idempotent).
+    const { error: markErr } = await admin
+      .from("billing_events")
+      .insert({ stripe_event_id: event.id, type: event.type, org_id: eventOrgId });
+    if (markErr && !String(markErr.message).toLowerCase().includes("duplicate")) {
+      console.error("billing_events mark error", markErr);
+    }
+    return new Response("ok", { status: 200 });
+  }
+
+  // ── App actions: checkout / portal (JWT-verified) ──
+  let body: { action?: string; org_id?: string; plan?: string };
+  try { body = await req.json(); } catch { return json({ error: "Invalid request body" }, 400, req); }
+  const { action, org_id, plan } = body;
+  if (!org_id) return json({ error: "org_id is required" }, 400, req);
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+  const { data: { user } } = await userClient.auth.getUser();
+  if (!user) return json({ error: "Not authenticated" }, 401, req);
+
+  // Only an owner/admin of the org may manage its billing.
+  const { data: membership } = await admin
+    .from("organization_members").select("role").eq("org_id", org_id).eq("user_id", user.id).maybeSingle();
+  if (!membership || !["owner", "admin"].includes(membership.role)) {
+    return json({ error: "You don't have permission to manage this workspace's billing" }, 403, req);
+  }
+
+  // Validate the Origin before it's baked into Stripe redirect URLs (#12). An
+  // unvalidated Origin would let an attacker point checkout success/cancel — and
+  // the billing-portal return — at an arbitrary site (post-payment open redirect).
+  // Any disallowed/missing origin falls back to the canonical production URL.
+  const rawOrigin = req.headers.get("origin") ?? "";
+  const origin = isAllowedOrigin(rawOrigin) ? rawOrigin : "https://steelbuild-pro.com";
+
+  if (action === "checkout") {
+    const PRICE: Record<string, string> = { pro: cfg.pricePro, business: cfg.priceBusiness };
+    const priceId = plan ? PRICE[plan] : "";
+    if (!priceId) return json({ error: `Plan "${plan}" isn't available for checkout yet` }, 400, req);
+
+    const { data: org } = await admin.from("organizations").select("stripe_customer_id, name").eq("id", org_id).single();
+    let customerId = org?.stripe_customer_id ?? null;
+    if (!customerId) {
+      const customer = await stripe.customers.create({ name: org?.name ?? undefined, email: user.email ?? undefined, metadata: { org_id } });
+      customerId = customer.id;
+      await admin.from("organizations").update({ stripe_customer_id: customerId }).eq("id", org_id);
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      client_reference_id: org_id,
+      metadata: { org_id, plan: plan ?? "" },
+      subscription_data: { metadata: { org_id, plan: plan ?? "" } },
+      allow_promotion_codes: true,
+      success_url: `${origin}/Billing?status=success`,
+      cancel_url: `${origin}/Billing?status=cancel`,
+    });
+    return json({ url: session.url }, 200, req);
+  }
+
+  if (action === "portal") {
+    const { data: org } = await admin.from("organizations").select("stripe_customer_id").eq("id", org_id).single();
+    if (!org?.stripe_customer_id) return json({ error: "No billing account yet — start a subscription first" }, 400, req);
+    const portal = await stripe.billingPortal.sessions.create({ customer: org.stripe_customer_id, return_url: `${origin}/Billing` });
+    return json({ url: portal.url }, 200, req);
+  }
+
+  return json({ error: "Unknown action" }, 400, req);
+}

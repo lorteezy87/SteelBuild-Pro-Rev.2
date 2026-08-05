@@ -7,11 +7,12 @@
  * is slipping, and what needs a human update next.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -25,32 +26,40 @@ import {
 import { usePermissions } from "@/services/permissions";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
-import WPFormModal from "@/components/workpackages/WPFormModal";
-import WPBulkAddModal from "@/components/workpackages/WPBulkAddModal";
+import WorkPackageDetailModalRaw from "@/components/workpackages/WorkPackageDetailModal";
+import WPFormModalRaw from "@/components/workpackages/WPFormModal";
+import WPBulkAddModalRaw from "@/components/workpackages/WPBulkAddModal";
 import { getNextNumber } from "@/components/shared/numberSequencing";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { batchProcess } from "@/utils/batchProcess";
 import { BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
-import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
+import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { exportWorkPackagesCSV } from "./workPackages/utils";
+import { prepareBulkWorkPackageRows } from "./workPackages/creation";
 import { buildWorkPackageMetrics, sortWorkPackagesForExecution } from "./workPackages/analytics";
-import { RESPONSIVE_CSS, contentGridStyle, pageStyle } from "./workPackages/styles";
 import {
-  ControlPanel,
   ExceptionPanel,
-  Hero,
   PhaseFlowView,
   RegisterView,
   StatusBoardView,
-  SummaryStrip,
 } from "./workPackages/components";
 import type { WorkPackage } from "./workPackages/types";
+import WpControlCenter from "./workPackages/WpControlCenter";
+import { reconcileSelection } from "./workPackages/wpControlCenter.derive";
+import { calcWpProgress } from "@/utils/projectKpis";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
-// The design-system primitives + LoadingSkeleton are still .jsx; these
-// casts are removable once the shared layer is typed.
+// The design-system primitives, LoadingSkeleton, and the workpackages
+// modals/filter are still .jsx; their destructured `= []` prop defaults make
+// TS infer `never[]` props. These boundary casts are removable once those
+// shared/feature components are typed.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
+const SequenceFilter = SequenceFilterRaw as unknown as ComponentType<AnyProps>;
+const WPBulkAddModal = WPBulkAddModalRaw as unknown as ComponentType<AnyProps>;
+const WPFormModal = WPFormModalRaw as unknown as ComponentType<AnyProps>;
+const WorkPackageDetailModal = WorkPackageDetailModalRaw as unknown as ComponentType<AnyProps>;
 
 export default function WorkPackages() {
   const projectId = useProjectId();
@@ -69,6 +78,7 @@ export default function WorkPackages() {
   const [detailWP, setDetailWP] = useState<WorkPackage | null>(null);
   const [selectedWPs, setSelectedWPs] = useState<Set<string>>(new Set());
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
+  const [allocatingNumber, setAllocatingNumber] = useState(false);
 
   const { data: rawWorkPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: ["work-packages", projectId],
@@ -120,6 +130,13 @@ export default function WorkPackages() {
   const invalidateWps = () => {
     qc.invalidateQueries({ queryKey: ["work-packages"] });
     qc.invalidateQueries({ queryKey: ["wps-all"] });
+    // Fan out the full work_package family (incl. ["wps-fab", projectId] read by
+    // FabRelease) so a WP mutation doesn't leave sibling pages stale.
+    void invalidateEntity(qc, "work_package", projectId);
+    // Piece assign UI reads WPs from the relationships snapshot — without these
+    // keys, soft-deleted packages stay in the Target work package dropdown.
+    void qc.invalidateQueries({ queryKey: ["piece-relationships"] });
+    void qc.invalidateQueries({ queryKey: ["piece-register"] });
   };
 
   const updateWPMut = useMutation({
@@ -136,7 +153,9 @@ export default function WorkPackages() {
   });
 
   const createWPMut = useMutation({
-    mutationFn: (data: any) => entities.WorkPackage.create(data),
+    mutationFn: (data: any) => entities.WorkPackage.create(
+      withProjectId(data as Record<string, unknown>, effectiveProjectId),
+    ),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, wpQueryKeys, created, ((record, key) => !key[1] || record.project_id === key[1]) as any);
       invalidateWps();
@@ -161,31 +180,7 @@ export default function WorkPackages() {
 
   const bulkCreateMut = useMutation({
     mutationFn: async (rows: any[]) => {
-      if (!rows?.length) throw new Error("No rows to add");
-      if (!effectiveProjectId) throw new Error("Select a project first");
-      const needsNumbers = rows.filter((row) => !row.wp_number);
-      let nextStart = null;
-      if (needsNumbers.length > 0) {
-        try {
-          nextStart = await getNextNumber(effectiveProjectId, "wp_number");
-        } catch (err) {
-          console.warn("[WorkPackages] getNextNumber fallback:", err?.message);
-          const maxNum = workPackages
-            .map((wp) => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
-            .filter((n) => !Number.isNaN(n))
-            .reduce((max, n) => Math.max(max, n), 0);
-          nextStart = maxNum + 1;
-        }
-      }
-      let cursor = nextStart;
-      const prepared = rows.map((row) => {
-        let wpNumber = row.wp_number;
-        if (!wpNumber && cursor != null) {
-          wpNumber = `WP-${String(cursor).padStart(3, "0")}`;
-          cursor += 1;
-        }
-        return { ...row, wp_number: wpNumber, project_id: effectiveProjectId, project_name: row.project_name || undefined };
-      });
+      const prepared = await prepareBulkWorkPackageRows(rows, effectiveProjectId, getNextNumber);
       return batchProcess(prepared, (data) => entities.WorkPackage.create(data), 5);
     },
     onSuccess: (results) => {
@@ -257,7 +252,21 @@ export default function WorkPackages() {
     [filtered, selectedWPs]
   );
 
+  useEffect(() => {
+    setSelectedWPs((previous) => {
+      const next = reconcileSelection(previous, filtered.map((wp) => wp.id));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [filtered]);
+
   const projectName = selectedProject?.name || (projectId ? "No active project" : "All Projects");
+
+  // Project-level context for the canonical execution shell.
+  const projectHealth = (selectedProject as unknown as { health_status?: string | null })?.health_status ?? null;
+  const percentComplete =
+    (selectedProject as unknown as { scope_complete_pct_override?: number | null })?.scope_complete_pct_override != null
+      ? Number((selectedProject as unknown as { scope_complete_pct_override: number }).scope_complete_pct_override)
+      : (workPackages.length ? calcWpProgress(workPackages).pct : null);
 
   const toggleSelect = (id: string) =>
     setSelectedWPs((prev) => {
@@ -272,144 +281,47 @@ export default function WorkPackages() {
   };
 
   const handleWPCreate = useCallback(async () => {
+    if (allocatingNumber) return;
+    setAllocatingNumber(true);
     let wpNumber = "";
     try {
       if (effectiveProjectId) {
         const n = await getNextNumber(effectiveProjectId, "wp_number");
         wpNumber = `WP-${String(n).padStart(3, "0")}`;
+      } else {
+        throw new Error("No active project selected");
       }
     } catch (err) {
-      console.warn("[WorkPackages] getNextNumber fallback:", err?.message);
-      const maxNum = workPackages
-        .map((wp) => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
-        .filter((n) => !Number.isNaN(n))
-        .reduce((max, n) => Math.max(max, n), 0);
-      wpNumber = `WP-${String(maxNum + 1).padStart(3, "0")}`;
+      console.warn("[WorkPackages] getNextNumber failed:", err?.message);
+      toast.error("Unable to reserve a work package number. Please retry.");
+      return;
+    } finally {
+      setAllocatingNumber(false);
     }
-    setEditingWP({ wp_number: wpNumber, project_id: effectiveProjectId });
+    setEditingWP({ wp_number: wpNumber, project_id: effectiveProjectId ?? undefined });
     setWPModalOpen(true);
-  }, [effectiveProjectId, workPackages]);
+  }, [allocatingNumber, effectiveProjectId]);
 
   useAutoOpenCreate(handleWPCreate, { enabled: !!effectiveProjectId });
 
   if (wpLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
   }
 
-  return (
-    <div style={pageStyle}>
-      <style>{RESPONSIVE_CSS}</style>
-      <Hero
-        projectName={projectName}
-        metrics={metrics}
-        view={view}
-        onViewChange={setView}
-        onExport={() => exportWorkPackagesCSV(filtered)}
-        onBulkAdd={() => setBulkAddOpen(true)}
-        onCreate={handleWPCreate}
-        canCreate={!!effectiveProjectId && can("create", "work_package")}
-      />
+  const canCreate = !!effectiveProjectId && can("create", "work_package") && !allocatingNumber;
+  const canEdit = can("edit", "work_package");
+  const canDelete = can("delete", "work_package");
 
-      <SummaryStrip metrics={metrics} onPhaseFilter={setPhaseFilter} phaseFilter={phaseFilter} />
-
-      <ControlPanel
-        search={search}
-        onSearch={setSearch}
-        phaseFilter={phaseFilter}
-        onPhaseFilter={setPhaseFilter}
-        statusFilter={statusFilter}
-        onStatusFilter={setStatusFilter}
-        riskFilter={riskFilter}
-        onRiskFilter={setRiskFilter}
-        filteredCount={filtered.length}
-        totalCount={metrics.totalCount}
-        onClear={() => {
-          setSearch("");
-          setPhaseFilter("all");
-          setStatusFilter("all");
-          setRiskFilter("all");
-          setSeqFilter(null);
-        }}
-      />
-
-      <SequenceFilter items={workPackages} value={seqFilter} onChange={setSeqFilter} />
-
-      <div className="wp-content-grid" style={contentGridStyle}>
-        <ExceptionPanel
-          metrics={metrics}
-          onRiskFilter={setRiskFilter}
-          onStatusFilter={setStatusFilter}
-          onPhaseFilter={setPhaseFilter}
-          onOpen={setDetailWP}
-        />
-
-        <main style={{ minWidth: 0 }}>
-          {view === "flow" && (
-            <PhaseFlowView
-              rows={filtered}
-              phaseRollup={metrics.phaseRollup}
-              onOpen={setDetailWP}
-              onEdit={can("edit", "work_package") ? handleWPEdit : null}
-              onDelete={can("delete", "work_package") ? setDeleteTarget : null}
-              selectedWPs={selectedWPs}
-              onToggleSelect={toggleSelect}
-            />
-          )}
-
-          {view === "board" && (
-            <StatusBoardView
-              rows={filtered}
-              onOpen={setDetailWP}
-              onEdit={can("edit", "work_package") ? handleWPEdit : null}
-              onDelete={can("delete", "work_package") ? setDeleteTarget : null}
-            />
-          )}
-
-          {view === "register" && (
-            <RegisterView
-              rows={filtered}
-              selectedWPs={selectedWPs}
-              onToggleSelect={toggleSelect}
-              onOpen={setDetailWP}
-              onEdit={can("edit", "work_package") ? handleWPEdit : null}
-              onDelete={can("delete", "work_package") ? setDeleteTarget : null}
-            />
-          )}
-        </main>
-      </div>
-
-      <BulkActionBar
-        count={selectedWPs.size}
-        onClear={() => setSelectedWPs(new Set())}
-        actions={[
-          {
-            label: "SET COMPLETE",
-            icon: "check",
-            onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "Complete" }),
-            disabled: bulkStatusMut.isPending,
-          },
-          {
-            label: "SET IN PROGRESS",
-            icon: "arrow",
-            onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "In Progress" }),
-            disabled: bulkStatusMut.isPending,
-          },
-          {
-            label: "EXPORT",
-            icon: "download",
-            onClick: () => exportWorkPackagesCSV(selectedRows),
-          },
-        ]}
-      />
-
+  const wpModals = (
+    <>
       <WPBulkAddModal
         open={bulkAddOpen}
         onClose={() => setBulkAddOpen(false)}
-        onCommit={(rows) => bulkCreateMut.mutate(rows)}
+        onCommit={(rows: unknown[]) => bulkCreateMut.mutate(rows)}
         projectId={effectiveProjectId}
         projectName={projectName}
         existingWPs={workPackages}
@@ -418,9 +330,10 @@ export default function WorkPackages() {
 
       {(wpModalOpen || editingWP) && (
         <WPFormModal
+          key={editingWP?.id || editingWP?.wp_number || "new"}
           open={wpModalOpen || !!editingWP}
           onClose={() => { setWPModalOpen(false); setEditingWP(null); }}
-          onSave={(data) => {
+          onSave={(data: unknown) => {
             if (editingWP?.id) updateWPMut.mutate({ id: editingWP.id, data });
             else createWPMut.mutate(data);
           }}
@@ -428,6 +341,7 @@ export default function WorkPackages() {
           projects={projects}
           nextNumber={editingWP?.wp_number || ""}
           allDrawings={drawings}
+          defaultProjectId={effectiveProjectId || ""}
         />
       )}
 
@@ -436,17 +350,131 @@ export default function WorkPackages() {
           wp={detailWP}
           drawings={drawings}
           onClose={() => setDetailWP(null)}
-          onEdit={(wp) => { setDetailWP(null); handleWPEdit(wp); }}
+          onEdit={(wp: WorkPackage) => { setDetailWP(null); handleWPEdit(wp); }}
         />
       )}
 
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => { if (deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }}
         title="Delete Work Package"
         description={`Delete "${deleteTarget?.name}" (${deleteTarget?.wp_number})? This cannot be undone.`}
       />
-    </div>
+    </>
+  );
+
+  const bulkActions = (
+    <BulkActionBar
+      count={selectedWPs.size}
+      onClear={() => setSelectedWPs(new Set())}
+      actions={[
+        {
+          label: "SET COMPLETE",
+          icon: "check",
+          onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "Complete" }),
+          disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+        },
+        {
+          label: "SET IN PROGRESS",
+          icon: "arrow",
+          onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "In Progress" }),
+          disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+        },
+        {
+          label: "EXPORT",
+          icon: "download",
+          onClick: () => exportWorkPackagesCSV(selectedRows),
+          disabled: selectedRows.length === 0,
+        },
+      ]}
+    />
+  );
+
+  return (
+    <WpControlCenter
+      projectName={projectName}
+      workPackages={workPackages as unknown as Parameters<typeof WpControlCenter>[0]["workPackages"]}
+      filtered={filtered as unknown as Parameters<typeof WpControlCenter>[0]["filtered"]}
+      metrics={metrics as unknown as Parameters<typeof WpControlCenter>[0]["metrics"]}
+      view={view}
+      onViewChange={setView}
+      search={search}
+      onSearch={setSearch}
+      phaseFilter={phaseFilter}
+      onPhaseFilter={setPhaseFilter}
+      statusFilter={statusFilter}
+      onStatusFilter={setStatusFilter}
+      riskFilter={riskFilter}
+      onRiskFilter={setRiskFilter}
+      onClearFilters={() => {
+        setSearch("");
+        setPhaseFilter("all");
+        setStatusFilter("all");
+        setRiskFilter("all");
+        setSeqFilter(null);
+      }}
+      filteredCount={filtered.length}
+      totalCount={metrics.totalCount}
+      onOpenWp={setDetailWP as unknown as Parameters<typeof WpControlCenter>[0]["onOpenWp"]}
+      onExport={() => exportWorkPackagesCSV(filtered)}
+      onBulkAdd={() => setBulkAddOpen(true)}
+      onCreate={canCreate ? handleWPCreate : null}
+      canCreate={canCreate}
+      selectedIds={selectedWPs}
+      onToggleSelect={toggleSelect}
+      onToggleAll={(checked) =>
+        setSelectedWPs(checked ? new Set(filtered.map((w) => w.id)) : new Set())
+      }
+      projectHealth={projectHealth}
+      percentComplete={percentComplete}
+      sequenceFilter={<SequenceFilter items={workPackages} value={seqFilter} onChange={setSeqFilter} />}
+      exceptionPanel={
+        <ExceptionPanel
+          metrics={metrics}
+          onRiskFilter={setRiskFilter}
+          onStatusFilter={setStatusFilter}
+          onPhaseFilter={setPhaseFilter}
+          onOpen={setDetailWP}
+        />
+      }
+      listTruncationNotice={<ListTruncationNotice count={rawWorkPackages.length} label="work packages" />}
+      bulkActions={bulkActions}
+      modals={wpModals}
+    >
+      <main style={{ minWidth: 0 }}>
+        {view === "flow" && (
+          <PhaseFlowView
+            rows={filtered}
+            phaseRollup={metrics.phaseRollup}
+            onOpen={setDetailWP}
+            onEdit={canEdit ? handleWPEdit : null}
+            onDelete={canDelete ? setDeleteTarget : null}
+            selectedWPs={selectedWPs}
+            onToggleSelect={toggleSelect}
+          />
+        )}
+
+        {view === "board" && (
+          <StatusBoardView
+            rows={filtered}
+            onOpen={setDetailWP}
+            onEdit={canEdit ? handleWPEdit : null}
+            onDelete={canDelete ? setDeleteTarget : null}
+          />
+        )}
+
+        {view === "register" && (
+          <RegisterView
+            rows={filtered}
+            selectedWPs={selectedWPs}
+            onToggleSelect={toggleSelect}
+            onOpen={setDetailWP}
+            onEdit={canEdit ? handleWPEdit : null}
+            onDelete={canDelete ? setDeleteTarget : null}
+          />
+        )}
+      </main>
+    </WpControlCenter>
   );
 }

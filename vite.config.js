@@ -1,12 +1,33 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import path from 'path'
+import fs from 'node:fs'
 import { fileURLToPath } from 'url'
-import wasm from 'vite-plugin-wasm'
-import topLevelAwait from 'vite-plugin-top-level-await'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// web-ifc's .wasm MUST match the installed web-ifc JS version, or the IFC viewer
+// silently renders zero geometry. Copy the wasm straight from node_modules into
+// the served /wasm/ path on every build/dev start so the two can never drift
+// (the 3D viewer calls IfcAPI.SetWasmPath('/wasm/')). public/wasm is gitignored
+// — it's a generated artifact, never committed. Runs regardless of how vite is
+// invoked (buildStart fires for `vite build` and `vite` dev alike).
+function copyWebIfcWasm() {
+  return {
+    name: 'copy-web-ifc-wasm',
+    buildStart() {
+      try {
+        const src = path.resolve(__dirname, 'node_modules/web-ifc/web-ifc.wasm')
+        const destDir = path.resolve(__dirname, 'public/wasm')
+        fs.mkdirSync(destDir, { recursive: true })
+        fs.copyFileSync(src, path.join(destDir, 'web-ifc.wasm'))
+      } catch (e) {
+        this.warn?.('[web-ifc] wasm copy failed (3D viewer will not load): ' + e.message)
+      }
+    },
+  }
+}
 
 // Sentry source-map upload runs ONLY when SENTRY_AUTH_TOKEN is present (set as a
 // Vercel build env var for production). Local + CI builds have no token, so the
@@ -32,15 +53,6 @@ function vendorChunk(id) {
   if (n.includes('vite/preload-helper')) return 'vendor-vite-runtime'
 
   if (!n.includes('/node_modules/')) return undefined
-
-  // BIM / 3D
-  if (n.includes('/node_modules/web-ifc/')) return 'vendor-bim-ifc'
-  if (n.includes('/node_modules/@thatopen/')) return 'vendor-bim-thatopen'
-  if (n.includes('/node_modules/camera-controls/')) return 'vendor-three-controls'
-  if (n.includes('/node_modules/three/build/three.webgpu')) return 'vendor-three-webgpu'
-  if (n.includes('/node_modules/three/build/three.tsl')) return 'vendor-three-webgpu'
-  if (n.includes('/node_modules/three/examples/')) return 'vendor-three-examples'
-  if (n.includes('/node_modules/three/')) return 'vendor-three-core'
 
   // PDF viewing (pdfjs-dist) is loaded by DrawingViewer + thumbnail/extraction
   // flows; keep it isolated so the viewer never pays for export-only weight.
@@ -98,8 +110,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    wasm(),
-    topLevelAwait(),
+    copyWebIfcWasm(),
     // Must be LAST so it sees the final emitted bundle + source maps. Gated on
     // the auth token; uploads are best-effort (errorHandler swallows failures)
     // so a misconfigured token/slug can never fail a production deploy.
@@ -121,15 +132,6 @@ export default defineConfig({
         })]
       : []),
   ],
-  optimizeDeps: {
-    // Exclude web-ifc from Vite's dependency pre-bundling to avoid
-    // circular-reference errors ("Cannot access 'Ct' before initialization")
-    exclude: ['web-ifc'],
-  },
-  worker: {
-    format: 'es',
-    plugins: () => [wasm(), topLevelAwait()],
-  },
   build: {
     // Emit hidden source maps (no sourceMappingURL comment, so they're not
     // referenced by the served bundle) only when we're going to upload them to
@@ -148,12 +150,28 @@ export default defineConfig({
       'node_modules/**',
       'dist/**',
       '.claude/**',
+      '.tmp/**',
       'steelbuild-pro/**',
+      // Playwright E2E specs run under `npm run test:e2e`, not Vitest — they
+      // import @playwright/test, which throws under the Vitest runner. Matched
+      // at any depth: a stale repo copy under .tmp/ has its own e2e/ dir that
+      // the root-relative 'e2e/**' pattern never matched, so `npm run test`
+      // reported 3 red files on an otherwise clean tree.
+      '**/e2e/**',
     ],
     // Default environment is `node` — keeps the 488 pure-helper tests
     // fast (no jsdom overhead). Component tests opt into jsdom via a
     // `// @vitest-environment jsdom` pragma at the top of the file.
     environment: 'node',
+    // The same non-secret placeholders ci.yml exports: src/lib/env.ts validates
+    // import.meta.env at module load, so without these a bare `npm test` in a
+    // fresh clone/worktree (no .env.local) fails 16 files on import. Tests never
+    // hit a real backend — anything network-shaped mocks the supabase client —
+    // so deterministic placeholders are MORE correct than a dev's real values.
+    env: {
+      VITE_SUPABASE_URL: 'https://ci-placeholder.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'ci-placeholder-anon-key',
+    },
     setupFiles: ['./vitest.setup.js', './src/setupTests.ts'],
     // Use the worker_threads pool. Threads are terminated forcibly at teardown,
     // so a worker whose event loop is briefly busy never produces the forks
@@ -161,5 +179,10 @@ export default defineConfig({
     // contended machines). Component tests here mock all native I/O (supabase,
     // base44) and only use jsdom, which runs cleanly under threads.
     pool: 'threads',
+    // Windows dev machines flake unless the suite runs with at most 2 workers
+    // (previously only tribal knowledge: "vitest needs --maxWorkers=2 on
+    // Windows"). Encode it here so a bare `npm test` is safe everywhere; CI
+    // (Linux) keeps full parallelism. (Audit L31)
+    ...(process.platform === 'win32' ? { maxWorkers: 2, minWorkers: 1 } : {}),
   },
 });

@@ -3,12 +3,12 @@
  * in-transit tracking, receiving, and exception follow-up.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import type { ComponentType, CSSProperties, PropsWithChildren } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { logActivity } from "@/services/auditLogger";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Clock3, PackageCheck, Search, Truck } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -20,19 +20,17 @@ import {
   removeRecordFromCaches,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
-import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
-import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
+import DeliveryFormModalRaw from "@/components/deliveries/DeliveryFormModal";
+import ShippingTicketImportModalRaw from "@/components/deliveries/ShippingTicketImportModal";
+import ShippingListImportModal from "@/components/deliveries/ShippingListImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { batchProcess } from "@/utils/batchProcess";
-import {
-  BulkActionBar as BulkActionBarRaw,
-  Button as ButtonRaw,
-  EmptyState as EmptyStateRaw,
-  StatusPill,
-} from "@/components/design-system";
-import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
+import { BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
+import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { exportDeliveriesCSV, isFabComplete } from "./deliveries/utils";
 import {
   buildDeliveryMetrics,
@@ -40,42 +38,34 @@ import {
   getDeliveryDisplayName,
   sortDeliveriesForDispatch,
 } from "./deliveries/analytics";
-import { deliveryStyles } from "./deliveries/styles";
-import {
-  LANE_ORDER,
-  RISK_FILTERS,
-  SCHEDULE_FILTERS,
-  STATUS_COLOR,
-  VIEW_OPTIONS,
-  display,
-  formatTons,
-  mono,
-  num,
-  todayIso,
-} from "./deliveries/format";
+import { LANE_ORDER, todayIso } from "./deliveries/format";
 import {
   DeliveryDetailModal,
   DispatchBoard,
-  ExceptionRail,
-  FilterSelect,
-  HeroMetric,
   ReceivingQuickPanel,
-  RegisterView,
   ScheduleView,
 } from "./deliveries/components";
-import type { DeliveryRecord } from "./deliveries/types";
+import type { DeliveryMetrics, DeliveryRecord } from "./deliveries/types";
+import DeliveryControlCenter from "./deliveries/DeliveryControlCenter";
 
 // The design-system primitives and LoadingSkeleton are still .jsx, so TS infers
 // permissive types. These casts are removable once the shared layer is typed.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
-const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
-const EmptyState = EmptyStateRaw as unknown as ComponentType<AnyProps>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
+// Same boundary cast for the .jsx feature components whose default-valued props
+// (e.g. `items = []`, `delivery = null`) make TS infer overly narrow prop types.
+const SequenceFilter = SequenceFilterRaw as unknown as ComponentType<AnyProps>;
+const DeliveryFormModal = DeliveryFormModalRaw as unknown as ComponentType<AnyProps>;
+const ShippingTicketImportModal = ShippingTicketImportModalRaw as unknown as ComponentType<AnyProps>;
 
 export default function Deliveries() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
+  const { activeProject: activeProjectRaw } = useProjectContext();
+  // ProjectContext.jsx is untyped JS, so activeProject infers as `null`/`never`.
+  // Cast at the boundary to its real shape (drop once ProjectContext is typed),
+  // mirroring the same boundary cast in useProjectId.ts.
+  const activeProject = activeProjectRaw as { name?: string | null } | null;
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { can } = usePermissions();
@@ -89,6 +79,7 @@ export default function Deliveries() {
   const [seqFilter, setSeqFilter] = useState<unknown>(null);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showListImport, setShowListImport] = useState(false);
   const [editing, setEditing] = useState<DeliveryRecord | null>(null);
   const [detail, setDetail] = useState<DeliveryRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -150,6 +141,12 @@ export default function Deliveries() {
     () => buildDeliveryMetrics(activeDeliveries, workPackages),
     [activeDeliveries, workPackages]
   );
+  // analytics.js is untyped JS; buildDeliveryMetrics over-pessimistically infers
+  // `today` as Date | null (dateValue can return null) — at runtime it always
+  // resolves to a real Date (todayStart falls back to new Date()). Re-typed view
+  // for the .tsx components that take the canonical DeliveryMetrics shape; kept
+  // separate so the loose-typed `metrics` is unchanged for the rest of this file.
+  const metricsTyped = metrics as DeliveryMetrics;
 
   useEffect(() => {
     if (!receiveMode) return;
@@ -173,6 +170,7 @@ export default function Deliveries() {
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
       entities.Delivery.update(id, data),
     onSuccess: async (updated, variables) => {
+      logActivity("delivery", "status_changed", updated, { projectId });
       replaceRecordInCaches(qc, deliveryQueryKeys, updated);
       await invalidateDeliveries();
       setDetail((prev) => (prev?.id === variables.id ? null : prev));
@@ -184,6 +182,7 @@ export default function Deliveries() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => entities.Delivery.delete(id),
     onSuccess: async (_result, deletedId) => {
+      logActivity("delivery", "deleted", deleteTarget || { id: deletedId, project_id: projectId }, { projectId });
       removeRecordFromCaches(qc, deliveryQueryKeys, deletedId);
       await invalidateDeliveries();
       if (detail?.id === deleteTarget?.id) setDetail(null);
@@ -201,7 +200,7 @@ export default function Deliveries() {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      const { succeeded, failed } = await batchProcess(ids, (id) =>
+      const { succeeded, failed } = await batchProcess(ids, (id: string) =>
         entities.Delivery.update(id, {
           status,
           actual_date: status === "Delivered" ? todayIso() : null,
@@ -212,7 +211,9 @@ export default function Deliveries() {
       }
       return { succeeded, failed };
     },
-    onSuccess: async (results) => {
+    onSuccess: async (results, variables) => {
+      results.succeeded.forEach(({ value, item }: any) =>
+        logActivity("delivery", "status_changed", value || { id: item, project_id: projectId }, { projectId, description: `→ ${variables.status}` }));
       await invalidateDeliveries();
       setSelectedIds(new Set());
       if (results.failed.length > 0) {
@@ -274,6 +275,9 @@ export default function Deliveries() {
     return groups;
   }, [filtered]);
 
+  // In-session dedup so the 60s metrics refetch doesn't re-run the alert pass
+  // for deliveries already handled (the DB title/id check still backstops it).
+  const alertsCreatedRef = useRef(new Set<string>());
   useEffect(() => {
     if (!projectId || !metrics.overdue.length) return undefined;
     const createDeliveryAlerts = async () => {
@@ -283,21 +287,22 @@ export default function Deliveries() {
         const existingTitles = new Set(existing.map((alert) => alert.title));
         for (const delivery of metrics.overdue) {
           if (existingIds.has(delivery.id)) continue;
+          if (alertsCreatedRef.current.has(delivery.id)) continue;
           const projectName = projectMap[delivery.project_id] || "";
           const wp = workPackageMap[delivery.work_package_id];
           const desc = getDeliveryDisplayName(delivery, wp);
-          const daysLate = delivery._signals.flags.find((flag) => flag.key === "overdue")?.label || "late";
+          const daysLate = delivery._signals.flags.find((flag: { key?: string; label?: string }) => flag.key === "overdue")?.label || "late";
           const alertTitle = `Delivery from ${delivery.vendor || "Unknown"} is ${daysLate}`;
           if (existingTitles.has(alertTitle)) continue;
-          await entities.Alert.create({
+          await entities.Alert.create(withProjectId({
             alert_type: "Delivery_Overdue",
             severity: delivery._signals.risk === "high" ? "High" : "Medium",
             title: alertTitle,
             description: `${desc} from ${delivery.vendor || "Unknown"} - PO: ${delivery.po_number || "TBD"} - Scheduled: ${delivery.scheduled_date || "TBD"} - Status: ${delivery.status || "Scheduled"} - Project: ${projectName}`,
             related_record_id: delivery.id,
-            project_id: delivery.project_id,
             project_name: projectName,
-          });
+          }, delivery.project_id));
+          alertsCreatedRef.current.add(delivery.id);
         }
       } catch (error) {
         console.warn("Delivery alert error:", error);
@@ -315,7 +320,27 @@ export default function Deliveries() {
     });
 
   const toggleAll = (checked: boolean) =>
-    setSelectedIds(checked ? new Set(filtered.map((delivery) => delivery.id)) : new Set());
+    setSelectedIds(
+      checked
+        ? new Set(
+            filtered
+              .map((delivery) => delivery.id)
+              .filter((id): id is string => Boolean(id))
+          )
+        : new Set()
+    );
+
+  useEffect(() => {
+    const visibleIds = new Set(
+      filtered
+        .map((delivery) => delivery.id)
+        .filter((id): id is string => Boolean(id))
+    );
+    setSelectedIds((previous) => {
+      const next = new Set([...previous].filter((id) => visibleIds.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [filtered]);
 
   const handleProjectSelect = (value: string) => {
     const next = new URLSearchParams(searchParams);
@@ -334,7 +359,7 @@ export default function Deliveries() {
   };
 
   const setDeliveryStatus = (delivery: DeliveryRecord, status: string) => {
-    if (!delivery || transitMut.isPending) return;
+    if (!delivery || !delivery.id || transitMut.isPending) return;
     if (status === "Delivered" && !isFabComplete(delivery, workPackages)) {
       const wp = workPackages.find((item) => item.id === delivery.work_package_id);
       toast.error(`Cannot mark delivered - WP "${wp?.name || wp?.wp_number || "linked"}" fabrication is not complete`);
@@ -367,303 +392,34 @@ export default function Deliveries() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page">
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
   }
 
-  const projectName = projectMap[projectId] || activeProject?.name || "All Projects";
+  const projectName = projectMap[projectId ?? ""] || activeProject?.name || "All Projects";
   const selectedDeliveries = filtered.filter((delivery) => selectedIds.has(delivery.id));
 
-  return (
-    <div className="delivery-page">
-      <style>{deliveryStyles}</style>
-
-      <section className="delivery-hero">
-        <div className="delivery-hero-main">
-          <div className="delivery-kicker">
-            <Truck size={14} />
-            Logistics Control - {projectName}
-          </div>
-          <h1 style={display}>Deliveries</h1>
-          <p>
-            Plan load-out, spot late trucks, confirm receiving, and keep field-ready steel visible before it
-            turns into a site constraint.
-          </p>
-          <div className="delivery-hero-actions">
-            <Button
-              variant="secondary"
-              icon="download"
-              onClick={() => exportDeliveriesCSV(filtered, projectMap, wpLabelMap)}
-            >
-              CSV
-            </Button>
-            {can("create", "delivery") && (
-              <Button variant="outline" icon="upload" onClick={() => setShowImport(true)}>
-                Import Ticket
-              </Button>
-            )}
-            {can("create", "delivery") && (
-              <Button
-                variant="primary"
-                icon="plus"
-                onClick={() => {
-                  setEditing(null);
-                  setDetail(null);
-                  setShowForm(true);
-                }}
-              >
-                Schedule Load
-              </Button>
-            )}
-          </div>
-        </div>
-        <div className="delivery-hero-grid">
-          <HeroMetric
-            label="Open Loads"
-            value={metrics.openCount}
-            sub={`${formatTons(metrics.totalOpenTons)} inbound`}
-            color="var(--phase-delivery)"
-            icon={PackageCheck}
-          />
-          <HeroMetric
-            label="Due Today"
-            value={metrics.dueToday.length}
-            sub={`${formatTons(metrics.dueToday.reduce((sum, d) => sum + num(d.weight_tons), 0))} scheduled`}
-            color="var(--status-warning)"
-            icon={Clock3}
-          />
-          <HeroMetric
-            label="Exceptions"
-            value={metrics.exceptions.length}
-            sub={`${metrics.overdue.length} late loads`}
-            color={metrics.exceptions.length ? "var(--status-error)" : "var(--status-success)"}
-            icon={AlertTriangle}
-          />
-          <HeroMetric
-            label="Ready To Receive"
-            value={metrics.readyToReceive.length}
-            sub={`${metrics.deliveredLast7.length} received in 7d`}
-            color="var(--status-success)"
-            icon={CheckCircle2}
-          />
-        </div>
-      </section>
-
-      {receiveMode && (
-        <ReceivingQuickPanel
-          metrics={metrics}
-          projectMap={projectMap}
-          workPackageMap={workPackageMap}
-          onOpen={setDetail}
-          onExit={clearReceiveMode}
-          onFilter={(filter) => {
-            setView("schedule");
-            setScheduleFilter(filter);
-            setRiskFilter("all");
-          }}
-          onScheduleLoad={() => {
-            setEditing(null);
-            setDetail(null);
-            setShowForm(true);
-          }}
-        />
-      )}
-
-      <section className="delivery-flow-strip">
-        <div className="delivery-flow-header">
-          <div>
-            <div className="delivery-section-label">Load Pipeline</div>
-            <div className="delivery-muted">Status mix across active and recently completed delivery records.</div>
-          </div>
-          <div className="delivery-flow-total" style={mono}>
-            {metrics.totalOpenPieces.toLocaleString()} open pcs
-          </div>
-        </div>
-        <div className="delivery-status-flow">
-          {metrics.statusRollup.map((item) => (
-            <button
-              key={item.status}
-              className={`delivery-status-step ${statusFilter === item.status ? "is-active" : ""}`}
-              onClick={() => setStatusFilter(statusFilter === item.status ? "all" : item.status)}
-              style={{ "--step-color": STATUS_COLOR[item.status] || "var(--text-muted)" } as CSSProperties}
-            >
-              <span>{item.status}</span>
-              <strong>{item.count}</strong>
-              <small>{formatTons(item.tons)}</small>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="delivery-toolbar">
-        <div className="delivery-search">
-          <Search size={15} />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search vendor, PO, load, carrier, truck, work package..."
-          />
-        </div>
-        {!projectId && (
-          <select value={projectId || ""} onChange={(event) => handleProjectSelect(event.target.value)}>
-            <option value="">All Projects</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name || (project as any).project_name}
-              </option>
-            ))}
-          </select>
-        )}
-        <FilterSelect value={scheduleFilter} onChange={setScheduleFilter} options={SCHEDULE_FILTERS} />
-        <FilterSelect value={riskFilter} onChange={setRiskFilter} options={RISK_FILTERS} />
-        <div className="delivery-view-toggle">
-          {VIEW_OPTIONS.map((option) => {
-            const Icon = option.icon;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                className={view === option.id ? "is-active" : ""}
-                onClick={() => setView(option.id)}
-              >
-                {Icon && <Icon size={14} />}
-                <span>{option.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <SequenceFilter items={activeDeliveries} value={seqFilter} onChange={setSeqFilter} />
-
-      <section className="delivery-layout">
-        <ExceptionRail
-          metrics={metrics}
-          projectMap={projectMap}
-          workPackageMap={workPackageMap}
-          onOpen={setDetail}
-          onFilterLate={() => {
-            setScheduleFilter("late");
-            setRiskFilter("all");
-          }}
-        />
-
-        <main className="delivery-main">
-          <div className="delivery-view-header">
-            <div>
-              <div className="delivery-section-label">
-                {view === "dispatch" ? "Dispatch Board" : view === "schedule" ? "Schedule Lookahead" : "Delivery Register"}
-              </div>
-              <div className="delivery-muted">
-                {filtered.length} of {metrics.totalCount} deliveries shown
-              </div>
-            </div>
-            <div className="delivery-header-actions">
-              <StatusPill label={`${selectedIds.size} Selected`} color={selectedIds.size ? "var(--accent)" : "var(--text-muted)"} />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setStatusFilter("all");
-                  setScheduleFilter("all");
-                  setRiskFilter("all");
-                  setSeqFilter(null);
-                  setSearch("");
-                }}
-              >
-                Clear Filters
-              </Button>
-            </div>
-          </div>
-
-          {view === "dispatch" && (
-            <DispatchBoard
-              laneGroups={laneGroups}
-              projectMap={projectMap}
-              workPackageMap={workPackageMap}
-              selectedIds={selectedIds}
-              onToggle={toggleSelect}
-              onOpen={setDetail}
-              onSetStatus={setDeliveryStatus}
-            />
-          )}
-
-          {view === "schedule" && (
-            <ScheduleView
-              metrics={metrics}
-              filtered={filtered}
-              projectMap={projectMap}
-              workPackageMap={workPackageMap}
-              onOpen={setDetail}
-            />
-          )}
-
-          {view === "register" && (
-            <RegisterView
-              deliveries={filtered}
-              projectMap={projectMap}
-              workPackageMap={workPackageMap}
-              selectedIds={selectedIds}
-              onToggle={toggleSelect}
-              onToggleAll={toggleAll}
-              onOpen={setDetail}
-              onEdit={(delivery) => {
-                setEditing(delivery);
-                setDetail(null);
-              }}
-              allSelected={filtered.length > 0 && selectedIds.size === filtered.length}
-            />
-          )}
-
-          {filtered.length === 0 && (
-            <div className="delivery-empty">
-              <EmptyState
-                icon="delivery"
-                title={metrics.totalCount === 0 ? "No deliveries tracked" : "No deliveries match your filters"}
-                body={
-                  metrics.totalCount === 0
-                    ? "Schedule the first load or import a shipping ticket to start tracking field arrivals."
-                    : "Clear filters or adjust the search to bring loads back into view."
-                }
-              />
-            </div>
-          )}
-        </main>
-      </section>
-
-      <BulkActionBar
-        count={selectedIds.size}
-        onClear={() => setSelectedIds(new Set())}
-        actions={[
-          { label: "In Transit", icon: "arrow", onClick: () => bulkUpdate("In Transit") },
-          { label: "Delivered", icon: "check", variant: "primary", onClick: () => bulkUpdate("Delivered") },
-          { label: "Partial", icon: "alert", onClick: () => bulkUpdate("Partial") },
-          {
-            label: "Export",
-            icon: "download",
-            onClick: () => exportDeliveriesCSV(selectedDeliveries, projectMap, wpLabelMap, "deliveries-selected.csv"),
-          },
-        ]}
-      />
-
+  // The page owns all modal state and mutation handlers; the control center only
+  // supplies the route-level presentation around these workflows.
+  const modals = (
+    <>
       <DeliveryDetailModal
         delivery={detail}
         projectMap={projectMap}
         workPackageMap={workPackageMap}
         onClose={() => setDetail(null)}
-        onEdit={can("edit", "delivery") ? (delivery) => {
+        onEdit={can("edit", "delivery") ? (delivery: DeliveryRecord) => {
           setEditing(delivery);
           setDetail(null);
         } : null}
-        onDelete={can("delete", "delivery") ? (delivery) => {
+        onDelete={can("delete", "delivery") ? (delivery: DeliveryRecord) => {
           setDeleteTarget(delivery);
           setDetail(null);
         } : null}
         onSetStatus={setDeliveryStatus}
       />
-
       {showForm && (
         <DeliveryFormModal
           projectId={projectId}
@@ -694,13 +450,118 @@ export default function Deliveries() {
           invalidateDeliveries();
         }}
       />
+      <ShippingListImportModal
+        open={showListImport}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        onImported={() => invalidateDeliveries()}
+        onClose={() => {
+          setShowListImport(false);
+          invalidateDeliveries();
+        }}
+      />
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => deleteTarget?.id && deleteMut.mutate(deleteTarget.id)}
         title="Delete delivery?"
         description="This delivery will be removed."
       />
+    </>
+  );
+
+  return (
+    <div className="delivery-page">
+      <DeliveryControlCenter
+        projectName={projectName}
+        projectId={projectId}
+        projectOptions={projects}
+        onProjectChange={handleProjectSelect}
+        deliveries={activeDeliveries}
+        filtered={filtered}
+        metrics={metricsTyped}
+        search={search}
+        onSearch={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        scheduleFilter={scheduleFilter}
+        onScheduleFilterChange={setScheduleFilter}
+        riskFilter={riskFilter}
+        onRiskFilterChange={setRiskFilter}
+        view={view}
+        onViewChange={setView}
+        onOpenDelivery={setDetail}
+        onExport={() => exportDeliveriesCSV(filtered, projectMap, wpLabelMap)}
+        onImport={can("create", "delivery") ? () => setShowImport(true) : null}
+        onImportList={can("create", "delivery") ? () => setShowListImport(true) : null}
+        onCreate={can("create", "delivery") ? () => { setEditing(null); setDetail(null); setShowForm(true); } : null}
+        onClearFilters={() => {
+          setStatusFilter("all");
+          setScheduleFilter("all");
+          setRiskFilter("all");
+          setSeqFilter(null);
+          setSearch("");
+        }}
+        sequenceFilter={<SequenceFilter items={activeDeliveries} value={seqFilter} onChange={setSeqFilter} />}
+        truncationNotice={<ListTruncationNotice count={deliveries.length} label="deliveries" />}
+        receivingPanel={receiveMode ? (
+          <ReceivingQuickPanel
+            metrics={metricsTyped}
+            projectMap={projectMap}
+            workPackageMap={workPackageMap}
+            onOpen={setDetail}
+            onExit={clearReceiveMode}
+            onFilter={(filter) => {
+              setView("schedule");
+              setScheduleFilter(filter);
+              setRiskFilter("all");
+            }}
+            onScheduleLoad={() => {
+              setEditing(null);
+              setDetail(null);
+              setShowForm(true);
+            }}
+          />
+        ) : null}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleAll={toggleAll}
+        dispatchBoard={
+          <DispatchBoard
+            laneGroups={laneGroups}
+            projectMap={projectMap}
+            workPackageMap={workPackageMap}
+            selectedIds={selectedIds}
+            onToggle={toggleSelect}
+            onOpen={setDetail}
+            onSetStatus={setDeliveryStatus}
+          />
+        }
+        scheduleView={
+          <ScheduleView
+            metrics={metricsTyped}
+            filtered={filtered}
+            projectMap={projectMap}
+            workPackageMap={workPackageMap}
+            onOpen={setDetail}
+          />
+        }
+      />
+      <BulkActionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          { label: "In Transit", icon: "arrow", onClick: () => bulkUpdate("In Transit") },
+          { label: "Delivered", icon: "check", variant: "primary", onClick: () => bulkUpdate("Delivered") },
+          { label: "Partial", icon: "alert", onClick: () => bulkUpdate("Partial") },
+          {
+            label: "Export",
+            icon: "download",
+            onClick: () => exportDeliveriesCSV(selectedDeliveries, projectMap, wpLabelMap, "deliveries-selected.csv"),
+          },
+        ]}
+      />
+      {modals}
     </div>
   );
 }

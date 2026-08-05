@@ -1,12 +1,16 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { PAGES } from "@/config/routes";
+import { PAGES, PROJECT_SCOPED_PAGES, STATIC_ROUTE_METADATA } from "@/config/routes";
 import PageNotFound from "@/lib/PageNotFound";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
+import ProjectScopedRoute from "@/components/shared/ProjectScopedRoute";
 import LayoutRoute from "@/boot/LayoutRoute";
 import PageLoader from "@/boot/PageLoader";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { useProjectContext } from "@/components/shared/ProjectContext";
+import { useProjectRole } from "@/hooks/useProjectRole";
+import { landingForRole } from "@/lib/landingForRole";
 
 // Two pages keep dedicated lazy bindings here (rather than going through the
 // PAGES registry) because they're mounted at non-canonical URLs:
@@ -30,20 +34,85 @@ function LazyRoute({ label, children }) {
   );
 }
 
-const LANDING_REDIRECT_KEY = "sbp-landing-redirected";
+function LegacyProjectDetailRedirect() {
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get("projectId") || searchParams.get("id");
+
+  if (!projectId) {
+    return <Navigate to="/Projects" replace />;
+  }
+
+  return <Navigate to={`/Projects?id=${encodeURIComponent(projectId)}`} replace />;
+}
+
+export const LANDING_REDIRECT_KEY = "sbp-landing-redirected";
 
 /**
- * Index route ("/"): honour Settings → Dashboard → "Default Landing Page".
- * Redirects ONCE per browser session on first load (the "page you see when you
- * open the app each morning"), so clicking the logo/home later still shows the
- * Dashboard rather than bouncing away.
+ * Index route ("/"): decide the "page you see when you open the app each
+ * morning". Precedence, applied ONCE per browser session on first load (so
+ * clicking the logo/home later still shows the Dashboard rather than bouncing
+ * away):
+ *
+ *   1. Explicit user pref (Settings → Dashboard → "Default Landing Page").
+ *   2. Role-aware default (only when no explicit pref): field → Field Today,
+ *      pm/admin/owner → Detailing Control Center, viewer/unknown → Dashboard.
+ *      See src/lib/landingForRole.js.
+ *
+ * The role is per-project and async (useProjectRole → RPC), and ProjectContext
+ * does NOT auto-select a project. So for the role path we wait — but only when
+ * there's actually something to wait for — before locking in the decision:
+ *   - active project present → wait for its role to resolve;
+ *   - none active but one is still pending (a saved pick or the Default-Project
+ *     pref may resolve into one) → wait for the project list;
+ *   - nothing selected/pending → decide now (→ Dashboard), so a brand-new,
+ *     zero-project user doesn't stare at a spinner through ProjectContext's
+ *     empty-list retry backoff.
+ * Deciding early on the transient "no project / viewer" state would fire the
+ * once-per-session guard and trap office/field users on the Dashboard. An
+ * explicit pref skips the wait entirely.
+ *
+ * Exported for the boot-invariant test (src/boot/__tests__/IndexRoute.test.jsx).
  */
-function IndexRoute() {
-  const { default_landing } = useUserPrefs();
-  const target = default_landing && default_landing !== "Dashboard" ? default_landing : null;
+export function IndexRoute() {
+  const { default_landing, default_project_id } = useUserPrefs();
+  const { activeProject, loading: projectsLoading } = useProjectContext();
+  const { role, isLoading: roleLoading } = useProjectRole(activeProject?.id);
+
   let alreadyRedirected = true;
   try { alreadyRedirected = sessionStorage.getItem(LANDING_REDIRECT_KEY) === "1"; } catch { /* ignore */ }
+
+  // An explicit, non-default pref always wins — unchanged legacy behavior.
+  const explicitTarget =
+    default_landing && default_landing !== "Dashboard" ? default_landing : null;
+
+  // Will an active project (and thus a per-project role) resolve this load?
+  // A saved localStorage pick or the Settings "Default Project" pref both
+  // resolve into an active project after ProjectContext loads.
+  let savedSelection = false;
+  try { savedSelection = !!localStorage.getItem("activeProjectId"); } catch { /* ignore */ }
+  const projectPending = savedSelection || !!default_project_id;
+
+  // roleReady: the inputs a role decision needs are in. With an active project
+  // we wait for its role; with none active we wait only if one is still
+  // pending (else decide immediately → no spinner for zero-project users).
+  const roleReady = activeProject ? !roleLoading : !(projectPending && projectsLoading);
+  const roleTarget =
+    !explicitTarget && roleReady ? landingForRole(role, !!activeProject) : null;
+
+  // Hold briefly while the role decision's inputs resolve (first load only).
+  // Do NOT set the guard here, or we'd lock in Dashboard before the role lands.
+  if (!explicitTarget && !alreadyRedirected && !roleReady) {
+    return <PageLoader />;
+  }
+
+  const target = explicitTarget || roleTarget;
   if (target && !alreadyRedirected) {
+    // Set the once-per-session guard synchronously with the redirect so a
+    // logo/home click later shows the Dashboard. Kept in render (not an effect)
+    // on purpose: this guarantees the guard is set exactly when we redirect —
+    // an effect could be skipped if <Navigate> swaps this route out first,
+    // breaking the once-per-session contract. Safe because the app is not
+    // wrapped in StrictMode and "/" renders synchronously.
     try { sessionStorage.setItem(LANDING_REDIRECT_KEY, "1"); } catch { /* ignore */ }
     return <Navigate to={`/${target}`} replace />;
   }
@@ -77,7 +146,13 @@ export default function AppRoutes() {
             path={path === "Reports" ? "Reports/*" : path}
             element={
               <LazyRoute label={path}>
-                <Page />
+                {PROJECT_SCOPED_PAGES.has(path) ? (
+                  <ProjectScopedRoute>
+                    <Page />
+                  </ProjectScopedRoute>
+                ) : (
+                  <Page />
+                )}
               </LazyRoute>
             }
           />
@@ -91,6 +166,34 @@ export default function AppRoutes() {
             </LazyRoute>
           }
         />
+
+        <Route path="ProjectDetail" element={<LegacyProjectDetailRedirect />} />
+        <Route
+          path="Financials"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/Financials"].target} replace />}
+        />
+        <Route
+          path="CostDashboard"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/CostDashboard"].target} replace />}
+        />
+        <Route
+          path="ResourceManagement"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/ResourceManagement"].target} replace />}
+        />
+        <Route
+          path="AIInsights"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/AIInsights"].target} replace />}
+        />
+        <Route
+          path="MarginRisk"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/MarginRisk"].target} replace />}
+        />
+
+        {/* /RFIHub was retired — redirect old links to /RFIs */}
+        <Route path="RFIHub" element={<Navigate to={STATIC_ROUTE_METADATA["/RFIHub"].target} replace />} />
+
+        {/* /GanttChart was retired — redirect old deep-links to /Schedule */}
+        <Route path="GanttChart" element={<Navigate to={STATIC_ROUTE_METADATA["/GanttChart"].target} replace />} />
       </Route>
 
       {/* 404 — outside layout */}
@@ -98,3 +201,5 @@ export default function AppRoutes() {
     </Routes>
   );
 }
+
+

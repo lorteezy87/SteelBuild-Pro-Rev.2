@@ -4,7 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { getQueryKey } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { formatDate } from "@/components/shared/formatters";
-import { CommandBar, StatusPill } from "@/components/design-system";
+import { CommandBar, StatusPill, Button } from "@/components/design-system";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 // ─── Utilities ──────────────────────────────────────────────────────────────
 
@@ -59,7 +61,7 @@ const TabBar = ({ tabs, active, onSelect }) => (
           cursor: "pointer",
           transition: "all 0.15s",
           background: active === t ? "var(--accent)" : "transparent",
-          color: active === t ? "#000" : "var(--text-muted)",
+          color: active === t ? "var(--bg-base)" : "var(--text-muted)",
         }}
       >
         {t}
@@ -423,28 +425,51 @@ export default function LEMs() {
 
   // ── Queries ─────────────────────────────────────────────────────────────
 
-  const { data: dailyLogs = [], isLoading: logsLoading } = useQuery({
+  const {
+    data: dailyLogs = [],
+    isLoading: logsLoading,
+    isError: logsError,
+    error: logsErrorValue,
+    refetch: refetchLogs,
+  } = useQuery({
     queryKey: getQueryKey("daily_log", projectId),
     queryFn: () => entities.DailyLog.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: workPackages = [], isLoading: wpLoading } = useQuery({
+  const {
+    data: workPackages = [],
+    isLoading: wpLoading,
+    isError: wpError,
+    error: wpErrorValue,
+    refetch: refetchWp,
+  } = useQuery({
     queryKey: getQueryKey("work_package", projectId),
     queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const { isLoading: expLoading } = useQuery({
+  const {
+    isLoading: expLoading,
+    isError: expError,
+    error: expErrorValue,
+    refetch: refetchExp,
+  } = useQuery({
     queryKey: getQueryKey("expense", projectId),
     queryFn: () => entities.Expense.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: deliveries = [], isLoading: delLoading } = useQuery({
+  const {
+    data: deliveries = [],
+    isLoading: delLoading,
+    isError: delError,
+    error: delErrorValue,
+    refetch: refetchDel,
+  } = useQuery({
     queryKey: getQueryKey("delivery", projectId),
     queryFn: () => entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -452,12 +477,20 @@ export default function LEMs() {
   });
 
   const isLoading = logsLoading || wpLoading || expLoading || delLoading;
+  const isError = logsError || wpError || expError || delError;
+  const loadError = logsErrorValue || wpErrorValue || expErrorValue || delErrorValue;
+  const refetchAll = () => {
+    refetchLogs();
+    refetchWp();
+    refetchExp();
+    refetchDel();
+  };
 
   // ── Guards ──────────────────────────────────────────────────────────────
 
   if (!projectId) {
     return (
-      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>&#9881;</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>Select a project</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
@@ -467,8 +500,29 @@ export default function LEMs() {
 
   if (isLoading) {
     return (
-      <div style={{ textAlign: "center", padding: "80px 24px" }}>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" }}>Loading LEM data...</div>
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load LEM data
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(loadError, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={refetchAll}>Retry</Button>
       </div>
     );
   }
@@ -476,7 +530,7 @@ export default function LEMs() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={activeProject?.name || "PROJECT"}
         title="Labor, Equipment & Materials"

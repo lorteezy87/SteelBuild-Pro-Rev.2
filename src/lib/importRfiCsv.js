@@ -136,7 +136,7 @@ const COLUMN_ALIASES = {
 // the preview step.
 const JOB_NUMBER_ALIASES = ["job number", "job #", "job no", "project number", "project #", "project no", "job", "project"];
 
-const normalize = (s) => String(s ?? "").toLowerCase().trim().replace(/[._\-]+/g, " ").replace(/\s+/g, " ");
+const normalize = (s) => String(s ?? "").toLowerCase().trim().replace(/[._-]+/g, " ").replace(/\s+/g, " ");
 
 function buildColumnIndex(headerRow) {
   const idx = { job_number: -1 };
@@ -284,7 +284,7 @@ export function parseRfiCsv(csvText, { fileName = "" } = {}) {
     const dSub = pick("date_submitted");
     const dReq = pick("date_required");
     const dAns = pick("date_answered");
-    const job  = pick("job_number" in idx ? "job_number" : "job_number");
+    const job  = pick("job_number");
 
     if (job) jobNumbers.add(job.replace(/\D+/g, ""));
 

@@ -2,12 +2,13 @@ export const drawingViewerStyles = `
 .drawing-viewer-redesign {
   --viewer-sidebar-width: 320px;
   --viewer-context-width: 336px;
-  --viewer-panel-bg: color-mix(in srgb, var(--bg-surface) 96%, #111827 4%);
-  --viewer-panel-bg-soft: color-mix(in srgb, var(--bg-surface-low) 92%, #0f172a 8%);
+  --viewer-panel-bg: color-mix(in srgb, var(--bg-surface) 96%, var(--bg-page) 4%);
+  --viewer-panel-bg-soft: color-mix(in srgb, var(--bg-surface-low) 92%, var(--bg-page) 8%);
   --viewer-line: color-mix(in srgb, var(--border-default) 82%, transparent);
   --viewer-paper-shadow: 0 22px 70px rgba(0,0,0,0.52), 0 4px 14px rgba(0,0,0,0.34);
   position: relative;
   display: flex;
+  flex-direction: row;
   flex: 1;
   height: calc(100dvh - 36px);
   max-height: calc(100dvh - 36px);
@@ -20,9 +21,27 @@ export const drawingViewerStyles = `
     var(--bg-page);
 }
 
+/*
+ * Layout shell uses .sb-dashboard-reference-page { flex-direction: column }.
+ * That class is also on the viewer root for chrome padding reset — but the
+ * viewer MUST stay a ROW (sidebar | canvas | context). Without this override
+ * the main pane collapses to height:0 and the empty-state/PDF canvas vanish.
+ * Specificity: two classes beats .sb-dashboard-reference-page alone.
+ */
+.sb-dashboard-reference-page.drawing-viewer-redesign {
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+  min-height: 0;
+  height: calc(100dvh - 36px);
+  max-height: calc(100dvh - 36px);
+  overflow: hidden;
+}
+
 .drawing-viewer-main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -153,9 +172,9 @@ export const drawingViewerStyles = `
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  border: 1px solid rgba(200,155,32,0.62);
+  border: 1px solid var(--accent-border);
   border-radius: 6px;
-  background: rgba(24, 20, 12, 0.92);
+  background: color-mix(in srgb, var(--bg-page) 92%, var(--accent) 8%);
   color: var(--accent);
   box-shadow: 0 10px 24px rgba(0,0,0,0.38);
   cursor: pointer;
@@ -254,5 +273,78 @@ export const drawingViewerStyles = `
   .drawing-viewer-empty-state {
     margin: 18px;
   }
+}
+
+/* ===========================================================================
+   canonical light presentation (SP5) — SURROUNDING CHROME ONLY.
+   ---------------------------------------------------------------------------
+   The DrawingViewer is a standalone route (not inside the Detailing command
+   shell), so DrawingViewer.jsx flips [data-skin="command"] on <html> + tags
+   the root .detailing-cc for the canonical presentation. That makes the
+   shipped [data-skin="command"] .detailing-cc token-alias block resolve every
+   var(--bg-surface / --text-* / --border-default / --accent / ...) the header,
+   toolbar, sidebar, and hints consume to the light kit palette.
+
+   The one thing the alias can't reach is the three --viewer-* custom props
+   defined above: they color-mix the (now-light) surface vars back with dark
+   literals (#111827 / #0f172a), muddying the chrome. Re-declare them to clean
+   light values here — every chrome surface that references them (toolbar,
+   sidebar header/footer, count badges, mini-metrics, sheet cards, meta blocks,
+   bottom hints) re-lights in one move. Only the floating fixed "Export Markups"
+   button hardcodes its own dark, so it gets an explicit override.
+
+   OUT OF SCOPE (stays dark by design — the drawing work-surface):
+   .drawing-viewer-pane, .drawing-viewer-canvas-scroll, .drawing-viewer-paper-
+   wrap, the in-canvas empty-state cards, and the floating markup/zone overlay
+   toolbars that sit ON the dark canvas (deferred to SP5-2).
+
+   This whole block is scoped to .drawing-viewer-redesign.detailing-cc, a class
+   combination that is ONLY present when the flag is on — so flag-off is
+   byte-identical and nothing here touches src/styles/command.css.
+
+   NOTE on the generic [data-skin="command"] [class$="-cc"] rule in command.css:
+   it turns any *-cc element into a column flex "light island" (flex-direction:
+   column; gap:14px; padding:16px; min-height:100%). That is right for the hub's
+   panel wrappers, but the viewer root is a full-height ROW layout (sidebar |
+   main | context). Because we reuse .detailing-cc on the root to inherit the
+   token alias, that generic rule would clobber the row layout. The selectors
+   below are prefixed [data-skin="command"] (specificity 0,3,0 > the generic's
+   0,2,0) so they deterministically win and restore the viewer's own layout.
+   =========================================================================== */
+/*
+ * Command-skin light chrome (optional). Row layout is already forced above via
+ * .sb-dashboard-reference-page.drawing-viewer-redesign — do not gate the ROW
+ * restore on [data-skin="command"] (DrawingViewer no longer sets that attr).
+ */
+[data-skin="command"] .drawing-viewer-redesign.detailing-cc {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+  min-height: 0;
+  height: calc(100dvh - 36px);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.06), transparent 26rem),
+    radial-gradient(circle at 92% 8%, rgba(16, 185, 129, 0.05), transparent 24rem),
+    var(--bg-page);
+  /* Re-light the viewer chrome vars (they color-mix the surface vars back with
+     dark literals above — override to clean light so the chrome isn't muddy). */
+  --viewer-panel-bg: var(--bg-surface);
+  --viewer-panel-bg-soft: var(--bg-surface-low);
+  --viewer-line: var(--border-default);
+  --viewer-paper-shadow: 0 22px 70px rgba(15,23,42,0.22), 0 4px 14px rgba(15,23,42,0.14);
+}
+
+@media (max-width: 720px) {
+  [data-skin="command"] .drawing-viewer-redesign.detailing-cc {
+    height: calc(100dvh - 52px);
+  }
+}
+
+[data-skin="command"] .drawing-viewer-redesign.detailing-cc .drawing-viewer-export-markups {
+  background: var(--accent-muted);
+  border-color: var(--accent-border);
+  color: var(--accent);
+  box-shadow: 0 10px 24px rgba(15,23,42,0.16);
 }
 `;

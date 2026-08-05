@@ -5,12 +5,14 @@ interface BulkActionToolbarProps {
   datePending: boolean;
   durationPending: boolean;
   resourcePending: boolean;
+  parentPending: boolean;
   showResourceInput: boolean;
   resourceValue: string;
   onStatus: (status: string) => void;
   onDelete: () => void;
   onEditDates: () => void;
   onEditDurations: () => void;
+  onSetParent: () => void;
   onShowResourceInput: () => void;
   onResourceValueChange: (value: string) => void;
   onApplyResource: () => void;
@@ -25,12 +27,14 @@ export default function BulkActionToolbar({
   datePending,
   durationPending,
   resourcePending,
+  parentPending,
   showResourceInput,
   resourceValue,
   onStatus,
   onDelete,
   onEditDates,
   onEditDurations,
+  onSetParent,
   onShowResourceInput,
   onResourceValueChange,
   onApplyResource,
@@ -83,6 +87,9 @@ export default function BulkActionToolbar({
       </button>
       <button onClick={onEditDurations} disabled={durationBusy} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--accent)", background: "rgba(86,176,255,0.12)", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: durationBusy ? "not-allowed" : "pointer", opacity: durationBusy ? 0.6 : 1 }}>
         Edit Durations
+      </button>
+      <button onClick={onSetParent} disabled={statusBusy || parentPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--accent)", background: "rgba(86,176,255,0.12)", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: statusBusy || parentPending ? "not-allowed" : "pointer", opacity: statusBusy || parentPending ? 0.6 : 1 }}>
+        Set Parent
       </button>
 
       <div style={{ width: 1, height: 20, background: "var(--divider)", margin: "0 4px" }} />

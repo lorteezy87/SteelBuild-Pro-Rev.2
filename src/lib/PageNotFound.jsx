@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { auth } from "@/api/supabaseClient";
 import { useQuery } from '@tanstack/react-query';
 
-export default function PageNotFound({}) {
+export default function PageNotFound() {
     const location = useLocation();
     const navigate = useNavigate();
     const pageName = location.pathname.substring(1);

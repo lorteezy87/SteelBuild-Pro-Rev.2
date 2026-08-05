@@ -4,6 +4,7 @@ import { entities } from "@/api/supabaseClient";
 import { COST_CODES } from '../shared/costCodes';
 import { getNextNumber } from '../shared/numberSequencing';
 import { toast } from 'sonner';
+import { withProjectId } from '@/lib/mutations/standardMutation';
 
 const EXPENSE_TYPES = ['Labor', 'Materials', 'Equipment', 'Subcontractor', 'Misc.', 'Overhead'];
 const PAYMENT_STATUSES = ['Unpaid', 'Paid', 'Pending Approval', 'Disputed', 'Voided'];
@@ -268,12 +269,20 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
       try {
         let expenseNumber;
         try {
-          expenseNumber = await getNextNumber(activeProject.id, 'EXPENSE');
-        } catch { expenseNumber = null; }
-        if (!expenseNumber) expenseNumber = `EXP-${Date.now().toString().slice(-6)}-${i}`;
+          expenseNumber = await getNextNumber(activeProject.id, "EXPENSE");
+        } catch (err) {
+          failed += 1;
+          console.error("Unable to reserve expense number for import row:", rec, err);
+          setProgress({ done: i + 1, total: valid.length, failed });
+          continue;
+        }
+        if (!expenseNumber) {
+          failed += 1;
+          setProgress({ done: i + 1, total: valid.length, failed });
+          continue;
+        }
 
-        const payload = {
-          project_id: activeProject.id,
+        const payload = withProjectId({
           project_name: activeProject.name || '',
           expense_number: expenseNumber,
           expense_date: rec.expense_date,
@@ -294,7 +303,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
           work_package_name: rec.work_package_name || '',
           submitted_by: rec.submitted_by || '',
           notes: rec.notes || '',
-        };
+        }, activeProject.id);
 
         await entities.Expense.create(payload);
         succeeded += 1;
@@ -426,7 +435,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
                   padding: '8px 14px', borderRadius: 6,
                   background: 'var(--accent)',
                   border: 'none',
-                  color: '#07090E',
+                  color: 'var(--on-accent)',
                   fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase',
                   cursor: 'pointer',
@@ -600,7 +609,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
               disabled={importing || validCount === 0 || !activeProject?.id}
               style={{
                 background: 'var(--accent)', border: 'none',
-                color: '#07090E', padding: '8px 18px', borderRadius: 6,
+                color: 'var(--on-accent)', padding: '8px 18px', borderRadius: 6,
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
                 letterSpacing: '0.08em', textTransform: 'uppercase',
                 cursor: importing || validCount === 0 ? 'not-allowed' : 'pointer',

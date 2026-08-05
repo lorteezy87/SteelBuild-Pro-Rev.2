@@ -28,12 +28,12 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
         gap: 18,
         flexWrap: "wrap",
         padding: "16px 18px",
-        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, #000 8%) 0%, color-mix(in srgb, var(--bg-surface-low) 88%, #000 12%) 100%)",
+        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, var(--bg-surface-low) 8%) 0%, color-mix(in srgb, var(--bg-surface-low) 88%, var(--bg-void) 12%) 100%)",
         backdropFilter: "blur(24px) saturate(150%)",
         WebkitBackdropFilter: "blur(24px) saturate(150%)",
-        border: "1px solid color-mix(in srgb, var(--border-default) 88%, white 12%)",
+        border: "1px solid color-mix(in srgb, var(--border-default) 88%, var(--border-strong) 12%)",
         borderRadius: "18px",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.34)",
+        boxShadow: "inset 0 1px 0 var(--glass-border), var(--shadow-lg)",
         marginBottom: 16,
         position: "relative",
         overflow: "hidden",
@@ -98,7 +98,7 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
                 color: "var(--accent)",
                 letterSpacing: "0.10em",
                 whiteSpace: "nowrap",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                boxShadow: "inset 0 1px 0 var(--glass-border)",
               }}
             >
               {count}

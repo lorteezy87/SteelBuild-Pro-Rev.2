@@ -8,9 +8,13 @@
  *   const {
  *     costCodes, expenses, sovItems, changeOrders,
  *     summary, costCodeRows, reviewFlags,
- *     expenseCrud, costCodeCrud, changeOrderCrud,
+ *     costCodeCrud,
  *     refreshAll,
  *   } = useFinancials(projectId, project);
+ *
+ * Only costCodeCrud is exposed — it's the one write path with a live consumer
+ * (Cost Control Center). Expenses and change orders are written by their own
+ * page mutations (Expenses.jsx, ChangeOrders.jsx), which own their validation.
  */
 
 import { useMemo, useCallback } from "react";
@@ -20,8 +24,11 @@ import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
+import { computeRevisedContractValue, preferManualActual } from "@/services/costRollup";
 import { COST_CODES } from "@/components/shared/costCodes";
 import { calcEVM } from "@/utils/projectKpis";
+import { logActivity } from "@/services/auditLogger";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 export type CostCode = RowWithAliases<'cost_codes'>;
 export type Expense = RowWithAliases<'expenses'>;
@@ -29,11 +36,11 @@ export type SOVItem = RowWithAliases<'sov_items'>;
 export type ChangeOrder = RowWithAliases<'change_orders'>;
 export type WorkPackage = RowWithAliases<'work_packages'>;
 
-// Project is passed in by the caller, often from a join / view that exposes
-// derived fields like `revised_contract_value` not present on the raw row.
+// Project is passed in by the caller. NOTE: there is no revised_contract_value
+// column on projects — the current contract value is DERIVED as
+// original + Σ approved COs via computeRevisedContractValue (costRollup.ts).
 // Keep the shape permissive to match real-world call sites.
 export type ProjectLike = Partial<RowWithAliases<'projects'>> & {
-  revised_contract_value?: number | null;
   original_contract_value?: number | null;
   scope_complete_pct_override?: number | null;
 };
@@ -176,11 +183,20 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
         (e) => e.cost_code === cc.cost_code_number
       );
 
-      const actualCost = relatedExpenses
+      // Actual/Committed prefer a MANUALLY-entered figure typed onto the cost
+      // code (cc.actual_cost / cc.committed_cost columns) when the user set one
+      // (> 0); otherwise they roll up from this code's expenses. This lets a PM
+      // either type a summary actual directly OR let logged expenses drive it,
+      // without double-counting. (User-chosen model 2026-06-30: "typed-in number
+      // wins, fall back to expenses." Previously expenses always won, so a typed
+      // actual saved to the column but never displayed → looked like it "didn't save".)
+      const expenseActual = relatedExpenses
         .filter((e) => e.payment_status === "Paid")
         .reduce((s, e) => s + safeNumber(e.amount), 0);
+      const expenseCommitted = relatedExpenses.reduce((s, e) => s + safeNumber(e.amount), 0);
 
-      const committedCost = relatedExpenses.reduce((s, e) => s + safeNumber(e.amount), 0);
+      const actualCost = preferManualActual(cc.actual_cost, expenseActual);
+      const committedCost = preferManualActual(cc.committed_cost, expenseCommitted);
 
       const signedExtras = coByCostCodeId[cc.id] || 0;
       const revisedBudget = safeNumber(cc.budget_amount) + signedExtras;
@@ -207,7 +223,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
 
   // ── Derived: project-level summary ──────────────────────────────────
   const summary = useMemo<FinancialSummary>(() => {
-    const contractValue = safeNumber(project?.revised_contract_value || project?.original_contract_value);
+    const contractValue = computeRevisedContractValue(project, changeOrders);
     const sovTotal = sovItems.reduce((s, item) => s + safeNumber(item.scheduled_value), 0);
     const revisedBudget = costCodeRows.reduce((s, r) => s + r.revised_budget, 0);
     const actual = costCodeRows.reduce((s, r) => s + r.actual_cost, 0);
@@ -306,7 +322,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     const rejectedTotal = rejected.reduce((s, co) => s + safeNumber(co.co_amount), 0);
 
     const originalContractValue = safeNumber(project?.original_contract_value);
-    const currentContractValue  = safeNumber(project?.revised_contract_value || project?.original_contract_value);
+    const currentContractValue  = computeRevisedContractValue(project, changeOrders);
 
     const contractGrowthPercent = originalContractValue > 0
       ? (approvedTotal / originalContractValue) * 100
@@ -546,47 +562,6 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     await invalidateEntities(qc, ["cost_code", "expense", "sov_item", "change_order", "project", "work_package"], projectId);
   }, [qc, projectId]);
 
-  // ── Expense CRUD ────────────────────────────────────────────────────
-  type ExpenseCreate = Record<string, unknown>;
-  const expenseCreateMut = useMutation<Expense, Error, ExpenseCreate>({
-    mutationFn: async (data) => {
-      const errors = validate("expense", data, "create");
-      if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
-      return await entities.Expense.create(data as Insert<'expenses'>);
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["expense"], projectId);
-      toast.success("Expense created");
-    },
-    onError: (err) => toast.error(`Failed to create expense: ${err.message}`),
-  });
-
-  type ExpenseUpdate = { id: string } & Record<string, unknown>;
-  const expenseUpdateMut = useMutation<Expense, Error, ExpenseUpdate>({
-    mutationFn: async ({ id, ...data }) => {
-      if (!id) throw new Error("Update requires an id.");
-      return await entities.Expense.update(id, data as Update<'expenses'>);
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["expense"], projectId);
-      toast.success("Expense updated");
-    },
-    onError: (err) => toast.error(`Failed to update expense: ${err.message}`),
-  });
-
-  const expenseDeleteMut = useMutation<string, Error, string>({
-    mutationFn: async (id) => {
-      if (!id) throw new Error("Delete requires an id.");
-      await entities.Expense.delete(id);
-      return id;
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["expense"], projectId);
-      toast.success("Expense deleted");
-    },
-    onError: (err) => toast.error(`Failed to delete expense: ${err.message}`),
-  });
-
   // ── Cost Code CRUD ──────────────────────────────────────────────────
   type CostCodeCreate = Record<string, unknown> & { cost_code_number?: string };
   const costCodeCreateMut = useMutation<CostCode, Error, CostCodeCreate>({
@@ -600,11 +575,15 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       if (existing) throw new Error(`Cost code ${data.cost_code_number} already exists in this project.`);
       return await entities.CostCode.create(data as Insert<'cost_codes'>);
     },
-    onSuccess: async () => {
+    onSuccess: async (created) => {
       await invalidateEntities(qc, ["cost_code"], projectId);
+      logActivity("create", "cost_code", created, {
+        projectId: created?.project_id || projectId,
+        projectName: created?.project_name,
+      });
       toast.success("Cost code created");
     },
-    onError: (err) => toast.error(`Failed to create cost code: ${err.message}`),
+    onError: (err) => toast.error(`Failed to create cost code: ${toUserErrorMessage(err)}`),
   });
 
   type CostCodeUpdate = { id: string } & Record<string, unknown>;
@@ -613,11 +592,15 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       if (!id) throw new Error("Update requires an id.");
       return await entities.CostCode.update(id, data as Update<'cost_codes'>);
     },
-    onSuccess: async () => {
+    onSuccess: async (updated) => {
       await invalidateEntities(qc, ["cost_code"], projectId);
+      logActivity("update", "cost_code", updated, {
+        projectId: updated?.project_id || projectId,
+        projectName: updated?.project_name,
+      });
       toast.success("Cost code updated");
     },
-    onError: (err) => toast.error(`Failed to update cost code: ${err.message}`),
+    onError: (err) => toast.error(`Failed to update cost code: ${toUserErrorMessage(err)}`),
   });
 
   const costCodeDeleteMut = useMutation<string, Error, string>({
@@ -626,52 +609,15 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       await entities.CostCode.delete(id);
       return id;
     },
-    onSuccess: async () => {
+    onSuccess: async (id) => {
       await invalidateEntities(qc, ["cost_code"], projectId);
-      toast.success("Cost code deleted");
+      logActivity("delete", "cost_code", { id, cost_code_number: id }, {
+        projectId,
+        description: "Archived cost code",
+      });
+      toast.success("Cost code archived");
     },
-    onError: (err) => toast.error(`Failed to delete cost code: ${err.message}`),
-  });
-
-  // ── Change Order CRUD ───────────────────────────────────────────────
-  type COCreate = Record<string, unknown>;
-  const coCreateMut = useMutation<ChangeOrder, Error, COCreate>({
-    mutationFn: async (data) => {
-      const errors = validate("change_order", data, "create");
-      if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
-      return await entities.ChangeOrder.create(data as Insert<'change_orders'>);
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["change_order", "project"], projectId);
-      toast.success("Change order created");
-    },
-    onError: (err) => toast.error(`Failed to create change order: ${err.message}`),
-  });
-
-  type COUpdate = { id: string } & Record<string, unknown>;
-  const coUpdateMut = useMutation<ChangeOrder, Error, COUpdate>({
-    mutationFn: async ({ id, ...data }) => {
-      if (!id) throw new Error("Update requires an id.");
-      return await entities.ChangeOrder.update(id, data as Update<'change_orders'>);
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["change_order", "project"], projectId);
-      toast.success("Change order updated");
-    },
-    onError: (err) => toast.error(`Failed to update change order: ${err.message}`),
-  });
-
-  const coDeleteMut = useMutation<string, Error, string>({
-    mutationFn: async (id) => {
-      if (!id) throw new Error("Delete requires an id.");
-      await entities.ChangeOrder.delete(id);
-      return id;
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["change_order", "project"], projectId);
-      toast.success("Change order deleted");
-    },
-    onError: (err) => toast.error(`Failed to delete change order: ${err.message}`),
+    onError: (err) => toast.error(`Failed to archive cost code: ${toUserErrorMessage(err)}`),
   });
 
   return {
@@ -703,10 +649,8 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     formatSigned,
     varianceColor,
 
-    // CRUD
-    expenseCrud: { create: expenseCreateMut, update: expenseUpdateMut, delete: expenseDeleteMut },
+    // CRUD (only cost codes have a live consumer — Cost Control Center)
     costCodeCrud: { create: costCodeCreateMut, update: costCodeUpdateMut, delete: costCodeDeleteMut },
-    changeOrderCrud: { create: coCreateMut, update: coUpdateMut, delete: coDeleteMut },
 
     // Refresh
     refreshAll,

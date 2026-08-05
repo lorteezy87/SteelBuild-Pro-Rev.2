@@ -37,6 +37,24 @@ export interface DrawingSet {
   [key: string]: any;
 }
 
+/** A row from the `drawing_revisions` table — the AUTHORITATIVE revision source
+ *  (§20-21). `is_current=true` marks the current revision for a given drawing. */
+export interface DrawingRevision {
+  id?: string;
+  drawing_id?: string;
+  revision_code?: string | null;
+  version_number?: number | null;
+  is_current?: boolean;
+  [key: string]: any;
+}
+
+/** The authoritative current revision for one drawing, as displayed (the code)
+ *  plus its version number (used only to pick the package-level max). */
+export interface CurrentRevisionInfo {
+  code: string;
+  version: number;
+}
+
 export interface SetPackage {
   key: string;
   setId: string | null;
@@ -61,6 +79,9 @@ export interface TriageItem {
   _submittalId: string | null;
   _drawingSetId: string | null;
   _firstSheetId: string | null;
+  /** All sheet ids in the package — used by the due-date edit to write ALL sheets
+   *  (not just sheets[0]) so the displayed earliestDate always reflects the write. */
+  _sheetIds: string[];
   /** Effective operational state (coalesced drafting → submittal → release). */
   detailingState?: string;
   /** True when no submittal governs the package, so a drafting state applies. */

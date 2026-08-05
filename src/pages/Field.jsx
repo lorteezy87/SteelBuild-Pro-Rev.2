@@ -240,7 +240,7 @@ export default function Field() {
         color: p.priority === "Critical" ? "var(--status-error)"
           : p.priority === "High" ? "var(--status-warning)"
           : "var(--accent)",
-        onClick: () => navigate("/Punchlist"),
+        onClick: () => navigate(`/Punchlist?id=${p.id}`),
       });
     }
     for (const i of liveInspections) {
@@ -253,7 +253,7 @@ export default function Field() {
         sub: i.inspector_name || "",
         status: i.status,
         color: "var(--status-info)",
-        onClick: () => navigate("/Inspections"),
+        onClick: () => navigate(`/Inspections?id=${i.id}`),
       });
     }
     for (const s of liveSafety) {
@@ -268,7 +268,7 @@ export default function Field() {
         color: s.severity === "Critical" ? "var(--status-error)"
           : s.severity === "High" ? "var(--status-warning)"
           : "var(--status-info)",
-        onClick: () => navigate("/Safety"),
+        onClick: () => navigate(`/Safety?id=${s.id}`),
       });
     }
     for (const d of deliveryMetrics.exceptions.slice(0, 8)) {
@@ -424,7 +424,7 @@ export default function Field() {
   ];
 
   return (
-    <div className="field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={activeProject ? activeProject.name : "ALL PROJECTS"}
         title="Field"
@@ -505,11 +505,11 @@ export default function Field() {
               icon={ClipboardList}
               cta={projectId ? {
                 label: todayLog ? "Open Daily Log" : "+ Log Today",
-                onClick: () => navigate(todayLog ? "/DailyLogs" : "/DailyLogs?new=1"),
+                onClick: () => navigate(todayLog ? `/DailyLogs?id=${todayLog.id}` : "/DailyLogs?new=1"),
               } : null}
             >
               {todayLog ? (
-                <DailyLogPreview log={todayLog} onClick={() => navigate("/DailyLogs")} />
+                <DailyLogPreview log={todayLog} onClick={() => navigate(`/DailyLogs?id=${todayLog.id}`)} />
               ) : (
                 <EmptyHint
                   text={projectId
@@ -526,7 +526,7 @@ export default function Field() {
                       <LogFeedRow
                         key={log.id}
                         log={log}
-                        onClick={() => navigate("/DailyLogs")}
+                        onClick={() => navigate(`/DailyLogs?id=${log.id}`)}
                       />
                     ))}
                   </div>
@@ -1015,8 +1015,8 @@ function PhotoThumb({ photo, onClick }) {
           bottom: 2,
           left: 2,
           right: 2,
-          background: "rgba(7,9,14,0.8)",
-          color: "white",
+          background: "color-mix(in srgb, var(--bg-base) 80%, transparent)",
+          color: "var(--on-accent)",
           fontFamily: "var(--font-mono)",
           fontSize: 8,
           fontWeight: 700,

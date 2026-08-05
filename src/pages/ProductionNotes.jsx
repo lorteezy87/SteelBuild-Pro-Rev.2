@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { CommandBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 // ─── Date helpers ──────────────────────────────────────────────────────────
 const toISODate = (d) => {
@@ -77,7 +79,13 @@ export default function ProductionNotes() {
   });
 
   // All notes for the selected meeting date.
-  const { data: notes = [], isLoading: notesLoading } = useQuery({
+  const {
+    data: notes = [],
+    isLoading: notesLoading,
+    isError: notesError,
+    error: notesErrorValue,
+    refetch: refetchNotes,
+  } = useQuery({
     queryKey: ["production-notes", meetingDate],
     queryFn: () => entities.ProductionNote.filter({ note_date: meetingDate }, "created_at"),
     staleTime: 30 * 1000,
@@ -85,7 +93,8 @@ export default function ProductionNotes() {
 
   // ─── Mutations ──────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => entities.ProductionNote.create(data),
+    // Multi-project workspace: stamp the row's selected project, not nav project.
+    mutationFn: (data) => entities.ProductionNote.create(withProjectId(data, data.project_id)),
     onMutate: async (data) => {
       await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
       const previous = qc.getQueryData(["production-notes", meetingDate]);
@@ -95,7 +104,7 @@ export default function ProductionNotes() {
     },
     onError: (err, _data, ctx) => {
       if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error(err.message || "Failed to add bullet");
+      toast.error(toUserErrorMessage(err, "Failed to add bullet"));
     },
     onSuccess: (record, vars) => {
       qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] });
@@ -119,7 +128,7 @@ export default function ProductionNotes() {
     },
     onError: (err, _data, ctx) => {
       if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error(err.message || "Update failed");
+      toast.error(toUserErrorMessage(err, "Update failed"));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
   });
@@ -134,7 +143,7 @@ export default function ProductionNotes() {
     },
     onError: (err, _id, ctx) => {
       if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error("Delete failed");
+      toast.error(toUserErrorMessage(err, "Delete failed"));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
   });
@@ -232,7 +241,7 @@ export default function ProductionNotes() {
   const highlightedCount = notes.filter((n) => n.is_high_priority).length;
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-page)" }}>
+    <div className="sb-dashboard-reference-page" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-page)" }}>
       <style>{`
         .bullet-row:hover .bullet-actions { opacity: 1 !important; }
         @media print {
@@ -357,7 +366,30 @@ export default function ProductionNotes() {
           </div>
 
           {/* Rows */}
-          {projectRows.length === 0 && !notesLoading && (
+          {notesLoading && projectRows.length === 0 ? (
+            <div style={{ padding: "24px" }}>
+              <LoadingSkeleton variant="table" rows={5} />
+            </div>
+          ) : notesError && projectRows.length === 0 ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px 24px",
+                gap: 16,
+              }}
+            >
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+                Couldn’t load production notes
+              </p>
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+                {toUserErrorMessage(notesErrorValue, "Something went wrong. Try again.")}
+              </p>
+              <Button variant="outline" onClick={() => refetchNotes()}>Retry</Button>
+            </div>
+          ) : projectRows.length === 0 ? (
             <div
               style={{
                 padding: "60px 24px",
@@ -374,33 +406,18 @@ export default function ProductionNotes() {
                 Add a project to get started
               </Button>
             </div>
+          ) : (
+            projectRows.map((row) => (
+              <ProjectRow
+                key={row.projectId}
+                row={row}
+                onUpdateBulletText={updateBulletText}
+                onToggleHighlight={toggleHighlight}
+                onDeleteBullet={deleteBullet}
+                onAddBullet={addBullet}
+              />
+            ))
           )}
-
-          {notesLoading && projectRows.length === 0 && (
-            <div
-              style={{
-                padding: "60px 24px",
-                textAlign: "center",
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                letterSpacing: "0.1em",
-              }}
-            >
-              LOADING…
-            </div>
-          )}
-
-          {projectRows.map((row) => (
-            <ProjectRow
-              key={row.projectId}
-              row={row}
-              onUpdateBulletText={updateBulletText}
-              onToggleHighlight={toggleHighlight}
-              onDeleteBullet={deleteBullet}
-              onAddBullet={addBullet}
-            />
-          ))}
         </div>
       </div>
 
@@ -615,7 +632,7 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
       style={{
         display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 6px",
         borderRadius: 4,
-        background: highlighted ? "rgba(234,179,8,0.18)" : "transparent",
+        background: highlighted ? "color-mix(in srgb, var(--status-warning) 18%, transparent)" : "transparent",
         borderLeft: highlighted ? "3px solid var(--status-warning)" : "3px solid transparent",
         transition: "background 0.15s",
       }}
@@ -635,7 +652,7 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
         style={{ flex: 1, background: "transparent", border: "none", outline: "none", resize: "none", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.55, padding: "1px 0", fontWeight: highlighted ? 600 : 400 }}
       />
       <div className="bullet-actions" style={{ display: "flex", gap: 4, opacity: 0.65, transition: "opacity 0.15s" }}>
-        <button title="Highlight (Ctrl+H)" onClick={() => onToggleHighlight(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: highlighted ? "rgba(234,179,8,0.25)" : "transparent", color: highlighted ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button title="Highlight (Ctrl+H)" onClick={() => onToggleHighlight(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: highlighted ? "color-mix(in srgb, var(--status-warning) 25%, transparent)" : "transparent", color: highlighted ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Highlighter size={12} />
         </button>
         <button title="Delete bullet" onClick={() => onDeleteBullet(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: "transparent", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--status-error)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>

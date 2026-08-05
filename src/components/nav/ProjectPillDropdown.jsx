@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { Building2 } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../shared/ProjectContext";
 
-export default function ProjectPillDropdown({ compact = false, align = "right" }) {
+export default function ProjectPillDropdown({ compact = false, align = "right", variant = "default" }) {
   // `activeProjects` excludes on-hold; the switcher never lists paused projects.
   const { activeProjects: projects, activeProject, setActiveProject, loading } = useProjectContext();
   // Pages resolve the project id via useProjectId() which checks the URL
@@ -87,6 +88,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
     [setActiveProject, searchParams, setSearchParams]
   );
 
+  const isDashboardVariant = variant === "dashboard";
   const projectNameLimit = compact ? 14 : 20;
   const label =
     loading
@@ -121,6 +123,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
       ref={ref}
       className="project-pill-dropdown"
       data-compact={compact ? "true" : "false"}
+      data-variant={variant}
       data-name-limit={projectNameLimit}
       style={{ position: "relative", minWidth: 0 }}
     >
@@ -131,31 +134,49 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 5,
-          background: "var(--accent-muted)",
-          border: "1px solid var(--accent-border)",
-          borderRadius: 20,
-          minHeight: compact ? 34 : 28,
-          padding: compact ? "6px 10px" : "5px 13px",
-          fontFamily: "var(--font-mono)",
+          gap: isDashboardVariant ? 10 : 5,
+          background: isDashboardVariant ? "var(--bg-surface)" : "var(--accent-muted)",
+          border: isDashboardVariant ? "1px solid var(--border-default)" : "1px solid var(--accent-border)",
+          borderRadius: isDashboardVariant ? 8 : 20,
+          minHeight: isDashboardVariant ? 46 : compact ? 34 : 28,
+          padding: isDashboardVariant ? "0 12px" : compact ? "6px 10px" : "5px 13px",
+          fontFamily: isDashboardVariant ? "var(--font-body)" : "var(--font-mono)",
           // Was 9px warning-orange (hard to read, looked like an alert). Larger,
           // primary-colored, lighter tracking → legible and clearly the project
           // switcher. The health dot (left) still carries the status color.
-          fontSize: 11,
-          fontWeight: 600,
+          fontSize: isDashboardVariant ? 13 : 11,
+          fontWeight: isDashboardVariant ? 700 : 600,
           color: "var(--text-primary)",
-          letterSpacing: "0.04em",
+          letterSpacing: isDashboardVariant ? "0" : "0.04em",
           cursor: "pointer",
           whiteSpace: "nowrap",
           transition: "all 0.15s",
           userSelect: "none",
-          maxWidth: compact ? "min(44vw, 190px)" : 280,
+          width: isDashboardVariant ? 230 : undefined,
+          maxWidth: isDashboardVariant ? 230 : compact ? "min(44vw, 190px)" : 280,
           overflow: "hidden",
           textOverflow: "ellipsis",
+          boxShadow: isDashboardVariant ? "var(--shadow-card)" : undefined,
         }}
         title={displayLabel}
       >
-        {activeProject && (
+        {isDashboardVariant ? (
+          <span
+            aria-hidden="true"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              border: "1px solid var(--border-default)",
+              display: "grid",
+              placeItems: "center",
+              color: "var(--text-muted)",
+              flexShrink: 0,
+            }}
+          >
+            <Building2 size={15} strokeWidth={1.7} />
+          </span>
+        ) : activeProject && (
           <span
             style={{
               width: 6,
@@ -180,7 +201,16 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
             minWidth: 0,
           }}
         >
-          {displayLabel}
+          {isDashboardVariant ? (
+            <span style={{ display: "flex", flexDirection: "column", gap: 2, lineHeight: 1.1 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {activeProject?.name || "Select project"}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-muted)" }}>
+                Project ID: {activeProject?.project_number || "Not selected"}
+              </span>
+            </span>
+          ) : displayLabel}
         </span>
         <span
           style={{
@@ -195,10 +225,10 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
         </span>
       </div>
 
-      {/* Dropdown panel */}
+      {/* Dropdown panel — solid opaque (no sbd-card glass) so page content never bleeds through */}
       {open && (
         <div
-          className="project-pill-dropdown-panel sbd-card"
+          className="project-pill-dropdown-panel sbp-opaque-popout"
           style={{
             position: compact ? "fixed" : "absolute",
             top: compact ? 58 : "calc(100% + 6px)",
@@ -210,15 +240,18 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
             width: compact ? "auto" : 400,
             maxHeight: compact ? "min(70dvh, 420px)" : 300,
             overflowY: "auto",
-            // Theme-aware opaque surface — a hardcoded dark gradient here left
-            // dark var(--text-primary) text unreadable on a dark panel in light mode.
-            background: "var(--bg-surface-secondary)",
+            // Solid elevated surface — sbd-card glass left content readable
+            // underneath the list. Prefer elevated, then page, then hard fallback.
+            background: "var(--bg-elevated, var(--bg-page, #161B22))",
             border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border-default))",
             borderRadius: 14,
-            boxShadow:
-              "0 24px 70px rgba(0,0,0,0.72), inset 0 1px 0 rgba(255,255,255,0.07)",
+            boxShadow: "var(--shadow-lg, 0 16px 40px rgba(0,0,0,0.55))",
             zIndex: 3000,
             padding: 8,
+            // Kill any inherited backdrop blur / translucency
+            backdropFilter: "none",
+            WebkitBackdropFilter: "none",
+            isolation: "isolate",
           }}
         >
           {/* Search filter */}
@@ -338,11 +371,7 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
           : "var(--text-muted)";
 
   const statusLabel =
-    project.phase === "Closeout"
-      ? "Complete"
-      : project.phase
-        ? "Active"
-        : "Active";
+    project.phase === "Closeout" ? "Complete" : "Active";
 
   const statusColor =
     statusLabel === "Complete"
@@ -376,7 +405,7 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
         background: isActive
           ? "var(--accent-muted)"
           : hovered
-            ? "rgba(86,176,255,0.12)"
+            ? "color-mix(in srgb, var(--status-info) 16%, transparent)"
             : "transparent",
         borderLeft: isActive
           ? "3px solid var(--accent)"

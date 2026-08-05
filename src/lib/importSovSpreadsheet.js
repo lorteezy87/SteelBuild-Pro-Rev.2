@@ -67,7 +67,7 @@ const ALIAS_LOOKUP = (() => {
 /** Lowercase, trim, collapse whitespace, strip a trailing/leading BOM. */
 export function normalizeHeader(h) {
   return String(h ?? "")
-    .replace(/^﻿/, "")
+    .replace(/^\uFEFF/, "")
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
@@ -85,7 +85,7 @@ export function canonicalizeHeader(h) {
  * Excel-exported CSV doesn't corrupt the first header.
  */
 export function parseCsvToAoa(text) {
-  const src = String(text ?? "").replace(/^﻿/, "");
+  const src = String(text ?? "").replace(/^\uFEFF/, "");
   const rows = [];
   let field = "";
   let row = [];

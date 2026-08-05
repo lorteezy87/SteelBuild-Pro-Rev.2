@@ -18,10 +18,13 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 export function useProjectId(): string | null {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
+  // ProjectContext.jsx is untyped JS, so activeProject infers as `null`. Cast at
+  // the boundary to its real shape (drop once ProjectContext is typed).
+  const project = activeProject as { id?: string | null } | null;
   return (
     searchParams.get("projectId") ||
     searchParams.get("project") ||
-    activeProject?.id ||
+    project?.id ||
     null
   );
 }

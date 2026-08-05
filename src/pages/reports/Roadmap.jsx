@@ -40,7 +40,7 @@ function yearOptions(allDates) {
   allDates.forEach((d) => {
     if (d) years.add(new Date(d).getFullYear());
   });
-  return Array.from(years).sort();
+  return Array.from(years).sort((a, b) => a - b);
 }
 
 export default function Roadmap() {

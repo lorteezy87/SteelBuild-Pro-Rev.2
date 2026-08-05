@@ -64,6 +64,11 @@ const toolbarStyle = {
 
 const canvasWrapStyle = {
   flex: 1,
+  // A flex child needs min-height/width:0 to actually shrink to the available
+  // space (instead of growing to its content) — without it the page can't be
+  // measured or scrolled correctly.
+  minHeight: 0,
+  minWidth: 0,
   overflow: "auto",
   background: "rgba(0,0,0,0.4)",
   position: "relative",
@@ -112,6 +117,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   const canvasRef = useRef(null);
   const overlayRef = useRef(null);
   const pdfDocRef = useRef(null);
+  const wrapRef = useRef(null); // the scroll container — measured to fit the page
   const [pdfReady, setPdfReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [pageNum, setPageNum] = useState(1);
@@ -119,6 +125,11 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   // The viewport size at the rendered scale — we need this to convert
   // mouse coords to normalised PDF coords on save.
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  // Measured content area of the scroll container (via ResizeObserver), used to
+  // fit the whole page to view on open + refit on resize.
+  const [wrapSize, setWrapSize] = useState({ width: 0, height: 0 });
+  // Zoom relative to fit-to-page: 1 = the whole sheet; >1 zooms in to mark precisely.
+  const [zoom, setZoom] = useState(1);
 
   // Marker state. Rects are stored in NORMALISED coords (0..1) regardless
   // of zoom, so changing the page or zoom doesn't invalidate them.
@@ -163,7 +174,11 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     return () => { cancelled = true; };
   }, [sourceUrl]);
 
-  // Render the current page whenever the page changes or the PDF loads.
+  // Render the current page whenever the page changes or the PDF loads, sized so
+  // the ENTIRE sheet is visible on open (fit-to-page / "contain") — no scrolling
+  // to find the titleblock. We rasterise at a higher internal resolution
+  // (× devicePixelRatio) but DISPLAY at the fit size, so the whole page fits the
+  // viewport yet stays sharp. `fitTick` re-fits on window resize.
   useEffect(() => {
     if (!pdfReady || !pdfDocRef.current || !canvasRef.current) return;
     let cancelled = false;
@@ -171,28 +186,58 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
       try {
         const page = await pdfDocRef.current.getPage(pageNum);
         if (cancelled) return;
-        // Fit-to-width inside the canvas wrap. We render at a moderate
-        // scale (1.5×) to keep the canvas crisp without exploding GPU
-        // memory on large architectural drawings.
-        const renderScale = 1.5;
-        const viewport = page.getViewport({ scale: renderScale });
+
+        const base = page.getViewport({ scale: 1 }); // native page size
+        // Available content area of the scroll container. ResizeObserver gives the
+        // content-box directly (padding already excluded); fall back until first measure.
+        const availW = Math.max(200, wrapSize.width || 1000);
+        const availH = Math.max(200, wrapSize.height || 700);
+        // Fit the whole sheet; never upscale past native (1×) so a small PDF
+        // neither blows up nor pixelates.
+        const fitScale = Math.min(availW / base.width, availH / base.height, 1);
+        const scale = fitScale * zoom; // zoom 1 = fit the whole page
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        const display = page.getViewport({ scale });
+        const render = page.getViewport({ scale: scale * dpr });
+
         const canvas = canvasRef.current;
         if (!canvas) return;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
+        canvas.width = Math.round(render.width);
+        canvas.height = Math.round(render.height);
+        canvas.style.width = `${Math.round(display.width)}px`;
+        canvas.style.height = `${Math.round(display.height)}px`;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page.render({ canvasContext: ctx, viewport: render }).promise;
         if (cancelled) return;
-        setViewportSize({ width: viewport.width, height: viewport.height });
+        setViewportSize({ width: Math.round(display.width), height: Math.round(display.height) });
       } catch (err) {
         if (!cancelled) setLoadError(err?.message || "Failed to render page");
       }
     })();
     return () => { cancelled = true; };
-  }, [pageNum, pdfReady]);
+  }, [pageNum, pdfReady, wrapSize, zoom]);
+
+  // Measure the scroll container so the page can be fit-to-view. A ResizeObserver
+  // gives the true content size on first layout AND on any resize — no scroll-
+  // timing guesswork, so the whole sheet stays visible.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver((entries) => {
+      const cr = entries[0]?.contentRect;
+      if (cr && cr.width && cr.height) {
+        setWrapSize((prev) =>
+          prev.width === Math.round(cr.width) && prev.height === Math.round(cr.height)
+            ? prev
+            : { width: Math.round(cr.width), height: Math.round(cr.height) },
+        );
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // ── Mouse → normalised coord helpers ────────────────────────────────
   const mouseToNormalised = useCallback((e) => {
@@ -541,6 +586,33 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
             >›</button>
           </div>
 
+          <div style={{ width: 1, height: 22, background: "var(--border-default)", margin: "0 4px" }} />
+
+          {/* Zoom (1× = fit the whole page) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              onClick={() => setZoom((z) => Math.max(0.2, +(z / 1.25).toFixed(3)))}
+              disabled={!pdfReady}
+              style={{ ...btn("secondary"), padding: "6px 11px" }}
+              aria-label="Zoom out"
+            >−</button>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", minWidth: 52, textAlign: "center" }}>
+              {zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%`}
+            </span>
+            <button
+              onClick={() => setZoom((z) => Math.min(8, +(z * 1.25).toFixed(3)))}
+              disabled={!pdfReady}
+              style={{ ...btn("secondary"), padding: "6px 11px" }}
+              aria-label="Zoom in"
+            >+</button>
+            <button
+              onClick={() => setZoom(1)}
+              disabled={!pdfReady || zoom === 1}
+              style={{ ...btn("secondary"), padding: "6px 10px" }}
+              title="Fit the whole sheet in view"
+            >Fit</button>
+          </div>
+
           <div style={{ flex: 1 }} />
 
           {/* Hint */}
@@ -552,7 +624,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
         </div>
 
         {/* Canvas + overlay */}
-        <div style={canvasWrapStyle}>
+        <div ref={wrapRef} style={canvasWrapStyle}>
           {loadError && (
             <div style={{ color: "var(--status-error)", fontFamily: "var(--font-body)", fontSize: 13, padding: 24, textAlign: "center" }}>
               {loadError}

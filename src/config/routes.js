@@ -22,16 +22,37 @@
 
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { registerRoutePrefetcher } from "@/lib/routePrefetch";
+// Static import: moduleRegistry has no imports of its own (no cycle), and it is
+// already in the main chunk via the nav (SidebarNav/MobileDrawer/launcherConfig),
+// so the previous `await import()` in validateRoutes couldn't code-split it —
+// it only produced a Rollup "dynamically + statically imported" warning. Importing
+// it statically here removes that warning at no bundle cost.
+import { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } from "./moduleRegistry";
 
 // ── Helper: build a registry entry ───────────────────────────────────
 /**
  * @typedef {Object} RouteEntry
  * @property {React.LazyExoticComponent<any>} component  Lazy page component.
  * @property {string} label                              Breadcrumb / tab label.
+ * @property {"active"|"internal"} lifecycle             Route lifecycle.
  * @property {boolean} [projectScoped]                   True if page genuinely
  *                                                       depends on an active
  *                                                       project; defaults false.
  */
+export const ROUTE_LIFECYCLES = Object.freeze(["active", "internal"]);
+
+export const STATIC_ROUTE_METADATA = {
+  "/": { lifecycle: "active", kind: "entry" },
+  "/Landing": { lifecycle: "active", kind: "entry" },
+  "/GanttChart": { lifecycle: "legacy", kind: "redirect", target: "/Schedule" },
+  "/RFIHub": { lifecycle: "legacy", kind: "redirect", target: "/RFIs" },
+  "/Financials": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
+  "/CostDashboard": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
+  "/ProjectDetail": { lifecycle: "legacy", kind: "redirect", target: "/Projects" },
+  "/ResourceManagement": { lifecycle: "legacy", kind: "redirect", target: "/ResourceHub" },
+  "/AIInsights": { lifecycle: "legacy", kind: "redirect", target: "/PortfolioHub" },
+  "/MarginRisk": { lifecycle: "legacy", kind: "redirect", target: "/RiskHub" },
+};
 
 /**
  * Sugar so a page row stays one line:
@@ -46,6 +67,7 @@ function r(component, label, opts) {
   return {
     component,
     label,
+    lifecycle: opts?.lifecycle || "active",
     projectScoped: opts?.projectScoped === true,
   };
 }
@@ -58,10 +80,9 @@ const ROUTE_DOMAINS = {
     CommandCenter:          r(lazyWithRetry(() => import("@/pages/CommandCenter")),         "Command Center"),
     ExecutiveView:          r(lazyWithRetry(() => import("@/pages/ExecutiveView")),         "Executive View"),
     Projects:               r(lazyWithRetry(() => import("@/pages/Projects")),              "Projects"),
+    ProjectsHub:            r(lazyWithRetry(() => import("@/pages/ProjectsHub")),           "Projects"),
     Onboarding:             r(lazyWithRetry(() => import("@/pages/Onboarding")),            "Onboarding"),
-    ProjectDetail:          r(lazyWithRetry(() => import("@/pages/ProjectDetail")),         "Project Detail"),
     PortfolioHub:           r(lazyWithRetry(() => import("@/pages/PortfolioHub")),          "Portfolio Overview"),
-    AIInsights:             r(lazyWithRetry(() => import("@/pages/AIInsights")),            "Portfolio Overview"),
   },
 
   // ── Communications ──
@@ -85,9 +106,10 @@ const ROUTE_DOMAINS = {
   fabrication: {
     WorkPackages:       r(lazyWithRetry(() => import("@/pages/WorkPackages")),       "Work Packages",       { projectScoped: true }),
     Constraints:        r(lazyWithRetry(() => import("@/pages/Constraints")),        "Constraints",         { projectScoped: true }),
+    PieceRegister:      r(lazyWithRetry(() => import("@/pages/PieceRegister")),      "Piece Register",      { projectScoped: true }),
     FabRelease:         r(lazyWithRetry(() => import("@/pages/FabRelease")),         "Fab Release",         { projectScoped: true }),
+    ProductionStatus:   r(lazyWithRetry(() => import("@/pages/ProductionStatus")),   "Production Status",   { projectScoped: true }),
     RiskHub:            r(lazyWithRetry(() => import("@/pages/RiskHub")),            "Risk",                { projectScoped: true }),
-    MarginRisk:         r(lazyWithRetry(() => import("@/pages/MarginRisk")),         "Margin Risk",         { projectScoped: true }),
     BudgetHours:        r(lazyWithRetry(() => import("@/pages/BudgetHours")),        "Budget Hours",        { projectScoped: true }),
     Procurement:        r(lazyWithRetry(() => import("@/pages/Procurement")),        "Procurement",         { projectScoped: true }),
     LookAheadSchedule:  r(lazyWithRetry(() => import("@/pages/LookAheadSchedule")),  "Look-Ahead Schedule", { projectScoped: true }),
@@ -97,16 +119,15 @@ const ROUTE_DOMAINS = {
   scheduling: {
     ScheduleHub:          r(lazyWithRetry(() => import("@/pages/ScheduleHub")),         "Schedule",             { projectScoped: true }),
     Schedule:             r(lazyWithRetry(() => import("@/pages/Schedule")),            "Schedule",             { projectScoped: true }),
-    GanttChart:           r(lazyWithRetry(() => import("@/pages/GanttChart")),          "Gantt Chart",          { projectScoped: true }),
     ProjectCalendar:      r(lazyWithRetry(() => import("@/pages/ProjectCalendar")),     "Project Calendar",     { projectScoped: true }),
     FieldPlan:            r(lazyWithRetry(() => import("@/pages/FieldPlan")),           "Field Plan",          { projectScoped: true }),
-    ResourceHub:          r(lazyWithRetry(() => import("@/pages/ResourceHub")),         "Resources"),
-    ResourceManagement:   r(lazyWithRetry(() => import("@/pages/ResourceManagement")),  "Resource Management"),
+    ResourceHub:          r(lazyWithRetry(() => import("@/pages/ResourceHub")),         "Resources",             { projectScoped: true }),
     ResourceScheduling:   r(lazyWithRetry(() => import("@/pages/ResourceScheduling")),  "Crew Scheduling"),
   },
 
   // ── Field Operations ──
   field: {
+    FieldToday:      r(lazyWithRetry(() => import("@/pages/FieldToday")),      "Field Today",         { projectScoped: true }),
     FieldHub:        r(lazyWithRetry(() => import("@/pages/FieldHub")),        "Field",               { projectScoped: true }),
     Field:           r(lazyWithRetry(() => import("@/pages/Field")),           "Field",               { projectScoped: true }),
     DailyLogs:       r(lazyWithRetry(() => import("@/pages/DailyLogs")),       "Daily Logs",          { projectScoped: true }),
@@ -121,10 +142,10 @@ const ROUTE_DOMAINS = {
   // ── Cost & Finance ──
   cost: {
     CostHub:             r(lazyWithRetry(() => import("@/pages/CostHub")),             "Budget Control",       { projectScoped: true }),
-    Financials:          r(lazyWithRetry(() => import("@/pages/Financials")),          "Budget Control",       { projectScoped: true }),
-    CostDashboard:       r(lazyWithRetry(() => import("@/pages/CostDashboard")),       "Cost Dashboard",       { projectScoped: true }),
     ChangeOrders:        r(lazyWithRetry(() => import("@/pages/ChangeOrders")),        "Change Orders",        { projectScoped: true }),
+    Backcharges:        r(lazyWithRetry(() => import("@/pages/Backcharges")),         "Backcharge Defense",   { projectScoped: true }),
     SOV:                 r(lazyWithRetry(() => import("@/pages/SOV")),                 "Schedule of Values",   { projectScoped: true }),
+    PayApplications:    r(lazyWithRetry(() => import("@/pages/PayApplications")),     "Pay Applications",     { projectScoped: true }),
     Expenses:            r(lazyWithRetry(() => import("@/pages/Expenses")),            "Expenses",             { projectScoped: true }),
     ContractManagement:  r(lazyWithRetry(() => import("@/pages/ContractManagement")),  "Contract Management", { projectScoped: true }),
   },
@@ -137,7 +158,6 @@ const ROUTE_DOMAINS = {
   // ── Risk & Compliance ──
   risk: {
     ChangeRequests:  r(lazyWithRetry(() => import("@/pages/ChangeRequests")),  "Change Requests",     { projectScoped: true }),
-    DecisionLog:     r(lazyWithRetry(() => import("@/pages/DecisionLog")),     "Decision Log"),
     AlertsCenter:    r(lazyWithRetry(() => import("@/pages/AlertsCenter")),    "Alerts Center"),
   },
 
@@ -152,18 +172,21 @@ const ROUTE_DOMAINS = {
     ScopeExclusions:  r(lazyWithRetry(() => import("@/pages/ScopeExclusions")),  "Scope & Exclusions"),
     Contacts:         r(lazyWithRetry(() => import("@/pages/Contacts")),         "Contacts"),
     Vendors:          r(lazyWithRetry(() => import("@/pages/Vendors")),          "Vendors"),
-    DataExchange:     r(lazyWithRetry(() => import("@/pages/DataExchange")),     "Data Exchange",       { projectScoped: true }),
+    DataExchange:     r(lazyWithRetry(() => import("@/pages/DataExchange")),     "Data Exchange",       { projectScoped: true, lifecycle: "internal" }),
     Integrations:     r(lazyWithRetry(() => import("@/pages/Integrations")),     "Integrations"),
     Settings:         r(lazyWithRetry(() => import("@/pages/Settings")),         "Settings"),
-    UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management"),
-    ProjectMembers:   r(lazyWithRetry(() => import("@/pages/ProjectMembers")),   "Project Members"),
-    FeatureFlagsAdmin: r(lazyWithRetry(() => import("@/pages/FeatureFlagsAdmin")), "Feature Flags"),
-    AgentMemory:      r(lazyWithRetry(() => import("@/pages/AgentMemory")),      "Agent Memory"),
+    OrgMembers:       r(lazyWithRetry(() => import("@/pages/OrgMembers")),       "Team"),
+    Billing:          r(lazyWithRetry(() => import("@/pages/Billing")),          "Billing"),
+    UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management",       { lifecycle: "internal" }),
+    ProjectMembers:   r(lazyWithRetry(() => import("@/pages/ProjectMembers")),   "Project Members",       { lifecycle: "internal" }),
+    FeatureFlagsAdmin: r(lazyWithRetry(() => import("@/pages/FeatureFlagsAdmin")), "Feature Flags",       { lifecycle: "internal" }),
+    DesktopConnect:    r(lazyWithRetry(() => import("@/pages/DesktopConnect")),    "Connect Desktop",     { lifecycle: "internal" }),
     Tutorial:         r(lazyWithRetry(() => import("@/pages/Tutorial")),         "Tutorial / Help"),
   },
 
   // ── Tools ──
   tools: {
+    CalculatorsHub:             r(lazyWithRetry(() => import("@/pages/CalculatorsHub")),             "Calculators"),
     Calculator:                 r(lazyWithRetry(() => import("@/pages/RegularCalculator")),          "Calculator"),
     FeetInchesCalculator:       r(lazyWithRetry(() => import("@/pages/FeetInchesCalculator")),       "Feet & Inches Calculator"),
     SteelWeightCalculator:      r(lazyWithRetry(() => import("@/pages/SteelWeightCalculator")),      "Steel Weight Calculator"),
@@ -190,14 +213,12 @@ const ROUTE_REGISTRY = Object.values(ROUTE_DOMAINS).reduce(
 // Sidebar/modules hover and keyboard focus can warm these chunks, but app boot
 // no longer idle-prefetches them for users who never open the route.
 registerRoutePrefetcher("Dashboard", () => import("@/pages/Dashboard"));
+registerRoutePrefetcher("DrawingSubmittalHub", () => import("@/pages/DrawingSubmittalHub"));
 registerRoutePrefetcher("Schedule", () => import("@/pages/Schedule"));
 registerRoutePrefetcher("RFIs", () => import("@/pages/RFIs"));
 registerRoutePrefetcher("Drawings", () => import("@/pages/Drawings"));
 registerRoutePrefetcher("DrawingViewer", () => import("@/pages/DrawingViewer"));
-// Do not hover-prefetch the 3D model viewer: that route pulls the heavy
-// Three/@thatopen stack and should stay explicitly user-triggered.
 registerRoutePrefetcher("WorkPackages", () => import("@/pages/WorkPackages"));
-registerRoutePrefetcher("Financials", () => import("@/pages/Financials"));
 
 // ── Derived: page → component map (legacy router contract) ───────────
 export const PAGES = Object.fromEntries(
@@ -209,6 +230,11 @@ export const PAGE_LABELS = Object.fromEntries(
   Object.entries(ROUTE_REGISTRY).map(([key, entry]) => [key, entry.label])
 );
 
+// ── Derived: page → lifecycle map ───────────────────────────────────
+export const PAGE_LIFECYCLES = Object.fromEntries(
+  Object.entries(ROUTE_REGISTRY).map(([key, entry]) => [key, entry.lifecycle])
+);
+
 // ── Derived: pages whose UI depends on an active project ─────────────
 export const PROJECT_SCOPED_PAGES = new Set(
   Object.entries(ROUTE_REGISTRY)
@@ -217,12 +243,10 @@ export const PROJECT_SCOPED_PAGES = new Set(
 );
 
 // ── Derived: full set of route paths the app actually serves ─────────
-// "/", "/Landing", "/RFIHub" are static mounts in App.jsx, not in the
-// registry, so they get spliced in explicitly.
+// "/", "/Landing", "/RFIHub", and "/ProjectDetail" are legacy static mounts
+// handled in AppRoutes, so they get spliced in explicitly.
 export const ALL_ROUTE_PATHS = Array.from(new Set([
-  "/",
-  "/Landing",
-  "/RFIHub",
+  ...Object.keys(STATIC_ROUTE_METADATA),
   ...Object.keys(PAGES).map((p) => `/${p}`),
 ]));
 
@@ -251,7 +275,6 @@ export function routeLabel(pageName) {
  * an empty result.
  */
 export async function validateRoutes() {
-  const { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } = await import("./moduleRegistry");
   const registered = new Set(Object.keys(ROUTE_REGISTRY));
   const referenced = new Set();
 
@@ -270,10 +293,22 @@ export async function validateRoutes() {
     if (!entry.label) {
       issues.push(`Registered page has no label: ${key}`);
     }
+    if (!ROUTE_LIFECYCLES.includes(entry.lifecycle)) {
+      issues.push(`Unknown lifecycle for registered page ${key}: ${entry.lifecycle}`);
+    }
   }
   for (const p of PROJECT_SCOPED_PAGES) {
     if (!registered.has(p)) {
       issues.push(`PROJECT_SCOPED_PAGES references unregistered page: ${p}`);
+    }
+  }
+
+  for (const [path, meta] of Object.entries(STATIC_ROUTE_METADATA)) {
+    if (!ALL_ROUTE_PATHS.includes(path)) {
+      issues.push(`Static route path not mounted: ${path}`);
+    }
+    if (meta.kind === "redirect" && !ALL_ROUTE_PATHS.includes(meta.target)) {
+      issues.push(`Redirect target not mounted: ${path} -> ${meta.target}`);
     }
   }
 
@@ -306,3 +341,4 @@ export const pagesConfig = {
   Pages: PAGES,
   // Layout is imported directly by App.jsx (no longer bundled here)
 };
+

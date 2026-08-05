@@ -1,0 +1,810 @@
+- generic [ref=e6]:
+  - link "Skip to main content" [ref=e7] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e8]:
+    - navigation "Primary" [ref=e10]:
+      - generic [ref=e11]:
+        - img "SteelBuild Pro" [ref=e13] [cursor=pointer]
+        - generic "SELECT PROJECT" [ref=e16] [cursor=pointer]:
+          - generic [ref=e17]: SELECT PROJECT
+          - generic [ref=e18]: ▾
+        - generic [ref=e19]: Projects
+      - generic [ref=e20]:
+        - button "Open global search" [ref=e21] [cursor=pointer]:
+          - img [ref=e22]
+        - generic [ref=e25]:
+          - generic "Toggle compact/comfortable density" [ref=e26] [cursor=pointer]:
+            - img [ref=e27]
+          - generic "All Modules" [ref=e28] [cursor=pointer]:
+            - img [ref=e29]
+        - button "Switch to light mode" [ref=e34] [cursor=pointer]:
+          - img [ref=e35]
+        - button "Toggle high contrast mode" [ref=e37] [cursor=pointer]:
+          - img [ref=e38]
+        - img [ref=e43] [cursor=pointer]
+        - generic [ref=e45]:
+          - generic [ref=e46]: nickl@shsteelaz.com
+          - button "SIGN OUT" [ref=e47] [cursor=pointer]
+    - generic [ref=e48]:
+      - complementary "Primary navigation" [ref=e49]:
+        - generic [ref=e50]:
+          - button "Collapse all groups" [ref=e51] [cursor=pointer]: COLLAPSE
+          - button "Collapse to icons" [ref=e52] [cursor=pointer]:
+            - img [ref=e53]
+        - button "Search" [ref=e57] [cursor=pointer]:
+          - img [ref=e58]
+          - generic [ref=e61]: Search
+          - generic [ref=e62]: ⌘K
+        - navigation [ref=e63]:
+          - generic [ref=e64]:
+            - button "FAVORITES" [ref=e65] [cursor=pointer]:
+              - generic [ref=e66]:
+                - img [ref=e67]
+                - generic [ref=e69]: FAVORITES
+              - img [ref=e70]
+            - generic [ref=e72]:
+              - button "Projects" [ref=e74] [cursor=pointer]:
+                - img [ref=e76]
+                - generic [ref=e79]: Projects
+              - button "RFIs" [ref=e81] [cursor=pointer]:
+                - img [ref=e82]
+                - generic [ref=e85]: RFIs
+              - button "Work Packages" [ref=e87] [cursor=pointer]:
+                - img [ref=e88]
+                - generic [ref=e92]: Work Packages
+              - button "Deliveries" [ref=e94] [cursor=pointer]:
+                - img [ref=e95]
+                - generic [ref=e100]: Deliveries
+              - button "Vendors" [ref=e102] [cursor=pointer]:
+                - img [ref=e103]
+                - generic [ref=e107]: Vendors
+              - button "Daily Logs" [ref=e109] [cursor=pointer]:
+                - img [ref=e110]
+                - generic [ref=e113]: Daily Logs
+              - button "Change Orders" [ref=e115] [cursor=pointer]:
+                - img [ref=e116]
+                - generic [ref=e118]: Change Orders
+          - generic [ref=e120]:
+            - button "OVERVIEW" [disabled] [ref=e121]:
+              - generic [ref=e122]: OVERVIEW
+            - generic [ref=e123]:
+              - button "Dashboard" [ref=e125] [cursor=pointer]:
+                - img [ref=e126]
+                - generic [ref=e131]: Dashboard
+              - button "Command Center" [ref=e133] [cursor=pointer]:
+                - img [ref=e134]
+                - generic [ref=e136]: Command Center
+              - button "Portfolio Overview" [ref=e138] [cursor=pointer]:
+                - img [ref=e139]
+                - generic [ref=e141]: Portfolio Overview
+          - generic [ref=e142]:
+            - button "PROJECTS" [ref=e143] [cursor=pointer]:
+              - generic [ref=e144]: PROJECTS
+              - img [ref=e145]
+            - generic [ref=e147]:
+              - button "Projects" [ref=e149] [cursor=pointer]:
+                - img [ref=e151]
+                - generic [ref=e154]: Projects
+              - button "Scope & Exclusions" [ref=e156] [cursor=pointer]:
+                - img [ref=e157]
+                - generic [ref=e160]: Scope & Exclusions
+              - button "Contacts" [ref=e162] [cursor=pointer]:
+                - img [ref=e163]
+                - generic [ref=e167]: Contacts
+              - button "Project Members" [ref=e169] [cursor=pointer]:
+                - img [ref=e170]
+                - generic [ref=e172]: Project Members
+          - generic [ref=e173]:
+            - button "PROJECT MANAGEMENT" [ref=e174] [cursor=pointer]:
+              - generic [ref=e175]: PROJECT MANAGEMENT
+              - img [ref=e176]
+            - generic [ref=e178]:
+              - button "Schedule" [ref=e180] [cursor=pointer]:
+                - img [ref=e181]
+                - generic [ref=e183]: Schedule
+              - button "Action Items" [ref=e185] [cursor=pointer]:
+                - img [ref=e186]
+                - generic [ref=e189]: Action Items
+              - button "RFIs" [ref=e191] [cursor=pointer]:
+                - img [ref=e192]
+                - generic [ref=e195]: RFIs
+              - button "Change Orders" [ref=e197] [cursor=pointer]:
+                - img [ref=e198]
+                - generic [ref=e200]: Change Orders
+              - button "Pay Applications" [ref=e202] [cursor=pointer]:
+                - img [ref=e203]
+                - generic [ref=e205]: Pay Applications
+              - button "Backcharge Defense" [ref=e207] [cursor=pointer]:
+                - img [ref=e208]
+                - generic [ref=e210]: Backcharge Defense
+          - generic [ref=e211]:
+            - button "DESIGN & DRAWINGS" [ref=e212] [cursor=pointer]:
+              - generic [ref=e213]: DESIGN & DRAWINGS
+              - img [ref=e214]
+            - generic [ref=e216]:
+              - button "Detailing Control Center" [ref=e218] [cursor=pointer]:
+                - img [ref=e219]
+                - generic [ref=e221]: Detailing Control Center
+              - button "Drawing Viewer" [ref=e223] [cursor=pointer]:
+                - img [ref=e224]
+                - generic [ref=e227]: Drawing Viewer
+          - generic [ref=e228]:
+            - button "PRODUCTION" [ref=e229] [cursor=pointer]:
+              - generic [ref=e230]: PRODUCTION
+              - img [ref=e231]
+            - generic [ref=e233]:
+              - button "Work Packages" [ref=e235] [cursor=pointer]:
+                - img [ref=e236]
+                - generic [ref=e240]: Work Packages
+              - button "Fab Release" [ref=e242] [cursor=pointer]:
+                - img [ref=e243]
+                - generic [ref=e245]: Fab Release
+              - button "Production Status" [ref=e247] [cursor=pointer]:
+                - img [ref=e248]
+                - generic [ref=e250]: Production Status
+              - button "Risk" [ref=e252] [cursor=pointer]:
+                - img [ref=e253]
+                - generic [ref=e255]: Risk
+              - button "Budget Hours" [ref=e257] [cursor=pointer]:
+                - img [ref=e258]
+                - generic [ref=e260]: Budget Hours
+              - button "Procurement" [ref=e262] [cursor=pointer]:
+                - img [ref=e263]
+                - generic [ref=e267]: Procurement
+              - button "Resources" [ref=e269] [cursor=pointer]:
+                - img [ref=e270]
+                - generic [ref=e272]: Resources
+              - button "Deliveries" [ref=e274] [cursor=pointer]:
+                - img [ref=e275]
+                - generic [ref=e280]: Deliveries
+          - generic [ref=e281]:
+            - button "FINANCIALS" [ref=e282] [cursor=pointer]:
+              - generic [ref=e283]: FINANCIALS
+              - img [ref=e284]
+            - generic [ref=e286]:
+              - button "Budget Control" [ref=e288] [cursor=pointer]:
+                - img [ref=e289]
+                - generic [ref=e292]: Budget Control
+              - button "Schedule of Values" [ref=e294] [cursor=pointer]:
+                - img [ref=e295]
+                - generic [ref=e298]: Schedule of Values
+              - button "Expenses" [ref=e300] [cursor=pointer]:
+                - img [ref=e301]
+                - generic [ref=e304]: Expenses
+          - generic [ref=e305]:
+            - button "DOCUMENTS & REPORTS" [ref=e306] [cursor=pointer]:
+              - generic [ref=e307]: DOCUMENTS & REPORTS
+              - img [ref=e308]
+            - generic [ref=e310]:
+              - button "Documents" [ref=e312] [cursor=pointer]:
+                - img [ref=e313]
+                - generic [ref=e315]: Documents
+              - button "Reports" [ref=e317] [cursor=pointer]:
+                - img [ref=e318]
+                - generic [ref=e320]: Reports
+          - generic [ref=e321]:
+            - button "FIELD" [ref=e322] [cursor=pointer]:
+              - generic [ref=e323]: FIELD
+              - img [ref=e324]
+            - generic [ref=e326]:
+              - button "Field Today" [ref=e328] [cursor=pointer]:
+                - img [ref=e329]
+                - generic [ref=e331]: Field Today
+              - button "Field Hub" [ref=e333] [cursor=pointer]:
+                - img [ref=e334]
+                - generic [ref=e336]: Field Hub
+              - button "Daily Logs" [ref=e338] [cursor=pointer]:
+                - img [ref=e339]
+                - generic [ref=e342]: Daily Logs
+              - button "Photos" [ref=e344] [cursor=pointer]:
+                - img [ref=e345]
+                - generic [ref=e348]: Photos
+              - button "LEMs" [ref=e350] [cursor=pointer]:
+                - img [ref=e351]
+                - generic [ref=e354]: LEMs
+          - generic [ref=e355]:
+            - button "ADMINISTRATION" [ref=e356] [cursor=pointer]:
+              - generic [ref=e357]: ADMINISTRATION
+              - img [ref=e358]
+            - generic [ref=e360]:
+              - button "Vendors" [ref=e362] [cursor=pointer]:
+                - img [ref=e363]
+                - generic [ref=e367]: Vendors
+              - button "Settings" [ref=e369] [cursor=pointer]:
+                - img [ref=e370]
+                - generic [ref=e373]: Settings
+          - generic [ref=e374]:
+            - button "TOOLS" [ref=e375] [cursor=pointer]:
+              - generic [ref=e376]: TOOLS
+              - img [ref=e377]
+            - generic [ref=e379]:
+              - button "Calculator" [ref=e381] [cursor=pointer]:
+                - img [ref=e382]
+                - generic [ref=e384]: Calculator
+              - button "Ft/In Calculator" [ref=e386] [cursor=pointer]:
+                - img [ref=e387]
+                - generic [ref=e393]: Ft/In Calculator
+              - button "Steel Weight Calculator" [ref=e395] [cursor=pointer]:
+                - img [ref=e396]
+                - generic [ref=e398]: Steel Weight Calculator
+              - button "Crane Pick Calculator" [ref=e400] [cursor=pointer]:
+                - img [ref=e401]
+                - generic [ref=e406]: Crane Pick Calculator
+              - button "Decimal / Fraction Converter" [ref=e408] [cursor=pointer]:
+                - img [ref=e409]
+                - generic [ref=e412]: Decimal / Fraction Converter
+        - generic [ref=e413]:
+          - button "Recent" [ref=e414] [cursor=pointer]:
+            - img [ref=e415]
+            - generic [ref=e418]: Recent
+          - generic [ref=e419]:
+            - button "RFIs" [ref=e420] [cursor=pointer]:
+              - img [ref=e421]
+              - generic [ref=e424]: RFIs
+            - button "Portfolio Overview" [ref=e425] [cursor=pointer]:
+              - img [ref=e426]
+              - generic [ref=e428]: Portfolio Overview
+            - button "Command Center" [ref=e429] [cursor=pointer]:
+              - img [ref=e430]
+              - generic [ref=e432]: Command Center
+      - main "Main content" [ref=e434]:
+        - generic [ref=e435]:
+          - banner "Projects page header" [ref=e437]:
+            - generic [ref=e438]:
+              - generic [ref=e439]: PORTFOLIO
+              - generic [ref=e440]:
+                - heading "Projects" [level=1] [ref=e441]
+                - generic [ref=e442]: 15 · ACTIVE + HISTORY
+              - generic [ref=e443]: $9,072,284.00 portfolio value · 10 active · 1 at risk · 2 on hold
+            - generic [ref=e444]:
+              - generic [ref=e445]:
+                - button "CARDS" [ref=e446] [cursor=pointer]
+                - button "LIST" [ref=e447] [cursor=pointer]
+              - button "New Project" [ref=e448] [cursor=pointer]:
+                - img [ref=e449]
+                - text: New Project
+          - generic [ref=e450]:
+            - generic [ref=e451]:
+              - generic [ref=e452]: Portfolio Value
+              - generic [ref=e453]: $9,072,284.00
+              - generic [ref=e454]: 15 projects total
+            - generic [ref=e455]:
+              - generic [ref=e456]: Active
+              - generic [ref=e457]: "10"
+              - generic [ref=e458]: in progress
+            - generic [ref=e459] [cursor=pointer]:
+              - generic [ref=e460]: At Risk
+              - generic [ref=e461]: "1"
+              - generic [ref=e462]: need attention
+            - generic [ref=e463]:
+              - generic [ref=e464]: Open RFIs
+              - generic [ref=e465]: "7"
+              - generic [ref=e466]: 5 overdue
+            - generic [ref=e467]:
+              - generic [ref=e468]: Pending COs
+              - generic [ref=e469]: $12,115.25
+              - generic [ref=e470]: 1 awaiting approval
+          - generic [ref=e471]:
+            - textbox "Search projects, clients, GC…" [ref=e472]
+            - generic [ref=e473]:
+              - button "All" [ref=e474] [cursor=pointer]
+              - button "Pre-Construction" [ref=e475] [cursor=pointer]: Pre-Construction
+              - button "Detailing" [ref=e477] [cursor=pointer]: Detailing
+              - button "Procurement" [ref=e479] [cursor=pointer]: Procurement
+              - button "Fabrication" [ref=e481] [cursor=pointer]: Fabrication
+              - button "Delivery" [ref=e483] [cursor=pointer]: Delivery
+              - button "Installation" [ref=e485] [cursor=pointer]: Installation
+              - button "Installation/Erection" [ref=e487] [cursor=pointer]: Installation/Erection
+              - button "Erection" [ref=e489] [cursor=pointer]: Erection
+              - button "Closeout" [ref=e491] [cursor=pointer]: Closeout
+            - generic [ref=e494]:
+              - button "On Track" [ref=e495] [cursor=pointer]: On Track
+              - button "Watch" [ref=e497] [cursor=pointer]: Watch
+              - button "At Risk" [ref=e499] [cursor=pointer]: At Risk
+            - generic [ref=e502]:
+              - button "Beams/Deck" [ref=e503] [cursor=pointer]
+              - button "Beams/Joists/Deck" [ref=e504] [cursor=pointer]
+              - button "Joist Deck" [ref=e505] [cursor=pointer]
+              - button "Tilt" [ref=e506] [cursor=pointer]
+              - button "Tilt Hybrid" [ref=e507] [cursor=pointer]
+              - button "Misc." [ref=e508] [cursor=pointer]
+              - button "Other" [ref=e509] [cursor=pointer]
+            - generic [ref=e511]: 15 / 15
+          - generic [ref=e513]:
+            - generic [ref=e514] [cursor=pointer]:
+              - generic [ref=e515]:
+                - generic [ref=e516]:
+                  - generic [ref=e517]: Closeout
+                  - generic [ref=e518]: "25382"
+                - generic [ref=e519]:
+                  - generic [ref=e520]:
+                    - generic [ref=e521]: Academy MS Buckeye
+                    - generic [ref=e522]: BCCG
+                  - generic [ref=e523]:
+                    - img [ref=e524]
+                    - generic [ref=e528]: 0%
+              - generic [ref=e530]:
+                - generic [ref=e531]: Contract Value
+                - generic [ref=e532]: $167,813.00
+              - generic [ref=e533]:
+                - generic [ref=e534]:
+                  - generic [ref=e535]: "0"
+                  - generic [ref=e536]: Open RFIs
+                - generic [ref=e537]:
+                  - generic [ref=e538]: "0"
+                  - generic [ref=e539]: Pend COs
+                - generic [ref=e540]:
+                  - generic [ref=e541]: 0/0
+                  - generic [ref=e542]: WPs
+                - generic [ref=e543]:
+                  - generic [ref=e544]: 0%
+                  - generic [ref=e545]: Labor
+              - generic [ref=e546]:
+                - generic [ref=e549]: On Track
+                - button "EDIT" [ref=e550]
+                - button "ARCHIVE" [ref=e551]
+            - generic [ref=e552] [cursor=pointer]:
+              - generic [ref=e553]:
+                - generic [ref=e554]:
+                  - generic [ref=e555]: Erection
+                  - generic [ref=e556]: "25421"
+                - generic [ref=e557]:
+                  - generic [ref=e558]:
+                    - generic [ref=e559]: Academy MS Mesa
+                    - generic [ref=e560]: BCCG
+                  - generic [ref=e561]:
+                    - img [ref=e562]
+                    - generic [ref=e566]: 100%
+              - generic [ref=e568]:
+                - generic [ref=e569]: Contract Value
+                - generic [ref=e570]: $639,189.00
+              - generic [ref=e571]:
+                - generic [ref=e572]:
+                  - generic [ref=e573]: "0"
+                  - generic [ref=e574]: Open RFIs
+                - generic [ref=e575]:
+                  - generic [ref=e576]: "1"
+                  - generic [ref=e577]: Pend COs
+                - generic [ref=e578]:
+                  - generic [ref=e579]: 10/10
+                  - generic [ref=e580]: WPs
+                - generic [ref=e581]:
+                  - generic [ref=e582]: 108960.69T
+                  - generic [ref=e583]: Tons
+              - generic [ref=e584]:
+                - generic [ref=e587]: On Track
+                - generic [ref=e588]: 19d left
+                - button "EDIT" [ref=e589]
+                - button "ARCHIVE" [ref=e590]
+            - generic [ref=e591] [cursor=pointer]:
+              - generic [ref=e592]:
+                - generic [ref=e593]:
+                  - generic [ref=e594]: Detailing
+                  - generic [ref=e595]: "24463"
+                - generic [ref=e596]:
+                  - generic [ref=e597]:
+                    - generic [ref=e598]: ADOT Tucson MVD Renovation
+                    - generic [ref=e599]: BCCG
+                  - generic [ref=e600]:
+                    - img [ref=e601]
+                    - generic [ref=e605]: 100%
+              - generic [ref=e607]:
+                - generic [ref=e608]: Contract Value
+                - generic [ref=e609]: $75,888.00
+              - generic [ref=e610]:
+                - generic [ref=e611]:
+                  - generic [ref=e612]: "0"
+                  - generic [ref=e613]: Open RFIs
+                - generic [ref=e614]:
+                  - generic [ref=e615]: "0"
+                  - generic [ref=e616]: Pend COs
+                - generic [ref=e617]:
+                  - generic [ref=e618]: 9/9
+                  - generic [ref=e619]: WPs
+                - generic [ref=e620]:
+                  - generic [ref=e621]: 10134.3T
+                  - generic [ref=e622]: Tons
+              - generic [ref=e623]:
+                - generic [ref=e626]: On Track
+                - button "EDIT" [ref=e627]
+                - button "ARCHIVE" [ref=e628]
+            - generic [ref=e629] [cursor=pointer]:
+              - generic [ref=e630]:
+                - generic [ref=e631]:
+                  - generic [ref=e632]: Detailing
+                  - generic [ref=e633]: "25443"
+                - generic [ref=e634]:
+                  - generic [ref=e635]:
+                    - generic [ref=e636]: ALA AJ Seminary Building
+                    - generic [ref=e637]: Porter Brothers
+                  - generic [ref=e638]:
+                    - img [ref=e639]
+                    - generic [ref=e643]: 0%
+              - generic [ref=e645]:
+                - generic [ref=e646]: Contract Value
+                - generic [ref=e647]: $84,114.00
+              - generic [ref=e648]:
+                - generic [ref=e649]:
+                  - generic [ref=e650]: "0"
+                  - generic [ref=e651]: Open RFIs
+                - generic [ref=e652]:
+                  - generic [ref=e653]: "0"
+                  - generic [ref=e654]: Pend COs
+                - generic [ref=e655]:
+                  - generic [ref=e656]: 0/0
+                  - generic [ref=e657]: WPs
+                - generic [ref=e658]:
+                  - generic [ref=e659]: 0%
+                  - generic [ref=e660]: Labor
+              - generic [ref=e661]:
+                - generic [ref=e664]: Watch
+                - button "EDIT" [ref=e665]
+                - button "ARCHIVE" [ref=e666]
+            - generic [ref=e667] [cursor=pointer]:
+              - generic [ref=e668]:
+                - generic [ref=e669]:
+                  - generic [ref=e670]: Erection
+                  - generic [ref=e671]: "25116"
+                - generic [ref=e672]:
+                  - generic [ref=e673]:
+                    - generic [ref=e674]: ALA Apache Junction
+                    - generic [ref=e675]: Porter Brothers
+                  - generic [ref=e676]:
+                    - img [ref=e677]
+                    - generic [ref=e681]: 100%
+              - generic [ref=e683]:
+                - generic [ref=e684]: Contract Value
+                - generic [ref=e685]: $1,083,539.00
+              - generic [ref=e686]:
+                - generic [ref=e687]:
+                  - generic [ref=e688]: "0"
+                  - generic [ref=e689]: Open RFIs
+                - generic [ref=e690]:
+                  - generic [ref=e691]: "0"
+                  - generic [ref=e692]: Pend COs
+                - generic [ref=e693]:
+                  - generic [ref=e694]: 17/17
+                  - generic [ref=e695]: WPs
+                - generic [ref=e696]:
+                  - generic [ref=e697]: 62254.52T
+                  - generic [ref=e698]: Tons
+              - generic [ref=e699]:
+                - generic [ref=e702]: On Track
+                - generic [ref=e703]: 19d left
+                - button "EDIT" [ref=e704]
+                - button "ARCHIVE" [ref=e705]
+            - generic [ref=e706] [cursor=pointer]:
+              - generic [ref=e707]:
+                - generic [ref=e708]:
+                  - generic [ref=e709]: Detailing
+                  - generic [ref=e710]: "25645"
+                - generic [ref=e711]:
+                  - generic [ref=e712]:
+                    - generic [ref=e713]: ALA Buckeye (Admin Bldg.)
+                    - generic [ref=e714]: McGrath Construction
+                  - generic [ref=e715]:
+                    - img [ref=e716]
+                    - generic [ref=e720]: 0%
+              - generic [ref=e722]:
+                - generic [ref=e723]: Contract Value
+                - generic [ref=e724]: $901,570.00
+              - generic [ref=e725]:
+                - generic [ref=e726]:
+                  - generic [ref=e727]: "5"
+                  - generic [ref=e728]: Open RFIs
+                - generic [ref=e729]:
+                  - generic [ref=e730]: "0"
+                  - generic [ref=e731]: Pend COs
+                - generic [ref=e732]:
+                  - generic [ref=e733]: 0/1
+                  - generic [ref=e734]: WPs
+                - generic [ref=e735]:
+                  - generic [ref=e736]: 0%
+                  - generic [ref=e737]: Labor
+              - generic [ref=e738]:
+                - generic [ref=e741]: On Track
+                - generic [ref=e742]: 172d left
+                - button "EDIT" [ref=e743]
+                - button "ARCHIVE" [ref=e744]
+            - generic [ref=e745] [cursor=pointer]:
+              - generic [ref=e746]:
+                - generic [ref=e747]:
+                  - generic [ref=e748]: Detailing
+                  - generic [ref=e749]: "25599"
+                  - generic "ALA Casa Grande (Admin Bldg." [ref=e750]:
+                    - img [ref=e751]
+                    - text: On Hold
+                - generic [ref=e753]:
+                  - generic [ref=e754]:
+                    - generic [ref=e755]: ALA Casa Grande (Admin Bldg.)
+                    - generic [ref=e756]: Porter Brothers
+                  - generic [ref=e757]:
+                    - img [ref=e758]
+                    - generic [ref=e762]: 0%
+              - generic [ref=e764]:
+                - generic [ref=e765]: Contract Value
+                - generic [ref=e766]: $902,840.00
+              - generic [ref=e767]:
+                - generic [ref=e768]:
+                  - generic [ref=e769]: "3"
+                  - generic [ref=e770]: Open RFIs
+                - generic [ref=e771]:
+                  - generic [ref=e772]: "0"
+                  - generic [ref=e773]: Pend COs
+                - generic [ref=e774]:
+                  - generic [ref=e775]: 0/0
+                  - generic [ref=e776]: WPs
+                - generic [ref=e777]:
+                  - generic [ref=e778]: 0%
+                  - generic [ref=e779]: Labor
+              - generic [ref=e780]:
+                - generic [ref=e783]: At Risk
+                - button "EDIT" [ref=e784]
+                - button "ARCHIVE" [ref=e785]
+            - generic [ref=e786] [cursor=pointer]:
+              - generic [ref=e787]:
+                - generic [ref=e788]:
+                  - generic [ref=e789]: Detailing
+                  - generic [ref=e790]: "25582"
+                  - generic "ALA Casa Grande (Field House / Classrooms" [ref=e791]:
+                    - img [ref=e792]
+                    - text: On Hold
+                - generic [ref=e794]:
+                  - generic [ref=e795]:
+                    - generic [ref=e796]: ALA Casa Grande (Field House / Classrooms)
+                    - generic [ref=e797]: Way Construction
+                  - generic [ref=e798]:
+                    - img [ref=e799]
+                    - generic [ref=e803]: 0%
+              - generic [ref=e805]:
+                - generic [ref=e806]: Contract Value
+                - generic [ref=e807]: $144,797.00
+              - generic [ref=e808]:
+                - generic [ref=e809]:
+                  - generic [ref=e810]: "0"
+                  - generic [ref=e811]: Open RFIs
+                - generic [ref=e812]:
+                  - generic [ref=e813]: "0"
+                  - generic [ref=e814]: Pend COs
+                - generic [ref=e815]:
+                  - generic [ref=e816]: 0/0
+                  - generic [ref=e817]: WPs
+                - generic [ref=e818]:
+                  - generic [ref=e819]: 0%
+                  - generic [ref=e820]: Labor
+              - generic [ref=e821]:
+                - generic [ref=e824]: On Track
+                - button "EDIT" [ref=e825]
+                - button "ARCHIVE" [ref=e826]
+            - generic [ref=e827] [cursor=pointer]:
+              - generic [ref=e828]:
+                - generic [ref=e829]:
+                  - generic [ref=e830]: Erection
+                  - generic [ref=e831]: "25395"
+                - generic [ref=e832]:
+                  - generic [ref=e833]:
+                    - generic [ref=e834]: ASM Garage
+                    - generic [ref=e835]: Okland
+                  - generic [ref=e836]:
+                    - img [ref=e837]
+                    - generic [ref=e841]: 83%
+              - generic [ref=e843]:
+                - generic [ref=e844]: Contract Value
+                - generic [ref=e845]: $1,259,153.00
+              - generic [ref=e846]:
+                - generic [ref=e847]:
+                  - generic [ref=e848]: "0"
+                  - generic [ref=e849]: Open RFIs
+                - generic [ref=e850]:
+                  - generic [ref=e851]: "0"
+                  - generic [ref=e852]: Pend COs
+                - generic [ref=e853]:
+                  - generic [ref=e854]: 5/6
+                  - generic [ref=e855]: WPs
+                - generic [ref=e856]:
+                  - generic [ref=e857]: 581245.4800000001T
+                  - generic [ref=e858]: Tons
+              - generic [ref=e859]:
+                - generic [ref=e862]: At Risk
+                - generic [ref=e863]: 19d left
+                - button "EDIT" [ref=e864]
+                - button "ARCHIVE" [ref=e865]
+            - generic [ref=e866] [cursor=pointer]:
+              - generic [ref=e867]:
+                - generic [ref=e868]:
+                  - generic [ref=e869]: Erection
+                  - generic [ref=e870]: "24426"
+                - generic [ref=e871]:
+                  - generic [ref=e872]:
+                    - generic [ref=e873]: Capstone Tucson Student Housing
+                    - generic [ref=e874]: Core Construction
+                  - generic [ref=e875]:
+                    - img [ref=e876]
+                    - generic [ref=e880]: 100%
+              - generic [ref=e882]:
+                - generic [ref=e883]: Contract Value
+                - generic [ref=e884]: $1,429,253.00
+              - generic [ref=e885]:
+                - generic [ref=e886]:
+                  - generic [ref=e887]: "0"
+                  - generic [ref=e888]: Open RFIs
+                - generic [ref=e889]:
+                  - generic [ref=e890]: "0"
+                  - generic [ref=e891]: Pend COs
+                - generic [ref=e892]:
+                  - generic [ref=e893]: 20/20
+                  - generic [ref=e894]: WPs
+                - generic [ref=e895]:
+                  - generic [ref=e896]: 154205.69T
+                  - generic [ref=e897]: Tons
+              - generic [ref=e898]:
+                - generic [ref=e901]: On Track
+                - generic [ref=e902]: 81d left
+                - button "EDIT" [ref=e903]
+                - button "ARCHIVE" [ref=e904]
+            - generic [ref=e905] [cursor=pointer]:
+              - generic [ref=e906]:
+                - generic [ref=e907]:
+                  - generic [ref=e908]: Closeout
+                  - generic [ref=e909]: "25231"
+                - generic [ref=e910]:
+                  - generic [ref=e911]:
+                    - generic [ref=e912]: Casa Grande Dialysis
+                    - generic [ref=e913]: Concept Commercial Construction
+                  - generic [ref=e914]:
+                    - img [ref=e915]
+                    - generic [ref=e919]: 0%
+              - generic [ref=e921]:
+                - generic [ref=e922]: Contract Value
+                - generic [ref=e923]: $169,000.00
+              - generic [ref=e924]:
+                - generic [ref=e925]:
+                  - generic [ref=e926]: "0"
+                  - generic [ref=e927]: Open RFIs
+                - generic [ref=e928]:
+                  - generic [ref=e929]: "0"
+                  - generic [ref=e930]: Pend COs
+                - generic [ref=e931]:
+                  - generic [ref=e932]: 0/0
+                  - generic [ref=e933]: WPs
+                - generic [ref=e934]:
+                  - generic [ref=e935]: 0%
+                  - generic [ref=e936]: Labor
+              - generic [ref=e937]:
+                - generic [ref=e940]: On Track
+                - generic [ref=e941]: 19d left
+                - button "EDIT" [ref=e942]
+                - button "ARCHIVE" [ref=e943]
+            - generic [ref=e944] [cursor=pointer]:
+              - generic [ref=e945]:
+                - generic [ref=e946]:
+                  - generic [ref=e947]: Erection
+                  - generic [ref=e948]: "24520"
+                - generic [ref=e949]:
+                  - generic [ref=e950]:
+                    - generic [ref=e951]: Crosswalk Church
+                    - generic [ref=e952]: Catalyst Construction
+                  - generic [ref=e953]:
+                    - img [ref=e954]
+                    - generic [ref=e958]: 100%
+              - generic [ref=e960]:
+                - generic [ref=e961]: Contract Value
+                - generic [ref=e962]: $515,406.00
+              - generic [ref=e963]:
+                - generic [ref=e964]:
+                  - generic [ref=e965]: "0"
+                  - generic [ref=e966]: Open RFIs
+                - generic [ref=e967]:
+                  - generic [ref=e968]: "0"
+                  - generic [ref=e969]: Pend COs
+                - generic [ref=e970]:
+                  - generic [ref=e971]: 13/13
+                  - generic [ref=e972]: WPs
+                - generic [ref=e973]:
+                  - generic [ref=e974]: 124944.07T
+                  - generic [ref=e975]: Tons
+              - generic [ref=e976]:
+                - generic [ref=e979]: On Track
+                - button "EDIT" [ref=e980]
+                - button "ARCHIVE" [ref=e981]
+            - generic [ref=e982] [cursor=pointer]:
+              - generic [ref=e983]:
+                - generic [ref=e984]:
+                  - generic [ref=e985]: Erection
+                  - generic [ref=e986]: "25372"
+                - generic [ref=e987]:
+                  - generic [ref=e988]:
+                    - generic [ref=e989]: Medina Station Phase II
+                    - generic [ref=e990]: Whiting-Turner
+                  - generic [ref=e991]:
+                    - img [ref=e992]
+                    - generic [ref=e996]: 98%
+              - generic [ref=e998]:
+                - generic [ref=e999]: Contract Value
+                - generic [ref=e1000]: $756,549.00
+              - generic [ref=e1001]:
+                - generic [ref=e1002]:
+                  - generic [ref=e1003]: "0"
+                  - generic [ref=e1004]: Open RFIs
+                - generic [ref=e1005]:
+                  - generic [ref=e1006]: "0"
+                  - generic [ref=e1007]: Pend COs
+                - generic [ref=e1008]:
+                  - generic [ref=e1009]: 47/48
+                  - generic [ref=e1010]: WPs
+                - generic [ref=e1011]:
+                  - generic [ref=e1012]: 193650.32999999993T
+                  - generic [ref=e1013]: Tons
+              - generic [ref=e1014]:
+                - generic [ref=e1017]: On Track
+                - generic [ref=e1018]: 19d left
+                - button "EDIT" [ref=e1019]
+                - button "ARCHIVE" [ref=e1020]
+            - generic [ref=e1021] [cursor=pointer]:
+              - generic [ref=e1022]:
+                - generic [ref=e1023]:
+                  - generic [ref=e1024]: Fabrication
+                  - generic [ref=e1025]: "25531"
+                - generic [ref=e1026]:
+                  - generic [ref=e1027]:
+                    - generic [ref=e1028]: Skyport at Redfield
+                    - generic [ref=e1029]: LGE Design/Build
+                  - generic [ref=e1030]:
+                    - img [ref=e1031]
+                    - generic [ref=e1035]: 29%
+              - generic [ref=e1036]:
+                - generic [ref=e1037]:
+                  - generic [ref=e1038]: Contract Value
+                  - generic [ref=e1039]: $1,868,467.56
+                - generic [ref=e1040]: "-$26,935.44"
+              - generic [ref=e1041]:
+                - generic [ref=e1042]:
+                  - generic [ref=e1043]: "5"
+                  - generic [ref=e1044]: Open RFIs
+                - generic [ref=e1045]:
+                  - generic [ref=e1046]: "0"
+                  - generic [ref=e1047]: Pend COs
+                - generic [ref=e1048]:
+                  - generic [ref=e1049]: 4/14
+                  - generic [ref=e1050]: WPs
+                - generic [ref=e1051]:
+                  - generic [ref=e1052]: 0%
+                  - generic [ref=e1053]: Labor
+              - generic [ref=e1054]:
+                - generic [ref=e1057]: On Track
+                - generic [ref=e1058]: 202d left
+                - button "EDIT" [ref=e1059]
+                - button "ARCHIVE" [ref=e1060]
+            - generic [ref=e1061] [cursor=pointer]:
+              - generic [ref=e1062]:
+                - generic [ref=e1063]:
+                  - generic [ref=e1064]: Closeout
+                  - generic [ref=e1065]: "25181"
+                - generic [ref=e1066]:
+                  - generic [ref=e1067]:
+                    - generic [ref=e1068]: Swain Electric
+                    - generic [ref=e1069]: Swain Electric
+                  - generic [ref=e1070]:
+                    - img [ref=e1071]
+                    - generic [ref=e1075]: 100%
+              - generic [ref=e1077]:
+                - generic [ref=e1078]: Contract Value
+                - generic [ref=e1079]: $95,407.00
+              - generic [ref=e1080]:
+                - generic [ref=e1081]:
+                  - generic [ref=e1082]: "0"
+                  - generic [ref=e1083]: Open RFIs
+                - generic [ref=e1084]:
+                  - generic [ref=e1085]: "0"
+                  - generic [ref=e1086]: Pend COs
+                - generic [ref=e1087]:
+                  - generic [ref=e1088]: 3/3
+                  - generic [ref=e1089]: WPs
+                - generic [ref=e1090]:
+                  - generic [ref=e1091]: 8065.599999999999T
+                  - generic [ref=e1092]: Tons
+              - generic [ref=e1093]:
+                - generic [ref=e1096]: On Track
+                - button "EDIT" [ref=e1097]
+                - button "ARCHIVE" [ref=e1098]
+    - region "Notifications alt+T"

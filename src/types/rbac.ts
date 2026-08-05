@@ -2,9 +2,9 @@
  * rbac.ts — Shared RBAC vocabulary for the permission moat.
  *
  * Single source of truth for the role and action unions used by the
- * server-authoritative permission layer (`services/permissions`) and the
- * workflow state machine (`services/workflowEngine`). Frontend role logic is
- * DISPLAY-ONLY — the authoritative guards are RLS and `validateTransition`.
+ * server-authoritative permission layer (`services/permissions`).
+ * Frontend role logic is DISPLAY-ONLY — the authoritative guards are RLS and
+ * domain RPC/policy enforcement.
  */
 
 // Global role lives in `user_profiles.role`.
@@ -17,10 +17,6 @@ export type ProjectRole = "owner" | "admin" | "pm" | "field" | "viewer";
 // `canPerform` is fed whichever role the caller holds, so its rank table must
 // cover BOTH vocabularies. A global `user` maps to PM-level privilege.
 export type AppRole = GlobalRole | ProjectRole;
-
-// Workflow transition floors (`minRole`) only ever use the project-control
-// subset — never the global-only `user`, and `owner` is normalized to `admin`.
-export type WorkflowRole = "admin" | "pm" | "field" | "viewer";
 
 // Entity-agnostic actions gated by `canPerform`.
 export type PermissionAction =

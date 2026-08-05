@@ -2,6 +2,7 @@ import React from "react";
 import { Modal, Button, StatusPill, BicPill, PhaseChevron, Icon } from "@/components/design-system";
 import { daysOpen, isOverdue } from "./utils";
 import RfiCopilotPanel from "@/components/rfis/RfiCopilotPanel";
+import { recommendedDownstreamActions } from "@/lib/rfiDownstream";
 
 const STAGE_INDEX = { Open: 0, "Under Review": 1, "Incomplete Response": 2, Answered: 3, Closed: 4 };
 
@@ -31,14 +32,15 @@ function impactValue(rfi) {
   return parts.join(" / ") || "No known impact";
 }
 
-export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO }) {
+export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO, onDownstreamAction }) {
   if (!rfi) return null;
 
   const age = daysOpen(rfi);
   const overdue = isOverdue(rfi);
   const activeIdx = STAGE_INDEX[rfi.status] ?? 0;
+  const downstream = onDownstreamAction ? recommendedDownstreamActions(rfi) : [];
   const priorityColor =
-    rfi.priority === "Critical" ? "#FF6B35" :
+    rfi.priority === "Critical" ? "var(--status-review)" :
     rfi.priority === "High" ? "var(--status-warning)" :
     rfi.priority === "Medium" ? "var(--status-info)" :
     "var(--text-muted)";
@@ -53,7 +55,7 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Close</Button>
-          {onCreateCO && rfi.cost_impact && (
+          {onCreateCO && (rfi.cost_impact || rfi.metadata?.change_order_likely) && (
             <Button variant="secondary" onClick={onCreateCO}>Create CO</Button>
           )}
           {onNudge && <Button variant="secondary" icon="bell" onClick={onNudge}>Nudge BIC</Button>}
@@ -116,6 +118,44 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
         </section>
       )}
 
+      {downstream.length > 0 && (
+        <section className="rfi-detail-section">
+          <SectionLabel>Apply the answer downstream</SectionLabel>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {downstream.map((action) => (
+              <button
+                key={action.key}
+                type="button"
+                onClick={() => onDownstreamAction(action.key)}
+                title={action.hint}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  gap: 2,
+                  padding: "8px 12px",
+                  minWidth: 152,
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  background: action.primary ? "var(--accent-muted)" : "var(--bg-input)",
+                  border: `1px solid ${action.primary ? "var(--accent)" : "var(--border)"}`,
+                  color: "var(--text-primary)",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, fontSize: 13 }}>
+                  {action.icon && (
+                    <Icon name={action.icon} size={13} color={action.primary ? "var(--accent)" : "var(--text-muted)"} />
+                  )}
+                  {action.label}
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{action.hint}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {(rfi.drawing_reference || rfi.spec_section) && (
         <section className="rfi-detail-section">
           <SectionLabel>Reference</SectionLabel>
@@ -146,6 +186,22 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
             {rfi.metadata?.piece_marks && (
               <div className="rfi-reference-chip">Pieces / {rfi.metadata.piece_marks}</div>
             )}
+          </div>
+        </section>
+      )}
+
+      {(rfi.metadata?.drawing_revision_required || rfi.metadata?.change_order_likely || rfi.metadata?.fab_impact || rfi.metadata?.erection_impact) && (
+        <section className="rfi-detail-section">
+          <SectionLabel>Impact</SectionLabel>
+          <div className="rfi-reference-row">
+            {rfi.metadata?.drawing_revision_required && (
+              <div className="rfi-reference-chip" style={{ color: "var(--status-warning)", borderColor: "var(--status-warning)", fontWeight: 700 }}>✎ Drawing revision required</div>
+            )}
+            {rfi.metadata?.change_order_likely && (
+              <div className="rfi-reference-chip" style={{ color: "var(--status-review)", borderColor: "var(--status-review)", fontWeight: 700 }}>$ Change order likely</div>
+            )}
+            {rfi.metadata?.fab_impact && <div className="rfi-reference-chip">Fabrication impact</div>}
+            {rfi.metadata?.erection_impact && <div className="rfi-reference-chip">Erection impact</div>}
           </div>
         </section>
       )}

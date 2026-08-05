@@ -25,13 +25,16 @@ const WINDOWS = [
   { key: 0,   label: "All"  },
 ];
 
-export default function CycleTimeCard({ submittals = [], isLoading = false }) {
+export default function CycleTimeCard({ submittals = [], roundsBySubmittal = null, isLoading = false }) {
   const [windowDays, setWindowDays] = useState(90);
 
   const stats = useMemo(() => {
     const filtered = filterByDaysWindow(submittals, windowDays);
-    return computeCycleTime(filtered);
-  }, [submittals, windowDays]);
+    // Pass the rounds map so the per-reviewer breakdown reads the closing
+    // reviewer from the latest round — released submittals now have their
+    // ball_in_court cleared, so the submittal field alone would read "Unassigned".
+    return computeCycleTime(filtered, { roundsBySubmittal });
+  }, [submittals, windowDays, roundsBySubmittal]);
 
   return (
     <div className="sbd-card" style={{

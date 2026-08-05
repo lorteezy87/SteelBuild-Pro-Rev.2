@@ -1,3 +1,7 @@
+/**
+ * @deprecated Prefer `ProcessBoardPanel` (canonical Detailing Process Board).
+ * Kept for back-compat tests; hub routes use ProcessBoardPanel (Slice 10).
+ */
 import React, { useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -12,7 +16,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { STAGE_MAP, STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+import { STAGE_MAP, WORKFLOW_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import {
   derivedSetStage,
   isRRStatus,
@@ -21,6 +25,11 @@ import {
 } from "@/lib/submittalStageMapping";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { formatShortDate } from "@/utils/dates";
+// Working-day-aware due dispatcher (Phase 5). The local calendar-day `dueInfo`
+// below is retained for DRAWING-set (sheet) dues, which stay calendar-day; only
+// SUBMITTAL-governed dues switch to working days when `useWorkdays` is on. Shares
+// the SAME tested engine as the Control Board / Approval Matrix so all three agree.
+import { dueInfoFor } from "@/pages/drawingSubmittalHub/format";
 
 const surfaceLow = "var(--bg-surface-low)";
 const surfaceHigh = "var(--bg-surface-high)";
@@ -42,7 +51,7 @@ const STAGE_CAPTIONS = {
   IFA: "In for approval",
   OFA: "Out for approval",
   BFA: "Back from approval",
-  OFS: "Out for scrub",
+  OFS: "OFS — Out for Scrub",
   IFC: "Issued for construction",
   Released: "Released for fab",
 };
@@ -76,25 +85,11 @@ function daysUntil(input) {
 // new Date("2026-06-10") is UTC midnight and renders a day early in MST.
 const fmtDate = (input) => formatShortDate(input);
 
-function dueInfo(input, closed = false) {
-  if (closed) {
-    return { label: "Closed", overdue: false, dueSoon: false, tone: success, sort: 99999 };
-  }
-  const days = daysUntil(input);
-  if (days === null) {
-    return { label: "No date", overdue: false, dueSoon: false, tone: textMuted, sort: 99998 };
-  }
-  if (days < 0) {
-    return { label: `${Math.abs(days)}d late`, overdue: true, dueSoon: false, tone: error, sort: days };
-  }
-  if (days === 0) {
-    return { label: "Due today", overdue: false, dueSoon: true, tone: warning, sort: 0 };
-  }
-  if (days <= 7) {
-    return { label: `${days}d left`, overdue: false, dueSoon: true, tone: warning, sort: days };
-  }
-  return { label: fmtDate(input), overdue: false, dueSoon: false, tone: textMuted, sort: days };
-}
+// NOTE: the calendar/working-day due chip now comes from the shared, tested
+// `dueInfoFor` engine in drawingSubmittalHub/format.ts (imported above) so the
+// Process Board, Control Board, and Approval Matrix all agree. `daysUntil`
+// stays — it still backs compareDueDates / earliestDate for the sheet-date
+// fallback.
 
 function getSubmittalDueDate(submittal) {
   return submittal?.required_date || submittal?.due_date || submittal?.date_required || null;
@@ -143,7 +138,7 @@ function getStageColor(stage) {
   return STAGE_MAP[stage]?.color || textMuted;
 }
 
-function buildBoardItems(setPackages, submittals) {
+function buildBoardItems(setPackages, submittals, useWorkdays = false) {
   const packageItems = (setPackages || []).map((pkg) => {
     const latestSubmittal = getLatestStageSubmittal(pkg.submittals);
     const stage = latestSubmittal
@@ -153,10 +148,13 @@ function buildBoardItems(setPackages, submittals) {
           latestSubmittal.approved_date,
         ) || derivedSetStage(pkg.submittals, pkg.sheets)
       : derivedSetStage(pkg.submittals, pkg.sheets);
-    const dueDate =
-      getSubmittalDueDate(latestSubmittal) ||
-      earliestDate((pkg.sheets || []).map(getDrawingDueDate));
-    const due = dueInfo(dueDate, stage === "Released" || CLOSED_SUBMITTAL_STATUSES.has(latestSubmittal?.status));
+    // Prefer the governing submittal's due; only fall back to the earliest sheet
+    // due when no submittal governs. Working-day counting applies ONLY to the
+    // submittal-governed case (a drawing-set/sheet due stays calendar-day).
+    const submittalDue = getSubmittalDueDate(latestSubmittal);
+    const dueDate = submittalDue || earliestDate((pkg.sheets || []).map(getDrawingDueDate));
+    const closed = stage === "Released" || CLOSED_SUBMITTAL_STATUSES.has(latestSubmittal?.status);
+    const due = dueInfoFor(dueDate, { closed, useWorkdays: useWorkdays && !!submittalDue });
     const setNumber = pkg.parent ? formatDrawingSetNumber(pkg.parent) : "";
     const submittalNumber = latestSubmittal?.submittal_number || "";
     return {
@@ -192,7 +190,8 @@ function buildBoardItems(setPackages, submittals) {
         submittalStatusToStage(submittal.status, submittal.ball_in_court, submittal.approved_date) ||
         "Not Started";
       const dueDate = getSubmittalDueDate(submittal);
-      const due = dueInfo(dueDate, CLOSED_SUBMITTAL_STATUSES.has(submittal.status));
+      // Always a submittal due date → working-day-aware when the flag is on.
+      const due = dueInfoFor(dueDate, { closed: CLOSED_SUBMITTAL_STATUSES.has(submittal.status), useWorkdays });
       return {
         id: `submittal-${submittal.id}`,
         kind: "Unlinked Submittal",
@@ -247,13 +246,14 @@ export default function SubmittalVisualBoard({
   submittals = [],
   isLoading = false,
   onOpenTab,
+  useWorkdays = false,
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
 
   const allItems = useMemo(
-    () => buildBoardItems(setPackages, submittals),
-    [setPackages, submittals],
+    () => buildBoardItems(setPackages, submittals, useWorkdays),
+    [setPackages, submittals, useWorkdays],
   );
   const boardItems = useMemo(
     () => filterItems(allItems, filter, search),
@@ -261,9 +261,9 @@ export default function SubmittalVisualBoard({
   );
 
   const stageBuckets = useMemo(() => {
-    const buckets = Object.fromEntries(STAGE_ORDER.map((stage) => [stage, []]));
+    const buckets = Object.fromEntries(WORKFLOW_STAGE_ORDER.map((stage) => [stage, []]));
     for (const item of boardItems) {
-      const key = STAGE_ORDER.includes(item.stage) ? item.stage : "Not Started";
+      const key = WORKFLOW_STAGE_ORDER.includes(item.stage) ? item.stage : "Not Started";
       buckets[key].push(item);
     }
     return buckets;
@@ -345,7 +345,7 @@ export default function SubmittalVisualBoard({
         padding: "2px 2px 12px",
         minHeight: 520,
       }}>
-        {STAGE_ORDER.map((stage) => (
+        {WORKFLOW_STAGE_ORDER.map((stage) => (
           <ProcessColumn
             key={stage}
             stage={stage}
@@ -477,7 +477,7 @@ function ProcessCard({ item, onOpenTab }) {
           : surfaceLow,
         color: textPrimary,
         cursor: "pointer",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.10)",
+        boxShadow: "var(--shadow-card)",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>

@@ -2,9 +2,11 @@ import React, { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../components/shared/ProjectContext";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toast } from "sonner";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { daysUntil, toLocalMidnight, startOfToday } from "@/lib/dateMath";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 
@@ -39,7 +41,13 @@ export default function FieldPlan() {
   const [onlyBlocked, setOnlyBlocked] = useState(false);
 
   // ── Data ───────────────────────────────────────────────────────────
-  const { data: tasks = [], isLoading } = useQuery({
+  const {
+    data: tasks = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["field-plan-tasks", projectId, horizonDays],
     queryFn: async () => {
       if (!projectId) return [];
@@ -87,7 +95,7 @@ export default function FieldPlan() {
         const open = r.status !== "Closed" && r.status !== "Answered";
         return {
           type: "RFI",
-          label: `${r.rfi_number || "RFI"} · ${r.subject || ""}`.slice(0, 60),
+          label: `${r.rfi_number || "RFI"} · ${r.title || ""}`.slice(0, 60),
           severity: open ? "danger" : "ok",
           resolved: !open,
         };
@@ -201,7 +209,7 @@ export default function FieldPlan() {
 
   // ── Render ─────────────────────────────────────────────────────────
   if (!projectId) return (
-    <div style={{ padding: 40, textAlign: "center" }}>
+    <div className="sb-dashboard-reference-page" style={{ textAlign: "center" }}>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>
         Select a project to view the Field Plan
       </div>
@@ -213,7 +221,7 @@ export default function FieldPlan() {
     : crews;
 
   return (
-    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }} className="fieldplan-root">
+    <div className="sb-dashboard-reference-page fieldplan-root" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <CommandBar
         eyebrow={`${activeProject?.project_name || "PROJECT"} · FIELD PLAN`}
         title={`${horizonDays}-Day Field Plan`}
@@ -266,8 +274,25 @@ export default function FieldPlan() {
 
       <PhoenixPanel>
         {isLoading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-            Loading schedule…
+          <div style={{ padding: 16 }}>
+            <LoadingSkeleton variant="table" rows={6} />
+          </div>
+        ) : isError ? (
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "40px 24px",
+            gap: 12,
+          }}>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+              Couldn’t load field plan
+            </p>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+              {toUserErrorMessage(error, "Something went wrong. Try again.")}
+            </p>
+            <Button variant="outline" onClick={() => refetch()}>Retry</Button>
           </div>
         ) : tasks.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
@@ -332,7 +357,7 @@ export default function FieldPlan() {
           .sidebar, .nav, .command-bar-actions, button { display: none !important; }
           .fieldplan-root { padding: 12px !important; }
           table { font-size: 9px !important; }
-          th, td { border: 1px solid #333 !important; }
+          th, td { border: 1px solid var(--border-strong) !important; }
         }
       `}</style>
     </div>

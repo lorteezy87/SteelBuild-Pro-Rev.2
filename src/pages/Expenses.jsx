@@ -19,15 +19,17 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
-import { CommandBar } from "@/components/design-system";
 import DeleteDialog from "../components/shared/DeleteDialog";
-import { Plus, RefreshCw } from "lucide-react";
 import ExpenseFormModal from "../components/expenses/ExpenseFormModal";
 import ExpenseImportModal from "../components/expenses/ExpenseImportModal";
 import { formatCurrencyShort, roundCurrency } from "../components/shared/formatters";
 import { COST_CODES } from "../components/shared/costCodes";
 import { toast } from "sonner";
 import { getNextNumber } from "../components/shared/numberSequencing";
+// Invalidate the FULL expense family (project list + ["expenses-all"] used by
+// Dashboard/Reports + cost rollups), not just the unscoped ["expenses"] prefix.
+import { invalidateEntity } from "@/services/cacheRegistry";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 import { safeNum, buildRedFlagAlerts, exportExpensesCSV } from "./expenses/utils";
 import { computeCostCodeTotals } from "@/services/costRollup";
@@ -37,6 +39,8 @@ import AlertChips    from "./expenses/AlertChips";
 import FilterBar     from "./expenses/FilterBar";
 import ExpenseTable  from "./expenses/ExpenseTable";
 import BulkActionBar from "./expenses/BulkActionBar";
+import ExpensesControlCenter from "./expenses/ExpensesControlCenter";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 export default function ExpensesPage() {
   const qc = useQueryClient();
@@ -63,7 +67,13 @@ export default function ExpensesPage() {
   }, [search]);
 
   /* ── Queries ── */
-  const { data: expenses = [], isLoading, refetch } = useQuery({
+  const {
+    data: expenses = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["expenses", activeProject?.id],
     queryFn: async () => {
       if (!activeProject?.id) return [];
@@ -103,39 +113,40 @@ export default function ExpensesPage() {
   /* ── Mutations ── */
   const createMut = useMutation({
     mutationFn: async (d) => {
+      const scoped = withProjectId(d, activeProject?.id);
       let expenseNumber;
       try {
-        expenseNumber = activeProject?.id ? await getNextNumber(activeProject.id, "EXPENSE") : null;
+        expenseNumber = await getNextNumber(scoped.project_id, "EXPENSE");
       } catch {
-        expenseNumber = null;
+        throw new Error("Unable to reserve an expense number. Please retry.");
       }
-      if (!expenseNumber) expenseNumber = `EXP-${String((expenses.length || 0) + 1).padStart(3, "0")}`;
-      return entities.Expense.create({ ...d, expense_number: expenseNumber, project_id: d.project_id || activeProject?.id });
+      if (!expenseNumber) throw new Error("Unable to reserve an expense number. Please retry.");
+      return entities.Expense.create({ ...scoped, expense_number: expenseNumber });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setModalOpen(false);
       setEditing(null);
       toast.success("Expense created");
     },
-    onError: (err) => toast.error("Failed to create expense: " + (err?.message || "Unknown error")),
+    onError: (err) => toast.error(`Failed to create expense: ${toUserErrorMessage(err, "Unknown error")}`),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.Expense.update(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setModalOpen(false);
       setEditing(null);
       toast.success("Expense updated");
     },
-    onError: (err) => toast.error("Failed to update expense: " + (err?.message || "Unknown error")),
+    onError: (err) => toast.error(`Failed to update expense: ${toUserErrorMessage(err, "Unknown error")}`),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.Expense.delete(id),
     onSuccess: (_, deletedId) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       if (editing?.id === deletedId) {
         setEditing(null);
         setModalOpen(false);
@@ -143,7 +154,7 @@ export default function ExpensesPage() {
       if (deleteTarget?.id === deletedId) setDeleteTarget(null);
       toast.success("Expense deleted");
     },
-    onError: () => toast.error("Failed to delete expense"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to delete expense")),
   });
 
   const bulkUpdateMut = useMutation({
@@ -156,14 +167,14 @@ export default function ExpensesPage() {
       return { succeeded };
     },
     onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
       toast.success(`${result.succeeded} expense(s) updated`);
     },
     onError: (err) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
-      toast.error(err.message);
+      toast.error(toUserErrorMessage(err, "Bulk update failed"));
     },
   });
 
@@ -177,14 +188,14 @@ export default function ExpensesPage() {
       return { succeeded };
     },
     onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
       toast.success(`${result.succeeded} expense(s) deleted`);
     },
     onError: (err) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
-      toast.error(err.message);
+      toast.error(toUserErrorMessage(err, "Bulk delete failed"));
     },
   });
 
@@ -263,6 +274,16 @@ export default function ExpensesPage() {
     });
   }, [expenses, debouncedSearch, costCodeFilter, typeFilter, statusFilter, wpFilter, filterByDate]);
 
+  useEffect(() => {
+    const visibleIds = new Set(filtered.map((expense) => expense.id));
+    setSelected((current) => {
+      const next = current.filter((id) => visibleIds.has(id));
+      return next.length === current.length && next.every((id, index) => id === current[index])
+        ? current
+        : next;
+    });
+  }, [filtered]);
+
   /* ── Spend by cost code (for donut) ── */
   const spendByCostCode = useMemo(() => {
     const map = {};
@@ -291,7 +312,7 @@ export default function ExpensesPage() {
     const items = [];
     const seen = new Set();
     costCodes.forEach((cc) => {
-      const code = cc.code || cc.cost_code;
+      const code = cc.cost_code_number || cc.code;
       if (!code || seen.has(code)) return;
       seen.add(code);
       const meta = COST_CODES.find((c) => c.code === code) || {};
@@ -363,10 +384,48 @@ export default function ExpensesPage() {
   const toggleAll = () => setSelected(selected.length === filtered.length ? [] : filtered.map((e) => e.id));
   const handleExportCSV = () => exportExpensesCSV(filtered, activeProject?.name);
 
+  /* ── Shared modals rendered inside the canonical control center ── */
+  const modals = (
+    <>
+      <ExpenseFormModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditing(null); }}
+        onSave={handleSave}
+        isSaving={createMut.isPending || updateMut.isPending}
+        expense={editing}
+        projects={projects}
+        workPackages={workPackages}
+        sovItems={sovItems}
+        expenses={expenses}
+        costCodes={costCodes}
+        nextNumber=""
+        defaultProjectId={activeProject?.id}
+      />
+      <ExpenseImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        activeProject={activeProject}
+        workPackages={workPackages}
+        onImported={() => invalidateEntity(qc, "expense", activeProject?.id)}
+      />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
+        title="Delete Expense"
+        description={`Delete ${deleteTarget?.expense_number}? This cannot be undone.`}
+      />
+    </>
+  );
+
   /* ── No active project: early return ── */
   if (!activeProject?.id) {
     return (
-      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>📌</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>
           Select a project to view Expenses
@@ -379,140 +438,101 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div style={{ paddingBottom: selected.length > 0 ? 72 : 0 }}>
-      <CommandBar
-        eyebrow={activeProject?.name || "COST"}
-        title="Expenses"
-        count={expenses.length}
-        unit=" · ENTRIES"
-        subtitle={`${formatCurrencyShort(totalCommitted)} committed · ${formatCurrencyShort(totalPaid)} paid`}
-      >
-        <button
-          onClick={refetch}
-          title="Refresh"
-          className="sbd-btn"
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}
-        >
-          <RefreshCw size={12} /> Refresh
-        </button>
-        <button
-          onClick={() => { setEditing(null); setModalOpen(true); }}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> New Expense
-        </button>
-      </CommandBar>
-
-      <KpiStrip
-        activeKPI={activeKPI}
-        onClick={handleKPIClick}
-        totalBudget={totalBudget}
-        totalCommitted={totalCommitted}
-        totalPaid={totalPaid}
-        paidCount={paidCount}
-        totalRemaining={totalRemaining}
-        totalOutstanding={totalOutstanding}
-        pctUsed={pctUsed}
-        remainingColor={remainingColor}
-        remainingBorderColor={remainingBorderColor}
+    <div className="exp-page">
+      <ListTruncationNotice count={expenses.length} label="expenses" />
+      <ExpensesControlCenter
+        projectName={activeProject?.name || "Project"}
         expenses={expenses}
-      />
-
-      <AnalyticsGrid
-        spendByCostCode={spendByCostCode}
-        costCodeBudgetVsActual={costCodeBudgetVsActual}
-        statusBreakdown={statusBreakdown}
-        topVendors={topVendors}
-        expenses={expenses}
-        totalCommitted={totalCommitted}
-      />
-
-      <AlertChips
-        alerts={visibleAlerts}
-        onDismiss={(key) => setDismissedAlerts((prev) => [...prev, key])}
-      />
-
-      <FilterBar
-        search={search} onSearchChange={setSearch}
-        costCodeFilter={costCodeFilter} onCostCodeFilter={setCostCodeFilter}
-        typeFilter={typeFilter} onTypeFilter={setTypeFilter}
+        filtered={filtered}
+        search={search}
+        onSearch={setSearch}
         statusFilter={statusFilter}
         onStatusFilter={(v) => { setStatusFilter(v); setActiveKPI(null); }}
-        wpFilter={wpFilter} onWPFilter={setWpFilter} workPackages={workPackages}
-        dateRangeFilter={dateRangeFilter} onDateRangeFilter={setDateRangeFilter}
-        activeKPI={activeKPI}
-        onClearKPI={() => { setActiveKPI(null); setStatusFilter("all"); }}
-        onImport={() => setImportOpen(true)}
+        onRefresh={refetch}
         onExport={handleExportCSV}
-      />
+        onImport={() => setImportOpen(true)}
+        onCreate={() => { setEditing(null); setModalOpen(true); }}
+        onOpenExpense={(e) => { setEditing(e); setModalOpen(true); }}
+      >
+        <KpiStrip
+          activeKPI={activeKPI}
+          onClick={handleKPIClick}
+          totalBudget={totalBudget}
+          totalCommitted={totalCommitted}
+          totalPaid={totalPaid}
+          paidCount={paidCount}
+          totalRemaining={totalRemaining}
+          totalOutstanding={totalOutstanding}
+          pctUsed={pctUsed}
+          remainingColor={remainingColor}
+          remainingBorderColor={remainingBorderColor}
+          expenses={expenses}
+        />
 
-      <ExpenseTable
-        filtered={filtered}
-        isLoading={isLoading}
-        selected={selected}
-        onToggleSelect={toggleSelect}
-        onToggleAll={toggleAll}
-        onEdit={(e) => { setEditing(e); setModalOpen(true); }}
-        onDelete={setDeleteTarget}
-      />
+        <AnalyticsGrid
+          spendByCostCode={spendByCostCode}
+          costCodeBudgetVsActual={costCodeBudgetVsActual}
+          statusBreakdown={statusBreakdown}
+          topVendors={topVendors}
+          expenses={expenses}
+          totalCommitted={totalCommitted}
+        />
 
-      <BulkActionBar
-        count={selected.length}
-        isPending={bulkUpdateMut.isPending || bulkDeleteMut.isPending}
-        onMarkPaid={() => {
-          if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
-            bulkUpdateMut.mutate({ ids: selected, data: { payment_status: "Paid" } });
-          }
-        }}
-        onMarkVoided={() => {
-          if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
-            bulkUpdateMut.mutate({ ids: selected, data: { payment_status: "Voided" } });
-          }
-        }}
-        onDelete={() => {
-          if (!bulkDeleteMut.isPending && !bulkUpdateMut.isPending) {
-            bulkDeleteMut.mutate(selected);
-          }
-        }}
-        onClear={() => setSelected([])}
-      />
+        <AlertChips
+          alerts={visibleAlerts}
+          onDismiss={(key) => setDismissedAlerts((prev) => [...prev, key])}
+        />
 
-      <ExpenseFormModal
-        open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditing(null); }}
-        onSave={handleSave}
-        isSaving={createMut.isPending || updateMut.isPending}
-        expense={editing}
-        projects={projects}
-        workPackages={workPackages}
-        sovItems={sovItems}
-        expenses={expenses}
-        costCodes={costCodes}
-        nextNumber={`EXP-${String((expenses.length || 0) + 1).padStart(3, "0")}`}
-        defaultProjectId={activeProject?.id}
-      />
+        <FilterBar
+          search={search} onSearchChange={setSearch}
+          costCodeFilter={costCodeFilter} onCostCodeFilter={setCostCodeFilter}
+          typeFilter={typeFilter} onTypeFilter={setTypeFilter}
+          statusFilter={statusFilter}
+          onStatusFilter={(v) => { setStatusFilter(v); setActiveKPI(null); }}
+          wpFilter={wpFilter} onWPFilter={setWpFilter} workPackages={workPackages}
+          dateRangeFilter={dateRangeFilter} onDateRangeFilter={setDateRangeFilter}
+          activeKPI={activeKPI}
+          onClearKPI={() => { setActiveKPI(null); setStatusFilter("all"); }}
+          onImport={() => setImportOpen(true)}
+          onExport={handleExportCSV}
+        />
 
-      <ExpenseImportModal
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        activeProject={activeProject}
-        workPackages={workPackages}
-        onImported={() => qc.invalidateQueries({ queryKey: ["expenses"] })}
-      />
+        <ExpenseTable
+          filtered={filtered}
+          isLoading={isLoading}
+          isError={isError}
+          errorMessage={toUserErrorMessage(error, "Something went wrong. Try again.")}
+          onRetry={() => refetch()}
+          selected={selected}
+          onToggleSelect={toggleSelect}
+          onToggleAll={toggleAll}
+          onEdit={(e) => { setEditing(e); setModalOpen(true); }}
+          onDelete={setDeleteTarget}
+          onOpen={(e) => { setEditing(e); setModalOpen(true); }}
+        />
 
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (!deleteMut.isPending && deleteTarget?.id) {
-            deleteMut.mutate(deleteTarget.id);
-          }
-        }}
-        title="Delete Expense"
-        description={`Delete ${deleteTarget?.expense_number}? This cannot be undone.`}
-      />
+        <BulkActionBar
+          count={selected.length}
+          isPending={bulkUpdateMut.isPending || bulkDeleteMut.isPending}
+          onMarkPaid={() => {
+            if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
+              bulkUpdateMut.mutate({ ids: selected, data: { payment_status: "Paid" } });
+            }
+          }}
+          onMarkVoided={() => {
+            if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
+              bulkUpdateMut.mutate({ ids: selected, data: { payment_status: "Voided" } });
+            }
+          }}
+          onDelete={() => {
+            if (!bulkDeleteMut.isPending && !bulkUpdateMut.isPending) {
+              bulkDeleteMut.mutate(selected);
+            }
+          }}
+          onClear={() => setSelected([])}
+        />
+      </ExpensesControlCenter>
+      {modals}
     </div>
   );
 }

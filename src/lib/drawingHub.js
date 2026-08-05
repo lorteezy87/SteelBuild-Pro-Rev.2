@@ -45,6 +45,7 @@ export {
   ensureCurrentRevision,
   carryZonesForward,
   createNewRevisionAndCarryZones,
+  recordSheetSlipSheet,
 } from "./drawingHub/revisions";
 
 // Zone CRUD — extracted to drawingHub/zones.js. Re-exported so existing

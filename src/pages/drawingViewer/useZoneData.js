@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ensureCurrentRevision,
   listZones,
@@ -12,6 +12,7 @@ import {
   listZoneProposals,
   listZoneDependencies,
 } from "@/lib/drawingHub";
+import { invalidateEntity } from "@/services/cacheRegistry";
 
 const EMPTY_ZONE_DATA = { summaries: new Map(), computed: new Map(), densities: new Map() };
 
@@ -106,6 +107,18 @@ export function useZoneData({ projectId, activeId, activeDrawing, zoneMode, show
     enabled: !!activeDrawing?.id && zoneMode !== "off",
     staleTime: 5 * 60 * 1000,
   });
+
+  // If the current revision was just PROVISIONED on demand (first zone-open on
+  // an untracked drawing), the Doc Control register + hub "Rev" rollup are
+  // stale — refresh them. Gated on __provisioned so the common found-existing
+  // path does no needless invalidation (and never the ["drawing-revision-current"]
+  // key this hook owns, so there's no refetch loop).
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (currentRevision?.__provisioned && projectId) {
+      invalidateEntity(qc, "drawing_revision", projectId);
+    }
+  }, [currentRevision?.__provisioned, currentRevision?.id, projectId, qc]);
 
   const { data: zones = [], refetch: refetchZones } = useQuery({
     queryKey: ["drawing-zones", currentRevision?.id],

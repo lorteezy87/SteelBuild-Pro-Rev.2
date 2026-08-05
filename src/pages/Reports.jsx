@@ -21,7 +21,7 @@ import { ChevronRight } from "lucide-react";
 
 const CATEGORY_ACCENT = {
   Portfolio: "var(--status-info)",
-  Financial: "#8B5CF6",
+  Financial: "var(--status-info)",
   Risk: "var(--status-error)",
   Schedule: "var(--accent)",
   Cost: "var(--status-success)",
@@ -29,7 +29,7 @@ const CATEGORY_ACCENT = {
   // --status-info regardless of which theme is active. (--secondary
   // aliases to --accent in tokens.css, so it would collide with
   // Schedule.) No purple/pink per CLAUDE.md.
-  Team: "#14B8A6",
+  Team: "var(--accent-light)",
 };
 
 function ReportCard({ entry, onClick }) {
@@ -181,6 +181,7 @@ function ReportRoute({ slug }) {
 
 export default function Reports() {
   return (
+    <div className="sb-dashboard-reference-page">
     <Routes>
       <Route index element={<ReportsHub />} />
       {REPORTS.map((entry) => (
@@ -193,5 +194,6 @@ export default function Reports() {
       {/* Unknown sub-slug → bounce back to the hub */}
       <Route path="*" element={<Navigate to="/Reports" replace />} />
     </Routes>
+    </div>
   );
 }

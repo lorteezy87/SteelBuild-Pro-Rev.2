@@ -6,7 +6,6 @@ import { AuthContext } from "@/lib/AuthContext";
 import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import UserSettingsTab from "@/components/settings/UserSettingsTab.jsx";
-import { CommandBar } from "@/components/design-system";
 import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
 import DisplayTab from "@/components/settings/DisplayTab.jsx";
 import DashboardTab from "@/components/settings/DashboardTab.jsx";
@@ -15,6 +14,7 @@ import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
 import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
 import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
+import SettingsControlCenter from "./settings/SettingsControlCenter";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -47,8 +47,6 @@ const TAB_GROUPS = [
     ],
   },
 ];
-
-const ALL_TABS = TAB_GROUPS.flatMap(g => g.tabs);
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
@@ -117,16 +115,9 @@ export default function Settings() {
     }))
     .filter(group => group.tabs.length > 0);
 
-  const activeTabMeta = ALL_TABS.find(t => t.id === activeTab);
-
-  return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <CommandBar
-        eyebrow={isAdmin ? "PERSONAL · WORKSPACE" : "PERSONAL"}
-        title="Settings"
-        subtitle={`${user?.full_name || user?.email || "Signed in"} · ${activeTabMeta?.label || "Profile"}${activeTabMeta?.desc ? ` · ${activeTabMeta.desc}` : ""}`}
-      />
-
+  // SettingsControlCenter is the canonical shell.
+  // All settings forms and mutations stay in Settings.jsx so behavior cannot diverge.
+  const settingsBody = (
     <div style={{
       display: 'grid',
       gridTemplateColumns: isMobile ? '1fr' : '220px 1fr',
@@ -255,6 +246,15 @@ export default function Settings() {
         {activeTab === 'setup' && <SetupAdminTab isAdmin={isAdmin} />}
       </div>
     </div>
-    </div>
+  );
+
+  return (
+    <SettingsControlCenter
+      user={user}
+      prefs={userPrefs}
+      visibleSectionCount={visibleGroups.reduce((count, group) => count + group.tabs.length, 0)}
+    >
+      {settingsBody}
+    </SettingsControlCenter>
   );
 }

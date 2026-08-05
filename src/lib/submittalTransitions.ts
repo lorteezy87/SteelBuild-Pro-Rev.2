@@ -1,0 +1,95 @@
+/**
+ * Submittal status transition rules — client mirror of the DB gate.
+ *
+ * Lifecycle (canonical):
+ *   Draft → Submitted / Under Review → disposition → (R&R/Rejected restart)
+ *         → Approved / Approved as Noted → Released for Fabrication
+ *
+ * Same-status writes are allowed (no-op). Unknown statuses are rejected so
+ * legacy strings cannot silently overwrite the workflow.
+ */
+
+export const SUBMITTAL_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
+  Draft: ["Submitted", "Under Review", "Void"],
+  Submitted: [
+    "Under Review",
+    "Approved",
+    "Approved as Noted",
+    "Revise and Resubmit",
+    "Rejected",
+    "Void",
+  ],
+  "Under Review": [
+    "Submitted",
+    "Approved",
+    "Approved as Noted",
+    "Revise and Resubmit",
+    "Rejected",
+    "Void",
+  ],
+  // Mid-flow approvals keep Released / R&R / Void. "Under Review" (→ OFA) is
+  // deliberately NOT allowed: OFS is post-approval scrub, not a resubmittal
+  // loop (Slice 4 — OFS→OFA requires an audited override path outside this
+  // graph, or a fresh Rejected/R&R disposition).
+  Approved: ["Released for Fabrication", "Revise and Resubmit", "Void"],
+  "Approved as Noted": [
+    "Released for Fabrication",
+    "Revise and Resubmit",
+    "Void",
+  ],
+  // R&R holds the package until an actual resubmission (a SENT status with
+  // transmission evidence — see rrResubmitGate). "Draft" is deliberately NOT
+  // allowed: sliding back to Draft would hide a failed approval cycle as
+  // fresh internal prep (the R&R stage must stay visible until resubmit).
+  "Revise and Resubmit": ["Submitted", "Under Review", "Void"],
+  // Rejected keeps the Draft edge as the authorized reopen path for a new
+  // approval cycle (product decision pending a formal reopen workflow).
+  Rejected: ["Draft", "Submitted", "Under Review", "Void"],
+  "Released for Fabrication": ["Void"],
+  Void: [],
+};
+
+export type SubmittalTransitionResult =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+/**
+ * Validate a submittal status transition.
+ * @param from current status (null/empty treated as Draft recovery)
+ * @param to target status
+ */
+export function validateSubmittalTransition(
+  from: string | null | undefined,
+  to: string | null | undefined,
+): SubmittalTransitionResult {
+  const target = String(to || "").trim();
+  if (!target) return { ok: false, reason: "A target submittal status is required." };
+  if (!(target in SUBMITTAL_STATUS_TRANSITIONS)) {
+    return { ok: false, reason: `Unknown target submittal status "${target}".` };
+  }
+
+  const current = String(from || "").trim() || "Draft";
+  if (current === target) return { ok: true };
+
+  if (!(current in SUBMITTAL_STATUS_TRANSITIONS)) {
+    // Legacy/unknown source — allow recovery only into a known status.
+    return { ok: true };
+  }
+
+  const allowed = SUBMITTAL_STATUS_TRANSITIONS[current] || [];
+  if (!allowed.includes(target)) {
+    return {
+      ok: false,
+      reason: `Cannot move a submittal from "${current}" to "${target}". Allowed next statuses: ${
+        allowed.length ? allowed.join(", ") : "(terminal)"
+      }.`,
+    };
+  }
+  return { ok: true };
+}
+
+/** True when the target disposition restarts the review cycle. */
+export function isSubmittalRestartStatus(status: string | null | undefined): boolean {
+  const s = String(status || "").trim();
+  return s === "Revise and Resubmit" || s === "Rejected";
+}

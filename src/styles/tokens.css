@@ -430,6 +430,29 @@ html[data-accent="slate"] {
   --phase-erection:           #15803D;
   --phase-closeout:           #475569;
 
+  /* Gantt surfaces — light equivalents for the app-specific SBD Gantt
+     tokens used by inline schedule chrome without requiring .steelbuild-light. */
+  --sbd-gantt-bg:              #F8FAFC;
+  --sbd-gantt-panel:           #FFFFFF;
+  --sbd-gantt-panel-strong:    #F1F5F9;
+  --sbd-gantt-header:          #E2E8F0;
+  --sbd-gantt-left:            #FFFFFF;
+  --sbd-gantt-row:             #FFFFFF;
+  --sbd-gantt-row-alt:         #F8FAFC;
+  --sbd-gantt-row-hover:       rgba(29, 78, 216, 0.08);
+  --sbd-gantt-grid:            rgba(100, 116, 139, 0.22);
+  --sbd-gantt-grid-strong:     rgba(100, 116, 139, 0.34);
+  --sbd-gantt-weekend:         rgba(29, 78, 216, 0.045);
+  --sbd-gantt-today:           #EA580C;
+  --sbd-gantt-today-soft:      rgba(234, 88, 12, 0.14);
+  --sbd-gantt-preconstruction: #64748B;
+  --sbd-gantt-detailing:       #2563EB;
+  --sbd-gantt-procurement:     #B45309;
+  --sbd-gantt-fabrication:     #D97706;
+  --sbd-gantt-delivery:        #047857;
+  --sbd-gantt-installation:    #0891B2;
+  --sbd-gantt-closeout:        #475569;
+
   /* Shadows — noticeable, layered umbra for real depth */
   --shadow-sm:                0 1px 2px rgba(2,6,23,0.06), 0 1px 1px rgba(2,6,23,0.04);
   --shadow-card:              0 1px 3px rgba(2,6,23,0.08), 0 4px 10px rgba(2,6,23,0.04);

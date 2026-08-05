@@ -32,17 +32,20 @@ For the running list of known issues, see [`TECH_DEBT.md`](./TECH_DEBT.md).
                                │
                                ▼
                   ┌────────────────────────┐
-                  │  Anthropic Claude API  │
-                  │  (LLM via edge fn)     │
+                  │  LLM provider (OpenAI) │
+                  │  Stripe (billing)      │
+                  │  — via Edge Functions  │
                   └────────────────────────┘
 
-         Hosting: Vercel auto-deploys from main
+         Hosting: Vercel (CI-gated deploy job) → steelbuild-pro.com
 ```
 
 There is no separate backend service. The app is a SPA that talks
 directly to Supabase with the publishable anon key, with security
 enforced by Postgres Row-Level Security and Edge Functions for
-operations that need server-side compute (LLM calls, scheduled jobs).
+operations that need server-side compute (LLM calls, billing,
+data export, scheduled jobs). It is **multi-tenant**: each company is an
+`organizations` row (a "workspace"), and every project belongs to one org.
 
 ---
 
@@ -120,6 +123,53 @@ owner  = 3   ←─ same as admin (legacy synonym)
 
 ---
 
+## Multi-tenancy & billing
+
+SteelBuild Pro is a multi-tenant SaaS. A company signs up, creates a
+**workspace** (`organizations`), and works inside it; the workspace is the
+billing + invite + grouping unit.
+
+### Tenancy model
+
+| Table | Purpose |
+|---|---|
+| `organizations` | The workspace. `plan` is the billing/entitlement anchor; `stripe_*` columns track the subscription. |
+| `organization_members` | (user, org) membership + role (`owner`/`admin`/`member`). |
+| `organization_invitations` | Tokenized email invites (14-day expiry); accepted via `accept_invitation()`. |
+| `projects.org_id` | Every project belongs to exactly one org (NOT NULL). |
+
+Front-end: `OrgProvider` / `useOrg()` resolve the active workspace (fail-open so
+a transient fetch error never strands a member), `OrgOnboarding` is the
+create-workspace / accept-invite gate above the app, and `OrgMembers`
+(`/OrgMembers`) manages the team + invites. A brand-new workspace is routed into
+the first-run **Onboarding** wizard.
+
+### Data isolation (the org boundary)
+
+`user_projects` remains authoritative for *which* member sees *which* project's
+data and at what role — but the **org boundary is enforced underneath it**.
+`user_has_project_access(project_id)` (the chokepoint for ~70 project-scoped RLS
+policies) now requires the caller to be a member of the project's org;
+`create_project()` rejects a client-supplied `org_id` the caller isn't a member
+of; `vendors` and `user_profiles` reads are org-scoped; and Storage uploads are
+written under an `<org_id>/uploads/...` path that storage RLS gates by org
+membership (legacy flat `uploads/...` files are grandfathered to the founding
+org via `founding_org_id()`). Net: one tenant can never read another's rows or
+files. See migrations `20260615000000`–`20260616000000`.
+
+### Billing
+
+Stripe subscription plans (Free / Pro / Business; `src/lib/billing/plans.ts`,
+`usePlan()`). `organizations.plan` is the only definition of entitlement and is
+**tamper-proof** — a `BEFORE UPDATE` trigger blocks the client from changing the
+billing columns; only the Stripe webhook (service role) can. Plan **limits**
+(projects, members) are enforced server-side in `create_project()` and
+`accept_invitation()` via `plan_project_limit()` / `plan_member_limit()`. The
+`/Billing` page calls the `stripe-billing` Edge Function for Checkout + Portal;
+price ids live in the function's env, so the client only ever passes a plan key.
+
+---
+
 ## Domain workflow
 
 The detailing/submittal workflow is the heart of the app. Stages
@@ -137,7 +187,8 @@ The detailing/submittal workflow is the heart of the app. Stages
 └─ Released for Fab             (S&H internal release to fab shop)
 ```
 
-R&R (Revise and Resubmit / Rejected) outcomes loop back to IFA.
+R&R (Revise and Resubmit / Rejected) is a first-class derived workflow stage
+(after BFA); it is never written to `drawings.stage`.
 
 ### Workflow source of truth
 
@@ -156,15 +207,12 @@ Approver-class  (EOR / Architect / AOR)                        → OFA / BFA
 Downstream-class (GC / Owner)                                  → IFC
 ```
 
-### Auto-lock on approval
+### Drawing-set edit locks
 
-When a submittal transitions to a terminal-approved status (`Approved`,
-`Approved as Noted`, `Released for Fabrication`), every linked drawing
-set is auto-locked from edits. This is implemented in
-`useSubmittals.ts` `lockLinkedSetsIfApproved` — the lock primitive
-(`drawingHub/setLock.lockSet`) is unchanged; only the trigger path
-moved from `set_approval_status='approved'` (legacy, document-side) to
-submittal terminal status (workflow-side).
+Drawing sets retain `is_locked` / admin unlock (`drawingHub/setLock`) for
+manual override and DB write barriers, but **submittal approval no longer
+auto-locks** linked sets. Terminal status (`Approved` / `Approved as Noted` /
+`Released for Fabrication`) updates workflow state only.
 
 ---
 
@@ -187,6 +235,14 @@ submittal terminal status (workflow-side).
 | `submittal_sheet_responses` | Per-sheet response within a round |
 | `comments` | Polymorphic — used by RFIs, submittals, drawings |
 | `feature_flags` | Lightweight flag system w/ per-email overrides |
+| `organizations` / `organization_members` / `organization_invitations` | Multi-tenant workspace, membership, invites (see above) |
+
+Beyond the moat, the schema spans the broader steel workflow: `rfis`,
+`change_orders`, `work_packages`, `schedule_tasks`, cost (`sov_items` /
+`cost_codes` / `expenses`), `deliveries`, QA (`inspections` /
+`quality_control_records`), field (`punchlist_items` / `daily_logs` / `photos`),
+`pay_applications` (AIA G702/G703), `backcharges` / `tm_tickets`, and production
++ 3D (`piece_production`, `model_registry`, `model_elements`).
 
 ### Soft deletes
 
@@ -202,6 +258,10 @@ out by default. Restores are possible by toggling the flag.
 ---
 
 ## Frontend organization
+
+Folder ownership and placement rules are defined in
+[`docs/FOLDER_OWNERSHIP.md`](./docs/FOLDER_OWNERSHIP.md). Use that document when
+adding a module or consolidating duplicate implementations.
 
 ### Routing
 
@@ -244,23 +304,80 @@ with `<AdminRoute>` (checks `user_profiles.role === 'admin'`).
 
 ### Migrations
 
-`supabase/migrations/NNN_name.sql`. Numbered sequentially. Apply via
-the Supabase dashboard SQL editor or the Supabase MCP. After a
-migration that adds columns, the code calls
-`NOTIFY pgrst, 'reload schema'` so PostgREST picks up the change.
+**Re-baselined 2026-06-20 (P0 #2).** `supabase/migrations/` now holds **3 ordered
+baseline files** that reproduce a fresh DB from zero:
+
+- `20260101000000_baseline_extensions.sql` — extensions in the `extensions` schema
+  the dump omits (`uuid-ossp`, `pgcrypto`, `pg_trgm`).
+- `20260101000010_baseline_schema.sql` — a `pg_dump --schema public` of live prod
+  (102 tables, 321 policies, 71 functions, 147 triggers). The Supabase-**managed**
+  `storage` schema is deliberately dumped OUT (the migration role can't recreate it;
+  it already exists on every project).
+- `20260101000020_baseline_seed.sql` — the app's storage **buckets** + RLS **policies**
+  on `storage.objects` and the `pg_cron` jobs, each in a guarded `do $$ … $$` block
+  (skips gracefully where the role lacks privilege / pg_cron isn't installed).
+
+The 190 pre-baseline files are archived under `supabase/migrations_archive/` (moved,
+not deleted). Prod `schema_migrations` was reconciled to exactly these 3 versions, so
+`supabase db push` reports "up to date" and fresh branches / `db reset` / CI replay
+cleanly. Verified from-zero on a local stack 2026-06-20 (counts matched prod exactly).
+
+**Why it had to happen:** migrations were applied via MCP `apply_migration`, which
+stamps its **own apply-time version** into `schema_migrations` while repo files carried
+different filename timestamps — the two lineages drifted ~completely apart (200 remote
+versions, almost none matching a repo file), so from-zero replay died on the first
+statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay-broken`.
+
+**Going forward — keep filenames and `schema_migrations` in LOCKSTEP (do not re-drift):**
+
+- **Preferred (Docker available):** `npx supabase migration new <name>` → edit the file
+  → `npx supabase db push`. The CLI keeps the filename version == `schema_migrations`.
+- **MCP path (cloud/Linux sessions):** after `apply_migration(name, query)`, immediately
+  read the recorded version
+  (`select version from supabase_migrations.schema_migrations order by version desc limit 1`)
+  and commit a repo file named `supabase/migrations/<that-version>_<name>.sql` with the
+  **identical** SQL. Never let the on-disk name and the recorded version diverge.
+- Write DDL replay-safe (`IF NOT EXISTS`, `to_regprocedure()` guards). A migration that
+  changes the exposed schema ends with `NOTIFY pgrst, 'reload schema'`.
+- **NEVER** run `supabase db reset` (or point reset/branch tooling) at prod — it DROPS
+  and rebuilds the DB. Verify replay on a disposable branch or a local stack only.
 
 ### Edge Functions
 
-`supabase/functions/`:
-- `llm-proxy` — server-side Anthropic Claude calls. The browser never
-  sees the API key.
-- `schedule-assistant` — schedule-related LLM tasks
+`supabase/functions/` (deploy via Supabase MCP `deploy_edge_function` or
+`supabase functions deploy`):
+
+- `llm-proxy` — the LLM gateway. Holds the only provider API key; all model
+  calls route here. Does its own JWT verification (deploy `--no-verify-jwt`).
+- `email-ingest` — inbound email → staged project records (Power Automate path).
+- `email-send` — outbound email compose/reply pipeline.
+- `project-export` — RLS-scoped, audited per-project data export (powers the
+  workspace backup; see Data export).
+- `stripe-billing` — subscription checkout, portal, and the `/webhook` route
+  (the tamper-proof `org.plan` anchor). Does its own auth (deploy `--no-verify-jwt`).
+- `_shared/` — CORS + attachment helpers (a shared dir, not a deployed function).
+- **Deprecated / orphan — still deployed, pending `supabase functions delete`
+  (owner/CLI):** `sharepoint-proxy`, `bluebeam-proxy` (removed integrations) and
+  the Stripe Sync Engine orphans `stripe-setup` / `stripe-webhook` /
+  `stripe-worker` (these are NOT the real webhook — that lives inside
+  `stripe-billing`). As of 2026-07-24 the application inventory is **5 real**
+  (`llm-proxy`, `email-ingest`, `email-send`, `project-export`, `stripe-billing`)
+  **+ 5 orphan/deprecated** (`sharepoint-proxy`, `bluebeam-proxy`, `stripe-setup`,
+  `stripe-webhook`, `stripe-worker`). A previously shipped schedule chat Edge
+  Function may still exist remotely pending `supabase functions delete`
+  (owner/CLI). The `pg_cron` job that pinged `stripe-worker` every 60s was
+  unscheduled 2026-07-01. See `docs/runbooks/owner-checklist.md`.
 
 ### Storage
 
-Supabase Storage `uploads/` bucket holds drawing PDFs, photos, IFC
-files, etc. URL lifecycle is signed-URL based (short-lived); the app
-re-resolves on use. Client-side cap: 32 MB per upload.
+The `app-files` Supabase Storage bucket holds drawing PDFs, photos, IFC models
+(gzipped), etc.; `email-attachments` is a separate project-scoped bucket. URL
+lifecycle is signed-URL based (short-lived); the app re-resolves on use via
+`resolveFileUrl` / `getSignedUrl`. Bucket file-size limit is 50 MB (large IFC
+models are gzipped on upload to fit + speed downloads). **Tenant-isolated**: new
+uploads are written under `<org_id>/uploads/...` and storage RLS gates reads by
+org membership; legacy flat `uploads/...` objects are grandfathered to the
+founding org. UPDATE/DELETE are owner-scoped.
 
 ---
 
@@ -270,9 +387,7 @@ re-resolves on use. Client-side cap: 32 MB per upload.
 
 `reconcile_stuck_extractions()` Postgres function flips drawings stuck
 in `ai_extraction_status='Extracting'` for >5 min back to `'Failed'`.
-Currently NOT scheduled (pg_cron extension is available on Supabase
-but not installed on this project) — see TECH_DEBT.md for the wiring
-options (install pg_cron OR run from a scheduled edge function).
+Scheduled every 5 minutes via `pg_cron` (migration `20260516003546`).
 
 ### Trigger functions
 
@@ -309,11 +424,17 @@ work unchanged.
 | `shipping-ticket-import`  | openai    | gpt-4o-mini        | `src/lib/importShippingTicket.js`                 |
 | `rfi-log-import`          | openai    | gpt-4o-mini        | `src/lib/importRfiLog.js`                         |
 | `photo-ocr`               | openai    | gpt-4o-mini        | `src/components/ocr/FileUploadWithOCR.jsx`        |
-| `schedule-assist`         | anthropic | claude-sonnet-4-5  | (NOT WIRED IN PHASE 1 — see TECH_DEBT.md)         |
 
 The Phase 1 routing intentionally **mirrors current production
 defaults**. We did not silently switch any caller to a new provider;
 Phase 2 will use telemetry to make informed switches.
+
+> **Since Phase 1:** the default provider is OpenAI (`gpt-4o` / `gpt-4o-mini`);
+> the AI **Revision Intelligence** line replaced the old `analyzeDrawing.js` /
+> `compareRevisions.js` with `src/lib/revisionSnapshotDiff.js` (per-sheet diff,
+> useCase `revision-compare`) feeding `drawing_revision_deltas`, a package-level
+> Revision Impact Report, and one-click Create-RFI-from-delta. The gateway
+> pattern is unchanged — only the routing rows + callers evolved.
 
 **Telemetry.** Every call writes one row to `public.llm_telemetry`
 (success or failure):
@@ -395,23 +516,45 @@ The migration that creates `llm_telemetry` is `081_llm_telemetry.sql`.
 branches and every PR:
 
 1. ESLint (errors block, warnings allowed)
-2. TypeScript (currently non-blocking — types stale, see TECH_DEBT.md)
-3. Vitest (488+ tests)
+2. TypeScript — four gates: `typecheck` (TS), `typecheck:js` (JS/JSX), and the
+   `typecheck:strict` (strictNullChecks) + `typecheck:noimplicitany` ratchets,
+   all blocking
+3. Vitest (~1,740 tests)
 4. Production Vite build
 
 Concurrency group cancels redundant runs on rapid iteration.
 
 ### Deployment
 
-Vercel auto-deploys from `main`. Workflow:
+Production deploys are **CI-gated** (since 2026-06-19). Vercel's own git
+auto-deploy is OFF (`vercel.json` `git.deploymentEnabled.main:false`); the
+`deploy` job in `.github/workflows/ci.yml` is the sole path. Workflow:
 
-1. Develop on a `claude/<slug>` feature branch
-2. Push commits + PR if collaborating
-3. Merge into `main` (Vercel builds + deploys)
+1. Develop on a `claude/<slug>` feature branch (or directly on `main`)
+2. Push to `main` → the `ci` job runs (lint + 4 typechecks + Vitest + build)
+3. **Only if `ci` is green** does the `deploy` job publish to Vercel
+   (`vercel pull/build/deploy --prebuilt --prod`). A red run leaves prod on the
+   last good build.
 4. Verify on the live URL
 
-`CLAUDE.md` documents the auto-deploy command sequence used by
-agent-driven development.
+Remaining gap: no branch-protection required check (repo plan), so red/unreviewed
+commits can still land on `main` (they just can't deploy). `CLAUDE.md` documents
+the git-safety rules + agent deploy sequence.
+
+### Availability & data residency
+
+Single-region, all-US vendor chain (an accepted risk at this stage):
+
+- **Database + Auth + Storage:** Supabase (Postgres 17) on AWS **us-east-1**,
+  single region. Daily backups; PITR is an owner dashboard toggle.
+- **Hosting / CDN:** Vercel (US). **Payments:** Stripe (US). **Monitoring:**
+  Sentry (US). **AI:** US-based model providers via `llm-proxy`.
+- No customer data is stored outside the US; there is no EU-residency option.
+
+Degradation stance: auth fails closed with a clear error; AI features degrade to
+deterministic paths (regex email-classify, deterministic revision overlay);
+billing entitlements survive a Stripe outage via the `organizations.plan` DB
+anchor. See `docs/runbooks/backup-dr.md` + `incident-response.md`.
 
 ---
 
@@ -419,9 +562,10 @@ agent-driven development.
 
 ### Unit / integration
 
-Vitest. 490+ tests across pure helpers (`drawingHub`, `submittalStageMapping`,
-`projectMetrics`, `submittalAnalytics`, `pdfSheetExtractor`, etc.) and
-some hook-level tests via mocked supabase calls.
+Vitest. ~1,250 tests across pure helpers (`drawingHub`, `submittalStageMapping`,
+`costRollup`, `projectKpis`, `payapp`, `backcharge`, `pdfSheetExtractor`, etc.),
+hook-level tests, and jsdom integration tests that drive real components +
+import flows with the Supabase client mocked.
 
 ```
 npm test               # one-shot run
@@ -495,16 +639,17 @@ DrawingViewer and ModelViewer, then add interaction tests
   30s on list views)
 - ThumbnailFilmstrip caches pdfjs documents by storage path so
   multi-sheet PDFs parse once, not once per sheet
-- IFC tile streaming via @thatopen/components keeps memory bounded for
-  large models
-- Refetch-on-window-focus disabled for ModelViewer's workPackages
-  query (was thrashing the color-update effect)
+- The self-hosted IFC viewer (web-ifc + three) is lazy-loaded so the
+  ~3.6 MB wasm + three never touch the main bundle; it renders structural
+  members only (~5× fewer draw calls on big models)
+- Large IFC models are gzipped on upload (e.g. 52 MB → ~7 MB)
+- Sentry error + performance monitoring with masked session replay
 
 ### What's not done
 
 - No Lighthouse CI / performance budgets in the build
 - No bundle-size budgets
-- No Sentry or PostHog instrumentation
+- Large-project virtualization / server-side filtering still partial
 - No code splitting beyond per-route lazy chunks
 
 Track all of these in TECH_DEBT.md.
@@ -519,7 +664,8 @@ src/
   components/
     drawings/       Drawings page UI + modals + viewer subcomponents
     submittals/     Submittals page UI + bulk modals + round timeline
-    schedule/       Schedule page UI + Gantt + helpers
+    schedule/       Schedule page UI + Gantt (decomposed into scheduleGanttHelpers
+                    + useColumnResize/useGanttLayout/useTaskBarDrag hooks + toolbar)
     workpackages/   Work packages UI
     dashboard/      Portfolio + drilldown views
     commandcenter/  CommandCenter (action feed, today/week, drawer)
@@ -539,15 +685,155 @@ src/
   utils/            Pure helpers (batchProcess, formatters, etc.)
 
 supabase/
-  migrations/       NNN_name.sql, applied in order
+  migrations/       3 baseline files (20260101000000/10/20) — replay from zero
+  migrations_archive/  190 pre-2026-06-20 migrations (history; not applied)
   functions/        Edge function source
 
-public/             Static assets including thatopen/fragments-worker.mjs
+public/             Static assets including web-ifc wasm (public/wasm/) + pdf workers
 ```
 
 ---
 
 ## Decision log (recent material decisions)
+
+### 2026-07-25 — R&R is a first-class derived workflow stage (drawing approval lifecycle, Slice 1)
+
+R&R (Revise & Resubmit) / Rejected submittal outcomes previously derived to the
+**IFA** stage plus a separate badge (`isRRStatus` / `isPackageRR`), which let a
+failed approval cycle read as a fresh internal-prep package in boards, KPIs and
+rollups. `submittalStatusToStage` now derives those outcomes to a dedicated
+**"R&R"** stage, placed after BFA in the display order
+(`Not Started → IFA → OFA → BFA → R&R → OFS → IFC → Released`,
+`WORKFLOW_STAGE_ORDER` in `drawingsConfig.js`). This is a **display-derivation
+change only**: `submittals.status` + `ball_in_court` remain the workflow source
+of truth (§20), the 7-value `drawings.stage` CHECK is untouched, and "R&R" is
+never written to a sheet row — the 7-stage `STAGE_ORDER` still governs every
+sheet-stage write path. Later slices (approval-cycle history, the
+R&R→OFA transmission-evidence gate, OFS completion checklist, comment
+dispositions, release-gate unification) are specced in
+`docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-rr-stage.md`
+and `docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-ofs-slice4.md`.
+
+### 2026-07-25 — Returned-comment dispositions gate OFS/IFC and R&R/OFA (Slice 5)
+
+Structured `submittal_comment_dispositions` rows track comments returned with
+AAN / R&R. Required unresolved statuses block OFS→IFC and R&R→OFA unless an
+audited override is recorded (`commentDispositionGate`). Sheet-level
+`submittal_sheet_responses` remain the per-sheet disposition SoT.
+`drawing_revisions` gains nullable `revision_source` / `revision_reason`.
+
+### 2026-07-25 — Package fab-release requires IFC/Released (Slice 8)
+
+`isApprovedForFab` / `computeFabReleaseGate` / SQL `evaluate_fab_release_package`
+align with piece-control Slice 6 readiness. Bare `set_approval_status` /
+`ifc_status` / OFS no longer pass package export. New blocker kind
+`not_ifc_ready`. Playwright fab-release E2E (RFI gate) unchanged.
+
+### 2026-07-25 — Dashboard SoT includes R&R; Approval = IFC/Released (Slice 9)
+
+Document Hub stage maps include R&R. `DrawingApprovalStatusCard` prefers
+`submittalPipelineRollupFromSubmittals`. `SteelExecutionStatusCard` Approval
+metric counts IFC/Released only (not OFS).
+
+### 2026-07-25 — Legacy cleanup + dual-source docs (Slice 10)
+
+Removed unreachable `DrawingKanban`. Documented remaining dual-source in
+`docs/architecture/drawing-workflow-dual-source.md`. Scrubbed stale
+“R&R → IFA” product copy. Sheet-stage recovery path kept for sets without
+submittals.
+
+### 2026-07-25 — R&R/OFS/BFA risk aging + Critical ActionItems (Slice 7)
+
+Time-sensitive stages (**R&R**, **OFS**, **BFA**) get Normal / Attention /
+Urgent / Critical tiers from working-day countdown (or days-stuck when no
+due). Surfaced on Process Board (critical filter + pills), Submittal detail,
+and Piece Impact flags. Critical packages draft deduped ActionItems via
+`ensureCriticalAgingActionItems` — Alerts Center Refresh stays reload-only
+(no `generate-alerts` Edge Function). Package fab-release gate unify remains
+Slice 8; dashboard SoT remains Slice 9.
+
+### 2026-07-25 — Piece release requires IFC/Released governing drawings (Slice 6)
+
+Canonical piece / work-package fabrication readiness no longer treats bare
+Approved / AAN (or sheet-response / review-only evidence) as release-ready.
+`piece_control_drawing_is_approved` and client `isDrawingApproved` /
+`isGoverningDrawingReleaseReady` agree: ready = most-recent linked submittal
+derives **IFC** (Approved/AAN + GC/Owner) or **Released for Fabrication**, or
+`drawings.stage` is IFC/Released, or current-revision
+`approved_for_fabrication` signoff. OFS, R&R, BFA, OFA, and IFA fail closed.
+Piece Register surfaces a Piece Impact panel (governing sheet/rev/stage +
+exposure flags) when a single piece is selected. Package-level
+`fabReleaseGate` / `isApprovedForFab` unification remains Slice 8.
+
+### 2026-07-25 — OFS is mandatory scrub before IFC (drawing approval lifecycle, Slice 4)
+
+Approved packages must pass through **OFS — Out for Scrub** before IFC /
+Released for Fabrication. `submittal_approved_to_scrub` defaults ON and
+`nextSubmittalAction` defaults `approvedRoutesToScrub: true` so BFA
+`Approved` follows the same OFS → IFC → Released path as `Approved as Noted`.
+OFS remains a derived stage (Approved/AAN + Detailer-class BIC); scrub is
+**not** a resubmittal — Approved/AAN → Under Review is removed from the
+status graph, OFS→OFA and skip-OFS releases are blocked without an audited
+override, and OFS→IFC requires the scrub checklist (`ofsCompletionGate` +
+`IfcIssueDialog`) stamped into `submittals.metadata.ofs_checklist`.
+
+### 2026-06-20 — DB migration baseline squash (P0 #2)
+
+`supabase/migrations/` could no longer bootstrap a DB from zero: MCP
+`apply_migration` stamps apply-time versions into `schema_migrations`, so over
+months the repo filenames (190 files) and the recorded versions (200 rows)
+drifted almost completely apart, and fresh branches / `db reset` / CI all failed
+at the first statement. Fixed by squashing to **3 baseline files** (extensions +
+a `pg_dump --schema public` of live prod + a guarded storage/cron seed),
+archiving the 190 originals to `supabase/migrations_archive/`, and reconciling
+prod `schema_migrations` to exactly the 3 baseline versions (the 200 stale rows
+reverted — bookkeeping only, no schema/data touched). Verified from-zero on a
+local stack (counts matched prod: 102 tables / 321 policies / 71 functions). The
+Supabase-managed `storage` schema is dumped OUT (the migration role can't
+recreate it). Going-forward lockstep rule: see **Migrations** above. Runbook:
+`docs/db-baseline-cutover.md`.
+
+### 2026-06 — Large-component decomposition (behavior-preserving)
+
+The biggest components are being thinned by extracting their pure logic into
+named, unit-tested modules rather than rewriting them. The rule: move logic out
+**byte-identical**, keep each slice to one concern, and run the full suite +
+build after every slice. Pure helpers and per-prop `useMemo` derivations go to a
+sibling `*Helpers` / `*Derive` module (or `format.ts`); self-contained
+interaction subsystems become custom hooks; pure data-display JSX becomes small
+presentational components; the irreducible render loop stays in the container.
+Applied so far: `ScheduleGantt.jsx` (2,812 → 2,280 — helpers module +
+`useColumnResize`/`useGanttLayout`/`useTaskBarDrag` + toolbar/legend),
+`PortfolioView.jsx` (roll-ups → `portfolioDerive.js`), both drawing-upload modals
+(shared `lib/drawingUploadUtils.js`), and the hub's Approval Matrix builders
+(→ `drawingSubmittalHub/format.ts`). The thinned containers are still JS/JSX —
+`.tsx` conversion is the follow-up (see TECH_DEBT).
+
+### 2026-06 — Multi-tenant SaaS (monetization)
+
+The product was turned into a sellable multi-tenant SaaS. We added an
+org/workspace tenancy layer (`organizations` + members + invites), Stripe
+subscription billing with a tamper-proof `org.plan` anchor + server-side limit
+enforcement, self-serve signup + a first-run onboarding wizard, per-tenant data
+export, and — critically — wired the **org boundary into the RLS layer** so
+tenants are isolated at the database, not just behind feature gates.
+`user_projects` stays authoritative for project-level role; org membership is the
+gate beneath it. See the Multi-tenancy & billing section.
+
+### 2026-06 — Self-hosted IFC viewer (dropped @thatopen)
+
+The `@thatopen/components` IFC/BIM stack was removed (it bloated the bundle by
+~7 MB across chunks). The Detailing Control Center's 3D tab now uses a
+self-hosted `web-ifc` (wasm) + `three.js` viewer, lazy-loaded behind the
+`viewer_3d` flag, with the wasm version-pinned + copied to `public/wasm/` by a
+Vite plugin. Fab status is colored per piece from `model_elements`.
+
+### 2026-06 — AI Revision Intelligence (the differentiator)
+
+Per-sheet AI semantic diff of drawing revisions (`revisionSnapshotDiff.js` →
+`llm-proxy` `revision-compare` → `drawing_revision_deltas`), a package-level
+Revision Impact Report, and one-click Create-RFI-from-delta. Behind the
+`revision_ai_diff` flag.
 
 ### 2026-05 — Submittals as workflow source of truth (Sprint 2)
 
@@ -600,10 +886,13 @@ Stayed on Supabase Auth. The user explicitly chose this over a
 hosted auth provider. SSO/SAML is achievable via Supabase's auth
 providers when needed; not yet wired.
 
-### 2026-04 — No offline support
+### 2026-04 — No offline support (later partially reversed)
 
-Considered for field users. Rejected per user direction. Responsive
-web on mobile/tablet is the mobile strategy.
+Originally rejected; responsive web was the mobile strategy. **Update
+(2026-06):** Field Today gained an offline outbox for field *capture* —
+idempotent progress writes plus dedup-safe punch/photo creates (localStorage +
+IndexedDB, `client_op_id` keys) — so flaky-connection field work isn't lost. A
+full PWA / service-worker cold-start cache is still out of scope.
 
 ---
 
@@ -614,10 +903,14 @@ See [`TECH_DEBT.md`](./TECH_DEBT.md) for the running list and
 
 Major remaining buckets:
 
-- RBAC Phase C — per-project member-management admin UI
-- Sentry / PostHog instrumentation
-- TypeScript expansion across pages
-- A11y audit pass
-- RTL component tests
-- Mobile responsive (Sprint 5)
-- Email notifications (Sprint 3, blocked on email-provider pick)
+- **TypeScript expansion** — still ~86% JS; convert incrementally (services/ is
+  fully typed; shared-infra-first ordering). The biggest components now have their
+  pure logic extracted into tested helper modules + hooks (see the decomposition
+  decision-log entry); thinning the containers to `.tsx` is the next step.
+- **Legal** — ToS / privacy / DPA pages to back the self-serve signup.
+- **Storage backfill** — migrate the ~770 legacy flat `uploads/...` objects to
+  org-prefixed paths (grandfathered for now).
+- **Full-browser E2E** — jsdom integration tests exist; no signed-in Playwright
+  flow yet (no self-signup test user).
+- A11y audit pass; mobile/iPad polish on core workflows.
+- Large-project performance (virtualization, server-side filtering).

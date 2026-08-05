@@ -1,0 +1,847 @@
+- generic [ref=e6]:
+  - link "Skip to main content" [ref=e7] [cursor=pointer]:
+    - /url: "#main-content"
+  - dialog [ref=e8]:
+    - generic [ref=e9]:
+      - img [ref=e10]
+      - button [ref=e11] [cursor=pointer]:
+        - img [ref=e12]
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e18]: OVERVIEW
+        - generic [ref=e19]:
+          - button [ref=e20] [cursor=pointer]:
+            - generic [ref=e21]: ◈
+            - generic [ref=e22]: Dashboard
+          - button [ref=e23] [cursor=pointer]:
+            - generic [ref=e24]: ⌘
+            - generic [ref=e25]: Command Center
+          - button [ref=e26] [cursor=pointer]:
+            - generic [ref=e27]: ✦
+            - generic [ref=e28]: Portfolio Overview
+      - generic [ref=e29]:
+        - generic [ref=e30] [cursor=pointer]:
+          - generic [ref=e31]: PROJECTS
+          - generic [ref=e32]: ▾
+        - generic [ref=e33]:
+          - button [ref=e34] [cursor=pointer]:
+            - generic [ref=e35]: ⊟
+            - generic [ref=e36]: Projects
+          - button [ref=e37] [cursor=pointer]:
+            - generic [ref=e38]: ≡
+            - generic [ref=e39]: Scope & Exclusions
+          - button [ref=e40] [cursor=pointer]:
+            - generic [ref=e41]: 👤
+            - generic [ref=e42]: Contacts
+          - button [ref=e43] [cursor=pointer]:
+            - generic [ref=e44]: 👥
+            - generic [ref=e45]: Project Members
+      - generic [ref=e46]:
+        - generic [ref=e47] [cursor=pointer]:
+          - generic [ref=e48]: PROJECT MANAGEMENT
+          - generic [ref=e49]: ▾
+        - generic [ref=e50]:
+          - button [ref=e51] [cursor=pointer]:
+            - generic [ref=e52]: ▥
+            - generic [ref=e53]: Schedule
+          - button [ref=e54] [cursor=pointer]:
+            - generic [ref=e55]: ☑
+            - generic [ref=e56]: Action Items
+          - button [ref=e57] [cursor=pointer]:
+            - generic [ref=e58]: ⚑
+            - generic [ref=e59]: RFIs
+          - button [ref=e60] [cursor=pointer]:
+            - generic [ref=e61]: $
+            - generic [ref=e62]: Change Orders
+          - button [ref=e63] [cursor=pointer]:
+            - generic [ref=e64]: 🧾
+            - generic [ref=e65]: Pay Applications
+          - button [ref=e66] [cursor=pointer]:
+            - generic [ref=e67]: ⚖
+            - generic [ref=e68]: Backcharge Defense
+      - generic [ref=e69]:
+        - generic [ref=e70] [cursor=pointer]:
+          - generic [ref=e71]: DESIGN & DRAWINGS
+          - generic [ref=e72]: ▾
+        - generic [ref=e73]:
+          - button [ref=e74] [cursor=pointer]:
+            - generic [ref=e75]: ▦
+            - generic [ref=e76]: Detailing Control Center
+          - button [ref=e77] [cursor=pointer]:
+            - generic [ref=e78]: ▦
+            - generic [ref=e79]: Drawing Viewer
+      - generic [ref=e80]:
+        - generic [ref=e81] [cursor=pointer]:
+          - generic [ref=e82]: PRODUCTION
+          - generic [ref=e83]: ▾
+        - generic [ref=e84]:
+          - button [ref=e85] [cursor=pointer]:
+            - generic [ref=e86]: ▦
+            - generic [ref=e87]: Work Packages
+          - button [ref=e88] [cursor=pointer]:
+            - generic [ref=e89]: 🏭
+            - generic [ref=e90]: Fab Release
+          - button [ref=e91] [cursor=pointer]:
+            - generic [ref=e92]: ⚠
+            - generic [ref=e93]: Risk
+          - button [ref=e94] [cursor=pointer]:
+            - generic [ref=e95]: ⏱
+            - generic [ref=e96]: Budget Hours
+          - button [ref=e97] [cursor=pointer]:
+            - generic [ref=e98]: 📦
+            - generic [ref=e99]: Procurement
+          - button [ref=e100] [cursor=pointer]:
+            - generic [ref=e101]: 👥
+            - generic [ref=e102]: Resources
+          - button [ref=e103] [cursor=pointer]:
+            - generic [ref=e104]: 📦
+            - generic [ref=e105]: Deliveries
+      - generic [ref=e106]:
+        - generic [ref=e107] [cursor=pointer]:
+          - generic [ref=e108]: FINANCIALS
+          - generic [ref=e109]: ▾
+        - generic [ref=e110]:
+          - button [ref=e111] [cursor=pointer]:
+            - generic [ref=e112]: ◎
+            - generic [ref=e113]: Budget Control
+          - button [ref=e114] [cursor=pointer]:
+            - generic [ref=e115]: 📊
+            - generic [ref=e116]: Schedule of Values
+          - button [ref=e117] [cursor=pointer]:
+            - generic [ref=e118]: 💰
+            - generic [ref=e119]: Expenses
+      - generic [ref=e120]:
+        - generic [ref=e121] [cursor=pointer]:
+          - generic [ref=e122]: DOCUMENTS & REPORTS
+          - generic [ref=e123]: ▾
+        - generic [ref=e124]:
+          - button [ref=e125] [cursor=pointer]:
+            - generic [ref=e126]: 📁
+            - generic [ref=e127]: Documents
+          - button [ref=e128] [cursor=pointer]:
+            - generic [ref=e129]: 📋
+            - generic [ref=e130]: Reports
+      - generic [ref=e131]:
+        - generic [ref=e132] [cursor=pointer]:
+          - generic [ref=e133]: FIELD
+          - generic [ref=e134]: ▾
+        - generic [ref=e135]:
+          - button [ref=e136] [cursor=pointer]:
+            - generic [ref=e137]: 📲
+            - generic [ref=e138]: Field Today
+          - button [ref=e139] [cursor=pointer]:
+            - generic [ref=e140]: 🏗
+            - generic [ref=e141]: Field Hub
+          - button [ref=e142] [cursor=pointer]:
+            - generic [ref=e143]: 📋
+            - generic [ref=e144]: Daily Logs
+          - button [ref=e145] [cursor=pointer]:
+            - generic [ref=e146]: 📷
+            - generic [ref=e147]: Photos
+          - button [ref=e148] [cursor=pointer]:
+            - generic [ref=e149]: ⚙
+            - generic [ref=e150]: LEMs
+      - generic [ref=e151]:
+        - generic [ref=e152] [cursor=pointer]:
+          - generic [ref=e153]: ADMINISTRATION
+          - generic [ref=e154]: ▾
+        - generic [ref=e155]:
+          - button [ref=e156] [cursor=pointer]:
+            - generic [ref=e157]: 🏢
+            - generic [ref=e158]: Vendors
+          - button [ref=e159] [cursor=pointer]:
+            - generic [ref=e160]: ⚙
+            - generic [ref=e161]: Settings
+      - generic [ref=e162]:
+        - generic [ref=e163] [cursor=pointer]:
+          - generic [ref=e164]: TOOLS
+          - generic [ref=e165]: ▾
+        - generic [ref=e166]:
+          - button [ref=e167] [cursor=pointer]:
+            - generic [ref=e168]: 🧮
+            - generic [ref=e169]: Calculator
+          - button [ref=e170] [cursor=pointer]:
+            - generic [ref=e171]: 📐
+            - generic [ref=e172]: Ft/In Calculator
+          - button [ref=e173] [cursor=pointer]:
+            - generic [ref=e174]: ⚖
+            - generic [ref=e175]: Steel Weight Calculator
+          - button [ref=e176] [cursor=pointer]:
+            - generic [ref=e177]: 🏗
+            - generic [ref=e178]: Crane Pick Calculator
+          - button [ref=e179] [cursor=pointer]:
+            - generic [ref=e180]: ↔
+            - generic [ref=e181]: Decimal / Fraction Converter
+  - generic [ref=e182]:
+    - navigation "Primary" [ref=e184]:
+      - generic [ref=e185]:
+        - button [ref=e186] [cursor=pointer]
+        - img "SteelBuild Pro" [ref=e191] [cursor=pointer]
+      - generic [ref=e192]:
+        - button "Open global search" [ref=e193] [cursor=pointer]:
+          - img [ref=e194]
+        - img [ref=e199] [cursor=pointer]
+        - generic "SELECT PROJECT" [ref=e202] [cursor=pointer]:
+          - generic [ref=e203]: SELECT PROJECT
+          - generic [ref=e204]: ▾
+    - main "Main content" [ref=e207]:
+      - generic [ref=e208]:
+        - banner "Field Today page header" [ref=e209]:
+          - generic [ref=e210]:
+            - generic [ref=e211]: Field
+            - generic [ref=e212]:
+              - heading "Field Today" [level=1] [ref=e213]
+              - generic [ref=e214]: 42open
+            - generic [ref=e215]: Jun 12
+        - group "Quick capture" [ref=e216]:
+          - button "Add Punch Log a deficiency" [ref=e217] [cursor=pointer]:
+            - img [ref=e219]
+            - generic [ref=e223]:
+              - strong [ref=e224]: Add Punch
+              - generic [ref=e225]: Log a deficiency
+          - button "Photo Snap progress" [ref=e226] [cursor=pointer]:
+            - img [ref=e228]
+            - generic [ref=e231]:
+              - strong [ref=e232]: Photo
+              - generic [ref=e233]: Snap progress
+          - button "Daily Log Today's report" [ref=e234] [cursor=pointer]:
+            - img [ref=e236]
+            - generic [ref=e239]:
+              - strong [ref=e240]: Daily Log
+              - generic [ref=e241]: Today's report
+        - generic [ref=e242]:
+          - generic [ref=e243]:
+            - img [ref=e244]
+            - text: Today's Work
+          - generic [ref=e248]:
+            - generic [ref=e249]:
+              - generic [ref=e250]:
+                - generic [ref=e251]:
+                  - generic [ref=e252]: Balcony Rail - Bldg. 1
+                  - generic [ref=e253]:
+                    - img [ref=e254]
+                    - text: Yashwant
+                - generic [ref=e259]: OVERDUE · Apr 6
+              - generic [ref=e261]: 65%
+              - generic [ref=e262]:
+                - button "0" [ref=e263] [cursor=pointer]
+                - button "25" [ref=e264] [cursor=pointer]
+                - button "50" [ref=e265] [cursor=pointer]
+                - button "75" [ref=e266] [cursor=pointer]
+                - button "Done" [ref=e267] [cursor=pointer]
+            - generic [ref=e268]:
+              - generic [ref=e269]:
+                - generic [ref=e270]:
+                  - generic [ref=e271]: Balcony Rails - Bldg. 1
+                  - generic [ref=e272]:
+                    - img [ref=e273]
+                    - text: S&H Field
+                - generic [ref=e278]: OVERDUE · Apr 10
+              - generic [ref=e280]: 0%
+              - generic [ref=e281]:
+                - button "0" [pressed] [ref=e282] [cursor=pointer]
+                - button "25" [ref=e283] [cursor=pointer]
+                - button "50" [ref=e284] [cursor=pointer]
+                - button "75" [ref=e285] [cursor=pointer]
+                - button "Done" [ref=e286] [cursor=pointer]
+            - generic [ref=e287]:
+              - generic [ref=e288]:
+                - generic [ref=e289]:
+                  - generic [ref=e290]: Balcony Rails - Bldg. 2
+                  - generic [ref=e291]:
+                    - img [ref=e292]
+                    - text: S&H Field
+                - generic [ref=e297]: OVERDUE · Apr 18
+              - generic [ref=e299]: 0%
+              - generic [ref=e300]:
+                - button "0" [pressed] [ref=e301] [cursor=pointer]
+                - button "25" [ref=e302] [cursor=pointer]
+                - button "50" [ref=e303] [cursor=pointer]
+                - button "75" [ref=e304] [cursor=pointer]
+                - button "Done" [ref=e305] [cursor=pointer]
+            - generic [ref=e306]:
+              - generic [ref=e307]:
+                - generic [ref=e308]:
+                  - generic [ref=e309]: Site Misc. Steel
+                  - generic [ref=e310]:
+                    - img [ref=e311]
+                    - text: S&H Field
+                - generic [ref=e316]: OVERDUE · Apr 19
+              - generic [ref=e318]: 0%
+              - generic [ref=e319]:
+                - button "0" [pressed] [ref=e320] [cursor=pointer]
+                - button "25" [ref=e321] [cursor=pointer]
+                - button "50" [ref=e322] [cursor=pointer]
+                - button "75" [ref=e323] [cursor=pointer]
+                - button "Done" [ref=e324] [cursor=pointer]
+            - generic [ref=e325]:
+              - generic [ref=e326]:
+                - generic [ref=e327]:
+                  - generic [ref=e328]: Ladders - Bldg. 1 & 2
+                  - generic [ref=e329]:
+                    - img [ref=e330]
+                    - text: Yashwant
+                - generic [ref=e335]: OVERDUE · Apr 22
+              - generic [ref=e337]: 0%
+              - generic [ref=e338]:
+                - button "0" [pressed] [ref=e339] [cursor=pointer]
+                - button "25" [ref=e340] [cursor=pointer]
+                - button "50" [ref=e341] [cursor=pointer]
+                - button "75" [ref=e342] [cursor=pointer]
+                - button "Done" [ref=e343] [cursor=pointer]
+            - generic [ref=e344]:
+              - generic [ref=e345]:
+                - generic [ref=e346]:
+                  - generic [ref=e347]: Roof Access Ladder - Bldg. 1 & 2
+                  - generic [ref=e348]:
+                    - img [ref=e349]
+                    - text: S&H Field
+                - generic [ref=e354]: OVERDUE · Apr 26
+              - generic [ref=e356]: 0%
+              - generic [ref=e357]:
+                - button "0" [pressed] [ref=e358] [cursor=pointer]
+                - button "25" [ref=e359] [cursor=pointer]
+                - button "50" [ref=e360] [cursor=pointer]
+                - button "75" [ref=e361] [cursor=pointer]
+                - button "Done" [ref=e362] [cursor=pointer]
+            - generic [ref=e363]:
+              - generic [ref=e364]:
+                - generic [ref=e365]:
+                  - generic [ref=e366]: Balcony Rails - Bldg. 1
+                  - generic [ref=e367]:
+                    - img [ref=e368]
+                    - text: S&H Shop
+                - generic [ref=e373]: OVERDUE · Apr 27
+              - generic [ref=e375]: 0%
+              - generic [ref=e376]:
+                - button "0" [pressed] [ref=e377] [cursor=pointer]
+                - button "25" [ref=e378] [cursor=pointer]
+                - button "50" [ref=e379] [cursor=pointer]
+                - button "75" [ref=e380] [cursor=pointer]
+                - button "Done" [ref=e381] [cursor=pointer]
+            - generic [ref=e382]:
+              - generic [ref=e383]:
+                - generic [ref=e384]:
+                  - generic [ref=e385]: Balcony Rails - Bldg. 1
+                  - generic [ref=e386]:
+                    - img [ref=e387]
+                    - text: S&H Shipping
+                - generic [ref=e392]: OVERDUE · May 5
+              - generic [ref=e394]: 0%
+              - generic [ref=e395]:
+                - button "0" [pressed] [ref=e396] [cursor=pointer]
+                - button "25" [ref=e397] [cursor=pointer]
+                - button "50" [ref=e398] [cursor=pointer]
+                - button "75" [ref=e399] [cursor=pointer]
+                - button "Done" [ref=e400] [cursor=pointer]
+            - generic [ref=e401]:
+              - generic [ref=e402]:
+                - generic [ref=e403]:
+                  - generic [ref=e404]: Balcony Rails - Bldg. 2
+                  - generic [ref=e405]:
+                    - img [ref=e406]
+                    - text: S&H Shop
+                - generic [ref=e411]: OVERDUE · May 5
+              - generic [ref=e413]: 0%
+              - generic [ref=e414]:
+                - button "0" [pressed] [ref=e415] [cursor=pointer]
+                - button "25" [ref=e416] [cursor=pointer]
+                - button "50" [ref=e417] [cursor=pointer]
+                - button "75" [ref=e418] [cursor=pointer]
+                - button "Done" [ref=e419] [cursor=pointer]
+            - generic [ref=e420]:
+              - generic [ref=e421]:
+                - generic [ref=e422]:
+                  - generic [ref=e423]: Site Misc. Steel
+                  - generic [ref=e424]:
+                    - img [ref=e425]
+                    - text: S&H Shop
+                - generic [ref=e430]: OVERDUE · May 6
+              - generic [ref=e432]: 0%
+              - generic [ref=e433]:
+                - button "0" [pressed] [ref=e434] [cursor=pointer]
+                - button "25" [ref=e435] [cursor=pointer]
+                - button "50" [ref=e436] [cursor=pointer]
+                - button "75" [ref=e437] [cursor=pointer]
+                - button "Done" [ref=e438] [cursor=pointer]
+            - generic [ref=e439]:
+              - generic [ref=e440]:
+                - generic [ref=e441]:
+                  - generic [ref=e442]: Panel Embeds - Bldg. 2
+                  - generic [ref=e443]:
+                    - img [ref=e444]
+                    - text: S&H Field
+                - generic [ref=e449]: OVERDUE · May 11
+              - generic [ref=e451]: 72%
+              - generic [ref=e452]:
+                - button "0" [ref=e453] [cursor=pointer]
+                - button "25" [ref=e454] [cursor=pointer]
+                - button "50" [ref=e455] [cursor=pointer]
+                - button "75" [ref=e456] [cursor=pointer]
+                - button "Done" [ref=e457] [cursor=pointer]
+            - generic [ref=e458]:
+              - generic [ref=e459]:
+                - generic [ref=e460]:
+                  - generic [ref=e461]: Balcony Rails - Bldg. 2
+                  - generic [ref=e462]:
+                    - img [ref=e463]
+                    - text: S&H Shipping
+                - generic [ref=e468]: OVERDUE · May 12
+              - generic [ref=e470]: 0%
+              - generic [ref=e471]:
+                - button "0" [pressed] [ref=e472] [cursor=pointer]
+                - button "25" [ref=e473] [cursor=pointer]
+                - button "50" [ref=e474] [cursor=pointer]
+                - button "75" [ref=e475] [cursor=pointer]
+                - button "Done" [ref=e476] [cursor=pointer]
+            - generic [ref=e477]:
+              - generic [ref=e478]:
+                - generic [ref=e479]:
+                  - generic [ref=e480]: Site Misc. Steel
+                  - generic [ref=e481]:
+                    - img [ref=e482]
+                    - text: S&H Shipping
+                - generic [ref=e487]: OVERDUE · May 13
+              - generic [ref=e489]: 0%
+              - generic [ref=e490]:
+                - button "0" [pressed] [ref=e491] [cursor=pointer]
+                - button "25" [ref=e492] [cursor=pointer]
+                - button "50" [ref=e493] [cursor=pointer]
+                - button "75" [ref=e494] [cursor=pointer]
+                - button "Done" [ref=e495] [cursor=pointer]
+            - generic [ref=e496]:
+              - generic [ref=e497]:
+                - generic [ref=e498]:
+                  - generic [ref=e499]: Stairs - Bldg 1
+                  - generic [ref=e500]:
+                    - img [ref=e501]
+                    - text: Yashwant
+                - generic [ref=e506]: OVERDUE · May 18
+              - generic [ref=e508]: 0%
+              - generic [ref=e509]:
+                - button "0" [pressed] [ref=e510] [cursor=pointer]
+                - button "25" [ref=e511] [cursor=pointer]
+                - button "50" [ref=e512] [cursor=pointer]
+                - button "75" [ref=e513] [cursor=pointer]
+                - button "Done" [ref=e514] [cursor=pointer]
+            - generic [ref=e515]:
+              - generic [ref=e516]:
+                - generic [ref=e517]:
+                  - generic [ref=e518]: Stairs - Bldg. 2
+                  - generic [ref=e519]:
+                    - img [ref=e520]
+                    - text: Yashwant
+                - generic [ref=e525]: OVERDUE · May 18
+              - generic [ref=e527]: 0%
+              - generic [ref=e528]:
+                - button "0" [pressed] [ref=e529] [cursor=pointer]
+                - button "25" [ref=e530] [cursor=pointer]
+                - button "50" [ref=e531] [cursor=pointer]
+                - button "75" [ref=e532] [cursor=pointer]
+                - button "Done" [ref=e533] [cursor=pointer]
+            - generic [ref=e534]:
+              - generic [ref=e535]:
+                - generic [ref=e536]:
+                  - generic [ref=e537]: Roof Access Ladders - Bldg. 1 & 2
+                  - generic [ref=e538]:
+                    - img [ref=e539]
+                    - text: S&H Shipping
+                - generic [ref=e544]: OVERDUE · May 20
+              - generic [ref=e546]: 0%
+              - generic [ref=e547]:
+                - button "0" [pressed] [ref=e548] [cursor=pointer]
+                - button "25" [ref=e549] [cursor=pointer]
+                - button "50" [ref=e550] [cursor=pointer]
+                - button "75" [ref=e551] [cursor=pointer]
+                - button "Done" [ref=e552] [cursor=pointer]
+            - generic [ref=e553]:
+              - generic [ref=e554]:
+                - generic [ref=e555]:
+                  - generic [ref=e556]: Stairs - Bldg. 1
+                  - generic [ref=e557]:
+                    - img [ref=e558]
+                    - text: S&H Field
+                - generic [ref=e563]: OVERDUE · May 22
+              - generic [ref=e565]: 0%
+              - generic [ref=e566]:
+                - button "0" [pressed] [ref=e567] [cursor=pointer]
+                - button "25" [ref=e568] [cursor=pointer]
+                - button "50" [ref=e569] [cursor=pointer]
+                - button "75" [ref=e570] [cursor=pointer]
+                - button "Done" [ref=e571] [cursor=pointer]
+            - generic [ref=e572]:
+              - generic [ref=e573]:
+                - generic [ref=e574]:
+                  - generic [ref=e575]: Site Misc. Steel
+                  - generic [ref=e576]:
+                    - img [ref=e577]
+                    - text: Yashwant
+                - generic [ref=e582]: OVERDUE · Jun 2
+              - generic [ref=e584]: 27%
+              - generic [ref=e585]:
+                - button "0" [ref=e586] [cursor=pointer]
+                - button "25" [ref=e587] [cursor=pointer]
+                - button "50" [ref=e588] [cursor=pointer]
+                - button "75" [ref=e589] [cursor=pointer]
+                - button "Done" [ref=e590] [cursor=pointer]
+            - generic [ref=e591]:
+              - generic [ref=e592]:
+                - generic [ref=e593]:
+                  - generic [ref=e594]: Stairs - Bldg. 2
+                  - generic [ref=e595]:
+                    - img [ref=e596]
+                    - text: S&H Field
+                - generic [ref=e601]: OVERDUE · Jun 2
+              - generic [ref=e603]: 0%
+              - generic [ref=e604]:
+                - button "0" [pressed] [ref=e605] [cursor=pointer]
+                - button "25" [ref=e606] [cursor=pointer]
+                - button "50" [ref=e607] [cursor=pointer]
+                - button "75" [ref=e608] [cursor=pointer]
+                - button "Done" [ref=e609] [cursor=pointer]
+            - generic [ref=e610]:
+              - generic [ref=e611]:
+                - generic [ref=e612]:
+                  - generic [ref=e613]: Truck 1 Delivery
+                  - generic [ref=e614]:
+                    - img [ref=e615]
+                    - text: Daniel Nichols
+                - generic [ref=e620]: OVERDUE · Jun 2
+              - generic [ref=e622]: 0%
+              - generic [ref=e623]:
+                - button "0" [pressed] [ref=e624] [cursor=pointer]
+                - button "25" [ref=e625] [cursor=pointer]
+                - button "50" [ref=e626] [cursor=pointer]
+                - button "75" [ref=e627] [cursor=pointer]
+                - button "Done" [ref=e628] [cursor=pointer]
+            - generic [ref=e629]:
+              - generic [ref=e630]:
+                - generic [ref=e631]:
+                  - generic [ref=e632]: Building 2 Hardware
+                  - generic [ref=e633]:
+                    - img [ref=e634]
+                    - text: Copper State
+                - generic [ref=e639]: OVERDUE · Jun 3
+              - generic [ref=e641]: 0%
+              - generic [ref=e642]:
+                - button "0" [pressed] [ref=e643] [cursor=pointer]
+                - button "25" [ref=e644] [cursor=pointer]
+                - button "50" [ref=e645] [cursor=pointer]
+                - button "75" [ref=e646] [cursor=pointer]
+                - button "Done" [ref=e647] [cursor=pointer]
+            - generic [ref=e648]:
+              - generic [ref=e649]:
+                - generic [ref=e650]:
+                  - generic [ref=e651]: Main Steel - Bldg. 2
+                  - generic [ref=e652]:
+                    - img [ref=e653]
+                    - text: Daniel Nichols
+                - generic [ref=e658]: OVERDUE · Jun 4
+              - generic [ref=e660]: 0%
+              - generic [ref=e661]:
+                - button "0" [pressed] [ref=e662] [cursor=pointer]
+                - button "25" [ref=e663] [cursor=pointer]
+                - button "50" [ref=e664] [cursor=pointer]
+                - button "75" [ref=e665] [cursor=pointer]
+                - button "Done" [ref=e666] [cursor=pointer]
+            - generic [ref=e667]:
+              - generic [ref=e668]:
+                - generic [ref=e669]:
+                  - generic [ref=e670]: Balcony Rail - Bldg. 1
+                  - generic [ref=e671]:
+                    - img [ref=e672]
+                    - text: Daniel Nichols
+                - generic [ref=e677]: OVERDUE · Jun 6
+              - generic [ref=e679]: 0%
+              - generic [ref=e680]:
+                - button "0" [pressed] [ref=e681] [cursor=pointer]
+                - button "25" [ref=e682] [cursor=pointer]
+                - button "50" [ref=e683] [cursor=pointer]
+                - button "75" [ref=e684] [cursor=pointer]
+                - button "Done" [ref=e685] [cursor=pointer]
+            - generic [ref=e686]:
+              - generic [ref=e687]:
+                - generic [ref=e688]:
+                  - generic [ref=e689]: Balcony Rail - Bldg. 2
+                  - generic [ref=e690]:
+                    - img [ref=e691]
+                    - text: Daniel Nichols
+                - generic [ref=e696]: OVERDUE · Jun 6
+              - generic [ref=e698]: 0%
+              - generic [ref=e699]:
+                - button "0" [pressed] [ref=e700] [cursor=pointer]
+                - button "25" [ref=e701] [cursor=pointer]
+                - button "50" [ref=e702] [cursor=pointer]
+                - button "75" [ref=e703] [cursor=pointer]
+                - button "Done" [ref=e704] [cursor=pointer]
+            - generic [ref=e705]:
+              - generic [ref=e706]:
+                - generic [ref=e707]:
+                  - generic [ref=e708]: Roof Access Ladders - Bldg. 1 & 2
+                  - generic [ref=e709]:
+                    - img [ref=e710]
+                    - text: S&H Shop
+                - generic [ref=e715]: OVERDUE · Jun 6
+              - generic [ref=e717]: 0%
+              - generic [ref=e718]:
+                - button "0" [pressed] [ref=e719] [cursor=pointer]
+                - button "25" [ref=e720] [cursor=pointer]
+                - button "50" [ref=e721] [cursor=pointer]
+                - button "75" [ref=e722] [cursor=pointer]
+                - button "Done" [ref=e723] [cursor=pointer]
+            - generic [ref=e724]:
+              - generic [ref=e725]:
+                - generic [ref=e726]:
+                  - generic [ref=e727]: Site Misc. Steel
+                  - generic [ref=e728]:
+                    - img [ref=e729]
+                    - text: Daniel Nichols
+                - generic [ref=e734]: OVERDUE · Jun 6
+              - generic [ref=e736]: 0%
+              - generic [ref=e737]:
+                - button "0" [pressed] [ref=e738] [cursor=pointer]
+                - button "25" [ref=e739] [cursor=pointer]
+                - button "50" [ref=e740] [cursor=pointer]
+                - button "75" [ref=e741] [cursor=pointer]
+                - button "Done" [ref=e742] [cursor=pointer]
+            - generic [ref=e743]:
+              - generic [ref=e744]:
+                - generic [ref=e745]:
+                  - generic [ref=e746]: Stairs - Bldg. 1
+                  - generic [ref=e747]:
+                    - img [ref=e748]
+                    - text: S&H Shop
+                - generic [ref=e753]: OVERDUE · Jun 8
+              - generic [ref=e755]: 0%
+              - generic [ref=e756]:
+                - button "0" [pressed] [ref=e757] [cursor=pointer]
+                - button "25" [ref=e758] [cursor=pointer]
+                - button "50" [ref=e759] [cursor=pointer]
+                - button "75" [ref=e760] [cursor=pointer]
+                - button "Done" [ref=e761] [cursor=pointer]
+            - generic [ref=e762]:
+              - generic [ref=e763]:
+                - generic [ref=e764]:
+                  - generic [ref=e765]: Stairs - Bldg. 2
+                  - generic [ref=e766]:
+                    - img [ref=e767]
+                    - text: S&H Shop
+                - generic [ref=e772]: OVERDUE · Jun 8
+              - generic [ref=e774]: 0%
+              - generic [ref=e775]:
+                - button "0" [pressed] [ref=e776] [cursor=pointer]
+                - button "25" [ref=e777] [cursor=pointer]
+                - button "50" [ref=e778] [cursor=pointer]
+                - button "75" [ref=e779] [cursor=pointer]
+                - button "Done" [ref=e780] [cursor=pointer]
+            - generic [ref=e781]:
+              - generic [ref=e782]:
+                - generic [ref=e783]:
+                  - generic [ref=e784]: Balcony Rail - Bldg. 2
+                  - generic [ref=e785]:
+                    - img [ref=e786]
+                    - text: Yashwant
+                - generic [ref=e791]: OVERDUE · Jun 9
+              - generic [ref=e793]: 0%
+              - generic [ref=e794]:
+                - button "0" [pressed] [ref=e795] [cursor=pointer]
+                - button "25" [ref=e796] [cursor=pointer]
+                - button "50" [ref=e797] [cursor=pointer]
+                - button "75" [ref=e798] [cursor=pointer]
+                - button "Done" [ref=e799] [cursor=pointer]
+            - generic [ref=e800]:
+              - generic [ref=e801]:
+                - generic [ref=e802]:
+                  - generic [ref=e803]: Truck 3 Delivery
+                  - generic [ref=e804]:
+                    - img [ref=e805]
+                    - text: S&H Shipping
+                - generic [ref=e810]: OVERDUE · Jun 10
+              - generic [ref=e812]: 0%
+              - generic [ref=e813]:
+                - button "0" [pressed] [ref=e814] [cursor=pointer]
+                - button "25" [ref=e815] [cursor=pointer]
+                - button "50" [ref=e816] [cursor=pointer]
+                - button "75" [ref=e817] [cursor=pointer]
+                - button "Done" [ref=e818] [cursor=pointer]
+            - generic [ref=e819]:
+              - generic [ref=e820]:
+                - generic [ref=e821]:
+                  - generic [ref=e822]: Main Steel - Bldg. 2
+                  - generic [ref=e823]:
+                    - img [ref=e824]
+                    - text: S&H Field
+                - generic [ref=e829]: ACTIVE · Jun 13
+              - generic [ref=e831]: 0%
+              - generic [ref=e832]:
+                - button "0" [pressed] [ref=e833] [cursor=pointer]
+                - button "25" [ref=e834] [cursor=pointer]
+                - button "50" [ref=e835] [cursor=pointer]
+                - button "75" [ref=e836] [cursor=pointer]
+                - button "Done" [ref=e837] [cursor=pointer]
+            - generic [ref=e838]:
+              - generic [ref=e839]:
+                - generic [ref=e840]:
+                  - generic [ref=e841]: Stairs - Bldg. 1
+                  - generic [ref=e842]:
+                    - img [ref=e843]
+                    - text: S&H Shipping
+                - generic [ref=e848]: ACTIVE · Jun 15
+              - generic [ref=e850]: 0%
+              - generic [ref=e851]:
+                - button "0" [pressed] [ref=e852] [cursor=pointer]
+                - button "25" [ref=e853] [cursor=pointer]
+                - button "50" [ref=e854] [cursor=pointer]
+                - button "75" [ref=e855] [cursor=pointer]
+                - button "Done" [ref=e856] [cursor=pointer]
+            - generic [ref=e857]:
+              - generic [ref=e858]:
+                - generic [ref=e859]:
+                  - generic [ref=e860]: Stairs - Bldg. 2
+                  - generic [ref=e861]:
+                    - img [ref=e862]
+                    - text: S&H Shipping
+                - generic [ref=e867]: ACTIVE · Jun 15
+              - generic [ref=e869]: 0%
+              - generic [ref=e870]:
+                - button "0" [pressed] [ref=e871] [cursor=pointer]
+                - button "25" [ref=e872] [cursor=pointer]
+                - button "50" [ref=e873] [cursor=pointer]
+                - button "75" [ref=e874] [cursor=pointer]
+                - button "Done" [ref=e875] [cursor=pointer]
+            - generic [ref=e876]:
+              - generic [ref=e877]:
+                - generic [ref=e878]:
+                  - generic [ref=e879]: Joists / Deck - Bldg. 1
+                  - generic [ref=e880]:
+                    - img [ref=e881]
+                    - text: Yashwant
+                - generic [ref=e886]: ACTIVE · Jun 19
+              - generic [ref=e888]: 74%
+              - generic [ref=e889]:
+                - button "0" [ref=e890] [cursor=pointer]
+                - button "25" [ref=e891] [cursor=pointer]
+                - button "50" [ref=e892] [cursor=pointer]
+                - button "75" [ref=e893] [cursor=pointer]
+                - button "Done" [ref=e894] [cursor=pointer]
+            - generic [ref=e895]:
+              - generic [ref=e896]:
+                - generic [ref=e897]:
+                  - generic [ref=e898]: Joists / Deck - Bldg. 2
+                  - generic [ref=e899]:
+                    - img [ref=e900]
+                    - text: New Mill
+                - generic [ref=e905]: ACTIVE · Jun 19
+              - generic [ref=e907]: 0%
+              - generic [ref=e908]:
+                - button "0" [pressed] [ref=e909] [cursor=pointer]
+                - button "25" [ref=e910] [cursor=pointer]
+                - button "50" [ref=e911] [cursor=pointer]
+                - button "75" [ref=e912] [cursor=pointer]
+                - button "Done" [ref=e913] [cursor=pointer]
+            - generic [ref=e914]:
+              - generic [ref=e915]:
+                - generic [ref=e916]:
+                  - generic [ref=e917]: Joists / Deck - Bldg. 2
+                  - generic [ref=e918]:
+                    - img [ref=e919]
+                    - text: New Mill
+                - generic [ref=e924]: ACTIVE · Jun 19
+              - generic [ref=e926]: 0%
+              - generic [ref=e927]:
+                - button "0" [pressed] [ref=e928] [cursor=pointer]
+                - button "25" [ref=e929] [cursor=pointer]
+                - button "50" [ref=e930] [cursor=pointer]
+                - button "75" [ref=e931] [cursor=pointer]
+                - button "Done" [ref=e932] [cursor=pointer]
+            - generic [ref=e933]:
+              - generic [ref=e934]:
+                - generic [ref=e935]:
+                  - generic [ref=e936]: Main Steel - Bldg. 2
+                  - generic [ref=e937]:
+                    - img [ref=e938]
+                    - text: S&H Shop
+                - generic [ref=e943]: ACTIVE · Jun 20
+              - generic [ref=e945]: 0%
+              - generic [ref=e946]:
+                - button "0" [pressed] [ref=e947] [cursor=pointer]
+                - button "25" [ref=e948] [cursor=pointer]
+                - button "50" [ref=e949] [cursor=pointer]
+                - button "75" [ref=e950] [cursor=pointer]
+                - button "Done" [ref=e951] [cursor=pointer]
+            - generic [ref=e952]:
+              - generic [ref=e953]:
+                - generic [ref=e954]:
+                  - generic [ref=e955]: Main Steel - Bldg. 1
+                  - generic [ref=e956]:
+                    - img [ref=e957]
+                    - text: Yashwant
+                - generic [ref=e962]: ACTIVE · Jun 25
+              - generic [ref=e964]: 14%
+              - generic [ref=e965]:
+                - button "0" [ref=e966] [cursor=pointer]
+                - button "25" [ref=e967] [cursor=pointer]
+                - button "50" [ref=e968] [cursor=pointer]
+                - button "75" [ref=e969] [cursor=pointer]
+                - button "Done" [ref=e970] [cursor=pointer]
+            - generic [ref=e971]:
+              - generic [ref=e972]:
+                - generic [ref=e973]:
+                  - generic [ref=e974]: Main Steel - Bldg. 2
+                  - generic [ref=e975]:
+                    - img [ref=e976]
+                    - text: S&H Shipping
+                - generic [ref=e981]: ACTIVE · Jun 26
+              - generic [ref=e983]: 0%
+              - generic [ref=e984]:
+                - button "0" [pressed] [ref=e985] [cursor=pointer]
+                - button "25" [ref=e986] [cursor=pointer]
+                - button "50" [ref=e987] [cursor=pointer]
+                - button "75" [ref=e988] [cursor=pointer]
+                - button "Done" [ref=e989] [cursor=pointer]
+            - generic [ref=e990]:
+              - generic [ref=e991]:
+                - generic [ref=e992]:
+                  - generic [ref=e993]: Joists / Deck - Bldg. 1 & 2
+                  - generic [ref=e994]:
+                    - img [ref=e995]
+                    - text: S&H Field
+                - generic [ref=e1000]: ACTIVE · Jun 28
+              - generic [ref=e1002]: 0%
+              - generic [ref=e1003]:
+                - button "0" [pressed] [ref=e1004] [cursor=pointer]
+                - button "25" [ref=e1005] [cursor=pointer]
+                - button "50" [ref=e1006] [cursor=pointer]
+                - button "75" [ref=e1007] [cursor=pointer]
+                - button "Done" [ref=e1008] [cursor=pointer]
+            - generic [ref=e1009]:
+              - generic [ref=e1010]:
+                - generic [ref=e1011]:
+                  - generic [ref=e1012]: Truck 2 Delivery
+                  - generic [ref=e1013]:
+                    - img [ref=e1014]
+                    - text: S&H Shipping
+                - generic [ref=e1019]: ACTIVE · TBD
+              - generic [ref=e1021]: 0%
+              - generic [ref=e1022]:
+                - button "0" [pressed] [ref=e1023] [cursor=pointer]
+                - button "25" [ref=e1024] [cursor=pointer]
+                - button "50" [ref=e1025] [cursor=pointer]
+                - button "75" [ref=e1026] [cursor=pointer]
+                - button "Done" [ref=e1027] [cursor=pointer]
+            - generic [ref=e1028]:
+              - generic [ref=e1029]:
+                - generic [ref=e1030]:
+                  - generic [ref=e1031]: Joists / Deck - Bldg. 1
+                  - generic [ref=e1032]:
+                    - img [ref=e1033]
+                    - text: New Mill
+                - generic [ref=e1038]: UPCOMING · Jun 19
+              - generic [ref=e1040]: 0%
+              - generic [ref=e1041]:
+                - button "0" [pressed] [ref=e1042] [cursor=pointer]
+                - button "25" [ref=e1043] [cursor=pointer]
+                - button "50" [ref=e1044] [cursor=pointer]
+                - button "75" [ref=e1045] [cursor=pointer]
+                - button "Done" [ref=e1046] [cursor=pointer]
+    - region "Notifications alt+T"

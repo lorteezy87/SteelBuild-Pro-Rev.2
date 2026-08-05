@@ -3,26 +3,42 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { toast } from "sonner";
-import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
+import { wpBudgetHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
-import { formatLocalDate } from "@/utils/dates";
 import {
-  addDays, subDays, snapToMonday, fmt, isThisWeek,
+  addDays, snapToMonday, fmt,
   PHASE_COLORS, PX_PER_DAY,
-  GHOST_RESOURCES_SCHED,
-  extractSkillsRS, getRowCapacityBg,
   injectKeyframes,
+  getBarStyle as computeBarStyle,
+  buildTimelineHeaders,
+  buildMonthBanners,
+  computeTodayOffset,
+  computeTimelineWindow,
+  computeCapacityFromWorkPackages,
 } from "./resourceScheduling/utils";
 import CapacityView from "./resourceScheduling/CapacityView";
 import NewResourceDialog from "./resourceScheduling/NewResourceDialog";
 import WPContextMenu from "./resourceScheduling/WPContextMenu";
 import TimelineHeaderRaw from "./resourceScheduling/TimelineHeader";
-import UnscheduledTray from "./resourceScheduling/UnscheduledTray";
 import ResourceRow from "./resourceScheduling/ResourceRow";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus } from "lucide-react";
 import { buildResourceGuruPlanning } from "@/lib/resourcePlanning";
-import { ResourceGuruCommandStrip } from "./resourceScheduling/components";
+import {
+  ResourceGuruCommandStrip,
+  SchedulingToolbar,
+  BoardEmptyState,
+  HoursSummaryStrip,
+  ResourcesSidebar,
+  DragTooltipOverlay,
+  HoverTooltipOverlay,
+  UndoToastBanner,
+} from "./resourceScheduling/components";
+import { buildScheduleStats } from "./resourceScheduling/format";
+
+// Only mounted while the edit dialog is open — keep it off the board's chunk.
+const ResourceFormModal = lazyWithRetry(() => import("@/components/resources/ResourceFormModal"));
 
 // One-shot keyframe injection - must run at module load, not render.
 injectKeyframes();
@@ -65,6 +81,20 @@ export default function ResourceScheduling() {
       toast.success("Resource created");
     },
     onError: (err) => toast.error(err.message || "Failed to create resource"),
+  });
+
+  // The board could create resources but never edit them, so a resource added
+  // here had no edit path at all. ResourceFormModal hands back a payload
+  // already mapped to the `resources` columns, so it goes straight through.
+  const [editingResource, setEditingResource] = useState<any>(null);
+  const updateResMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => entities.Resource.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      setEditingResource(null);
+      toast.success("Resource updated");
+    },
+    onError: (err: any) => toast.error(err?.message || "Failed to update resource"),
   });
 
   // Data queries
@@ -151,168 +181,29 @@ export default function ResourceScheduling() {
   }, [topLevelResources, membersByParentId, expandedCrews]);
 
   // Capacity view data (uses same workPackages query)
-  const capacity = useMemo(() => {
-    const wps = workPackages;
-    const shopBudget = wps.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0), 0);
-    const shopActual = wps.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0), 0);
-    const shopRemaining = shopBudget - shopActual;
-    const fieldBudget = wps.reduce((s, w) => s + (Number(w.field_hours_budget) || 0), 0);
-    const fieldActual = wps.reduce((s, w) => s + (Number(w.field_hours_actual) || 0), 0);
-    const fieldRemaining = fieldBudget - fieldActual;
-    const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-    const inFabTons = wps.filter(w => w.phase === 'Fabrication' && w.status === 'In Progress').reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-    const byPhase = {
-      Detailing: wps.filter(w => w.phase === 'Detailing' && !['Complete', 'On Hold'].includes(w.status)).length,
-      Fabrication: wps.filter(w => w.phase === 'Fabrication' && !['Complete', 'On Hold'].includes(w.status)).length,
-      Delivery: wps.filter(w => w.phase === 'Delivery' && !['Complete', 'On Hold'].includes(w.status)).length,
-      Erection: wps.filter(w => w.phase === 'Erection' && !['Complete', 'On Hold'].includes(w.status)).length,
-    };
-    return { shopBudget, shopActual, shopRemaining, fieldBudget, fieldActual, fieldRemaining, totalTons, inFabTons, byPhase };
-  }, [workPackages]);
+  const capacity = useMemo(() => computeCapacityFromWorkPackages(workPackages), [workPackages]);
 
-  // Calculate timeline window from actual WP scheduling dates.
-  // scheduled_start_date / scheduled_end_date were added in migration 042.
-  // released_date is kept as a fallback start (the date the package was
-  // released to the shop) so legacy WPs without a scheduling window still
-  // anchor the timeline.
-  const { timelineStart, timelineEnd, totalDays } = useMemo(() => {
-    const starts = workPackages
-      .filter((wp) => wp.scheduled_start_date || wp.released_date)
-      .map((wp) => new Date(wp.scheduled_start_date || wp.released_date).getTime())
-      .filter((t) => !isNaN(t));
-    const ends = workPackages
-      .filter((wp) => wp.scheduled_end_date)
-      .map((wp) => new Date(wp.scheduled_end_date).getTime())
-      .filter((t) => !isNaN(t));
-
-    const tStart = starts.length > 0
-      ? subDays(new Date(Math.min.apply(null, starts)), 14)
-      : subDays(new Date(), 14);
-    const tEnd = ends.length > 0
-      ? addDays(new Date(Math.max.apply(null, ends)), 14)
-      : addDays(new Date(), 60);
-
-    const days = Math.ceil((+tEnd - +tStart) / 86400000);
-
-    return {
-      timelineStart: tStart,
-      timelineEnd: tEnd,
-      totalDays: days,
-    };
-  }, [workPackages]);
+  const { timelineStart, timelineEnd } = useMemo(
+    () => computeTimelineWindow(workPackages),
+    [workPackages],
+  );
 
   const pxPerDay = PX_PER_DAY[zoomMode];
 
-  // Calculate bar position
-  const getBarStyle = (wp: any) => {
-    const rawStart = wp.scheduled_start_date || wp.released_date;
-    if (!rawStart || !wp.scheduled_end_date) return null;
+  const getBarStyle = useCallback(
+    (wp: any) => computeBarStyle(wp, timelineStart, pxPerDay),
+    [timelineStart, pxPerDay],
+  );
 
-    const start = new Date(rawStart);
-    // wp.scheduled_end_date guaranteed non-null by the guard above.
-    const end = new Date(wp.scheduled_end_date);
-    const left = Math.round(
-      ((+start - +timelineStart) / 86400000) * pxPerDay
-    );
-    const width = Math.max(
-      Math.round(((+end - +start) / 86400000) * pxPerDay),
-      pxPerDay * 2
-    );
-    const duration = Math.round((+end - +start) / 86400000);
+  const headers = useMemo(
+    () => buildTimelineHeaders(zoomMode, timelineStart, timelineEnd, pxPerDay),
+    [zoomMode, timelineStart, timelineEnd, pxPerDay],
+  );
 
-    return { left, width, duration };
-  };
-
-  // Build timeline headers
-  const buildHeaders = useCallback(() => {
-    const headers = [];
-    let cursor = new Date(timelineStart);
-    cursor.setHours(0, 0, 0, 0);
-
-    if (zoomMode === "week") {
-      while (cursor < timelineEnd) {
-        headers.push({
-          label: cursor.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-          subLabel: cursor.toLocaleDateString("en-US", {
-            weekday: "short",
-          }),
-          width: pxPerDay * 7,
-          isToday: isThisWeek(cursor),
-          date: new Date(cursor),
-        });
-        cursor = addDays(cursor, 7);
-      }
-    } else if (zoomMode === "month") {
-      while (cursor < timelineEnd) {
-        headers.push({
-          label: cursor.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-          subLabel: cursor.toLocaleDateString("en-US", {
-            year: "numeric",
-          }),
-          width: pxPerDay * 7,
-          isToday: isThisWeek(cursor),
-          month: cursor.getMonth(),
-          date: new Date(cursor),
-        });
-        cursor = addDays(cursor, 7);
-      }
-    } else if (zoomMode === "quarter") {
-      while (cursor < timelineEnd) {
-        headers.push({
-          label: cursor.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-          width: pxPerDay * 14,
-          isToday: false,
-          date: new Date(cursor),
-        });
-        cursor = addDays(cursor, 14);
-      }
-    }
-
-    return headers;
-  }, [zoomMode, timelineStart, timelineEnd, pxPerDay]);
-
-  const headers = buildHeaders();
-
-  // Build month banners for month view
-  const monthBanners = useMemo(() => {
-    if (zoomMode !== "month") return [];
-
-    const banners = [];
-    let currentMonth = -1;
-    let currentWidth = 0;
-    let currentLabel = "";
-
-    headers.forEach((h) => {
-      if (h.month !== currentMonth) {
-        if (currentMonth !== -1) {
-          banners.push({ label: currentLabel, width: currentWidth });
-        }
-        currentMonth = h.month;
-        currentLabel = formatLocalDate(h.date, "en-US", {
-          month: "long",
-          year: "numeric",
-        });
-        currentWidth = h.width;
-      } else {
-        currentWidth += h.width;
-      }
-    });
-
-    if (currentLabel) {
-      banners.push({ label: currentLabel, width: currentWidth });
-    }
-
-    return banners;
-  }, [zoomMode, headers]);
+  const monthBanners = useMemo(
+    () => buildMonthBanners(zoomMode, headers),
+    [zoomMode, headers],
+  );
 
   // Filter WPs
   const filteredWorkPackages = useMemo(() => {
@@ -359,34 +250,10 @@ export default function ResourceScheduling() {
     });
   }, [displayResources, resourceFocus, resourceGuruPlan.rowById]);
 
-  const scheduleStats = useMemo(() => {
-    const totalBudgetHrs = filteredWorkPackages.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-    const totalActualHrs = filteredWorkPackages.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
-    const totalShopBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0), 0);
-    const totalShopActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0), 0);
-    const totalFieldBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_budget) || 0), 0);
-    const totalFieldActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_actual) || 0), 0);
-    const assignedWPCount = scheduledWps.filter(wp => wp.crew).length;
-    const unassignedCount = filteredWorkPackages.filter(wp => !wp.crew).length;
-    const overAllocatedResources = topLevelResources.filter(res => {
-      const resWPs = scheduledWps.filter(wp => wp.crew === res.name);
-      const resBudget = resWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-      const effCap = effectiveCapacityById[res.id] || 0;
-      return effCap > 0 && resBudget > effCap;
-    }).length;
-
-    return {
-      totalBudgetHrs,
-      totalActualHrs,
-      totalShopBudget,
-      totalShopActual,
-      totalFieldBudget,
-      totalFieldActual,
-      assignedWPCount,
-      unassignedCount,
-      overAllocatedResources,
-    };
-  }, [filteredWorkPackages, scheduledWps, topLevelResources, effectiveCapacityById]);
+  const scheduleStats = useMemo(
+    () => buildScheduleStats(filteredWorkPackages, scheduledWps, topLevelResources, effectiveCapacityById),
+    [filteredWorkPackages, scheduledWps, topLevelResources, effectiveCapacityById],
+  );
 
   // Cleanup drag function
   const cleanupDrag = useCallback(() => {
@@ -772,16 +639,7 @@ export default function ResourceScheduling() {
     };
   };
 
-  // Today line offset - normalize both dates to midnight to avoid DST errors
-  const todayOffset = Math.round(
-    (() => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tStart = new Date(timelineStart);
-      tStart.setHours(0, 0, 0, 0);
-      return ((+today - +tStart) / 86400000) * pxPerDay;
-    })()
-  );
+  const todayOffset = computeTodayOffset(timelineStart, pxPerDay);
 
   // Auto-scroll to today when the board mounts or timeline changes
   useEffect(() => {
@@ -791,6 +649,7 @@ export default function ResourceScheduling() {
   }, [todayOffset]);
 
   return (
+    <div className="sb-dashboard-reference-page">
     <OperationsPageShell
       eyebrow={activeProject?.name || "No Project Selected"}
       title="Crew Scheduling"
@@ -817,79 +676,14 @@ export default function ResourceScheduling() {
     >
       {/* TOOLBAR */}
       <OpsFilterPanel>
-        {/* View toggle */}
-        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
-          {[{ id: "board", label: "Board" }, { id: "capacity", label: "Capacity" }].map(v => (
-            <button key={v.id} onClick={() => setViewMode(v.id)} style={{
-              padding: "6px 12px",
-              border: "none",
-              borderRight: v.id !== "capacity" ? "1px solid var(--border-default)" : "none",
-              background: viewMode === v.id ? "var(--accent-muted)" : "transparent",
-              color: viewMode === v.id ? "var(--accent)" : "var(--text-secondary)",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-            }}>{v.label}</button>
-          ))}
-        </div>
-
-        {/* Zoom buttons */}
-        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
-          {["week", "month", "quarter"].map((mode, i) => (
-            <button
-              key={mode}
-              onClick={() => setZoomMode(mode)}
-              style={{
-                padding: "6px 12px",
-                border: "none",
-                borderRight: i < 2 ? "1px solid var(--border-default)" : "none",
-                background: zoomMode === mode ? "var(--accent-muted)" : "transparent",
-                color: zoomMode === mode ? "var(--accent)" : "var(--text-secondary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                cursor: "pointer",
-                textTransform: "uppercase",
-              }}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-
-        {/* Phase filters */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          {["all", "Detailing", "Fabrication", "Delivery", "Erection"].map((p) => {
-            const phaseColor =
-              p === "Detailing"   ? "var(--phase-detailing)"   :
-              p === "Fabrication" ? "var(--phase-fabrication)" :
-              p === "Delivery"    ? "var(--phase-delivery)"    :
-              p === "Erection"    ? "var(--phase-erection)"    :
-                                    "var(--accent)";
-            const active = filterPhase === p;
-            return (
-              <button
-                key={p}
-                onClick={() => setFilterPhase(p)}
-                style={{
-                  padding: "5px 10px",
-                  borderRadius: 6,
-                  border: active ? `1px solid ${phaseColor}` : "1px solid var(--border-default)",
-                  background: active ? "color-mix(in srgb, " + phaseColor + " 14%, transparent)" : "transparent",
-                  color: active ? phaseColor : "var(--text-muted)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-              >
-                {p === "all" ? "All Phases" : p}
-              </button>
-            );
-          })}
-        </div>
+        <SchedulingToolbar
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          zoomMode={zoomMode}
+          onZoomModeChange={setZoomMode}
+          filterPhase={filterPhase}
+          onFilterPhaseChange={setFilterPhase}
+        />
       </OpsFilterPanel>
 
       <ResourceGuruCommandStrip
@@ -908,6 +702,19 @@ export default function ResourceScheduling() {
         onClose={() => setShowNewResource(false)}
       />
 
+      {/* Edit Resource Modal — reuses the register's form so both surfaces
+          write the exact same column mapping. */}
+      {editingResource && (
+        <React.Suspense fallback={null}>
+          <ResourceFormModal
+            projectId={activeProject?.id}
+            editing={editingResource}
+            onClose={() => setEditingResource(null)}
+            onSave={(data: any) => updateResMut.mutate({ id: editingResource.id, data })}
+          />
+        </React.Suspense>
+      )}
+
       {/* Capacity view */}
       {viewMode === "capacity" && (
         <CapacityView capacity={capacity} workPackages={workPackages} />
@@ -918,250 +725,20 @@ export default function ResourceScheduling() {
       <>
       {/* HERO EMPTY STATE ? no resources or WPs yet */}
       {resources.length === 0 && workPackages.length === 0 && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 40 }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            No Resources Assigned
-          </div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-muted)", maxWidth: 380, textAlign: "center", lineHeight: 1.7 }}>
-            Add crew, equipment, and work packages to start building your resource schedule. Drag work packages onto resources to assign them.
-          </div>
-
-          {/* Ghost placeholder rows */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 520, marginTop: 8 }}>
-            {GHOST_RESOURCES_SCHED.map((ghost, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "12px 16px",
-                  background: "var(--bg-surface-low)",
-                  border: "1px dashed var(--bg-surface-high)",
-                  borderRadius: "var(--radius-card)",
-                  animation: "rsGhostShimmer 2.5s ease-in-out infinite",
-                  animationDelay: `${i * 0.35}s`,
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-disabled)" }}>{ghost.name}</div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-disabled)", marginTop: 2 }}>{ghost.role}</div>
-                </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {ghost.skills.map((s) => (
-                    <span key={s} style={{
-                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 600,
-                      color: "var(--text-disabled)", background: "var(--hover-bg)",
-                      border: "1px solid var(--divider)", borderRadius: 10,
-                      padding: "2px 7px", textTransform: "uppercase", letterSpacing: "0.04em",
-                    }}>{s}</span>
-                  ))}
-                </div>
-                <div style={{
-                  width: 100, height: 20, borderRadius: 4,
-                  background: "var(--hover-bg)", border: "1px dashed var(--divider)",
-                }} />
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-            <button
-              onClick={() => setShowNewResource(true)}
-              style={{
-                background: "var(--accent)", color: "#07090E", border: "none",
-                borderRadius: "var(--radius-btn)", padding: "10px 24px",
-                fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700,
-                cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
-                minHeight: 44, transition: "background 0.15s, box-shadow 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-glow-gold)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.boxShadow = "none"; }}
-            >
-              + Add First Resource
-            </button>
-            <button
-              onClick={() => toast.info("Company resource sync coming soon")}
-              style={{
-                background: "transparent", color: "var(--text-muted)",
-                border: "1px solid var(--border-strong)", borderRadius: "var(--radius-btn)",
-                padding: "10px 20px", fontFamily: "var(--font-display)", fontSize: 12,
-                fontWeight: 600, cursor: "pointer", textTransform: "uppercase",
-                letterSpacing: "0.08em", minHeight: 44, transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              Sync Company Resources
-            </button>
-          </div>
-        </div>
+        <BoardEmptyState onAddResource={() => setShowNewResource(true)} />
       )}
-      {/* HOURS SUMMARY STRIP */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8,
-        padding: "8px 16px", borderBottom: "1px solid var(--divider)",
-        background: "var(--bg-page)", flexShrink: 0,
-      }}>
-        {(() => {
-          // Phase-aware totals: each WP contributes only its phase-relevant
-          // hours bucket, so shop + field WPs don't double-count at the
-          // portfolio stat.
-          const totalBudgetHrs = filteredWorkPackages.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-          const totalActualHrs = filteredWorkPackages.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
-          const totalShopBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0), 0);
-          const totalShopActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0), 0);
-          const totalFieldBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_budget) || 0), 0);
-          const totalFieldActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_actual) || 0), 0);
-          const assignedWPCount = scheduledWps.filter(wp => wp.crew).length;
-          const unassignedCount = filteredWorkPackages.filter(wp => !wp.crew).length;
-          // Count how many top-level resources are over-allocated. Over-
-          // alloc = assigned WP budget > effective capacity (rollup from
-          // crew members when applicable). Uses phase-aware hour bucketing
-          // so a field crew isn't charged for a WP's shop hours and vice
-          // versa.
-          const overAllocatedResources = topLevelResources.filter(res => {
-            const resWPs = scheduledWps.filter(wp => wp.crew === res.name);
-            const resBudget = resWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-            const effCap = effectiveCapacityById[res.id] || 0;
-            return effCap > 0 && resBudget > effCap;
-          }).length;
-          return [
-            { label: "TOTAL ESTIMATED", value: totalBudgetHrs.toLocaleString() + "h", color: "var(--accent)" },
-            { label: "TOTAL ACTUAL", value: totalActualHrs.toLocaleString() + "h", color: totalActualHrs > totalBudgetHrs ? "var(--status-error)" : "var(--status-success)" },
-            { label: "SHOP HRS", value: `${totalShopActual.toLocaleString()} / ${totalShopBudget.toLocaleString()}`, color: totalShopActual > totalShopBudget ? "var(--status-error)" : "var(--text-secondary)" },
-            { label: "FIELD HRS", value: `${totalFieldActual.toLocaleString()} / ${totalFieldBudget.toLocaleString()}`, color: totalFieldActual > totalFieldBudget ? "var(--status-error)" : "var(--text-secondary)" },
-            { label: "ASSIGNED / TOTAL", value: `${assignedWPCount} / ${filteredWorkPackages.length} WPs`, color: unassignedCount > 0 ? "var(--status-warning)" : "var(--status-success)" },
-            { label: "OVER-ALLOCATED", value: overAllocatedResources, color: overAllocatedResources > 0 ? "var(--status-error)" : "var(--status-success)" },
-          ].map(({ label, value, color }) => {
-            const isOverAlloc = label === "OVER-ALLOCATED" && (value as number) > 0;
-            return (
-              <div key={label} style={{
-                padding: "6px 10px", background: "var(--hover-bg)", borderRadius: 6,
-                border: isOverAlloc ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--hover-bg)",
-                animation: isOverAlloc ? "rsOverAllocPulse 2s ease-in-out infinite" : undefined,
-                transition: "border-color 0.2s",
-              }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color }}>{value}</div>
-              </div>
-            );
-          });
-        })()}
-      </div>
+      <HoursSummaryStrip stats={scheduleStats} />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* LEFT PANEL ? Allocation & Unscheduled */}
-        <div
-          style={{
-            width: 260,
-            background: "var(--bg-page)",
-            borderRight: "1px solid var(--border-default)",
-            padding: "12px",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "auto",
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              color: "var(--status-warning)",
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              marginBottom: 12,
-              fontWeight: 700,
-            }}
-          >
-            RESOURCES
-          </div>
-
-          {["Person", "Crew", "Labor", "Equipment", "Subcontractor", "Material", "Bay"].map(type => {
-            // Only show top-level resources in the capacity stack - members
-            // are rolled up into their crew's effective capacity.
-            const typeResources = topLevelResources.filter(r => (r.resource_type || "Person") === type);
-            if (typeResources.length === 0) return null;
-            return (
-              <div key={type}>
-                <div style={{
-                  fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-                    letterSpacing: "0.14em", textTransform: "uppercase", padding: "8px 0 4px",
-                  borderBottom: "1px solid var(--border-default)", marginBottom: 6,
-                }}>
-                  {type} ({typeResources.length})
-                </div>
-                {typeResources.map(res => {
-                  const assignedWPs = scheduledWps.filter(wp => wp.crew === res.name);
-                  const resBudgetHrs = assignedWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-                  const resActualHrs = assignedWPs.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
-                  const resBurnPct = resBudgetHrs > 0 ? Math.round((resActualHrs / resBudgetHrs) * 100) : 0;
-                  const isOverBudget = resActualHrs > resBudgetHrs && resBudgetHrs > 0;
-                  // Effective capacity = own + sum of direct members' capacities
-                  const resBudgetFromEntity = effectiveCapacityById[res.id] || 0;
-                  const isOverAllocated = resBudgetFromEntity > 0 && resBudgetHrs > resBudgetFromEntity;
-                  const resSkills = extractSkillsRS(res);
-                  const memberCount = (membersByParentId[res.id] || []).length;
-                  const heatBg = getRowCapacityBg(resBurnPct, isOverAllocated);
-                  return (
-                    <div key={res.id} style={{
-                      background: isOverAllocated ? "rgba(239,68,68,0.06)" : heatBg !== "transparent" ? heatBg : "var(--bg-surface-low)",
-                      border: isOverAllocated ? "1px solid rgba(239,68,68,0.20)" : "1px solid var(--divider)",
-                      borderRadius: 8, padding: 8, marginBottom: 8,
-                      transition: "background 0.2s, border-color 0.2s",
-                    }}>
-                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 600, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                        {res.name}
-                        {memberCount > 0 && (
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em" }}>
-                            · {memberCount} MEMBER{memberCount === 1 ? "" : "S"}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                        {res.role || "\u2014"}
-                      </div>
-                      {/* Skill tag badges */}
-                      {resSkills.length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
-                          {resSkills.map((sk, si) => (
-                            <span key={si} style={{
-                              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
-                              color: "var(--text-secondary)", background: "var(--hover-bg)",
-                              border: "1px solid var(--bg-surface-high)", borderRadius: 8,
-                              padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
-                            }}>{sk}</span>
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: isOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
-                        {resBudgetHrs}h bud {"\u00B7"} {resActualHrs}h act {"\u00B7"} {resBurnPct}%
-                      </div>
-                      <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--border-default)", marginTop: 3 }}>
-                        <div style={{ width: `${Math.min(100, resBurnPct)}%`, height: "100%", borderRadius: 2, background: resBurnPct > 100 ? "var(--status-error)" : resBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
-                      </div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
-                        {assignedWPs.length} WPs {"\u00B7"} {assignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
-                      </div>
-                      {isOverAllocated && (
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
-                        {"\u26A0"} OVER-ALLOC ({resBudgetHrs}h / {resBudgetFromEntity}h cap)
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-
-          <UnscheduledTray
-            unscheduledWps={unscheduledWps}
-            onPointerDown={onUnscheduledPointerDown}
-            onOpenContextMenu={setContextMenu}
-          />
-        </div>
+        <ResourcesSidebar
+          topLevelResources={topLevelResources}
+          scheduledWps={scheduledWps}
+          effectiveCapacityById={effectiveCapacityById}
+          membersByParentId={membersByParentId}
+          unscheduledWps={unscheduledWps}
+          onUnscheduledPointerDown={onUnscheduledPointerDown}
+          onOpenContextMenu={setContextMenu}
+        />
 
         {/* RIGHT PANEL ? Timeline Board */}
         <div
@@ -1204,6 +781,7 @@ export default function ResourceScheduling() {
               todayOffset={todayOffset}
               onBarPointerDown={onBarPointerDown}
               onOpenContextMenu={setContextMenu}
+              onEditResource={setEditingResource}
               onBarHoverEnter={(e, wp) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 const shopBud = Number(wp.shop_hours_budget) || 0;
@@ -1225,62 +803,8 @@ export default function ResourceScheduling() {
         </div>
       </div>
 
-      {/* Drag Tooltip */}
-      {dragTooltip && (
-        <div
-          style={{
-            position: "fixed",
-            left: dragTooltip.x,
-            top: dragTooltip.y,
-            transform: "translateX(-50%)",
-            background: "var(--bg-surface-low)",
-            border: "1px solid rgba(245,158,11,0.5)",
-            borderRadius: 6,
-            padding: "4px 12px",
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
-            color: "var(--status-warning)",
-            fontWeight: 700,
-            pointerEvents: "none",
-            zIndex: 10001,
-            whiteSpace: "nowrap",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.7)",
-          }}
-        >
-          {dragTooltip.text}
-          {dragTooltip.subText && (
-            <div style={{ fontSize: 9, fontWeight: 500, color: "var(--text-secondary)", marginTop: 2, letterSpacing: "0.03em" }}>
-              {dragTooltip.subText}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Hover Tooltip */}
-      {hoverTooltip && (
-        <div style={{
-          position: "fixed", left: hoverTooltip.x, top: hoverTooltip.y,
-          transform: "translate(-50%, -100%)", background: "var(--bg-surface-low)",
-          border: "1px solid rgba(var(--accent-rgb, 59,130,246),0.25)", borderRadius: 8,
-          padding: "10px 14px", zIndex: 10001, pointerEvents: "none",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.7)", minWidth: 200,
-        }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
-            {hoverTooltip.wp.wp_number} — {hoverTooltip.wp.name}
-          </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", lineHeight: 1.8 }}>
-            Phase: {hoverTooltip.wp.phase} {"\u00B7"} Status: {hoverTooltip.wp.status}<br/>
-            Tonnage: {hoverTooltip.wp.tonnage || 0}T {"\u00B7"} Progress: {hoverTooltip.wp.percent_complete || 0}%<br/>
-            Shop: {hoverTooltip.shopAct}h / {hoverTooltip.shopBud}h {"\u00B7"} Field: {hoverTooltip.fieldAct}h / {hoverTooltip.fieldBud}h<br/>
-            <span style={{ color: hoverTooltip.totalAct > hoverTooltip.totalBud ? "var(--status-error-bright)" : "var(--status-success-bright)", fontWeight: 700 }}>
-              Total: {hoverTooltip.totalAct}h / {hoverTooltip.totalBud}h ({hoverTooltip.totalBud > 0 ? Math.round((hoverTooltip.totalAct / hoverTooltip.totalBud) * 100) : 0}%)
-            </span>
-            {hoverTooltip.totalBud > 0 && (
-              <><br/><span style={{ color: "var(--accent)", fontWeight: 600 }}>{"\u2248"} {hoursToWorkdays(hoverTooltip.totalBud)} workdays</span></>
-            )}
-          </div>
-        </div>
-      )}
+      <DragTooltipOverlay tooltip={dragTooltip} />
+      <HoverTooltipOverlay tooltip={hoverTooltip} />
 
       {/* Context Menu */}
       <WPContextMenu
@@ -1294,29 +818,10 @@ export default function ResourceScheduling() {
         }}
       />
 
-      {/* Undo Toast */}
-      {undoToast && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 20,
-            left: 20,
-            background: "var(--bg-surface-low)",
-            border: "1px solid rgba(0,214,143,0.30)",
-            borderRadius: 8,
-            padding: "10px 14px",
-            fontSize: 11,
-            fontFamily: "var(--font-body)",
-            color: "var(--status-success)",
-            zIndex: 9998,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
-          }}
-        >
-          ✓ {undoToast.message}
-        </div>
-      )}
+      <UndoToastBanner toast={undoToast} />
       </>
       )}
     </OperationsPageShell>
+    </div>
   );
 }

@@ -92,7 +92,9 @@ function isoDate(value: any): string | null {
 }
 
 function todayStart(value: any): Date {
-  const parsed = value ? asDate(value) : new Date();
+  // asDate returns null for unparseable input; fall back to today so this never
+  // dereferences null (matches the falsy-value branch, which already uses today).
+  const parsed = (value ? asDate(value) : new Date()) ?? new Date();
   parsed.setHours(0, 0, 0, 0);
   return parsed;
 }
@@ -142,7 +144,7 @@ function isReleasedDrawing(drawing: Row): boolean {
   ].some((value) => RELEASED_DRAWING_STATES.has(normalize(value)));
 }
 
-function projectArea(row: Row): any {
+function projectArea(row: Row | null | undefined): any {
   return (
     row?.project_area ||
     row?.area ||

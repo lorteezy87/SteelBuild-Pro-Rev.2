@@ -2,11 +2,12 @@
  * drawingHub/setLock.js — Set-level edit lock for drawing_sets.
  *
  * Migration 071 added is_locked / locked_at / locked_by / locked_reason on
- * drawing_sets. When a set is locked, every write path that mutates a
- * sheet's zones, links, dependencies, or markup MUST refuse to proceed.
- * The DB does NOT enforce the lock — RLS only checks project membership —
- * so this module's `assertSetUnlocked()` guard is the single source of
- * truth for the rule.
+ * drawing_sets. When a set is locked, the DB now enforces a write barrier
+ * across the core hub mutation tables (drawings, drawing_zones,
+ * drawing_links, and drawing_zone_dependencies) via triggers.
+ * This module's `assertSetUnlocked()` guard is a defense-in-depth layer
+ * for interactive clients, while DB-level enforcement blocks service-role
+ * and direct DB writes too.
  *
  * Lock granularity is the SET, not the sheet. A sheet's drawing row points
  * back to drawing_sets via drawing_set_id; we resolve the set and check
@@ -14,7 +15,7 @@
  * with drawing_set_id = NULL) are always considered unlocked, since
  * there's no parent record to flip.
  *
- * Admin-only unlock is gated client-side via useAppSecurity().isAdmin in
+ * Admin-only unlock is gated client-side via usePermissions().isAdmin in
  * the UI layer; this module enforces nothing about WHO can lock or
  * unlock — RLS handles project membership and the UI gates the action.
  */
@@ -43,12 +44,19 @@ export async function lockSet({ setId, reason = null, userId = null } = {}) {
 }
 
 /**
- * Clear the lock. The audit columns (locked_at / locked_by / locked_reason)
- * are nulled out so a future lock pass starts fresh. Returns the updated
- * row.
+ * Clear the lock — an ADMIN OVERRIDE. A `reason` is REQUIRED: unlocking a
+ * released-for-fab set is consequential, so the override must be justified.
+ * The lock columns (locked_at / locked_by / locked_reason) are nulled so a
+ * future lock pass starts fresh — which means the reason only survives in the
+ * caller's audit trail (see DrawingViewer.onUnlock → logActivity). Returns the
+ * updated row. Throws if setId or reason is missing.
  */
-export async function unlockSet({ setId } = {}) {
+export async function unlockSet({ setId, reason = null } = {}) {
   if (!setId) throw new Error("unlockSet: setId required");
+  const cleanReason = reason ? String(reason).trim() : "";
+  if (!cleanReason) {
+    throw new Error("unlockSet: reason required — unlocking is an admin override and must record why.");
+  }
   const { data, error } = await supabase
     .from("drawing_sets")
     .update({

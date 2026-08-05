@@ -33,52 +33,39 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import DeleteDialog from '@/components/shared/DeleteDialog';
-import { KpiTile as KpiTileRaw } from '@/components/design-system';
-import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from '@/components/operations/OperationsPageShell';
-import { Plus, Download, Printer } from 'lucide-react';
+import type { RowWithAliases } from '@/api/supabaseClient';
+import type { Json } from '@/types/supabase';
 import { useProjectId } from '@/hooks/useProjectId';
 import { useAutoOpenCreate } from '@/hooks/useAutoOpenCreate';
+import { toUserErrorMessage, withProjectId } from '@/lib/mutations/standardMutation';
 import { exportToCSV } from '@/lib/csv';
-import { PROCUREMENT_CATEGORIES, ALL_STATUSES, iStyle, addWeeks } from './procurement/format';
-import {
-  PipelineView, ListView, BoardView, ProcurementFormModal,
-} from './procurement/components';
+import { PROCUREMENT_CATEGORIES, ALL_STATUSES, addWeeks } from './procurement/format';
+import ProcurementControlCenter from './procurement/ProcurementControlCenter';
+import { ProcurementFormModal } from './procurement/components';
+import DeleteDialog from '@/components/shared/DeleteDialog';
+import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
+import { Button as ButtonBase } from '@/components/design-system';
+const Button = ButtonBase as any;
+import type { ProcurementItem } from './procurement/procurementControlCenter.derive';
 
-// KpiTile is a still-.jsx primitive; cast at the boundary.
-const KpiTile = KpiTileRaw as any;
 
 export default function Procurement() {
   const [searchParams, setSearchParams] = useSearchParams();
   const projectId = useProjectId();
   const qc = useQueryClient();
 
-  const [view, setView] = useState('pipeline');
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [editing, setEditing] = useState<RowWithAliases<'deliveries'> | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RowWithAliases<'deliveries'> | null>(null);
   const [filterCat, setFilterCat] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [search, setSearch] = useState('');
 
-  // Restore persisted view + read URL search params on first render.
   React.useEffect(() => {
-    const savedView = localStorage.getItem('procurementView');
-    if (savedView && ['pipeline', 'list', 'board'].includes(savedView)) {
-      setView(savedView);
-    }
-    const urlView = searchParams.get('view');
-    if (urlView && ['pipeline', 'list', 'board'].includes(urlView)) {
-      setView(urlView);
-    }
     const urlStatus = searchParams.get('status');
-    if (urlStatus && ALL_STATUSES.includes(urlStatus)) {
-      setFilterStatus(urlStatus);
-    }
+    if (urlStatus && ALL_STATUSES.includes(urlStatus)) setFilterStatus(urlStatus);
     const urlCat = searchParams.get('cat');
-    if (urlCat && PROCUREMENT_CATEGORIES.includes(urlCat)) {
-      setFilterCat(urlCat);
-    }
+    if (urlCat && PROCUREMENT_CATEGORIES.includes(urlCat)) setFilterCat(urlCat);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -87,7 +74,13 @@ export default function Procurement() {
     setShowForm(true);
   }, { enabled: !!projectId });
 
-  const { data: rawItems = [], isLoading } = useQuery({
+  const {
+    data: rawItems = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['procurement', projectId],
     queryFn: () => projectId
       ? entities.Delivery.filter({ project_id: projectId })
@@ -122,11 +115,9 @@ export default function Procurement() {
   );
 
   const createMut = useMutation({
-    mutationFn: (data: any) => entities.Delivery.create({
-      ...data,
-      delivery_type: 'PROCUREMENT',
-      project_id: projectId,
-    }),
+    mutationFn: (data: any) => entities.Delivery.create(
+      withProjectId({ ...data, delivery_type: 'PROCUREMENT' }, projectId),
+    ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement'] });
       qc.invalidateQueries({ queryKey: ['deliveries-all'] });
@@ -134,7 +125,7 @@ export default function Procurement() {
       setEditing(null);
       toast.success('Item added');
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, 'Failed to add item')),
   });
 
   const updateMut = useMutation({
@@ -146,7 +137,7 @@ export default function Procurement() {
       setEditing(null);
       toast.success('Item updated');
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, 'Failed to update item')),
   });
 
   // Soft-delete mirrors the Budget Hours pattern. Hard delete was
@@ -167,6 +158,7 @@ export default function Procurement() {
       setDeleteTarget(null);
       toast.success('Item removed');
     },
+    onError: (err) => toast.error(toUserErrorMessage(err, 'Failed to remove item')),
   });
 
   const today = useMemo(() => new Date(), []);
@@ -234,14 +226,6 @@ export default function Procurement() {
     });
   }, [enriched, filterCat, filterStatus, search]);
 
-  const kpis = useMemo(() => ({
-    total: items.length,
-    open: items.filter(i => !['Received', 'Cancelled'].includes(i.status)).length,
-    overdue: enriched.filter(i => i.isOverdue).length,
-    longLead: items.filter(i => i.is_long_lead === true).length,
-    longLeadSlipping: enriched.filter(i => i.longLeadSlipping).length,
-    totalWeight: items.reduce((s, i) => s + (Number(i.weight_tons) || 0), 0),
-  }), [items, enriched]);
 
   const selectedProject = projects.find(p => p.id === projectId);
 
@@ -252,10 +236,6 @@ export default function Procurement() {
     return m;
   }, [workPackages]);
 
-  const handleSetView = (v) => {
-    setView(v);
-    localStorage.setItem('procurementView', v);
-  };
 
   const handleSetFilterStatus = (s) => {
     setFilterStatus(s);
@@ -273,6 +253,15 @@ export default function Procurement() {
       'Lead (wk)', 'Long Lead', 'Weight (T)', 'Pieces',
       'Cost Estimate', 'Work Package', 'Notes',
     ];
+    // metadata is jsonb (Json | null). cost_estimate is only ever stored as a
+    // string (see procurement form), but the Json type also admits object/array
+    // members — read it only when metadata is a plain object, then keep the
+    // original `value || ''` semantics for the string/number it can actually be.
+    const costEstimate = (meta: Json | null | undefined): string | number => {
+      if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return '';
+      const v = meta.cost_estimate;
+      return (typeof v === 'string' || typeof v === 'number') ? (v || '') : '';
+    };
     const rows = filtered.map((i) => [
       i.description || '',
       i.procurement_category || '',
@@ -287,7 +276,7 @@ export default function Procurement() {
       i.is_long_lead ? 'Yes' : 'No',
       Number(i.weight_tons || 0) || '',
       Number(i.pieces || 0) || '',
-      i.metadata?.cost_estimate || '',
+      costEstimate(i.metadata),
       i.work_package_id ? (wpById.get(i.work_package_id)?.wp_number || wpById.get(i.work_package_id)?.name || '') : '',
       i.notes || '',
     ]);
@@ -301,7 +290,7 @@ export default function Procurement() {
 
   if (!projectId) {
     return (
-      <div style={{ textAlign: 'center', padding: '80px 24px' }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: 'center', padding: '80px 24px' }}>
         <div style={{ fontSize: 32, marginBottom: 12, fontFamily: "var(--font-mono)", fontWeight: 800 }}>PKG</div>
         <div style={{
           fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700,
@@ -313,158 +302,83 @@ export default function Procurement() {
     );
   }
 
-  return (
-    <OperationsPageShell
-      eyebrow={selectedProject?.name || "Procurement"}
-      title="Procurement Tracker"
-      subtitle="Track material, vendors, purchase orders, long-lead risk, shipping commitments, and received status from one procurement command board."
-      meta={[
-        { label: "Items", value: kpis.total },
-        { label: "Open", value: kpis.open, color: "var(--status-warning)" },
-        { label: "Overdue", value: kpis.overdue, color: kpis.overdue > 0 ? "var(--status-error)" : "var(--status-success)" },
-        { label: "View", value: view },
-      ]}
-      metrics={[
-        { label: "Total Items", value: kpis.total, sub: `${filtered.length} showing`, color: "var(--accent)" },
-        { label: "Long Lead", value: kpis.longLead, sub: `${kpis.longLeadSlipping} slipping`, color: kpis.longLeadSlipping > 0 ? "var(--status-error)" : "var(--phase-detailing)" },
-        { label: "Overdue", value: kpis.overdue, sub: "Needs follow-up", color: kpis.overdue > 0 ? "var(--status-error)" : "var(--status-success)" },
-        { label: "Total Weight", value: `${kpis.totalWeight.toFixed(1)}T`, sub: "Procurement tons", color: "var(--phase-fabrication)" },
-      ]}
-      actions={(
-        <>
-          <div style={{ display: 'flex', border: '1px solid var(--border-default)', borderRadius: 8, overflow: 'hidden' }}>
-            {[
-              { id: 'pipeline', label: 'Pipeline' },
-              { id: 'list', label: 'List' },
-              { id: 'board', label: 'Board' },
-            ].map((v, i) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => handleSetView(v.id)}
-                style={{
-                  padding: '8px 12px',
-                  border: 'none',
-                  borderRight: i < 2 ? '1px solid var(--border-default)' : 'none',
-                  background: view === v.id ? 'var(--accent-muted)' : 'transparent',
-                  color: view === v.id ? 'var(--accent)' : 'var(--text-secondary)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-          <OpsActionButton onClick={handleExportCSV} title="Export filtered rows as CSV" icon={<Download size={13} />}>
-            Export CSV
-          </OpsActionButton>
-          <OpsActionButton onClick={() => window.print()} title="Print this page" icon={<Printer size={13} />}>
-            Print
-          </OpsActionButton>
-          <OpsActionButton variant="primary" onClick={() => { setEditing(null); setShowForm(true); }} icon={<Plus size={13} />}>
-            Add Item
-          </OpsActionButton>
-        </>
-      )}
-    >
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-        <KpiTile compact label="Total Items"      value={kpis.total}                         color="var(--accent)" />
-        <KpiTile compact label="Open"             value={kpis.open}                          color="var(--status-warning)" />
-        <KpiTile compact label="Overdue"          value={kpis.overdue}                       color="var(--status-error)" />
-        <KpiTile compact label="Long Lead"        value={kpis.longLead}                      color="var(--phase-detailing)" />
-        <KpiTile compact label="LL Slipping"      value={kpis.longLeadSlipping}              color="var(--status-error)" />
-        <KpiTile compact label="Total Weight"     value={`${kpis.totalWeight.toFixed(1)}T`}  color="var(--phase-fabrication)" />
+  // Gate fetch states at the page shell — ProcurementControlCenter has no loading props
+  // (same pattern as ActionItems / RFIs / ChangeOrders / Backcharges).
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
       </div>
+    );
+  }
 
-      {/* Filters */}
-      <OpsFilterPanel>
-        <input
-          placeholder="Search description / vendor / PO..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ ...iStyle, width: 260, height: 32, padding: '0 12px' }}
-        />
-        <select
-          value={filterCat}
-          onChange={e => setFilterCat(e.target.value)}
-          style={{ ...iStyle, width: 'auto', height: 32, padding: '0 10px' }}
-        >
-          <option value="all">All Categories</option>
-          {PROCUREMENT_CATEGORIES.map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <select
-          value={filterStatus}
-          onChange={e => handleSetFilterStatus(e.target.value)}
-          style={{ ...iStyle, width: 'auto', height: 32, padding: '0 10px' }}
-        >
-          <option value="all">All Status</option>
-          {ALL_STATUSES.map(s => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </OpsFilterPanel>
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '48px 24px',
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', margin: 0 }}>
+          Couldn’t load procurement items
+        </p>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', margin: 0, textAlign: 'center', maxWidth: 320 }}>
+          {toUserErrorMessage(error, 'Something went wrong. Try again.')}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
 
-      {isLoading ? (
-        <div style={{ textAlign: 'center', padding: 32, fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>
-          LOADING...
-        </div>
-      ) : view === 'pipeline' ? (
-        <PipelineView
-          items={filtered}
-          wpById={wpById}
-          onEdit={(i) => { setEditing(i); setShowForm(true); }}
+  // Canonical Procurement control center. Page-owned mutations and modals remain below.
+    return (
+      <>
+        <ProcurementControlCenter
+          projectName={selectedProject?.name || 'Procurement'}
+          items={enriched as unknown as ProcurementItem[]}
+          filtered={filtered as unknown as ProcurementItem[]}
+          search={search}
+          onSearch={setSearch}
+          categoryFilter={filterCat}
+          onCategoryChange={setFilterCat}
+          statusFilter={filterStatus}
+          onStatusChange={handleSetFilterStatus}
+          onOpenItem={(item) => { setEditing(item as unknown as Parameters<typeof setEditing>[0]); setShowForm(true); }}
+          onExport={handleExportCSV}
+          onCreate={() => { setEditing(null); setShowForm(true); }}
         />
-      ) : view === 'list' ? (
-        <ListView
-          items={filtered}
-          wpById={wpById}
-          onEdit={(i) => { setEditing(i); setShowForm(true); }}
-          onDelete={(i) => setDeleteTarget(i)}
-        />
-      ) : (
-        <BoardView
-          items={filtered}
-          wpById={wpById}
-          onEdit={(i) => { setEditing(i); setShowForm(true); }}
-        />
-      )}
-
-      {/* Form Modal */}
-      {showForm && (
-        <ProcurementFormModal
-          projectId={projectId}
-          item={editing}
-          vendors={vendors}
-          workPackages={workPackages}
-          onClose={() => { setShowForm(false); setEditing(null); }}
-          onSave={(data) => {
-            if (editing) {
-              updateMut.mutate({ id: editing.id, data });
-            } else {
-              createMut.mutate(data);
+        {/* Reuse the page-owned modals */}
+        {showForm && (
+          <ProcurementFormModal
+            projectId={projectId}
+            item={editing}
+            vendors={vendors}
+            workPackages={workPackages}
+            onClose={() => { setShowForm(false); setEditing(null); }}
+            onSave={(data) => {
+              if (editing) {
+                updateMut.mutate({ id: editing.id, data });
+              } else {
+                createMut.mutate(data);
+              }
+            }}
+            isSaving={createMut.isPending || updateMut.isPending}
+          />
+        )}
+        <DeleteDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            if (!deleteMut.isPending && deleteTarget?.id) {
+              deleteMut.mutate(deleteTarget.id);
             }
           }}
-          isSaving={createMut.isPending || updateMut.isPending}
+          title="Remove Procurement Item"
+          description="The item will be archived (soft-deleted). It can be recovered from the database if needed."
         />
-      )}
-
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (!deleteMut.isPending && deleteTarget?.id) {
-            deleteMut.mutate(deleteTarget.id);
-          }
-        }}
-        title="Remove Procurement Item"
-        description="The item will be archived (soft-deleted). It can be recovered from the database if needed."
-      />
-    </OperationsPageShell>
-  );
-}
+      </>
+    );
+  }

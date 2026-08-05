@@ -229,22 +229,37 @@ export default function DataExchange() {
       if (!importApproved) throw new Error("Review and approve the import before committing records.");
 
       let skippedDuplicates = 0;
-      const existingRfiNumbers = targetKey === "rfis"
-        ? new Set(records.map((record) => rfiNumberDedupKey(record.rfi_number)).filter(Boolean))
+      // Skip rows that already exist (or repeat within the paste) by the
+      // target's natural key, so a re-import doesn't 409 on the unique index.
+      // RFIs key on the normalized rfi_number; submittals on submittal_number
+      // (the (project_id, submittal_number) unique index). Other targets have
+      // no natural key here and aren't deduped.
+      const dedupField =
+        targetKey === "rfis" ? "rfi_number"
+          : targetKey === "submittals" ? "submittal_number"
+            : null;
+      const dedupKey = (value) =>
+        targetKey === "rfis"
+          ? rfiNumberDedupKey(value)
+          : value == null ? "" : String(value).trim().toLowerCase();
+      const existingKeys = dedupField
+        ? new Set(records.map((record) => dedupKey(record[dedupField])).filter(Boolean))
         : null;
-      const stagedRfiNumbers = new Set();
+      const stagedKeys = new Set();
 
       const recordsToCreate = stagedImport.validRecords.flatMap((record) => {
         const nextRecord = targetKey === "rfis" && record.rfi_number
           ? { ...record, rfi_number: normalizeRfiNumber(record.rfi_number) }
           : record;
-        const rfiKey = targetKey === "rfis" ? rfiNumberDedupKey(nextRecord.rfi_number) : null;
-        if (rfiKey) {
-          if (existingRfiNumbers.has(rfiKey) || stagedRfiNumbers.has(rfiKey)) {
-            skippedDuplicates += 1;
-            return [];
+        if (dedupField) {
+          const key = dedupKey(nextRecord[dedupField]);
+          if (key) {
+            if (existingKeys.has(key) || stagedKeys.has(key)) {
+              skippedDuplicates += 1;
+              return [];
+            }
+            stagedKeys.add(key);
           }
-          stagedRfiNumbers.add(rfiKey);
         }
         const metadata = { ...(record.metadata || {}) };
         delete metadata.onboarding_import;
@@ -259,20 +274,28 @@ export default function DataExchange() {
       });
 
       if (!recordsToCreate.length) {
-        return { rows: [], skippedDuplicates };
+        return { rows: [], skippedDuplicates, skippedCreates: 0 };
       }
 
-      const rows = await bulkCreateWithFallback(selectedEntity, recordsToCreate);
-      return { rows, skippedDuplicates };
+      const { created, skipped } = await bulkCreateWithFallback(selectedEntity, recordsToCreate);
+      return { rows: created, skippedDuplicates, skippedCreates: skipped };
     },
-    onSuccess: ({ rows, skippedDuplicates }) => {
+    onSuccess: ({ rows, skippedDuplicates, skippedCreates = 0 }) => {
       queryClient.invalidateQueries({ queryKey: ["data-exchange", selectedTarget.entityKey, selectedProjectId] });
       queryClient.invalidateQueries({ queryKey: [selectedTarget.entityKey] });
       setImportApproved(false);
-      if (rows.length > 0) {
-        toast.success(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skippedDuplicates ? `, ${skippedDuplicates} duplicate skipped` : ""}`);
-      } else if (skippedDuplicates) {
-        toast.warning(`${skippedDuplicates} duplicate ${selectedTarget.label.toLowerCase()} skipped; no new rows imported`);
+      const skipBits = [];
+      if (skippedDuplicates) skipBits.push(`${skippedDuplicates} duplicate skipped`);
+      if (skippedCreates) skipBits.push(`${skippedCreates} row create failed`);
+      const skipSuffix = skipBits.length ? `, ${skipBits.join(", ")}` : "";
+      if (rows.length > 0 && skippedCreates > 0) {
+        toast.warning(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skipSuffix}`);
+      } else if (rows.length > 0) {
+        toast.success(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skipSuffix}`);
+      } else if (skippedDuplicates || skippedCreates) {
+        toast.warning(
+          `${skipBits.join(", ") || "rows skipped"}; no new rows imported`,
+        );
       } else {
         toast.info("No rows were imported");
       }
@@ -347,7 +370,7 @@ export default function DataExchange() {
   }
 
   return (
-    <div className="data-exchange-page">
+    <div className="sb-dashboard-reference-page data-exchange-page">
       <style>{dataExchangeStyles}</style>
 
       <header className="de-header">
@@ -752,7 +775,7 @@ const dataExchangeStyles = `
 .de-primary-btn {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--accent-foreground, #fff);
+  color: var(--bg-base);
 }
 
 .de-secondary-btn,

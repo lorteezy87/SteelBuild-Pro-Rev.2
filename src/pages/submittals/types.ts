@@ -17,6 +17,10 @@ export interface Submittal {
   submittal_type?: string;
   project_id?: string;
   notes?: string | null;
+  /** Phase 3 splitting: parent this row was spun off from (null = top-level). */
+  parent_submittal_id?: string | null;
+  /** Phase 3 splitting: why this child was spun off (null for non-children). */
+  split_reason?: string | null;
   [key: string]: any;
 }
 

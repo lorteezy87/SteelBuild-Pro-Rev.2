@@ -24,12 +24,21 @@
 import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2, X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
-import { OperationsPageShell, OpsActionButton } from "@/components/operations/OperationsPageShell";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { PRESET_LIST } from "@/lib/budgetHourPresets";
+import { usePermissions } from "@/services/permissions";
+import { logActivity } from "@/services/auditLogger";
+import { invalidateEntity } from "@/services/cacheRegistry";
+import { toastCrudError } from "@/components/shared/crudFeedback";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { Button } from "@/components/design-system";
+import BudgetHoursControlCenter from "./budgetHours/BudgetHoursControlCenter";
+import ScopeItemFormModal from "./budgetHours/ScopeItemFormModal";
 
 /* ─────────────────────────────────────────────
    Variance helpers
@@ -486,7 +495,20 @@ export default function BudgetHours() {
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [presetOpen, setPresetOpen] = useState(false);
+  // Control-center filters remain page-owned so query and mutation state stays stable.
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [overBudgetOnly, setOverBudgetOnly] = useState(false);
+  // Scope-item create/edit modal + delete confirm (canonical presentation CRUD).
+  const [scopeModalOpen, setScopeModalOpen] = useState(false);
+  const [scopeEditTarget, setScopeEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const canCreateScope = can("create", "budget_hour_item");
+  const canEditScope = can("edit", "budget_hour_item");
+  const canDeleteScope = can("delete", "budget_hour_item");
 
   /* ── Data ── */
   // The entity wrapper doesn't auto-filter soft-deletes, so the query
@@ -494,7 +516,13 @@ export default function BudgetHours() {
   // every downstream consumer (the Standard / Specialty buckets, the
   // Misses sub-table, totals) sees an "active rows only" view and the
   // user actually sees the row disappear after they click Remove.
-  const { data: rawRows = [], isLoading } = useQuery({
+  const {
+    data: rawRows = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["budget-hour-items", projectId],
     queryFn: () => (projectId ? entities.BudgetHourItem.filter({ project_id: projectId }, "sort_order") : []),
     enabled: !!projectId,
@@ -511,26 +539,42 @@ export default function BudgetHours() {
     return m;
   }, [wps]);
 
-  /* ── Mutations ── */
+  /* ── Mutations ──
+     Audit + cache invalidation mirror the canonical Deliveries pattern:
+     logActivity (fire-and-forget) + invalidateEntity (fans out every
+     budget-hour-items key) + toastCrudError on failure. deleteMut stays a
+     SOFT delete (is_deleted flag) — recoverable, never a hard delete. */
   const createMut = useMutation({
-    mutationFn: (data) => entities.BudgetHourItem.create(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] }),
-    onError: (e) => toast.error(`Create failed: ${e.message || "unknown error"}`),
+    mutationFn: (data) => entities.BudgetHourItem.create(withProjectId(data, projectId)),
+    onSuccess: async (created) => {
+      logActivity("budget_hour_item", "created", created, { projectId });
+      await invalidateEntity(qc, "budget_hour_item", projectId);
+    },
+    onError: (e) => toastCrudError(e, "Create failed"),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, patch }) => entities.BudgetHourItem.update(id, patch),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] }),
-    onError: (e) => toast.error(`Save failed: ${e.message || "unknown error"}`),
+    onSuccess: async (updated) => {
+      logActivity("budget_hour_item", "updated", updated, { projectId });
+      await invalidateEntity(qc, "budget_hour_item", projectId);
+    },
+    onError: (e) => toastCrudError(e, "Save failed"),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.BudgetHourItem.update(id, { is_deleted: true, deleted_at: new Date().toISOString() }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] });
+    onSuccess: async (updated, deletedId) => {
+      logActivity(
+        "budget_hour_item",
+        "deleted",
+        updated || { id: deletedId, project_id: projectId, scope_item: deleteTarget?.scope_item },
+        { projectId },
+      );
+      await invalidateEntity(qc, "budget_hour_item", projectId);
       toast.success("Row removed");
     },
-    onError: (e) => toast.error(`Delete failed: ${e.message || "unknown error"}`),
+    onError: (e) => toastCrudError(e, "Delete failed"),
   });
 
   /* ── Buckets ── */
@@ -589,9 +633,9 @@ export default function BudgetHours() {
     // Sequentially create so sort_order stays stable; small list (≤12).
     for (const row of built) {
       try {
-        await entities.BudgetHourItem.create({ ...row, project_id: projectId });
+        await entities.BudgetHourItem.create(withProjectId(row, projectId));
       } catch (e) {
-        toast.error(`Preset row "${row.scope_item}" failed: ${e.message || "unknown"}`);
+        toast.error(`Preset row "${row.scope_item}" failed: ${toUserErrorMessage(e, "unknown")}`);
       }
     }
     qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] });
@@ -600,319 +644,170 @@ export default function BudgetHours() {
 
   const saveCell = (id, patch) => updateMut.mutate({ id, patch });
 
-  /* ── Empty / loading states ── */
+  /* ── Scope-item modal CRUD ── */
+  const openCreateScope = () => {
+    setScopeEditTarget(null);
+    setScopeModalOpen(true);
+  };
+
+  const openEditScope = (row) => {
+    setScopeEditTarget(row);
+    setScopeModalOpen(true);
+  };
+
+  // Save from the modal — create (new row, next sort_order) or update ({id,patch}).
+  const handleScopeSave = (patch) => {
+    if (!projectId) return;
+    if (scopeEditTarget) {
+      updateMut.mutate(
+        { id: scopeEditTarget.id, patch },
+        { onSuccess: () => { setScopeModalOpen(false); setScopeEditTarget(null); } }
+      );
+    } else {
+      const maxSort = Math.max(0, ...rows.map((r) => Number(r.sort_order) || 0));
+      createMut.mutate(
+        { ...patch, project_id: projectId, sort_order: maxSort + 10, metadata: {} },
+        { onSuccess: () => setScopeModalOpen(false) }
+      );
+    }
+  };
+
+  const requestDeleteRow = (row) => setDeleteTarget(row);
+  const confirmDeleteRow = () => {
+    if (!deleteTarget?.id) return;
+    deleteMut.mutate(deleteTarget.id, { onSettled: () => setDeleteTarget(null) });
+  };
+
   if (!projectId) {
     return (
-      <div style={{
-        padding: 32, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)",
-        textAlign: "center",
-      }}>
-        Select a project to track budget hours.
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Select a project
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+          Budget Hours is project-scoped. Choose a project from the top nav.
+        </div>
       </div>
     );
   }
 
-  return (
-    <OperationsPageShell
-      eyebrow={activeProject?.project_number || "Budget Control"}
-      title="Budget Hours"
-      subtitle={`${activeProject?.name || "Project"} labor-hour command center: compare kickoff budget, current actuals, linked work packages, and misses before they become margin problems.`}
-      meta={[
-        { label: "Scope Items", value: rows.filter((r) => r.category !== "Misses").length },
-        { label: "Specialty", value: specialtyRows.length },
-        { label: "Variance", value: fmtPct(totalVarPct), color: varianceColor(totalVarPct) },
-        { label: "Actual / Budget", value: `${fmtHours(totalActual)} / ${fmtHours(totalBudget)}` },
-      ]}
-      metrics={[
-        { label: "Shop Budget", value: fmtHours(totals.sb), sub: "hours" },
-        { label: "Shop Actual", value: fmtHours(totals.sa), sub: fmtPct(shopVarPct), color: varianceColor(shopVarPct) },
-        { label: "Field Budget", value: fmtHours(totals.fb), sub: "hours" },
-        { label: "Field Actual", value: fmtHours(totals.fa), sub: fmtPct(fieldVarPct), color: varianceColor(fieldVarPct) },
-        { label: "Total Hours", value: `${fmtHours(totalActual)} / ${fmtHours(totalBudget)}`, sub: fmtPct(totalVarPct), color: varianceColor(totalVarPct) },
-      ]}
-      actions={(
-        <>
-          <OpsActionButton onClick={() => setPresetOpen(true)}>
-            Set Up From Template
-          </OpsActionButton>
-          <OpsActionButton variant="primary" onClick={addBlankRow} icon={<Plus size={13} />}>
-            Add Item
-          </OpsActionButton>
-        </>
-      )}
-    >
-      {isLoading && (
-        <div style={{ padding: 24, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
-          Loading…
-        </div>
-      )}
-
-      {!isLoading && rows.length === 0 && (
-        <div style={{
-          padding: 32,
-          background: "var(--bg-surface)",
-          border: "1px dashed var(--border-default)",
-          borderRadius: 8,
-          textAlign: "center",
-        }}>
-          <div style={{
-            fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-primary)", marginBottom: 6,
-          }}>
-            No budget-hour items yet.
-          </div>
-          <div style={{
-            fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 14,
-          }}>
-            Start with the Estimating Kickoff (Standard 12) preset, or add a single blank row.
-          </div>
-          <button
-            onClick={() => setPresetOpen(true)}
-            style={{
-              background: "var(--accent)", color: "var(--bg-base)", border: "none",
-              borderRadius: 6, padding: "8px 16px",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-              cursor: "pointer", textTransform: "uppercase",
-            }}
-          >
-            Set Up From Template
-          </button>
-        </div>
-      )}
-
-      {/* Standard scope */}
-      {standardRows.length > 0 && (
-        <BudgetTable
-          title="Standard Scope"
-          rows={standardRows}
-          wpsById={wpsById}
-          onSave={saveCell}
-          onDelete={(id) => deleteMut.mutate(id)}
-          onMoveToSpecialty={(id) => updateMut.mutate({ id, patch: { is_specialty: true, category: "Specialty" } })}
-        />
-      )}
-
-      {/* Specialty items */}
-      {specialtyRows.length > 0 && (
-        <BudgetTable
-          title="Specialty Items"
-          rows={specialtyRows}
-          wpsById={wpsById}
-          onSave={saveCell}
-          onDelete={(id) => deleteMut.mutate(id)}
-          onMoveToStandard={(id) => updateMut.mutate({ id, patch: { is_specialty: false, category: "Standard" } })}
-        />
-      )}
-
-      {/* Add specialty button — only if standard exists, so the user can
-          start a "Specialty" group without touching the empty state. */}
-      {rows.filter((r) => r.category !== "Misses").length > 0 && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: -4 }}>
-          <button
-            onClick={() => {
-              const maxSort = Math.max(0, ...rows.map((r) => Number(r.sort_order) || 0));
-              createMut.mutate({
-                project_id: projectId,
-                category: "Specialty",
-                scope_item: "New Specialty Item",
-                sort_order: maxSort + 10,
-                is_specialty: true,
-                shop_hours_budget: 0,
-                shop_hours_actual: 0,
-                field_hours_budget: 0,
-                field_hours_actual: 0,
-                metadata: {},
-              });
-            }}
-            style={{
-              background: "transparent", border: "1px dashed var(--border-default)", borderRadius: 4,
-              padding: "6px 12px", color: "var(--text-muted)",
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-              cursor: "pointer", textTransform: "uppercase",
-            }}
-          >
-            + Add Specialty Item
-          </button>
-        </div>
-      )}
-
-      {/* Misses */}
-      {rows.length > 0 && (
-        <MissesPanel
-          projectId={projectId}
-          missesRow={missesRow}
-          onCreateRow={async (payload) => {
-            const created = await entities.BudgetHourItem.create(payload);
-            qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] });
-            return created;
-          }}
-          onUpdateRow={(id, patch) => updateMut.mutate({ id, patch })}
-        />
-      )}
-
-      <PresetDialog open={presetOpen} onClose={() => setPresetOpen(false)} onPick={applyPreset} />
-    </OperationsPageShell>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   Per-section table
-───────────────────────────────────────────── */
-function BudgetTable({ title, rows, wpsById, onSave, onDelete, onMoveToSpecialty, onMoveToStandard }) {
-  const totals = useMemo(() => {
-    let sb = 0, sa = 0, fb = 0, fa = 0;
-    for (const r of rows) {
-      sb += Number(r.shop_hours_budget) || 0;
-      fb += Number(r.field_hours_budget) || 0;
-      const eff = effectiveActuals(r, wpsById);
-      sa += eff.shop;
-      fa += eff.field;
-    }
-    return { sb, sa, fb, fa };
-  }, [rows, wpsById]);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-        letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)",
-      }}>
-        {title}
+  // Gate fetch states at the page shell — BudgetHoursControlCenter has no loading props.
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
       </div>
-      <div style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderRadius: 8,
-        overflow: "hidden",
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 16,
       }}>
-        {/* Header */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(200px, 1.5fr) 80px 80px 70px 80px 80px 70px 1fr 36px",
-          gap: 8, padding: "8px 12px",
-          background: "var(--bg-surface-secondary)",
-          borderBottom: "1px solid var(--divider)",
-        }}>
-          {["Scope Item", "Shop Bud", "Shop Act", "Δ %", "Field Bud", "Field Act", "Δ %", "Notes", ""].map((h, i) => (
-            <div key={i} style={{
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-              letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--text-muted)",
-              textAlign: i === 0 || i === 7 ? "left" : "right",
-            }}>
-              {h}
-            </div>
-          ))}
-        </div>
-        {/* Rows */}
-        {rows.map((r) => {
-          const eff = effectiveActuals(r, wpsById);
-          const shopPct = variancePct(r.shop_hours_budget, eff.shop);
-          const fieldPct = variancePct(r.field_hours_budget, eff.field);
-          return (
-            <div key={r.id} style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(200px, 1.5fr) 80px 80px 70px 80px 80px 70px 1fr 36px",
-              gap: 8, padding: "6px 12px",
-              alignItems: "center",
-              borderBottom: "1px solid var(--divider)",
-            }}>
-              <TextCell value={r.scope_item} placeholder="Scope item name"
-                onSave={(v) => onSave(r.id, { scope_item: v || "Untitled" })}
-              />
-              <HourCell value={r.shop_hours_budget}
-                onSave={(v) => onSave(r.id, { shop_hours_budget: v })}
-              />
-              <HourCell value={eff.shop} locked={eff.linked}
-                onSave={(v) => onSave(r.id, { shop_hours_actual: v })}
-              />
-              <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: varianceColor(shopPct) }}>
-                {fmtPct(shopPct)}
-              </div>
-              <HourCell value={r.field_hours_budget}
-                onSave={(v) => onSave(r.id, { field_hours_budget: v })}
-              />
-              <HourCell value={eff.field} locked={eff.linked}
-                onSave={(v) => onSave(r.id, { field_hours_actual: v })}
-              />
-              <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: varianceColor(fieldPct) }}>
-                {fmtPct(fieldPct)}
-              </div>
-              <TextCell value={r.notes} placeholder="—"
-                onSave={(v) => onSave(r.id, { notes: v })}
-              />
-              <div style={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
-                {onMoveToSpecialty && (
-                  <button
-                    onClick={() => onMoveToSpecialty(r.id)}
-                    title="Move to Specialty Items"
-                    style={{
-                      background: "transparent", border: "none", cursor: "pointer",
-                      color: "var(--text-muted)", padding: 2, fontFamily: "var(--font-mono)", fontSize: 9,
-                    }}
-                  >
-                    ↓
-                  </button>
-                )}
-                {onMoveToStandard && (
-                  <button
-                    onClick={() => onMoveToStandard(r.id)}
-                    title="Move to Standard Scope"
-                    style={{
-                      background: "transparent", border: "none", cursor: "pointer",
-                      color: "var(--text-muted)", padding: 2, fontFamily: "var(--font-mono)", fontSize: 9,
-                    }}
-                  >
-                    ↑
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    if (window.confirm(`Remove "${r.scope_item}"?`)) onDelete(r.id);
-                  }}
-                  style={{
-                    background: "transparent", border: "none", cursor: "pointer",
-                    color: "var(--status-error)", padding: 2,
-                  }}
-                  title="Remove"
-                >
-                  <Trash2 size={11} />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-        {/* Totals */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(200px, 1.5fr) 80px 80px 70px 80px 80px 70px 1fr 36px",
-          gap: 8, padding: "8px 12px",
-          background: "var(--bg-surface-secondary)",
-          alignItems: "center",
-        }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Subtotal
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-            {fmtHours(totals.sb)}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-            {fmtHours(totals.sa)}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: varianceColor(variancePct(totals.sb, totals.sa)) }}>
-            {fmtPct(variancePct(totals.sb, totals.sa))}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-            {fmtHours(totals.fb)}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-            {fmtHours(totals.fa)}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: varianceColor(variancePct(totals.fb, totals.fa)) }}>
-            {fmtPct(variancePct(totals.fb, totals.fa))}
-          </div>
-          <div />
-          <div />
-        </div>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load budget hours
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(error, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
       </div>
-    </div>
-  );
+    );
+  }
+
+  /* ── Canonical Budget Hours control center ── */
+    // Apply search + category + over-budget filter for the DataTable.
+    // Misses rows are always excluded from the table (they have their own panel).
+    const commandFiltered = rows
+      .filter((r) => r.category !== "Misses")
+      .filter((r) => {
+        if (categoryFilter === "Standard") return r.category === "Standard" && !r.is_specialty;
+        if (categoryFilter === "Specialty") return r.category === "Specialty" || r.is_specialty;
+        return true;
+      })
+      .filter((r) => {
+        if (!overBudgetOnly) return true;
+        // Quick over-budget check: total actual > total budget (ignoring WP rollup for filter — full math in derive)
+        const tb = (Number(r.shop_hours_budget) || 0) + (Number(r.field_hours_budget) || 0);
+        const ta = (Number(r.shop_hours_actual) || 0) + (Number(r.field_hours_actual) || 0);
+        return ta > tb && tb > 0;
+      })
+      .filter((r) => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return (
+          (r.scope_item || "").toLowerCase().includes(q) ||
+          (r.notes || "").toLowerCase().includes(q)
+        );
+      });
+
+    const handleExportCsv = () => {
+      const headers = ["Scope Item", "Category", "Shop Budget", "Shop Actual", "Field Budget", "Field Actual", "Notes"];
+      const exportRows = commandFiltered.map((r) => [
+        r.scope_item, r.category,
+        Number(r.shop_hours_budget) || 0,
+        Number(r.shop_hours_actual) || 0,
+        Number(r.field_hours_budget) || 0,
+        Number(r.field_hours_actual) || 0,
+        r.notes || "",
+      ]);
+      const csv = [headers, ...exportRows].map((row) => row.map((c) => `"${c ?? ""}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "budget_hours.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    return (
+      <>
+        <BudgetHoursControlCenter
+          projectName={activeProject?.name || "Project"}
+          rows={rows}
+          wpsById={wpsById}
+          search={search}
+          onSearch={setSearch}
+          categoryFilter={categoryFilter}
+          onCategoryChange={setCategoryFilter}
+          overBudgetOnly={overBudgetOnly}
+          onOverBudgetToggle={() => setOverBudgetOnly((v) => !v)}
+          filteredRows={commandFiltered}
+          onAddItem={openCreateScope}
+          onSetUpTemplate={() => setPresetOpen(true)}
+          onExport={handleExportCsv}
+          onEditRow={openEditScope}
+          onDeleteRow={requestDeleteRow}
+          canCreate={canCreateScope}
+          canEdit={canEditScope}
+          canDelete={canDeleteScope}
+        />
+        <PresetDialog open={presetOpen} onClose={() => setPresetOpen(false)} onPick={applyPreset} />
+        <ScopeItemFormModal
+          open={scopeModalOpen}
+          editTarget={scopeEditTarget}
+          saving={createMut.isPending || updateMut.isPending}
+          onClose={() => { setScopeModalOpen(false); setScopeEditTarget(null); }}
+          onSave={handleScopeSave}
+        />
+        <DeleteDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDeleteRow}
+          title="Delete scope item?"
+          description={
+            deleteTarget?.scope_item
+              ? `"${deleteTarget.scope_item}" will be removed from Budget Hours.`
+              : "This scope item will be removed from Budget Hours."
+          }
+        />
+      </>
+    );
 }

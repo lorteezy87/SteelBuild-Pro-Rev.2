@@ -14,6 +14,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
   const [form, setForm] = useState(empty);
   const [selectedCode, setSelectedCode] = useState("");
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (costCode) {
@@ -36,6 +37,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
 
   const handleSave = async () => {
     if (!validate()) return;
+    if (saving) return;
 
     // Check for duplicates only on create
     if (!costCode && selectedCode) {
@@ -47,8 +49,10 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
     }
 
     const selectedCostCodeMeta = COST_CODES.find((c) => c.code === selectedCode);
+    // Emit ONLY real, user-editable cost_codes columns — never spread ...form.
     const data = {
-      ...form,
+      project_id: form.project_id,
+      project_name: form.project_name || "",
       cost_code_number: selectedCode,
       description: selectedCostCodeMeta?.name || form.description || "",
       phase: selectedCostCodeMeta?.category || form.phase || "Materials",
@@ -56,17 +60,21 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
       actual_cost: Number(form.actual_cost) || 0,
       committed_cost: Number(form.committed_cost) || 0,
       forecast_to_complete: Number(form.forecast_to_complete) || 0,
+      notes: form.notes || "",
     };
     const proj = projects.find((p) => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
 
+    setSaving(true);
     try {
       await onSave(data);
       setForm(empty);
       setSelectedCode("");
     } catch (err) {
-      console.error('Save failed:', err);
-      alert(`Failed to save: ${err.message}`);
+      // Mutation onError already toasts; keep modal open for retry.
+      console.error("Save failed:", err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -87,13 +95,13 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
           // Use an OPAQUE surface token. In .steelbuild-dark, --bg-surface
           // resolves to a translucent value (rgba white ~0.035), which made
           // this modal render see-through over the dialog scrim (appeared
-          // blank/unclickable). --bg-surface-secondary stays opaque (#161B22
-          // dark / #F8FAFC light) — matching the default DialogContent face.
+          // blank/unclickable). --bg-surface-secondary stays opaque in
+          // both themes — matching the default DialogContent face.
           background: 'var(--bg-surface-secondary)',
           color: 'var(--text-primary)',
           borderRadius: 14,
           border: '1px solid var(--accent-border)',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.8)'
+          boxShadow: 'var(--shadow-card)'
         }}>
 
         <DialogHeader>
@@ -175,10 +183,10 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                   appearance: 'none',
                   WebkitAppearance: 'none',
                   MozAppearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%233B82F6'/%3E%3C/svg%3E")`,
+                  backgroundImage: 'linear-gradient(45deg, transparent 50%, var(--accent) 50%), linear-gradient(135deg, var(--accent) 50%, transparent 50%)',
                   backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 10px center',
-                  backgroundSize: '10px 6px',
+                  backgroundPosition: 'calc(100% - 14px) 50%, calc(100% - 9px) 50%',
+                  backgroundSize: '5px 5px, 5px 5px',
                   boxSizing: 'border-box'
                 }}>
 
@@ -222,7 +230,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 height: 38,
                 background: selectedCode ? 'var(--accent-muted)' : 'var(--bg-surface-low)',
                 border: '1px solid',
-                borderColor: selectedCode ? 'var(--accent-border)' : 'var(--accent-border)',
+                borderColor: 'var(--accent-border)',
                 borderRadius: 8,
                 display: 'flex',
                 alignItems: 'center',
@@ -375,7 +383,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               border: '1px solid var(--border-default)',
               borderRadius: 8,
               padding: '8px 12px',
-              color: variance > 0 ? '#FF1744' : '#00E676',
+              color: variance > 0 ? 'var(--status-error)' : 'var(--status-success)',
               fontFamily: 'var(--font-body)',
               fontSize: 12
             }}>
@@ -400,7 +408,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               border: '1px solid var(--border-default)',
               borderRadius: 8,
               padding: '8px 12px',
-              color: pctUsed > 100 ? '#FF1744' : 'var(--text-primary)',
+              color: pctUsed > 100 ? 'var(--status-error)' : 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 12
             }}>
@@ -464,6 +472,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
           </button>
           <button
             onClick={handleSave}
+            disabled={saving}
             style={{
               background: 'var(--accent)',
               border: 'none',
@@ -474,11 +483,12 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: '0.10em',
-              cursor: 'pointer',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.6 : 1,
               boxShadow: '0 4px 14px var(--accent-muted)'
             }}>
 
-            {costCode ? "UPDATE" : "CREATE"}
+            {saving ? "SAVING…" : costCode ? "UPDATE" : "CREATE"}
           </button>
           </DialogFooter>
       </DialogContent>

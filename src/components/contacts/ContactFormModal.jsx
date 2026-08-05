@@ -3,6 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Modal, Button } from "@/components/design-system";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const INITIAL_FORM = {
   first_name: "",
@@ -42,20 +43,21 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
   });
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.Contact.create(data),
+    mutationFn: (data) =>
+      entities.Contact.create(withProjectId(data, data.project_id || projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       toast.success("Contact created");
       onClose();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to create contact")),
   });
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.project_id) {
       toast.error("Select a project");
       return;
@@ -66,11 +68,15 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
     }
 
     if (isEdit) {
-      onSave && onSave(formData);
-      onClose();
-    } else {
-      createMut.mutate(formData);
+      // Await parent update so a rejected write keeps the modal open with values.
+      try {
+        await Promise.resolve(onSave?.(formData));
+      } catch {
+        // Parent mutation toasts onError.
+      }
+      return;
     }
+    createMut.mutate(formData);
   };
 
   const inputStyle = {
@@ -112,13 +118,17 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Project */}
+        {/* Project — locked to the active project when one is in context, so a
+            contact added from a project's Contacts page always saves to (and
+            shows up in) THAT project. The free picker only appears in
+            portfolio mode (no active project) where the list isn't scoped. */}
         <div>
           <label style={labelStyle}>Project</label>
           <select
             value={formData.project_id}
             onChange={(e) => handleChange("project_id", e.target.value)}
-            style={inputStyle}
+            style={projectId ? { ...inputStyle, opacity: 0.7, cursor: "not-allowed" } : inputStyle}
+            disabled={!!projectId}
           >
             <option value="">Select a project</option>
             {projects.map((p) => (
@@ -127,6 +137,11 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
               </option>
             ))}
           </select>
+          {projectId ? (
+            <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+              Adding to the current project. Switch projects to add a contact elsewhere.
+            </div>
+          ) : null}
         </div>
 
         {/* Name */}

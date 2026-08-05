@@ -34,7 +34,7 @@ export default function KPICard({ label, value, detail, borderColor, badge, onCl
               ...mono,
               fontSize: 9,
               fontWeight: 700,
-              color: "#fff",
+              color: "var(--accent-text)",
               background: "var(--status-error)",
               borderRadius: "var(--radius-badge)",
               padding: "2px 6px",

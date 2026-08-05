@@ -1,7 +1,7 @@
 /**
  * permissions.test.js — RBAC gate (canPerform) decision matrix.
  *
- * canPerform is UI-gating only (the authoritative guard is workflowEngine),
+ * canPerform is UI-gating only. The authoritative guard is RLS and domain RPCs,
  * but it still drives what users see, so its role × action × entity logic is
  * worth pinning down.
  */
@@ -92,6 +92,22 @@ describe("canPerform — entity overrides", () => {
     expect(canPerform("field", "approve", "change_order")).toBe(false);
     expect(canPerform("pm", "void", "change_order")).toBe(false);
     expect(canPerform("admin", "void", "change_order")).toBe(true);
+  });
+
+  it("budget_hour_item lets a pm delete (matches its pm-floor RLS)", () => {
+    // budget_hour_items RLS = user_has_project_role_at_least(project_id,'pm')
+    // for INSERT/UPDATE/DELETE, so a project PM must be able to delete (the
+    // generic delete floor is admin — the override lowers it to pm).
+    expect(canPerform("pm", "create", "budget_hour_item")).toBe(true);
+    expect(canPerform("pm", "edit", "budget_hour_item")).toBe(true);
+    expect(canPerform("pm", "delete", "budget_hour_item")).toBe(true);
+    // field / viewer are still below the pm floor.
+    expect(canPerform("field", "create", "budget_hour_item")).toBe(false);
+    expect(canPerform("field", "delete", "budget_hour_item")).toBe(false);
+    expect(canPerform("viewer", "delete", "budget_hour_item")).toBe(false);
+    // owner/admin remain able to delete.
+    expect(canPerform("admin", "delete", "budget_hour_item")).toBe(true);
+    expect(canPerform("owner", "delete", "budget_hour_item")).toBe(true);
   });
 
   it("override only applies to its own entity:action, not other entities", () => {

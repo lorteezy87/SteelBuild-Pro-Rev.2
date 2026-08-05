@@ -9,9 +9,50 @@
     <meta name="description" content="SteelBuild Pro is a real-time construction project management platform for structural steel — tracking fabrication, deliveries, RFIs, costs, and field operations from detailing through closeout." />
     <meta name="theme-color" content="#0B0E11" />
 
-    <!-- Favicon & app icons -->
-    <link rel="icon" type="image/png" href="/steelbuild-pro-logo.png" />
-    <link rel="apple-touch-icon" href="/steelbuild-pro-logo.png" />
+    <!-- Installed-app (PWA) behavior. The web manifest is injected at runtime
+         by main.jsx (it skips password-protected Vercel previews); these metas
+         drive the iOS/Android standalone launch + status-bar treatment when the
+         app is added to the home screen. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SteelBuild" />
+
+    <!-- Social / link preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://steelbuild-pro.com" />
+    <meta property="og:title" content="SteelBuild Pro — Structural Steel Project Management" />
+    <meta property="og:description" content="The project delivery platform built for structural steel fabricators and erectors — from detailing approval to turnover package." />
+    <meta property="og:image" content="https://steelbuild-pro.com/steelbuild-pro-logo.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="675" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SteelBuild Pro — Structural Steel Project Management" />
+    <meta name="twitter:image" content="https://steelbuild-pro.com/steelbuild-pro-logo.jpg" />
+
+    <!-- Favicon & app icons. A single full-bleed square SVG diamond mark —
+         scales sharply at any size and iOS rounds the apple-touch-icon from
+         the square field. (Replaced the prior PNG set; see public/favicon.svg.) -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- Apply persisted theme before first paint to avoid FOUC -->
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem("sbp-theme");
+          if (theme !== "light" && theme !== "dark") theme = "dark";
+          var root = document.documentElement;
+          root.setAttribute("data-theme", theme);
+          if (theme === "dark") root.classList.add("steelbuild-dark");
+          else root.classList.remove("steelbuild-dark");
+          var accent = localStorage.getItem("sbp-accent");
+          if (accent) root.setAttribute("data-accent", accent);
+          var contrast = localStorage.getItem("sbp-contrast");
+          if (contrast) root.setAttribute("data-contrast", contrast);
+        } catch (e) { /* private browsing */ }
+      })();
+    </script>
 
     <!-- Preconnect for web fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -23,10 +64,18 @@
       body { margin: 0; background: #0B0E11; }
       #root:empty {
         display: flex;
+        flex-direction: column;
+        gap: 30px;
         align-items: center;
         justify-content: center;
         min-height: 100vh;
         background: #0B0E11;
+      }
+      #root:empty::before {
+        content: '';
+        width: min(440px, 82vw);
+        aspect-ratio: 16 / 9;
+        background: url('/steelbuild-pro-logo.jpg') center / contain no-repeat;
       }
       #root:empty::after {
         content: '';

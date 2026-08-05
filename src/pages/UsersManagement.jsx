@@ -90,7 +90,7 @@ function UsersManagementContent() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow="ADMIN · WORKSPACE"
         title="User Management"
@@ -227,7 +227,7 @@ function UsersManagementContent() {
                             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
                             background: getUserAvatarColor(user),
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            color: "#fff", fontSize: 11, fontWeight: 700,
+                            color: "var(--on-accent)", fontSize: 11, fontWeight: 700,
                             lineHeight: 1, userSelect: "none",
                           }}
                         >
@@ -293,3 +293,4 @@ export default function UsersManagement() {
     </AdminRoute>
   );
 }
+

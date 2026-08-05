@@ -20,6 +20,7 @@ import {
   scheduleTaskUrgency,
 } from "./urgencyEngine";
 import { applyEffectiveDates } from "@/services/scheduleCascade";
+import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
 
 // ── Effective-date overlay for schedule tasks ───────────────────────────
 //
@@ -320,8 +321,14 @@ export function buildFeed(entities, projectMap = {}) {
   // predecessor pushed it 10 days into the future would still be flagged
   // overdue here even though the Gantt and Task List render it as future.
   // Same source of truth as Schedule.jsx — see scheduleCascade.js.
+  // Exclude summary/parent tasks: their rolled-up dates merely span their
+  // children, so a late child already emits its own overdue feed item. Feeding
+  // the parent too would double-count on the Command Center overdue/due-soon
+  // windows (a "hit list" surface the owner wants parents kept off of).
+  const scheduleParentIds = buildParentIdSet(scheduleTasks);
   const tasksWithEffective = overlayScheduleTaskEffectiveDates(scheduleTasks);
   for (const t of tasksWithEffective) {
+    if (isSummaryTask(t, scheduleParentIds)) continue;
     const item = scheduleTaskUrgency(t, projectMap);
     if (item) feed.push(item);
   }

@@ -29,22 +29,26 @@ if (DSN) {
     dsn: DSN,
     environment: import.meta.env.MODE,
     release: import.meta.env.VITE_APP_VERSION || undefined,
-    sendDefaultPii: true,
+    // PII off: don't auto-attach IP address / user identifiers / request headers.
+    // Session replay is already masked (below); if richer triage is ever needed,
+    // attach only minimal scrubbed identifiers explicitly (e.g. hashed user id,
+    // org id) via Sentry.setUser — never email / financial / document data.
+    sendDefaultPii: false,
     integrations: [
       Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({ maskAllText: true, blockAllMedia: true }),
     ],
     tracesSampleRate: 0.1,
     // Trace-propagation adds `sentry-trace` + `baggage` request headers to
-    // matched outgoing calls. Do NOT match *.supabase.co: the Edge Functions
-    // (llm-proxy, schedule-assistant, email-send) use a fixed
-    // Access-Control-Allow-Headers list that does not include those
-    // headers, so the browser's CORS preflight fails and every browser→function
-    // call is blocked ("Request header field baggage is not allowed…" →
-    // "Failed to send a request to the Edge Function"). Restrict propagation to
-    // our own origin; Supabase is a third party we don't need to trace-link.
-    // (If function-level tracing is ever wanted, first add `sentry-trace,
-    // baggage` to the functions' CORS allow-headers, then re-add a target.)
+    // matched outgoing calls. Do NOT match *.supabase.co: deployed Edge
+    // Functions use a fixed Access-Control-Allow-Headers list that does not
+    // include those headers, so the browser's CORS preflight fails and every
+    // browser→function call is blocked ("Request header field baggage is not
+    // allowed…" → "Failed to send a request to the Edge Function"). Restrict
+    // propagation to our own origin; Supabase is a third party we don't need
+    // to trace-link. (If function-level tracing is ever wanted, first add
+    // `sentry-trace, baggage` to the functions' CORS allow-headers, then re-add
+    // a target.)
     tracePropagationTargets: [
       "localhost",
       /^https:\/\/(www\.)?steelbuild-pro\.com/,
@@ -52,6 +56,36 @@ if (DSN) {
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
     enableLogs: true,
+    // Scrub sensitive data before anything leaves the browser (M15). Query
+    // strings can carry projectId / redirect targets / tokens, and Postgres
+    // unique-violation messages echo the conflicting ROW VALUES ("Key
+    // (project_id, name)=(<uuid>, <name>) already exists") — both are stripped
+    // here so they never reach Sentry.
+    beforeSend(event) {
+      // Drop the query string from the request URL.
+      if (event.request?.url) {
+        event.request.url = event.request.url.split("?")[0];
+      }
+      // Redact row values embedded in Postgres unique-violation messages.
+      if (event.exception?.values) {
+        for (const v of event.exception.values) {
+          if (typeof v.value === "string") {
+            v.value = v.value.replace(/Key \(.+?\)=\(.+?\)/g, "Key (…)=(…)");
+          }
+        }
+      }
+      return event;
+    },
+    // Strip query strings from fetch/xhr breadcrumbs for the same reason.
+    beforeBreadcrumb(breadcrumb) {
+      if (
+        (breadcrumb.category === "fetch" || breadcrumb.category === "xhr") &&
+        typeof breadcrumb.data?.url === "string"
+      ) {
+        breadcrumb.data.url = breadcrumb.data.url.split("?")[0];
+      }
+      return breadcrumb;
+    },
   });
 }
 
