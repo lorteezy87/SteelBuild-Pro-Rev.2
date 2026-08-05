@@ -52,6 +52,8 @@ export interface BoardItem {
   submittalCount: number;
   discipline: string;
   routeTab: string;
+  /** Drawing set id when kind is Drawing Set — used for create-submittal deep link. */
+  drawingSetId?: string | null;
   /** Slice 7 — R&R/OFS/BFA aging risk (null when stage is not scored). */
   risk: SubmittalRiskAssessment | null;
 }
@@ -202,6 +204,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
       submittalCount: (pkg.submittals || []).length,
       discipline: pkg.parent?.discipline || latestSubmittal?.discipline || "",
       routeTab: latestSubmittal ? "submittals" : "drawings",
+      drawingSetId: pkg.setId || null,
       risk: riskForBoardStage(stage, dueDate, latestSubmittal, useWorkdays && !!submittalDue),
     };
   });
