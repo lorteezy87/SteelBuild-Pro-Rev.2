@@ -1,90 +1,21 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { PHASE_COLORS } from "../../utils/phases";
-import { formatDateShort } from "../shared/formatters";
 import DateOrTbdInput from "./DateOrTbdInput";
 import {
   filterScheduleTasksByPriorityStatus,
   groupScheduleTasksByPhase,
+  PRIORITY_COLORS,
+  STATUS_COLORS,
+  STATUSES,
+  PRIORITIES,
+  TASK_LIST_COLUMNS,
+  getScheduleTaskRowKey,
+  fmtScheduleTaskDate as fmtDate,
+  INLINE_INPUT,
+  INLINE_SELECT,
 } from "./scheduleTaskListHelpers";
 
-const PRIORITY_COLORS = {
-  Critical: "var(--status-error)",
-  High: "var(--status-warning)",
-  Normal: "var(--status-info)",
-  Low: "var(--text-muted)",
-};
-
-const STATUS_COLORS = {
-  "Not Started": "var(--text-muted)",
-  "In Progress": "var(--status-warning)",
-  Complete: "var(--status-success)",
-  Delayed: "var(--status-error)",
-  "On Hold": "var(--status-info)",
-};
-
-const STATUSES = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold", "Cancelled"];
-const PRIORITIES = ["Critical", "High", "Normal", "Low"];
-const TASK_LIST_COLUMNS = [
-  { key: "select", label: "" },
-  { key: "wbs", label: "WBS" },
-  { key: "task", label: "Task" },
-  { key: "start", label: "Start" },
-  { key: "finish", label: "Finish" },
-  { key: "assigned-to", label: "Assigned To" },
-  { key: "priority", label: "Priority" },
-  { key: "status", label: "Status" },
-  { key: "actions", label: "" },
-];
-
-
-export function getScheduleTaskRowKey(task, index, phase = "task") {
-  const id = String(task?.id || "").trim();
-  if (id) return id;
-
-  const fallback = [
-    phase,
-    task?._stored_wbs_code || task?.wbs_code,
-    task?.task_number,
-    task?.task_name,
-    index,
-  ]
-    .filter((part) => part !== null && part !== undefined && String(part).trim() !== "")
-    .map((part) => String(part).trim())
-    .join(":");
-
-  return fallback || `${phase}:task:${index}`;
-}
-
-const fmtDate = (d) => {
-  if (!d) return "TBD";
-  return formatDateShort(d);
-};
-
-const INLINE_INPUT = {
-  background: "var(--accent-muted)",
-  border: "1px solid var(--accent-border)",
-  borderRadius: 4,
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  padding: "2px 6px",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const INLINE_SELECT = {
-  background: "var(--accent-muted)",
-  border: "1px solid var(--accent-border)",
-  borderRadius: 4,
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  padding: "2px 4px",
-  outline: "none",
-  width: "100%",
-  cursor: "pointer",
-};
+export { getScheduleTaskRowKey };
 
 export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, selectedIds = new Set(), onToggleSelect }) {
   const [sortBy, setSortBy] = useState("start_date");

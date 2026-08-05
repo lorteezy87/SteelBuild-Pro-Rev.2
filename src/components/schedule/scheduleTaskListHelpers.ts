@@ -3,6 +3,7 @@
  */
 import { PHASES, PHASE_NUMBER, derivePhase } from "../../utils/phases";
 import { buildTreeOrder } from "./scheduleTree";
+import { formatDateShort } from "../shared/formatters";
 
 const PRIORITY_ORDER = ["Critical", "High", "Normal", "Low"];
 
@@ -73,3 +74,100 @@ export function groupScheduleTasksByPhase<
     return { phase, tasks: visibleTasks, totalTasks: ordered.length };
   }).filter((g) => g.tasks.length > 0);
 }
+
+export const PRIORITY_COLORS: Record<string, string> = {
+  Critical: "var(--status-error)",
+  High: "var(--status-warning)",
+  Normal: "var(--status-info)",
+  Low: "var(--text-muted)",
+};
+
+export const STATUS_COLORS: Record<string, string> = {
+  "Not Started": "var(--text-muted)",
+  "In Progress": "var(--status-warning)",
+  Complete: "var(--status-success)",
+  Delayed: "var(--status-error)",
+  "On Hold": "var(--status-info)",
+};
+
+export const STATUSES = [
+  "Not Started",
+  "In Progress",
+  "Complete",
+  "Delayed",
+  "On Hold",
+  "Cancelled",
+] as const;
+
+export const PRIORITIES = ["Critical", "High", "Normal", "Low"] as const;
+
+export const TASK_LIST_COLUMNS: Array<{ key: string; label: string }> = [
+  { key: "select", label: "" },
+  { key: "wbs", label: "WBS" },
+  { key: "task", label: "Task" },
+  { key: "start", label: "Start" },
+  { key: "finish", label: "Finish" },
+  { key: "assigned-to", label: "Assigned To" },
+  { key: "priority", label: "Priority" },
+  { key: "status", label: "Status" },
+  { key: "actions", label: "" },
+];
+
+export function getScheduleTaskRowKey(
+  task: {
+    id?: string | null;
+    _stored_wbs_code?: string | null;
+    wbs_code?: string | null;
+    task_number?: string | number | null;
+    task_name?: string | null;
+  } | null | undefined,
+  index: number,
+  phase: string = "task",
+): string {
+  const id = String(task?.id || "").trim();
+  if (id) return id;
+
+  const fallback = [
+    phase,
+    task?._stored_wbs_code || task?.wbs_code,
+    task?.task_number,
+    task?.task_name,
+    index,
+  ]
+    .filter((part) => part !== null && part !== undefined && String(part).trim() !== "")
+    .map((part) => String(part).trim())
+    .join(":");
+
+  return fallback || `${phase}:task:${index}`;
+}
+
+export function fmtScheduleTaskDate(d: string | null | undefined): string {
+  if (!d) return "TBD";
+  return formatDateShort(d);
+}
+
+export const INLINE_INPUT: Record<string, string | number> = {
+  background: "var(--accent-muted)",
+  border: "1px solid var(--accent-border)",
+  borderRadius: 4,
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  padding: "2px 6px",
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+export const INLINE_SELECT: Record<string, string | number> = {
+  background: "var(--accent-muted)",
+  border: "1px solid var(--accent-border)",
+  borderRadius: 4,
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  padding: "2px 4px",
+  outline: "none",
+  width: "100%",
+  cursor: "pointer",
+};

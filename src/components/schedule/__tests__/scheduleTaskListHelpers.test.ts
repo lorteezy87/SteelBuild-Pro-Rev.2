@@ -3,6 +3,14 @@ import {
   filterScheduleTasksByPriorityStatus,
   sortByStartDate,
   groupScheduleTasksByPhase,
+  PRIORITY_COLORS,
+  STATUS_COLORS,
+  getScheduleTaskRowKey,
+  fmtScheduleTaskDate,
+  INLINE_INPUT,
+  INLINE_SELECT,
+  STATUSES,
+  PRIORITIES,
 } from "../scheduleTaskListHelpers";
 
 describe("filterScheduleTasksByPriorityStatus", () => {
@@ -42,5 +50,27 @@ describe("groupScheduleTasksByPhase", () => {
     const fab2 = collapsed.find((g) => g.phase === "Fabrication");
     // child hidden when parent collapsed
     expect(fab2?.tasks.every((t: any) => t.id !== "c")).toBe(true);
+  });
+});
+
+describe("schedule task list chrome maps", () => {
+  it("priority and status colors cover known keys", () => {
+    expect(PRIORITY_COLORS.Critical).toBe("var(--status-error)");
+    expect(STATUS_COLORS.Complete).toBe("var(--status-success)");
+    expect(STATUSES).toContain("Cancelled");
+    expect(PRIORITIES).toContain("Normal");
+  });
+
+  it("getScheduleTaskRowKey prefers id then stable fallback", () => {
+    expect(getScheduleTaskRowKey({ id: "task-1", task_name: "Detailing" }, 0, "Detailing")).toBe("task-1");
+    const first = getScheduleTaskRowKey({ id: "", wbs_code: "1.1", task_name: "TBD" }, 0, "Detailing");
+    const second = getScheduleTaskRowKey({ id: "", wbs_code: "1.1", task_name: "TBD" }, 1, "Detailing");
+    expect(first).not.toBe(second);
+  });
+
+  it("fmtScheduleTaskDate and inline styles", () => {
+    expect(fmtScheduleTaskDate(null)).toBe("TBD");
+    expect(INLINE_INPUT.fontSize).toBe(12);
+    expect(INLINE_SELECT.fontSize).toBe(9);
   });
 });
