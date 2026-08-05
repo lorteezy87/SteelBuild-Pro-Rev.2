@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Upload, Camera, Trash2, Check, AlertCircle } from "lucide-react";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-import { cancelButtonStyle, uploadButtonStyle } from "./photoUploadModalHelpers";
+import {
+  cancelButtonStyle,
+  uploadButtonStyle,
+  inputStyle,
+  compactInputStyle,
+} from "./photoUploadModalHelpers";
 
 const CATEGORIES = ["Progress", "Safety", "Issue", "Delivery", "Punchlist", "Other"];
 const MAX_DIMENSION = 2400;
@@ -797,22 +802,4 @@ function Label({ children }) {
   );
 }
 
-const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  padding: "6px 9px",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 11,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const compactInputStyle = {
-  ...inputStyle,
-  fontSize: 10,
-  padding: "5px 7px",
-};
 

@@ -37,3 +37,22 @@ export function uploadButtonStyle(disabled?: boolean): Record<string, string | n
     gap: 6,
   };
 }
+
+export const inputStyle: Record<string, string | number> = {
+  width: "100%",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 6,
+  padding: "6px 9px",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 11,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+export const compactInputStyle: Record<string, string | number> = {
+  ...inputStyle,
+  fontSize: 10,
+  padding: "5px 7px",
+};
