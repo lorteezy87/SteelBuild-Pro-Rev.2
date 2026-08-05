@@ -41,6 +41,8 @@ import {
   toggleSelectionId,
   selectionFromDocs,
   removeIdFromSelection,
+  selectDocsByIds,
+  countDocsForStatusTab,
 } from "./documents/documentsPageHelpers";
 import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
@@ -429,7 +431,7 @@ export default function Documents() {
   };
 
   const handleBulkDownload = async () => {
-    const docs = allDocuments.filter((d) => selectedIds.has(d.id));
+    const docs = selectDocsByIds(allDocuments, selectedIds);
     toast.info(`Downloading ${docs.length} file(s)...`);
     const { failed } = await batchProcess(docs, (doc) => handleDownloadDoc(doc), 3);
     if (failed.length > 0) {
@@ -501,7 +503,7 @@ export default function Documents() {
         {STATUS_TABS.map((tab) => {
           const count = tab.key === "all"
             ? allDocuments.length
-            : allDocuments.filter((d) => d.status === tab.key).length;
+            : countDocsForStatusTab(allDocuments, tab.key);
           return (
             <button
               key={tab.key}

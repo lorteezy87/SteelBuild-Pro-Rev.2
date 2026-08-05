@@ -178,3 +178,34 @@ export function splitCreateSubmittalPayload(
   const { drawing_types: chosenTypes, ...submittalData } = data;
   return { chosenTypes, submittalData };
 }
+
+export type ComponentCreateToast = { level: "warning" | "success"; message: string };
+
+/**
+ * After Promise.allSettled on drawing-type component inserts, build toasts.
+ * Matches Submittals.tsx create-path copy exactly.
+ */
+export function summarizeComponentCreateResults(
+  results: Array<PromiseSettledResult<unknown>>,
+  chosenTypeCount: number,
+): ComponentCreateToast[] {
+  const failedComponents = (results || []).filter((r) => r.status === "rejected").length;
+  const toasts: ComponentCreateToast[] = [];
+  if (failedComponents > 0) {
+    toasts.push({
+      level: "warning",
+      message: `Submittal created, but ${failedComponents} drawing type component${
+        failedComponents === 1 ? "" : "s"
+      } failed. Add them from the detail panel.`,
+    });
+  }
+  if (failedComponents < chosenTypeCount) {
+    const ok = chosenTypeCount - failedComponents;
+    toasts.push({
+      level: "success",
+      message: `Submittal created with ${ok} drawing type component${ok === 1 ? "" : "s"}`,
+    });
+  }
+  return toasts;
+}
+

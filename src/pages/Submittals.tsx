@@ -25,6 +25,7 @@ import SheetResponseGridRaw from "@/components/submittals/SheetResponseGrid";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import {
   splitCreateSubmittalPayload,
+  summarizeComponentCreateResults,
 } from "./submittals/submittalMutationHelpers";
 import {
   buildNewRoundCarrySeed,
@@ -731,12 +732,9 @@ export default function Submittals() {
                     const componentResults = await Promise.allSettled(
                       chosenTypes.map((t) => addComponentType({ submittalId: created.id, projectId: pid, drawingType: t })),
                     );
-                    const failedComponents = componentResults.filter((result) => result.status === "rejected").length;
-                    if (failedComponents > 0) {
-                      toast.warning(`Submittal created, but ${failedComponents} drawing type component${failedComponents === 1 ? "" : "s"} failed. Add them from the detail panel.`);
-                    }
-                    if (failedComponents < chosenTypes.length) {
-                      toast.success(`Submittal created with ${chosenTypes.length - failedComponents} drawing type component${chosenTypes.length - failedComponents === 1 ? "" : "s"}`);
+                    for (const t of summarizeComponentCreateResults(componentResults, chosenTypes.length)) {
+                      if (t.level === "warning") toast.warning(t.message);
+                      else toast.success(t.message);
                     }
                   }
                 }

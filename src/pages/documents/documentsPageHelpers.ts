@@ -49,3 +49,21 @@ export function removeIdFromSelection(prev: Set<string>, id: string): Set<string
   next.delete(id);
   return next;
 }
+
+/** Selected document rows from full list (order preserved). */
+export function selectDocsByIds<T extends { id?: string | null }>(
+  docs: T[],
+  selectedIds: Set<string>,
+): T[] {
+  return (docs || []).filter((d) => d?.id && selectedIds.has(d.id as string));
+}
+
+/** Count live documents for a status tab key ("all" or concrete status). */
+export function countDocsForStatusTab<T extends { status?: string | null }>(
+  docs: T[],
+  tabKey: string,
+): number {
+  if (tabKey === "all") return (docs || []).length;
+  return (docs || []).filter((d) => d.status === tabKey).length;
+}
+

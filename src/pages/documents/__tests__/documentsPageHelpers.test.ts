@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {
-  nextActiveFilters,
+import {nextActiveFilters,
   nextCategoryFilters,
   categoryFilterFromActive,
   pruneSelectionToAllowed,
   toggleSelectionId,
   selectionFromDocs,
-  removeIdFromSelection,
-} from "../documentsPageHelpers";
+  removeIdFromSelection, selectDocsByIds, countDocsForStatusTab} from "../documentsPageHelpers";
 
 describe("documentsPageHelpers", () => {
   it("filter mutators", () => {
@@ -27,5 +25,20 @@ describe("documentsPageHelpers", () => {
     expect([...selectionFromDocs([{ id: "x" }, { id: "y" }])]).toEqual(["x", "y"]);
     expect(removeIdFromSelection(new Set(["a"]), "z")).toEqual(new Set(["a"]));
     expect([...removeIdFromSelection(new Set(["a", "b"]), "a")]).toEqual(["b"]);
+  });
+});
+
+describe("selectDocsByIds / countDocsForStatusTab", () => {
+  const docs = [
+    { id: "a", status: "Approved" },
+    { id: "b", status: "Draft" },
+    { id: "c", status: "Approved" },
+  ];
+  it("selects by id set", () => {
+    expect(selectDocsByIds(docs, new Set(["a", "c"])).map((d) => d.id)).toEqual(["a", "c"]);
+  });
+  it("counts status tabs", () => {
+    expect(countDocsForStatusTab(docs, "all")).toBe(3);
+    expect(countDocsForStatusTab(docs, "Approved")).toBe(2);
   });
 });

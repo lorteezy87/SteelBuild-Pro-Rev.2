@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  appendSubmittalNotes,
+import {appendSubmittalNotes,
   buildBulkSubmittalCreatePayload,
   buildBulkUpdateRowPatch,
   classifyBulkOutcome,
@@ -8,8 +7,7 @@ import {
   formatSheetResponseSaveToast,
   formatSubmittalWriteError,
   isSubmittalDuplicateNumberError,
-  splitCreateSubmittalPayload,
-} from "../submittalMutationHelpers";
+  splitCreateSubmittalPayload, summarizeComponentCreateResults} from "../submittalMutationHelpers";
 
 describe("appendSubmittalNotes", () => {
   it("returns append text when prior is empty", () => {
@@ -127,5 +125,18 @@ describe("splitCreateSubmittalPayload", () => {
       chosenTypes: ["Shop", "Erection"],
       submittalData: { title: "Beams" },
     });
+  });
+});
+
+describe("summarizeComponentCreateResults", () => {
+  it("warns on partial failures and success on remaining", () => {
+    const results = [
+      { status: "fulfilled", value: 1 },
+      { status: "rejected", reason: new Error("x") },
+    ] as PromiseSettledResult<unknown>[];
+    const toasts = summarizeComponentCreateResults(results, 2);
+    expect(toasts.map((t) => t.level)).toEqual(["warning", "success"]);
+    expect(toasts[0].message).toContain("1 drawing type component failed");
+    expect(toasts[1].message).toContain("with 1 drawing type component");
   });
 });

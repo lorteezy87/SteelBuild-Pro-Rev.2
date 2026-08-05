@@ -30,6 +30,8 @@ import {
   countOwners,
   updateStagedRoleAt,
   removeStagedAt,
+  summarizeInviteSendResults,
+  keepFailedStagedRows,
 } from "./orgMembers/orgMembersPageHelpers";
 
 export default function OrgMembers() {
@@ -127,15 +129,10 @@ export default function OrgMembers() {
     }
     setSendingStaged(false);
     refresh();
-    const okCount = results.filter((r) => r.ok).length;
-    const failCount = results.length - okCount;
-    const failedEmails = new Set(results.filter((r) => !r.ok).map((r) => r.email));
-    setStaged((rows) => rows.filter((row) => failedEmails.has(row.email)));
-    if (okCount) {
-      toast.success(`Created ${okCount} invite${okCount === 1 ? "" : "s"}${failCount ? `, ${failCount} couldn't be sent` : ""} — copy links from Pending invites below`);
-    } else if (failCount) {
-      toast.error("Couldn't create invites — seat limit reached, or they're already invited");
-    }
+    const summary = summarizeInviteSendResults(results);
+    setStaged((rows) => keepFailedStagedRows(rows, summary.failedEmails));
+    if (summary.successToast) toast.success(summary.successToast);
+    else if (summary.errorToast) toast.error(summary.errorToast);
   };
 
   const copyLink = async (token) => {

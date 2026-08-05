@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildStagedSkippedNote,
+import {buildStagedSkippedNote,
   countOwners,
   updateStagedRoleAt,
-  removeStagedAt,
-} from "../orgMembersPageHelpers";
+  removeStagedAt, summarizeInviteSendResults, keepFailedStagedRows} from "../orgMembersPageHelpers";
 
 describe("orgMembersPageHelpers", () => {
   it("builds skip note and counts owners", () => {
@@ -19,5 +17,27 @@ describe("orgMembersPageHelpers", () => {
     const rows = [{ role: "member" }, { role: "admin" }];
     expect(updateStagedRoleAt(rows, 1, "owner")[1].role).toBe("owner");
     expect(removeStagedAt(rows, 0)).toEqual([{ role: "admin" }]);
+  });
+});
+
+describe("summarizeInviteSendResults", () => {
+  it("counts ok/fail and builds toasts", () => {
+    const s = summarizeInviteSendResults([
+      { email: "a@x.com", ok: true },
+      { email: "b@x.com", ok: false },
+    ]);
+    expect(s.okCount).toBe(1);
+    expect(s.failCount).toBe(1);
+    expect(s.successToast).toContain("Created 1 invite");
+    expect(s.failedEmails.has("b@x.com")).toBe(true);
+    expect(keepFailedStagedRows([{ email: "a@x.com" }, { email: "b@x.com" }], s.failedEmails)).toEqual([
+      { email: "b@x.com" },
+    ]);
+  });
+
+  it("errors when all fail", () => {
+    const s = summarizeInviteSendResults([{ email: "a@x.com", ok: false }]);
+    expect(s.successToast).toBeNull();
+    expect(s.errorToast).toMatch(/Couldn't create invites/);
   });
 });
