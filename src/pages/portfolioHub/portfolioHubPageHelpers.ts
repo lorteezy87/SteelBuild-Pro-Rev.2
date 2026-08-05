@@ -1,5 +1,7 @@
 /** Pure helpers for PortfolioHub tab resolution. */
 
+import { resolveHubTabKey } from "@/pages/hubs/hubTabHelpers";
+
 export const PORTFOLIO_TABS = [
   { key: "overview", label: "Portfolio Overview" },
   { key: "executive", label: "Executive View" },
@@ -7,10 +9,11 @@ export const PORTFOLIO_TABS = [
 
 export type PortfolioTabKey = (typeof PORTFOLIO_TABS)[number]["key"];
 
+
+const PORTFOLIO_TAB_KEYS = PORTFOLIO_TABS.map((t) => t.key);
+
 export function resolvePortfolioTabKey(
   param: string | null | undefined,
 ): PortfolioTabKey {
-  return PORTFOLIO_TABS.some((t) => t.key === param)
-    ? (param as PortfolioTabKey)
-    : "overview";
+  return resolveHubTabKey(param, PORTFOLIO_TAB_KEYS, "overview") as PortfolioTabKey;
 }

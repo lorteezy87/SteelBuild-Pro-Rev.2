@@ -61,12 +61,8 @@ export function filterSelectedRows<T extends { id: string }>(
   return (rows || []).filter((r) => selectedIds.has(r.id));
 }
 
-export function nextSelectedIdsToggle(prev: Set<string>, id: string): Set<string> {
-  const next = new Set(prev);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
-}
+/** @deprecated Prefer toggleSelectionId from `@/pages/shared/selectionHelpers`. */
+export { toggleSelectionId as nextSelectedIdsToggle } from "@/pages/shared/selectionHelpers";
 
 export function resolveProjectPercentComplete(
   selectedProject: { scope_complete_pct_override?: number | null } | null | undefined,

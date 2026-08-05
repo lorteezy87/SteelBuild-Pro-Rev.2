@@ -1,16 +1,18 @@
 import { findById } from "@/pages/shared/findById";
 import { filterLiveRecords } from "@/pages/shared/filterLiveRecords";
+import { resolveHubTabKey } from "@/pages/hubs/hubTabHelpers";
 
 /** Pure helpers for FieldHub page shell. */
 
 /** Alias — same soft-delete filter as shared filterLiveRecords. */
 export const filterLiveFieldRecords = filterLiveRecords;
 
+
 export function resolveFieldHubTabKey(
   param: string | null | undefined,
   tabKeys: string[],
 ): string {
-  return tabKeys.includes(param || "") ? (param as string) : "hub";
+  return resolveHubTabKey(param, tabKeys, "hub");
 }
 
 export function resolveProjectName(

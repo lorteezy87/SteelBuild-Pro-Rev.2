@@ -1,5 +1,7 @@
 /** Pure helpers for CalculatorsHub tab resolution. */
 
+import { resolveHubTabKey } from "@/pages/hubs/hubTabHelpers";
+
 export const CALCULATOR_TAB_KEYS = [
   "calculator",
   "feetinches",
@@ -10,10 +12,9 @@ export const CALCULATOR_TAB_KEYS = [
 
 export type CalculatorTabKey = (typeof CALCULATOR_TAB_KEYS)[number];
 
+
 export function resolveCalculatorTabKey(
   param: string | null | undefined,
 ): CalculatorTabKey {
-  return (CALCULATOR_TAB_KEYS as readonly string[]).includes(param || "")
-    ? (param as CalculatorTabKey)
-    : "calculator";
+  return resolveHubTabKey(param, CALCULATOR_TAB_KEYS, "calculator") as CalculatorTabKey;
 }

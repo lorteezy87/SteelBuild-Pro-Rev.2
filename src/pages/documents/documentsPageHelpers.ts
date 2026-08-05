@@ -1,4 +1,7 @@
-/** Pure filter/selection mutators for Documents page shell. */
+/**
+ * Pure filter/selection mutators for Documents page shell.
+ */
+import { selectionFromIds } from "@/pages/shared/selectionHelpers";
 
 export function nextActiveFilters(
   prev: Record<string, unknown>,
@@ -24,30 +27,16 @@ export function categoryFilterFromActive(
   return activeFilters?.category?.[0] || "All";
 }
 
-export function pruneSelectionToAllowed(
-  previous: Set<string>,
-  allowedIds: Set<string>,
-): Set<string> {
-  const next = new Set([...previous].filter((id) => allowedIds.has(id)));
-  return next.size === previous.size ? previous : next;
-}
+/** @deprecated Prefer `@/pages/shared/selectionHelpers`. */
+export {
+  pruneSelectionToAllowed,
+  toggleSelectionId,
+  removeIdFromSelection,
+} from "@/pages/shared/selectionHelpers";
 
-export function toggleSelectionId(prev: Set<string>, id: string): Set<string> {
-  const next = new Set(prev);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
-}
-
+/** @deprecated Prefer selectionFromIds from shared selectionHelpers. */
 export function selectionFromDocs(docs: Array<{ id?: string }>): Set<string> {
-  return new Set((docs || []).map((d) => d.id).filter(Boolean) as string[]);
-}
-
-export function removeIdFromSelection(prev: Set<string>, id: string): Set<string> {
-  if (!prev.has(id)) return prev;
-  const next = new Set(prev);
-  next.delete(id);
-  return next;
+  return selectionFromIds(docs);
 }
 
 /** Selected document rows from full list (order preserved). */
@@ -66,4 +55,3 @@ export function countDocsForStatusTab<T extends { status?: string | null }>(
   if (tabKey === "all") return (docs || []).length;
   return (docs || []).filter((d) => d.status === tabKey).length;
 }
-

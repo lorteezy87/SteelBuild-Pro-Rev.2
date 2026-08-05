@@ -45,16 +45,11 @@ export function filterChangeOrders(
   });
 }
 
-export function nextSelectedToggle(prev: Set<string>, id: string): Set<string> {
-  const next = new Set(prev);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
-}
-
-export function selectAllOrNone(checked: boolean, ids: string[]): Set<string> {
-  return checked ? new Set(ids) : new Set();
-}
+/** @deprecated Prefer shared selectionHelpers. */
+export {
+  toggleSelectionId as nextSelectedToggle,
+  selectAllOrNone,
+} from "@/pages/shared/selectionHelpers";
 
 export const CHANGE_ORDERS_CSV_HEADERS = [
   "CO #",

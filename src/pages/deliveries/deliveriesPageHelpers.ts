@@ -140,12 +140,8 @@ export function groupDeliveriesByLane(
   return groups;
 }
 
-export function nextSelectedIdsToggle(prev: Set<string>, id: string): Set<string> {
-  const next = new Set(prev);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
-}
+/** @deprecated Prefer toggleSelectionId from shared selectionHelpers. */
+export { toggleSelectionId as nextSelectedIdsToggle } from "@/pages/shared/selectionHelpers";
 
 export function collectIds(
   rows: Array<{ id?: string | null }>,

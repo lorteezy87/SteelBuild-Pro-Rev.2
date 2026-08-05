@@ -2,6 +2,7 @@
  * Pure helpers for Submittals page shell (index maps / related RFIs).
  */
 import type { DrawingSet, DrawingSetsById } from "./types";
+import { findById } from "@/pages/shared/findById";
 
 export function buildDrawingSetsById(
   drawingSets: Array<{ id?: string | null } & Partial<DrawingSet>>,
@@ -69,13 +70,6 @@ export function filterRelatedSetRfis<T extends RfiLinkLike>(
 }
 
 
-export function findRowById<T extends { id?: string | null }>(
-  rows: T[],
-  id: string | null | undefined,
-): T | null {
-  if (!id) return null;
-  return (rows || []).find((r) => r.id === id) ?? null;
-}
 
 export type SpinOffParentLike = {
   discipline?: string | null;
@@ -93,12 +87,16 @@ export function buildSpinOffInitial(
   };
 }
 
-export function toggleSelectionId(prev: Set<string>, id: string): Set<string> {
-  const next = new Set(prev);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
+/** @deprecated Prefer findById from shared. */
+export function findRowById<T extends { id?: string | null }>(
+  rows: T[],
+  id: string | null | undefined,
+): T | null {
+  return findById(rows, id);
 }
+
+/** @deprecated Prefer `@/pages/shared/selectionHelpers`. */
+export { toggleSelectionId } from "@/pages/shared/selectionHelpers";
 
 /** Statuses that allow spinning off a child submittal. */
 export const SPLIT_ELIGIBLE_STATUSES = new Set<string>([

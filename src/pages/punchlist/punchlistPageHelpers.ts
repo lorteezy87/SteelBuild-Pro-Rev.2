@@ -35,6 +35,5 @@ export function computePunchlistStats(punchlist: PunchItemLike[]) {
   return { ...stats, completionRate };
 }
 
-export function toggleIdInList(prev: string[], id: string): string[] {
-  return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-}
+/** @deprecated Prefer shared selectionHelpers. */
+export { toggleIdInList } from "@/pages/shared/selectionHelpers";

@@ -79,12 +79,8 @@ export function hasActiveScopeFilters(opts: {
   );
 }
 
-export function nextSelectedIds(prev: Set<string>, id: string): Set<string> {
-  const next = new Set(prev);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
-}
+/** @deprecated Prefer toggleSelectionId. */
+export { toggleSelectionId as nextSelectedIds } from "@/pages/shared/selectionHelpers";
 
 export function bulkSuccessMessage(count: number, verb: "Updated" | "Deleted"): string {
   return `${verb} ${count} item${count === 1 ? "" : "s"}`;
