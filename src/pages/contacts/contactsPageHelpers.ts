@@ -56,3 +56,29 @@ export const CONTACT_TYPE_COLORS: Record<string, string> = {
   [CONTACT_TYPE.INSPECTOR]: "var(--text-muted)",
   [CONTACT_TYPE.INTERNAL]: "var(--secondary)",
 };
+
+/** Filter chip values including "all". */
+export const CONTACT_TYPE_FILTER_OPTIONS = [
+  "all",
+  ...Object.values(CONTACT_TYPE),
+] as const;
+
+/**
+ * KPI-tile toggle: click active type again → all; else set that type.
+ */
+export function nextContactTypeFilter(
+  current: string,
+  clicked: string,
+): string {
+  if (clicked === "all") return "all";
+  return current === clicked ? "all" : clicked;
+}
+
+export function contactsCommandSubtitle(
+  filterType: string,
+): string {
+  const base =
+    "Project directory · Owner / GC / Engineer / Subs / Suppliers / Inspectors";
+  return filterType !== "all" ? `${base} · filtered: ${filterType}` : base;
+}
+

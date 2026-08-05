@@ -8,12 +8,14 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Upload } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
-import { CONTACT_TYPE } from "@/lib/enums";
 import {
   filterContacts,
   computeContactStats,
   findById,
   CONTACT_TYPE_COLORS,
+  CONTACT_TYPE_FILTER_OPTIONS,
+  nextContactTypeFilter,
+  contactsCommandSubtitle,
 } from "./contacts/contactsPageHelpers";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
@@ -97,7 +99,7 @@ export default function Contacts() {
     [contacts],
   );
 
-  const typeOptions = ["all", ...Object.values(CONTACT_TYPE)];
+  const typeOptions = CONTACT_TYPE_FILTER_OPTIONS;
 
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -106,7 +108,7 @@ export default function Contacts() {
         title="Contacts"
         count={isLoading ? undefined : filtered.length}
         unit=" · CONTACTS"
-        subtitle={`Project directory · Owner / GC / Engineer / Subs / Suppliers / Inspectors${filterType !== "all" ? ` · filtered: ${filterType}` : ""}`}
+        subtitle={contactsCommandSubtitle(filterType)}
       >
         <Button variant="secondary"><Upload size={12} /> Import CSV</Button>
         <Button variant="primary" icon="plus" onClick={() => { setEditingContact(null); setShowForm(true); }}>
@@ -115,14 +117,14 @@ export default function Contacts() {
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
-        <KpiTile compact label="Total"        value={stats.total}          color="var(--accent)"                active={filterType === "all"}           onClick={() => setFilterType("all")} />
-        <KpiTile compact label="Owner"        value={stats.owner}          color={CONTACT_TYPE_COLORS.Owner}            active={filterType === "Owner"}         onClick={() => setFilterType(filterType === "Owner" ? "all" : "Owner")} />
-        <KpiTile compact label="GC"           value={stats.gc}             color={CONTACT_TYPE_COLORS.GC}               active={filterType === "GC"}            onClick={() => setFilterType(filterType === "GC" ? "all" : "GC")} />
-        <KpiTile compact label="Engineer"     value={stats.engineer}       color={CONTACT_TYPE_COLORS.Engineer}         active={filterType === "Engineer"}      onClick={() => setFilterType(filterType === "Engineer" ? "all" : "Engineer")} />
-        <KpiTile compact label="Subs"         value={stats.subcontractor}  color={CONTACT_TYPE_COLORS.Subcontractor}    active={filterType === "Subcontractor"} onClick={() => setFilterType(filterType === "Subcontractor" ? "all" : "Subcontractor")} />
-        <KpiTile compact label="Supplier"     value={stats.supplier}       color={CONTACT_TYPE_COLORS.Supplier}         active={filterType === "Supplier"}      onClick={() => setFilterType(filterType === "Supplier" ? "all" : "Supplier")} />
-        <KpiTile compact label="Inspector"    value={stats.inspector}      color={CONTACT_TYPE_COLORS.Inspector}        active={filterType === "Inspector"}     onClick={() => setFilterType(filterType === "Inspector" ? "all" : "Inspector")} />
-        <KpiTile compact label="Internal"     value={stats.internal}       color={CONTACT_TYPE_COLORS.Internal}         active={filterType === "Internal"}      onClick={() => setFilterType(filterType === "Internal" ? "all" : "Internal")} />
+        <KpiTile compact label="Total"        value={stats.total}          color="var(--accent)"                active={filterType === "all"}           onClick={() => setFilterType(nextContactTypeFilter(filterType, "all"))} />
+        <KpiTile compact label="Owner"        value={stats.owner}          color={CONTACT_TYPE_COLORS.Owner}            active={filterType === "Owner"}         onClick={() => setFilterType(nextContactTypeFilter(filterType, "Owner"))} />
+        <KpiTile compact label="GC"           value={stats.gc}             color={CONTACT_TYPE_COLORS.GC}               active={filterType === "GC"}            onClick={() => setFilterType(nextContactTypeFilter(filterType, "GC"))} />
+        <KpiTile compact label="Engineer"     value={stats.engineer}       color={CONTACT_TYPE_COLORS.Engineer}         active={filterType === "Engineer"}      onClick={() => setFilterType(nextContactTypeFilter(filterType, "Engineer"))} />
+        <KpiTile compact label="Subs"         value={stats.subcontractor}  color={CONTACT_TYPE_COLORS.Subcontractor}    active={filterType === "Subcontractor"} onClick={() => setFilterType(nextContactTypeFilter(filterType, "Subcontractor"))} />
+        <KpiTile compact label="Supplier"     value={stats.supplier}       color={CONTACT_TYPE_COLORS.Supplier}         active={filterType === "Supplier"}      onClick={() => setFilterType(nextContactTypeFilter(filterType, "Supplier"))} />
+        <KpiTile compact label="Inspector"    value={stats.inspector}      color={CONTACT_TYPE_COLORS.Inspector}        active={filterType === "Inspector"}     onClick={() => setFilterType(nextContactTypeFilter(filterType, "Inspector"))} />
+        <KpiTile compact label="Internal"     value={stats.internal}       color={CONTACT_TYPE_COLORS.Internal}         active={filterType === "Internal"}      onClick={() => setFilterType(nextContactTypeFilter(filterType, "Internal"))} />
       </div>
 
       {/* Search Bar — prominent, full width */}
@@ -169,7 +171,7 @@ export default function Contacts() {
             return (
               <button
                 key={t}
-                onClick={() => setFilterType(filterType === t && t !== "all" ? "all" : t)}
+                onClick={() => setFilterType(nextContactTypeFilter(filterType, t))}
                 style={{
                   padding: "6px 10px",
                   borderRadius: "var(--radius-btn)",
@@ -270,4 +272,3 @@ export default function Contacts() {
     </div>
   );
 }
-
