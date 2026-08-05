@@ -15,6 +15,14 @@ import {
   sumChangeOrderBreakdown,
   sumSovBillingTotals,
 } from "./contractManagementHelpers";
+import {
+  thStyle,
+  tdStyle,
+  tdBodyStyle,
+  tdRightStyle,
+  totalsStyle,
+  CO_STATUS_COLORS,
+} from "./contractManagementStyleHelpers";
 
 // Local aliases so the ~30 call sites below don't need to change.
 const fmt = (v) => formatCurrency(v, 0);
@@ -31,41 +39,10 @@ export const KPICard = ({ label, value, sub, tone }) => (
 );
 
 export const COStatusBadge = ({ status }) => {
-  const colors = {
-    Draft: { bg: "rgba(128,128,128,0.15)", border: "rgba(128,128,128,0.3)", text: "var(--text-muted)" },
-    Submitted: { bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.3)", text: "var(--status-info)" },
-    "Under Review": { bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.3)", text: "var(--status-warning)" },
-    Approved: { bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.3)", text: "var(--status-success)" },
-    Rejected: { bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.3)", text: "var(--status-error)" },
-    Certified: { bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.3)", text: "var(--status-success)" },
-    Paid: { bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.3)", text: "var(--status-info)" },
-  };
-  const c = colors[status] || colors.Draft;
+  const c = CO_STATUS_COLORS[status] || CO_STATUS_COLORS.Draft;
   return (
     <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 3, background: c.bg, border: `1px solid ${c.border}`, fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: c.text }}>{status}</span>
   );
-};
-
-// ─── Table cell/row styles ──────────────────────────────────────────────────
-const thStyle = {
-  fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em",
-  textTransform: "uppercase", color: "var(--text-muted)", padding: "10px 12px",
-  textAlign: "left", borderBottom: "1px solid var(--divider)", whiteSpace: "nowrap",
-};
-
-const tdStyle = {
-  fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-primary)",
-  padding: "10px 12px", borderBottom: "1px solid var(--divider)", whiteSpace: "nowrap",
-};
-
-const tdBodyStyle = {
-  ...tdStyle, fontFamily: "var(--font-body)", whiteSpace: "normal", maxWidth: 260,
-};
-
-const tdRightStyle = { ...tdStyle, textAlign: "right" };
-
-const totalsStyle = {
-  ...tdStyle, fontWeight: 800, borderTop: "2px solid var(--accent)", borderBottom: "none",
 };
 
 // ─── Tab button ─────────────────────────────────────────────────────────────
