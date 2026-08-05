@@ -7,6 +7,8 @@
  * preserving lift, not a rewrite.
  */
 
+import { filterLiveRecords } from "@/pages/shared/filterLiveRecords";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /** Shape of a raw budget_hour_items row (matches supabase.ts Row). */
@@ -140,9 +142,9 @@ export function fmtHoursOrBlank(n: unknown): string {
   return v.toFixed(1);
 }
 
-export function filterLiveBudgetRows<T extends { is_deleted?: boolean | null }>(rows: T[]): T[] {
-  return rows.filter((r) => !r?.is_deleted);
-}
+
+/** Alias for budget-row soft-delete filter. */
+export const filterLiveBudgetRows = filterLiveRecords;
 
 export function partitionBudgetRows(rows: BudgetHourRow[]) {
   return {

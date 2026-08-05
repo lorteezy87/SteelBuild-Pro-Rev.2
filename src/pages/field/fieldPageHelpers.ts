@@ -3,8 +3,6 @@
  * No React, no network — page stays the orchestrator.
  */
 
-export type SoftDeletable = { is_deleted?: boolean | null; [key: string]: unknown };
-
 export function startOfWeekISO(now: Date = new Date()): string {
   const day = now.getDay();
   const diff = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -34,9 +32,8 @@ export function fmtShortDate(iso: string | null | undefined): string {
   }
 }
 
-export function filterLiveRecords<T extends SoftDeletable>(rows: T[]): T[] {
-  return rows.filter((r) => !r.is_deleted);
-}
+/** @deprecated Prefer `@/pages/shared/filterLiveRecords` — re-export kept for local imports. */
+export { filterLiveRecords } from "@/pages/shared/filterLiveRecords";
 
 export function findTodayLog<T extends { date?: string | null }>(
   logs: T[],

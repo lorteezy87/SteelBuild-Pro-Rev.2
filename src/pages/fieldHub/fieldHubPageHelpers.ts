@@ -1,11 +1,10 @@
 import { findById } from "@/pages/shared/findById";
+import { filterLiveRecords } from "@/pages/shared/filterLiveRecords";
+
 /** Pure helpers for FieldHub page shell. */
 
-export function filterLiveFieldRecords<T extends { is_deleted?: boolean | null }>(
-  rows: T[] | null | undefined,
-): T[] {
-  return (rows || []).filter((r) => !r.is_deleted);
-}
+/** Alias — same soft-delete filter as shared filterLiveRecords. */
+export const filterLiveFieldRecords = filterLiveRecords;
 
 export function resolveFieldHubTabKey(
   param: string | null | undefined,

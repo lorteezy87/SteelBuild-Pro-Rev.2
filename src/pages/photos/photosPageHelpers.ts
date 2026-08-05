@@ -1,9 +1,8 @@
 /**
  * Pure helpers for Photos page shell.
  */
-export function filterLiveRecords<T extends { is_deleted?: boolean | null }>(rows: T[]): T[] {
-  return (rows || []).filter((r) => !r.is_deleted);
-}
+/** @deprecated Prefer `@/pages/shared/filterLiveRecords` — re-export kept for local imports. */
+export { filterLiveRecords } from "@/pages/shared/filterLiveRecords";
 
 export type PhotoLike = {
   taken_date?: string | null;

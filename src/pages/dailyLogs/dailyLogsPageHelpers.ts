@@ -1,6 +1,7 @@
 /**
  * Pure helpers for DailyLogs page shell.
  */
+import { filterLiveRecords } from "@/pages/shared/filterLiveRecords";
 import { localToday } from "@/utils/dates";
 
 export function getDateCutoff(preset: string, now: Date = new Date()): string | null {
@@ -22,9 +23,9 @@ export function getDateCutoff(preset: string, now: Date = new Date()): string | 
   return null;
 }
 
-export function filterLiveDailyLogs<T extends { is_deleted?: boolean | null }>(rawLogs: T[]): T[] {
-  return (rawLogs || []).filter((r) => !r.is_deleted);
-}
+
+/** Alias for daily-log soft-delete filter. */
+export const filterLiveDailyLogs = filterLiveRecords;
 
 export type DailyLogLike = {
   date?: string | null;
