@@ -16,6 +16,7 @@ import {
   commentAuthorInitials as initials,
   extractMentions,
 } from "./commentThreadHelpers";
+import CommentBody from "./CommentBody";
 
 /**
  * CommentThread — polymorphic comment thread for any entity in the app.
@@ -359,34 +360,10 @@ function CommentRow({ c, canModify = false, onDelete, onCycleStatus }) {
         )}
       </div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
-        {renderBodyWithMentions(c.body)}
+        <CommentBody body={c.body} />
       </div>
     </div>
   );
 }
 
-function renderBodyWithMentions(body) {
-  // Highlight @mentions visually. Not interactive routing here — keep it
-  // simple: just visually distinguish them.
-  const parts = String(body).split(/(@[\w.-]+)/g);
-  return parts.map((part, i) => {
-    if (/^@[\w.-]+$/.test(part)) {
-      return (
-        <span
-          key={i}
-          style={{
-            background: "var(--accent-muted)",
-            color: "var(--accent)",
-            padding: "0 3px",
-            borderRadius: 3,
-            fontWeight: 600,
-          }}
-        >
-          {part}
-        </span>
-      );
-    }
-    return <React.Fragment key={i}>{part}</React.Fragment>;
-  });
-}
 

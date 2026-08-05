@@ -65,7 +65,7 @@ export const DRAWING_HEALTH_WEIGHTS = {
 
 const WEIGHTS = DRAWING_HEALTH_WEIGHTS;
 
-const TERMINAL_APPROVED = new Set(["Approved", "Approved as Noted", "Released for Fabrication"]);
+export const TERMINAL_APPROVED = new Set(["Approved", "Approved as Noted", "Released for Fabrication"]);
 
 export const DRAWING_HEALTH_BANDS: Record<BandKey, { label: string; color: string }> = {
   excellent: { label: "Excellent", color: "#2EA043" },

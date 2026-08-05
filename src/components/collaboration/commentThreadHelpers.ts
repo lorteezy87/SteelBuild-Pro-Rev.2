@@ -84,3 +84,12 @@ export function extractMentions(body: string | null | undefined): string[] {
   const matches = String(body || "").match(/@[\w.-]+/g) || [];
   return [...new Set(matches.map((m) => m.slice(1)))];
 }
+
+/** Presentational chrome for @mention highlights in comment bodies. */
+export const COMMENT_MENTION_STYLE: Record<string, string | number> = {
+  background: "var(--accent-muted)",
+  color: "var(--accent)",
+  padding: "0 3px",
+  borderRadius: 3,
+  fontWeight: 600,
+};
