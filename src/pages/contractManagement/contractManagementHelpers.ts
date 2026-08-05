@@ -114,3 +114,9 @@ export function sumSovBillingTotals(
   const totalExpenses = (expenses || []).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   return { scheduled, billed, retainage, netReceived: billed - retainage, totalExpenses };
 }
+
+export const CONTRACT_MGMT_TABS = [
+  "CHANGE ORDERS",
+  "BILLING & SOV",
+  "CONTRACT SUMMARY",
+] as const;

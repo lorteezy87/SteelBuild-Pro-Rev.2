@@ -97,3 +97,15 @@ export const URGENCY_COLORS: Record<string, string> = {
   awaiting: "var(--text-muted)",
   normal: "var(--border-default)",
 };
+
+export const PAGE_FOR_TYPE: Record<string, string> = {
+  RFI: "RFIs",
+  SUB: "Submittals",
+  DWG: "Drawings",
+  CO: "ChangeOrders",
+  DEL: "Deliveries",
+  WP: "WorkPackages",
+  PAY: "SOV",
+  NOTE: "ProductionNotes",
+  TASK: "Schedule",
+};

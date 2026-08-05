@@ -1,7 +1,11 @@
 import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
-import { extractDetails, URGENCY_COLORS } from "./itemDetailDrawerHelpers";
+import {
+  extractDetails,
+  URGENCY_COLORS,
+  PAGE_FOR_TYPE,
+} from "./itemDetailDrawerHelpers";
 
 /**
  * Slide-out detail drawer for a single feed item.
@@ -40,10 +44,6 @@ export default function ItemDetailDrawer({ item, onClose }) {
   // else derive one from the item's type + project — the canonical presentation path's
   // ActionItems don't carry quickAction, which is why the button used to be a
   // permanent no-op there. Routes map to the page registry (src/config/routes.js).
-  const PAGE_FOR_TYPE = {
-    RFI: "RFIs", SUB: "Submittals", DWG: "Drawings", CO: "ChangeOrders",
-    DEL: "Deliveries", WP: "WorkPackages", PAY: "SOV", NOTE: "ProductionNotes", TASK: "Schedule",
-  };
   const targetRoute = (() => {
     if (item.quickAction?.route) return item.quickAction.route;
     const page = PAGE_FOR_TYPE[item.itemType];

@@ -23,6 +23,7 @@ import { usePermissions } from "@/services/permissions";
 import {
   sumApprovedChangeOrders,
   sumPendingChangeOrders,
+  CONTRACT_MGMT_TABS,
 } from "./contractManagement/contractManagementHelpers";
 import {
   ContractOverviewPanel,
@@ -267,7 +268,7 @@ export default function ContractManagement() {
   }
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
-  const TABS = ["CHANGE ORDERS", "BILLING & SOV", "CONTRACT SUMMARY"];
+  const TABS = CONTRACT_MGMT_TABS;
 
   return (
     <div className="sb-dashboard-reference-page" style={{ padding: "24px 28px", background: "var(--bg-page)", minHeight: "100vh" }}>

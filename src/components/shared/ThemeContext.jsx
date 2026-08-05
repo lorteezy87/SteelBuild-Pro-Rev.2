@@ -33,34 +33,13 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import {
   resolveInitialTheme,
   shouldPersistTheme,
-  THEME_STORAGE_KEY,
 } from "@/lib/themeResolution";
-
-const KEY = {
-  theme:     THEME_STORAGE_KEY,
-  accent:    "sbp-accent",
-  fontScale: "sbp-font-scale",
-  contrast:  "sbp-contrast",
-  motion:    "sbp-motion",
-};
-
-const DEFAULTS = {
-  theme:     "dark",
-  accent:    "gold",
-  fontScale: "md",
-  contrast:  "normal",
-  motion:    "auto",
-};
-
-const ALLOWED = {
-  theme:     new Set(["dark", "light"]),
-  accent:    new Set(["gold", "teal", "blue", "amber", "slate"]),
-  fontScale: new Set(["sm", "md", "lg"]),
-  contrast:  new Set(["normal", "high"]),
-  motion:    new Set(["auto", "reduced"]),
-};
-
-const FONT_SCALE_VALUE = { sm: 0.94, md: 1.0, lg: 1.12 };
+import {
+  THEME_PREF_KEYS as KEY,
+  THEME_DEFAULTS as DEFAULTS,
+  THEME_ALLOWED as ALLOWED,
+  FONT_SCALE_VALUE,
+} from "./themeContextHelpers";
 
 const ThemeContext = createContext({
   theme: "dark",
