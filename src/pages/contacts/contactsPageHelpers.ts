@@ -43,3 +43,12 @@ export function computeContactStats(contacts: ContactLike[]) {
     internal: contacts.filter((c) => c.contact_type === CONTACT_TYPE.INTERNAL).length,
   };
 }
+
+export function findById<T extends { id?: string | null }>(
+  rows: T[],
+  id: string | null | undefined,
+): T | null {
+  if (!id) return null;
+  return (rows || []).find((r) => r.id === id) || null;
+}
+

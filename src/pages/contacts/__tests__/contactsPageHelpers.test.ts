@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterContacts, computeContactStats } from "../contactsPageHelpers";
+import {filterContacts, computeContactStats, findById} from "../contactsPageHelpers";
 import { CONTACT_TYPE } from "@/lib/enums";
 
 describe("contactsPageHelpers", () => {
@@ -20,5 +20,12 @@ describe("contactsPageHelpers", () => {
     expect(stats.engineer).toBe(1);
     expect(stats.gc).toBe(1);
     expect(stats.owner).toBe(0);
+  });
+});
+
+describe("findById", () => {
+  it("returns matching row or null", () => {
+    expect(findById([{ id: "a" }, { id: "b" }], "b")?.id).toBe("b");
+    expect(findById([{ id: "a" }], null)).toBeNull();
   });
 });

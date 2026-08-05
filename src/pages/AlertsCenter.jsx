@@ -10,15 +10,11 @@ import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import {
-  resolveAlertPath as resolveAlertPathHelper,
+  resolveAlertPath,
   filterAlerts,
   uniqueAlertTypes,
   severityStyle,
 } from "./alertsCenter/alertsCenterPageHelpers";
-
-function resolveAlertPath(alert) {
-  return resolveAlertPathHelper(alert, createPageUrl);
-}
 
 export default function AlertsCenter() {
   const navigate = useNavigate();
@@ -153,14 +149,14 @@ export default function AlertsCenter() {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    {resolveAlertPath(alert) && (
+                    {resolveAlertPath(alert, createPageUrl) && (
                       <Button
                         size="sm"
                         variant="outline"
                         className="h-7 text-xs"
                         onClick={() => {
                           markRead(alert);
-                          navigate(resolveAlertPath(alert));
+                          navigate(resolveAlertPath(alert, createPageUrl));
                         }}
                       >
                         <ExternalLink className="w-3 h-3 mr-1" />Open

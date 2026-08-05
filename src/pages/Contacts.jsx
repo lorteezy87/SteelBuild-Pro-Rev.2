@@ -9,7 +9,11 @@ import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Upload } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 import { CONTACT_TYPE } from "@/lib/enums";
-import { filterContacts, computeContactStats } from "./contacts/contactsPageHelpers";
+import {
+  filterContacts,
+  computeContactStats,
+  findById,
+} from "./contacts/contactsPageHelpers";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
@@ -89,7 +93,7 @@ export default function Contacts() {
     onError: (e) => toast.error(toUserErrorMessage(e, "Failed to delete contact")),
   });
 
-  const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;
+  const selectedProject = findById(projects, projectId);
 
   const filtered = useMemo(
     () => filterContacts(contacts, filterType, search),
