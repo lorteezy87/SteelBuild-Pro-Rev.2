@@ -19,13 +19,25 @@ import {
   addIdsToSelection,
   selectIdRange,
 } from "@/lib/pieceControl/pieceSelectionRange";
-import { sortPieceRegisterRows } from "@/lib/pieceControl/pieceRegisterSort";
 import {
   applyWorkPackageAutoAssign,
   planWorkPackageAutoAssign,
   type AutoAssignPlan,
 } from "@/lib/pieceControl/wpAutoAssign";
-import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
+import {
+  buildContainerIds,
+  selectLeafPieces,
+  buildWorkPackageTitleMap,
+  buildDrawingLinkCountByPiece,
+  resolveLiveWorkPackageId,
+  filterPackageScopedLeaves,
+  filterSelectablePieces,
+  sumSelectedPieceTons,
+  filterActiveDrawingSets,
+  filterDrawingSetsByNeedle,
+  summarizeAutoAssignSkips,
+} from "./pieceRelationshipHelpers";
+
 
 interface PieceRelationshipManagerProps {
   projectId: string;
@@ -78,83 +90,51 @@ export default function PieceRelationshipManager({
   const snapshot = snapshotQuery.data;
 
   const containerIds = useMemo(
-    () => new Set(
-      (snapshot?.pieces ?? [])
-        .map((piece) => piece.parent_piece_id)
-        .filter((id): id is string => Boolean(id)),
-    ),
+    () => buildContainerIds(snapshot?.pieces),
     [snapshot?.pieces],
   );
   const leafPieces = useMemo(
-    () => (snapshot?.pieces ?? []).filter(
-      (piece) => !piece.is_container && !containerIds.has(piece.id),
-    ),
+    () => selectLeafPieces(snapshot?.pieces, containerIds),
     [containerIds, snapshot?.pieces],
   );
   const workPackageMap = useMemo(
-    () => new Map(
-      (snapshot?.workPackages ?? []).map((wp) => [wp.id, formatWorkPackageTitle(wp)]),
-    ),
+    () => buildWorkPackageTitleMap(snapshot?.workPackages),
     [snapshot?.workPackages],
   );
-  const drawingLinkCountByPiece = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const link of snapshot?.pieceDrawingSets ?? []) {
-      map.set(link.piece_id, (map.get(link.piece_id) ?? 0) + 1);
-    }
-    return map;
-  }, [snapshot?.pieceDrawingSets]);
+  const drawingLinkCountByPiece = useMemo(
+    () => buildDrawingLinkCountByPiece(snapshot?.pieceDrawingSets),
+    [snapshot?.pieceDrawingSets],
+  );
 
   const liveWorkPackageId = (piece: { work_package_id?: string | null }) =>
-    piece.work_package_id && workPackageMap.has(piece.work_package_id)
-      ? piece.work_package_id
-      : null;
+    resolveLiveWorkPackageId(piece, workPackageMap);
 
-  const packageScopedLeaves = focusedWorkPackageId
-    ? leafPieces.filter((piece) => {
-      const liveId = liveWorkPackageId(piece);
-      return !liveId || liveId === focusedWorkPackageId;
-    })
-    : leafPieces;
+  const packageScopedLeaves = useMemo(
+    () => filterPackageScopedLeaves(leafPieces, focusedWorkPackageId, workPackageMap),
+    [leafPieces, focusedWorkPackageId, workPackageMap],
+  );
 
-  const selectablePieces = useMemo(() => {
-    const mark = markFilter.trim().toLowerCase();
-    const filtered = packageScopedLeaves.filter((piece) => {
-      const liveId = liveWorkPackageId(piece);
-      if (scopeFilter === "unassigned" && liveId) return false;
-      if (
-        scopeFilter === "package" &&
-        focusedWorkPackageId &&
-        liveId !== focusedWorkPackageId
-      ) {
-        return false;
-      }
-      if (mark && !String(piece.piece_mark || "").toLowerCase().includes(mark)) {
-        return false;
-      }
-      if (needsDrawingOnly && (drawingLinkCountByPiece.get(piece.id) ?? 0) > 0) {
-        return false;
-      }
-      return true;
-    });
-    return sortPieceRegisterRows(
-      filtered.map((piece) => ({
-        ...piece,
-        workPackageLabel: liveWorkPackageId(piece)
-          ? workPackageMap.get(liveWorkPackageId(piece)!) ?? "Unassigned"
-          : "Unassigned",
-      })),
-      { key: "work_package", direction: "asc" },
-    );
-  }, [
-    drawingLinkCountByPiece,
-    focusedWorkPackageId,
-    markFilter,
-    needsDrawingOnly,
-    packageScopedLeaves,
-    scopeFilter,
-    workPackageMap,
-  ]);
+  const selectablePieces = useMemo(
+    () =>
+      filterSelectablePieces({
+        packageScopedLeaves,
+        workPackageMap,
+        drawingLinkCountByPiece,
+        markFilter,
+        needsDrawingOnly,
+        scopeFilter,
+        focusedWorkPackageId,
+      }),
+    [
+      drawingLinkCountByPiece,
+      focusedWorkPackageId,
+      markFilter,
+      needsDrawingOnly,
+      packageScopedLeaves,
+      scopeFilter,
+      workPackageMap,
+    ],
+  );
 
   useEffect(() => {
     if (
@@ -169,27 +149,10 @@ export default function PieceRelationshipManager({
     ? leafPieces.filter((piece) => liveWorkPackageId(piece) === focusedWorkPackageId)
     : leafPieces;
 
-  const selectedTons = useMemo(() => {
-    let lbs = 0;
-    let known = 0;
-    for (const piece of selectablePieces) {
-      if (!selectedPieceIds.has(piece.id)) continue;
-      const each = Number(piece.weight_each_lbs);
-      const qty = Number(piece.quantity) || 0;
-      const total = Number(piece.weight_total_lbs);
-      const weight =
-        Number.isFinite(each) && each >= 0 && qty > 0
-          ? each * qty
-          : Number.isFinite(total) && total >= 0
-            ? total
-            : null;
-      if (weight !== null) {
-        lbs += weight;
-        known += 1;
-      }
-    }
-    return { tons: lbs / 2000, known, selected: selectedPieceIds.size };
-  }, [selectablePieces, selectedPieceIds]);
+  const selectedTons = useMemo(
+    () => sumSelectedPieceTons(selectablePieces, selectedPieceIds),
+    [selectablePieces, selectedPieceIds],
+  );
 
   const readiness = useMemo(() => {
     if (!snapshot) return [];
@@ -220,20 +183,13 @@ export default function PieceRelationshipManager({
     (snapshot?.drawingSets ?? []).map((set) => [set.id, set]),
   );
   const activeDrawingSets = useMemo(
-    () =>
-      (snapshot?.drawingSets ?? []).filter(
-        (set) => !set.is_deleted && !set.deleted_at,
-      ),
+    () => filterActiveDrawingSets(snapshot?.drawingSets),
     [snapshot?.drawingSets],
   );
-  const filteredDrawingSets = useMemo(() => {
-    const needle = drawingFilter.trim().toLowerCase();
-    if (!needle) return activeDrawingSets;
-    return activeDrawingSets.filter((set) => {
-      const name = String(set.set_name ?? "").toLowerCase();
-      return name.includes(needle) || set.id.toLowerCase().includes(needle);
-    });
-  }, [activeDrawingSets, drawingFilter]);
+  const filteredDrawingSets = useMemo(
+    () => filterDrawingSetsByNeedle(activeDrawingSets, drawingFilter),
+    [activeDrawingSets, drawingFilter],
+  );
 
   const allVisibleSelected =
     selectablePieces.length > 0 &&
@@ -393,14 +349,10 @@ export default function PieceRelationshipManager({
       ),
   });
 
-  const autoAssignSkipSummary = useMemo(() => {
-    if (!autoAssignPlan) return null;
-    const counts: Record<string, number> = {};
-    for (const row of autoAssignPlan.skipped) {
-      counts[row.reason] = (counts[row.reason] ?? 0) + 1;
-    }
-    return counts;
-  }, [autoAssignPlan]);
+  const autoAssignSkipSummary = useMemo(
+    () => (autoAssignPlan ? summarizeAutoAssignSkips(autoAssignPlan.skipped) : null),
+    [autoAssignPlan],
+  );
 
   const runAssign = () => {
     const target = focusedWorkPackageId || targetWorkPackageId;

@@ -5,6 +5,7 @@ import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { Search } from "lucide-react";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { filterQuickNavModules, buildSearchDisplayItems } from "./globalSearchHelpers";
 
 // Stable empty array — prevents infinite re-render loops from useCallback/useEffect
 // dependency chains when queries are disabled and would otherwise return new [] refs.
@@ -225,25 +226,16 @@ export default function GlobalSearchModal({ open, onClose }) {
   }, [query, searchScope, runSearch]);
 
   // Module quick-nav filtered by query
-  const filteredModules = useMemo(() => {
-    if (query.length >= 2) return []; // search results take over
-    if (query.length === 0) return QUICK_NAV;
-    const ql = query.toLowerCase();
-    return QUICK_NAV.filter((m) => m.name.toLowerCase().includes(ql));
-  }, [query]);
+  const filteredModules = useMemo(
+    () => filterQuickNavModules(QUICK_NAV, query),
+    [query],
+  );
 
   // Combined display items
-  const displayItems = useMemo(() => {
-    if (results.length > 0) return results;
-    return filteredModules.map((m) => ({
-      type: "Module",
-      id: m.page,
-      title: m.name,
-      subtitle: m.group,
-      page: m.page,
-      icon: m.icon,
-    }));
-  }, [results, filteredModules]);
+  const displayItems = useMemo(
+    () => buildSearchDisplayItems(results, filteredModules),
+    [results, filteredModules],
+  );
 
   // Reset selection when items change
   useEffect(() => {
