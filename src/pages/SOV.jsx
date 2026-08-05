@@ -16,15 +16,14 @@ import {
   buildSovStaged,
 } from "../lib/importSovSpreadsheet";
 import SovControlCenter from "./sov/SovControlCenter";
-import { downloadTextFile } from "@/lib/exports/fabRelease";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button as DsButton } from "@/components/design-system";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { SovNoProjectGuard } from "./sov/components";
 import {
-  buildSovCsvRows, buildSovCsvString,
   calcSovLine,
+  downloadSovCsv,
 } from "./sov/format";
 import {
   resolveEffectiveRetainage,
@@ -261,10 +260,7 @@ export default function SOV() {
     [sovs, statusFilter, ccSearch],
   );
 
-  const exportCSV = () => {
-    const csv = buildSovCsvString(buildSovCsvRows(filtered, calc));
-    downloadTextFile(csv, "sov.csv", "text/csv;charset=utf-8");
-  };
+  const exportCSV = () => downloadSovCsv(filtered, calc);
 
   const nextSovId = "";
 

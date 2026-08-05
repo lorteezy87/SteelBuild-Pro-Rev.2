@@ -1,3 +1,4 @@
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 import { roundCurrency } from "@/components/shared/formatters";
 
 export const SOV_COL_COUNT = 16;
@@ -138,5 +139,18 @@ export function buildSovCsvString(
   return [SOV_CSV_HEADERS, ...rows]
     .map((r) => r.map((c) => `"${c ?? ""}"`).join(","))
     .join("\n");
+}
+
+/** Side-effect CSV download for SOV register export. */
+export function downloadSovCsv(
+  lines: Record<string, unknown>[],
+  calc: (s: Record<string, unknown>) => SovLineCalc,
+  filename = "sov.csv",
+): void {
+  downloadTextFile(
+    buildSovCsvString(buildSovCsvRows(lines, calc)),
+    filename,
+    "text/csv;charset=utf-8",
+  );
 }
 
