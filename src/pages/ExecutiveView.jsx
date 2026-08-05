@@ -34,40 +34,12 @@ import {
   EXECUTIVE_RFI_SEVERITY_COLORS,
 } from "./executiveView/executiveViewPageHelpers";
 
-const TOOLTIP_STYLE = {
-  contentStyle: {
-    background: "var(--bg-surface-high)",
-    border: "none",
-    borderRadius: 2,
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    color: "var(--text-primary)",
-  },
-  labelStyle: { color: "var(--text-muted)", fontSize: 9 },
-};
-
-const AXIS_PROPS = {
-  tick: { fontFamily: "var(--font-mono)", fontSize: 9, fill: "var(--text-muted)" },
-  axisLine: false,
-  tickLine: false,
-};
-
-const CARD_STYLE = {
-  background: "var(--bg-surface)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "var(--radius-card)",
-  padding: "18px 20px",
-};
-
-const CARD_TITLE = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: "0.12em",
-  textTransform: "uppercase",
-  color: "var(--text-primary)",
-  marginBottom: 16,
-};
+import {
+  executiveTooltipStyle as TOOLTIP_STYLE,
+  executiveAxisProps as AXIS_PROPS,
+  executiveCardStyle as CARD_STYLE,
+  executiveCardTitle as CARD_TITLE,
+} from "./executiveView/ExecutiveViewUi";
 
 export default function ExecutiveView() {
   const navigate = useNavigate();

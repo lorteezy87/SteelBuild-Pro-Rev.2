@@ -68,3 +68,8 @@ export function classifyQueryFailure(error: unknown): DesktopConnectFailure {
   return "query";
 }
 
+/** Resolve the connect query string — always fresh from the browser unless tests pin it. */
+export function resolveDesktopConnectSearch(explicit?: string): string {
+  if (explicit !== undefined) return explicit;
+  return typeof window !== "undefined" ? window.location.search : "";
+}

@@ -24,7 +24,12 @@ import ApprovalChainPanelRaw from "@/components/submittals/ApprovalChainPanel";
 import { getSubmittalLineage, submittalLineageLabel } from "@/lib/submittalLineage";
 import type { DrawingType, SubmittalComponent } from "@/lib/submittalComponents";
 import { BIC_CHOICES, STATUSES, STATUS_CFG, TYPES } from "./format";
-import { filterRelatedSetRfis } from "./submittalsPageHelpers";
+import {
+  filterRelatedSetRfis,
+  isSplitEligibleStatus,
+  isSubmittalDetailOverdue,
+  riskTierChipColor,
+} from "./submittalsPageHelpers";
 import { SubmittalTypeChips } from "./components";
 import {
   DetailSection,
@@ -71,12 +76,6 @@ const ResponseMatrix = ResponseMatrixRaw as unknown as ComponentType<GenericProp
 const SubmittalReviewStrip = SubmittalReviewStripRaw as unknown as ComponentType<GenericProps>;
 const LinkedRFIs = LinkedRFIsRaw as unknown as ComponentType<GenericProps>;
 const LinkedTasks = LinkedTasksRaw as unknown as ComponentType<GenericProps>;
-
-const SPLIT_ELIGIBLE_STATUSES = new Set<string>([
-  "Approved",
-  "Approved as Noted",
-  "Released for Fabrication",
-]);
 
 export interface SubmittalDetailProps {
   submittal: Submittal | null;
@@ -224,10 +223,11 @@ export function SubmittalDetail({
   }
 
   const cfg = STATUS_CFG[submittal.status ?? ""] || STATUS_CFG.Draft;
-  const overdue =
-    submittal.required_date &&
-    !["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(submittal.status ?? "") &&
-    daysUntil(submittal.required_date) < 0;
+  const overdue = isSubmittalDetailOverdue(
+    submittal.status,
+    submittal.required_date,
+    daysUntil,
+  );
   const workflowStage = submittalStatusToStage(
     submittal.status,
     submittal.ball_in_court,
@@ -244,14 +244,7 @@ export function SubmittalDetail({
       null,
     useWorkdays: true,
   });
-  const riskChipColor =
-    risk?.tier === "critical"
-      ? "var(--status-error)"
-      : risk?.tier === "urgent"
-        ? "var(--status-warning)"
-        : risk?.tier === "attention"
-          ? "var(--accent)"
-          : "var(--text-muted)";
+  const riskChipColor = riskTierChipColor(risk?.tier);
 
   return (
     <div style={{ width: 480, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--bg-page, var(--bg-page))", minHeight: 0 }}>
@@ -349,7 +342,7 @@ export function SubmittalDetail({
           }}
         />
 
-        {splittingEnabled && onSpinOff && SPLIT_ELIGIBLE_STATUSES.has(submittal.status ?? "") && (
+        {splittingEnabled && onSpinOff && isSplitEligibleStatus(submittal.status) && (
           <button
             type="button"
             onClick={onSpinOff}

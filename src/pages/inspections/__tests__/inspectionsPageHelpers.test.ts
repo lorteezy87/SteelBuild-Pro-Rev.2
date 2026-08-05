@@ -23,3 +23,17 @@ describe("inspectionsPageHelpers", () => {
     expect(nextStatusFilterToggle("all", "Scheduled")).toBe("Scheduled");
   });
 });
+
+import {
+  INSPECTION_TYPES,
+  INSPECTION_STATUSES,
+  INSPECTION_STATUS_COLORS,
+} from "../inspectionsPageHelpers";
+
+describe("inspection catalogs", () => {
+  it("has types, statuses, and status colors", () => {
+    expect(INSPECTION_TYPES.length).toBeGreaterThan(5);
+    expect(INSPECTION_STATUSES).toContain("Completed");
+    expect(INSPECTION_STATUS_COLORS.Completed).toBeTruthy();
+  });
+});

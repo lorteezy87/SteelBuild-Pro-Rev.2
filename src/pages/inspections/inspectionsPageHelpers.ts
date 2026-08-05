@@ -35,3 +35,39 @@ export function computeInspectionStats(inspections: InspectionLike[]) {
 export function nextStatusFilterToggle(current: string, statusValue: string): string {
   return current === statusValue ? "all" : statusValue;
 }
+
+/** Canonical inspection type filter options (form + chips). */
+export const INSPECTION_TYPES = [
+  "Steel Fabrication",
+  "Welds",
+  "Material",
+  "Dimensional",
+  "Surface Prep",
+  "Coating",
+  "Installation",
+  "Connections",
+  "Field Verification",
+  "Other",
+] as const;
+
+export const INSPECTION_TYPE_ABBREV: Record<string, string> = {
+  "Steel Fabrication": "Steel Fab",
+  "Field Verification": "Field Verify",
+  "Surface Prep": "Surf Prep",
+};
+
+export const INSPECTION_STATUSES = [
+  "Scheduled",
+  "In Progress",
+  "Completed",
+  "On Hold",
+  "Cancelled",
+] as const;
+
+export const INSPECTION_STATUS_COLORS: Record<string, string> = {
+  Scheduled: "var(--status-info, #0EA5E9)",
+  "In Progress": "var(--status-warning, #F59E0B)",
+  Completed: "var(--status-success, #10B981)",
+  "On Hold": "var(--text-muted, #8898A8)",
+  Cancelled: "var(--status-error, #FF3B3B)",
+};

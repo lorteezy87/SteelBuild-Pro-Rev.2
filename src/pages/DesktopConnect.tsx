@@ -20,7 +20,7 @@ import {
   type DesktopSessionValidationField,
   type MinimalDesktopSession,
 } from "@/lib/desktopSessionHandoff";
-import { desktopConnectFailureMessage, classifyQueryFailure } from "./desktopConnect/desktopConnectPageHelpers";
+import { desktopConnectFailureMessage, classifyQueryFailure, resolveDesktopConnectSearch } from "./desktopConnect/desktopConnectPageHelpers";
 
 type BrowserSession = {
   access_token: string;
@@ -126,11 +126,7 @@ const defaultDependencies: DesktopConnectDependencies = {
   },
 };
 
-/** Resolve the connect query string — always fresh from the browser unless tests pin it. */
-export function resolveDesktopConnectSearch(explicit?: string): string {
-  if (explicit !== undefined) return explicit;
-  return typeof window !== "undefined" ? window.location.search : "";
-}
+export { resolveDesktopConnectSearch };
 
 export function DesktopConnect({
   dependencies = defaultDependencies,

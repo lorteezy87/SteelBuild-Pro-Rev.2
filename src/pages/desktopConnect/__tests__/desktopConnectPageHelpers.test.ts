@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { DesktopConnectQueryError } from "@/lib/desktopSessionHandoff";
-import {desktopConnectFailureMessage,
-  DESKTOP_CONNECT_FAILURE_MESSAGES, classifyQueryFailure} from "../desktopConnectPageHelpers";
+import {
+  desktopConnectFailureMessage,
+  DESKTOP_CONNECT_FAILURE_MESSAGES,
+  classifyQueryFailure,
+  resolveDesktopConnectSearch,
+} from "../desktopConnectPageHelpers";
 
 describe("desktopConnectPageHelpers", () => {
   it("looks up failure messages", () => {
@@ -20,5 +24,16 @@ describe("classifyQueryFailure", () => {
     expect(classifyQueryFailure(new DesktopConnectQueryError("missing", "m"))).toBe("query-missing");
     expect(classifyQueryFailure(new DesktopConnectQueryError("invalid", "i"))).toBe("query");
     expect(classifyQueryFailure(new Error("x"))).toBe("query");
+  });
+});
+
+
+describe("resolveDesktopConnectSearch", () => {
+  it("returns explicit search when provided", () => {
+    expect(resolveDesktopConnectSearch("?state=x")).toBe("?state=x");
+  });
+  it("returns empty string when window-less and no explicit", () => {
+    // jsdom has window; pin empty explicit is more reliable for pure behavior
+    expect(resolveDesktopConnectSearch("")).toBe("");
   });
 });

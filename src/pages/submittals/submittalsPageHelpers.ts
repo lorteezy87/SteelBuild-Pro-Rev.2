@@ -99,3 +99,40 @@ export function toggleSelectionId(prev: Set<string>, id: string): Set<string> {
   else next.add(id);
   return next;
 }
+
+/** Statuses that allow spinning off a child submittal. */
+export const SPLIT_ELIGIBLE_STATUSES = new Set<string>([
+  "Approved",
+  "Approved as Noted",
+  "Released for Fabrication",
+]);
+
+export function isSplitEligibleStatus(status: string | null | undefined): boolean {
+  return SPLIT_ELIGIBLE_STATUSES.has(status ?? "");
+}
+
+/** Closed-ish statuses that do not count as date-overdue for the detail panel. */
+const NON_OVERDUE_STATUSES = new Set([
+  "Approved",
+  "Approved as Noted",
+  "Released for Fabrication",
+  "Void",
+]);
+
+export function isSubmittalDetailOverdue(
+  status: string | null | undefined,
+  requiredDate: string | null | undefined,
+  daysUntilFn: (d: string) => number,
+): boolean {
+  if (!requiredDate) return false;
+  if (NON_OVERDUE_STATUSES.has(status ?? "")) return false;
+  return daysUntilFn(requiredDate) < 0;
+}
+
+/** Map risk aging tier to chip color tokens (detail panel). */
+export function riskTierChipColor(tier: string | null | undefined): string {
+  if (tier === "critical") return "var(--status-error)";
+  if (tier === "urgent") return "var(--status-warning)";
+  if (tier === "attention") return "var(--accent)";
+  return "var(--text-muted)";
+}

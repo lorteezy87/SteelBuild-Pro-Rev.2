@@ -4,6 +4,10 @@ import {
   filterInspections,
   computeInspectionStats,
   nextStatusFilterToggle,
+  INSPECTION_TYPES,
+  INSPECTION_TYPE_ABBREV,
+  INSPECTION_STATUSES,
+  INSPECTION_STATUS_COLORS,
 } from "./inspections/inspectionsPageHelpers";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
@@ -19,34 +23,10 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 import { findById } from "@/pages/shared/findById";
-const TYPES = [
-  "Steel Fabrication",
-  "Welds",
-  "Material",
-  "Dimensional",
-  "Surface Prep",
-  "Coating",
-  "Installation",
-  "Connections",
-  "Field Verification",
-  "Other",
-];
-
-const TYPE_ABBREV = {
-  "Steel Fabrication": "Steel Fab",
-  "Field Verification": "Field Verify",
-  "Surface Prep": "Surf Prep",
-};
-
-const STATUSES = ["Scheduled", "In Progress", "Completed", "On Hold", "Cancelled"];
-
-const STATUS_COLORS = {
-  Scheduled: "var(--status-info, #0EA5E9)",
-  "In Progress": "var(--status-warning, #F59E0B)",
-  Completed: "var(--status-success, #10B981)",
-  "On Hold": "var(--text-muted, #8898A8)",
-  Cancelled: "var(--status-error, #FF3B3B)",
-};
+const TYPES = INSPECTION_TYPES;
+const TYPE_ABBREV = INSPECTION_TYPE_ABBREV;
+const STATUSES = INSPECTION_STATUSES;
+const STATUS_COLORS = INSPECTION_STATUS_COLORS;
 
 export default function Inspections() {
   const projectId = useProjectId();

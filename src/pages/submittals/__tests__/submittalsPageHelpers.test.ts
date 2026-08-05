@@ -60,3 +60,26 @@ describe("submittal selection helpers", () => {
     expect([...toggleSelectionId(new Set(["a"]), "b")].sort()).toEqual(["a", "b"]);
   });
 });
+
+import {
+  isSplitEligibleStatus,
+  isSubmittalDetailOverdue,
+  riskTierChipColor,
+} from "../submittalsPageHelpers";
+
+describe("submittal detail pure helpers", () => {
+  it("split eligibility", () => {
+    expect(isSplitEligibleStatus("Approved")).toBe(true);
+    expect(isSplitEligibleStatus("Draft")).toBe(false);
+  });
+  it("overdue respects closed statuses", () => {
+    const days = (d: string) => (d === "2020-01-01" ? -10 : 5);
+    expect(isSubmittalDetailOverdue("Draft", "2020-01-01", days)).toBe(true);
+    expect(isSubmittalDetailOverdue("Approved", "2020-01-01", days)).toBe(false);
+    expect(isSubmittalDetailOverdue("Draft", null, days)).toBe(false);
+  });
+  it("risk tier colors", () => {
+    expect(riskTierChipColor("critical")).toContain("error");
+    expect(riskTierChipColor("normal")).toContain("muted");
+  });
+});
