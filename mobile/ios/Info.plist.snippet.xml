@@ -1,0 +1,28 @@
+<!--
+  Info.plist keys required by the native plugins this app bundles.
+
+  Apple REJECTS apps that touch the camera or photo library without a purpose
+  string. After `npm run cap:add:ios`, paste these <key>/<string> pairs into the
+  top-level <dict> of `ios/App/App/Info.plist` (edit the copy text as you like —
+  the review team reads them verbatim).
+
+  Required by @capacitor/camera:
+-->
+<key>NSCameraUsageDescription</key>
+<string>SteelBuild Pro uses the camera to capture jobsite and delivery photos and attach them to your projects.</string>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>SteelBuild Pro lets you attach photos from your library to RFIs, deliveries, and field reports.</string>
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>SteelBuild Pro saves exported reports and photos to your photo library when you choose to download them.</string>
+
+<!--
+  Optional — only if you later add these capabilities:
+
+  @capacitor/geolocation (jobsite check-in):
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>SteelBuild Pro tags field reports with your current jobsite location.</string>
+
+  Face ID / biometric unlock:
+    <key>NSFaceIDUsageDescription</key>
+    <string>SteelBuild Pro uses Face ID to unlock the app.</string>
+-->
