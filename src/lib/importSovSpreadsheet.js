@@ -10,6 +10,8 @@
  * (with validity + an auto-suggested cost code) for the pre-import review.
  */
 
+import { SOV_HEADER_ALIASES as HEADER_ALIASES } from "./importSovSpreadsheetHelpers";
+
 /** Canonical SOV import columns (also the downloadable template header order). */
 export const SOV_TEMPLATE_COLUMNS = [
   "line_item_number",
@@ -34,24 +36,9 @@ export const SOV_TEMPLATE_SAMPLE = [
 ];
 
 /**
- * Header aliases → canonical field. Lets a real-world CSV/XLSX header
- * ("Scheduled Value", "Line #", "% Complete", "Cost Code") map onto the
- * fields the importer understands. Keys are matched after `normalizeHeader`.
+ * Header aliases → canonical field. Catalog lives in
+ * importSovSpreadsheetHelpers.ts (imported as HEADER_ALIASES).
  */
-const HEADER_ALIASES = {
-  line_item_number: ["line item number", "line", "line #", "line no", "item", "item #", "item number", "no", "#"],
-  description: ["desc", "scope", "item description", "work description"],
-  scheduled_value: ["scheduled value", "value", "amount", "contract value", "scheduled amount", "sov value"],
-  application_number: ["application number", "app", "app #", "application", "pay app", "pay app #"],
-  period_from: ["period from", "from", "start", "period start"],
-  period_to: ["period to", "to", "end", "period end"],
-  previous_percent_complete: ["previous % complete", "previous percent", "prev %", "previous %", "% prev"],
-  current_percent_complete: ["current % complete", "current percent", "% complete", "percent complete", "% comp", "current %"],
-  retainage_percent: ["retainage %", "retainage", "retention", "retention %"],
-  status: ["state"],
-  cost_code: ["cost code", "code", "cost code number", "cost code #", "cc"],
-  cost_code_name: ["cost code name", "code name"],
-};
 
 // Reverse lookup: normalized header string → canonical field.
 const ALIAS_LOOKUP = (() => {

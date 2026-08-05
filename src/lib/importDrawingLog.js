@@ -13,10 +13,12 @@
  * array-of-arrays in, so this is testable without a spreadsheet engine.
  */
 
-const MONTHS = {
-  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
-};
+import { RFI_CSV_MONTHS } from "./importRfiCsvHelpers";
+
+// Abbreviated month keys only (14-Nov-25 style); full names not needed here.
+const MONTHS = Object.fromEntries(
+  Object.entries(RFI_CSV_MONTHS).filter(([k]) => k.length === 3),
+);
 
 /** Parse a log date cell — "14-Nov-25", ISO, or US M/D/Y — to YYYY-MM-DD, else null. */
 export function parseLogDate(value) {

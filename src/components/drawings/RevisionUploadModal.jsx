@@ -12,7 +12,7 @@ import {
   hasAmbiguousSheetMatches,
   findExactLiveDrawing,
 } from "@/lib/drawingUploadUtils";
-import { extractRevisionSheets, deriveVirtualSets, buildRevisionSnapshot } from "./revisionUploadHelpers";
+import { extractRevisionSheets, deriveVirtualSets, buildRevisionSnapshot, REVISION_UPLOAD_STEP_ORDER as STEP_ORDER } from "./revisionUploadHelpers";
 import StepSelectSet from "./revisionUploadSteps/SelectSetStep";
 import StepRevMeta from "./revisionUploadSteps/RevMetaStep";
 import StepDropPDF from "./revisionUploadSteps/DropPdfStep";
@@ -351,7 +351,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
 
   const handleClose = () => { reset(); onClose(); };
 
-  const STEP_ORDER = ["selectSet", "revMeta", "dropPDF", "comparison", "success"];
+  // progress dots use STEP_ORDER from revisionUploadHelpers
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

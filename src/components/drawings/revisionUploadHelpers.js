@@ -25,6 +25,9 @@ export const CHANGE_STYLE = {
   same:    { color: "var(--text-muted)", label: "≡ SAME", bg: "transparent" },
 };
 
+/** Wizard step order for RevisionUploadModal progress chrome. */
+export const REVISION_UPLOAD_STEP_ORDER = ["selectSet", "revMeta", "dropPDF", "comparison", "success"];
+
 // Extract every sheet from a revision PDF using the shared extractor
 // (columnar pdfjs + Anthropic tool-use + post-processing fixup).
 // Returns a flat `sheets` array so the comparison step can match on

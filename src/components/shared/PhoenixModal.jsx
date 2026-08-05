@@ -1,89 +1,30 @@
 import React, { useEffect, useId } from "react";
 import { X } from "lucide-react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import {
+  btnPrimary,
+  btnSecondary,
+  btnDanger,
+  inputStyle,
+  inputDisabledStyle,
+  labelStyle,
+  PHOENIX_OVERLAY_STYLE,
+  phoenixDialogStyle,
+  PHOENIX_HEADER_STYLE,
+  PHOENIX_TITLE_STYLE,
+  PHOENIX_CLOSE_BTN_STYLE,
+  PHOENIX_BODY_STYLE,
+  PHOENIX_FOOTER_STYLE,
+} from "./phoenixModalHelpers";
 
-const modalSurface = "var(--bg-surface-secondary)";
-const modalPanel = "var(--bg-surface-high)";
-const modalPanelMuted = "var(--bg-surface-low)";
-const modalBorder = "var(--border-default)";
-const modalBorderMuted = "var(--divider)";
-const modalText = "var(--text-primary)";
-const modalTextSecondary = "var(--text-secondary)";
-const modalTextMuted = "var(--text-muted)";
-const modalActionText = "var(--accent-text, var(--on-accent))";
-
-export const btnPrimary = {
-  background: "linear-gradient(135deg, rgba(86,176,255,0.98) 0%, rgba(35,134,230,0.98) 100%)",
-  border: "1px solid rgba(86,176,255,0.4)",
-  borderRadius: 8,
-  padding: "8px 20px",
-  color: modalActionText,
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-  letterSpacing: "0.02em",
-  boxShadow: "0 10px 24px rgba(17,113,190,0.28)",
-  transition: "box-shadow 0.15s",
-};
-
-export const btnSecondary = {
-  background: modalPanelMuted,
-  border: `1px solid ${modalBorder}`,
-  borderRadius: 8,
-  padding: "7px 18px",
-  color: modalTextSecondary,
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  fontWeight: 500,
-  cursor: "pointer",
-  transition: "all 0.15s",
-};
-
-export const btnDanger = {
-  background: "rgba(239,68,68,0.13)",
-  border: "1px solid rgba(239,68,68,0.35)",
-  borderRadius: 8,
-  padding: "7px 18px",
-  color: "var(--status-error)",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  fontWeight: 500,
-  cursor: "pointer",
-};
-
-export const inputStyle = {
-  width: "100%",
-  background: modalPanel,
-  border: `1px solid ${modalBorder}`,
-  borderRadius: 8,
-  padding: "8px 12px",
-  color: modalText,
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  lineHeight: "18px",
-  minHeight: 38,
-  outline: "none",
-  boxSizing: "border-box",
-  boxShadow: "0 1px 0 rgba(255,255,255,0.03) inset",
-};
-
-export const inputDisabledStyle = {
-  ...inputStyle,
-  background: modalPanelMuted,
-  color: modalTextMuted,
-  cursor: "not-allowed",
-};
-
-export const labelStyle = {
-  display: "block",
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  letterSpacing: "0.12em",
-  color: modalTextMuted,
-  marginBottom: 6,
-  textTransform: "uppercase",
-  fontWeight: 500,
+// Back-compat re-exports for form modals that import chrome from this module.
+export {
+  btnPrimary,
+  btnSecondary,
+  btnDanger,
+  inputStyle,
+  inputDisabledStyle,
+  labelStyle,
 };
 
 export default function PhoenixModal({ open, onClose, title, children, footer, maxWidth = 680 }) {
@@ -105,17 +46,7 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
     <div
       onClick={onClose}
       aria-hidden="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(1,4,10,0.76)",
-        backdropFilter: "blur(8px)",
-        zIndex: 1200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
+      style={PHOENIX_OVERLAY_STYLE}
     >
       <div
         ref={trapRef}
@@ -123,77 +54,27 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        style={{
-          background: modalSurface,
-          border: `1px solid ${modalBorder}`,
-          borderRadius: 16,
-          boxShadow: "0 32px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset",
-          maxWidth,
-          width: "90vw",
-          maxHeight: "85vh",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          color: modalText,
-        }}
+        style={phoenixDialogStyle(maxWidth)}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "20px 24px 16px",
-            borderBottom: `1px solid ${modalBorderMuted}`,
-            background: "var(--bg-surface-low)",
-            flexShrink: 0,
-          }}
-        >
-          <span
-            id={titleId}
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 18,
-              fontWeight: 700,
-              color: modalText,
-              letterSpacing: "0.04em",
-            }}
-          >
+        <div style={PHOENIX_HEADER_STYLE}>
+          <span id={titleId} style={PHOENIX_TITLE_STYLE}>
             {title}
           </span>
           <button
             onClick={onClose}
             aria-label="Close dialog"
-            style={{
-              background: modalPanelMuted,
-              border: `1px solid ${modalBorderMuted}`,
-              color: modalTextMuted,
-              cursor: "pointer",
-              padding: 4,
-              borderRadius: 6,
-              display: "flex",
-              alignItems: "center",
-            }}
+            style={PHOENIX_CLOSE_BTN_STYLE}
           >
             <X size={16} />
           </button>
         </div>
 
-        <div style={{ padding: "20px 24px", flex: 1, overflowY: "auto", color: modalText }}>
+        <div style={PHOENIX_BODY_STYLE}>
           {children}
         </div>
 
         {footer && (
-          <div
-            style={{
-              padding: "14px 24px",
-              borderTop: `1px solid ${modalBorderMuted}`,
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 10,
-              background: "var(--bg-surface-low)",
-              flexShrink: 0,
-            }}
-          >
+          <div style={PHOENIX_FOOTER_STYLE}>
             {footer}
           </div>
         )}

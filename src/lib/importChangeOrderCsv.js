@@ -37,6 +37,11 @@
  * picks in the preview.
  */
 
+import {
+  CO_CSV_COLUMN_ALIASES as COLUMN_ALIASES,
+  CO_CSV_MONTHS as MONTHS,
+} from "./importChangeOrderCsvHelpers";
+
 // ── Shared CSV tokenizer ────────────────────────────────────────────
 export function parseCsv(raw) {
   if (typeof raw !== "string") return [];
@@ -81,68 +86,8 @@ export function parseCsv(raw) {
 
 // ── Column aliases ──────────────────────────────────────────────────
 //
-// Every tool spells these columns a little differently. We match
-// normalized (lowercase, punctuation-collapsed) header text against
-// broad alias sets. First column that maps wins; unmatched columns
-// are ignored.
-const COLUMN_ALIASES = {
-  co_number: [
-    "co #", "co no", "co number", "number", "no", "no.", "#",
-    "change order #", "change order no", "change order number",
-    "cco #", "cco number", "co id", "id", "co",
-  ],
-  title: [
-    "title", "subject", "description short", "co title",
-    "change order title", "summary", "name",
-  ],
-  description: [
-    "description", "scope", "scope description", "details", "notes",
-    "change description", "long description",
-  ],
-  reason_code: [
-    "reason", "reason code", "type", "category", "change type",
-    "classification", "co type",
-  ],
-  status: [
-    "status", "state", "co status", "approval status", "phase",
-  ],
-  co_amount: [
-    "amount", "co amount", "change order amount", "cost",
-    "price", "value", "total", "sub total", "change value",
-  ],
-  submitted_date: [
-    "submitted", "submitted date", "date submitted", "issue date",
-    "issued", "issued date", "date issued", "date", "submit date",
-    "co date",
-  ],
-  approved_date: [
-    "approved", "approved date", "date approved", "approval date",
-    "date approval", "executed", "executed date",
-  ],
-  approved_by: [
-    "approved by", "approver", "signed by", "executed by",
-    "approval by",
-  ],
-  notes: [
-    "note", "notes", "comment", "comments", "remarks",
-  ],
-  schedule_impact_days: [
-    "schedule impact", "schedule days", "days impact",
-    "schedule impact days", "time impact", "days", "time ext",
-    "time extension",
-  ],
-  margin_percent: [
-    "margin", "margin %", "margin percent", "margin pct",
-    "gross margin", "gm%", "gm %",
-  ],
-  project_name: [
-    "project", "project name", "job", "job name",
-  ],
-  project_number: [
-    "project number", "project #", "project no", "project no.",
-    "job number", "job #", "job no", "job no.",
-  ],
-};
+// Catalog lives in importChangeOrderCsvHelpers.ts (imported as COLUMN_ALIASES).
+// Match is case-insensitive / punctuation-collapsed; first map wins.
 
 const normalize = (s) => String(s ?? "")
   .toLowerCase()
@@ -169,13 +114,7 @@ function buildColumnIndex(headerRow) {
 //
 // Dates: accept MM/DD/YYYY, M/D/YY, ISO YYYY-MM-DD, "Jan 5, 2026",
 // "5-Jan-26". Sane-year gate [1980, 2200] guards Date.parse's weird
-// two-digit-year fallback.
-const MONTHS = {
-  jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
-  apr: 4, april: 4, may: 5, jun: 6, june: 6,
-  jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9,
-  oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
-};
+// two-digit-year fallback. MONTHS catalog imported from helpers.
 function normalizeDate(raw) {
   if (raw === null || raw === undefined) return null;
   const s = String(raw).trim();
