@@ -18,16 +18,7 @@ import React, { useRef, useState } from "react";
 import { integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { compressImage } from "@/utils/compressImage";
-
-const labelStyle = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "9px",
-  color: "var(--text-muted)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  display: "block",
-  marginBottom: "4px",
-};
+import { PHOTO_STRIP_LABEL_STYLE as labelStyle } from "./photoStripUploaderHelpers";
 
 export default function PhotoStripUploader({
   value = [],

@@ -10,25 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 
-export const PHASE_COLORS = {
-  Detailing:   { bg: "color-mix(in srgb, var(--phase-detailing) 12%, transparent)",  color: "var(--phase-detailing)",  border: "color-mix(in srgb, var(--phase-detailing) 30%, transparent)"  },
-  Fabrication: { bg: "color-mix(in srgb, var(--phase-fab) 12%, transparent)",  color: "var(--phase-fab)",  border: "color-mix(in srgb, var(--phase-fab) 30%, transparent)"  },
-  Delivery:    { bg: "color-mix(in srgb, var(--phase-delivery) 12%, transparent)",  color: "var(--phase-delivery)",  border: "color-mix(in srgb, var(--phase-delivery) 30%, transparent)"  },
-  Erection:    { bg: "color-mix(in srgb, var(--phase-erection) 12%, transparent)",   color: "var(--phase-erection)",   border: "color-mix(in srgb, var(--phase-erection) 30%, transparent)"   },
-};
+export {
+  LOOK_AHEAD_PHASE_COLORS as PHASE_COLORS,
+  LOOK_AHEAD_STATUS_CONFIG as STATUS_CONFIG,
+  EMPTY_LOOK_AHEAD_ITEM as empty,
+} from "./lookAheadScheduleHelpers";
 
-export const STATUS_CONFIG = {
-  "Not Started": { bg: "color-mix(in srgb, var(--text-muted) 12%, transparent)", color: "var(--text-muted)", border: "color-mix(in srgb, var(--text-muted) 30%, transparent)", icon: "○" },
-  "In Progress":  { bg: "color-mix(in srgb, var(--accent) 12%, transparent)",  color: "var(--accent)",   border: "color-mix(in srgb, var(--accent) 30%, transparent)",  icon: "◑" },
-  "Complete":     { bg: "color-mix(in srgb, var(--status-success) 12%, transparent)", color: "var(--status-success)",  border: "color-mix(in srgb, var(--status-success) 30%, transparent)", icon: "✓" },
-  "Delayed":      { bg: "color-mix(in srgb, var(--status-warning) 15%, transparent)", color: "var(--status-warning)",  border: "color-mix(in srgb, var(--status-warning) 40%, transparent)", icon: "⚠" },
-};
-
-export const empty = {
-  project_id: "", project_name: "", activity: "", phase: "Erection", crew: "",
-  planned_start: "", planned_end: "", forecast_start: "", forecast_end: "",
-  percent_complete: 0, constraints: "", status: "Not Started",
-};
+import {
+  LOOK_AHEAD_PHASE_COLORS as PHASE_COLORS,
+  LOOK_AHEAD_STATUS_CONFIG as STATUS_CONFIG,
+  EMPTY_LOOK_AHEAD_ITEM as empty,
+} from "./lookAheadScheduleHelpers";
 
 export function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = false, blockers = [] }) {
   const [form, setForm] = useState(empty);

@@ -10,6 +10,10 @@ import {
   filterRevisionImpactRows,
   shouldVirtualizeRevisionImpact,
 } from "./revisionImpact.derive";
+import {
+  REV_DOWNSTREAM,
+  REVISION_IMPACT_BOARD_GRID_COLS as REVISION_GRID_COLS,
+} from "./revisionImpactBoardHelpers";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -17,20 +21,6 @@ type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 
 // ── Revision Impact Board (slice 4 of the Hub Command Center) ──────────────
-const REV_DOWNSTREAM: Record<string, { label: string; color: string }> = {
-  critical: { label: "In field", color: error },
-  high: { label: "Delivered", color: warning },
-  medium: { label: "Fabricated", color: accent },
-  low: { label: "Not downstream", color: textMuted },
-};
-
-// Shared CSS-grid column template for the virtualized Revision Impact board
-// (header + rows use this exact string, so they always align). Distinct from
-// REVISION_GRID_COLS — these are the impact board's 8 columns. Widths approximate
-// the table's auto-layout: a wide changed-sheet column (has a set-name subline),
-// then content columns, then the right-aligned RFI / pieces / action columns.
-const REVISION_GRID_COLS =
-  "minmax(180px, 2fr) minmax(56px, 0.6fr) minmax(110px, 1fr) minmax(160px, 1.8fr) minmax(96px, 0.9fr) minmax(80px, 0.7fr) minmax(72px, 0.7fr) minmax(96px, 0.9fr)";
 
 // ⚠ MIRROR of the table-branch <Td> cells in RevisionImpactBoard (the
 // !shouldVirtualize branch). Any column add/edit MUST be made in BOTH places.

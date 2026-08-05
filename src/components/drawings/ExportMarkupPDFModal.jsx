@@ -14,20 +14,12 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { generateMarkupSummaryPdf, suggestMarkupPdfFilename } from "@/lib/exports/markupPDF";
-import { selectExportSheets } from "./exportMarkupPdfHelpers";
-
-const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
-
-const labelStyle = {
-  ...mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-  letterSpacing: "0.15em", color: "var(--text-muted)", display: "block", marginBottom: 6,
-};
-
-const btnBase = {
-  ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
-  padding: "8px 16px", borderRadius: 2, border: "1px solid var(--border-default)",
-  cursor: "pointer", textTransform: "uppercase",
-};
+import {
+  selectExportSheets,
+  MARKUP_PDF_MONO as mono,
+  MARKUP_PDF_LABEL_STYLE as labelStyle,
+  MARKUP_PDF_BTN_BASE as btnBase,
+} from "./exportMarkupPdfHelpers";
 
 export default function ExportMarkupPDFModal({
   open,

@@ -12,16 +12,7 @@
  */
 
 import React, { useMemo, useState } from "react";
-
-const labelStyle = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "9px",
-  color: "var(--text-muted)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  display: "block",
-  marginBottom: "4px",
-};
+import { MULTI_SELECT_LABEL_STYLE as labelStyle } from "./multiSelectChipsHelpers";
 
 export default function MultiSelectChips({
   label,

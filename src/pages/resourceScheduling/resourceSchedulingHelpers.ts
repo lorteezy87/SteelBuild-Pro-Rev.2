@@ -863,3 +863,43 @@ export const RESOURCE_TYPES = [
   "Bay",
 ] as const;
 
+export const NEW_RESOURCE_INPUT_STYLE: Record<string, string | number> = {
+  width: "100%",
+  padding: "7px 10px",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 6,
+  fontSize: 12,
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  outline: "none",
+};
+
+export const NEW_RESOURCE_BTN_GHOST: Record<string, string | number> = {
+  padding: "8px 16px",
+  borderRadius: 6,
+  border: "1px solid var(--border-default)",
+  background: "transparent",
+  color: "var(--text-muted)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  cursor: "pointer",
+  textTransform: "uppercase",
+};
+
+export const NEW_RESOURCE_BTN_PRIMARY: Record<string, string | number> = {
+  padding: "8px 20px",
+  borderRadius: 6,
+  border: "none",
+  background: "var(--accent)",
+  color: "var(--on-accent)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  cursor: "pointer",
+  textTransform: "uppercase",
+};
+

@@ -1,6 +1,11 @@
 import React from "react";
 import { toast } from "sonner";
-import { nextNewResourceField } from "./resourceSchedulingHelpers";
+import {
+  nextNewResourceField,
+  NEW_RESOURCE_INPUT_STYLE as inputStyle,
+  NEW_RESOURCE_BTN_GHOST as btnGhost,
+  NEW_RESOURCE_BTN_PRIMARY as btnPrimary,
+} from "./resourceSchedulingHelpers";
 
 /**
  * Inline "New Resource" dialog used by the Crew Scheduling page.
@@ -124,28 +129,3 @@ export default function NewResourceDialog({
   );
 }
 
-const inputStyle = {
-  width: "100%",
-  padding: "7px 10px",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  fontSize: 12,
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  outline: "none",
-};
-
-const btnGhost = {
-  padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border-default)",
-  background: "transparent", color: "var(--text-muted)",
-  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-  letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-};
-
-const btnPrimary = {
-  padding: "8px 20px", borderRadius: 6, border: "none",
-  background: "var(--accent)", color: "var(--on-accent)",
-  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800,
-  letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-};
