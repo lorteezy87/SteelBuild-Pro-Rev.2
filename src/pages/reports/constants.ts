@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Style tokens and lookup maps for the Portfolio Reports page.
  * Grouped here so feature components can import directly without

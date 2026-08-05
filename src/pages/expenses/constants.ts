@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Shared constants for the Expenses page.
  */

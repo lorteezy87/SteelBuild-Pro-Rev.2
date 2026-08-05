@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Pure helpers for the Deliveries page — CSV export, day-equality,
  * fabrication-completeness check that gates "mark delivered".

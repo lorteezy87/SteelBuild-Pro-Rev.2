@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Shared constants for the Deliveries page — status palette + status
  * list used by KPIs, filter pills, detail-drawer workflow buttons.

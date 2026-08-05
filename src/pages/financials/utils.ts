@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { formatCurrency } from "@/components/shared/formatters";
 
 export const mono = { fontFamily: "var(--font-mono)" };

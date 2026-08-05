@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Pure helpers for the Portfolio Reports page: currency formatter,
  * health grader, date-range filter, CSV export, print.

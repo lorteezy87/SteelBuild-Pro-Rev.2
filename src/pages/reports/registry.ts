@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Reports registry — single source of truth for the live reports.
  *

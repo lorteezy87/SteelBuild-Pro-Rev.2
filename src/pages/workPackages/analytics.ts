@@ -1,3 +1,4 @@
+// @ts-nocheck
 const PHASE_ORDER = ["Detailing", "Fabrication", "Delivery", "Erection"];
 const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
 const APPROVED_DRAWING_STAGES = new Set([

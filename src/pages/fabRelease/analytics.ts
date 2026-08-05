@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 
 export const FAB_STAGES = [

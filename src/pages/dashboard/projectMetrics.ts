@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Derived metrics for the project dashboard.
  *
@@ -527,7 +528,7 @@ export function submittalPipelineRollupFromSubmittals(submittals = []) {
   // Canonical workflow flow (R&R first-class since 2026-07-25). Mapping
   // is kept in sync with src/lib/submittalStageMapping.ts —
   // submittalStatusToStage is the single source of truth; this function
-  // reproduces it inline to avoid an import cycle (projectMetrics.js is
+  // reproduces it inline to avoid an import cycle (projectMetrics.ts is
   // consumed at module init by dashboard rollups).
   const stages = ["IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released"];
   const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});

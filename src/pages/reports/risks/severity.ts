@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Risk severity helpers — single source of truth for the four
  * Risk reports + the shared form modal.
