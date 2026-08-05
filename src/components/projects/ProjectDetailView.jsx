@@ -17,6 +17,8 @@ import {
   buildRfisTabMetrics,
   isRfiOverdue,
   buildDeliveriesTabMetrics,
+  PHASE_CONFIG,
+  HEALTH_CONFIG,
 } from '@/components/projects/projectDetailViewHelpers';
 
 const mono = { fontFamily: 'JetBrains Mono, monospace' };
@@ -31,20 +33,6 @@ const TABS = [
   { id: 'deliveries', label: 'Deliveries',  icon: Package },
   { id: 'commercial', label: 'Commercial',  icon: DollarSign },
 ];
-
-const PHASE_CONFIG = {
-  Detailing:   { color: 'var(--accent)' },
-  Fabrication: { color: 'var(--accent)' },
-  Delivery:    { color: 'var(--status-info)' },
-  Erection:    { color: 'var(--status-success)' },
-  Closeout:    { color: 'var(--text-muted)' },
-};
-
-const HEALTH_CONFIG = {
-  'On Track': { color: 'var(--status-success)', dot: '#22C55E' },
-  'Watch':    { color: 'var(--status-warning)', dot: '#F59E0B' },
-  'At Risk':  { color: 'var(--status-error)',   dot: '#EF4444' },
-};
 
 function KpiStrip({ items }) {
   return (

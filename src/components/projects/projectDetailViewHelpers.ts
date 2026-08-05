@@ -131,3 +131,16 @@ export function buildDeliveriesTabMetrics(deliveries: any[]) {
   return { open, delivered };
 }
 
+export const PHASE_CONFIG: Record<string, { color: string }> = {
+  Detailing: { color: "var(--accent)" },
+  Fabrication: { color: "var(--accent)" },
+  Delivery: { color: "var(--status-info)" },
+  Erection: { color: "var(--status-success)" },
+  Closeout: { color: "var(--text-muted)" },
+};
+
+export const HEALTH_CONFIG: Record<string, { color: string; dot: string }> = {
+  "On Track": { color: "var(--status-success)", dot: "#22C55E" },
+  Watch: { color: "var(--status-warning)", dot: "#F59E0B" },
+  "At Risk": { color: "var(--status-error)", dot: "#EF4444" },
+};

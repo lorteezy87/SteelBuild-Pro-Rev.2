@@ -5,6 +5,8 @@ import {
   groupScheduleTasksByPhase,
   buildCommercialMetrics,
   costCodeSpendPct,
+  PHASE_CONFIG,
+  HEALTH_CONFIG,
 } from "../projectDetailViewHelpers";
 
 describe("buildOverviewMetrics", () => {
@@ -114,5 +116,12 @@ describe("drawings / rfis / deliveries tab metrics", () => {
         { status: "Rejected" },
       ]),
     ).toEqual({ open: 1, delivered: 1 });
+  });
+});
+
+describe("project detail chrome configs", () => {
+  it("phase and health", () => {
+    expect(PHASE_CONFIG.Erection.color).toBe("var(--status-success)");
+    expect(HEALTH_CONFIG["At Risk"].dot).toBe("#EF4444");
   });
 });
