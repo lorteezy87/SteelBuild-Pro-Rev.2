@@ -14,3 +14,25 @@ export function formatRelative(iso: string | null | undefined, nowMs: number = D
   if (day < 7) return `${day}d ago`;
   return d.toLocaleDateString();
 }
+
+export const COMMENT_STATUS_ORDER = ["open", "addressed", "rejected", "clarification"] as const;
+
+export const COMMENT_STATUS_COLOR: Record<string, string> = {
+  open: "#9ca3af",
+  addressed: "#10b981",
+  rejected: "#ef4444",
+  clarification: "#f59e0b",
+};
+
+export const COMMENT_STATUS_LABEL: Record<string, string> = {
+  open: "OPEN",
+  addressed: "DONE",
+  rejected: "NO",
+  clarification: "?",
+};
+
+export function nextCommentStatus(current: string | null | undefined): string {
+  const idx = COMMENT_STATUS_ORDER.indexOf((current || "open") as (typeof COMMENT_STATUS_ORDER)[number]);
+  const safe = idx >= 0 ? idx : 0;
+  return COMMENT_STATUS_ORDER[(safe + 1) % COMMENT_STATUS_ORDER.length];
+}

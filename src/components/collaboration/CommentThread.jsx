@@ -5,28 +5,13 @@ import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { AuthContext } from "@/lib/AuthContext";
 import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
-import { formatRelative } from "./commentThreadHelpers";
-
-// Comment-resolution status (migration 073). Cycle matches the markup
-// status (3a) palette so resolution semantics read the same across
-// surfaces. NULL on legacy rows — treated identically to "open".
-const COMMENT_STATUS_ORDER = ["open", "addressed", "rejected", "clarification"];
-const COMMENT_STATUS_COLOR = {
-  open:          "#9ca3af",
-  addressed:     "#10b981",
-  rejected:      "#ef4444",
-  clarification: "#f59e0b",
-};
-const COMMENT_STATUS_LABEL = {
-  open:          "OPEN",
-  addressed:     "DONE",
-  rejected:      "NO",
-  clarification: "?",
-};
-function nextCommentStatus(current) {
-  const idx = COMMENT_STATUS_ORDER.indexOf(current || "open");
-  return COMMENT_STATUS_ORDER[(idx + 1) % COMMENT_STATUS_ORDER.length];
-}
+import {
+  formatRelative,
+  COMMENT_STATUS_ORDER,
+  COMMENT_STATUS_COLOR,
+  COMMENT_STATUS_LABEL,
+  nextCommentStatus,
+} from "./commentThreadHelpers";
 
 /**
  * CommentThread — polymorphic comment thread for any entity in the app.
