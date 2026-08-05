@@ -130,3 +130,23 @@ export function bulkClearInProgressPatch() {
 export function bulkMarkIncompletePatch() {
   return { is_completed: false, completed_at: null };
 }
+
+export const SCOPE_TYPE_COLORS: Record<string, string> = {
+  Scope: "var(--status-success)",
+  Exclusion: "var(--status-error)",
+  Clarification: "var(--status-info)",
+};
+
+export const scopeChipBtnStyle: Record<string, string | number> = {
+  background: "var(--bg-page)",
+  color: "var(--text-primary)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 2,
+  padding: "4px 10px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};

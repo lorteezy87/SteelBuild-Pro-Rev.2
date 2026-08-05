@@ -8,34 +8,18 @@ import { AlertTriangle, Bell, ExternalLink } from "lucide-react";
 import { formatDate } from "@/components/shared/formatters";
 import StatusBadge from "@/components/shared/StatusBadge";
 import { createPageUrl } from "@/utils";
-import { resolveAlertPath, severityStyle } from "./alertsCenterPageHelpers";
+import {
+  resolveAlertPath,
+  severityStyle,
+  ALERT_SEVERITY_FILTERS,
+  alertFilterBtnActive,
+  alertFilterBtnInactive,
+} from "./alertsCenterPageHelpers";
 
-export const ALERT_SEVERITY_FILTERS = ["all", "Critical", "High", "Medium", "Low"] as const;
-
-export const alertFilterBtnActive = {
-  padding: "4px 12px",
-  borderRadius: "var(--radius-badge)",
-  fontFamily: "var(--font-body)",
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  cursor: "pointer",
-  border: "none",
-  background: "var(--accent-muted)",
-  color: "var(--accent-light)",
-};
-
-export const alertFilterBtnInactive = {
-  padding: "4px 12px",
-  borderRadius: "var(--radius-badge)",
-  fontFamily: "var(--font-body)",
-  fontSize: 9,
-  fontWeight: 600,
-  letterSpacing: "0.08em",
-  cursor: "pointer",
-  border: "none",
-  background: "var(--bg-surface-low)",
-  color: "var(--text-muted)",
+export {
+  ALERT_SEVERITY_FILTERS,
+  alertFilterBtnActive,
+  alertFilterBtnInactive,
 };
 
 export function AlertsFilterBar({

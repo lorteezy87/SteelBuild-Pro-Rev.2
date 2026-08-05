@@ -10,60 +10,30 @@ import {
   buildSummaryText,
   keycapButtonStyle,
   STATUS_LABEL,
+  PICK_TAPE_KEY,
+  mono,
+  body,
+  cardStyle,
+  inputStyle,
+  selectStyle,
+  labelStyle,
+  STATUS_COLOR,
+  ANGLE_MODES,
+  ANGLE_PRESETS,
 } from "./cranePickCalculatorHelpers";
 
-export const PICK_TAPE_KEY = "crane-pick-history";
-
-export const mono = { fontFamily: "var(--font-mono)" };
-export const body = { fontFamily: "var(--font-body)" };
-
-// ── Shared style tokens (mirrors the other PM tool pages) ──────────
-export const cardStyle = {
-  background: "var(--bg-surface)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 8,
-  overflow: "hidden",
+export {
+  PICK_TAPE_KEY,
+  mono,
+  body,
+  cardStyle,
+  inputStyle,
+  selectStyle,
+  labelStyle,
+  STATUS_COLOR,
+  ANGLE_MODES,
+  ANGLE_PRESETS,
 };
-export const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  padding: "10px 12px",
-  color: "var(--text-primary)",
-  fontSize: 14,
-  ...mono,
-  outline: "none",
-  boxSizing: "border-box",
-};
-export const selectStyle = { ...inputStyle, padding: "9px 12px", cursor: "pointer" };
-export const labelStyle = {
-  ...mono,
-  fontSize: 9,
-  color: "var(--text-muted)",
-  letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  marginBottom: 6,
-  display: "block",
-};
-
-// Status pill colors — reuse the bright tier we introduced in the
-// palette-unification pass. RED pulls extra weight so users don't miss
-// critical-lift warnings on a tablet in bright sunlight.
-export const STATUS_COLOR = {
-  green:  "var(--status-success-bright)",
-  yellow: "var(--status-warning-bright)",
-  red:    "var(--status-error-bright)",
-};
-// Angle entry modes — users either type degrees directly or measure
-// H / S with a tape in the field.
-export const ANGLE_MODES = {
-  DEGREES:     "degrees",
-  HEIGHT_SPAN: "height-span",
-};
-
-// Quick-pick angle buttons (nice-to-have from spec).
-export const ANGLE_PRESETS = [30, 45, 60, 90];
 
 
 export function PickSummaryModal({ onClose, data }) {

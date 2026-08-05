@@ -16,9 +16,12 @@ import {
   distanceMeters,
   formatMeasureDistance,
 } from "@/lib/ifc/viewerMeasure";
+import {
+  IFC_HIGHLIGHT_HEX,
+  IFC_MEASURE_COLOR as MEASURE_COLOR,
+} from "./ifcModelViewerHelpers";
 
-const HIGHLIGHT = new THREE.Color("#f5d90a");
-const MEASURE_COLOR = 0xf5d90a;
+const HIGHLIGHT = new THREE.Color(IFC_HIGHLIGHT_HEX);
 
 export default function IfcModelViewer({
   buffer,

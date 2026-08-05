@@ -13,6 +13,7 @@ import {
   fmtScheduleTaskDate as fmtDate,
   INLINE_INPUT,
   INLINE_SELECT,
+  TASK_LIST_GRID,
 } from "./scheduleTaskListHelpers";
 
 export { getScheduleTaskRowKey };
@@ -105,7 +106,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
     outline: "none",
   };
 
-  const GRID = "28px 70px 2fr 90px 90px 1fr 80px 90px 130px";
+  const GRID = TASK_LIST_GRID;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

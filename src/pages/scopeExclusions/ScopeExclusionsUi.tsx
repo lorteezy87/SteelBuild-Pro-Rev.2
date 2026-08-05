@@ -8,26 +8,16 @@ import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import {
   SCOPE_TYPES,
   SCOPE_CATEGORIES,
+  SCOPE_TYPE_COLORS,
+  scopeChipBtnStyle as chipBtn,
 } from "./scopeExclusionsHelpers";
 
-export const TYPE_META = {
-  Scope: { color: "var(--status-success)", Icon: Check },
-  Exclusion: { color: "var(--status-error)", Icon: X },
-  Clarification: { color: "var(--status-info)", Icon: Info },
-};
+export { chipBtn };
 
-export const chipBtn = {
-  background: "var(--bg-page)",
-  color: "var(--text-primary)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 2,
-  padding: "4px 10px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  cursor: "pointer",
+export const TYPE_META = {
+  Scope: { color: SCOPE_TYPE_COLORS.Scope, Icon: Check },
+  Exclusion: { color: SCOPE_TYPE_COLORS.Exclusion, Icon: X },
+  Clarification: { color: SCOPE_TYPE_COLORS.Clarification, Icon: Info },
 };
 
 export function ScopeCommandBar({

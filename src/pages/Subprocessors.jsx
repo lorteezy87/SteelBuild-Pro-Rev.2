@@ -31,48 +31,9 @@ import {
   LEGAL_F,
 } from "./legal/LegalShell";
 import { LEGAL_CONTACT, LEGAL_LAST_UPDATED } from "./legal/legalMeta";
+import { SUBPROCESSORS } from "./legal/subprocessorsHelpers";
 
 
-/* The current set of sub-processors. Purpose is the reason customer data may be
-   handled; Location/Region is where the provider operates + stores data. */
-const SUBPROCESSORS = [
-  {
-    name: "Supabase",
-    purpose: "Database, authentication, and file storage (our backend of record).",
-    location: "United States",
-    region: "AWS us-east-1",
-  },
-  {
-    name: "Vercel",
-    purpose: "Web frontend hosting and content delivery (CDN).",
-    location: "United States",
-    region: "US",
-  },
-  {
-    name: "Stripe",
-    purpose: "Subscription billing and payment processing.",
-    location: "United States",
-    region: "US",
-  },
-  {
-    name: "Sentry",
-    purpose: "Error monitoring and performance (masked session replay — text masked, media blocked).",
-    location: "United States",
-    region: "US",
-  },
-  {
-    name: "OpenAI",
-    purpose: "AI-assisted document analysis (drawing revision comparison, sheet extraction, email classification, RFI drafting). API data is not used to train their models.",
-    location: "United States",
-    region: "US · no-training API terms",
-  },
-  {
-    name: "Anthropic",
-    purpose: "AI-assisted document analysis (drawing revision comparison, sheet extraction, email classification, RFI drafting). API data is not used to train their models.",
-    location: "United States",
-    region: "US · no-training API terms",
-  },
-];
 
 const CONTACT = LEGAL_CONTACT;
 const LAST_UPDATED = LEGAL_LAST_UPDATED.subprocessors;

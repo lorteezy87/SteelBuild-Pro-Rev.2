@@ -7,6 +7,7 @@ import {
   groupProcurementByCategory,
   sumWeightTons,
   sortWorkPackagesByNumber,
+  PROCUREMENT_LIST_GRID,
 } from "./format";
 
 // StatusBadge is a still-.jsx component; cast at the boundary.
@@ -149,7 +150,7 @@ export function Pill({ color, text }) {
  * ---------------------------------------------------------------------- */
 export function ListView({ items, wpById, onEdit, onDelete }) {
   // Item · Category · Vendor · PO · Required · Promised · Lead · Weight · Status · Actions
-  const GRID = '1.4fr 130px 130px 100px 90px 90px 70px 70px 110px 80px';
+  const GRID = PROCUREMENT_LIST_GRID;
   return (
     <div className="sbd-card" style={{
       padding: 0, overflow: 'hidden',

@@ -20,7 +20,8 @@ export const STATUS_LABEL = {
   red:    "CRITICAL",
 };
 
-const mono = { fontFamily: "var(--font-mono)" };
+export const mono = { fontFamily: "var(--font-mono)" };
+export const body = { fontFamily: "var(--font-body)" };
 
 export function lbOrDash(n) {
   if (!Number.isFinite(Number(n))) return "—";
@@ -356,3 +357,54 @@ export function createEmptyCranePickForm(degreesMode: string): {
     counterweight: "",
   };
 }
+
+export const PICK_TAPE_KEY = "crane-pick-history";
+
+export const cardStyle: Record<string, string | number> = {
+  background: "var(--bg-surface)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 8,
+  overflow: "hidden",
+};
+
+export const inputStyle: Record<string, string | number> = {
+  width: "100%",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 6,
+  padding: "10px 12px",
+  color: "var(--text-primary)",
+  fontSize: 14,
+  ...mono,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+export const selectStyle: Record<string, string | number> = {
+  ...inputStyle,
+  padding: "9px 12px",
+  cursor: "pointer",
+};
+
+export const labelStyle: Record<string, string | number> = {
+  ...mono,
+  fontSize: 9,
+  color: "var(--text-muted)",
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  marginBottom: 6,
+  display: "block",
+};
+
+export const STATUS_COLOR: Record<string, string> = {
+  green: "var(--status-success-bright)",
+  yellow: "var(--status-warning-bright)",
+  red: "var(--status-error-bright)",
+};
+
+export const ANGLE_MODES = {
+  DEGREES: "degrees",
+  HEIGHT_SPAN: "height-span",
+} as const;
+
+export const ANGLE_PRESETS = [30, 45, 60, 90] as const;

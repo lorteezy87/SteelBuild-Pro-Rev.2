@@ -1,17 +1,12 @@
 import React, { useState } from "react";
+import {
+  DMS_FILTER_CATEGORIES as CATEGORIES,
+  DMS_FILTER_DISCIPLINES as DISCIPLINES,
+  DMS_FILTER_STATUSES as STATUSES,
+} from "./documentFiltersHelpers";
 
 export default function DocumentFilters({ onFilterChange, activeFilters, onClearAll }) {
   const [open, setOpen] = useState(false);
-
-  const CATEGORIES = [
-    "Blueprint", "Shop Drawing", "IFC Model", "Specification",
-    "Submittal", "Transmittal", "RFI Response", "Change Order",
-    "Contract", "Photo", "Report", "Correspondence",
-    "Permit", "Inspection Report", "Other"
-  ];
-
-  const DISCIPLINES = ["Structural", "Architectural", "MEP", "Civil", "Misc Metals", "Geotechnical", "General", "Other"];
-  const STATUSES = ["Draft", "Under Review", "Approved", "Approved with Comments", "Revise & Resubmit", "Rejected", "Issued", "Superseded", "Archived", "Void"];
 
   const removeFilter = (key, value) => {
     const updated = activeFilters[key]

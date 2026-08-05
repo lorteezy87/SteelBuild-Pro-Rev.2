@@ -59,3 +59,37 @@ export function uniqueAlertTypes(alerts: AlertLike[]): string[] {
 export function severityStyle(severity: string | null | undefined): { bg: string; border: string } {
   return SEVERITY_BG[severity || ""] || SEVERITY_BG.Low;
 }
+
+export const ALERT_SEVERITY_FILTERS = [
+  "all",
+  "Critical",
+  "High",
+  "Medium",
+  "Low",
+] as const;
+
+export const alertFilterBtnActive: Record<string, string | number> = {
+  padding: "4px 12px",
+  borderRadius: "var(--radius-badge)",
+  fontFamily: "var(--font-body)",
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  cursor: "pointer",
+  border: "none",
+  background: "var(--accent-muted)",
+  color: "var(--accent-light)",
+};
+
+export const alertFilterBtnInactive: Record<string, string | number> = {
+  padding: "4px 12px",
+  borderRadius: "var(--radius-badge)",
+  fontFamily: "var(--font-body)",
+  fontSize: 9,
+  fontWeight: 600,
+  letterSpacing: "0.08em",
+  cursor: "pointer",
+  border: "none",
+  background: "var(--bg-surface-low)",
+  color: "var(--text-muted)",
+};

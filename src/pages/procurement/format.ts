@@ -123,3 +123,7 @@ export function sortWorkPackagesByNumber<
     String(a.wp_number || "").localeCompare(String(b.wp_number || "")),
   );
 }
+
+/** Grid template for procurement ListView columns. */
+export const PROCUREMENT_LIST_GRID =
+  "1.4fr 130px 130px 100px 90px 90px 70px 70px 110px 80px";

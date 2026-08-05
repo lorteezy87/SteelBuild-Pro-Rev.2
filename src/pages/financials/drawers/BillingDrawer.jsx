@@ -2,14 +2,12 @@ import React, { useState } from "react";
 import { formatCurrency, formatDate } from "@/components/shared/formatters";
 import { mono, body, HEALTH_COLOR, safeNumber, periodDisplay } from "../utils";
 import { DrawerTile, drawerTd, drawerTdRight, FinancialDrawer } from "../DrawerAtoms";
-import { enrichBillingRows, sortDrawerRows, nextDrawerSort } from "../drawerHelpers";
-
-const SOV_STATUS_COLORS = {
-  "Draft":     "var(--text-muted)",
-  "Submitted": "var(--status-info)",
-  "Certified": "var(--accent)",
-  "Paid":      "var(--status-success)",
-};
+import {
+  enrichBillingRows,
+  sortDrawerRows,
+  nextDrawerSort,
+  SOV_STATUS_COLORS,
+} from "../drawerHelpers";
 
 export function BillingDrawer({ open, onClose, kpi, sovItems }) {
   const [sortCol, setSortCol] = useState("application_number");

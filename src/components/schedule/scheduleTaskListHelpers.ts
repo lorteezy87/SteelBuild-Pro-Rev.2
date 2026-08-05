@@ -171,3 +171,6 @@ export const INLINE_SELECT: Record<string, string | number> = {
   width: "100%",
   cursor: "pointer",
 };
+
+export const TASK_LIST_GRID =
+  "28px 70px 2fr 90px 90px 1fr 80px 90px 130px";

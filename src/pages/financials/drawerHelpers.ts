@@ -120,3 +120,10 @@ export function buildCompletedPaymentCycles<T extends Record<string, any>>(
       };
     });
 }
+
+export const SOV_STATUS_COLORS: Record<string, string> = {
+  Draft: "var(--text-muted)",
+  Submitted: "var(--status-info)",
+  Certified: "var(--accent)",
+  Paid: "var(--status-success)",
+};
