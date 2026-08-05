@@ -11,6 +11,8 @@ import {
   runCachedGlobalSearch,
   ICON_MAP,
   COLOR_MAP,
+  QUICK_NAV,
+  SCOPE_OPTIONS,
 } from "./globalSearchHelpers";
 
 // Stable empty array — prevents infinite re-render loops from useCallback/useEffect
@@ -18,26 +20,6 @@ import {
 const EMPTY = [];
 
 
-/* ── Quick-nav modules for empty-query state ────────────────────────────── */
-const QUICK_NAV = [
-  { icon: "◈", name: "Dashboard",    page: "Dashboard",               group: "Navigate" },
-  { icon: "⚑", name: "RFI Hub",      page: "RFIs",                    group: "Navigate" },
-  { icon: "▦", name: "Detailing",    page: "DrawingSubmittalHub",     group: "Navigate" },
-  { icon: "☰", name: "Work Packages",page: "WorkPackages",            group: "Navigate" },
-  { icon: "📦", name: "Deliveries",  page: "Deliveries",              group: "Navigate" },
-  { icon: "◎", name: "Budget Control",   page: "CostHub",              group: "Navigate" },
-  { icon: "▣", name: "Piece Register", page: "PieceRegister",         group: "Navigate" },
-  { icon: "📑", name: "Contracts",   page: "ContractManagement",      group: "Navigate" },
-  { icon: "$", name: "Change Orders", page: "ChangeOrders",            group: "Navigate" },
-  { icon: "📁", name: "Documents",   page: "Documents",               group: "Navigate" },
-  { icon: "✨", name: "Portfolio",              page: "PortfolioHub",              group: "Navigate" },
-];
-
-const SCOPE_OPTIONS = [
-  { key: "project", label: "This Project" },
-  { key: "all",     label: "All Projects" },
-  { key: "contacts", label: "Contacts" },
-];
 
 export default function GlobalSearchModal({ open, onClose }) {
   const [query, setQuery] = useState("");

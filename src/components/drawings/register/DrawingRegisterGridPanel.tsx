@@ -28,18 +28,12 @@ import {
   groupRegisterRowsBySet,
   SET_FILTER_NONE,
 } from "./docControl.derive";
-import { statusTone } from "./drawingRegisterGridPanelHelpers";
+import {
+  statusTone,
+  STATUS_FILTERS,
+  RELEASE_OPTIONS,
+} from "./drawingRegisterGridPanelHelpers";
 
-const STATUS_FILTERS = [
-  "all", "received", "pending_review", "reviewed", "released_for_estimate",
-  "released_for_shop", "released_for_field", "on_hold", "superseded", "void",
-];
-
-const RELEASE_OPTIONS: { value: ReleaseStatus; label: string }[] = [
-  { value: "released_for_estimate", label: "Estimate" },
-  { value: "released_for_shop", label: "Shop" },
-  { value: "released_for_field", label: "Field" },
-];
 
 function StatusCell({ status }: { status: string | null }) {
   const label = status ? status.replace(/_/g, " ") : "no revision";

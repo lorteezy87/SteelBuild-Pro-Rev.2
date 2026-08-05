@@ -29,10 +29,11 @@ import { BackchargeFormModal } from "@/pages/Backcharges";
 import { buildBackchargePrefillFromSheet, createBackchargeFromDelta, sheetsWithRevisionBackcharge } from "@/lib/backchargeFromDelta";
 import { listBackcharges } from "@/lib/backcharge/repository";
 import { downloadRevisionImpactPdf } from "@/lib/exports/revisionImpactPDF";
-import { filterRevisionsForSheets } from "./revisionImpactHelpers";
-
-const mono = "var(--font-mono)";
-const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
+import {
+  filterRevisionsForSheets,
+  SEV_ORDER,
+  IMPACT_MONO as mono,
+} from "./revisionImpactHelpers";
 
 export default function RevisionImpactReportModal({ open, onClose, set, projectId }) {
   const { user } = useAppSecurity();

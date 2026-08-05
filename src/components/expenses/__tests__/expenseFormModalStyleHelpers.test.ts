@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { iStyle, labelStyle, sectionLabel, triggerStyle } from "../expenseFormModalStyleHelpers";
+import {
+  EXPENSE_TYPES,
+  PAYMENT_STATUSES,
+  UNITS,
+  EMPTY_EXPENSE_FORM,
+  iStyle,
+} from "../expenseFormModalStyleHelpers";
 
 describe("expenseFormModalStyleHelpers", () => {
-  it("form chrome", () => {
-    expect(iStyle.fontSize).toBe(12);
-    expect(labelStyle.fontSize).toBe(8);
-    expect(sectionLabel.color).toBe("var(--accent)");
-    expect(triggerStyle.height).toBe(34);
+  it("option lists and empty form", () => {
+    expect(EXPENSE_TYPES).toContain("Labor");
+    expect(PAYMENT_STATUSES).toContain("Unpaid");
+    expect(UNITS).toContain("EA");
+    expect(EMPTY_EXPENSE_FORM.expense_type).toBe("Materials");
+    expect(iStyle.width).toBe("100%");
   });
 });

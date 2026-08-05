@@ -45,3 +45,52 @@ export const triggerStyle: Record<string, string | number> = {
   color: "var(--text-primary)",
   height: 34,
 };
+
+export const EXPENSE_TYPES = [
+  "Labor",
+  "Materials",
+  "Equipment",
+  "Subcontractor",
+  "Misc.",
+  "Overhead",
+] as const;
+
+export const PAYMENT_STATUSES = [
+  "Unpaid",
+  "Paid",
+  "Pending Approval",
+  "Disputed",
+  "Voided",
+] as const;
+
+export const UNITS = ["LS", "HR", "EA", "TON", "LF", "SF", "Day"] as const;
+
+/** Module-load empty form; expense_date freezes to load-day like the original. */
+export const EMPTY_EXPENSE_FORM = {
+  project_id: "",
+  project_name: "",
+  description: "",
+  expense_type: "Materials",
+  cost_code: "",
+  cost_code_name: "",
+  amount: 0,
+  quantity: 1,
+  unit_cost: 0,
+  unit: "EA",
+  vendor: "",
+  invoice_number: "",
+  invoice_date: null,
+  payment_status: "Unpaid",
+  payment_date: null,
+  work_package_id: "",
+  work_package_name: "",
+  sov_line_item_id: "",
+  sov_line_item_name: "",
+  expense_date: new Date().toISOString().split("T")[0],
+  submitted_by: "",
+  approved_by: "",
+  approved_date: null,
+  notes: "",
+  receipt_url: "",
+  tags: "",
+};

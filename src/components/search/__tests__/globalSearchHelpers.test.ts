@@ -5,6 +5,8 @@ import {
   runCachedGlobalSearch,
   ICON_MAP,
   COLOR_MAP,
+  QUICK_NAV,
+  SCOPE_OPTIONS,
 } from "../globalSearchHelpers";
 
 const NAV = [
@@ -134,5 +136,12 @@ describe("search chrome maps", () => {
     expect(ICON_MAP.RFI).toBe("⚑");
     expect(COLOR_MAP.Drawing).toBe("#0EA5E9");
     expect(COLOR_MAP.Module).toBe("var(--accent)");
+  });
+});
+
+describe("QUICK_NAV / SCOPE_OPTIONS", () => {
+  it("exports chrome constants", () => {
+    expect(QUICK_NAV.length).toBeGreaterThan(5);
+    expect(SCOPE_OPTIONS[0].key).toBe("project");
   });
 });

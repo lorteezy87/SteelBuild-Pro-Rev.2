@@ -4,24 +4,16 @@ import { COST_CODES, COST_CODES_GROUPED } from '../shared/costCodes';
 import { getCostCodeSummary } from '../shared/budgetCalculations';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import FormField from '@/components/shared/FormField';
-import { iStyle, labelStyle, sectionLabel, triggerStyle } from './expenseFormModalStyleHelpers';
-
-const EXPENSE_TYPES = ['Labor', 'Materials', 'Equipment', 'Subcontractor', 'Misc.', 'Overhead'];
-const PAYMENT_STATUSES = ['Unpaid', 'Paid', 'Pending Approval', 'Disputed', 'Voided'];
-const UNITS = ['LS', 'HR', 'EA', 'TON', 'LF', 'SF', 'Day'];
-
-const empty = {
-  project_id: '', project_name: '', description: '',
-  expense_type: 'Materials', cost_code: '', cost_code_name: '',
-  amount: 0, quantity: 1, unit_cost: 0, unit: 'EA',
-  vendor: '', invoice_number: '', invoice_date: null,
-  payment_status: 'Unpaid', payment_date: null,
-  work_package_id: '', work_package_name: '',
-  sov_line_item_id: '', sov_line_item_name: '',
-  expense_date: new Date().toISOString().split('T')[0],
-  submitted_by: '', approved_by: '', approved_date: null,
-  notes: '', receipt_url: '', tags: '',
-};
+import {
+  iStyle,
+  labelStyle,
+  sectionLabel,
+  triggerStyle,
+  EXPENSE_TYPES,
+  PAYMENT_STATUSES,
+  UNITS,
+  EMPTY_EXPENSE_FORM,
+} from './expenseFormModalStyleHelpers';
 
 export default function ExpenseFormModal({
   open, onClose, onSave, expense,
@@ -31,13 +23,13 @@ export default function ExpenseFormModal({
   isSaving = false,
 }) {
   const trapRef = useFocusTrap(open);
-  const [form, setForm] = useState(empty);
+  const [form, setForm] = useState(EMPTY_EXPENSE_FORM);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     setForm(expense
-      ? { ...empty, ...expense }
-      : { ...empty, expense_number: nextNumber || '', project_id: defaultProjectId || '' }
+      ? { ...EMPTY_EXPENSE_FORM, ...expense }
+      : { ...EMPTY_EXPENSE_FORM, expense_number: nextNumber || '', project_id: defaultProjectId || '' }
     );
     setErrors({});
   }, [expense, open, nextNumber, defaultProjectId]);

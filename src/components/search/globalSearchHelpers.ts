@@ -264,3 +264,30 @@ export const COLOR_MAP: Record<string, string> = {
   Contact: "#0D9488",
   Module: "var(--accent)",
 };
+
+export type QuickNavItem = {
+  icon: string;
+  name: string;
+  page: string;
+  group: string;
+};
+
+export const QUICK_NAV: QuickNavItem[] = [
+  { icon: "◈", name: "Dashboard", page: "Dashboard", group: "Navigate" },
+  { icon: "⚑", name: "RFI Hub", page: "RFIs", group: "Navigate" },
+  { icon: "▦", name: "Detailing", page: "DrawingSubmittalHub", group: "Navigate" },
+  { icon: "☰", name: "Work Packages", page: "WorkPackages", group: "Navigate" },
+  { icon: "📦", name: "Deliveries", page: "Deliveries", group: "Navigate" },
+  { icon: "◎", name: "Budget Control", page: "CostHub", group: "Navigate" },
+  { icon: "▣", name: "Piece Register", page: "PieceRegister", group: "Navigate" },
+  { icon: "📑", name: "Contracts", page: "ContractManagement", group: "Navigate" },
+  { icon: "$", name: "Change Orders", page: "ChangeOrders", group: "Navigate" },
+  { icon: "📁", name: "Documents", page: "Documents", group: "Navigate" },
+  { icon: "✨", name: "Portfolio", page: "PortfolioHub", group: "Navigate" },
+];
+
+export const SCOPE_OPTIONS = [
+  { key: "project", label: "This Project" },
+  { key: "all", label: "All Projects" },
+  { key: "contacts", label: "Contacts" },
+] as const;
