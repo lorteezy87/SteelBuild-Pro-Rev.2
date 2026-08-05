@@ -84,3 +84,17 @@ describe("formatJobStatusTodayLabel", () => {
     expect(label.length).toBeGreaterThan(5);
   });
 });
+
+import { createEmptyJobStatusFilters } from "../jobStatusReportHelpers";
+import { nextFilterToggle } from "@/pages/shared/nextFilterToggle";
+
+describe("job status empty filters", () => {
+  it("resets search and filters", () => {
+    expect(createEmptyJobStatusFilters()).toEqual({
+      search: "",
+      healthFilter: "all",
+      readinessFilter: "all",
+    });
+    expect(nextFilterToggle("At Risk", "At Risk")).toBe("all");
+  });
+});

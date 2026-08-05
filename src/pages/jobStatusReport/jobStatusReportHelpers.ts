@@ -148,3 +148,19 @@ export function formatJobStatusTodayLabel(
     timeZone,
   });
 }
+
+export function createEmptyJobStatusFilters(): {
+  search: string;
+  healthFilter: string;
+  readinessFilter: string;
+} {
+  return {
+    search: "",
+    healthFilter: "all",
+    readinessFilter: "all",
+  };
+}
+
+export function jobStatusCommandSubtitle(todayLabel: string): string {
+  return todayLabel;
+}

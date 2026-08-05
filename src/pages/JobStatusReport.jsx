@@ -18,7 +18,9 @@ import {
   filterJobStatusProjects,
   countByHealthStatus,
   formatJobStatusTodayLabel,
+  createEmptyJobStatusFilters,
 } from "./jobStatusReport/jobStatusReportHelpers";
+import { nextFilterToggle } from "@/pages/shared/nextFilterToggle";
 import {
   FilterChip,
   KpiTile,
@@ -134,11 +136,16 @@ export default function JobStatusReport() {
         marginBottom: 12,
       }}>
         <Filter size={12} color="var(--text-muted)" />
-        <FilterChip label="All" count={enriched.length} active={healthFilter === "all" && readinessFilter === "all"} onClick={() => { setHealthFilter("all"); setReadinessFilter("all"); }} />
-        <FilterChip label="At Risk" count={countByHealthStatus(enriched, "At Risk")} active={healthFilter === "At Risk"} onClick={() => setHealthFilter(healthFilter === "At Risk" ? "all" : "At Risk")} color="var(--danger)" />
-        <FilterChip label="Watch"   count={countByHealthStatus(enriched, "Watch")}   active={healthFilter === "Watch"}   onClick={() => setHealthFilter(healthFilter === "Watch" ? "all" : "Watch")} color="var(--warning)" />
-        <FilterChip label="Ready"   count={kpis.readyCount}         active={readinessFilter === "ready"}        onClick={() => setReadinessFilter(readinessFilter === "ready" ? "all" : "ready")} color="var(--success)" />
-        <FilterChip label="Missing Data" count={kpis.missingDataCount} active={readinessFilter === "missing-data"} onClick={() => setReadinessFilter(readinessFilter === "missing-data" ? "all" : "missing-data")} color="var(--danger)" />
+        <FilterChip label="All" count={enriched.length} active={healthFilter === "all" && readinessFilter === "all"} onClick={() => {
+          const empty = createEmptyJobStatusFilters();
+          setHealthFilter(empty.healthFilter);
+          setReadinessFilter(empty.readinessFilter);
+          setSearch(empty.search);
+        }} />
+        <FilterChip label="At Risk" count={countByHealthStatus(enriched, "At Risk")} active={healthFilter === "At Risk"} onClick={() => setHealthFilter(nextFilterToggle(healthFilter, "At Risk"))} color="var(--danger)" />
+        <FilterChip label="Watch"   count={countByHealthStatus(enriched, "Watch")}   active={healthFilter === "Watch"}   onClick={() => setHealthFilter(nextFilterToggle(healthFilter, "Watch"))} color="var(--warning)" />
+        <FilterChip label="Ready"   count={kpis.readyCount}         active={readinessFilter === "ready"}        onClick={() => setReadinessFilter(nextFilterToggle(readinessFilter, "ready"))} color="var(--success)" />
+        <FilterChip label="Missing Data" count={kpis.missingDataCount} active={readinessFilter === "missing-data"} onClick={() => setReadinessFilter(nextFilterToggle(readinessFilter, "missing-data"))} color="var(--danger)" />
 
         <div style={{ position: "relative", flex: 1, minWidth: 200, marginLeft: "auto" }}>
           <Search size={12} color="var(--text-muted)" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" }} />

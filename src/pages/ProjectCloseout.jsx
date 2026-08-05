@@ -11,6 +11,12 @@ import { buildCloseoutDbPayload } from "@/lib/closeout/closeoutPayload";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 import { ProjectCloseoutLessons } from "./projectCloseout/ProjectCloseoutUi";
+import {
+  PROJECT_CLOSEOUT_COMMAND_SUBTITLE,
+  PROJECT_CLOSEOUT_TABS,
+  replaceCloseoutInList,
+  replaceCloseoutWithServerRow,
+} from "./projectCloseout/projectCloseoutHelpers";
 
 import { findById } from "@/pages/shared/findById";
 export default function ProjectCloseout() {
@@ -58,7 +64,7 @@ export default function ProjectCloseout() {
       await qc.cancelQueries({ queryKey: closeoutQueryKey });
       const previous = qc.getQueryData(closeoutQueryKey);
       qc.setQueryData(closeoutQueryKey, (current = []) =>
-        current.map((row) => row.id === id ? { ...row, ...patch } : row),
+        replaceCloseoutInList(current, id, patch),
       );
       return { previous };
     },
@@ -68,7 +74,7 @@ export default function ProjectCloseout() {
     },
     onSuccess: (updated) => {
       qc.setQueryData(closeoutQueryKey, (current = []) =>
-        current.map((row) => row.id === updated.id ? updated : row),
+        replaceCloseoutWithServerRow(current, updated),
       );
       toast.success("Closeout updated");
     },
@@ -89,18 +95,14 @@ export default function ProjectCloseout() {
     await updateMut.mutateAsync({ id: projectCloseout.id, patch });
   };
 
-  const tabs = [
-    { label: "Checklist", id: "checklist" },
-    { label: "Summary", id: "summary" },
-    { label: "Lessons Learned", id: "lessons" },
-  ];
+  const tabs = PROJECT_CLOSEOUT_TABS;
 
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "SELECT PROJECT"}
         title="Project Closeout"
-        subtitle="Handover checklist · final billing summary · lessons learned"
+        subtitle={PROJECT_CLOSEOUT_COMMAND_SUBTITLE}
       />
 
       {isLoading || isError ? (
