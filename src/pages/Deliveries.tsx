@@ -46,6 +46,15 @@ import {
   ScheduleView,
 } from "./deliveries/components";
 import type { DeliveryMetrics, DeliveryRecord } from "./deliveries/types";
+import {
+  buildIdNameMap,
+  buildIdRecordMap,
+  buildWpLabelMap,
+  filterActiveDeliveries,
+  filterDeliveries,
+  groupDeliveriesByLane,
+  nextSelectedIdsToggle,
+} from "./deliveries/deliveriesPageHelpers";
 import DeliveryControlCenter from "./deliveries/DeliveryControlCenter";
 
 // The design-system primitives and LoadingSkeleton are still .jsx, so TS infers
@@ -114,26 +123,23 @@ export default function Deliveries() {
     staleTime: 60000,
   });
 
-  const projectMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const project of projects) map[project.id] = project.name || (project as any).project_name || "";
-    return map;
-  }, [projects]);
+  const projectMap = useMemo(
+    () => buildIdNameMap(projects as any),
+    [projects],
+  );
 
-  const workPackageMap = useMemo(() => {
-    const map: Record<string, Record<string, unknown>> = {};
-    for (const wp of workPackages) map[wp.id] = wp;
-    return map;
-  }, [workPackages]);
+  const workPackageMap = useMemo(
+    () => buildIdRecordMap(workPackages as any),
+    [workPackages],
+  );
 
-  const wpLabelMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const wp of workPackages) map[wp.id] = wp.wp_number || wp.name || "";
-    return map;
-  }, [workPackages]);
+  const wpLabelMap = useMemo(
+    () => buildWpLabelMap(workPackages as any),
+    [workPackages],
+  );
 
   const activeDeliveries = useMemo(
-    () => deliveries.filter((delivery) => !delivery?.is_deleted),
+    () => filterActiveDeliveries(deliveries),
     [deliveries]
   );
 
@@ -225,55 +231,26 @@ export default function Deliveries() {
     onError: (e) => toastCrudError(e, "Bulk update failed"),
   });
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return metrics.enriched
-      .filter((delivery) => {
-        const signals = delivery._signals;
-        if (statusFilter !== "all" && signals.status !== statusFilter) return false;
-        if (riskFilter !== "all" && signals.risk !== riskFilter) return false;
-        if (scheduleFilter === "late" && !signals.overdue) return false;
-        if (scheduleFilter === "today" && !signals.dueToday) return false;
-        if (scheduleFilter === "week" && !signals.dueNext7) return false;
-        if (scheduleFilter === "ready" && !metrics.readyToReceive.some((item) => item.id === delivery.id)) return false;
-        if (scheduleFilter === "unscheduled" && !signals.unscheduled) return false;
-        if (scheduleFilter === "longLead" && !signals.longLead) return false;
-        if (!matchesSequenceFilter(delivery, seqFilter)) return false;
-        if (!q) return true;
-        const wp = workPackageMap[delivery.work_package_id];
-        const haystack = [
-          delivery.delivery_number,
-          delivery.delivery_title,
-          delivery.description,
-          delivery.vendor,
-          delivery.po_number,
-          delivery.carrier,
-          delivery.tracking_number,
-          delivery.truck_number,
-          delivery.load_number,
-          delivery.load_category,
-          delivery.procurement_category,
-          delivery.receiving_location,
-          projectMap[delivery.project_id],
-          wp?.wp_number,
-          wp?.name,
-        ].join(" ").toLowerCase();
-        return haystack.includes(q);
-      })
-      .sort(sortDeliveriesForDispatch);
-  }, [metrics, projectMap, riskFilter, scheduleFilter, seqFilter, search, statusFilter, workPackageMap]);
+  const filtered = useMemo(
+    () => filterDeliveries(metrics.enriched as any, {
+      statusFilter,
+      riskFilter,
+      scheduleFilter,
+      search,
+      seqFilter,
+      readyToReceive: metrics.readyToReceive as any,
+      projectMap,
+      workPackageMap,
+      matchesSequenceFilter: matchesSequenceFilter as any,
+      sortFn: sortDeliveriesForDispatch as any,
+    }) as any,
+    [metrics, projectMap, riskFilter, scheduleFilter, seqFilter, search, statusFilter, workPackageMap],
+  );
 
-  const laneGroups = useMemo(() => {
-    const groups: Record<string, DeliveryRecord[]> = Object.fromEntries(
-      LANE_ORDER.map((lane) => [lane, [] as DeliveryRecord[]])
-    );
-    for (const delivery of filtered) {
-      const lane = deliveryLane(delivery);
-      if (!groups[lane]) groups.Exceptions.push(delivery);
-      else groups[lane].push(delivery);
-    }
-    return groups;
-  }, [filtered]);
+  const laneGroups = useMemo(
+    () => groupDeliveriesByLane(filtered as any, deliveryLane as any) as any,
+    [filtered],
+  );
 
   // In-session dedup so the 60s metrics refetch doesn't re-run the alert pass
   // for deliveries already handled (the DB title/id check still backstops it).
@@ -313,11 +290,7 @@ export default function Deliveries() {
   }, [metrics.overdue, projectId, projectMap, workPackageMap]);
 
   const toggleSelect = (id: string) =>
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) => nextSelectedIdsToggle(prev, id));
 
   const toggleAll = (checked: boolean) =>
     setSelectedIds(
