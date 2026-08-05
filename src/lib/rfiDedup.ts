@@ -18,7 +18,7 @@
 // Construction-RFI filler words that carry no disambiguating signal — dropped
 // before similarity so "Please confirm the bolt grade" and "Confirm bolt
 // grade?" still match strongly.
-const STOPWORDS = new Set([
+export const STOPWORDS = new Set([
   "the", "a", "an", "and", "or", "of", "to", "for", "is", "are", "be", "on",
   "in", "at", "with", "this", "that", "what", "which", "how", "do", "does",
   "can", "we", "i", "should", "please", "confirm", "clarify", "provide",

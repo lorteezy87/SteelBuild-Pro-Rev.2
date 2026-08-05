@@ -350,7 +350,7 @@ export function describeScopeItem(typeKey) {
 // match before plain "frame", "bike rack" must match before "rack").
 // The last entry `/./` is the generic fallback so every line classifies
 // into something — the modal surfaces generics so the user can review.
-const CLASSIFIERS = [
+export const CLASSIFIERS = [
   // Specialty / high-signal keywords first
   { type: "pv_support",        re: /\bpv\b|\bphotovoltaic|\bsolar\s*(support|screen|racking)/i },
   { type: "rtu_dunnage",       re: /\brtu[\s-]*dunnage|\bdunnage[\s-]*(fram|steel)/i },

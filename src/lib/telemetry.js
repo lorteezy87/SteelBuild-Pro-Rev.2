@@ -25,7 +25,7 @@ function pushBuffer(entry) {
 // Callers often pass full project/email records as context; redact known
 // sensitive keys so financial / document / PII data can't surface in
 // window.__sbpErrorLog (readable in browser devtools).
-const SENSITIVE_KEYS = new Set([
+export const SENSITIVE_KEYS = new Set([
   "body_html", "body_text", "amount", "contract_value", "file_url",
   "storage_path", "email", "recipients", "cc", "bcc",
   "password", "token", "api_key", "secret",

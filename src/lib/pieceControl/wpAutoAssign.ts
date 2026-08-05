@@ -72,7 +72,7 @@ export type AutoAssignOptions = {
   reassignExisting?: boolean;
 };
 
-const NOISE_TOKENS = new Set([
+export const NOISE_TOKENS = new Set([
   "ifc",
   "ifa",
   "epm",

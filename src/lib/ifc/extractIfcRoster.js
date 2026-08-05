@@ -15,7 +15,7 @@
  */
 import { getEngine } from "@/lib/ifc/ifcEngine";
 
-const PART_TYPES = ["IFCBEAM", "IFCCOLUMN", "IFCPLATE", "IFCMEMBER"];
+export const PART_TYPES = ["IFCBEAM", "IFCCOLUMN", "IFCPLATE", "IFCMEMBER"];
 
 /**
  * @param {ArrayBuffer} buffer

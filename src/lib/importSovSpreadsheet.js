@@ -126,7 +126,7 @@ export function aoaToRows(aoa) {
  * ones (Deck, Misc). The standard names mirror the 14 default steel cost codes
  * seeded into every project (migration 086).
  */
-const COST_CODE_RULES = [
+export const COST_CODE_RULES = [
   [/\bdetail/i, "Detailing"],
   [/anchor|embed/i, "Anchor Bolts/Embeds"],
   [/joist/i, "Joist"],

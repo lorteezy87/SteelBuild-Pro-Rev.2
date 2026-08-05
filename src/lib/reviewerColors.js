@@ -42,7 +42,7 @@ export const REVIEWER_COLOR_FALLBACK = "#6b7280";
 
 // Lower-cased lookup for case-insensitive matching. Built once at
 // module load so consumers don't pay the cost on every render.
-const LOWER_LOOKUP = Object.freeze(
+export const LOWER_LOOKUP = Object.freeze(
   Object.fromEntries(
     Object.entries(REVIEWER_COLORS).map(([k, v]) => [k.toLowerCase(), v]),
   ),

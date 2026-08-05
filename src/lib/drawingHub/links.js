@@ -124,7 +124,7 @@ export async function removeLink({ linkId, userId }) {
  * we still return the link with record:null so the UI can flag
  * "orphaned link".
  */
-const TYPE_TO_ENTITY = {
+export const TYPE_TO_ENTITY = {
   rfi:          { table: "rfis",             accessor: entities.RFI },
   work_package: { table: "work_packages",    accessor: entities.WorkPackage },
   delivery:     { table: "deliveries",       accessor: entities.Delivery },
