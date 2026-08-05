@@ -1,3 +1,4 @@
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 /**
  * Pure helpers for ChangeOrders page shell (filter + source-RFI label).
  */
@@ -109,5 +110,18 @@ export function buildChangeOrdersCsvString(rows: ChangeOrderCsvLike[]): string {
 
 export function changeOrdersCsvFilename(projectName: string): string {
   return `change-orders-${(projectName || "project").replace(/\s+/g, "-")}.csv`;
+}
+
+/** Side-effect CSV download for Change Orders register. */
+export function downloadChangeOrdersCsv(
+  rows: Parameters<typeof buildChangeOrdersCsvString>[0],
+  projectName = "",
+  filename?: string,
+): void {
+  downloadTextFile(
+    buildChangeOrdersCsvString(rows),
+    filename || changeOrdersCsvFilename(projectName),
+    "text/csv;charset=utf-8",
+  );
 }
 

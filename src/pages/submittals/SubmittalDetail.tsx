@@ -28,6 +28,9 @@ import {
   filterRelatedSetRfis,
   isSplitEligibleStatus,
   isSubmittalDetailOverdue,
+  isResubmitStatus,
+  computeNextRoundNumber,
+  buildSubmittalFieldPatch,
   riskTierChipColor,
 } from "./submittalsPageHelpers";
 import { SubmittalTypeChips } from "./components";
@@ -208,9 +211,9 @@ export function SubmittalDetail({
     [submittal, allSubmittals],
   );
   const patch = (field: string, value: unknown) => {
-    if (!submittal || !onFieldChange) return;
-    if ((submittal[field] ?? "") === (value ?? "")) return;
-    onFieldChange({ [field]: value === "" ? null : value });
+    if (!onFieldChange) return;
+    const next = buildSubmittalFieldPatch(submittal as Record<string, unknown> | null, field, value);
+    if (next) onFieldChange(next);
   };
 
   if (!submittal) {
@@ -492,11 +495,8 @@ export function SubmittalDetail({
             onReturnRound={onReturnRound}
           />
           {onNewRound && (() => {
-            const isResubmit = ["Revise and Resubmit", "Rejected"].includes(submittal.status ?? "");
-            const lastRoundNum = rounds.length
-              ? (rounds[rounds.length - 1].round_number || rounds.length)
-              : (submittal.total_rounds || 0);
-            const nextRoundNum = (lastRoundNum || 0) + 1;
+            const isResubmit = isResubmitStatus(submittal.status);
+            const nextRoundNum = computeNextRoundNumber(rounds, submittal.total_rounds);
             return (
               <div style={{ marginTop: 8 }}>
                 <button

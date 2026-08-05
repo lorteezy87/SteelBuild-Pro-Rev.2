@@ -1,3 +1,4 @@
+import { exportToCSV } from "@/lib/csv";
 /**
  * Pure helpers for Procurement page shell (subset filter / enrich / filter-sort).
  * Behavior-preserving extract from Procurement.tsx — do not mix with
@@ -197,3 +198,28 @@ export const PROCUREMENT_CSV_HEADERS = [
   "Work Package",
   "Notes",
 ] as const;
+
+/** Default procurement CSV filename (project stamp). */
+export function procurementCsvFilename(
+  projectName?: string | null,
+  now: Date = new Date(),
+): string {
+  const stamp = now.toISOString().slice(0, 10);
+  const slug = (projectName || "project").replace(/\W+/g, "-");
+  return `procurement-${slug}-${stamp}.csv`;
+}
+
+/** Side-effect CSV download for Procurement items. */
+export function downloadProcurementCsv(
+  items: Array<Record<string, unknown>>,
+  wpById: Map<string, { wp_number?: string | null; name?: string | null }>,
+  projectName?: string | null,
+  filename?: string,
+): void {
+  exportToCSV({
+    filename: filename || procurementCsvFilename(projectName),
+    headers: [...PROCUREMENT_CSV_HEADERS],
+    rows: (items || []).map((i) => buildProcurementCsvRow(i as never, wpById)),
+  });
+}
+

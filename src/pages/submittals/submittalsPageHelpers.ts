@@ -194,3 +194,35 @@ export function isSubmittalSpinOffCreate(
 ): boolean {
   return Boolean(parentSubmittal) && !initial?.id;
 }
+
+/** True when status warrants a resubmittal-styled new-round CTA. */
+export function isResubmitStatus(status: string | null | undefined): boolean {
+  return status === "Revise and Resubmit" || status === "Rejected";
+}
+
+/** Next round number from rounds list or submittal total_rounds fallback. */
+export function computeNextRoundNumber(
+  rounds: Array<{ round_number?: number | null }> | null | undefined,
+  totalRoundsFallback?: number | null,
+): number {
+  const list = rounds || [];
+  const lastRoundNum = list.length
+    ? list[list.length - 1].round_number || list.length
+    : totalRoundsFallback || 0;
+  return (lastRoundNum || 0) + 1;
+}
+
+/**
+ * Build field patch for SubmittalDetail: empty string → null; skip no-ops.
+ * Returns null when nothing should write.
+ */
+export function buildSubmittalFieldPatch(
+  current: Record<string, unknown> | null | undefined,
+  field: string,
+  value: unknown,
+): Record<string, unknown> | null {
+  if (!current) return null;
+  if ((current[field] ?? "") === (value ?? "")) return null;
+  return { [field]: value === "" ? null : value };
+}
+

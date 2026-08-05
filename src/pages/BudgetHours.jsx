@@ -36,7 +36,6 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
 import BudgetHoursControlCenter from "./budgetHours/BudgetHoursControlCenter";
-import { downloadTextFile } from "@/lib/exports/fabRelease";
 import ScopeItemFormModal from "./budgetHours/ScopeItemFormModal";
 
 /* ─────────────────────────────────────────────
@@ -46,7 +45,7 @@ import {
   filterLiveBudgetRows,
   buildWpsById,
   filterCommandBudgetRows,
-  buildBudgetHoursCsvRows, buildBudgetHoursCsvString,
+  downloadBudgetHoursCsv,
 } from "./budgetHours/budgetHoursControlCenter.derive";
 import {
   PresetDialog,
@@ -258,10 +257,7 @@ export default function BudgetHours() {
       search,
     });
 
-    const handleExportCsv = () => {
-      const csv = buildBudgetHoursCsvString(buildBudgetHoursCsvRows(commandFiltered));
-      downloadTextFile(csv, "budget_hours.csv", "text/csv;charset=utf-8");
-    };
+    const handleExportCsv = () => downloadBudgetHoursCsv(commandFiltered);
 
     return (
       <>

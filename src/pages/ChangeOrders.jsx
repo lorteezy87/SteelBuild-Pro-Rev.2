@@ -48,10 +48,8 @@ import {
   filterChangeOrders,
   nextSelectedToggle,
   selectAllOrNone,
-  buildChangeOrdersCsvString,
-  changeOrdersCsvFilename,
+  downloadChangeOrdersCsv,
 } from "./changeOrders/changeOrdersPageHelpers";
-import { downloadTextFile } from "@/lib/exports/fabRelease";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 import { BulkActionBar } from "@/components/design-system";
@@ -375,14 +373,7 @@ export default function ChangeOrders() {
 
   const projectName = findById(projects, projectId)?.name || "";
 
-  const exportCsv = () => {
-    const csv = buildChangeOrdersCsvString(filtered);
-    downloadTextFile(
-      csv,
-      changeOrdersCsvFilename(projectName),
-      "text/csv;charset=utf-8",
-    );
-  };
+  const exportCsv = () => downloadChangeOrdersCsv(filtered, projectName);
 
   const modals = (
     <>

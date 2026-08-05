@@ -37,7 +37,6 @@ import type { RowWithAliases } from '@/api/supabaseClient';
 import { useProjectId } from '@/hooks/useProjectId';
 import { useAutoOpenCreate } from '@/hooks/useAutoOpenCreate';
 import { toUserErrorMessage, withProjectId } from '@/lib/mutations/standardMutation';
-import { exportToCSV } from '@/lib/csv';
 import { PROCUREMENT_CATEGORIES, ALL_STATUSES } from './procurement/format';
 import ProcurementControlCenter from './procurement/ProcurementControlCenter';
 import { ProcurementFormModal } from './procurement/components';
@@ -51,8 +50,7 @@ import {
   enrichProcurementItems,
   filterAndSortEnriched,
   buildWpById,
-  buildProcurementCsvRow,
-  PROCUREMENT_CSV_HEADERS,
+  downloadProcurementCsv,
 } from './procurement/procurementPageHelpers';
 
 
@@ -204,16 +202,8 @@ export default function Procurement() {
     setSearchParams(next, { replace: true });
   };
 
-  const handleExportCSV = () => {
-    const headers = [...PROCUREMENT_CSV_HEADERS];
-    const rows = filtered.map((i) => buildProcurementCsvRow(i, wpById));
-    const stamp = new Date().toISOString().slice(0, 10);
-    exportToCSV({
-      filename: `procurement-${selectedProject?.name?.replace(/\W+/g, '-') || 'project'}-${stamp}.csv`,
-      headers,
-      rows,
-    });
-  };
+  const handleExportCSV = () =>
+    downloadProcurementCsv(filtered, wpById, selectedProject?.name);
 
   if (!projectId) {
     return (

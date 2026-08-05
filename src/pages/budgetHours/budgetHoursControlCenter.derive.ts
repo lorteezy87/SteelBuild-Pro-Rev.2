@@ -8,6 +8,7 @@
  */
 
 import { filterLiveRecords } from "@/pages/shared/filterLiveRecords";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -411,5 +412,17 @@ export function buildBudgetHoursCsvString(
   return [[...BUDGET_HOURS_CSV_HEADERS], ...rows]
     .map((row) => row.map((c) => `"${c ?? ""}"`).join(","))
     .join("\n");
+}
+
+/** Side-effect CSV download for Budget Hours command table. */
+export function downloadBudgetHoursCsv(
+  rows: Parameters<typeof buildBudgetHoursCsvRows>[0],
+  filename = "budget_hours.csv",
+): void {
+  downloadTextFile(
+    buildBudgetHoursCsvString(buildBudgetHoursCsvRows(rows)),
+    filename,
+    "text/csv;charset=utf-8",
+  );
 }
 

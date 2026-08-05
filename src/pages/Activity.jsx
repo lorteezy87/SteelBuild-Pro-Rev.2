@@ -12,10 +12,9 @@ import {
   uniqueActivityEntities,
   filterActivities,
   activityHasActiveFilters,
-  buildActivityCsvRows, buildActivityCsvString, activityCsvFilename,
+  downloadActivityCsv,
   ACTIVITY_DATE_RANGES,
 } from "./activity/activityPageHelpers";
-import { downloadTextFile } from "@/lib/exports/fabRelease";
 
 
 export default function ActivityPage() {
@@ -77,10 +76,7 @@ export default function ActivityPage() {
     setDateRange("all");
   };
 
-  const handleExportCSV = () => {
-    const csv = buildActivityCsvString(buildActivityCsvRows(filtered));
-    downloadTextFile(csv, activityCsvFilename(), "text/csv;charset=utf-8");
-  };
+  const handleExportCSV = () => downloadActivityCsv(filtered);
 
   const selectTriggerClass = "bg-transparent text-slate-50 px-3 py-2 text-sm rounded-md flex h-9 w-full items-center justify-between whitespace-nowrap border border-input shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1";
 

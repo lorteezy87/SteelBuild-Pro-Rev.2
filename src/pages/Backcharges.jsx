@@ -12,7 +12,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { downloadTextFile } from "@/lib/exports/fabRelease";
 import {
   addTmTicket,
   createBackcharge,
@@ -23,17 +22,17 @@ import {
   softDeleteTmTicket,
   updateBackcharge,
 } from "@/lib/backcharge/repository";
-import {
-  buildBackchargeRegisterCsv,
-  buildDefenseManifestCsv,
-  suggestDefenseFilename,
-} from "@/lib/backcharge/defensePackage";
+import { suggestDefenseFilename } from "@/lib/backcharge/defensePackage";
 import { buildDefensePdf } from "@/lib/backcharge/defensePdf";
 import { entities } from "@/api/supabaseClient";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import BackchargeControlCenter from "./backcharges/BackchargeControlCenter";
 import { filterBackcharges } from "./backcharges/backchargeControlCenter.derive";
-import { buildIdMap } from "./backcharges/backchargesPageHelpers";
+import {
+  buildIdMap,
+  downloadBackchargeRegisterCsv,
+  downloadDefenseManifestCsv,
+} from "./backcharges/backchargesPageHelpers";
 import {
   BackchargeFormModal,
   BackchargeDetailPanel,
@@ -122,14 +121,14 @@ export default function Backcharges() {
       const [tks, evs] = await Promise.all([listTmTickets(bc.id), listEvents(bc.id)]);
       const stem = suggestDefenseFilename(bc, activeProject);
       buildDefensePdf({ backcharge: bc, tickets: tks, events: evs, project: activeProject }).save(`${stem}.pdf`);
-      downloadTextFile(buildDefenseManifestCsv(bc, tks, evs), `${stem}_manifest.csv`, "text/csv;charset=utf-8");
+      downloadDefenseManifestCsv(bc, tks, evs, `${stem}_manifest.csv`);
       toast.success("Defense package exported (PDF + CSV)");
     } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };
 
   if (!projectId) return <div style={{ ...mono, padding: 24, color: "var(--text-muted)" }}>Select a project to manage backcharges.</div>;
   const filtered = filterBackcharges(backcharges, ccSearch, ccStatusFilter);
-  const handleExport = () => downloadTextFile(buildBackchargeRegisterCsv(backcharges), "backcharge_register.csv", "text/csv;charset=utf-8");
+  const handleExport = () => downloadBackchargeRegisterCsv(backcharges);
 
   if (isLoading) {
     return <div style={{ padding: 24 }}><LoadingSkeleton variant="page" /></div>;

@@ -21,6 +21,7 @@
  */
 
 import type { RiskItem, RiskSignal } from "@/services/marginRiskEngine";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 
 export type { RiskItem, RiskSignal };
 
@@ -313,5 +314,17 @@ export function buildRiskCsvString(
   return rows
     .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
     .join("\n");
+}
+
+/** Side-effect CSV download for Risk Hub filtered risks. */
+export function downloadRiskCsv(
+  risks: Parameters<typeof buildRiskCsvRows>[0],
+  filename = "risk-export.csv",
+): void {
+  downloadTextFile(
+    buildRiskCsvString(buildRiskCsvRows(risks)),
+    filename,
+    "text/csv;charset=utf-8",
+  );
 }
 

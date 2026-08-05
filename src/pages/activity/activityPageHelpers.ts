@@ -1,3 +1,4 @@
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 /** Pure helpers for Activity page shell. */
 
 export type ActivityLike = {
@@ -117,3 +118,16 @@ export const ACTIVITY_DATE_RANGES = [
   { value: "30d", label: "Last 30 Days" },
   { value: "90d", label: "Last 90 Days" },
 ] as const;
+
+/** Side-effect CSV download for Activity feed export. */
+export function downloadActivityCsv(
+  activities: ActivityLike[],
+  filename?: string,
+): void {
+  downloadTextFile(
+    buildActivityCsvString(buildActivityCsvRows(activities)),
+    filename || activityCsvFilename(),
+    "text/csv;charset=utf-8",
+  );
+}
+

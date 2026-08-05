@@ -17,9 +17,8 @@ import {
   buildFlatRisks,
   filterFlatRisks,
   formatRiskExposureMoney,
-  buildRiskCsvRows, buildRiskCsvString,
+  downloadRiskCsv,
 } from "./riskHub/riskControlCenter.derive";
-import { downloadTextFile } from "@/lib/exports/fabRelease";
 import RiskControlCenter from "./riskHub/RiskControlCenter";
 
 export default function RiskHub() {
@@ -75,8 +74,7 @@ export default function RiskHub() {
   );
 
   const handleExport = () => {
-    const csv = buildRiskCsvString(buildRiskCsvRows(filtered));
-    downloadTextFile(csv, "risk-export.csv", "text/csv;charset=utf-8");
+    downloadRiskCsv(filtered);
   };
 
   if (!projectId) {

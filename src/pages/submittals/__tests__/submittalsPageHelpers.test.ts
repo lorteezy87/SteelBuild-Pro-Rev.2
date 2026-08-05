@@ -101,3 +101,23 @@ describe("submittal form pure helpers", () => {
     expect(isSubmittalSpinOffCreate({ id: "p" }, { id: "c" })).toBe(false);
   });
 });
+
+import {
+  isResubmitStatus,
+  computeNextRoundNumber,
+  buildSubmittalFieldPatch,
+} from "../submittalsPageHelpers";
+
+describe("submittal detail pure helpers", () => {
+  it("resubmit status and next round", () => {
+    expect(isResubmitStatus("Rejected")).toBe(true);
+    expect(isResubmitStatus("Approved")).toBe(false);
+    expect(computeNextRoundNumber([{ round_number: 2 }], 1)).toBe(3);
+    expect(computeNextRoundNumber([], 4)).toBe(5);
+  });
+  it("field patch empty→null and no-op", () => {
+    expect(buildSubmittalFieldPatch({ title: "A" }, "title", "A")).toBeNull();
+    expect(buildSubmittalFieldPatch({ title: "A" }, "title", "")).toEqual({ title: null });
+    expect(buildSubmittalFieldPatch({ title: "A" }, "title", "B")).toEqual({ title: "B" });
+  });
+});
