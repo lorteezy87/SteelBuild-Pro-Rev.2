@@ -16,6 +16,13 @@ import ReportShell from "./ReportShell";
 import { FilterBar, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
 import { mono, body, CARD, PROJECT_HEALTH_COLORS } from "./constants";
+import {
+  buildPpmProjectBands,
+  ppmDateRange,
+  ppmXFor,
+  quartersBetween,
+  truncateProjectName,
+} from "./ppmRoadmapHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 const ROW_HEIGHT = 32;
@@ -23,16 +30,6 @@ const HEADER_HEIGHT = 36;
 const LEFT_GUTTER = 220;
 const RIGHT_GUTTER = 16;
 const BAR_HEIGHT = 18;
-
-function quartersBetween(start, end) {
-  const out = [];
-  const d = new Date(start.getFullYear(), Math.floor(start.getMonth() / 3) * 3, 1);
-  while (d <= end) {
-    out.push(new Date(d));
-    d.setMonth(d.getMonth() + 3);
-  }
-  return out;
-}
 
 export default function PPMRoadmap() {
   const navigate = useNavigate();
@@ -43,25 +40,15 @@ export default function PPMRoadmap() {
     queryFn: () => entities.Project.list(),
   });
 
-  const validProjects = useMemo(() => {
-    return projects
-      .filter((p) => p.start_date && p.target_completion_date)
-      .filter((p) => phaseFilter === "all" || p.phase === phaseFilter)
-      .map((p) => ({
-        ...p,
-        startTs: new Date(p.start_date).getTime(),
-        endTs: new Date(p.target_completion_date).getTime(),
-      }))
-      .sort((a, b) => a.startTs - b.startTs);
-  }, [projects, phaseFilter]);
+  const validProjects = useMemo(
+    () => buildPpmProjectBands(projects, phaseFilter),
+    [projects, phaseFilter],
+  );
 
-  const { rangeStart, rangeEnd } = useMemo(() => {
-    if (validProjects.length === 0) return { rangeStart: null, rangeEnd: null };
-    return {
-      rangeStart: new Date(Math.min(...validProjects.map((p) => p.startTs))),
-      rangeEnd: new Date(Math.max(...validProjects.map((p) => p.endTs))),
-    };
-  }, [validProjects]);
+  const { rangeStart, rangeEnd } = useMemo(
+    () => ppmDateRange(validProjects),
+    [validProjects],
+  );
 
   const quarters = useMemo(() => {
     if (!rangeStart || !rangeEnd) return [];
@@ -71,10 +58,14 @@ export default function PPMRoadmap() {
   const chartW = Math.max(900, quarters.length * 90 + LEFT_GUTTER + RIGHT_GUTTER);
   const innerW = chartW - LEFT_GUTTER - RIGHT_GUTTER;
   const totalMs = rangeStart && rangeEnd ? rangeEnd - rangeStart : 0;
-  const xFor = (ts) => {
-    if (!totalMs) return LEFT_GUTTER;
-    return LEFT_GUTTER + ((ts - rangeStart.getTime()) / totalMs) * innerW;
-  };
+  const xFor = (ts) =>
+    ppmXFor({
+      ts,
+      rangeStart,
+      totalMs,
+      leftGutter: LEFT_GUTTER,
+      innerW,
+    });
 
   const totalH = HEADER_HEIGHT + validProjects.length * ROW_HEIGHT + 12;
 
@@ -138,7 +129,7 @@ export default function PPMRoadmap() {
                     {p.project_number || ""}
                   </text>
                   <text x={12} y={rowY + ROW_HEIGHT / 2 + 9} style={{ ...body, fontSize: 11, fill: "var(--text-secondary)" }}>
-                    {(p.name || "").length > 24 ? (p.name || "").slice(0, 24) + "…" : (p.name || "—")}
+                    {truncateProjectName(p.name)}
                   </text>
                   <rect
                     x={x1}

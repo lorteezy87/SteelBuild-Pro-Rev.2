@@ -24,6 +24,7 @@ import {
   SEVERITIES,
 } from "./risks/severity";
 import RiskFormModal from "@/components/risks/RiskFormModal";
+import { scopeRisksByProject } from "./risksDashboardHelpers";
 
 export default function RiskStatus() {
   const [projectFilter, setProjectFilter] = useState("all");
@@ -39,10 +40,10 @@ export default function RiskStatus() {
     queryFn: () => entities.Project.list(),
   });
 
-  const scoped = useMemo(() => {
-    if (projectFilter === "all") return risks;
-    return risks.filter((r) => r.project_id === projectFilter);
-  }, [risks, projectFilter]);
+  const scoped = useMemo(
+    () => scopeRisksByProject(risks, projectFilter),
+    [risks, projectFilter],
+  );
 
   const grid = useMemo(() => bucketByMatrix(scoped), [scoped]);
 

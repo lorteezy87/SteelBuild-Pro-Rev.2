@@ -1,6 +1,13 @@
 import React from "react";
 import { StatusPill, BicPill, Icon } from "@/components/design-system";
 import { daysOpen, isOverdue, rfiStatusShortLabel, rfiDueSummary, rfiImpactSummary } from "./utils";
+import {
+  rfiAssignedLine,
+  rfiPriorityColor,
+  rfiReferenceLine,
+  rfiRowClassNames,
+  rfiSubmittedLine,
+} from "./rfiRowHelpers";
 
 export const RFI_ROW_GRID = "46px 108px minmax(360px, 1.45fr) minmax(156px, 0.58fr) minmax(142px, 0.5fr) minmax(148px, 0.5fr) minmax(148px, 0.5fr) 44px";
 
@@ -8,23 +15,14 @@ export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
   const overdue = isOverdue(rfi);
   const due = rfiDueSummary(rfi);
   const impact = rfiImpactSummary(rfi);
-  const reference = [rfi.discipline, rfi.drawing_reference, rfi.spec_section].filter(Boolean).join(" / ");
-  const submitted = [rfi.submitted_by, rfi.submitted_date].filter(Boolean).join(" / ");
-  const assigned = rfi.assigned_to || rfi.project_name || "";
-  const priorityColor =
-    rfi.priority === "Critical" ? "var(--status-review)" :
-    rfi.priority === "High" ? "var(--status-warning)" :
-    rfi.priority === "Medium" ? "var(--status-info)" :
-    "var(--text-muted)";
+  const reference = rfiReferenceLine(rfi);
+  const submitted = rfiSubmittedLine(rfi);
+  const assigned = rfiAssignedLine(rfi);
+  const priorityColor = rfiPriorityColor(rfi.priority);
 
   return (
     <div
-      className={[
-        "rfi-record-row",
-        selected ? "is-selected" : "",
-        overdue ? "is-overdue" : "",
-        rfi.priority === "Critical" ? "is-critical" : "",
-      ].filter(Boolean).join(" ")}
+      className={rfiRowClassNames({ selected, overdue, priority: rfi.priority })}
       onClick={onOpen}
     >
       <div className="rfi-row-check" onClick={(e) => e.stopPropagation()}>
