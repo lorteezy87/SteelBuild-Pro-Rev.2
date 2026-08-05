@@ -227,3 +227,58 @@ export function costStatusTone(row: {
   if ((row.used_pct ?? 0) > 85) return "warn";
   return "good";
 }
+
+export const COST_CONTROL_CSV_HEADERS = [
+  "Code",
+  "Description",
+  "Phase",
+  "Budget",
+  "Actual",
+  "Committed",
+  "Forecast",
+  "EAC",
+  "Variance",
+  "% Used",
+  "Status",
+] as const;
+
+export type CostControlCsvRow = {
+  cost_code_number?: string | null;
+  description?: string | null;
+  phase?: string | null;
+  revised_budget?: number | null;
+  actual_cost?: number | null;
+  committed_cost?: number | null;
+  forecast_to_complete?: number | string | null;
+  used_pct?: number | null;
+  is_over?: boolean | null;
+  [key: string]: unknown;
+};
+
+export function buildCostControlCsvRows(rows: CostControlCsvRow[]): Array<Array<string | number>> {
+  return (rows || []).map((r) => {
+    const v = Number(r.committed_cost || 0) - Number(r.revised_budget || 0);
+    const eac = Number(r.actual_cost || 0) + Number(r.forecast_to_complete ?? 0);
+    const used = Number(r.used_pct || 0);
+    return [
+      r.cost_code_number ?? "",
+      r.description ?? "",
+      r.phase ?? "",
+      r.revised_budget ?? "",
+      r.actual_cost ?? "",
+      r.committed_cost ?? "",
+      r.forecast_to_complete ?? 0,
+      eac,
+      v,
+      `${used.toFixed(1)}%`,
+      r.is_over ? "Over Budget" : used > 85 ? "Watch" : "On Track",
+    ];
+  });
+}
+
+export function buildCostControlCsvString(rows: CostControlCsvRow[]): string {
+  return [COST_CONTROL_CSV_HEADERS as unknown as Array<string | number>, ...buildCostControlCsvRows(rows)]
+    .map((row) => row.map((c) => `"${c ?? ""}"`).join(","))
+    .join("\n");
+}
+

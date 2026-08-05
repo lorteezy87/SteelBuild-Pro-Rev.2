@@ -16,14 +16,12 @@ vi.mock("@/components/shared/costCodes", () => ({
   CATEGORY_COLORS: { Labor: "#3B82F6", Materials: "#F59E0B", Subcontractor: "#10B981" },
 }));
 
-import {
-  buildBarChartData,
+import {buildBarChartData,
   buildCumulativeData,
   buildCategoryPieData,
   buildVarianceAlerts,
   buildCoAging,
-  costStatusTone,
-} from "../costControlCenter.derive";
+  costStatusTone, buildCostControlCsvString, buildCostControlCsvRows} from "../costControlCenter.derive";
 
 // ─── Shared fixtures ────────────────────────────────────────────────────────
 
@@ -241,5 +239,28 @@ describe("costStatusTone", () => {
 
   it("returns good when fields are undefined", () => {
     expect(costStatusTone({})).toBe("good");
+  });
+});
+
+describe("buildCostControlCsvString", () => {
+  it("marks over-budget and watch statuses", () => {
+    const rows = buildCostControlCsvRows([
+      {
+        cost_code_number: "01",
+        description: "Steel",
+        phase: "Fab",
+        revised_budget: 100,
+        actual_cost: 50,
+        committed_cost: 120,
+        forecast_to_complete: 10,
+        used_pct: 90,
+        is_over: true,
+      },
+    ]);
+    expect(rows[0][10]).toBe("Over Budget");
+    expect(rows[0][7]).toBe(60); // eac
+    expect(buildCostControlCsvString([
+      { cost_code_number: "01", used_pct: 50, is_over: false, revised_budget: 1, actual_cost: 0, committed_cost: 0 },
+    ])).toContain("On Track");
   });
 });

@@ -43,7 +43,9 @@ import {
   buildVarianceAlerts,
   buildCoAging,
   costStatusTone,
+  buildCostControlCsvString,
 } from "./costControlCenter.derive";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 import CostChartRow from "./CostChartRow";
 import { persistCostCode } from "./costCodeSave";
 
@@ -253,26 +255,11 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
 
   // ── CSV export ──
   const handleExport = () => {
-    const headers = ["Code", "Description", "Phase", "Budget", "Actual", "Committed", "Forecast", "EAC", "Variance", "% Used", "Status"];
-    const rows = filteredRows.map((r) => {
-      const v = r.committed_cost - r.revised_budget;
-      const eac = r.actual_cost + Number((r as Record<string, unknown>).forecast_to_complete ?? 0);
-      return [
-        r.cost_code_number, r.description, r.phase,
-        r.revised_budget, r.actual_cost, r.committed_cost,
-        (r as Record<string, unknown>).forecast_to_complete ?? 0,
-        eac, v, `${r.used_pct.toFixed(1)}%`,
-        r.is_over ? "Over Budget" : r.used_pct > 85 ? "Watch" : "On Track",
-      ];
-    });
-    const csv = [headers, ...rows].map((row) => row.map((c) => `"${c ?? ""}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "cost_control_center.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadTextFile(
+      buildCostControlCsvString(filteredRows),
+      "cost_control_center.csv",
+      "text/csv;charset=utf-8",
+    );
   };
 
   // ── Row click → edit ──
