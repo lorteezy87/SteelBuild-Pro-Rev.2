@@ -28,3 +28,27 @@ export function isWorkPackageFabComplete(wp: {
   if (rank === 1 && wp.status === "Complete") return true;
   return false;
 }
+
+export const DELIVERY_LABEL_STYLE: Record<string, string | number> = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 8,
+  fontWeight: 700,
+  color: "var(--text-muted)",
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  display: "block",
+  marginBottom: 4,
+};
+
+export const DELIVERY_INPUT_STYLE: Record<string, string | number> = {
+  width: "100%",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
+  borderRadius: "var(--radius-input)",
+  padding: "10px 12px",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  outline: "none",
+  boxSizing: "border-box",
+};

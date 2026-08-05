@@ -30,3 +30,27 @@ export const PRIORITY_OPTIONS = [
     border: "rgba(239,68,68,0.3)",
   },
 ] as const;
+
+export const ACTION_ITEM_INPUT_STYLE: Record<string, string | number> = {
+  width: "100%",
+  background: "var(--bg-surface-high)",
+  border: "1px solid var(--border-strong)",
+  borderRadius: 8,
+  padding: "8px 12px",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  outline: "none",
+  boxSizing: "border-box",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+};
+
+export const ACTION_ITEM_LABEL_STYLE: Record<string, string | number> = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  color: "var(--text-muted)",
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  display: "block",
+  marginBottom: 4,
+};

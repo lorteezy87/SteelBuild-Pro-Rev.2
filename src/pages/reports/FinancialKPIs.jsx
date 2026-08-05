@@ -14,7 +14,8 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import {
+  useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
@@ -23,20 +24,34 @@ import {
   calcEVM,
   calcWpProgress,
   calcLaborBurn,
-} from "@/utils/projectKpis";
+  } from "@/utils/projectKpis";
 import ReportShell from "./ReportShell";
-import { FilterBar, SearchInput } from "./ReportFilters";
-import { mono, body, CARD, CARD_TITLE, LABEL, HEALTH_COLORS } from "./constants";
+import { FilterBar,
+  SearchInput } from "./ReportFilters";
+import { mono,
+  body,
+  CARD,
+  CARD_TITLE,
+  LABEL,
+  HEALTH_COLORS } from "./constants";
 import {
   formatCurrency,
   formatCurrencyFull,
   formatPercent,
   exportTableCSV,
-} from "./utils";
+  } from "./utils";
 import {
-  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
-  ResponsiveContainer, Cell, BarChart, Bar,
-} from "recharts";
+  ScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RTooltip,
+  ResponsiveContainer,
+  Cell,
+  BarChart,
+  Bar,
+  } from "recharts";
 import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
 import {
   trafficLight,
@@ -49,6 +64,8 @@ import {
   buildCashFlowChartData,
   buildMarginChartData,
   buildArAgingBuckets,
+  kpiScatterColors,
+  kpiBarColors,
 } from "./financialKpisHelpers";
 
 /* ─── Presentational helpers ──────────────────────────────────────── */
@@ -185,18 +202,8 @@ export default function FinancialKPIs() {
   /* ── AR Aging ── */
   const arAging = useMemo(() => buildArAgingBuckets(sovItems), [sovItems]);
 
-  const SCATTER_COLORS = {
-    good: chartTheme.colors.success,
-    watch: chartTheme.colors.warning,
-    risk: chartTheme.colors.error,
-    neutral: chartTheme.text.muted,
-  };
-
-  const BAR_COLORS = {
-    good: chartTheme.colors.success,
-    watch: chartTheme.colors.warning,
-    risk: chartTheme.colors.error,
-  };
+  const SCATTER_COLORS = kpiScatterColors(chartTheme);
+  const BAR_COLORS = kpiBarColors(chartTheme);
 
   return (
     <ReportShell

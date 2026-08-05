@@ -6,7 +6,11 @@ import { useFormValidation } from "@/hooks/useFormValidation";
 import { Button, Modal } from "@/components/design-system";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-import { PRIORITY_OPTIONS } from "./actionItemFormModalHelpers";
+import {
+  PRIORITY_OPTIONS,
+  ACTION_ITEM_INPUT_STYLE,
+  ACTION_ITEM_LABEL_STYLE,
+} from "./actionItemFormModalHelpers";
 
 const tomorrow = () => {
   const d = new Date();
@@ -98,17 +102,8 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
 
   const field = (key, value) => setFormData(prev => ({ ...prev, [key]: value }));
 
-  const inputStyle = {
-    width: "100%", background: "var(--bg-surface-high)", border: "1px solid var(--border-strong)",
-    borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)",
-    fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-  };
-
-  const labelStyle = {
-    fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-    letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: 4,
-  };
+  const inputStyle = ACTION_ITEM_INPUT_STYLE;
+  const labelStyle = ACTION_ITEM_LABEL_STYLE;
 
   return (
     <Modal

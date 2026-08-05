@@ -9,6 +9,8 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import {
   DELIVERY_FORM_STATUSES,
   isWorkPackageFabComplete,
+  DELIVERY_LABEL_STYLE,
+  DELIVERY_INPUT_STYLE,
 } from "./deliveryFormModalHelpers";
 
 export default function DeliveryFormModal({ projectId, onClose, delivery = null }) {
@@ -151,29 +153,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     });
   };
 
-  const labelStyle = {
-    fontFamily: "var(--font-mono)",
-    fontSize: 8,
-    fontWeight: 700,
-    color: "var(--text-muted)",
-    letterSpacing: "0.10em",
-    textTransform: "uppercase",
-    display: "block",
-    marginBottom: 4,
-  };
-
-  const inputStyle = {
-    width: "100%",
-    background: "var(--bg-input)",
-    border: "1px solid var(--border-default)",
-    borderRadius: "var(--radius-input)",
-    padding: "10px 12px",
-    color: "var(--text-primary)",
-    fontFamily: "var(--font-body)",
-    fontSize: 12,
-    outline: "none",
-    boxSizing: "border-box",
-  };
+  const labelStyle = DELIVERY_LABEL_STYLE;
+  const inputStyle = DELIVERY_INPUT_STYLE;
 
   const riskScheduling =
     formData.required_date &&

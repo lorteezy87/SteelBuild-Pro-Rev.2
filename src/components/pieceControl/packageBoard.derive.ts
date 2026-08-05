@@ -3,6 +3,7 @@ import {
   type LeafSelectablePiece,
 } from "@/lib/pieceControl/canonicalRollups";
 import { pieceTons } from "@/lib/pieceControl/tonnage";
+import { PIECE_LIFECYCLE_LABELS } from "@/lib/pieceControl/lifecycle";
 
 export const UNASSIGNED_COLUMN_ID = "unassigned";
 
@@ -157,3 +158,5 @@ export function buildPackageBoardColumns(input: BuildPackageBoardInput): BoardCo
 
   return columns;
 }
+
+export const LIFECYCLE_OPTIONS = Object.entries(PIECE_LIFECYCLE_LABELS);

@@ -7,7 +7,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import "@/styles/piece-control-command.css";
-import { PIECE_LIFECYCLE_LABELS } from "@/lib/pieceControl/lifecycle";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import {
   assignPiecesToWorkPackage,
@@ -17,6 +16,7 @@ import {
 import {
   UNASSIGNED_COLUMN_ID,
   buildPackageBoardColumns,
+  LIFECYCLE_OPTIONS,
   type BoardPiece,
   type BoardWorkPackage,
 } from "./packageBoard.derive";
@@ -29,7 +29,6 @@ interface PackageBoardProps {
   pieceControlMode?: string;
 }
 
-const LIFECYCLE_OPTIONS = Object.entries(PIECE_LIFECYCLE_LABELS);
 
 export default function PackageBoard({
   projectId,

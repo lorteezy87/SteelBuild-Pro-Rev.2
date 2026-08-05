@@ -4,7 +4,7 @@
 // (migration 077): OFS, IFC, Released. Submittal-shape labels
 // "Approved" / "Approved as Noted" kept for any legacy data flowing
 // through here.
-const APPROVED_STAGES = [
+export const APPROVED_STAGES = [
   'Released',
   'IFC',
   'Issued for Construction',

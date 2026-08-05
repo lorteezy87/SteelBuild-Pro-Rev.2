@@ -465,3 +465,22 @@ export function buildArAgingBuckets(
   return Object.entries(buckets).map(([name, value]) => ({ name, value }));
 }
 
+export function kpiScatterColors(chartTheme: {
+  colors: Record<string, string>;
+  text: Record<string, string>;
+}) {
+  return {
+    good: chartTheme.colors.success,
+    watch: chartTheme.colors.warning,
+    risk: chartTheme.colors.error,
+    neutral: chartTheme.text.muted,
+  };
+}
+
+export function kpiBarColors(chartTheme: { colors: Record<string, string> }) {
+  return {
+    good: chartTheme.colors.success,
+    watch: chartTheme.colors.warning,
+    risk: chartTheme.colors.error,
+  };
+}
