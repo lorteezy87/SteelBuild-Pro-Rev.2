@@ -1,0 +1,33 @@
+import { describe, expect, it } from "vitest";
+import {
+  getDateCutoff,
+  filterLiveDailyLogs,
+  filterDailyLogs,
+  computeDailyLogMetrics,
+} from "../dailyLogsPageHelpers";
+
+describe("dailyLogsPageHelpers", () => {
+  it("date cutoffs for presets", () => {
+    const now = new Date("2026-06-15T12:00:00Z"); // Monday
+    expect(getDateCutoff("all", now)).toBeNull();
+    expect(getDateCutoff("month", now)).toBe("2026-06-01");
+    expect(getDateCutoff("week", now)).toBe("2026-06-15");
+  });
+
+  it("filters live, date range, search, and metrics", () => {
+    expect(filterLiveDailyLogs([{ id: "1" }, { id: "2", is_deleted: true }])).toHaveLength(1);
+    const logs = [
+      { date: "2026-06-16", activities: "Bolt up", crew_name: "A", hours_worked: 8, headcount: 2, safety_incidents: 0, delay_hours: 1 },
+      { date: "2026-06-10", activities: "Weld", superintendent: "Sam", hours_worked: 10, headcount: 1, safety_incidents: 1, delay_hours: 0 },
+    ];
+    // week of Mon 2026-06-15 → cutoff 2026-06-15 (UTC)
+    const week = filterDailyLogs(logs, { dateRange: "week", searchTerm: "", now: new Date("2026-06-15T12:00:00Z") });
+    expect(week.map((l) => l.date)).toEqual(["2026-06-16"]);
+    const search = filterDailyLogs(logs, { dateRange: "all", searchTerm: "sam" });
+    expect(search).toHaveLength(1);
+    const m = computeDailyLogMetrics(logs as any);
+    expect(m.totalManHours).toBe(8 * 2 + 10 * 1);
+    expect(m.safetyIncidents).toBe(1);
+    expect(m.delayHours).toBe(1);
+  });
+});

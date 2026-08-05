@@ -24,27 +24,12 @@ import {
 } from "@/components/shared/crudFeedback";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
-import { localToday } from "@/utils/dates";
 
-function getDateCutoff(preset) {
-  const now = new Date();
-  if (preset === "today") {
-    return localToday();
-  }
-  if (preset === "week") {
-    const day = now.getDay();
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(now.getFullYear(), now.getMonth(), diff)
-      .toISOString()
-      .slice(0, 10);
-  }
-  if (preset === "month") {
-    return new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString()
-      .slice(0, 10);
-  }
-  return null;
-}
+import {
+  filterLiveDailyLogs,
+  filterDailyLogs,
+  computeDailyLogMetrics,
+} from "./dailyLogs/dailyLogsPageHelpers";
 
 export default function DailyLogs() {
   const projectId = useProjectId();
@@ -85,7 +70,7 @@ export default function DailyLogs() {
   // Defensive in-memory soft-delete filter — the entity client does this
   // at fetch time, but a stale cache from before the migration could still
   // surface deleted rows. Mirrors the BudgetHours / Procurement pattern.
-  const logs = useMemo(() => rawLogs.filter((r) => !r.is_deleted), [rawLogs]);
+  const logs = useMemo(() => filterLiveDailyLogs(rawLogs), [rawLogs]);
 
   // Field Hub rows deep-link here with ?id=<log>; open it for edit.
   useAutoOpenEdit(
@@ -100,55 +85,16 @@ export default function DailyLogs() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const filteredLogs = useMemo(() => {
-    let result = logs;
-
-    // Date range filter
-    const cutoff = getDateCutoff(dateRange);
-    if (cutoff) {
-      result = result.filter((log) => log.date >= cutoff);
-    }
-
-    // Search filter
-    if (searchTerm.trim()) {
-      const term = searchTerm.trim().toLowerCase();
-      result = result.filter((log) => {
-        const fields = [
-          log.activities,
-          log.delays,
-          log.crew_name,
-          log.superintendent,
-        ];
-        return fields.some(
-          (f) => typeof f === "string" && f.toLowerCase().includes(term)
-        );
-      });
-    }
-
-    return result;
-  }, [logs, searchTerm, dateRange]);
+  const filteredLogs = useMemo(
+    () => filterDailyLogs(logs, { dateRange, searchTerm }),
+    [logs, searchTerm, dateRange],
+  );
 
   // Key metrics computed from filtered logs
-  const metrics = useMemo(() => {
-    const totalManHours = filteredLogs.reduce(
-      (sum, log) => sum + (log.hours_worked || 0) * (log.headcount || 0),
-      0
-    );
-    const avgCrewSize =
-      filteredLogs.length > 0
-        ? filteredLogs.reduce((sum, log) => sum + (log.headcount || 0), 0) /
-          filteredLogs.length
-        : 0;
-    const safetyIncidents = filteredLogs.reduce(
-      (sum, log) => sum + (log.safety_incidents || 0),
-      0
-    );
-    const delayHours = filteredLogs.reduce(
-      (sum, log) => sum + (log.delay_hours || 0),
-      0
-    );
-    return { totalManHours, avgCrewSize, safetyIncidents, delayHours };
-  }, [filteredLogs]);
+  const metrics = useMemo(
+    () => computeDailyLogMetrics(filteredLogs),
+    [filteredLogs],
+  );
 
   const createMut = useMutation({
     mutationFn: (data) => entities.DailyLog.create(withProjectId(data, projectId)),

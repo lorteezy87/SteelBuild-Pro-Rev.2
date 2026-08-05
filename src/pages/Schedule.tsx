@@ -2,7 +2,6 @@ import { useRef, useMemo, useState, useEffect } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { PHASES } from "@/utils/phases";
 import { batchProcess } from "@/utils/batchProcess";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
@@ -12,7 +11,7 @@ import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import { computePhaseWbs } from "./schedule/wbs";
 import { computeBulkParentOptions } from "./schedule/scheduleTaskHelpers";
-import { normalizeSchedulePhase } from "./schedule/schedulePageHelpers";
+import { normalizeSchedulePhase, computePhaseCounts, selectLinkedSubmittalDocs } from "./schedule/schedulePageHelpers";
 import type { ScheduleTask } from "./schedule/types";
 import ScheduleCommandCenter from "./schedule/ScheduleCommandCenter";
 import ScheduleBody from "./schedule/ScheduleBody";
@@ -99,7 +98,7 @@ export default function Schedule() {
     queryKey: ["documents", projectId],
     queryFn: () => projectId ? entities.Document.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
-    select: (docs: any[]) => docs.filter((d) => d.is_submittal && d.linked_wp_id),
+    select: (docs: any[]) => selectLinkedSubmittalDocs(docs),
   });
 
   // Deliveries no longer auto-populate the Gantt — the Delivery-phase
@@ -241,13 +240,10 @@ export default function Schedule() {
   );
 
   // Phase counts for KPI row
-  const phaseCounts = useMemo(() => {
-    const m: Record<string, number> = { all: scheduleTasks.length };
-    PHASES.forEach((p) => {
-      m[p] = scheduleTasks.filter((t) => t.phase === p).length;
-    });
-    return m;
-  }, [scheduleTasks]);
+  const phaseCounts = useMemo(
+    () => computePhaseCounts(scheduleTasks),
+    [scheduleTasks],
+  );
 
   // Shared props for the canonical operational body. Schedule.tsx remains the
   // logic boundary while ScheduleBody owns the Gantt, lookahead, and task-list

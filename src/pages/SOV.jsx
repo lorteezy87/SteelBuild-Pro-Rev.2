@@ -26,6 +26,11 @@ import {
   calcSovLine,
   SOV_CSV_HEADERS,
 } from "./sov/format";
+import {
+  resolveEffectiveRetainage,
+  filterSovLines,
+  filterSovLinesForControlCenter,
+} from "./sov/sovPageHelpers";
 
 export default function SOV() {
   const qc = useQueryClient();
@@ -236,53 +241,25 @@ export default function SOV() {
     }
   };
 
-  const effectiveRetainage = useMemo(() => {
-    if (globalRetainage === "per-row") return null;
-    if (globalRetainage === "custom") return Number(customRetainage) || 0;
-    return Number(globalRetainage);
-  }, [globalRetainage, customRetainage]);
+  const effectiveRetainage = useMemo(
+    () => resolveEffectiveRetainage(globalRetainage, customRetainage),
+    [globalRetainage, customRetainage],
+  );
 
   const calc = useCallback(
     (s) => calcSovLine(s, effectiveRetainage),
     [effectiveRetainage],
   );
 
-  const filtered = useMemo(() => sovs
-    .filter(s => {
-      const matchApp = appFilter === "all" || String(s.application_number) === String(appFilter);
-      const matchStatus = statusFilter === "all" || s.status === statusFilter;
-      return matchApp && matchStatus;
-    })
-    .sort((a, b) => {
-      const aNum = Number(a.line_item_number);
-      const bNum = Number(b.line_item_number);
-      if (Number.isFinite(aNum) && Number.isFinite(bNum) && aNum !== bNum) return aNum - bNum;
-      return String(a.sov_id || "").localeCompare(String(b.sov_id || ""), undefined, { numeric: true });
-    }),
-  [sovs, appFilter, statusFilter]);
+  const filtered = useMemo(
+    () => filterSovLines(sovs, { appFilter, statusFilter }),
+    [sovs, appFilter, statusFilter],
+  );
 
-  const ccFiltered = useMemo(() => {
-    const q = ccSearch.trim().toLowerCase();
-    return sovs
-      .filter(s => {
-        const matchStatus = statusFilter === "all" || statusFilter === "All" || s.status === statusFilter;
-        if (!matchStatus) return false;
-        if (!q) return true;
-        return (
-          String(s.line_item_number || "").toLowerCase().includes(q) ||
-          (s.sov_id || "").toLowerCase().includes(q) ||
-          (s.description || "").toLowerCase().includes(q) ||
-          (s.phase || "").toLowerCase().includes(q) ||
-          (s.cost_code || "").toLowerCase().includes(q)
-        );
-      })
-      .sort((a, b) => {
-        const aNum = Number(a.line_item_number);
-        const bNum = Number(b.line_item_number);
-        if (Number.isFinite(aNum) && Number.isFinite(bNum) && aNum !== bNum) return aNum - bNum;
-        return String(a.sov_id || "").localeCompare(String(b.sov_id || ""), undefined, { numeric: true });
-      });
-  }, [sovs, statusFilter, ccSearch]);
+  const ccFiltered = useMemo(
+    () => filterSovLinesForControlCenter(sovs, { statusFilter, ccSearch }),
+    [sovs, statusFilter, ccSearch],
+  );
 
   const exportCSV = () => {
     const rows = buildSovCsvRows(filtered, calc);
