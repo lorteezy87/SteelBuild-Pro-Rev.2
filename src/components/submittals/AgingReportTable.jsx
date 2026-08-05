@@ -13,6 +13,7 @@ import React, { useMemo, useState } from "react";
 import { computeAgingReport } from "@/lib/submittalAnalytics";
 import { sortAgingReportRows } from "./agingReportHelpers";
 import { formatShortDate } from "@/utils/dates";
+import { td, stuckColor } from "./agingReportTableHelpers";
 
 const THRESHOLDS = [3, 7, 14, 30];
 const COLUMNS = [
@@ -196,19 +197,13 @@ function Empty({ message }) {
   );
 }
 
-function td(align, extra = {}) {
+) {
   return {
     padding: "6px 10px", textAlign: align,
     color: "var(--text-primary)",
     fontVariantNumeric: "tabular-nums",
     ...extra,
   };
-}
-
-function stuckColor(days) {
-  if (days >= 30) return "var(--status-error)";
-  if (days >= 14) return "var(--status-warning)";
-  return "var(--text-primary)";
 }
 
 // Timezone-safe: lastActivityIso can derive from a date-only column (UTC

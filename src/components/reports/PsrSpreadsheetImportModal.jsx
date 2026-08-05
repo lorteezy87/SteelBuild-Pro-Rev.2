@@ -11,6 +11,7 @@ import {
   matchPsrToProject,
   readPsrSpreadsheetFile,
 } from "@/lib/importPsrSpreadsheet";
+import { cardStyle } from "./psrSpreadsheetImportModalHelpers";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -531,16 +532,6 @@ function CenteredStatus({ icon, title, subtitle }) {
       {subtitle && <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 8 }}>{subtitle}</div>}
     </div>
   );
-}
-
-function cardStyle(borderColor) {
-  return {
-    border: `1px solid ${borderColor}`,
-    borderLeft: `3px solid ${borderColor}`,
-    borderRadius: 4,
-    background: "var(--bg-surface)",
-    padding: "12px 14px",
-  };
 }
 
 const selectStyle = {
