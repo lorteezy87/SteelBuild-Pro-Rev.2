@@ -8,6 +8,7 @@
  */
 
 import React, { useMemo } from "react";
+import { buildSequenceFilterTags } from "./sequenceFilterHelpers";
 
 const chipStyle = (active) => ({
   padding: "4px 10px",
@@ -26,22 +27,9 @@ const chipStyle = (active) => ({
 });
 
 export default function SequenceFilter({ items = [], value, onChange, label = "Area / Sequence" }) {
-  const tags = useMemo(() => {
-    const areaSet = new Set();
-    const seqSet = new Set();
-    for (const item of items) {
-      if (item.area) areaSet.add(String(item.area).trim());
-      if (item.sequence_number) seqSet.add(String(item.sequence_number).trim());
-      if (item.area_sequence) areaSet.add(String(item.area_sequence).trim());
-      if (item.project_area) areaSet.add(String(item.project_area).trim());
-    }
-    // Natural (numeric-aware) sort so steel sequences order 1, 2, 10 — not the
-    // lexical 1, 10, 2 a bare String.sort() produces. Values are already strings.
-    const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-    const areas = [...areaSet].filter(Boolean).sort(natural).map((a) => ({ type: "area", value: a, label: a }));
-    const seqs = [...seqSet].filter(Boolean).sort(natural).map((s) => ({ type: "seq", value: s, label: s }));
-    return [...areas, ...seqs];
-  }, [items]);
+  // Natural (numeric-aware) sort so steel sequences order 1, 2, 10 — not the
+  // lexical 1, 10, 2 a bare String.sort() produces. Values are already strings.
+  const tags = useMemo(() => buildSequenceFilterTags(items), [items]);
 
   if (tags.length === 0) return null;
 

@@ -52,40 +52,16 @@ export default function PhotoGallery({ photos = [] }) {
   const [groupByMonth, setGroupByMonth] = useState(false);
 
   // ── Filter + sort ──
-  const sortedPhotos = useMemo(() => {
-    const filtered = searchTerm.trim()
-      ? photos.filter((p) => {
-          const hay = `${p.title || ""} ${p.description || ""} ${p.location || ""} ${p.category || ""}`.toLowerCase();
-          return hay.includes(searchTerm.toLowerCase());
-        })
-      : photos;
-
-    const arr = [...filtered];
-    arr.sort((a, b) => {
-      if (sortBy === "date_desc")
-        return new Date(b.taken_date || 0) - new Date(a.taken_date || 0);
-      if (sortBy === "date_asc")
-        return new Date(a.taken_date || 0) - new Date(b.taken_date || 0);
-      if (sortBy === "title_asc")
-        return (a.title || "").localeCompare(b.title || "");
-      if (sortBy === "category")
-        return (a.category || "").localeCompare(b.category || "");
-      return 0;
-    });
-    return arr;
-  }, [photos, searchTerm, sortBy]);
+  const sortedPhotos = useMemo(
+    () => filterAndSortPhotos(photos, { searchTerm, sortBy }),
+    [photos, searchTerm, sortBy],
+  );
 
   // ── Group photos by month if grouping is on ──
-  const groupedPhotos = useMemo(() => {
-    if (!groupByMonth) return [{ key: null, items: sortedPhotos }];
-    const groups = new Map();
-    for (const p of sortedPhotos) {
-      const key = formatGroupKey(p.taken_date);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(p);
-    }
-    return Array.from(groups, ([key, items]) => ({ key, items }));
-  }, [sortedPhotos, groupByMonth]);
+  const groupedPhotos = useMemo(
+    () => groupPhotosByMonth(sortedPhotos, groupByMonth, formatGroupKey),
+    [sortedPhotos, groupByMonth],
+  );
 
   // ── Mutations ──
   const deleteMutation = useMutation({

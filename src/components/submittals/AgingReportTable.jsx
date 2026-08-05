@@ -11,6 +11,7 @@
 
 import React, { useMemo, useState } from "react";
 import { computeAgingReport } from "@/lib/submittalAnalytics";
+import { sortAgingReportRows } from "./agingReportHelpers";
 import { formatShortDate } from "@/utils/dates";
 
 const THRESHOLDS = [3, 7, 14, 30];
@@ -33,19 +34,10 @@ export default function AgingReportTable({ submittals = [], isLoading = false })
     [submittals, thresholdDays],
   );
 
-  const sortedRows = useMemo(() => {
-    const arr = rows.slice();
-    arr.sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
-      if (typeof av === "number" && typeof bv === "number") {
-        return sortDir === "asc" ? av - bv : bv - av;
-      }
-      const cmp = String(av || "").localeCompare(String(bv || ""));
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return arr;
-  }, [rows, sortKey, sortDir]);
+  const sortedRows = useMemo(
+    () => sortAgingReportRows(rows, sortKey, sortDir),
+    [rows, sortKey, sortDir],
+  );
 
   const onSort = (key) => {
     if (sortKey === key) {
