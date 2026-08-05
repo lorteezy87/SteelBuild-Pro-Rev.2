@@ -52,6 +52,8 @@ import {
   nextSelectedIdsToggle,
   resolveProjectPercentComplete,
   formatWpNumber,
+  buildLiveProjectIdSet,
+  scopeWorkPackagesForPage,
 } from "./workPackages/workPackagesPageHelpers";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
@@ -102,14 +104,17 @@ export default function WorkPackages() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
+  const liveProjectIds = useMemo(() => buildLiveProjectIdSet(projects), [projects]);
   const selectedProject = projects.find((p) => p.id === projectId) || null;
   const effectiveProjectId = selectedProject?.id || null;
   const workPackages = useMemo(
-    () => projectId
-      ? (selectedProject ? rawWorkPackages : [])
-      : rawWorkPackages.filter((wp) => wp?.project_id && liveProjectIds.has(wp.project_id)),
-    [liveProjectIds, projectId, rawWorkPackages, selectedProject]
+    () =>
+      scopeWorkPackagesForPage(rawWorkPackages, {
+        projectId,
+        selectedProject,
+        liveProjectIds,
+      }),
+    [liveProjectIds, projectId, rawWorkPackages, selectedProject],
   );
 
   const { data: drawings = [] } = useQuery({

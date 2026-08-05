@@ -123,3 +123,11 @@ export function nextSelectedIdsForToggle(
   else next.add(id);
   return next;
 }
+
+export function findMessageById<T extends { id?: string | null }>(
+  messages: T[],
+  selectedId: string | null | undefined,
+): T | null {
+  if (!selectedId) return null;
+  return (messages || []).find((m) => m.id === selectedId) || null;
+}

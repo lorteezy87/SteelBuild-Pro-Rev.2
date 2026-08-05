@@ -5,6 +5,8 @@ import {
   nextSelectedIdsToggle,
   resolveProjectPercentComplete,
   formatWpNumber,
+  buildLiveProjectIdSet,
+  scopeWorkPackagesForPage,
 } from "../workPackagesPageHelpers";
 
 describe("workPackagesPageHelpers", () => {
@@ -68,3 +70,16 @@ describe("workPackagesPageHelpers", () => {
     ).toBeNull();
   });
 });
+
+  it("scopes work packages by live projects", () => {
+    const live = buildLiveProjectIdSet([{ id: "p1" }, { id: null as any }, { id: "p2" }]);
+    expect([...live].sort()).toEqual(["p1", "p2"]);
+    const raw = [
+      { id: "w1", project_id: "p1" },
+      { id: "w2", project_id: "gone" },
+      { id: "w3", project_id: "p2" },
+    ];
+    expect(scopeWorkPackagesForPage(raw, { projectId: null, selectedProject: null, liveProjectIds: live }).map((w) => w.id)).toEqual(["w1", "w3"]);
+    expect(scopeWorkPackagesForPage(raw, { projectId: "p1", selectedProject: { id: "p1" }, liveProjectIds: live })).toEqual(raw);
+    expect(scopeWorkPackagesForPage(raw, { projectId: "p1", selectedProject: null, liveProjectIds: live })).toEqual([]);
+  });

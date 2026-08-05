@@ -42,6 +42,7 @@ import {
 } from "@/lib/backcharge/types";
 import BackchargeControlCenter from "./backcharges/BackchargeControlCenter";
 import { filterBackcharges } from "./backcharges/backchargeControlCenter.derive";
+import { buildIdMap } from "./backcharges/backchargesPageHelpers";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 const usd = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -267,8 +268,8 @@ export default function Backcharges() {
   // Change orders + RFIs for the link pickers / resolved numbers in the package.
   const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders", projectId], queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
   const { data: rfis = [] } = useQuery({ queryKey: ["rfis", projectId], queryFn: () => entities.RFI.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
-  const coById = useMemo(() => new Map((changeOrders || []).map((c) => [c.id, c])), [changeOrders]);
-  const rfiById = useMemo(() => new Map((rfis || []).map((r) => [r.id, r])), [rfis]);
+  const coById = useMemo(() => buildIdMap(changeOrders || []), [changeOrders]);
+  const rfiById = useMemo(() => buildIdMap(rfis || []), [rfis]);
   const withLinkNumbers = (bc) => (bc ? {
     ...bc,
     linked_co_number: bc.linked_co_id ? coById.get(bc.linked_co_id)?.co_number || null : null,

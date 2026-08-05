@@ -11,6 +11,7 @@ import {
   allFilteredSelected,
   nextSelectedIdsForToggleAll,
   nextSelectedIdsForToggle,
+  findMessageById,
 } from "../emailInboxHelpers";
 import type { EmailMessage } from "../types";
 
@@ -97,5 +98,12 @@ describe("emailInboxHelpers", () => {
     expect([...nextSelectedIdsForToggleAll(filtered, new Set(["1", "2"]))]).toEqual([]);
     expect([...nextSelectedIdsForToggle(new Set(["1"]), "2")].sort()).toEqual(["1", "2"]);
     expect([...nextSelectedIdsForToggle(new Set(["1"]), "1")]).toEqual([]);
+  });
+
+  it("finds selected message by id", () => {
+    const messages = [msg({ id: "1" }), msg({ id: "2" })];
+    expect(findMessageById(messages, "2")?.id).toBe("2");
+    expect(findMessageById(messages, null)).toBeNull();
+    expect(findMessageById(messages, "missing")).toBeNull();
   });
 });

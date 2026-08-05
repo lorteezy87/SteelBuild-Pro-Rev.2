@@ -82,3 +82,35 @@ export function resolveProjectPercentComplete(
 export function formatWpNumber(n: number): string {
   return `WP-${String(n).padStart(3, "0")}`;
 }
+
+/** Live project ids from the projects list (drop null/empty). */
+export function buildLiveProjectIdSet(
+  projects: Array<{ id?: string | null }>,
+): Set<string> {
+  return new Set(
+    (projects || []).map((p) => p.id).filter((id): id is string => Boolean(id)),
+  );
+}
+
+/**
+ * Scope WP list for the page shell:
+ * - project selected + found → raw list for that project (query already scoped)
+ * - project selected but missing from live list → empty (stale selection)
+ * - all-projects mode → only WPs whose project_id is still live
+ */
+export function scopeWorkPackagesForPage<T extends { project_id?: string | null }>(
+  rawWorkPackages: T[],
+  opts: {
+    projectId: string | null | undefined;
+    selectedProject: { id?: string } | null | undefined;
+    liveProjectIds: Set<string>;
+  },
+): T[] {
+  const { projectId, selectedProject, liveProjectIds } = opts;
+  if (projectId) {
+    return selectedProject ? (rawWorkPackages || []) : [];
+  }
+  return (rawWorkPackages || []).filter(
+    (wp) => wp?.project_id && liveProjectIds.has(wp.project_id),
+  );
+}

@@ -46,6 +46,7 @@ import {
   allFilteredSelected,
   nextSelectedIdsForToggleAll,
   nextSelectedIdsForToggle,
+  findMessageById,
 } from "./emailInbox/emailInboxHelpers";
 import {
   InboxHeader,
@@ -158,8 +159,8 @@ export default function EmailInbox() {
 
   // ── Selected message ───────────────────────────────────────────────
   const selectedMessage = useMemo(
-    () => messages.find((m) => m.id === selectedId) || null,
-    [messages, selectedId]
+    () => findMessageById(messages, selectedId),
+    [messages, selectedId],
   );
 
   // Auto-mark as read when selected
