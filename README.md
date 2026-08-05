@@ -281,10 +281,9 @@ stays always on. Config: `src/config/moduleGating.js` + `useModuleAccess`.
 - **Detailing event glue** — Create submittal from package (`?targetSetId=`),
   revision **Attach / Not now** confirm, status → BIC/dates **suggest strip**
   (`src/lib/submittalLinkGlue.ts`).
-- **Piece Register** — Overview / Register / Imports / Lots & links /
-  Production / Logistics / Settings. Lifecycle writes refresh 3D Fab colors.
-  **Package Board** (WP drag-assign columns) lands via the Package Board supersede
-  PR chain when CI is green.
+- **Piece Register** — Overview / Register / **Board** (WP drag-assign columns) /
+  Imports / Lots & links / Production / Logistics / Settings. Lifecycle writes
+  refresh 3D Fab colors.
 - **Theme** — SteelBuild Dark uses **opaque** panel tokens (`--sbd-bg-panel*`)
   and `.sbp-opaque-popout` for menus (no frosted glass wash-out on selects).
 - **Signup** — Terms/Privacy clickwrap required before account creation.
