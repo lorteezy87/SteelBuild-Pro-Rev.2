@@ -3,13 +3,17 @@ import {
   filterLiveRecords,
   filterSafetyIncidents,
   computeSafetyStats,
-  SAFETY_INCIDENT_TYPES,
-  SAFETY_SEVERITIES,
-  SAFETY_STATUS_FILTERS,
   nextFilterToggle,
   safetyCommandSubtitle,
   createEmptySafetyFilters,
 } from "./safety/safetyPageHelpers";
+import {
+  SafetyKpiStrip,
+  SafetyFilterBar,
+  SafetyLoadError,
+  SafetyEmptyState,
+  SafetyFilteredEmpty,
+} from "./safety/SafetyUi";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,7 +22,7 @@ import SafetyIncidentFormModal from "@/components/safety/SafetyIncidentFormModal
 import SafetyIncidentList from "@/components/safety/SafetyIncidentList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -126,9 +130,6 @@ export default function Safety() {
   const filtered = filterSafetyIncidents(incidents, { filterType, filterSeverity, filterStatus });
   const stats = computeSafetyStats(incidents);
 
-  const types = SAFETY_INCIDENT_TYPES;
-  const severities = SAFETY_SEVERITIES;
-
   return (
     <div
       className="sb-dashboard-reference-page"
@@ -146,51 +147,24 @@ export default function Safety() {
         </Button>
       </CommandBar>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
-        <KpiTile compact label="Total"       value={stats.total}      color="var(--accent)" />
-        <KpiTile compact label="Critical"    value={stats.critical}   color="var(--status-error)"
-                 active={filterSeverity === "Critical"} onClick={() => setFilterSeverity(nextFilterToggle(filterSeverity, "Critical"))} />
-        <KpiTile compact label="High"        value={stats.high}       color="var(--status-warning)"
-                 active={filterSeverity === "High"} onClick={() => setFilterSeverity(nextFilterToggle(filterSeverity, "High"))} />
-        <KpiTile compact label="Injuries"    value={stats.injuries}   color="var(--status-error)"
-                 active={filterType === "Injury"} onClick={() => setFilterType(nextFilterToggle(filterType, "Injury"))} />
-        <KpiTile compact label="Near Misses" value={stats.nearMisses} color="var(--status-warning)"
-                 active={filterType === "Near Miss"} onClick={() => setFilterType(nextFilterToggle(filterType, "Near Miss"))} />
-        <KpiTile compact label="Hazards"     value={stats.hazards}    color="var(--status-info)"
-                 active={filterType === "Hazard"} onClick={() => setFilterType(nextFilterToggle(filterType, "Hazard"))} />
-        <KpiTile compact label="Open"        value={stats.open}       color="var(--phase-fabrication)"
-                 active={filterStatus === "Open"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "Open"))} />
-      </div>
+      <SafetyKpiStrip
+        stats={stats}
+        filterSeverity={filterSeverity}
+        filterType={filterType}
+        filterStatus={filterStatus}
+        onToggleSeverity={(v) => setFilterSeverity(nextFilterToggle(filterSeverity, v))}
+        onToggleType={(v) => setFilterType(nextFilterToggle(filterType, v))}
+        onToggleStatus={(v) => setFilterStatus(nextFilterToggle(filterStatus, v))}
+      />
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Type:</span>
-          {["all", ...types.slice(0, 4)].map((type) => (
-            <button key={type} onClick={() => setFilterType(type)} style={{ background: filterType === type ? "var(--accent)" : "var(--bg-surface-low)", color: filterType === type ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {type === "all" ? "All" : type.slice(0, 5)}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Severity:</span>
-          {["all", ...severities].map((sev) => (
-            <button key={sev} onClick={() => setFilterSeverity(sev)} style={{ background: filterSeverity === sev ? "var(--accent)" : "var(--bg-surface-low)", color: filterSeverity === sev ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {sev === "all" ? "All" : sev}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Status:</span>
-          {SAFETY_STATUS_FILTERS.map((status) => (
-            <button key={status} onClick={() => setFilterStatus(status)} style={{ background: filterStatus === status ? "var(--accent)" : "var(--bg-surface-low)", color: filterStatus === status ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {status === "all" ? "All" : status.slice(0, 6)}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SafetyFilterBar
+        filterType={filterType}
+        filterSeverity={filterSeverity}
+        filterStatus={filterStatus}
+        onFilterType={setFilterType}
+        onFilterSeverity={setFilterSeverity}
+        onFilterStatus={setFilterStatus}
+      />
 
       {/* Form Modal */}
       {showForm && <SafetyIncidentFormModal projectId={projectId} incident={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
@@ -199,51 +173,20 @@ export default function Safety() {
       {isLoading ? (
         <LoadingSkeleton variant="table" rows={5} />
       ) : isError ? (
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
-        }}>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-            Couldn’t load incidents
-          </p>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
-            {toUserErrorMessage(error, "Something went wrong. Try again.")}
-          </p>
-          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
-        </div>
+        <SafetyLoadError
+          errorMessage={toUserErrorMessage(error, "Something went wrong. Try again.")}
+          onRetry={() => refetch()}
+        />
       ) : filtered.length === 0 ? (
         incidents.length === 0 ? (
-          <div style={{
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
-          }}>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-              No safety incidents yet
-            </p>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
-              Report injuries, near-misses, and hazards so the project has a clear safety trail.
-            </p>
-            <Button variant="primary" onClick={() => { setEditing(null); setShowForm(true); }}>
-              + Report Incident
-            </Button>
-          </div>
+          <SafetyEmptyState onReport={() => { setEditing(null); setShowForm(true); }} />
         ) : (
-          <div style={{
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "36px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 12,
-          }}>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-              No incidents match the current filters
-            </p>
-            <Button variant="outline" onClick={() => {
-              const empty = createEmptySafetyFilters();
-              setFilterType(empty.filterType);
-              setFilterSeverity(empty.filterSeverity);
-              setFilterStatus(empty.filterStatus);
-            }}>
-              Clear Filters
-            </Button>
-          </div>
+          <SafetyFilteredEmpty onClearFilters={() => {
+            const empty = createEmptySafetyFilters();
+            setFilterType(empty.filterType);
+            setFilterSeverity(empty.filterSeverity);
+            setFilterStatus(empty.filterStatus);
+          }} />
         )
       ) : (
         <SafetyIncidentList incidents={filtered} onEdit={(incident) => {setEditing(incident); setShowForm(true);}} onDelete={setDeleteTarget} onStatusChange={handleStatusChange} />

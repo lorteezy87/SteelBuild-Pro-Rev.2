@@ -4,15 +4,17 @@ import {
   filterInspections,
   computeInspectionStats,
   nextStatusFilterToggle,
-  INSPECTION_TYPES,
-  INSPECTION_TYPE_ABBREV,
-  INSPECTION_STATUSES,
-  INSPECTION_STATUS_COLORS,
   inspectionsCommandSubtitle,
   buildPunchlistCreatePayloadsFromInspection,
   buildInspectionPunchlistConvertedStamp,
   mergeInspectionMetadataWithConverted,
 } from "./inspections/inspectionsPageHelpers";
+import {
+  InspectionsKpiStrip,
+  InspectionsFilterBar,
+  InspectionsLoadError,
+  InspectionsEmptyState,
+} from "./inspections/InspectionsUi";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,18 +22,13 @@ import { toast } from "sonner";
 import InspectionFormModal from "@/components/inspections/InspectionFormModal";
 import InspectionList from "@/components/inspections/InspectionList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 import { findById } from "@/pages/shared/findById";
-const TYPES = INSPECTION_TYPES;
-const TYPE_ABBREV = INSPECTION_TYPE_ABBREV;
-const STATUSES = INSPECTION_STATUSES;
-const STATUS_COLORS = INSPECTION_STATUS_COLORS;
-
 export default function Inspections() {
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
@@ -178,134 +175,22 @@ export default function Inspections() {
         </Button>
       </CommandBar>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-        <KpiTile compact label="Total"       value={stats.total}      color="var(--accent)"
-                 active={filterStatus === "all"} onClick={() => setFilterStatus("all")} />
-        <KpiTile compact label="Scheduled"   value={stats.scheduled}  color={STATUS_COLORS.Scheduled}
-                 active={filterStatus === "Scheduled"} onClick={() => handleStatClick("Scheduled")} />
-        <KpiTile compact label="In Progress" value={stats.inProgress} color={STATUS_COLORS["In Progress"]}
-                 active={filterStatus === "In Progress"} onClick={() => handleStatClick("In Progress")} />
-        <KpiTile compact label="Completed"   value={stats.completed}  color={STATUS_COLORS.Completed}
-                 active={filterStatus === "Completed"} onClick={() => handleStatClick("Completed")} />
-        <KpiTile compact label="Approved"    value={stats.approved}   color="var(--status-success)" />
-        <KpiTile compact label="Rejected"    value={stats.rejected}   color="var(--status-error)" />
-      </div>
+      <InspectionsKpiStrip
+        stats={stats}
+        filterStatus={filterStatus}
+        onStatusClick={(v) => {
+          if (v === "all") setFilterStatus("all");
+          else handleStatClick(v);
+        }}
+      />
 
-      {/* Filters — full labels, no truncation */}
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              color: "var(--text-muted)",
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-              flexShrink: 0,
-            }}
-          >
-            Type:
-          </span>
-          {["all", ...TYPES].map((type) => (
-            <button
-              key={type}
-              onClick={() => setFilterType(type)}
-              aria-pressed={filterType === type}
-              style={{
-                background: filterType === type ? "var(--accent)" : "var(--bg-surface)",
-                color: filterType === type ? "#07090E" : "var(--text-secondary)",
-                border: filterType === type ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-                borderRadius: "var(--radius-btn)",
-                padding: "4px 10px",
-                fontFamily: "var(--font-mono)",
-                fontSize: 8,
-                fontWeight: 700,
-                cursor: "pointer",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                transition: "all 0.12s",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {type === "all" ? "All" : (TYPE_ABBREV[type] || type)}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ width: 1, height: 20, background: "var(--divider)" }} />
-
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              color: "var(--text-muted)",
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-              flexShrink: 0,
-            }}
-          >
-            Status:
-          </span>
-          {["all", ...STATUSES].map((status) => {
-            const sColor = STATUS_COLORS[status];
-            return (
-              <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                aria-pressed={filterStatus === status}
-                style={{
-                  background: filterStatus === status
-                    ? (sColor ? `${sColor}20` : "var(--accent)")
-                    : "var(--bg-surface)",
-                  color: filterStatus === status
-                    ? (sColor || "#07090E")
-                    : "var(--text-secondary)",
-                  border: filterStatus === status
-                    ? `1px solid ${sColor || "var(--accent)"}`
-                    : "1px solid var(--border-default)",
-                  borderRadius: "var(--radius-btn)",
-                  padding: "4px 10px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 8,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  transition: "all 0.12s",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {status === "all" ? "All" : status}
-              </button>
-            );
-          })}
-
-          {/* Active filter clear */}
-          {(filterType !== "all" || filterStatus !== "all") && (
-            <button
-              onClick={() => { setFilterType("all"); setFilterStatus("all"); }}
-              style={{
-                background: "transparent",
-                color: "var(--text-muted)",
-                border: "1px dashed var(--border-default)",
-                borderRadius: "var(--radius-btn)",
-                padding: "4px 10px",
-                fontFamily: "var(--font-mono)",
-                fontSize: 8,
-                fontWeight: 700,
-                cursor: "pointer",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-              }}
-            >
-              Clear Filters
-            </button>
-          )}
-        </div>
-      </div>
+      <InspectionsFilterBar
+        filterType={filterType}
+        filterStatus={filterStatus}
+        onFilterType={setFilterType}
+        onFilterStatus={setFilterStatus}
+        onClearFilters={() => { setFilterType("all"); setFilterStatus("all"); }}
+      />
 
       {/* Form Modal */}
       {showForm && (
@@ -321,59 +206,16 @@ export default function Inspections() {
       {isLoading ? (
         <LoadingSkeleton variant="table" rows={5} />
       ) : isError ? (
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
-        }}>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-            Couldn’t load inspections
-          </p>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
-            {toUserErrorMessage(error, "Something went wrong. Try again.")}
-          </p>
-          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
-        </div>
+        <InspectionsLoadError
+          errorMessage={toUserErrorMessage(error, "Something went wrong. Try again.")}
+          onRetry={() => refetch()}
+        />
       ) : filtered.length === 0 ? (
-        <div className="sbd-card" style={{
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          padding: "60px 20px", gap: 16,
-          borderStyle: "dashed",
-        }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: "50%",
-            background: "var(--accent-muted, rgba(200,155,32,0.08))",
-            border: "1px solid var(--accent-border, rgba(200,155,32,0.20))",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 24,
-          }}>
-            {inspections.length === 0 ? "🔍" : "🔎"}
-          </div>
-          <div style={{
-            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
-            color: "var(--text-primary)", textAlign: "center",
-          }}>
-            {inspections.length === 0
-              ? "No Inspections Yet"
-              : "No Inspections Match Your Filters"}
-          </div>
-          <div style={{
-            fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)",
-            textAlign: "center", maxWidth: 340, lineHeight: 1.6,
-          }}>
-            {inspections.length === 0
-              ? "Create your first inspection to start tracking quality control for this project."
-              : "Try adjusting your type or status filters, or clear all filters to see everything."}
-          </div>
-          {inspections.length === 0 ? (
-            <Button variant="primary" onClick={() => { setEditing(null); setShowForm(true); }} style={{ marginTop: 4 }}>
-              + Create First Inspection
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={() => { setFilterType("all"); setFilterStatus("all"); }} style={{ marginTop: 4 }}>
-              Clear All Filters
-            </Button>
-          )}
-        </div>
+        <InspectionsEmptyState
+          totalCount={inspections.length}
+          onCreate={() => { setEditing(null); setShowForm(true); }}
+          onClearFilters={() => { setFilterType("all"); setFilterStatus("all"); }}
+        />
       ) : (
         <InspectionList
           inspections={filtered}
