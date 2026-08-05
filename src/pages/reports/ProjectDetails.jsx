@@ -20,6 +20,12 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import {
+  findProjectById,
+  filterByProjectId,
+  computeProjectDetailKpis,
+  resolveDefaultProjectId,
+} from "./projectDetailsHelpers";
+import {
   isRfiOpen,
   isCoPending,
   isWpComplete,
@@ -110,12 +116,11 @@ export default function ProjectDetails() {
 
   // Auto-select the first project if none chosen.
   React.useEffect(() => {
-    if (!selectedId && projects.length > 0) {
-      setParams({ project: String(projects[0].id) }, { replace: true });
-    }
+    const nextId = resolveDefaultProjectId(selectedId, projects);
+    if (nextId) setParams({ project: nextId }, { replace: true });
   }, [selectedId, projects, setParams]);
 
-  const project = projects.find((p) => String(p.id) === String(selectedId));
+  const project = findProjectById(projects, selectedId);
 
   const enabled = !!project;
 
@@ -152,30 +157,12 @@ export default function ProjectDetails() {
 
   const pid = project?.id;
 
-  const projectRFIs = useMemo(
-    () => rfis.filter((r) => r.project_id === pid),
-    [rfis, pid]
-  );
-  const projectCOs = useMemo(
-    () => changeOrders.filter((c) => c.project_id === pid),
-    [changeOrders, pid]
-  );
-  const projectWPs = useMemo(
-    () => workPackages.filter((w) => w.project_id === pid),
-    [workPackages, pid]
-  );
-  const projectDeliveries = useMemo(
-    () => deliveries.filter((d) => d.project_id === pid),
-    [deliveries, pid]
-  );
-  const projectExpenses = useMemo(
-    () => expenses.filter((e) => e.project_id === pid),
-    [expenses, pid]
-  );
-  const projectActions = useMemo(
-    () => actionItems.filter((a) => a.project_id === pid),
-    [actionItems, pid]
-  );
+  const projectRFIs = useMemo(() => filterByProjectId(rfis, pid), [rfis, pid]);
+  const projectCOs = useMemo(() => filterByProjectId(changeOrders, pid), [changeOrders, pid]);
+  const projectWPs = useMemo(() => filterByProjectId(workPackages, pid), [workPackages, pid]);
+  const projectDeliveries = useMemo(() => filterByProjectId(deliveries, pid), [deliveries, pid]);
+  const projectExpenses = useMemo(() => filterByProjectId(expenses, pid), [expenses, pid]);
+  const projectActions = useMemo(() => filterByProjectId(actionItems, pid), [actionItems, pid]);
 
   // Derived counts for KPI strip — all four predicates pulled from
   // the shared `entityPredicates` so this page can't drift from
@@ -184,16 +171,28 @@ export default function ProjectDetails() {
   // included a literal "Pending" status (not in the live enum) and
   // wpComplete checked for "Shipped" (also not in the live enum) —
   // both branches were silent dead code.
-  const openRFIs = projectRFIs.filter(isRfiOpen).length;
-  const pendingCOs = projectCOs.filter(isCoPending).length;
-  const openActions = projectActions.filter(isActionItemOpen).length;
-  const wpComplete = projectWPs.filter(isWpComplete).length;
-  const wpPct = projectWPs.length
-    ? (wpComplete / projectWPs.length) * 100
-    : 0;
-  const totalExpenses = projectExpenses
-    .filter((e) => e.payment_status !== "Voided")
-    .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const {
+    openRFIs,
+    pendingCOs,
+    openActions,
+    wpComplete,
+    wpPct,
+    totalExpenses,
+  } = useMemo(
+    () =>
+      computeProjectDetailKpis({
+        projectRFIs,
+        projectCOs,
+        projectActions,
+        projectWPs,
+        projectExpenses,
+        isRfiOpen,
+        isCoPending,
+        isActionItemOpen,
+        isWpComplete,
+      }),
+    [projectRFIs, projectCOs, projectActions, projectWPs, projectExpenses],
+  );
 
   // ── Column defs (kept compact — these are detail tables, not the
   //    canonical RFI/CO/etc. pages). Rows with no project still render
