@@ -17,17 +17,11 @@ import React, { useMemo, useRef } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-
-const STATUS_ORDER = ["Not Completed", "In Progress", "Completed", "Not Applicable"];
-
-const STATUS_STYLE = {
-  "Not Completed":   { color: "var(--text-muted)",     bg: "var(--bg-surface-low)",   border: "var(--border-default)" },
-  "In Progress":     { color: "var(--status-warning)", bg: "var(--warning-muted)",    border: "var(--warning-border)" },
-  "Completed":       { color: "var(--status-success)", bg: "var(--success-muted)",    border: "var(--success-border)" },
-  "Not Applicable":  { color: "var(--text-muted)",     bg: "var(--hover-bg)",         border: "var(--border-default)" },
-};
-
-const mono = { fontFamily: "var(--font-mono)" };
+import {
+  STATUS_ORDER,
+  STATUS_STYLE,
+  mono,
+} from "./projectHandoffChecklistHelpers";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
