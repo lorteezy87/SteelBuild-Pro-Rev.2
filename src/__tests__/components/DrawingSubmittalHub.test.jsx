@@ -100,13 +100,14 @@ describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
     const user = userEvent.setup();
     renderHub();
     await user.click(await screen.findByText("Drawing Register"));
-    // DrawingRegisterGridPanel chrome — proves clean register is mounted
-    // (not the full Drawings editor CommandBar).
+    // DrawingRegisterGridPanel chrome — clean register with set filter + view path.
     expect(
-      await screen.findByText(/Current revision \+ release status/i),
+      await screen.findByText(/Sheets grouped by drawing set/i),
     ).toBeInTheDocument();
     expect(
       screen.getByPlaceholderText(/Filter sheet, title, discipline, set/i),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Filter by drawing set/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Full editor/i })).toBeInTheDocument();
   });
 });

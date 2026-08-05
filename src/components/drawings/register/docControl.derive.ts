@@ -25,18 +25,64 @@ export type ImpactStatus = (typeof IMPACT_STATUSES)[number];
  * disables the status gate; the query matches sheet #, title, discipline, set, and
  * status (case-insensitive, trimmed).
  */
+/** Sentinel for the set filter: rows with no drawing_set_name. */
+export const SET_FILTER_NONE = "__none__";
+
 export function filterRegisterRows(
   rows: DrawingRegisterRow[],
   query: string,
   statusFilter: string,
+  setFilter: string = "all",
 ): DrawingRegisterRow[] {
   const q = query.trim().toLowerCase();
   return rows.filter((r) => {
     if (statusFilter !== "all" && r.current_status !== statusFilter) return false;
+    if (setFilter !== "all") {
+      if (setFilter === SET_FILTER_NONE) {
+        if (r.drawing_set_name) return false;
+      } else if ((r.drawing_set_name || "") !== setFilter) {
+        return false;
+      }
+    }
     if (!q) return true;
     return [r.sheet_number, r.sheet_title, r.discipline, r.drawing_set_name, r.current_status]
       .some((v) => (v || "").toLowerCase().includes(q));
   });
+}
+
+/** Unique non-empty set names from the register, sorted for the set filter dropdown. */
+export function listDrawingSetNames(rows: DrawingRegisterRow[]): string[] {
+  const names = new Set<string>();
+  for (const r of rows) {
+    const n = (r.drawing_set_name || "").trim();
+    if (n) names.add(n);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+}
+
+export interface RegisterSetGroup {
+  /** Null = unassigned (no set name). */
+  setName: string | null;
+  rows: DrawingRegisterRow[];
+}
+
+/**
+ * Group filtered rows by drawing_set_name. Named sets first (A–Z), unassigned last.
+ * Within each group, preserve the input order (already sheet_number-sorted by the view).
+ */
+export function groupRegisterRowsBySet(rows: DrawingRegisterRow[]): RegisterSetGroup[] {
+  const map = new Map<string | null, DrawingRegisterRow[]>();
+  for (const r of rows) {
+    const key = (r.drawing_set_name || "").trim() || null;
+    const list = map.get(key);
+    if (list) list.push(r);
+    else map.set(key, [r]);
+  }
+  const named = [...map.keys()].filter((k): k is string => k != null)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+  const out: RegisterSetGroup[] = named.map((setName) => ({ setName, rows: map.get(setName)! }));
+  if (map.has(null)) out.push({ setName: null, rows: map.get(null)! });
+  return out;
 }
 
 // ── Review queue ────────────────────────────────────────────────────────────
