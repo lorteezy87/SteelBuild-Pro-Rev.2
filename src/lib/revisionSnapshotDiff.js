@@ -31,13 +31,13 @@ const MAX_OUTPUT_TOKENS = 4000;
 // In lockstep with the CHECK constraints on drawing_revision_deltas. Any AI
 // output outside these sets is coerced to a safe fallback client-side so the
 // insert can never fail the check.
-const VALID_DELTA_TYPES = new Set([
+export const VALID_DELTA_TYPES = new Set([
   "sheet_added", "sheet_removed",
   "grid_shift", "connection_change", "dimension_change",
   "detail_revised", "callout_added", "callout_removed",
   "material_change", "elevation_change", "other",
 ]);
-const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low", "info"]);
+export const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low", "info"]);
 
 export const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
