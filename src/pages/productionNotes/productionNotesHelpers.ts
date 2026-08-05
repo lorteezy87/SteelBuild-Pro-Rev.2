@@ -112,3 +112,9 @@ export function filterAvailableProjects<P extends ProjectLike>(
     .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
+export function countHighlightedNotes<T extends { is_high_priority?: boolean | null }>(
+  notes: T[],
+): number {
+  return (notes || []).filter((n) => n.is_high_priority).length;
+}
+

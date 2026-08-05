@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeReadiness,
   sortProjectsByHealthThenName,
+  countByHealthStatus,
 } from "../jobStatusReportHelpers";
 // extended below
 
@@ -58,5 +59,19 @@ describe("jobStatusReport page helpers", () => {
       readinessFilter: "all",
     });
     expect(filtered.map((p) => p.id)).toEqual(["1"]);
+  });
+});
+
+describe("countByHealthStatus", () => {
+  it("counts matching health labels", () => {
+    const rows = [
+      { health_status: "At Risk" },
+      { health_status: "Watch" },
+      { health_status: "At Risk" },
+      { health_status: "Healthy" },
+    ];
+    expect(countByHealthStatus(rows, "At Risk")).toBe(2);
+    expect(countByHealthStatus(rows, "Watch")).toBe(1);
+    expect(countByHealthStatus(rows, "Missing")).toBe(0);
   });
 });

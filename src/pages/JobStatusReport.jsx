@@ -20,6 +20,7 @@ import {
   enrichProjectsWithReadiness,
   computeJobStatusKpis,
   filterJobStatusProjects,
+  countByHealthStatus,
 } from "./jobStatusReport/jobStatusReportHelpers";
 import {
   FilterChip,
@@ -136,8 +137,8 @@ export default function JobStatusReport() {
       }}>
         <Filter size={12} color="var(--text-muted)" />
         <FilterChip label="All" count={enriched.length} active={healthFilter === "all" && readinessFilter === "all"} onClick={() => { setHealthFilter("all"); setReadinessFilter("all"); }} />
-        <FilterChip label="At Risk" count={enriched.filter(p => p.health_status === "At Risk").length} active={healthFilter === "At Risk"} onClick={() => setHealthFilter(healthFilter === "At Risk" ? "all" : "At Risk")} color="var(--danger)" />
-        <FilterChip label="Watch"   count={enriched.filter(p => p.health_status === "Watch").length}   active={healthFilter === "Watch"}   onClick={() => setHealthFilter(healthFilter === "Watch" ? "all" : "Watch")} color="var(--warning)" />
+        <FilterChip label="At Risk" count={countByHealthStatus(enriched, "At Risk")} active={healthFilter === "At Risk"} onClick={() => setHealthFilter(healthFilter === "At Risk" ? "all" : "At Risk")} color="var(--danger)" />
+        <FilterChip label="Watch"   count={countByHealthStatus(enriched, "Watch")}   active={healthFilter === "Watch"}   onClick={() => setHealthFilter(healthFilter === "Watch" ? "all" : "Watch")} color="var(--warning)" />
         <FilterChip label="Ready"   count={kpis.readyCount}         active={readinessFilter === "ready"}        onClick={() => setReadinessFilter(readinessFilter === "ready" ? "all" : "ready")} color="var(--success)" />
         <FilterChip label="Missing Data" count={kpis.missingDataCount} active={readinessFilter === "missing-data"} onClick={() => setReadinessFilter(readinessFilter === "missing-data" ? "all" : "missing-data")} color="var(--danger)" />
 

@@ -42,10 +42,9 @@ import {
 } from "@/lib/backcharge/types";
 import BackchargeControlCenter from "./backcharges/BackchargeControlCenter";
 import { filterBackcharges } from "./backcharges/backchargeControlCenter.derive";
-import { buildIdMap } from "./backcharges/backchargesPageHelpers";
+import { buildIdMap, formatUsd } from "./backcharges/backchargesPageHelpers";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
-const usd = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: 16 };
 const input = { ...mono, width: "100%", boxSizing: "border-box", fontSize: 12, padding: "7px 9px", borderRadius: 3, background: "var(--bg-input, var(--bg-surface-low))", border: "1px solid var(--border-default)", color: "var(--text-primary)", outline: "none" };
 const labelCss = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: 4 };
@@ -159,7 +158,7 @@ function AddTicketRow({ onAdd, busy }) {
         <div><span style={labelCss}>Markup %</span>{num("markup_percent", "0")}</div>
         <div style={{ gridColumn: "span 2" }}><span style={labelCss}>Signed by (field)</span><input style={{ ...input, fontSize: 11 }} value={t.signed_by} onChange={(e) => set("signed_by", e.target.value)} /></div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-          <div style={{ ...mono, fontSize: 13, fontWeight: 700, color: "var(--accent)", alignSelf: "center" }}>{usd(preview)}</div>
+          <div style={{ ...mono, fontSize: 13, fontWeight: 700, color: "var(--accent)", alignSelf: "center" }}>{formatUsd(preview)}</div>
           <button style={{ ...btnPrimary, fontSize: 9 }} disabled={busy} onClick={() => { onAdd(t); setT({ ...EMPTY_TICKET, ticket_date: localToday() }); }}>Add T&amp;M</button>
         </div>
       </div>
@@ -223,7 +222,7 @@ function BackchargeDetailPanel({
                 {t.ticket_date ? formatLocalDate(t.ticket_date) : ""} · {t.description || t.ticket_number || "T&M"}
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flex: "0 0 auto" }}>
-                <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>{usd(computeTmTicketTotal(t))}</span>
+                <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>{formatUsd(computeTmTicketTotal(t))}</span>
                 <button onClick={() => onDeleteTicket(t.id)} style={{ ...btn, padding: "2px 6px", fontSize: 9, color: "var(--text-muted)" }}>✕</button>
               </div>
             </div>

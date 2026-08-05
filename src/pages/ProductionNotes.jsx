@@ -31,6 +31,7 @@ import {
   buildProjectNoteRows,
   projectIdsWithRows,
   filterAvailableProjects,
+  countHighlightedNotes,
 } from "./productionNotes/productionNotesHelpers";
 import {
   ProjectRow,
@@ -196,7 +197,7 @@ export default function ProductionNotes() {
 
   // ─── Render ─────────────────────────────────────────────────────────────
   const totalBullets = notes.length;
-  const highlightedCount = notes.filter((n) => n.is_high_priority).length;
+  const highlightedCount = countHighlightedNotes(notes);
 
   return (
     <div className="sb-dashboard-reference-page" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-page)" }}>

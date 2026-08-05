@@ -10,3 +10,11 @@ export function buildIdMap<T extends { id?: string | null }>(
       .map((r) => [r.id as string, r]),
   );
 }
+
+/** Currency display used by Backcharges form/detail panels. */
+export function formatUsd(n: unknown): string {
+  return `$${Number(n || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
+}

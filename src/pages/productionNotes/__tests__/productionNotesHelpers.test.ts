@@ -8,6 +8,7 @@ import {
   buildProjectNoteRows,
   projectIdsWithRows,
   filterAvailableProjects,
+  countHighlightedNotes,
 } from "../productionNotesHelpers";
 
 describe("productionNotesHelpers", () => {
@@ -58,5 +59,11 @@ describe("productionNotesHelpers", () => {
         "gam",
       ).map((p) => p.id),
     ).toEqual(["p3"]);
+  });
+});
+
+describe("countHighlightedNotes", () => {
+  it("counts high-priority bullets", () => {
+    expect(countHighlightedNotes([{ is_high_priority: true }, { is_high_priority: false }, {}])).toBe(1);
   });
 });

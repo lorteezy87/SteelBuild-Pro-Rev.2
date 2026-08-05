@@ -126,3 +126,12 @@ export function filterJobStatusProjects<
       return aOrder - bOrder;
     });
 }
+
+/** Count projects matching a health_status label (e.g. "At Risk", "Watch"). */
+export function countByHealthStatus<T extends { health_status?: string | null }>(
+  projects: T[],
+  status: string,
+): number {
+  return (projects || []).filter((p) => p.health_status === status).length;
+}
+
