@@ -8,6 +8,10 @@ import {
   INSPECTION_TYPE_ABBREV,
   INSPECTION_STATUSES,
   INSPECTION_STATUS_COLORS,
+  inspectionsCommandSubtitle,
+  buildPunchlistCreatePayloadsFromInspection,
+  buildInspectionPunchlistConvertedStamp,
+  mergeInspectionMetadataWithConverted,
 } from "./inspections/inspectionsPageHelpers";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
@@ -114,47 +118,23 @@ export default function Inspections() {
   // after conversion (idempotent — clicking again is a no-op).
   const convertMut = useMutation({
     mutationFn: async (inspection) => {
-      const count = Math.max(1, parseInt(inspection.deficiencies_count, 10) || 1);
-      const baseDescription = inspection.findings || inspection.corrective_actions || inspection.description || "Deficiency from inspection";
-      const inspNumber = inspection.id ? `INSP-${String(inspection.id).slice(0, 8)}` : "Inspection";
+      const payloads = buildPunchlistCreatePayloadsFromInspection(inspection);
       const items = [];
-      for (let i = 0; i < count; i++) {
-        const desc = count > 1
-          ? `[${inspNumber} #${i + 1}/${count}] ${baseDescription}`
-          : `[${inspNumber}] ${baseDescription}`;
+      for (const payload of payloads) {
         items.push(await entities.PunchlistItem.create(
-          withProjectId({
-            description: desc,
-            category: "Other",
-            location: inspection.location || "",
-            assigned_to: "",
-            priority: inspection.sign_off_status === "Rejected" ? "High" : "Medium",
-            status: "Open",
-            percent_complete: 0,
-            notes: inspection.corrective_actions || "",
-            inspection_id: inspection.id,
-            metadata: {
-              inspection_id: inspection.id,
-              inspection_number: inspNumber,
-              inspection_type: inspection.inspection_type,
-              deficiency_index: i + 1,
-              deficiency_count: count,
-            },
-          }, projectId || inspection.project_id),
+          withProjectId(payload, projectId || inspection.project_id),
         ));
       }
       // Stamp the inspection so the convert button hides on re-render
+      const stamp = buildInspectionPunchlistConvertedStamp(
+        payloads.length,
+        items.map((i) => i.id),
+        new Date().toISOString(),
+      );
       await entities.Inspection.update(inspection.id, {
-        metadata: {
-          ...(inspection.metadata || {}),
-          punchlist_converted: {
-            count,
-            at: new Date().toISOString(),
-            ids: items.map((i) => i.id),
-          },
-        },
+        metadata: mergeInspectionMetadataWithConverted(inspection.metadata, stamp),
       });
-      return { count };
+      return { count: payloads.length };
     },
     onSuccess: ({ count }) => {
       qc.invalidateQueries({ queryKey: ["inspections", projectId] });
@@ -191,7 +171,7 @@ export default function Inspections() {
         title="Inspections"
         count={filtered.length}
         unit={` OF ${inspections.length}`}
-        subtitle={`Welds · material · connections · coatings${filterType !== "all" || filterStatus !== "all" ? " · (filtered)" : ""}`}
+        subtitle={inspectionsCommandSubtitle(filterType, filterStatus)}
       >
         <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
           New Inspection
