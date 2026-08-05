@@ -10,6 +10,7 @@ import {
   Factory,
   FileUp,
   GitBranch,
+  LayoutGrid,
   PackageOpen,
   Scale,
   Search,
@@ -36,6 +37,7 @@ import { PieceImpactPanel } from "@/components/pieceControl/PieceImpactPanel";
 import { PieceLifecycleStrip } from "@/components/pieceControl/PieceLifecycleStrip";
 import PieceRegisterBulkBar from "@/components/pieceControl/PieceRegisterBulkBar";
 import PieceRelationshipManager from "@/components/pieceControl/PieceRelationshipManager";
+import PackageBoard from "@/components/pieceControl/PackageBoard";
 import { PieceProductionControl } from "@/components/pieceControl/PieceProductionControl";
 import { PieceLogisticsControl } from "@/components/pieceControl/PieceLogisticsControl";
 import { PieceControlPilotReadiness } from "@/components/pieceControl/PieceControlPilotReadiness";
@@ -114,6 +116,7 @@ const EMPTY_FILTERS: PieceRegisterFilters = {
 const REGISTER_VIEWS = [
   { id: "overview", label: "Overview", icon: Boxes },
   { id: "register", label: "Register", icon: PackageOpen },
+  { id: "board", label: "Board", icon: LayoutGrid },
   { id: "import", label: "Imports", icon: FileUp },
   { id: "relationships", label: "Lots & links", icon: GitBranch },
   { id: "production", label: "Production", icon: Factory },
@@ -1264,6 +1267,12 @@ export default function PieceRegister() {
               onModeChanged={handleModeChanged}
             />
           </div>
+        )}
+
+        {activeView === "board" && (
+          <section className="piece-register-embedded-workspace">
+            <PackageBoard projectId={projectId} pieceControlMode={mode} />
+          </section>
         )}
 
         {activeView === "relationships" && (
