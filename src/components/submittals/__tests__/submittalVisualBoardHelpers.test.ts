@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { bucketBoardItemsByStage, summarizeBoardItems } from "../submittalVisualBoardHelpers";
+import {
+  bucketBoardItemsByStage,
+  summarizeBoardItems,
+  BOARD_MONO,
+  BOARD_SUCCESS,
+  BOARD_SURFACE_LOW,
+} from "../submittalVisualBoardHelpers";
 
 describe("bucketBoardItemsByStage", () => {
   it("buckets known stages and falls back", () => {
@@ -43,5 +49,13 @@ describe("buildBoardItems / filterItems", () => {
     expect(items.length).toBeGreaterThan(0);
     const filtered = filterItems(items, "unlinked", "");
     expect(filtered.every((i) => !i.linked)).toBe(true);
+  });
+});
+
+describe("board token chrome", () => {
+  it("token strings", () => {
+    expect(BOARD_MONO).toContain("mono");
+    expect(BOARD_SUCCESS).toContain("success");
+    expect(BOARD_SURFACE_LOW).toContain("surface-low");
   });
 });

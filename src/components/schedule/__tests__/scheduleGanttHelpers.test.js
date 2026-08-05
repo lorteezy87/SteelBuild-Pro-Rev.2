@@ -1,12 +1,29 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from "vitest";
 import {
-  addDaysUTC, shiftDateOnly, loadColWidths, DEFAULT_COL_WIDTHS, COL_WIDTHS_KEY,
-  findFirstRowAtOrAfter, findFirstRowAfter,
-  getTaskMetadata, getTaskBaseline, hasBaselineDrift, isCriticalTask,
-  taskSearchHaystack, pluralize, isStalledTask, isOpenScheduleTask,
-  isSummaryScheduleTask, isActionableScheduleTask, taskOwner, isUnassignedTask,
-  hasLogicGapTask, isLookaheadTask,
+  addDaysUTC,
+  shiftDateOnly,
+  loadColWidths,
+  DEFAULT_COL_WIDTHS,
+  COL_WIDTHS_KEY,
+  findFirstRowAtOrAfter,
+  findFirstRowAfter,
+  getTaskMetadata,
+  getTaskBaseline,
+  hasBaselineDrift,
+  isCriticalTask,
+  taskSearchHaystack,
+  pluralize,
+  isStalledTask,
+  isOpenScheduleTask,
+  isSummaryScheduleTask,
+  isActionableScheduleTask,
+  taskOwner,
+  isUnassignedTask,
+  hasLogicGapTask,
+  isLookaheadTask,
+  BAR_HEIGHT,
+  BAR_RADIUS,
 } from "../scheduleGanttHelpers";
 
 describe("date helpers", () => {
@@ -152,3 +169,11 @@ describe("task predicates", () => {
     expect(isLookaheadTask({ start: "2026-06-16", end: "2026-06-18", status: "Complete" }, today, getStart, getEnd)).toBe(false);
   });
 });
+
+describe("BAR_HEIGHT / BAR_RADIUS", () => {
+  it("fixed bar shell", () => {
+    expect(BAR_HEIGHT).toBe(18);
+    expect(BAR_RADIUS).toBe(4);
+  });
+});
+

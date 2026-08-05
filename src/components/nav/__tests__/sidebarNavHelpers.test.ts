@@ -3,6 +3,10 @@ import {
   filterVisibleSidebarGroups,
   resolveFavoriteItems,
   resolveRecentItems,
+  RAIL_LS_KEY,
+  RECENTS_LS_KEY,
+  MAX_RECENTS,
+  FAVORITES_LS_KEY,
 } from "../sidebarNavHelpers";
 
 const groups = [
@@ -29,5 +33,14 @@ describe("sidebar nav pure", () => {
     expect(
       resolveRecentItems(v as any, ["Projects", "Hidden"], "Projects", 3).map((i: any) => i.page),
     ).toEqual(["Hidden"]);
+  });
+});
+
+describe("sidebar storage keys", () => {
+  it("keys and max recents", () => {
+    expect(RAIL_LS_KEY).toContain("sidebar-rail");
+    expect(RECENTS_LS_KEY).toContain("recents");
+    expect(MAX_RECENTS).toBe(4);
+    expect(FAVORITES_LS_KEY).toContain("favorites");
   });
 });

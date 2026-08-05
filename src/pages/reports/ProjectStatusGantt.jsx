@@ -31,12 +31,12 @@ import {
   buildMonthTicks,
   computeTodayPct,
   computeGanttBarLayout,
+  ROW_HEIGHT,
+  HEADER_HEIGHT,
+  LEFT_LABEL_W,
+  MIN_TIMELINE_W,
 } from "./projectStatusGanttHelpers";
 
-const ROW_HEIGHT = 32;
-const HEADER_HEIGHT = 40;
-const LEFT_LABEL_W = 260;
-const MIN_TIMELINE_W = 520;
 
 function GanttRow({ row, from, to, onClick }) {
   const layout = computeGanttBarLayout(row, from, to);

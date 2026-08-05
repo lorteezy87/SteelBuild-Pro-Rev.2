@@ -28,6 +28,7 @@ import {
   sanitizeTaskName,
   statusColor,
 } from "./scheduleTaskUtils";
+import { BAR_HEIGHT, BAR_RADIUS } from "./scheduleGanttHelpers";
 
 const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
@@ -261,8 +262,6 @@ function resolveLabelPlacement(name, widthPx) {
 // identically — anything position-sensitive (left, width, vertical
 // centring) stays untouched. Visual variants only swap colors / fills
 // inside this fixed shell.
-const BAR_HEIGHT = 18;
-const BAR_RADIUS = 4;
 
 // Task name rendered either inside the bar (white over the colored
 // fill, with a subtle text shadow on busy backgrounds) or as a

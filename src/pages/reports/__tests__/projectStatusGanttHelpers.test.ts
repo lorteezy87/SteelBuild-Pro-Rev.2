@@ -8,6 +8,10 @@ import {
   computeTodayPct,
   computeGanttBarLayout,
   monthStart,
+  ROW_HEIGHT,
+  HEADER_HEIGHT,
+  LEFT_LABEL_W,
+  MIN_TIMELINE_W,
 } from "../projectStatusGanttHelpers";
 
 describe("projectStatusGanttHelpers", () => {
@@ -67,5 +71,14 @@ describe("projectStatusGanttHelpers", () => {
     expect(layout!.widthPct).toBeGreaterThan(0);
 
     expect(monthStart(new Date(2026, 3, 15)).getDate()).toBe(1);
+  });
+});
+
+describe("layout constants", () => {
+  it("row and header sizes", () => {
+    expect(ROW_HEIGHT).toBe(32);
+    expect(HEADER_HEIGHT).toBe(40);
+    expect(LEFT_LABEL_W).toBe(260);
+    expect(MIN_TIMELINE_W).toBe(520);
   });
 });

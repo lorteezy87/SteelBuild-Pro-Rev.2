@@ -31,12 +31,13 @@ import {
   filterVisibleSidebarGroups,
   resolveFavoriteItems,
   resolveRecentItems,
+  RAIL_LS_KEY,
+  RECENTS_LS_KEY,
+  MAX_RECENTS,
+  FAVORITES_LS_KEY,
 } from "./sidebarNavHelpers";
 
 // ── Local storage helpers ───────────────────────────────────────────
-const RAIL_LS_KEY    = "sbp-sidebar-rail";
-const RECENTS_LS_KEY = "sbp-sidebar-recents";
-const MAX_RECENTS    = 4;
 
 function loadRailState() {
   try { return localStorage.getItem(RAIL_LS_KEY) === "1"; } catch { return false; }
@@ -55,7 +56,6 @@ function saveRecents(pages) {
 }
 
 // ── Favorites persistence ───────────────────────────────────────────
-const FAVORITES_LS_KEY = "sbp-sidebar-favorites";
 
 function loadFavorites() {
   try {

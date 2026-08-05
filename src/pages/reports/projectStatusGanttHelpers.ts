@@ -145,3 +145,9 @@ export function computeGanttBarLayout(
   const widthPct = ((row.end.getTime() - row.start.getTime()) / span) * 100;
   return { leftPct, widthPct };
 }
+
+export const ROW_HEIGHT = 32;
+export const HEADER_HEIGHT = 40;
+export const LEFT_LABEL_W = 260;
+export const MIN_TIMELINE_W = 520;
+

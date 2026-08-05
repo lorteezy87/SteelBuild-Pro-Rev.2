@@ -434,3 +434,6 @@ export function ganttTint(color: string, percent: number): string {
   return `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 }
 
+export const BAR_HEIGHT = 18;
+export const BAR_RADIUS = 4;
+

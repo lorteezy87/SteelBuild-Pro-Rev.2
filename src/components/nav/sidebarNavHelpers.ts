@@ -44,3 +44,9 @@ export function resolveRecentItems(
     .filter((it: any) => it.page !== currentPageName)
     .slice(0, limit);
 }
+
+export const RAIL_LS_KEY = "sbp-sidebar-rail";
+export const RECENTS_LS_KEY = "sbp-sidebar-recents";
+export const MAX_RECENTS = 4;
+export const FAVORITES_LS_KEY = "sbp-sidebar-favorites";
+

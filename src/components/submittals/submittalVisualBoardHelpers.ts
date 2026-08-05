@@ -234,3 +234,16 @@ export function filterItems(items, filter, search) {
   });
 }
 
+export const BOARD_MONO = "var(--font-mono)";
+export const BOARD_SUCCESS = "var(--status-success)";
+export const BOARD_WARNING = "var(--status-warning)";
+export const BOARD_ERROR = "var(--status-error)";
+export const BOARD_REVIEW = "var(--status-review)";
+export const BOARD_ACCENT = "var(--accent)";
+
+export const BOARD_SURFACE_LOW = "var(--bg-surface-low)";
+export const BOARD_SURFACE_HIGH = "var(--bg-surface-high)";
+export const BOARD_BORDER = "var(--border-default)";
+export const BOARD_TEXT_PRIMARY = "var(--text-primary)";
+export const BOARD_TEXT_MUTED = "var(--text-muted)";
+

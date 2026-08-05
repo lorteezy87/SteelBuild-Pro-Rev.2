@@ -29,19 +29,19 @@ import {
   STAGE_CAPTIONS,
   getStageColor,
   fmtDate,
+  BOARD_MONO as mono,
+  BOARD_SUCCESS as success,
+  BOARD_WARNING as warning,
+  BOARD_ERROR as error,
+  BOARD_REVIEW as review,
+  BOARD_ACCENT as accent,
+  BOARD_SURFACE_LOW as surfaceLow,
+  BOARD_SURFACE_HIGH as surfaceHigh,
+  BOARD_BORDER as border,
+  BOARD_TEXT_PRIMARY as textPrimary,
+  BOARD_TEXT_MUTED as textMuted,
 } from "./submittalVisualBoardHelpers";
 
-const surfaceLow = "var(--bg-surface-low)";
-const surfaceHigh = "var(--bg-surface-high)";
-const border = "var(--border-default)";
-const textPrimary = "var(--text-primary)";
-const textMuted = "var(--text-muted)";
-const mono = "var(--font-mono)";
-const success = "var(--status-success)";
-const warning = "var(--status-warning)";
-const error = "var(--status-error)";
-const review = "var(--status-review)";
-const accent = "var(--accent)";
 
 export default function SubmittalVisualBoard({
   setPackages = [],
