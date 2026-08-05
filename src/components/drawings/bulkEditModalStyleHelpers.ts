@@ -1,0 +1,14 @@
+/**
+ * Pure form chrome for drawings BulkEditModal.
+ */
+
+export const labelStyle: Record<string, string | number> = {
+  display: "block",
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: "0.12em",
+  color: "var(--text-muted)",
+  textTransform: "uppercase",
+  marginBottom: 4,
+};

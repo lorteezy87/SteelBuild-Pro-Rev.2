@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle } from "@/components/shared/PhoenixModal";
 import { STAGES, DISCIPLINES, mono } from "./drawingsConfig";
+import { labelStyle } from "./bulkEditModalStyleHelpers";
 
 /**
  * BulkEditModal — Apply field updates to multiple selected drawings at once.
@@ -8,17 +9,6 @@ import { STAGES, DISCIPLINES, mono } from "./drawingsConfig";
  * Only checked fields are included in the update payload. Unchecked fields
  * are left untouched on each drawing.
  */
-
-const labelStyle = {
-  display: "block",
-  ...mono,
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: "0.12em",
-  color: "var(--text-muted)",
-  textTransform: "uppercase",
-  marginBottom: 4,
-};
 
 const selectStyle = { ...inputStyle, cursor: "pointer" };
 
