@@ -21,6 +21,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Stamp, AlertCircle, CheckCircle2, FileWarning, Trash2 } from "lucide-react";
 import {
+import { formatStamp } from "./signoffStampHelpers";
   listSignoffs,
   createSignoff,
   voidSignoff,
@@ -343,15 +344,6 @@ function Row({ label, value, multiline = false }) {
   );
 }
 
-function formatStamp(iso) {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString();
-  } catch {
-    return iso;
-  }
-}
 
 const lbl = {
   ...mono, fontSize: 9, color: "var(--text-muted)",

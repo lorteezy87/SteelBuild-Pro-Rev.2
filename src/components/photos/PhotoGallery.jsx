@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import PhotoThumb from "./PhotoThumb";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { formatPhotoDate as formatDate, formatPhotoGroupKey as formatGroupKey } from "./photoGalleryFormatHelpers";
 
 const CATEGORY_COLORS = {
   Progress: "var(--status-info)",
@@ -31,18 +32,6 @@ const CATEGORY_COLORS = {
 
 const CATEGORIES = ["Progress", "Safety", "Issue", "Delivery", "Punchlist", "Other"];
 
-function formatDate(d) {
-  if (!d) return "—";
-  const dt = new Date(d);
-  return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-function formatGroupKey(d) {
-  if (!d) return "Unknown";
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return "Unknown";
-  return dt.toLocaleDateString(undefined, { year: "numeric", month: "long" });
-}
 
 export default function PhotoGallery({ photos = [] }) {
   const qc = useQueryClient();

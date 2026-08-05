@@ -20,17 +20,27 @@ export function buildLookaheadWeeks(todayUtc: Date, count = 6): LookaheadWeek[] 
   return result;
 }
 
+export function parseTaskDate(s: unknown): Date | null {
+  if (!s) return null;
+  if (s instanceof Date) return isNaN(s.getTime()) ? null : s;
+  const str = String(s).trim();
+  if (!str) return null;
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(str) ? `${str}T00:00:00Z` : str;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export function tasksIntersectingWeek<
   T extends { start_date?: string | null; end_date?: string | null },
 >(
   tasks: T[] | null | undefined,
   weekStart: Date,
   weekEnd: Date,
-  parseTaskDate: (raw: unknown) => Date | null,
+  parse: (raw: unknown) => Date | null = parseTaskDate,
 ): T[] {
   return (tasks || []).filter((task) => {
-    const s = parseTaskDate(task.start_date);
-    const e = parseTaskDate(task.end_date);
+    const s = parse(task.start_date);
+    const e = parse(task.end_date);
     const taskStart = s || e;
     const taskEnd = e || s;
     if (!taskStart || !taskEnd) return false;

@@ -1,4 +1,4 @@
-import { buildLookaheadWeeks, tasksIntersectingWeek } from "./lookaheadPlannerHelpers";
+import { buildLookaheadWeeks, tasksIntersectingWeek, parseTaskDate } from "./lookaheadPlannerHelpers";
 import React, { useMemo } from "react";
 
 // Schedule audit fix (bug class 5): the previous implementation
@@ -17,15 +17,6 @@ import React, { useMemo } from "react";
 //     [weekStart, weekEnd] (closed on both ends) appear under that week.
 //   - A task with only one date (start OR end) is treated as a 1-day
 //     window on the supplied date so it still surfaces.
-function parseTaskDate(s) {
-  if (!s) return null;
-  if (s instanceof Date) return isNaN(s.getTime()) ? null : s;
-  const str = String(s).trim();
-  if (!str) return null;
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(str) ? `${str}T00:00:00Z` : str;
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? null : d;
-}
 
 export default function LookaheadPlanner({ tasks }) {
   const todayUtc = useMemo(() => {

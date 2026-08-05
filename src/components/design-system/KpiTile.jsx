@@ -23,27 +23,8 @@
 
 import React, { useEffect, useState } from "react";
 import Icon from "./Icon";
+import { formatRelative } from "./kpiTileHelpers";
 
-// Relative time helper. Re-exports to a small string: "just now", "2m ago",
-// "1h ago", "3d ago", or falls back to a date stamp past 30d so the label
-// doesn't degenerate into "300d ago" for very stale tiles.
-function formatRelative(input) {
-  if (input === null || input === undefined) return null;
-  const d = input instanceof Date ? input : new Date(input);
-  const t = d.getTime();
-  if (!Number.isFinite(t)) return null;
-  const diff = Date.now() - t;
-  if (diff < 0) return "just now"; // clock skew — don't embarrass ourselves
-  const s = Math.floor(diff / 1000);
-  if (s < 30) return "just now";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const days = Math.floor(h / 24);
-  if (days <= 30) return `${days}d ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
-}
 
 const CONFIDENCE_COLOR = {
   high:   "var(--status-success)",
