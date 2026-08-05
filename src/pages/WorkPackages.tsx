@@ -46,6 +46,13 @@ import {
 import type { WorkPackage } from "./workPackages/types";
 import WpControlCenter from "./workPackages/WpControlCenter";
 import { reconcileSelection } from "./workPackages/wpControlCenter.derive";
+import {
+  filterWorkPackages,
+  filterSelectedRows,
+  nextSelectedIdsToggle,
+  resolveProjectPercentComplete,
+  formatWpNumber,
+} from "./workPackages/workPackagesPageHelpers";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
@@ -225,30 +232,21 @@ export default function WorkPackages() {
     [workPackages, drawings, projectDeliveries]
   );
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return metrics.enriched
-      .filter((wp) => {
-        if (phaseFilter !== "all" && wp._signals.phase !== phaseFilter) return false;
-        if (statusFilter !== "all" && wp._signals.status !== statusFilter) return false;
-        if (riskFilter !== "all" && wp._signals.risk !== riskFilter) return false;
-        if (!matchesSequenceFilter(wp, seqFilter)) return false;
-        if (!q) return true;
-        return [
-          wp.wp_number,
-          wp.name,
-          wp.project_name,
-          wp.crew,
-          wp.phase,
-          wp.status,
-          wp.notes,
-        ].some((value) => String(value || "").toLowerCase().includes(q));
-      })
-      .sort(sortWorkPackagesForExecution);
-  }, [metrics.enriched, phaseFilter, statusFilter, riskFilter, seqFilter, search]);
+  const filtered = useMemo(
+    () => filterWorkPackages(metrics.enriched as any, {
+      phaseFilter,
+      statusFilter,
+      riskFilter,
+      search,
+      seqFilter,
+      matchesSequenceFilter: matchesSequenceFilter as any,
+      sortFn: sortWorkPackagesForExecution as any,
+    }) as any,
+    [metrics.enriched, phaseFilter, statusFilter, riskFilter, seqFilter, search],
+  );
 
   const selectedRows = useMemo(
-    () => filtered.filter((wp) => selectedWPs.has(wp.id)),
+    () => filterSelectedRows(filtered, selectedWPs),
     [filtered, selectedWPs]
   );
 
@@ -263,17 +261,14 @@ export default function WorkPackages() {
 
   // Project-level context for the canonical execution shell.
   const projectHealth = (selectedProject as unknown as { health_status?: string | null })?.health_status ?? null;
-  const percentComplete =
-    (selectedProject as unknown as { scope_complete_pct_override?: number | null })?.scope_complete_pct_override != null
-      ? Number((selectedProject as unknown as { scope_complete_pct_override: number }).scope_complete_pct_override)
-      : (workPackages.length ? calcWpProgress(workPackages).pct : null);
+  const percentComplete = resolveProjectPercentComplete(
+    selectedProject as unknown as { scope_complete_pct_override?: number | null },
+    workPackages,
+    calcWpProgress as any,
+  );
 
   const toggleSelect = (id: string) =>
-    setSelectedWPs((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelectedWPs((prev) => nextSelectedIdsToggle(prev, id));
 
   const handleWPEdit = (wp: WorkPackage) => {
     setEditingWP(wp);
@@ -287,7 +282,7 @@ export default function WorkPackages() {
     try {
       if (effectiveProjectId) {
         const n = await getNextNumber(effectiveProjectId, "wp_number");
-        wpNumber = `WP-${String(n).padStart(3, "0")}`;
+        wpNumber = formatWpNumber(n);
       } else {
         throw new Error("No active project selected");
       }
