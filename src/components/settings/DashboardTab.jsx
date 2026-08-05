@@ -2,18 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Pin, GripVertical, Eye, EyeOff } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
-
-const labelStyle = {
-  fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
-  color: 'var(--text-muted)', letterSpacing: '0.12em',
-  textTransform: 'uppercase', marginBottom: 12, display: 'block',
-};
-
-const selectStyle = {
-  width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)',
-  borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box',
-};
+import { labelStyle, selectStyle } from './dashboardTabStyleHelpers';
 
 const Toggle = ({ checked, onChange }) => (
   <div onClick={onChange} style={{
