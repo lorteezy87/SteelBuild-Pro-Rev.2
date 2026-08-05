@@ -19,7 +19,11 @@
  * `dueInfoFor` dispatcher with the same source-gating. No behavior change.
  */
 import { useMemo, useState } from "react";
-import { statusPillTone } from "./processBoardPanelHelpers";
+import {
+  statusPillTone,
+  cardTone,
+  riskPillTone,
+} from "./processBoardPanelHelpers";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -65,21 +69,6 @@ const fmtDate = (input: any) => formatShortDate(input);
 
 function getStageColor(stage: string): string {
   return STAGE_MAP[stage]?.color || "var(--text-muted)";
-}
-
-/** Card-level tone: critical risk / overdue → danger, needs-action → review, due-soon → warn. */
-function cardTone(item: BoardItem): PillTone {
-  if (item.risk?.tier === "critical" || item.due.overdue) return "danger";
-  if (item.risk?.tier === "urgent" || item.needsAction) return "review";
-  if (item.risk?.tier === "attention" || item.due.dueSoon) return "warn";
-  return "neutral";
-}
-
-function riskPillTone(tier: string | undefined): PillTone {
-  if (tier === "critical") return "danger";
-  if (tier === "urgent") return "review";
-  if (tier === "attention") return "warn";
-  return "neutral";
 }
 
 export interface ProcessBoardPanelProps {
