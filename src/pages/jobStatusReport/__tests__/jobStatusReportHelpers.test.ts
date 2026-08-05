@@ -75,3 +75,12 @@ describe("countByHealthStatus", () => {
     expect(countByHealthStatus(rows, "Missing")).toBe(0);
   });
 });
+
+import { formatJobStatusTodayLabel } from "../jobStatusReportHelpers";
+
+describe("formatJobStatusTodayLabel", () => {
+  it("returns a non-empty localized string", () => {
+    const label = formatJobStatusTodayLabel(new Date("2026-08-05T18:00:00Z"));
+    expect(label.length).toBeGreaterThan(5);
+  });
+});

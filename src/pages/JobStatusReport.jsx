@@ -10,10 +10,6 @@ import ProjectDrilldownModal from "../components/reports/ProjectDrilldownModal";
 import PsrSpreadsheetImportModal from "@/components/reports/PsrSpreadsheetImportModal";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
-const today = new Date().toLocaleDateString("en-US", {
-  weekday: "long", year: "numeric", month: "long", day: "numeric",
-  timeZone: "America/Phoenix",
-});
 import { CommandBar } from "@/components/design-system";
 
 import {
@@ -21,6 +17,7 @@ import {
   computeJobStatusKpis,
   filterJobStatusProjects,
   countByHealthStatus,
+  formatJobStatusTodayLabel,
 } from "./jobStatusReport/jobStatusReportHelpers";
 import {
   FilterChip,
@@ -30,6 +27,7 @@ import {
 } from "./jobStatusReport/JobStatusReportUi";
 
 export default function JobStatusReport() {
+  const today = formatJobStatusTodayLabel();
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),

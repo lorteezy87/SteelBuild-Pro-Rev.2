@@ -135,3 +135,16 @@ export function countByHealthStatus<T extends { health_status?: string | null }>
   return (projects || []).filter((p) => p.health_status === status).length;
 }
 
+/** Phoenix timezone long date label for Job Status Report subtitle. */
+export function formatJobStatusTodayLabel(
+  now: Date = new Date(),
+  timeZone = "America/Phoenix",
+): string {
+  return now.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone,
+  });
+}
