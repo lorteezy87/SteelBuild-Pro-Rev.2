@@ -37,11 +37,15 @@ const COLOR_MODES = [
 ];
 const TYPE_LABELS = [["beam", "Beam"], ["column", "Column"], ["plate", "Plate"], ["member", "Member"]];
 
-const fsBtn = {
-  position: "absolute", top: 10, left: 10, padding: "6px 12px", borderRadius: 8,
+const viewerTools = {
+  position: "absolute", top: 10, left: 10, display: "flex", gap: 6, zIndex: 2,
+};
+
+const toolBtn = {
+  padding: "6px 12px", borderRadius: 8,
   border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
   color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
-  fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer", zIndex: 2,
+  fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer",
 };
 
 const linkBtn = {
@@ -85,6 +89,8 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
 
   const containerRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [measureMode, setMeasureMode] = useState(false);
+  const [measureResult, setMeasureResult] = useState(null);
   useEffect(() => {
     const onFs = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFs);
@@ -93,6 +99,12 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) containerRef.current?.requestFullscreen?.();
     else document.exitFullscreen?.();
+  };
+  const toggleMeasure = () => {
+    setMeasureMode((on) => {
+      if (on) setMeasureResult(null);
+      return !on;
+    });
   };
 
   const { data: storedModel } = useQuery({
@@ -351,11 +363,34 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     >
       <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <IfcModelViewer buffer={buffer} colorFor={colorFor} onPick={setPicked} onSelect={setSelectedGuids} />
+          <IfcModelViewer
+            buffer={buffer}
+            colorFor={colorFor}
+            onPick={setPicked}
+            onSelect={setSelectedGuids}
+            measureMode={measureMode}
+            onMeasure={setMeasureResult}
+          />
         </Suspense>
-        <button type="button" onClick={toggleFullscreen} title={isFullscreen ? "Exit full screen" : "Full screen"} style={fsBtn}>
-          {isFullscreen ? "Exit full screen" : "Full screen"}
-        </button>
+        <div style={viewerTools}>
+          <button type="button" onClick={toggleFullscreen} title={isFullscreen ? "Exit full screen" : "Full screen"} style={toolBtn}>
+            {isFullscreen ? "Exit full screen" : "Full screen"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleMeasure}
+            aria-pressed={measureMode}
+            title={measureMode ? "Exit measure (clear line)" : "Measure point-to-point distance"}
+            style={{
+              ...toolBtn,
+              border: `1px solid ${measureMode ? "#f5d90a" : "var(--border-default)"}`,
+              color: measureMode ? "#f5d90a" : "var(--text-secondary)",
+              background: measureMode ? "rgba(245,217,10,0.12)" : "rgba(13,17,23,0.72)",
+            }}
+          >
+            {measureMode ? "Measuring…" : "Measure"}
+          </button>
+        </div>
 
         {buffer && rosterLoading && (colorMode === "fab" || colorMode === "sequence" || colorMode === "status") && (
           <div style={loadingChip}>Loading {colorMode === "fab" ? "fab" : colorMode === "sequence" ? "sequence" : "status"} colors…</div>
@@ -463,6 +498,54 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
           </div>
           {projectId && hasRoster && (
             <Model3dSyncPanel projectId={projectId} modelElementRows={modelElementRows} />
+          )}
+        </div>
+
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
+          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>
+            Measure
+          </div>
+          {measureMode ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {measureResult?.phase === "done" && measureResult?.ftIn ? (
+                <>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#f5d90a", fontFamily: "var(--font-mono)" }}>
+                    {measureResult.ftIn}
+                  </div>
+                  <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>
+                    {measureResult.decimalFeet != null ? `${measureResult.decimalFeet.toFixed(3)} ft` : ""}
+                    {measureResult.meters != null ? ` · ${measureResult.meters.toFixed(3)} m` : ""}
+                  </div>
+                  <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    Click two more points for a new measure. Toggle Measure off to clear.
+                  </div>
+                </>
+              ) : measureResult?.phase === "a" ? (
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  First point set{measureResult.snappedA ? " (vertex snap)" : ""}. Click the second point.
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  Click two points on the model. Ends snap to nearest vertices (~3″).
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setMeasureMode(false)}
+                style={{ ...linkBtn, alignSelf: "flex-start", marginTop: 2 }}
+              >
+                Exit measure
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                Point-to-point distance with vertex snap. Uses model units (meters → ft-in).
+              </div>
+              <button type="button" onClick={() => setMeasureMode(true)} className="sbd-btn" style={{ alignSelf: "flex-start" }}>
+                Start measure
+              </button>
+            </div>
           )}
         </div>
 
