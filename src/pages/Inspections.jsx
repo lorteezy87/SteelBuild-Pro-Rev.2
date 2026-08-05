@@ -8,6 +8,7 @@ import {
   buildPunchlistCreatePayloadsFromInspection,
   buildInspectionPunchlistConvertedStamp,
   mergeInspectionMetadataWithConverted,
+  createEmptyInspectionFilters,
 } from "./inspections/inspectionsPageHelpers";
 import {
   InspectionsKpiStrip,
@@ -189,7 +190,11 @@ export default function Inspections() {
         filterStatus={filterStatus}
         onFilterType={setFilterType}
         onFilterStatus={setFilterStatus}
-        onClearFilters={() => { setFilterType("all"); setFilterStatus("all"); }}
+        onClearFilters={() => {
+          const empty = createEmptyInspectionFilters();
+          setFilterType(empty.filterType);
+          setFilterStatus(empty.filterStatus);
+        }}
       />
 
       {/* Form Modal */}
@@ -214,7 +219,11 @@ export default function Inspections() {
         <InspectionsEmptyState
           totalCount={inspections.length}
           onCreate={() => { setEditing(null); setShowForm(true); }}
-          onClearFilters={() => { setFilterType("all"); setFilterStatus("all"); }}
+          onClearFilters={() => {
+          const empty = createEmptyInspectionFilters();
+          setFilterType(empty.filterType);
+          setFilterStatus(empty.filterStatus);
+        }}
         />
       ) : (
         <InspectionList

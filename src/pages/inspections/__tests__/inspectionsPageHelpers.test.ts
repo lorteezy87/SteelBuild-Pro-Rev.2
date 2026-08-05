@@ -95,3 +95,14 @@ describe("inspection → punchlist convert pure builders", () => {
     ).toEqual({ prior: true, punchlist_converted: stamp });
   });
 });
+
+import { createEmptyInspectionFilters } from "../inspectionsPageHelpers";
+
+describe("createEmptyInspectionFilters", () => {
+  it("resets type and status to all", () => {
+    expect(createEmptyInspectionFilters()).toEqual({
+      filterType: "all",
+      filterStatus: "all",
+    });
+  });
+});

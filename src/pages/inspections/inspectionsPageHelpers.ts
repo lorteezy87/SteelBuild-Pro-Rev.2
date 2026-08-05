@@ -194,3 +194,10 @@ export function mergeInspectionMetadataWithConverted(
     punchlist_converted: stamp,
   };
 }
+
+export function createEmptyInspectionFilters(): {
+  filterType: string;
+  filterStatus: string;
+} {
+  return { filterType: "all", filterStatus: "all" };
+}
