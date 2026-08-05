@@ -21,30 +21,36 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Stamp, AlertCircle, CheckCircle2, FileWarning, Trash2 } from "lucide-react";
 import {
-import { formatStamp } from "./signoffStampHelpers";
+  formatStamp,
+  STAMP_META as STAMP_META_BASE,
+  mono,
+} from "./signoffStampHelpers";
+import {
   listSignoffs,
   createSignoff,
   voidSignoff,
   SIGNOFF_STAMP_TYPES,
 } from "@/lib/drawingHub";
 
-const mono = { fontFamily: "var(--font-mono)" };
+const QKEY = (drawingId, revId) => ["signoffs", drawingId, revId];
 
-// Display config per stamp type. Keep colors close to the existing chip
-// palette so the panel reads as part of the viewer rather than a bolt-on.
-// semantic signoff-stamp marks — allowlisted; hues render as ink/borders on
-// translucent tokenized chips so they keep dark-viewer contrast.
-const STAMP_META = {
-  approved_for_fabrication: { label: "Approved for Fab",   color: "var(--status-success)", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.35)", Icon: CheckCircle2 },
-  approved_as_noted:        { label: "Approved as Noted",  color: "var(--status-success-bright)", bg: "rgba(132,204,22,0.12)", border: "rgba(132,204,22,0.35)", Icon: CheckCircle2 },
-  revise_and_resubmit:      { label: "Revise & Resubmit",  color: "var(--status-warning)", bg: "rgba(245,158,11,0.14)", border: "rgba(245,158,11,0.40)", Icon: FileWarning },
-  rejected:                 { label: "Rejected",           color: "var(--status-error)", bg: "rgba(239,68,68,0.12)",  border: "rgba(239,68,68,0.35)",  Icon: AlertCircle },
-  reviewed:                 { label: "Reviewed",           color: "var(--status-info)", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.35)", Icon: Stamp },
-  for_information_only:     { label: "For Info Only",      color: "var(--text-muted)", bg: "rgba(107,114,128,0.12)",border: "rgba(107,114,128,0.35)",Icon: Stamp },
-  void:                     { label: "Void",               color: "var(--text-muted)", bg: "rgba(113,113,122,0.12)",border: "rgba(113,113,122,0.35)",Icon: Trash2 },
+// Icon overlay keeps lucide components local to this presentational panel.
+const STAMP_ICONS = {
+  approved_for_fabrication: CheckCircle2,
+  approved_as_noted: CheckCircle2,
+  revise_and_resubmit: FileWarning,
+  rejected: AlertCircle,
+  reviewed: Stamp,
+  for_information_only: Stamp,
+  void: Trash2,
 };
 
-const QKEY = (drawingId, revId) => ["signoffs", drawingId, revId];
+const STAMP_META = Object.fromEntries(
+  Object.entries(STAMP_META_BASE).map(([key, meta]) => [
+    key,
+    { ...meta, Icon: STAMP_ICONS[key] },
+  ]),
+);
 
 export default function SignoffStampPanel({
   projectId,
