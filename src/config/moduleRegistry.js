@@ -1,24 +1,9 @@
 /**
  * moduleRegistry.js - Central navigation and module configuration
- *
- * Single source of truth for:
- *  - Top-bar tab definitions (PRIMARY_TABS)
- *  - Module catalog (ALL_MODULES)
- *  - Modules dropdown groups (NAV_GROUPS)
- *  - Sidebar groups (SIDEBAR_GROUPS)
- *  - Page display labels (PAGE_LABELS)
- *
- * Shared by Layout shell, ModulesDropdown, SidebarNav, MobileDrawer,
- * Breadcrumbs, and BellDropdown.
  */
 
-// ── Tab definitions ──────────────────────────────────────────────────
 import { isNativePlatform } from "@/lib/native/platform";
 
-// The native iOS build is sign-in only: the billing/subscription surface is
-// stripped from the nav menus (App Store Guideline 3.1.x — accounts and plans
-// are managed on the web). The route itself still resolves, so deep links and
-// the read-only Billing page keep working; only the menu entries are hidden.
 const NATIVE_HIDDEN_PAGES = new Set(["Billing"]);
 function hideNativePages(groups) {
   if (!isNativePlatform()) return groups;
@@ -32,10 +17,6 @@ export const PRIMARY_TABS = [
   { label: "PROJECTS",    pages: ["ProjectsHub", "Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
-  // Consolidation (Phase 1): RESOURCES folded into FABRICATION and QUALITY
-  // folded into FIELD — fewer logical groups, and every page stays reachable
-  // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
-  // FieldPlan added here so it's no longer orphaned from the registry.
   { label: "FABRICATION", pages: ["WorkPackages", "PieceRegister", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "ProjectCalendar", "LookAheadSchedule"] },
@@ -59,7 +40,6 @@ export const TAB_DEFAULT_PAGE = {
   CLOSEOUT:    "ProjectCloseout",
 };
 
-// ── Full module catalog (used for grid dropdown + page label lookup) ─
 export const ALL_MODULES = [
   { icon: "\u25C8", name: "Dashboard",               group: "Overview",      page: "Dashboard" },
   { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
@@ -104,7 +84,6 @@ export const ALL_MODULES = [
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
   { icon: "\uD83D\uDCCB", name: "Reports",            group: "Reporting",     page: "ReportsHub" },
   { icon: "\uD83D\uDCCB", name: "Job Status Report",  group: "Reporting",     page: "JobStatusReport" },
-
   { icon: "\uD83D\uDCCA", name: "Activity Log",       group: "Reporting",     page: "Activity" },
   { icon: "\uD83D\uDD0D", name: "Inspections",        group: "Quality",       page: "Inspections" },
   { icon: "\u26A0", name: "Safety",                   group: "Quality",       page: "Safety" },
@@ -114,14 +93,14 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDEE1", name: "Warranty",           group: "Closeout",      page: "Warranty" },
   { icon: "\uD83D\uDCDD", name: "Change Requests",    group: "Closeout",      page: "ChangeRequests" },
   { icon: "\uD83C\uDFE2", name: "Vendors",            group: "Setup",         page: "Vendors" },
-  { icon: "\uD83D\uDCD0", name: "Calculator",                group: "Tools", page: "Calculator" }, // 🧮 calculator
+  { icon: "\uD83D\uDCD0", name: "Calculator",                group: "Tools", page: "Calculator" },
   { icon: "📐", name: "Ft/In Calculator",          group: "Tools", page: "FeetInchesCalculator" },
   { icon: "\u2696",       name: "Steel Weight Calculator",   group: "Tools", page: "SteelWeightCalculator" },
   { icon: "\uD83C\uDFD7", name: "Crane Pick Calculator",     group: "Tools", page: "CranePickCalculator" },
   { icon: "\u2194",       name: "Decimal / Fraction Converter", group: "Tools", page: "DecimalFractionConverter" },
+  { icon: "📝", name: "Notes", group: "Tools", page: "Notes" },
 ];
 
-// ── Modules dropdown nav groups (3-column layout) ────────────────────
 export const NAV_GROUPS = hideNativePages([
   {
     label: "OVERVIEW",
@@ -206,11 +185,11 @@ export const NAV_GROUPS = hideNativePages([
     label: "TOOLS",
     items: [
       { label: "Calculators", icon: "🧮", page: "CalculatorsHub" },
+      { label: "Notes", icon: "📝", page: "Notes" },
     ],
   },
 ]);
 
-// Column assignment for the 3-column modules dropdown
 const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DETAILING", "PROJECT MANAGEMENT"];
 const COLUMN_2_GROUPS = ["PRODUCTION", "FIELD", "DOCUMENTS & REPORTS"];
 const COLUMN_3_GROUPS = ["COST", "ADMINISTRATION", "TOOLS"];
@@ -221,7 +200,6 @@ export function getDropdownColumn(groupLabel) {
   return 2;
 }
 
-// ── Sidebar groups (desktop + mobile drawer) ─────────────────────────
 export const SIDEBAR_GROUPS = hideNativePages([
   {
     label: "OVERVIEW",
@@ -233,7 +211,6 @@ export const SIDEBAR_GROUPS = hideNativePages([
     ],
   },
   {
-    // Projects hub: the project record + Scope / Contacts / Members as tabs.
     label: "PROJECTS",
     collapsible: true,
     items: [
@@ -241,7 +218,6 @@ export const SIDEBAR_GROUPS = hideNativePages([
     ],
   },
   {
-    // The moat. Drawings / Submittals / Doc Control / 3D model are tabs inside.
     label: "DETAILING",
     collapsible: true,
     items: [
@@ -281,7 +257,6 @@ export const SIDEBAR_GROUPS = hideNativePages([
     ],
   },
   {
-    // One money home: Budget Control hubs Budget Detail + Cost Dashboard.
     label: "COST",
     collapsible: true,
     items: [
@@ -313,20 +288,18 @@ export const SIDEBAR_GROUPS = hideNativePages([
     ],
   },
   {
-    // The five steel calculators, collapsed into one Tools hub (tabs).
     label: "TOOLS",
     collapsible: true,
     items: [
-      { label: "Calculators",                  icon: "🧮", page: "CalculatorsHub" },
+      { label: "Calculators", icon: "🧮", page: "CalculatorsHub" },
+      { label: "Notes",       icon: "📝", page: "Notes" },
     ],
   },
 ]);
 
-// ── Page display labels (built from ALL_MODULES + overrides) ─────────
 export const PAGE_LABELS = (() => {
   const labels = {};
   ALL_MODULES.forEach((mod) => { labels[mod.page] = mod.name; });
-  // Add pages not covered by ALL_MODULES
   Object.assign(labels, {
     Dashboard:       "Dashboard",
     CommandCenter:   "Command Center",
@@ -336,20 +309,17 @@ export const PAGE_LABELS = (() => {
     FeatureFlagsAdmin: "Feature Flags",
     Expenses:        "Expenses",
     EmailInbox:      "Email Inbox",
-    // Moved out of the nav into Settings → Setup & Admin, but still routable, so
-    // keep their display labels for breadcrumbs / document title.
     Onboarding:      "Onboarding",
     DataExchange:    "Data Exchange",
     Integrations:    "Integrations",
     Tutorial:        "Tutorial / Help",
-    // Consolidation hubs (leaner-nav 2026-06-13).
     ProjectsHub:     "Projects",
     CalculatorsHub:  "Calculators",
+    Notes:           "Notes",
   });
   return labels;
 })();
 
-// ── Severity colors (used by nav alert badges) ──────────────────────
 export const SEVERITY_COLOR = {
   Critical: "var(--status-error)",
   High:     "var(--status-warning)",
@@ -357,7 +327,6 @@ export const SEVERITY_COLOR = {
   Low:      "var(--text-muted)",
 };
 
-// ── Sidebar collapse persistence ─────────────────────────────────────
 const SIDEBAR_LS_KEY = "sbp-nav-groups";
 
 export function loadSidebarState() {
@@ -374,7 +343,6 @@ export function saveSidebarState(state) {
   } catch { /* ignore */ }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
 export function timeAgo(dateStr) {
   if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -386,7 +354,6 @@ export function timeAgo(dateStr) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ── Dev-time schema validation ───────────────────────────────────────
 if (import.meta.env.DEV) {
   import("./schemas").then(({ validateNavConfig }) => {
     validateNavConfig({
