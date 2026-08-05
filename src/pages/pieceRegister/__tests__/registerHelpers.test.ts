@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  applyAttentionFocus,
+import {applyAttentionFocus,
   presentImportReconciliationText,
   uniqueValues,
   buildWorkPackageLabelMap,
@@ -8,8 +7,7 @@ import {
   buildFilteredRegisterRows,
   archiveConfirmationText,
   allRowsSelected,
-  buildSelectedPieceImpact,
-} from "../registerHelpers";
+  buildSelectedPieceImpact, IMPORT_DECISION_TONE} from "../registerHelpers";
 
 describe("uniqueValues", () => {
   it("dedupes, drops nullish/empty, and natural-sorts", () => {
@@ -104,5 +102,13 @@ describe("piece register display/filter helpers", () => {
   it("returns null impact without selection/snapshot", () => {
     expect(buildSelectedPieceImpact(null, null)).toBeNull();
     expect(buildSelectedPieceImpact("p1", { pieces: [], pieceDrawings: [], commentDispositions: [], drawings: [], drawingSets: [], submittals: [], sheetResponses: [], drawingRevisions: [], drawingReviews: [], drawingSignoffs: [] })).toBeNull();
+  });
+});
+
+describe("IMPORT_DECISION_TONE", () => {
+  it("maps decisions to pill tones", () => {
+    expect(IMPORT_DECISION_TONE.new).toBe("good");
+    expect(IMPORT_DECISION_TONE.conflict).toBe("danger");
+    expect(IMPORT_DECISION_TONE.unchanged).toBe("neutral");
   });
 });

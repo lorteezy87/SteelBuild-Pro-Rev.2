@@ -224,3 +224,75 @@ export function buildProjectBudgetData(
     };
   });
 }
+
+export const EXECUTIVE_HEALTH_COLORS = [
+  "var(--status-success)",
+  "var(--status-warning)",
+  "var(--status-error)",
+] as const;
+
+export const EXECUTIVE_RFI_SEVERITY_COLORS = [
+  "var(--status-error)",
+  "var(--status-warning)",
+  "var(--status-info)",
+  "var(--text-muted)",
+] as const;
+
+export type ExecutiveKpi = {
+  label: string;
+  value: string | number;
+  sub?: string;
+  color: string;
+};
+
+/** Pure KPI strip for Executive View (formatting helpers injected for testability). */
+export function buildExecutiveKpis(input: {
+  revisedTotal: number;
+  totalSpend: number;
+  totalBudget: number;
+  approvedCOVal: number;
+  approvedCoCount: number;
+  laborBurnPct: number;
+  totalActualHrs: number;
+  openRfiCount: number;
+  atRiskCount: number;
+  delayedTaskCount: number;
+  completeThisWeekCount: number;
+  formatCurrency: (n: number) => string;
+  formatBudgetPercent: (n: number) => string;
+}): ExecutiveKpi[] {
+  const f = input;
+  return [
+    { label: "Portfolio Value", value: f.formatCurrency(f.revisedTotal), color: "green" },
+    {
+      label: "Total Spend",
+      value: f.formatCurrency(f.totalSpend),
+      sub: `of ${f.formatCurrency(f.totalBudget)} budget`,
+      color: f.totalSpend > f.totalBudget ? "rose" : "blue",
+    },
+    {
+      label: "Approved COs",
+      value: f.formatCurrency(f.approvedCOVal),
+      sub: `${f.approvedCoCount} orders`,
+      color: "purple",
+    },
+    {
+      label: "Labor Burn",
+      value: f.formatBudgetPercent(f.laborBurnPct),
+      sub: `${f.totalActualHrs.toLocaleString()} hrs actual`,
+      color: "amber",
+    },
+    { label: "Open RFIs", value: f.openRfiCount, color: "blue" },
+    { label: "At Risk Projects", value: f.atRiskCount, color: "rose" },
+    {
+      label: "Delayed Tasks",
+      value: f.delayedTaskCount,
+      color: f.delayedTaskCount > 0 ? "rose" : "green",
+    },
+    {
+      label: "Complete This Week",
+      value: f.completeThisWeekCount,
+      color: "green",
+    },
+  ];
+}

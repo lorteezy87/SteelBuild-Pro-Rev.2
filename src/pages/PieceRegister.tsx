@@ -23,8 +23,7 @@ import {
   KpiStrip,
   PageHero,
   useCommandSkin,
-  type KpiCellDef,
-  type PillTone,
+  type KpiCellDef
 } from "@/components/command";
 import { PieceAttentionPanel } from "@/components/pieceControl/PieceAttentionPanel";
 import { PieceControlModeBadge } from "@/components/pieceControl/PieceControlModeBadge";
@@ -87,6 +86,7 @@ import {
   archiveConfirmationText as buildArchiveConfirmationText,
   allRowsSelected,
   buildSelectedPieceImpact,
+  IMPORT_DECISION_TONE,
 } from "./pieceRegister/registerHelpers";
 import { PieceRegisterArchiveDialog } from "./pieceRegister/PieceRegisterArchiveDialog";
 import { PieceRegisterRegisterView } from "./pieceRegister/PieceRegisterRegisterView";
@@ -119,14 +119,6 @@ const REGISTER_VIEWS = [
 ] as const;
 
 type PieceRegisterView = (typeof REGISTER_VIEWS)[number]["id"];
-
-const decisionTone: Record<string, PillTone> = {
-  new: "good",
-  unchanged: "neutral",
-  update_candidate: "warn",
-  conflict: "danger",
-  invalid: "danger",
-};
 
 export default function PieceRegister() {
   useCommandSkin();
@@ -927,7 +919,7 @@ export default function PieceRegister() {
             workPackages={(workPackagesQuery.data ?? []) as any}
             formatWorkPackageTitle={formatWorkPackageTitle}
             batchRows={(batchRowsQuery.data ?? []) as any}
-            decisionTone={decisionTone}
+            decisionTone={IMPORT_DECISION_TONE}
             assignPending={assignImportMutation.isPending}
             onAssignImport={() => assignImportMutation.mutate()}
           />

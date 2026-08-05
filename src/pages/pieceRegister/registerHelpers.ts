@@ -1,3 +1,4 @@
+import type { PillTone } from "@/components/command";
 /**
  * Pure helpers extracted from PieceRegister.tsx.
  * Keep page-level useMemo wrappers; only move pure bodies here.
@@ -166,3 +167,13 @@ export function buildSelectedPieceImpact(
       : null,
   });
 }
+
+/** Import-row decision → command-kit Pill tone. */
+export const IMPORT_DECISION_TONE: Record<string, PillTone> = {
+  new: "good",
+  unchanged: "neutral",
+  update_candidate: "warn",
+  conflict: "danger",
+  invalid: "danger",
+};
+

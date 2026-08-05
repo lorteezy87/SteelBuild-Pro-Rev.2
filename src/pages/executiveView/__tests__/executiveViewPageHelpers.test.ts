@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  sumContractValue,
+import {sumContractValue,
   sumApprovedCoValue,
   countApprovedCos,
   sumWpHours,
@@ -14,8 +13,7 @@ import {
   buildLaborByProject,
   buildWaterfallData,
   buildRfiAging,
-  buildProjectBudgetData,
-} from "../executiveViewPageHelpers";
+  buildProjectBudgetData, buildExecutiveKpis, EXECUTIVE_HEALTH_COLORS} from "../executiveViewPageHelpers";
 
 const NOW = new Date("2026-08-05T12:00:00Z");
 
@@ -85,5 +83,30 @@ describe("executiveViewPageHelpers", () => {
     expect(rows[0].open).toBe(1);
     expect(rows[0].overdue).toBe(1);
     expect(rows[0].avgDays).toBe(10);
+  });
+});
+
+describe("buildExecutiveKpis", () => {
+  it("builds eight portfolio KPI tiles", () => {
+    const kpis = buildExecutiveKpis({
+      revisedTotal: 100,
+      totalSpend: 120,
+      totalBudget: 100,
+      approvedCOVal: 10,
+      approvedCoCount: 2,
+      laborBurnPct: 50,
+      totalActualHrs: 40,
+      openRfiCount: 3,
+      atRiskCount: 1,
+      delayedTaskCount: 0,
+      completeThisWeekCount: 5,
+      formatCurrency: (n) => `$${n}`,
+      formatBudgetPercent: (n) => `${n}%`,
+    });
+    expect(kpis).toHaveLength(8);
+    expect(kpis[0].label).toBe("Portfolio Value");
+    expect(kpis[1].color).toBe("rose"); // over budget
+    expect(kpis[6].color).toBe("green"); // no delayed
+    expect(EXECUTIVE_HEALTH_COLORS).toHaveLength(3);
   });
 });

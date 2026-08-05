@@ -29,6 +29,9 @@ import {
   buildWaterfallData,
   buildRfiAging,
   buildProjectBudgetData,
+  buildExecutiveKpis,
+  EXECUTIVE_HEALTH_COLORS,
+  EXECUTIVE_RFI_SEVERITY_COLORS,
 } from "./executiveView/executiveViewPageHelpers";
 
 const TOOLTIP_STYLE = {
@@ -66,12 +69,6 @@ const CARD_TITLE = {
   marginBottom: 16,
 };
 
-const healthColors = [
-  "var(--status-success)",
-  "var(--status-warning)",
-  "var(--status-error)",
-];
-
 export default function ExecutiveView() {
   const navigate = useNavigate();
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => entities.Project.list(), staleTime: 5 * 60 * 1000 });
@@ -88,30 +85,27 @@ export default function ExecutiveView() {
   const { budget: totalBudgetHrs, actual: totalActualHrs } = sumWpHours(wps);
   const delayedTaskCount = countDelayedTasks(tasks);
 
-  const kpis = [
-    { label: "Portfolio Value", value: formatCurrency(revisedTotal), color: "green" },
-    { label: "Total Spend", value: formatCurrency(totalSpend), sub: `of ${formatCurrency(totalBudget)} budget`, color: totalSpend > totalBudget ? "rose" : "blue" },
-    { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${countApprovedCos(cos)} orders`, color: "purple" },
-    { label: "Labor Burn", value: formatBudgetPercent(totalBudgetHrs > 0 ? totalActualHrs / totalBudgetHrs * 100 : 0), sub: `${totalActualHrs.toLocaleString()} hrs actual`, color: "amber" },
-    { label: "Open RFIs", value: countOpenRfis(rfis), color: "blue" },
-    { label: "At Risk Projects", value: countAtRiskProjects(projects), color: "rose" },
-    {
-      label: 'Delayed Tasks',
-      value: delayedTaskCount,
-      color: delayedTaskCount > 0 ? 'rose' : 'green',
-    },
-    {
-      label: 'Complete This Week',
-      value: countTasksCompleteThisWeek(tasks),
-      color: 'green',
-    },
-  ];
+  const kpis = buildExecutiveKpis({
+    revisedTotal,
+    totalSpend,
+    totalBudget,
+    approvedCOVal,
+    approvedCoCount: countApprovedCos(cos),
+    laborBurnPct: totalBudgetHrs > 0 ? (totalActualHrs / totalBudgetHrs) * 100 : 0,
+    totalActualHrs,
+    openRfiCount: countOpenRfis(rfis),
+    atRiskCount: countAtRiskProjects(projects),
+    delayedTaskCount,
+    completeThisWeekCount: countTasksCompleteThisWeek(tasks),
+    formatCurrency,
+    formatBudgetPercent,
+  });
 
   // Charts data
   const projectBudgetData = buildProjectBudgetData(projects, codes, cos, computeCostCodeTotals);
 
   const rfiSeverity = buildRfiSeverity(rfis);
-  const rfiSeverityColors = ["var(--status-error)", "var(--status-warning)", "var(--status-info)", "var(--text-muted)"];
+  
 
   const laborData = buildLaborByProject(projects, wps);
 
@@ -176,7 +170,7 @@ export default function ExecutiveView() {
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie data={healthData} cx="50%" cy="50%" innerRadius={50} outerRadius={72} dataKey="value" strokeWidth={0}>
-                    {healthData.map((_, i) => <Cell key={i} fill={healthColors[i]} />)}
+                    {healthData.map((_, i) => <Cell key={i} fill={EXECUTIVE_HEALTH_COLORS[i]} />)}
                   </Pie>
                   <Tooltip {...TOOLTIP_STYLE} />
                 </PieChart>
@@ -184,7 +178,7 @@ export default function ExecutiveView() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 8, justifyContent: "center" }}>
                 {healthData.map((d, i) => (
                   <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: healthColors[i] }} />
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: EXECUTIVE_HEALTH_COLORS[i] }} />
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
                       {d.name} ({d.value})
                     </span>
@@ -249,7 +243,7 @@ export default function ExecutiveView() {
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie data={rfiSeverity} cx="50%" cy="50%" innerRadius={50} outerRadius={72} dataKey="value" strokeWidth={0}>
-                    {rfiSeverity.map((_, i) => <Cell key={i} fill={rfiSeverityColors[i]} />)}
+                    {rfiSeverity.map((_, i) => <Cell key={i} fill={EXECUTIVE_RFI_SEVERITY_COLORS[i]} />)}
                   </Pie>
                   <Tooltip {...TOOLTIP_STYLE} />
                 </PieChart>
@@ -257,7 +251,7 @@ export default function ExecutiveView() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 8, justifyContent: "center" }}>
                 {rfiSeverity.map((d, i) => (
                   <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: rfiSeverityColors[i] }} />
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: EXECUTIVE_RFI_SEVERITY_COLORS[i] }} />
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{d.name} ({d.value})</span>
                   </div>
                 ))}
