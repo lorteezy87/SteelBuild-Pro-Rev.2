@@ -11,8 +11,10 @@ import CommandCenterControlCenter from "./commandCenter/CommandCenterControlCent
  * Queries remain page-owned; CommandCenterControlCenter owns only presentation.
  */
 
-const STALE_TIME = 60_000;
-const EMPTY_LIST = Object.freeze([]);
+import {
+  COMMAND_CENTER_STALE_TIME_MS as STALE_TIME,
+  COMMAND_CENTER_EMPTY_LIST as EMPTY_LIST,
+} from "./commandCenter/commandCenterPageHelpers";
 
 export default function CommandCenter() {
   // Canonical control-center state.
