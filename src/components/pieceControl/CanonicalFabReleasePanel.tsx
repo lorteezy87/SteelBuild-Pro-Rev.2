@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertOctagon, CheckCircle2, CircleX, RefreshCw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -9,122 +9,25 @@ import {
 } from "@/lib/pieceControl/releaseRepository";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import { invalidatePieceControlQueries } from "@/lib/pieceControl/queryKeys";
+import {
+  CHECK_LABELS,
+  presentBlocker,
+  panelStyle as panel,
+  mutedStyle as muted,
+  warnBoxStyle as warnBox,
+  dangerBoxStyle as dangerBox,
+  goodBoxStyle as goodBox,
+  neutralBoxStyle as neutralBox,
+  iconBtnStyle as iconBtn,
+  primaryBtnStyle as primaryBtn,
+  inputStyle as input,
+} from "./canonicalFabReleasePanelHelpers";
 
 interface CanonicalFabReleasePanelProps {
   projectId: string;
   workPackageId: string;
   pieceControlMode: string;
 }
-
-const CHECK_LABELS: Array<{ key: keyof CanonicalReleaseGate["checks"]; label: string }> = [
-  { key: "scope", label: "Piece scope" },
-  { key: "drawings", label: "Shop drawings" },
-  { key: "material", label: "Material received / on hand" },
-  { key: "holds", label: "Piece holds" },
-];
-
-const BLOCKER_PRESENTATION_COPY: Record<string, string> = {
-  "No active, actionable canonical leaf pieces are assigned to this work package.":
-    "No active pieces are assigned to this work package.",
-};
-
-function presentBlocker(blocker: string) {
-  return BLOCKER_PRESENTATION_COPY[blocker] ?? blocker;
-}
-
-/** Theme-token styles — follow --cmd-* when on a command surface, else app tokens. */
-const panel: CSSProperties = {
-  borderRadius: 16,
-  border: "1px solid var(--cmd-border, var(--border-default))",
-  background: "var(--cmd-surface, var(--bg-surface))",
-  color: "var(--cmd-text, var(--text-primary))",
-  padding: 16,
-  boxShadow: "var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.2))",
-};
-
-const muted: CSSProperties = {
-  color: "var(--cmd-text-muted, var(--text-muted))",
-};
-
-const warnBox: CSSProperties = {
-  borderRadius: 12,
-  border: "1px solid var(--cmd-chip-warn-bg, var(--warning-border))",
-  background: "var(--cmd-chip-warn-bg, var(--warning-muted))",
-  color: "var(--cmd-warn-text, var(--status-warning))",
-  padding: 16,
-  fontSize: 14,
-};
-
-const dangerBox: CSSProperties = {
-  borderRadius: 12,
-  border: "1px solid var(--cmd-chip-danger-bg, var(--danger-border))",
-  background: "var(--cmd-chip-danger-bg, var(--danger-muted))",
-  color: "var(--cmd-danger-text, var(--status-error))",
-  padding: 12,
-  fontSize: 14,
-};
-
-const goodBox: CSSProperties = {
-  borderRadius: 12,
-  border: "1px solid var(--cmd-chip-good-bg, var(--success-border))",
-  background: "var(--cmd-chip-good-bg, var(--success-muted))",
-  color: "var(--cmd-good-text, var(--status-success))",
-  padding: 12,
-};
-
-const neutralBox: CSSProperties = {
-  borderRadius: 12,
-  border: "1px solid var(--cmd-border, var(--border-default))",
-  background: "var(--cmd-row-hover, var(--bg-surface-low))",
-  color: "var(--cmd-text, var(--text-primary))",
-  padding: 12,
-  fontSize: 14,
-  fontWeight: 800,
-};
-
-const iconBtn: CSSProperties = {
-  borderRadius: 8,
-  border: "1px solid var(--cmd-border, var(--border-default))",
-  background: "transparent",
-  color: "var(--cmd-text-muted, var(--text-muted))",
-  padding: 8,
-  cursor: "pointer",
-};
-
-const primaryBtn = (variant: "good" | "warn" | "danger"): CSSProperties => ({
-  marginTop: 16,
-  width: "100%",
-  borderRadius: 12,
-  border: "none",
-  padding: "12px 16px",
-  fontSize: 14,
-  fontWeight: 800,
-  cursor: "pointer",
-  background:
-    variant === "good"
-      ? "var(--cmd-good, var(--status-success))"
-      : variant === "warn"
-        ? "var(--cmd-warn, var(--status-warning))"
-        : "var(--cmd-danger, var(--status-error))",
-  color:
-    variant === "warn"
-      ? "var(--cmd-on-gold, #20160a)"
-      : "var(--cmd-pill-on-solid, #fff)",
-});
-
-const input: CSSProperties = {
-  borderRadius: 8,
-  border: "1px solid var(--cmd-border, var(--border-default))",
-  background: "var(--cmd-surface, var(--bg-surface))",
-  color: "var(--cmd-text, var(--text-primary))",
-  padding: 12,
-  fontSize: 14,
-  fontWeight: 500,
-  width: "100%",
-  boxSizing: "border-box",
-  fontFamily: "inherit",
-  resize: "vertical" as const,
-};
 
 function CheckRow({
   passed,

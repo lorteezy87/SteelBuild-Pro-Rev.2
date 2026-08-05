@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   availabilityTone,
+  TYPE_FILTERS,
 } from "../resourcesControlCenterHelpers";
 
 describe("availabilityTone", () => {
@@ -13,3 +14,10 @@ describe("availabilityTone", () => {
     expect(availabilityTone("Other")).toBe("neutral");
   });
 });
+
+describe("TYPE_FILTERS", () => {
+  it("includes Equipment", () => {
+    expect(TYPE_FILTERS).toContain("Equipment");
+  });
+});
+

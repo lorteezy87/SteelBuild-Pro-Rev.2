@@ -55,6 +55,7 @@ import {
 } from "./costControlCenter.derive";
 import CostChartRow from "./CostChartRow";
 import { persistCostCode } from "./costCodeSave";
+import { PHASE_OPTIONS } from "./costControlCenterHelpers";
 
 // CostCodeFormModal is untyped JS; its default-`[]` props infer as never[]. Cast so it accepts our data.
 const CostCodeForm = CostCodeFormModal as unknown as React.ComponentType<Record<string, unknown>>;
@@ -68,7 +69,6 @@ export interface CostControlCenterProps {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-const PHASE_OPTIONS = ["All", "Labor", "Materials", "Subcontractor", "Equipment", "Misc.", "Overhead"];
 
 export default function CostControlCenter({ projectId, project }: CostControlCenterProps) {
   useCommandSkin();

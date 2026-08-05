@@ -30,14 +30,13 @@ import type { ProductionStage } from "@/lib/importProductionStatus";
 import {
   buildProductionSummary,
   stageTone,
-  PRODUCTION_STAGES,
   localTodayISO,
 } from "./productionStatusControlCenter.derive";
 import ProductionStatusBulkBar from "./ProductionStatusBulkBar";
+import { STAGE_FILTERS } from "./productionStatusControlCenterHelpers";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const STAGE_FILTERS = ["All", ...PRODUCTION_STAGES] as const;
 
 function fmtPct(n: number): string {
   return `${n}%`;

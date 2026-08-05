@@ -9,3 +9,5 @@ export function availabilityTone(av: string): ResourceKpiTone {
   if (av === "Partially Available") return "info";
   return "neutral";
 }
+
+export const TYPE_FILTERS = ["All", "Person", "Crew", "Labor", "Equipment", "Bay", "Subcontractor", "Material"] as const;

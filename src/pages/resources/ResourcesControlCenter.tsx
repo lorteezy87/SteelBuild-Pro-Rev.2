@@ -39,13 +39,13 @@ import {
 } from "./resourcesControlCenter.derive";
 import {
   availabilityTone,
+  TYPE_FILTERS,
 } from "./resourcesControlCenterHelpers";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const TYPE_FILTERS = ["All", "Person", "Crew", "Labor", "Equipment", "Bay", "Subcontractor", "Material"];
 
 /** Small inline utilization bar — no SVG ring needed, simpler to maintain. */
 function UtilBar({ pct, tone }: { pct: number; tone: KpiTone }) {
