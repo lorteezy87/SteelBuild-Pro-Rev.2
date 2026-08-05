@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import StatusBadge from "../shared/StatusBadge";
 import { formatLocalDate } from "@/utils/dates";
+import { buildDrawingIdRecord } from "./wpFormModalHelpers";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -47,11 +48,7 @@ export default function WorkPackageList({
   onSelectAll,
   onCreateWP,
 }) {
-  const drawingMap = useMemo(() => {
-    const m = {};
-    drawings.forEach((d) => (m[d.id] = d));
-    return m;
-  }, [drawings]);
+  const drawingMap = useMemo(() => buildDrawingIdRecord(drawings), [drawings]);
 
   if (workPackages.length === 0) {
     return (

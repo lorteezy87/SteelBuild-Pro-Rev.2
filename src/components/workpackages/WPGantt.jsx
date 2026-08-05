@@ -1,5 +1,18 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { GANTT_PHASE_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
+import {
+  addDays,
+  daysBetween,
+  toISO,
+  fmtDate,
+  fmtDateLong,
+  startOfDay,
+  getWPDates,
+  detectConflicts,
+  buildGanttDateRange,
+  buildGanttTicks,
+  buildWeekendBands,
+} from "./wpGanttHelpers";
 
 // ─── Phase colors (matches page) ────────────────────────────────────
 const PHASE_COLOR = {
@@ -12,79 +25,6 @@ const PHASE_COLOR = {
 const LEFT_COL = 340;
 const ROW_H    = 38;
 const HEADER_H = 56;
-
-// ─── Date helpers ────────────────────────────────────────────────────
-function addDays(date, n) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-}
-function daysBetween(a, b) {
-  return Math.round((b - a) / 86400000);
-}
-function toISO(d) {
-  return d.toISOString().slice(0, 10);
-}
-function fmtDate(d) {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-function fmtDateLong(d) {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-// ─── Compute WP bar dates ────────────────────────────────────────────
-function getWPDates(wp) {
-  const start = wp.released_date
-    ? startOfDay(new Date(wp.released_date))
-    : startOfDay(new Date(wp.created_date || Date.now()));
-
-  const estDays = Math.max(3, Math.ceil((Number(wp.tonnage) || 0) / 2));
-
-  let end;
-  if (wp.target_end_date) {
-    end = startOfDay(new Date(wp.target_end_date));
-  } else if (wp.status === "Complete" && wp.updated_date) {
-    end = startOfDay(new Date(wp.updated_date));
-  } else {
-    end = addDays(start, estDays);
-  }
-
-  // Ensure end >= start + 1
-  if (end <= start) end = addDays(start, Math.max(1, estDays));
-
-  return { start, end };
-}
-
-// ─── Conflict detection ──────────────────────────────────────────────
-function detectConflicts(wps) {
-  const conflicts = new Set();
-  const conflictList = [];
-
-  wps.forEach(wp => {
-    if (wp.phase === "Erection") {
-      const deliveryWP = wps.find(w => w.phase === "Delivery" && w.name === wp.name);
-      if (deliveryWP && wp.released_date && deliveryWP.released_date) {
-        const erectionStart = startOfDay(new Date(wp.released_date));
-        const deliveryEnd = addDays(
-          new Date(deliveryWP.released_date),
-          Math.max(3, Math.ceil((Number(deliveryWP.tonnage) || 0) / 2))
-        );
-        if (erectionStart < deliveryEnd) {
-          conflicts.add(wp.id);
-          conflicts.add(deliveryWP.id);
-          conflictList.push({ wp1: deliveryWP, wp2: wp, type: "Erection starts before delivery complete" });
-        }
-      }
-    }
-  });
-
-  return { conflictSet: conflicts, conflictList };
-}
 
 // ─── Zoom level config ───────────────────────────────────────────────
 const ZOOM_LEVELS = [
@@ -106,22 +46,10 @@ export default function WPGantt({ wps, updateMut }) {
   const pxPerDay = zoom.pxPerDay;
 
   // Compute date range from all WPs
-  const { rangeStart, rangeEnd, totalDays } = useMemo(() => {
-    if (!wps.length) {
-      const today = startOfDay(new Date());
-      return { rangeStart: addDays(today, -30), rangeEnd: addDays(today, 60), totalDays: 90 };
-    }
-    let minDate = null;
-    let maxDate = null;
-    wps.forEach(wp => {
-      const { start, end } = getWPDates(wp);
-      if (!minDate || start < minDate) minDate = start;
-      if (!maxDate || end > maxDate) maxDate = end;
-    });
-    const rs = addDays(minDate, -14);
-    const re = addDays(maxDate, 21);
-    return { rangeStart: rs, rangeEnd: re, totalDays: daysBetween(rs, re) };
-  }, [wps]);
+  const { rangeStart, rangeEnd, totalDays } = useMemo(
+    () => buildGanttDateRange(wps),
+    [wps],
+  );
 
   const totalWidth = totalDays * pxPerDay;
   const today = startOfDay(new Date());
@@ -142,34 +70,16 @@ export default function WPGantt({ wps, updateMut }) {
   }, []);
 
   // Build tick marks for header
-  const ticks = useMemo(() => {
-    const result = [];
-    let cursor = new Date(rangeStart);
-    while (cursor < rangeEnd) {
-      result.push(new Date(cursor));
-      cursor = addDays(cursor, zoom.tickEvery);
-    }
-    return result;
-  }, [rangeStart, rangeEnd, zoom]);
+  const ticks = useMemo(
+    () => buildGanttTicks(rangeStart, rangeEnd, zoom.tickEvery),
+    [rangeStart, rangeEnd, zoom],
+  );
 
   // Weekend bands
-  const weekendBands = useMemo(() => {
-    if (pxPerDay < 12) return []; // Don't show on month zoom
-    const bands = [];
-    let cursor = new Date(rangeStart);
-    while (cursor < rangeEnd) {
-      if (cursor.getDay() === 6) { // Saturday
-        bands.push({
-          x: daysBetween(rangeStart, cursor) * pxPerDay,
-          width: 2 * pxPerDay,
-        });
-        cursor = addDays(cursor, 2);
-      } else {
-        cursor = addDays(cursor, 1);
-      }
-    }
-    return bands;
-  }, [rangeStart, rangeEnd, pxPerDay]);
+  const weekendBands = useMemo(
+    () => buildWeekendBands(rangeStart, rangeEnd, pxPerDay),
+    [rangeStart, rangeEnd, pxPerDay],
+  );
 
   const { conflictSet, conflictList } = useMemo(() => detectConflicts(wps), [wps]);
 

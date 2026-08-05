@@ -29,6 +29,17 @@ import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
 import MultiSelectChips from "@/components/shared/MultiSelectChips";
 import { Cloud, RefreshCw } from "lucide-react";
 import { getCurrentWeather, geocodeAddress as geocodeNominatim } from "@/components/shared/weatherUtils";
+import {
+  asArray,
+  asObject,
+  MANNING_TRADES,
+  emptyManning,
+  mergeManning,
+  sumManningTotals,
+  buildActionItemOptions,
+  buildDeliveryOptions,
+  buildRfiOptions,
+} from "./dailyLogFormHelpers";
 
 const inputStyle = {
   width: "100%",
@@ -53,46 +64,6 @@ const labelStyle = {
   marginBottom: "4px",
 };
 
-// Coerce JSONB values that may come back from Postgres as strings or null.
-function asArray(v) {
-  if (Array.isArray(v)) return v;
-  if (typeof v === "string") {
-    try {
-      const parsed = JSON.parse(v);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
-function asObject(v) {
-  if (v && typeof v === "object" && !Array.isArray(v)) return v;
-  if (typeof v === "string") {
-    try {
-      const parsed = JSON.parse(v);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
-    } catch { /* ignore */ }
-  }
-  return {};
-}
-
-// Manning trades — fixed canonical set. Anything not in the list goes
-// into the "Other" bucket. Order is rendered top→bottom on the form.
-const MANNING_TRADES = ["Ironworkers", "Welders", "Operators", "Laborers", "Foremen", "Other"];
-
-const emptyManning = () => MANNING_TRADES.reduce((acc, trade) => {
-  acc[trade] = { count: 0, hours: 0 };
-  return acc;
-}, {});
-
-/**
- * Open-Meteo geocoding (no API key, free tier well above our usage).
- * Returns { latitude, longitude } or null. Falls back to OSM Nominatim
- * via the existing weatherUtils helper if Open-Meteo's geocoder doesn't
- * find the address.
- */
 async function geocodeWithFallback(address) {
   if (!address) return null;
   try {
@@ -265,12 +236,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
   });
 
   const actionItemOptions = useMemo(
-    () =>
-      actionItems.map((a) => ({
-        id: a.id,
-        label: a.title || a.description?.slice(0, 40) || `Item ${a.id?.slice(0, 6)}`,
-        sublabel: a.status || "",
-      })),
+    () => buildActionItemOptions(actionItems),
     [actionItems]
   );
 
@@ -285,28 +251,18 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
   });
 
   const deliveryOptions = useMemo(
-    () =>
-      deliveriesForLink.map((d) => ({
-        id: d.id,
-        label: d.delivery_number || d.description || `Delivery ${d.id?.slice(0, 6)}`,
-        sublabel: d.status || "",
-      })),
+    () => buildDeliveryOptions(deliveriesForLink),
     [deliveriesForLink]
   );
 
   const rfiOptions = useMemo(
-    () =>
-      rfis.map((r) => ({
-        id: r.id,
-        label: r.rfi_number || r.title || `RFI ${r.id?.slice(0, 6)}`,
-        sublabel: r.title && r.rfi_number ? r.title : r.status || "",
-      })),
+    () => buildRfiOptions(rfis),
     [rfis]
   );
 
   // ── Manning helpers (B2) ──
   const manning = useMemo(
-    () => ({ ...emptyManning(), ...asObject(asObject(formData.metadata).manning) }),
+    () => mergeManning(formData.metadata),
     [formData.metadata]
   );
 
@@ -328,18 +284,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
     });
   };
 
-  const manningTotals = useMemo(() => {
-    let totalCount = 0;
-    let totalHours = 0;
-    for (const trade of MANNING_TRADES) {
-      const row = manning[trade] || { count: 0, hours: 0 };
-      const c = Number(row.count) || 0;
-      const h = Number(row.hours) || 0;
-      totalCount += c;
-      totalHours += c * h;
-    }
-    return { totalCount, totalHours };
-  }, [manning]);
+  const manningTotals = useMemo(() => sumManningTotals(manning), [manning]);
 
   // Auto-sync the legacy headcount / hours_worked columns so the rest
   // of the app (LEMs / dashboard tiles / older reports) stays accurate

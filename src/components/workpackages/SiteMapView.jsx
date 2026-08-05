@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { X, AlertTriangle, Pause } from "lucide-react";
 import { GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
+import { deriveZones, zoneHealth, summarizeZoneHealth } from "./siteMapHelpers";
 
 const PHASE_COLOR = {
   Detailing: GANTT_PHASE_HEX.Detailing,
@@ -27,95 +28,6 @@ function MiniBar({ value = 0, color = "var(--accent)", height = 4 }) {
       <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2, transition: "width 0.4s" }} />
     </div>
   );
-}
-
-// Derive zones from WP names by extracting prefixes/keywords
-function deriveZones(wps) {
-  const zoneMap = {};
-
-  wps.forEach(wp => {
-    // Try to extract a zone key from the WP name:
-    // Look for patterns like "Level 1", "Grid A", "Bay 1", "Zone X", "Col Line A"
-    // Fallback: use the first word or two as zone
-    let zone = "General";
-    const name = wp.name || "";
-
-    const patterns = [
-      /\b(level\s*\d+[a-z]?)/i,
-      /\b(floor\s*\d+[a-z]?)/i,
-      /\b(bay\s*[a-z0-9]+)/i,
-      /\b(grid\s*[a-z0-9]+)/i,
-      /\b(zone\s*[a-z0-9]+)/i,
-      /\b(col(?:umn)?\s*line\s*[a-z0-9]+)/i,
-      /\b(bldg\s*[a-z0-9]+)/i,
-      /\b(building\s*[a-z0-9]+)/i,
-      /\b(area\s*[a-z0-9]+)/i,
-      /\b(phase\s*\d+)/i,
-      /\b(section\s*[a-z0-9]+)/i,
-    ];
-
-    for (const pat of patterns) {
-      const m = name.match(pat);
-      if (m) { zone = m[1].trim(); break; }
-    }
-
-    if (zone === "General") {
-      // Use first meaningful word segment
-      const words = name.split(/[\s\-_/]+/).filter(Boolean);
-      if (words.length >= 2) {
-        zone = `${words[0]} ${words[1]}`;
-      } else if (words.length === 1) {
-        zone = words[0];
-      }
-    }
-
-    // Normalize zone label
-    zone = zone.replace(/\s+/g, " ").trim();
-
-    if (!zoneMap[zone]) {
-      zoneMap[zone] = { label: zone, wps: [] };
-    }
-    zoneMap[zone].wps.push(wp);
-  });
-
-  return Object.values(zoneMap);
-}
-
-// Compute zone health
-function zoneHealth(zone) {
-  const { wps } = zone;
-  if (!wps.length) return { color: "var(--bg-surface-high)", label: "Empty", issues: [] };
-
-  const onHold = wps.filter(w => w.status === "On Hold");
-  const noDrawings = wps.filter(w => !(w.linked_drawing_ids || "").split(",").some(s => s.trim()));
-  const inProgress = wps.filter(w => w.status === "In Progress");
-  const complete = wps.filter(w => w.status === "Complete");
-  const avgProgress = wps.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / wps.length;
-
-  const issues = [
-    ...onHold.map(w => ({ type: "hold", label: `${w.wp_number} On Hold`, wp: w })),
-    ...noDrawings.map(w => ({ type: "warn", label: `${w.wp_number} No Drawings`, wp: w })),
-  ];
-
-  let color, label;
-  if (onHold.length > 0) {
-    color = "rgba(255,61,61,0.18)";
-    label = "Blocked";
-  } else if (noDrawings.length > 0) {
-    color = "rgba(255,179,0,0.15)";
-    label = "Warning";
-  } else if (complete.length === wps.length) {
-    color = "rgba(0,214,143,0.15)";
-    label = "Complete";
-  } else if (inProgress.length > 0) {
-    color = "var(--warning-muted)";
-    label = "Active";
-  } else {
-    color = "var(--info-muted)";
-    label = "Planned";
-  }
-
-  return { color, label, issues, avgProgress, onHold, inProgress, complete, noDrawings };
 }
 
 // ─── Zone Cell ────────────────────────────────────────────────────
@@ -399,10 +311,7 @@ export default function SiteMapView({ wps, onSelectWP }) {
   const zones = useMemo(() => deriveZones(wps), [wps]);
 
   // Summary stats
-  const totalIssues = zones.reduce((s, z) => s + zoneHealth(z).issues.length, 0);
-  const activeZones = zones.filter(z => zoneHealth(z).label === "Active").length;
-  const blockedZones = zones.filter(z => zoneHealth(z).label === "Blocked").length;
-  const completeZones = zones.filter(z => zoneHealth(z).label === "Complete").length;
+  const { totalIssues, activeZones, blockedZones, completeZones } = summarizeZoneHealth(zones);
 
   const handleSelectWP = (wp) => {
     setSelectedZone(null);

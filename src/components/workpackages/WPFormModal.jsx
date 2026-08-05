@@ -4,10 +4,18 @@ import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { formatBudgetPercent } from "../shared/formatters";
 import { getDraftDrawingsWarning } from "../shared/workflowValidation";
-import { sortDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
 import { isPieceDrivenWorkPackageProgress } from "@/lib/pieceControl/wpProgressMapping";
+import {
+  APPROVED_DRAWING_STAGES,
+  buildDrawingSetOptions,
+  filterDrawingSetOptions,
+  buildLinkedSetGroups,
+  hasApprovedLinkedDrawings,
+  computeHourBurns,
+} from "./wpFormModalHelpers";
 
 const empty = {
   name: "", project_id: "", project_name: "", phase: "Detailing",
@@ -110,7 +118,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     // Enforce workflow: Fabrication requires at least one approved linked drawing
     if (form.phase === "Fabrication" && linkedDrawingIds.length === 0) {
       e.phase = "Cannot advance to Fabrication without linked drawings";
-    } else if (form.phase === "Fabrication" && !hasApprovedLinkedDrawings) {
+    } else if (form.phase === "Fabrication" && !hasApprovedLinked) {
       e.phase = "Linked drawings must be approved (Released/IFC) before Fabrication";
     }
     setErrors(e);
@@ -166,83 +174,33 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   // "Approved" = drawings past the BFA gate. In the corrected 7-stage flow
   // (migration 077): OFS, IFC, Released. "Approved" string kept for any
   // legacy submittal-shape data flowing through here.
-  const APPROVED_STAGES = ["Released", "IFC", "Issued for Construction", "OFS", "Approved", "Approved as Noted"];
-
-  // Group the project's drawings into SETS — the assignable unit. Set identity
-  // is the (required) drawing_set_name; ungrouped sheets fall under "Unassigned"
-  // and sort last. Reuses the canonical set-ordering helper (§21).
-  const drawingSetOptions = useMemo(() => {
-    const map = new Map();
-    for (const d of projectDrawings) {
-      if (!d?.id) continue;
-      const name = (d.drawing_set_name || "").trim();
-      const key = name.toLowerCase() || "__unassigned__";
-      let opt = map.get(key);
-      if (!opt) {
-        opt = { key, set_name: name || "Unassigned", isUngrouped: !name, drawings: [] };
-        map.set(key, opt);
-      }
-      opt.drawings.push(d);
-    }
-    return sortDrawingSetPackages([...map.values()]);
-  }, [projectDrawings]);
+  // Group the project's drawings into SETS — the assignable unit.
+  const drawingSetOptions = useMemo(
+    () => buildDrawingSetOptions(projectDrawings),
+    [projectDrawings],
+  );
 
   const linkedIdSet = useMemo(() => new Set(linkedDrawingIds), [linkedDrawingIds]);
 
-  // Sets with at least one un-linked sheet — what the picker offers, filtered by
-  // the search box. Carries linked/approved counts for the row display.
-  const filteredSetOptions = drawingSetOptions
-    .map((opt) => {
-      let linkedCount = 0;
-      let approvedCount = 0;
-      for (const d of opt.drawings) {
-        if (linkedIdSet.has(d.id)) linkedCount += 1;
-        if (APPROVED_STAGES.includes(d.stage || d.status)) approvedCount += 1;
-      }
-      return { ...opt, linkedCount, approvedCount, total: opt.drawings.length };
-    })
-    .filter(
-      (opt) =>
-        opt.linkedCount < opt.total &&
-        (!setSearch || opt.set_name.toLowerCase().includes(setSearch.toLowerCase())),
-    );
+  const filteredSetOptions = filterDrawingSetOptions(
+    drawingSetOptions,
+    linkedIdSet,
+    setSearch,
+  );
 
-  // Linked sheets grouped back into their sets — drives the chips + remove-by-set.
-  const linkedSetGroups = useMemo(() => {
-    const map = new Map();
-    for (const id of linkedDrawingIds) {
-      const d = allDrawings.find((dw) => dw.id === id);
-      const name = (d?.drawing_set_name || "").trim();
-      const key = name.toLowerCase() || "__unassigned__";
-      let g = map.get(key);
-      if (!g) {
-        g = { key, set_name: name || "Unassigned", isUngrouped: !name, ids: [], total: 0 };
-        map.set(key, g);
-      }
-      g.ids.push(id);
-    }
-    for (const opt of drawingSetOptions) {
-      const g = map.get(opt.key);
-      if (g) g.total = opt.drawings.length;
-    }
-    return sortDrawingSetPackages([...map.values()]);
-  }, [linkedDrawingIds, allDrawings, drawingSetOptions]);
+  const linkedSetGroups = useMemo(
+    () => buildLinkedSetGroups(linkedDrawingIds, allDrawings, drawingSetOptions),
+    [linkedDrawingIds, allDrawings, drawingSetOptions],
+  );
 
   const draftWarning = getDraftDrawingsWarning(linkedDrawingIds.join(","), allDrawings);
   const hasProjectSelected = !!form.project_id;
   const projectDrawingCount = projectDrawings.length;
-  const hasApprovedLinkedDrawings = linkedDrawingIds.some(id => {
-    const d = allDrawings.find(dw => dw.id === id);
-    return d && APPROVED_STAGES.includes(d.stage || d.status);
-  });
+  const hasApprovedLinked = hasApprovedLinkedDrawings(linkedDrawingIds, allDrawings);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const shopBurn = (Number(form.shop_hours_budget) || 0) > 0 ? ((Number(form.shop_hours_actual) || 0) / (Number(form.shop_hours_budget) || 1)) * 100 : 0;
-  const fieldBurn = (Number(form.field_hours_budget) || 0) > 0 ? ((Number(form.field_hours_actual) || 0) / (Number(form.field_hours_budget) || 1)) * 100 : 0;
-  const totalBudget = (Number(form.shop_hours_budget) || 0) + (Number(form.field_hours_budget) || 0);
-  const totalActual = (Number(form.shop_hours_actual) || 0) + (Number(form.field_hours_actual) || 0);
-  const totalBurn = totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0;
+  const { shopBurn, fieldBurn, totalBudget, totalActual, totalBurn } = computeHourBurns(form);
 
   const grid = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 };
 
@@ -328,7 +286,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
             ⊘ NO DRAWING SETS LINKED — Cannot advance to Fabrication without at least one linked drawing set. Link a set below first.
           </div>
         )}
-        {form.phase === "Fabrication" && linkedDrawingIds.length > 0 && !hasApprovedLinkedDrawings && (
+        {form.phase === "Fabrication" && linkedDrawingIds.length > 0 && !hasApprovedLinked && (
           <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.08em" }}>
             ⚠ LINKED DRAWINGS NOT YET APPROVED — Fabrication should not begin until all linked drawings are Released/IFC. Proceeding will create a workflow flag.
           </div>
