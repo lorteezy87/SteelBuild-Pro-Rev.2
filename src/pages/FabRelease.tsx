@@ -44,6 +44,12 @@ import { STAGE_FILTERS, VIEW_OPTIONS } from "./fabRelease/format";
 import { exportFabReleaseCSV } from "./fabRelease/exportCsv";
 import { FAB_RELEASE_STYLES } from "./fabRelease/styles";
 import { filterFabReleasePackages } from "./fabRelease/filter";
+import {
+  groupByWorkPackageId,
+  groupSubmittalsByDrawingSetId,
+  groupByLane,
+  groupByStatusOrder,
+} from "./fabRelease/fabReleasePageHelpers";
 import { canStartFabPackageCreation, reserveFabReleaseNumber } from "./fabRelease/creation";
 import { normalizeFabReleaseStage, normalizeFabReleaseView } from "./fabRelease/view";
 import {
@@ -234,40 +240,12 @@ export default function FabRelease() {
     onError: (e) => toastCrudError(e, "Failed to update package"),
   });
 
-  const rfisByWpId = useMemo(() => {
-    const map = new Map();
-    for (const rfi of rfis) {
-      const wpId = String(rfi.work_package_id || "");
-      if (!wpId) continue;
-      if (!map.has(wpId)) map.set(wpId, []);
-      map.get(wpId).push(rfi);
-    }
-    return map;
-  }, [rfis]);
-
-  const deliveriesByWpId = useMemo(() => {
-    const map = new Map();
-    for (const d of deliveries) {
-      const wpId = String(d.work_package_id || "");
-      if (!wpId) continue;
-      if (!map.has(wpId)) map.set(wpId, []);
-      map.get(wpId).push(d);
-    }
-    return map;
-  }, [deliveries]);
-
-  const submittalsByDrawingSetId = useMemo(() => {
-    const map = new Map();
-    for (const sub of submittals) {
-      const dsIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
-      for (const dsId of dsIds) {
-        const key = String(dsId);
-        if (!map.has(key)) map.set(key, []);
-        map.get(key).push(sub);
-      }
-    }
-    return map;
-  }, [submittals]);
+  const rfisByWpId = useMemo(() => groupByWorkPackageId(rfis as any), [rfis]);
+  const deliveriesByWpId = useMemo(() => groupByWorkPackageId(deliveries as any), [deliveries]);
+  const submittalsByDrawingSetId = useMemo(
+    () => groupSubmittalsByDrawingSetId(submittals as any),
+    [submittals],
+  );
 
   const metrics = useMemo(
     () => buildFabReleaseMetrics(workPackages, drawings, drawingSets, { rfisByWpId, deliveriesByWpId, submittalsByDrawingSetId }),
@@ -278,24 +256,15 @@ export default function FabRelease() {
     return filterFabReleasePackages(metrics.enriched, { stageFilter, riskFilter, seqFilter, search });
   }, [metrics.enriched, riskFilter, search, seqFilter, stageFilter]);
 
-  const laneGroups = useMemo(() => {
-    const groups: Record<string, EnrichedWorkPackage[]> = Object.fromEntries(BOARD_LANES.map((lane) => [lane, []]));
-    for (const wp of filtered) {
-      const lane = fabReleaseLane(wp);
-      if (groups[lane]) groups[lane].push(wp);
-      else groups.Blocked.push(wp);
-    }
-    return groups;
-  }, [filtered]);
+  const laneGroups = useMemo(
+    () => groupByLane(filtered, BOARD_LANES as unknown as string[], fabReleaseLane as any, "Blocked") as any,
+    [filtered],
+  );
 
-  const statusGroups = useMemo(() => {
-    const groups: Record<string, EnrichedWorkPackage[]> = Object.fromEntries(STATUS_ORDER.map((status) => [status, []]));
-    for (const wp of filtered) {
-      const status = STATUS_ORDER.includes(wp._signals.status) ? wp._signals.status : "Not Started";
-      groups[status].push(wp);
-    }
-    return groups;
-  }, [filtered]);
+  const statusGroups = useMemo(
+    () => groupByStatusOrder(filtered as any, STATUS_ORDER as unknown as string[]) as any,
+    [filtered],
+  );
 
   const handleViewChange = (nextView: string) => {
     setView(nextView);
