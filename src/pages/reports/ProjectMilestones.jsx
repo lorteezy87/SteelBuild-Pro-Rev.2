@@ -22,15 +22,10 @@ import { mono, body } from "./constants";
 import {
   buildProjectMilestoneRows,
   filterProjectMilestoneRows,
+  MILESTONE_STATUS_OPTIONS as STATUS_OPTIONS,
 } from "./projectMilestonesHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
-
-const STATUS_OPTIONS = [
-  { key: "all", label: "All" },
-  { key: "open", label: "Open Only" },
-  { key: "complete", label: "Completed" },
-];
 
 export default function ProjectMilestones() {
   const navigate = useNavigate();

@@ -45,6 +45,7 @@ import {
   buildGanttFlatRows,
   isGanttTaskOverdue,
   ganttTint,
+  HEAD_H,
 } from "./scheduleGanttHelpers";
 import {
   WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
@@ -70,7 +71,6 @@ import {
 } from "./scheduleGanttDerive";
 import { GanttLeftPanelRows, GanttTimelineRows } from "./GanttTaskRows";
 
-const HEAD_H  = 40;
 const tint = ganttTint;
 
 export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null }) {

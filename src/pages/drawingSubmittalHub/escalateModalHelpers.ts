@@ -13,3 +13,14 @@ export function buildContextBody(item: any, fmtDate: (d: string) => string): str
     .filter((line) => line !== null)
     .join("\n");
 }
+
+export const RFI_PRIORITIES = ["Critical", "High", "Medium", "Low"] as const;
+export const PCO_REASONS = [
+  "Design Change",
+  "Owner Request",
+  "Differing Conditions",
+  "Scope Gap",
+  "Error & Omission",
+  "Other",
+] as const;
+

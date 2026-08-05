@@ -21,11 +21,12 @@ import {
   dowShort,
 } from "@/lib/calendarMath";
 import EventPill from "./EventPill";
-import { bucketEventsByDay } from "./calendarViewHelpers";
-
-const MAX_VISIBLE = 3;
-const DAY_HEADERS_SUN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-const DAY_HEADERS_MON = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+import {
+  bucketEventsByDay,
+  MAX_VISIBLE_EVENTS as MAX_VISIBLE,
+  DAY_HEADERS_SUN,
+  DAY_HEADERS_MON,
+} from "./calendarViewHelpers";
 
 export default function MonthView({ focus, today, events, onDayClick, onEventClick, weekStart = "sunday" }) {
   const days = useMemo(() => buildMonthGrid(focus, weekStart), [focus, weekStart]);

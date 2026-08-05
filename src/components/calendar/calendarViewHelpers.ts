@@ -58,3 +58,12 @@ export function groupEventsByType<T extends { type?: string }>(
   }
   return map;
 }
+
+/** Month grid layout tokens. */
+export const MAX_VISIBLE_EVENTS = 3;
+export const DAY_HEADERS_SUN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] as const;
+export const DAY_HEADERS_MON = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+
+/** Day view collapse threshold for busy groups. */
+export const DAY_VIEW_COLLAPSE_AT = 10;
+

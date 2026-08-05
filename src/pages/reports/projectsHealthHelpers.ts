@@ -46,3 +46,11 @@ export function projectsHealthSubtitle(
 ): string {
   return `${buckets["On Track"].length} on track · ${buckets.Watch.length} watch · ${buckets["At Risk"].length} at risk · ${buckets.Unknown.length} on hold/unset`;
 }
+
+export const HEALTH_BUCKETS = [
+  { key: "On Track", label: "On Track", color: "var(--status-success)" },
+  { key: "Watch", label: "Watch", color: "var(--status-warning)" },
+  { key: "At Risk", label: "At Risk", color: "var(--status-error)" },
+  { key: "Unknown", label: "On Hold / Unknown", color: "var(--text-muted)" },
+] as const;
+

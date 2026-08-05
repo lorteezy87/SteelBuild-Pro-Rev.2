@@ -56,3 +56,11 @@ export function filterCompletedTaskRows(
       r.assignedTo.toLowerCase().includes(q),
   );
 }
+
+export const COMPLETED_WINDOWS = [
+  { key: "30", label: "Last 30 days" },
+  { key: "60", label: "Last 60 days" },
+  { key: "90", label: "Last 90 days" },
+  { key: "all", label: "All time" },
+] as const;
+

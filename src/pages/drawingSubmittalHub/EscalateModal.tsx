@@ -21,12 +21,13 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import { border, error as errorTone, fmtDate, mono, surface2, textMuted, textPrimary } from "./format";
-import { buildContextBody } from "./escalateModalHelpers";
+import {
+  buildContextBody,
+  RFI_PRIORITIES,
+  PCO_REASONS,
+} from "./escalateModalHelpers";
 
 export type EscalationKind = "rfi" | "pco";
-
-const RFI_PRIORITIES = ["Critical", "High", "Medium", "Low"];
-const PCO_REASONS = ["Design Change", "Owner Request", "Differing Conditions", "Scope Gap", "Error & Omission", "Other"];
 
 interface EscalateModalProps {
   item: any;                       // triage item from the hub read-model

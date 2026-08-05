@@ -4,17 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Modal, Button } from "@/components/design-system";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-
-const INITIAL_FORM = {
-  first_name: "",
-  last_name: "",
-  company: "",
-  role: "",
-  contact_type: "GC",
-  email: "",
-  phone: "",
-  notes: "",
-};
+import { INITIAL_CONTACT_FORM as INITIAL_FORM } from "./contactFormModalHelpers";
 
 export default function ContactFormModal({ projectId, contact = null, onClose, onSave }) {
   const qc = useQueryClient();

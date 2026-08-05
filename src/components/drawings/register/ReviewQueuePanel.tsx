@@ -20,10 +20,11 @@ import { Pill } from "@/components/command";
 import { attachableRegisterRows, filterReviews } from "./docControl.derive";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { decisionTone } from "./reviewQueuePanelHelpers";
-
-const ROLES = ["project_manager", "detailer", "shop", "field_ops", "document_control", "executive"];
-const DECIDE_OPTIONS = ["approved", "approved_with_notes", "rejected", "not_required"];
+import {
+  decisionTone,
+  REVIEW_ROLES as ROLES,
+  DECIDE_OPTIONS,
+} from "./reviewQueuePanelHelpers";
 
 const label = (s: string | null) => (s ? s.replace(/_/g, " ") : "—");
 

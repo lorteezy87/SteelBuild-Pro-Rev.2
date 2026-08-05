@@ -22,15 +22,10 @@ import { mono, body } from "./constants";
 import {
   buildUpcomingMilestoneRows,
   filterUpcomingMilestoneRows,
+  MILESTONE_WINDOWS as WINDOWS,
 } from "./upcomingMilestonesHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
-const WINDOWS = [
-  { key: "30", label: "Next 30 days" },
-  { key: "60", label: "Next 60 days" },
-  { key: "90", label: "Next 90 days" },
-  { key: "180", label: "Next 180 days" },
-];
 
 export default function UpcomingMilestones() {
   const navigate = useNavigate();

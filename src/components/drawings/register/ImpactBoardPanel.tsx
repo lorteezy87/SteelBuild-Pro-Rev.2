@@ -19,19 +19,12 @@ import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 import { IMPACT_STATUSES, attachableRegisterRows, groupImpactsByStatus } from "./docControl.derive";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-import { priorityTone } from "./impactBoardPanelHelpers";
-
-const IMPACT_TYPES = [
-  "fabrication", "erection", "embed", "anchor_bolts", "connections", "material_takeoff",
-  "shop_drawing_required", "rfi_followup", "change_order", "field_rework",
-];
-const PRIORITIES = ["low", "medium", "high", "critical"];
-
-/** Status → header accent colour, mirroring the legacy STATUS_TONE. */
-const STATUS_ACCENT: Record<string, string> = {
-  open: "var(--cmd-warn)", in_review: "var(--cmd-info)", ready: "var(--cmd-good)",
-  blocked: "var(--cmd-danger)", resolved: "var(--cmd-text-muted)", closed: "var(--cmd-text-muted)",
-};
+import {
+  priorityTone,
+  IMPACT_TYPES,
+  IMPACT_PRIORITIES as PRIORITIES,
+  IMPACT_STATUS_ACCENT as STATUS_ACCENT,
+} from "./impactBoardPanelHelpers";
 
 const label = (s: string) => s.replace(/_/g, " ");
 

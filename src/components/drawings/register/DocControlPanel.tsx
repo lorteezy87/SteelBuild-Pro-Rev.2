@@ -6,15 +6,10 @@ import { DrawingRegisterGridPanel } from "./DrawingRegisterGridPanel";
 import { TransmittalLogPanel } from "./TransmittalLogPanel";
 import { ReviewQueuePanel } from "./ReviewQueuePanel";
 import { ImpactBoardPanel } from "./ImpactBoardPanel";
-
-const VIEWS = [
-  { key: "register", label: "Register" },
-  { key: "reviews", label: "Reviews" },
-  { key: "impacts", label: "Impacts" },
-  { key: "transmittals", label: "Transmittals" },
-] as const;
-
-type ViewKey = (typeof VIEWS)[number]["key"];
+import {
+  DOC_CONTROL_VIEWS as VIEWS,
+  type DocControlViewKey as ViewKey,
+} from "./docControlPanelHelpers";
 
 export function DocControlPanel({ projectId }: { projectId: string | null }) {
   const [view, setView] = useState<ViewKey>("register");

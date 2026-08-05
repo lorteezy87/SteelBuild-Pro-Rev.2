@@ -9,9 +9,10 @@
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertTriangle, Boxes, FileWarning, Layers, Sparkles } from "lucide-react";
-
-const mono = "var(--font-mono)";
-const IMPACT_COLOR = { none: "var(--text-muted)", low: "#3FB950", medium: "#D29922", high: "#F85149" };
+import {
+  IMPACT_COLOR,
+  REVISION_SUMMARY_MONO as mono,
+} from "./revisionSummaryCardHelpers";
 
 export default function RevisionSummaryCard({ summary, onClose, onRunDeepDive, onCreateRfi }) {
   if (!summary) return null;

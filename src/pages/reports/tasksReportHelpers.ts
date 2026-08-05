@@ -77,3 +77,23 @@ export function filterTasksReportRows(
   }
   return out;
 }
+
+/** Live schedule_tasks.task_type values for the Tasks report filter. */
+export const TASKS_REPORT_TYPES = [
+  "Task",
+  "Milestone",
+  "Submittal",
+  "Fabrication",
+  "Install",
+  "Delivery",
+] as const;
+
+export const TASKS_REPORT_STATUSES = [
+  "Not Started",
+  "In Progress",
+  "Complete",
+  "Delayed",
+  "On Hold",
+  "Cancelled",
+] as const;
+

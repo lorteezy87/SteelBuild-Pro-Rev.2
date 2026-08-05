@@ -14,9 +14,11 @@ import React, { useMemo, useState } from "react";
 import { formatLongDate } from "@/lib/calendarMath";
 import { EVENT_TYPE_GROUPS } from "@/lib/calendarEvents";
 import EventPill from "./EventPill";
-import { eventsForDay, groupEventsByType } from "./calendarViewHelpers";
-
-const COLLAPSE_AT = 10;
+import {
+  eventsForDay,
+  groupEventsByType,
+  DAY_VIEW_COLLAPSE_AT as COLLAPSE_AT,
+} from "./calendarViewHelpers";
 
 export default function DayView({ focus, events, onEventClick }) {
   const dayEvents = useMemo(() => eventsForDay(focus, events), [focus, events]);

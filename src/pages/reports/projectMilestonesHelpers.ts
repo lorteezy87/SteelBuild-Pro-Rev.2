@@ -87,3 +87,10 @@ export function filterProjectMilestoneRows(
   }
   return out;
 }
+
+export const MILESTONE_STATUS_OPTIONS = [
+  { key: "all", label: "All" },
+  { key: "open", label: "Open Only" },
+  { key: "complete", label: "Completed" },
+] as const;
+

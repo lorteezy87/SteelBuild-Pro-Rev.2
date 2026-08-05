@@ -99,3 +99,10 @@ export function groupUpcomingKeyActivities(input: {
 export function countKeyActivities(groups: KeyActivityGroup[]): number {
   return (groups || []).reduce((s, g) => s + g.tasks.length, 0);
 }
+
+export const KEY_ACTIVITY_WINDOWS = [
+  { key: "7", label: "Next 7 days" },
+  { key: "14", label: "Next 14 days" },
+  { key: "30", label: "Next 30 days" },
+] as const;
+

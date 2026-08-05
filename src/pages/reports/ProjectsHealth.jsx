@@ -18,16 +18,10 @@ import { mono, body, CARD } from "./constants";
 import {
   bucketProjectsByHealth,
   projectsHealthSubtitle,
+  HEALTH_BUCKETS as BUCKETS,
 } from "./projectsHealthHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
-
-const BUCKETS = [
-  { key: "On Track", label: "On Track", color: "var(--status-success)" },
-  { key: "Watch", label: "Watch", color: "var(--status-warning)" },
-  { key: "At Risk", label: "At Risk", color: "var(--status-error)" },
-  { key: "Unknown", label: "On Hold / Unknown", color: "var(--text-muted)" },
-];
 
 function ProjectCard({ p, onClick }) {
   const phaseColor = SUPPORTED_PHASES.has(p.phase) ? PHASE_COLORS[p.phase] : "var(--text-muted)";

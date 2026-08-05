@@ -437,3 +437,6 @@ export function ganttTint(color: string, percent: number): string {
 export const BAR_HEIGHT = 18;
 export const BAR_RADIUS = 4;
 
+/** Header row height (px) for ScheduleGantt chrome. */
+export const HEAD_H = 40;
+

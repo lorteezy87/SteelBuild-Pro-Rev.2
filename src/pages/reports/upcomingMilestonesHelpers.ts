@@ -91,3 +91,10 @@ export function filterUpcomingMilestoneRows(
       r.projectNumber.toLowerCase().includes(q),
   );
 }
+
+export const MILESTONE_WINDOWS = [
+  { key: "30", label: "Next 30 days" },
+  { key: "60", label: "Next 60 days" },
+  { key: "90", label: "Next 90 days" },
+  { key: "180", label: "Next 180 days" },
+] as const;

@@ -21,16 +21,10 @@ import { mono, body } from "./constants";
 import {
   buildCompletedTaskRows,
   filterCompletedTaskRows,
+  COMPLETED_WINDOWS as WINDOWS,
 } from "./tasksCompletedHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
-
-const WINDOWS = [
-  { key: "30", label: "Last 30 days" },
-  { key: "60", label: "Last 60 days" },
-  { key: "90", label: "Last 90 days" },
-  { key: "all", label: "All time" },
-];
 
 export default function TasksCompleted() {
   const navigate = useNavigate();

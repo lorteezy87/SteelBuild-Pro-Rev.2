@@ -19,15 +19,10 @@ import { mono, body, CARD } from "./constants";
 import {
   countKeyActivities,
   groupUpcomingKeyActivities,
+  KEY_ACTIVITY_WINDOWS as WINDOWS,
 } from "./upcomingKeyActivitiesHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
-
-const WINDOWS = [
-  { key: "7", label: "Next 7 days" },
-  { key: "14", label: "Next 14 days" },
-  { key: "30", label: "Next 30 days" },
-];
 
 export default function UpcomingKeyActivities() {
   const navigate = useNavigate();

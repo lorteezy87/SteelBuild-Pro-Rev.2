@@ -19,16 +19,11 @@ import { mono, body } from "./constants";
 import {
   buildTasksReportRows,
   filterTasksReportRows,
+  TASKS_REPORT_TYPES as TASK_TYPES,
+  TASKS_REPORT_STATUSES as STATUSES,
 } from "./tasksReportHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
-
-// Live `schedule_tasks.task_type` values: Task / Submittal / Install /
-// Fabrication / Milestone / Delivery. The earlier dropdown also offered
-// Procurement / Detailing / Closeout, none of which exist on real rows
-// — selecting them returned 0 results, which read like a bug.
-const TASK_TYPES = ["Task", "Milestone", "Submittal", "Fabrication", "Install", "Delivery"];
-const STATUSES = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold", "Cancelled"];
 
 export default function Tasks() {
   const navigate = useNavigate();
