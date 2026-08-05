@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { generateMarkupSummaryPdf, suggestMarkupPdfFilename } from "@/lib/exports/markupPDF";
+import { selectExportSheets } from "./exportMarkupPdfHelpers";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 
@@ -41,13 +42,10 @@ export default function ExportMarkupPDFModal({
   const [busy, setBusy] = useState(false);
 
   // Sheets covered by the current scope.
-  const sheets = useMemo(() => {
-    if (!activeDrawing) return [];
-    if (scope === "drawing") return [activeDrawing];
-    const setName = activeDrawing.drawing_set_name;
-    if (!setName) return [activeDrawing];
-    return (drawings || []).filter((d) => d.drawing_set_name === setName);
-  }, [scope, activeDrawing, drawings]);
+  const sheets = useMemo(
+    () => selectExportSheets(scope, activeDrawing, drawings),
+    [scope, activeDrawing, drawings],
+  );
 
   if (!open) return null;
 

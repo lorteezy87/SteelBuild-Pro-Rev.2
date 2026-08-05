@@ -39,6 +39,7 @@ import {
   addDaysUTC,
   getTaskMetadata, getTaskBaseline, hasBaselineDrift, isCriticalTask,
   pluralize, taskOwner, isUnassignedTask, hasLogicGapTask,
+  groupGanttTasksByPhase,
 } from "./scheduleGanttHelpers";
 import {
   WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
@@ -190,28 +191,16 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   }, []);
 
   // ── Filter + group by phase ─────────────────────────────────────────
-  const grouped = useMemo(() => {
-    const filtered = phaseFilter === "all"
-      ? rawTasks
-      : rawTasks.filter(t => normalizePhase(t) === phaseFilter);
-
-    const map = {};
-    filtered.forEach(t => {
-      const ph = normalizePhase(t) || "Uncategorized";
-      if (!map[ph]) map[ph] = [];
-      map[ph].push(t);
-    });
-
-    // Order by PHASES array, uncategorized last — tree-sort within each phase
-    const ordered = [];
-    PHASES.forEach(ph => {
-      if (map[ph.key]) ordered.push({ phase: ph, tasks: buildTreeOrder(map[ph.key], { rootPrefix: ph.id }) });
-    });
-    if (map["Uncategorized"]) {
-      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: GANTT_BASELINE_VAR }, tasks: buildTreeOrder(map["Uncategorized"], { rootPrefix: 99 }) });
-    }
-    return ordered;
-  }, [rawTasks, phaseFilter]);
+  const grouped = useMemo(
+    () =>
+      groupGanttTasksByPhase(rawTasks, phaseFilter, {
+        normalizePhase,
+        PHASES,
+        buildTreeOrder,
+        uncategorizedColor: GANTT_BASELINE_VAR,
+      }),
+    [rawTasks, phaseFilter],
+  );
 
   // ── Date range ─────────────────────────────────────────────────────
   const allTasks = grouped.flatMap(g => g.tasks);

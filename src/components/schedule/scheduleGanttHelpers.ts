@@ -231,3 +231,53 @@ export function isLookaheadTask(
   if (start) return start >= today && start <= windowEnd;
   return end! >= today && end! <= windowEnd;
 }
+
+/** Filter + phase-group + tree-order tasks for ScheduleGantt left/timeline. */
+export function groupGanttTasksByPhase<T extends { id?: string }>(
+  rawTasks: T[],
+  phaseFilter: string,
+  deps: {
+    normalizePhase: (t: T) => string | null | undefined;
+    PHASES: Array<{ id: number; key: string; label: string; color?: string }>;
+    buildTreeOrder: (tasks: T[], opts: { rootPrefix: number }) => T[];
+    uncategorizedColor: string;
+  },
+): Array<{ phase: { id: number; key: string; label: string; color?: string }; tasks: T[] }> {
+  const { normalizePhase, PHASES, buildTreeOrder, uncategorizedColor } = deps;
+  const filtered =
+    phaseFilter === "all"
+      ? rawTasks
+      : rawTasks.filter((t) => normalizePhase(t) === phaseFilter);
+
+  const map: Record<string, T[]> = {};
+  filtered.forEach((t) => {
+    const ph = normalizePhase(t) || "Uncategorized";
+    if (!map[ph]) map[ph] = [];
+    map[ph].push(t);
+  });
+
+  const ordered: Array<{
+    phase: { id: number; key: string; label: string; color?: string };
+    tasks: T[];
+  }> = [];
+  PHASES.forEach((ph) => {
+    if (map[ph.key]) {
+      ordered.push({
+        phase: ph,
+        tasks: buildTreeOrder(map[ph.key], { rootPrefix: ph.id }),
+      });
+    }
+  });
+  if (map["Uncategorized"]) {
+    ordered.push({
+      phase: {
+        id: 99,
+        key: "Uncategorized",
+        label: "Uncategorized",
+        color: uncategorizedColor,
+      },
+      tasks: buildTreeOrder(map["Uncategorized"], { rootPrefix: 99 }),
+    });
+  }
+  return ordered;
+}

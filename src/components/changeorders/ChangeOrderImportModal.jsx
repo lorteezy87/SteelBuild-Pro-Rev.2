@@ -22,6 +22,7 @@ import { readChangeOrderCsvFile } from "@/lib/importChangeOrderCsv";
 import { batchProcess } from "@/utils/batchProcess";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { statusColor, formatMoney } from "./changeOrderImportHelpers";
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -527,23 +528,6 @@ export default function ChangeOrderImportModal({
       </div>
     </>
   );
-}
-
-// ── Visual helpers ──────────────────────────────────────────────────
-function statusColor(s) {
-  switch (String(s || "").toLowerCase()) {
-    case "approved":       return "var(--status-success)";
-    case "rejected":       return "var(--status-error)";
-    case "void":           return "var(--text-muted)";
-    case "draft":          return "var(--text-muted)";
-    case "submitted":      return "var(--status-info, #3B82F6)";
-    case "under review":   return "var(--status-warning)";
-    default:               return "var(--text-muted)";
-  }
-}
-function formatMoney(n) {
-  if (n === null || n === undefined || !Number.isFinite(Number(n))) return "—";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(n));
 }
 
 function Td({ children, mono: isMono, accent, success, align = "left" }) {
