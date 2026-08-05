@@ -37,3 +37,25 @@ export function computePunchlistStats(punchlist: PunchItemLike[]) {
 
 /** @deprecated Prefer shared selectionHelpers. */
 export { toggleIdInList } from "@/pages/shared/selectionHelpers";
+
+export const PUNCHLIST_STATUSES = [
+  "Open",
+  "In Progress",
+  "Completed",
+  "On Hold",
+  "Deferred",
+] as const;
+
+export const PUNCHLIST_CATEGORIES = [
+  "Structural",
+  "Connections",
+  "Painting/Coating",
+  "Hardware",
+  "Fit-Up",
+  "Cleanup",
+  "Documentation",
+  "Other",
+] as const;
+
+export const PUNCHLIST_PRIORITIES = ["Critical", "High", "Medium", "Low"] as const;
+

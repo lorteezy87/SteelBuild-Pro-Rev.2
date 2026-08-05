@@ -3,6 +3,9 @@ import {
   filterPunchlist,
   computePunchlistStats,
   toggleIdInList,
+  PUNCHLIST_STATUSES,
+  PUNCHLIST_CATEGORIES,
+  PUNCHLIST_PRIORITIES,
 } from "./punchlist/punchlistPageHelpers";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
@@ -220,9 +223,9 @@ export default function Punchlist() {
   const filtered = filterPunchlist(punchlist, { filterStatus, filterCategory, filterPriority });
   const { completionRate, ...stats } = computePunchlistStats(punchlist);
 
-  const statuses = ["Open", "In Progress", "Completed", "On Hold", "Deferred"];
-  const categories = ["Structural", "Connections", "Painting/Coating", "Hardware", "Fit-Up", "Cleanup", "Documentation", "Other"];
-  const priorities = ["Critical", "High", "Medium", "Low"];
+  const statuses = PUNCHLIST_STATUSES;
+  const categories = PUNCHLIST_CATEGORIES;
+  const priorities = PUNCHLIST_PRIORITIES;
 
   return (
     <div

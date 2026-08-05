@@ -25,3 +25,17 @@ describe("punchlistPageHelpers", () => {
     expect(toggleIdInList(["a"], "a")).toEqual([]);
   });
 });
+
+import {
+  PUNCHLIST_STATUSES,
+  PUNCHLIST_CATEGORIES,
+  PUNCHLIST_PRIORITIES,
+} from "../punchlistPageHelpers";
+
+describe("punchlist filter tokens", () => {
+  it("exposes status/category/priority catalogs", () => {
+    expect(PUNCHLIST_STATUSES).toContain("Deferred");
+    expect(PUNCHLIST_CATEGORIES[0]).toBe("Structural");
+    expect(PUNCHLIST_PRIORITIES).toEqual(["Critical", "High", "Medium", "Low"]);
+  });
+});
