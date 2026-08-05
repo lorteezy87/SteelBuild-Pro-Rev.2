@@ -32,3 +32,26 @@ export function computeSafetyStats(incidents: SafetyIncidentLike[]) {
     open: incidents.filter((i) => i.status === "Open").length,
   };
 }
+
+export const SAFETY_INCIDENT_TYPES = [
+  "Injury",
+  "Near Miss",
+  "Hazard",
+  "Property Damage",
+  "Environmental",
+  "Behavioral",
+  "Equipment Failure",
+  "Other",
+] as const;
+
+export const SAFETY_SEVERITIES = ["Critical", "High", "Medium", "Low"] as const;
+
+/** Status chip values used on the Safety register filter bar. */
+export const SAFETY_STATUS_FILTERS = [
+  "all",
+  "Open",
+  "In Progress",
+  "Completed",
+  "Closed",
+] as const;
+

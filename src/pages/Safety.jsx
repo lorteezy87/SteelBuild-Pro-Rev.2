@@ -3,6 +3,9 @@ import {
   filterLiveRecords,
   filterSafetyIncidents,
   computeSafetyStats,
+  SAFETY_INCIDENT_TYPES,
+  SAFETY_SEVERITIES,
+  SAFETY_STATUS_FILTERS,
 } from "./safety/safetyPageHelpers";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
@@ -120,8 +123,8 @@ export default function Safety() {
   const filtered = filterSafetyIncidents(incidents, { filterType, filterSeverity, filterStatus });
   const stats = computeSafetyStats(incidents);
 
-  const types = ["Injury", "Near Miss", "Hazard", "Property Damage", "Environmental", "Behavioral", "Equipment Failure", "Other"];
-  const severities = ["Critical", "High", "Medium", "Low"];
+  const types = SAFETY_INCIDENT_TYPES;
+  const severities = SAFETY_SEVERITIES;
 
   return (
     <div
@@ -178,7 +181,7 @@ export default function Safety() {
 
         <div style={{ display: "flex", gap: "8px" }}>
           <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Status:</span>
-          {["all", "Open", "In Progress", "Completed", "Closed"].map((status) => (
+          {SAFETY_STATUS_FILTERS.map((status) => (
             <button key={status} onClick={() => setFilterStatus(status)} style={{ background: filterStatus === status ? "var(--accent)" : "var(--bg-surface-low)", color: filterStatus === status ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               {status === "all" ? "All" : status.slice(0, 6)}
             </button>

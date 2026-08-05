@@ -22,3 +22,12 @@ describe("photosPageHelpers", () => {
     expect(stats.safety).toBe(1);
   });
 });
+
+import { PHOTO_CATEGORIES, PHOTO_DATE_RANGES } from "../photosPageHelpers";
+
+describe("photo filter tokens", () => {
+  it("exposes categories and date ranges", () => {
+    expect(PHOTO_CATEGORIES).toContain("Progress");
+    expect(PHOTO_DATE_RANGES[0].value).toBe("all");
+  });
+});

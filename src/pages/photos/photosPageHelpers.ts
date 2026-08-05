@@ -49,3 +49,20 @@ export function computePhotoStats(photos: PhotoLike[]) {
     other: photos.filter((p) => p.category === "Other").length,
   };
 }
+
+export const PHOTO_CATEGORIES = [
+  "Progress",
+  "Safety",
+  "Issue",
+  "Delivery",
+  "Punchlist",
+  "Other",
+] as const;
+
+export const PHOTO_DATE_RANGES = [
+  { label: "All Time", value: "all" },
+  { label: "This Week", value: "week" },
+  { label: "This Month", value: "month" },
+  { label: "Today", value: "today" },
+] as const;
+

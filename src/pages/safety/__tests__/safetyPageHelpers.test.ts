@@ -17,3 +17,17 @@ describe("safetyPageHelpers", () => {
     expect(s.open).toBe(2);
   });
 });
+
+import {
+  SAFETY_INCIDENT_TYPES,
+  SAFETY_SEVERITIES,
+  SAFETY_STATUS_FILTERS,
+} from "../safetyPageHelpers";
+
+describe("safety filter tokens", () => {
+  it("exposes types, severities, statuses", () => {
+    expect(SAFETY_INCIDENT_TYPES).toContain("Near Miss");
+    expect(SAFETY_SEVERITIES).toEqual(["Critical", "High", "Medium", "Low"]);
+    expect(SAFETY_STATUS_FILTERS[0]).toBe("all");
+  });
+});

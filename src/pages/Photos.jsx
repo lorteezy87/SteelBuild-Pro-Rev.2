@@ -1,6 +1,12 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
-import { filterLiveRecords, filterPhotos, computePhotoStats } from "./photos/photosPageHelpers";
+import {
+  filterLiveRecords,
+  filterPhotos,
+  computePhotoStats,
+  PHOTO_CATEGORIES,
+  PHOTO_DATE_RANGES,
+} from "./photos/photosPageHelpers";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
@@ -48,13 +54,8 @@ export default function Photos() {
   const filtered = filterPhotos(photos, { filterDate, filterCategory });
   const stats = computePhotoStats(photos);
 
-  const categories = ["Progress", "Safety", "Issue", "Delivery", "Punchlist", "Other"];
-  const dateRanges = [
-    { label: "All Time", value: "all" },
-    { label: "This Week", value: "week" },
-    { label: "This Month", value: "month" },
-    { label: "Today", value: "today" },
-  ];
+  const categories = PHOTO_CATEGORIES;
+  const dateRanges = PHOTO_DATE_RANGES;
 
   return (
     <div
