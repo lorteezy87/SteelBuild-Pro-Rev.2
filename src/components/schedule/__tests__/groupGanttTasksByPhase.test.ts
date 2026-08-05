@@ -63,3 +63,126 @@ describe("filterGroupedTasksByVisibleIds", () => {
     expect(out[0].tasks.map((t: any) => t.id)).toEqual(["2"]);
   });
 });
+
+import { buildGanttFlatRows, utcToday } from "../scheduleGanttHelpers";
+
+describe("utcToday", () => {
+  it("returns UTC midnight for the given date", () => {
+    const d = utcToday(new Date("2026-08-05T15:30:00.000Z"));
+    expect(d.toISOString()).toBe("2026-08-05T00:00:00.000Z");
+  });
+});
+
+describe("buildGanttFlatRows", () => {
+  const fab = { id: 4, key: "Fabrication", label: "Fabrication" };
+  const install = { id: 6, key: "Installation", label: "Installation" };
+  const effStart = (t: any) => t.start_date;
+  const effEnd = (t: any) => t.end_date;
+
+  it("emits phase summaries and tasks, inserts deliveries before Installation", () => {
+    const grouped = [
+      {
+        phase: fab,
+        tasks: [
+          { id: "t1", start_date: "2026-01-01", end_date: "2026-01-10", percent_complete: 50, _hasChildren: false },
+        ],
+      },
+      {
+        phase: install,
+        tasks: [
+          { id: "t2", start_date: "2026-02-01", end_date: "2026-02-10", percent_complete: 0, _hasChildren: false },
+        ],
+      },
+    ];
+    const deliveries = [
+      { id: "d1", scheduled_date: "2026-01-20", status: "Scheduled" },
+      { id: "d2", scheduled_date: "2026-01-15", status: "Delivered" },
+    ];
+    const rows = buildGanttFlatRows({
+      grouped,
+      collapsed: {},
+      collapsedTasks: {},
+      showDeliveries: true,
+      deliveries,
+      collapsedDeliveries: false,
+      effStart,
+      effEnd,
+    });
+    const types = rows.map((r: any) => r.type);
+    expect(types).toEqual([
+      "summary",
+      "task",
+      "delivery-summary",
+      "delivery",
+      "delivery",
+      "summary",
+      "task",
+    ]);
+    // deliveries sorted by scheduled_date
+    expect(rows[3].delivery.id).toBe("d2");
+    expect(rows[4].delivery.id).toBe("d1");
+    expect(rows[2].deliveryCount).toBe(2);
+    expect(rows[2].pctComplete).toBe(50);
+  });
+
+  it("hides child tasks under collapsed ancestors and collapsed phases", () => {
+    const parent = {
+      id: "p",
+      parent_task_id: null,
+      start_date: "2026-01-01",
+      end_date: "2026-01-10",
+      percent_complete: 0,
+      _hasChildren: true,
+    };
+    const child = {
+      id: "c",
+      parent_task_id: "p",
+      start_date: "2026-01-02",
+      end_date: "2026-01-05",
+      percent_complete: 0,
+      _hasChildren: false,
+    };
+    const rows = buildGanttFlatRows({
+      grouped: [{ phase: fab, tasks: [parent, child] }],
+      collapsed: { Fabrication: true },
+      collapsedTasks: {},
+      showDeliveries: false,
+      deliveries: [],
+      collapsedDeliveries: false,
+      effStart,
+      effEnd,
+    });
+    expect(rows.map((r: any) => r.type)).toEqual(["summary"]);
+
+    const openPhase = buildGanttFlatRows({
+      grouped: [{ phase: fab, tasks: [parent, child] }],
+      collapsed: {},
+      collapsedTasks: { p: true },
+      showDeliveries: false,
+      deliveries: [],
+      collapsedDeliveries: false,
+      effStart,
+      effEnd,
+    });
+    expect(openPhase.filter((r: any) => r.type === "task").map((r: any) => r.task.id)).toEqual(["p"]);
+  });
+
+  it("appends deliveries when no Installation phase exists", () => {
+    const rows = buildGanttFlatRows({
+      grouped: [
+        {
+          phase: fab,
+          tasks: [{ id: "t1", start_date: "a", end_date: "b", percent_complete: 0, _hasChildren: false }],
+        },
+      ],
+      collapsed: {},
+      collapsedTasks: {},
+      showDeliveries: true,
+      deliveries: [{ id: "d1", scheduled_date: "2026-01-01", status: "Scheduled" }],
+      collapsedDeliveries: true,
+      effStart,
+      effEnd,
+    });
+    expect(rows.map((r: any) => r.type)).toEqual(["summary", "task", "delivery-summary"]);
+  });
+});

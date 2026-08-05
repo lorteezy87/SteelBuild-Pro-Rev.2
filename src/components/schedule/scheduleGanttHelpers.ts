@@ -302,3 +302,117 @@ export function filterGroupedTasksByVisibleIds<
 export function utcToday(now: Date = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
+
+
+/** Flat phase/task/delivery row list for ScheduleGantt scroll sync. */
+export function buildGanttFlatRows(args: {
+  grouped: Array<{ phase: any; tasks: any[] }>;
+  collapsed: Record<string, boolean>;
+  collapsedTasks: Record<string, boolean>;
+  showDeliveries: boolean;
+  deliveries: any[];
+  collapsedDeliveries: boolean;
+  effStart: (task: any) => unknown;
+  effEnd: (task: any) => unknown;
+}): any[] {
+  const {
+    grouped,
+    collapsed,
+    collapsedTasks,
+    showDeliveries,
+    deliveries,
+    collapsedDeliveries,
+    effStart,
+    effEnd,
+  } = args;
+
+  const list: any[] = [];
+
+  // Check if task should be visible (no collapsed ancestor in task tree)
+  const isTaskVisible = (task: any, allPhaseTasks: any[]) => {
+    let pid = task.parent_task_id;
+    while (pid) {
+      if (collapsedTasks[pid]) return false;
+      const parent = allPhaseTasks.find((t) => t.id === pid);
+      if (!parent) break;
+      pid = parent.parent_task_id;
+    }
+    return true;
+  };
+
+  // Helper: insert delivery entity rows into the list
+  const insertDeliveryRows = () => {
+    if (!showDeliveries || deliveries.length === 0) return;
+    const delStarts = deliveries.map((d) => d.scheduled_date).filter(Boolean).sort();
+    const delEnds = deliveries
+      .map((d) => d.required_date || d.actual_date || d.scheduled_date)
+      .filter(Boolean)
+      .sort();
+    const deliveredCount = deliveries.filter((d) => d.status === "Delivered").length;
+    const pct = deliveries.length > 0 ? Math.round((deliveredCount / deliveries.length) * 100) : 0;
+    list.push({
+      type: "delivery-summary",
+      deliveryCount: deliveries.length,
+      start: delStarts[0],
+      end: delEnds[delEnds.length - 1],
+      pctComplete: pct,
+    });
+    if (!collapsedDeliveries) {
+      deliveries
+        .slice()
+        .sort((a, b) => (a.scheduled_date || "").localeCompare(b.scheduled_date || ""))
+        .forEach((d) => {
+          list.push({ type: "delivery", delivery: d });
+        });
+    }
+  };
+
+  // Insert deliveries in correct phase sequence:
+  // Pre-Construction → Detailing → Procurement → Fabrication → DELIVERIES → Installation → Closeout
+  let deliveriesInserted = false;
+
+  grouped.forEach(({ phase, tasks }) => {
+    // Insert delivery section right before Installation (after Fabrication/Delivery task phases)
+    if (!deliveriesInserted && (phase.key === "Installation" || phase.id >= 6)) {
+      deliveriesInserted = true;
+      insertDeliveryRows();
+    }
+
+    // Phase % uses displayPct so Complete tasks always count as 100% even
+    // when their percent_complete field is stale.
+    const phaseProgressTasks = tasks.filter((task) => !task._hasChildren);
+    const progressBasis = phaseProgressTasks.length ? phaseProgressTasks : tasks;
+    const avgPct =
+      progressBasis.length > 0
+        ? progressBasis.reduce((sum, t) => sum + displayPct(t), 0) / progressBasis.length
+        : 0;
+
+    // Phase summary bar spans from the earliest *effective* start to the
+    // latest *effective* end so a delayed predecessor visibly stretches
+    // its parent phase, matching what the task bars actually show.
+    const starts = tasks.map((t) => effStart(t)).filter(Boolean).sort();
+    const ends = tasks.map((t) => effEnd(t)).filter(Boolean).sort();
+    list.push({
+      type: "summary",
+      phase,
+      tasks,
+      start: starts[0],
+      end: ends[ends.length - 1],
+      pctComplete: avgPct,
+    });
+    if (!collapsed[phase.key]) {
+      tasks.forEach((t) => {
+        if (isTaskVisible(t, tasks)) {
+          list.push({ type: "task", task: t, phase });
+        }
+      });
+    }
+  });
+
+  // Fallback: if no Installation phase existed, append deliveries after all phases
+  if (!deliveriesInserted) {
+    insertDeliveryRows();
+  }
+
+  return list;
+}
