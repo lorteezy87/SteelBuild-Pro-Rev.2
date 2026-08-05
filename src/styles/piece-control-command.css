@@ -761,9 +761,22 @@
 
 [data-skin="command"] .piece-control-command input,
 [data-skin="command"] .piece-control-command select,
-[data-skin="command"] .piece-control-command textarea,
-[data-skin="command"] .piece-control-command select option {
+[data-skin="command"] .piece-control-command textarea {
   background-color: var(--cmd-surface);
+  color: var(--cmd-text);
+  border-color: var(--cmd-border);
+}
+
+/* Native option lists need an opaque menu fill — translucent --cmd-surface
+   (or frosted sbd tokens) paint black when the OS highlights the hovered row. */
+[data-skin="command"] .piece-control-command select option,
+[data-skin="command"] .piece-control-command select optgroup {
+  background-color: var(--cmd-menu, var(--cmd-surface));
+  color: var(--cmd-text);
+}
+[data-skin="command"] .piece-control-command select option:checked,
+[data-skin="command"] .piece-control-command select option:hover {
+  background-color: var(--cmd-menu-hover, var(--cmd-row-hover));
   color: var(--cmd-text);
 }
 
@@ -791,7 +804,10 @@
   --bg-surface: var(--cmd-surface);
   --bg-surface-low: var(--cmd-row-hover);
   --bg-surface-high: var(--cmd-surface);
-  --bg-input: var(--cmd-surface);
+  --bg-surface-secondary: var(--cmd-menu, var(--cmd-surface));
+  --bg-elevated: var(--cmd-menu, var(--cmd-surface));
+  --bg-input: var(--cmd-menu, var(--cmd-surface));
+  --hover-bg: var(--cmd-menu-hover, var(--cmd-row-hover));
   --text-primary: var(--cmd-text);
   --text-secondary: var(--cmd-text-muted);
   --text-muted: var(--cmd-text-muted);

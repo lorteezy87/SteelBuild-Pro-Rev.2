@@ -94,14 +94,17 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
       </div>
 
       {open && (
-        <div className="sbd-card" style={{
+        <div className="sbp-opaque-popout" style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0,
           width: 320,
-          background: "var(--bg-surface-secondary, var(--sbd-bg-surface-hi))",
-          backdropFilter: "blur(24px) saturate(150%)",
-          WebkitBackdropFilter: "blur(24px) saturate(150%)",
+          background: "var(--sbd-bg-panel-hi, var(--bg-elevated, #21262D))",
+          border: "1px solid var(--border-default)",
+          borderRadius: 14,
           borderTop: "2px solid var(--accent)",
+          boxShadow: "var(--shadow-lg, 0 16px 40px rgba(0,0,0,0.45))",
           zIndex: 2000, overflow: "hidden",
+          backdropFilter: "none",
+          WebkitBackdropFilter: "none",
         }}>
           {/* Header */}
           <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--divider)" }}>

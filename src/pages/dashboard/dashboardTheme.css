@@ -34,11 +34,15 @@
    The reference layout benefits (padding, structure, nav) remain; colors now pull from sbd tokens. */
 .steelbuild-dark .dashboard-reference-shell,
 .steelbuild-dark.dashboard-reference-shell {
-  --bg-base: var(--sbd-bg-base);
-  --bg-surface: var(--sbd-bg-surface);
-  --bg-surface-secondary: var(--sbd-bg-surface-hi);
-  --bg-hover: var(--sbd-bg-row-hover);
-  --hover-bg: var(--sbd-bg-surface-hi);
+  /* Opaque solids for chrome + menus. Frosted --sbd-bg-surface* made the
+     project switcher / floating panels too transparent to read. */
+  --bg-base: var(--sbd-bg-page, #0B0E11);
+  --bg-surface: var(--sbd-bg-panel, #161B22);
+  --bg-surface-secondary: var(--sbd-bg-panel-hi, #21262D);
+  --bg-elevated: var(--sbd-bg-panel-hi, #21262D);
+  --bg-input: var(--sbd-bg-panel-input, #1C2128);
+  --bg-hover: var(--sbd-bg-panel-hover, #2D333B);
+  --hover-bg: var(--sbd-bg-panel-hover, #2D333B);
   --border: var(--sbd-border);
   --border-default: var(--sbd-border);
   --border-strong: var(--sbd-border-strong);
@@ -52,7 +56,7 @@
   --status-error: var(--sbd-error);
   --status-success: var(--sbd-success);
   --status-warning: var(--sbd-warning);
-  --dashboard-avatar-bg: linear-gradient(145deg, var(--sbd-bg-surface-hi), var(--sbd-bg-elevated));
+  --dashboard-avatar-bg: linear-gradient(145deg, var(--sbd-bg-panel-hi, #21262D), var(--sbd-bg-panel, #161B22));
   --dashboard-avatar-text: var(--on-accent);
   background: var(--sbd-bg-page) !important;
 }
@@ -71,7 +75,7 @@
 }
 
 .steelbuild-dark .dashboard-reference-shell .sb-dashboard-topbar {
-  background: color-mix(in srgb, var(--bg-surface) 92%, transparent) !important;
+  background: var(--bg-surface) !important;
   border-bottom-color: var(--border-default) !important;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--text-primary) 4%, transparent);
 }
