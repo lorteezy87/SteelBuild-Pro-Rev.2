@@ -46,7 +46,7 @@ export interface RfiSummary {
   ballInCourt: BicSummaryRow[];
 }
 
-const OPEN_STATUSES = new Set(["Open", "Under Review", "Incomplete Response"]);
+export const OPEN_STATUSES = new Set(["Open", "Under Review", "Incomplete Response"]);
 
 /** Whole days from today (UTC-midnight basis) until `dateStr`; null if absent/invalid. */
 export function daysUntil(dateStr?: string | null): number | null {

@@ -84,7 +84,7 @@ export interface DocumentsSummary {
   reviewTone: "danger" | "warn" | "neutral";
 }
 
-const REVIEW_STATUSES = new Set(["Under Review", "Revise & Resubmit"]);
+export const REVIEW_STATUSES = new Set(["Under Review", "Revise & Resubmit"]);
 
 /** Parse an ISO date string to a Date, returning null if absent/invalid. */
 function parseDate(s?: string | null): Date | null {
@@ -182,7 +182,7 @@ export function scopeDocsToFolder(docs: DocumentRecord[], currentFolderId: strin
   return docs.filter((d) => (d.folder_id ?? null) === (currentFolderId ?? null));
 }
 
-const SEARCH_FIELDS = ["displayName", "documentNumber", "fileName", "description", "drawingNumber"] as const;
+export const SEARCH_FIELDS = ["displayName", "documentNumber", "fileName", "description", "drawingNumber"] as const;
 
 function matchesSearch(d: DocumentRecord, q: string): boolean {
   for (const f of SEARCH_FIELDS) {

@@ -232,7 +232,7 @@ export function validateDueDateWrite(
   return null;
 }
 
-const WORKFLOW_STAGE_STATES = new Set(["IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released", "Partially Released", "Released for Erection"]);
+export const WORKFLOW_STAGE_STATES = new Set(["IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released", "Partially Released", "Released for Erection"]);
 
 /** Manual detailing state is a pre-submittal recovery action only. */
 export function validateDetailingStateWrite(

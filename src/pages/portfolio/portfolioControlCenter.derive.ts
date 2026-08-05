@@ -112,7 +112,7 @@ export interface PortfolioSummary {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-const ACTIVE_STATUSES = new Set(["Active", "In Progress"]);
+export const ACTIVE_STATUSES = new Set(["Active", "In Progress"]);
 
 function n(v: unknown): number {
   const num = Number(v);

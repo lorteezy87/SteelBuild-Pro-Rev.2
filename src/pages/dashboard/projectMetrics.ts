@@ -675,7 +675,7 @@ export function projectedMargin(project, cos = [], expenses = []) {
  * item appears at most once, and its current_percent_complete is the
  * cumulative billed-percent through the latest pay app.
  */
-const BILLED_SOV_STATUSES = new Set(["Certified", "Paid"]);
+export const BILLED_SOV_STATUSES = new Set(["Certified", "Paid"]);
 
 export function latestCertifiedPerLineItem(sovItems = []) {
   const byKey = new Map();

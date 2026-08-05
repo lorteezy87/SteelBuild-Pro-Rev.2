@@ -79,7 +79,7 @@ const CATEGORY_ACCENT: Record<string, string> = {
  * Slugs that represent the highest-value "flagship" reports to surface first
  * in the featured panel when no favorites exist. Order is intentional.
  */
-const FEATURED_SLUGS = [
+export const FEATURED_SLUGS = [
   "portfolio-overview",
   "financial-kpis",
   "project-details",

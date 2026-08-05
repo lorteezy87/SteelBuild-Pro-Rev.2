@@ -27,7 +27,7 @@ export const STATUS_GROUPS: Record<string, string[]> = {
 
 /** Statuses that are terminal for the overdue tally — a past required_date on
  *  one of these does NOT count as overdue (the cycle is closed). */
-const OVERDUE_EXEMPT_STATUSES = ["Approved", "Approved as Noted", "Released for Fabrication", "Void"];
+export const OVERDUE_EXEMPT_STATUSES = ["Approved", "Approved as Noted", "Released for Fabrication", "Void"];
 
 export interface SubmittalFilterState {
   filterStatus: string;

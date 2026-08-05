@@ -51,7 +51,7 @@ export interface ActionItemsSummary {
   byOwner: OwnerSummaryRow[];
 }
 
-const ACTIVE_STATUSES = new Set<string>([
+export const ACTIVE_STATUSES = new Set<string>([
   ACTION_ITEM_STATUS.OPEN,
   ACTION_ITEM_STATUS.IN_PROGRESS,
 ]);

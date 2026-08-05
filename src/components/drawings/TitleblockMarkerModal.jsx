@@ -28,6 +28,8 @@ import { parseTitleblockRect } from "@/lib/titleblock";
 import { extractTextFromRect } from "@/lib/pdfTitleblockText";
 import { toast } from "sonner";
 import {
+  import { titleblockRectStyle,
+} from "./titleblockMarkerModalHelpers";
   overlayStyle,
   dialogStyle,
   headerStyle,
@@ -445,20 +447,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   const canSave = !saving && titleRect != null && numberRect != null;
 
   // Compute pixel-space rectangles to paint over the canvas.
-  const rectStyle = (rect, color) => {
-    if (!rect) return null;
-    return {
-      position: "absolute",
-      left: `${rect.x * 100}%`,
-      top: `${rect.y * 100}%`,
-      width: `${rect.width * 100}%`,
-      height: `${rect.height * 100}%`,
-      border: `2px solid ${color}`,
-      background: `${color}22`,
-      pointerEvents: "none",
-      boxSizing: "border-box",
-    };
-  };
+    const rectStyle = titleblockRectStyle;
 
   return (
     <div style={overlayStyle} role="dialog" aria-modal="true" aria-label="Mark titleblock rectangles">

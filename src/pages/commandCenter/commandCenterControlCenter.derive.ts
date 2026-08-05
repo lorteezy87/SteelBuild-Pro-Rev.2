@@ -197,10 +197,10 @@ function toneFromCount(count: number, warnAt: number, dangerAt: number): PanelTo
 
 // ── Panel row builders ────────────────────────────────────────────────────
 
-const OPEN_RFI_STATUSES = new Set(["Open", "Under Review", "Incomplete Response"]);
-const PENDING_SUB_STATUSES = new Set(["IFA", "OFA", "BFA", "OFS", "IFC", "R&R", "Pending", "Under Review", "Resubmit"]);
-const PENDING_CO_STATUSES = new Set(["Draft", "Submitted", "Under Review", "Pending"]);
-const WAITING_SUB_STATUSES = new Set(["IFA", "OFA"]);
+export const OPEN_RFI_STATUSES = new Set(["Open", "Under Review", "Incomplete Response"]);
+export const PENDING_SUB_STATUSES = new Set(["IFA", "OFA", "BFA", "OFS", "IFC", "R&R", "Pending", "Under Review", "Resubmit"]);
+export const PENDING_CO_STATUSES = new Set(["Draft", "Submitted", "Under Review", "Pending"]);
+export const WAITING_SUB_STATUSES = new Set(["IFA", "OFA"]);
 
 function rfiTodayPriority(rfi: RfiSource): PanelRow | null {
   if (!OPEN_RFI_STATUSES.has(rfi.status || "Open")) return null;

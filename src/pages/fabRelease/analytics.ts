@@ -57,9 +57,9 @@ export const STATUS_ORDER = ["Not Started", "In Progress", "Complete", "On Hold"
 export const BOARD_LANES = ["Blocked", "Ready For Release", "Released", "In Shop", "Ready To Ship"];
 
 const STAGE_ORDER = FAB_STAGES.map((stage) => stage.id);
-const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
+export const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
 /** Slice 8 — only IFC / Released count as fab-ready (not OFS / bare Approved). */
-const RELEASED_DRAWING_STATES = new Set([
+export const RELEASED_DRAWING_STATES = new Set([
   "released",
   "ifc",
   "issued for construction",

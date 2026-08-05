@@ -1,7 +1,7 @@
 // @ts-nocheck
-const PHASE_ORDER = ["Detailing", "Fabrication", "Delivery", "Erection"];
-const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
-const APPROVED_DRAWING_STAGES = new Set([
+export const PHASE_ORDER = ["Detailing", "Fabrication", "Delivery", "Erection"];
+export const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
+export const APPROVED_DRAWING_STAGES = new Set([
   "Released",
   "IFC",
   "Issued for Construction",
@@ -235,4 +235,3 @@ export function sortWorkPackagesForExecution(a, b) {
   return String(a.wp_number || "").localeCompare(String(b.wp_number || ""));
 }
 
-export { PHASE_ORDER };

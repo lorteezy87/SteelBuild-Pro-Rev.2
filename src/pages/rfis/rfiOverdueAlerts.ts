@@ -34,7 +34,7 @@ export type RfiOverdueAlertPlanItem = {
   };
 };
 
-const CLOSED_STATUSES = new Set(["Answered", "Closed"]);
+export const CLOSED_STATUSES = new Set(["Answered", "Closed"]);
 const MS_PER_DAY = 86400000;
 
 /** Start-of-day Date used by the overdue window (local midnight). */

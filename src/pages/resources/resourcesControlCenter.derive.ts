@@ -43,9 +43,9 @@ export interface WorkPackageRecord {
 }
 
 /** Labor-type resource_type values (mirrors ResourceManagement stats). */
-const LABOR_TYPES = new Set(["Person", "Crew", "Labor"]);
+export const LABOR_TYPES = new Set(["Person", "Crew", "Labor"]);
 /** Equipment-type resource_type values. */
-const EQUIPMENT_TYPES = new Set(["Equipment", "Bay"]);
+export const EQUIPMENT_TYPES = new Set(["Equipment", "Bay"]);
 
 /** Field from the DB; fallback mirrors ResourceManagement.getStatus(). */
 export function getAvailability(r: ResourceRecord): string {

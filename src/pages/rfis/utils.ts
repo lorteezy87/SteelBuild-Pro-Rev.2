@@ -118,7 +118,7 @@ export const isOverdue = (r) =>
  * Unknown statuses pass through unchanged so a future status value
  * (e.g. "On Hold") still renders something — just at full length.
  */
-const RFI_STATUS_SHORT = {
+export const RFI_STATUS_SHORT = {
   "Open": "OPEN",
   "Submitted": "OPEN",
   "Under Review": "REVIEW",

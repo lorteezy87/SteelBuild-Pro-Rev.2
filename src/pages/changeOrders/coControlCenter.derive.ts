@@ -49,8 +49,8 @@ export interface CoSummary {
   riskQueue: CoRecord[];
 }
 
-const TERMINAL = new Set(["Approved", "Rejected", "Void"]);
-const PENDING_STATUSES = new Set(["Submitted", "Under Review"]);
+export const TERMINAL = new Set(["Approved", "Rejected", "Void"]);
+export const PENDING_STATUSES = new Set(["Submitted", "Under Review"]);
 
 function safeAmount(co: CoRecord): number {
   const n = Number(co.co_amount);

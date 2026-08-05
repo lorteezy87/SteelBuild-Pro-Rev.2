@@ -30,8 +30,8 @@ import {
 import { dueInfoFor } from "@/pages/drawingSubmittalHub/format";
 import type { DueInfo } from "@/pages/drawingSubmittalHub/types";
 
-const ACTION_STATUSES = new Set(["Rejected", "Revise and Resubmit"]);
-const CLOSED_SUBMITTAL_STATUSES = new Set(["Released for Fabrication", "Void"]);
+export const ACTION_STATUSES = new Set(["Rejected", "Revise and Resubmit"]);
+export const CLOSED_SUBMITTAL_STATUSES = new Set(["Released for Fabrication", "Void"]);
 
 /** One board card — the shape the legacy `buildBoardItems` produces. */
 export interface BoardItem {

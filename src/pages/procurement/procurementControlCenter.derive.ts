@@ -40,8 +40,8 @@ export interface ProcurementItem {
 }
 
 // The procurement pipeline order.
-const TERMINAL_STATUSES = new Set(["Received", "Cancelled"]);
-const OPEN_STATUSES = new Set([
+export const TERMINAL_STATUSES = new Set(["Received", "Cancelled"]);
+export const OPEN_STATUSES = new Set([
   "Identified", "Quoted", "PO Issued", "Confirmed", "In Production", "Shipped",
 ]);
 

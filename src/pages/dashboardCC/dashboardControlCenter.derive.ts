@@ -96,10 +96,10 @@ export interface ModuleTile {
 
 // ── Closed-status sets (mirrors ProjectDashboard.jsx exactly) ─────────────────
 
-const CLOSED_CO_STATUSES = new Set(["Approved", "Approved as Noted", "Rejected", "Void", "Executed"]);
-const CLOSED_SUBMITTAL_STATUSES = new Set(["Approved", "Approved as Noted", "Released for Fabrication", "Void"]);
-const CLOSED_TASK_STATUSES = new Set(["Complete", "Completed", "Done", "Closed"]);
-const CLOSED_DELIVERY_STATUSES = new Set(["Delivered", "Complete", "Completed", "Received", "Cancelled"]);
+export const CLOSED_CO_STATUSES = new Set(["Approved", "Approved as Noted", "Rejected", "Void", "Executed"]);
+export const CLOSED_SUBMITTAL_STATUSES = new Set(["Approved", "Approved as Noted", "Released for Fabrication", "Void"]);
+export const CLOSED_TASK_STATUSES = new Set(["Complete", "Completed", "Done", "Closed"]);
+export const CLOSED_DELIVERY_STATUSES = new Set(["Delivered", "Complete", "Completed", "Received", "Cancelled"]);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

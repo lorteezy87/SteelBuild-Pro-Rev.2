@@ -103,7 +103,7 @@ export interface RiskSummary {
 }
 
 // Constraint statuses considered "resolved" (mirrors the constraints module).
-const RESOLVED_STATUSES = new Set(["Resolved", "Closed"]);
+export const RESOLVED_STATUSES = new Set(["Resolved", "Closed"]);
 
 /** Map a Constraint priority string to a severity level. */
 function priorityToSeverity(priority: string | null): FlatRisk["severity"] {

@@ -1,4 +1,4 @@
-const EDITABLE_FIELDS = [
+export const EDITABLE_FIELDS = [
   "project_id",
   "project_name",
   "title",

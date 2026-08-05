@@ -158,8 +158,8 @@ export interface FieldTodaySummary {
 
 // ── Pure derivation ───────────────────────────────────────────────────────────
 
-const OPEN_PUNCH_STATUSES = new Set(["Open", "In Progress", "Pending", "New"]);
-const CLOSED_PUNCH_STATUSES = new Set(["Closed", "Resolved", "Completed", "Complete"]);
+export const OPEN_PUNCH_STATUSES = new Set(["Open", "In Progress", "Pending", "New"]);
+export const CLOSED_PUNCH_STATUSES = new Set(["Closed", "Resolved", "Completed", "Complete"]);
 
 /** Derives the "next action" label for a task row — deterministic. */
 function nextActionForTask(task: ScheduleTaskRecord, bucket: UrgencyBucket): string {

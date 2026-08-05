@@ -60,7 +60,7 @@ export const PX_PER_DAY = {
 };
 
 // ─── Skill tag extraction ───────────────────────────────────────────
-const KNOWN_SKILLS_RS = [
+export const KNOWN_SKILLS_RS = [
   "CWI", "Fitter", "Rigger", "Welder", "Erector", "Detailer",
   "PE", "QC", "Foreman", "Crane Op", "Ironworker", "Painter",
 ];
