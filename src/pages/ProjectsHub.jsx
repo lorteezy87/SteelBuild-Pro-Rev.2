@@ -11,6 +11,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { resolveHubTabKey } from "./hubs/hubTabHelpers";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
@@ -29,7 +30,7 @@ const TABS = [
 export default function ProjectsHub() {
   const [params, setParams] = useSearchParams();
   const param = params.get("proj_tab");
-  const activeKey = TABS.some((t) => t.key === param) ? param : "projects";
+  const activeKey = resolveHubTabKey(param, TABS.map((t) => t.key), "projects");
   const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
   const setTab = (key) =>
     setParams(

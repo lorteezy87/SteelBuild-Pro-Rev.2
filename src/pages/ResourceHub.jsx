@@ -17,6 +17,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { resolveHubTabKey } from "./hubs/hubTabHelpers";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -37,7 +38,7 @@ export default function ResourceHub() {
   const { activeProject } = useProjectContext();
   const [params, setParams] = useSearchParams();
   const param = params.get("res_tab");
-  const activeTab = TABS.some((t) => t.key === param) ? param : "register";
+  const activeTab = resolveHubTabKey(param, TABS.map((t) => t.key), "register");
   const setTab = (key) =>
     setParams(
       (prev) => {

@@ -127,7 +127,7 @@ function signalToCategory(signal: string): string {
 }
 
 /** Flatten all engine RiskItems into FlatRisk records. */
-function flattenEngineItems(signals: RiskSignal[]): FlatRisk[] {
+export function flattenEngineItems(signals: RiskSignal[]): FlatRisk[] {
   const out: FlatRisk[] = [];
   for (const sig of signals) {
     const category = signalToCategory(sig.signal);
@@ -151,7 +151,7 @@ function flattenEngineItems(signals: RiskSignal[]): FlatRisk[] {
 }
 
 /** Flatten user-entered Constraints (action_items) into FlatRisk records. */
-function flattenConstraints(constraints: ConstraintRecord[]): FlatRisk[] {
+export function flattenConstraints(constraints: ConstraintRecord[]): FlatRisk[] {
   return constraints
     .filter((c) => !RESOLVED_STATUSES.has(c.status ?? ""))
     .map((c) => ({
@@ -167,6 +167,49 @@ function flattenConstraints(constraints: ConstraintRecord[]): FlatRisk[] {
       mitigationStatus: c.status ?? null,
       area: c.project_area ?? null,
     }));
+}
+
+export function buildFlatRisks(
+  signals: RiskSignal[],
+  constraints: ConstraintRecord[],
+): FlatRisk[] {
+  return [...flattenEngineItems(signals), ...flattenConstraints(constraints)];
+}
+
+export function filterFlatRisks(
+  items: FlatRisk[],
+  opts: { search: string; categoryFilter: string },
+): FlatRisk[] {
+  const q = (opts.search || "").toLowerCase();
+  return (items || []).filter((item) => {
+    if (opts.categoryFilter !== "All" && item.category !== opts.categoryFilter) return false;
+    if (q && !`${item.label} ${item.category} ${item.detail}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+export function formatRiskExposureMoney(n: number | null | undefined): string {
+  if (!n) return "—";
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${Math.round(n).toLocaleString()}`;
+}
+
+export function buildRiskCsvRows(
+  rows: FlatRisk[],
+): Array<Array<string | number>> {
+  return [
+    ["Risk", "Category", "Severity", "Exposure", "Status", "Owner", "Detail"],
+    ...rows.map((r) => [
+      r.label,
+      r.category,
+      r.severity,
+      r.exposure,
+      r.mitigationStatus ?? "Active",
+      r.owner ?? "—",
+      r.detail,
+    ]),
+  ];
 }
 
 /** Group flat items by category, counting and summing exposure. */

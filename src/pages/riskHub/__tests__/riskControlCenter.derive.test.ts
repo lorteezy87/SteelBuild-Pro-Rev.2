@@ -232,3 +232,38 @@ describe("buildRiskSummary – empty inputs", () => {
     expect(s.total).toBe(0);
   });
 });
+
+
+import {
+  buildFlatRisks,
+  filterFlatRisks,
+  formatRiskExposureMoney,
+  buildRiskCsvRows,
+} from "../riskControlCenter.derive";
+
+describe("flat risks filter/csv", () => {
+  it("builds filters and formats", () => {
+    const flat = buildFlatRisks(
+      [
+        {
+          signal: "open_rfis",
+          items: [
+            {
+              entityId: "1",
+              label: "RFI-1",
+              severity: "high",
+              exposure: 5000,
+              detail: "open",
+              entityType: "RFI",
+            },
+          ],
+        } as any,
+      ],
+      [{ id: "c1", title: "Blocker", status: "Open", priority: "Critical", constraint_type: "Material" } as any],
+    );
+    expect(flat.length).toBe(2);
+    expect(filterFlatRisks(flat, { search: "rfi", categoryFilter: "All" })).toHaveLength(1);
+    expect(formatRiskExposureMoney(1500)).toBe("$2K");
+    expect(buildRiskCsvRows(flat)[0][0]).toBe("Risk");
+  });
+});
