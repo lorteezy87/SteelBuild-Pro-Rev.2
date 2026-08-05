@@ -416,3 +416,21 @@ export function buildGanttFlatRows(args: {
 
   return list;
 }
+
+/** Effective-finish overdue check used by ScheduleGantt / stats. */
+export function isGanttTaskOverdue(
+  task: ScheduleTaskLike | null | undefined,
+  effEnd: (task: ScheduleTaskLike) => unknown,
+  today: Date,
+): boolean {
+  if (!task || task.status === "Complete") return false;
+  const e = parseDateUTC(effEnd(task));
+  if (!e) return false;
+  return e < today;
+}
+
+/** CSS color-mix tint helper for gantt chrome. */
+export function ganttTint(color: string, percent: number): string {
+  return `color-mix(in srgb, ${color} ${percent}%, transparent)`;
+}
+

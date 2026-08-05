@@ -186,3 +186,21 @@ describe("buildGanttFlatRows", () => {
     expect(rows.map((r: any) => r.type)).toEqual(["summary", "task", "delivery-summary"]);
   });
 });
+
+import { isGanttTaskOverdue, ganttTint } from "../scheduleGanttHelpers";
+
+describe("isGanttTaskOverdue / ganttTint", () => {
+  const today = new Date("2026-08-01T00:00:00.000Z");
+  const effEnd = (t: any) => t.end_date;
+
+  it("flags incomplete tasks past effective end", () => {
+    expect(isGanttTaskOverdue({ status: "In Progress", end_date: "2026-07-01" }, effEnd, today)).toBe(true);
+    expect(isGanttTaskOverdue({ status: "Complete", end_date: "2026-07-01" }, effEnd, today)).toBe(false);
+    expect(isGanttTaskOverdue({ status: "In Progress", end_date: "2026-09-01" }, effEnd, today)).toBe(false);
+    expect(isGanttTaskOverdue(null, effEnd, today)).toBe(false);
+  });
+
+  it("builds color-mix tint strings", () => {
+    expect(ganttTint("red", 12)).toBe("color-mix(in srgb, red 12%, transparent)");
+  });
+});

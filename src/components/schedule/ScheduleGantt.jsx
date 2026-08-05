@@ -43,6 +43,8 @@ import {
   filterGroupedTasksByVisibleIds,
   utcToday,
   buildGanttFlatRows,
+  isGanttTaskOverdue,
+  ganttTint,
 } from "./scheduleGanttHelpers";
 import {
   WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
@@ -69,7 +71,7 @@ import {
 import { GanttLeftPanelRows, GanttTimelineRows } from "./GanttTaskRows";
 
 const HEAD_H  = 40;
-const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
+const tint = ganttTint;
 
 export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null }) {
   const [collapsed, setCollapsed] = useState({});
@@ -291,12 +293,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   // Overdue uses the *effective* finish so a task whose predecessor slipped
   // is judged against where the bar actually sits in the gantt — not the
   // stale stored finish. Tasks marked Complete are never overdue.
-  const isOverdue = (task) => {
-    if (!task || task.status === "Complete") return false;
-    const e = parseDateUTC(effEnd(task));
-    if (!e) return false;
-    return e < today;
-  };
+  const isOverdue = (task) => isGanttTaskOverdue(task, effEnd, today);
 
   const scrollToToday = () => {
     if (rightBody.current) {
