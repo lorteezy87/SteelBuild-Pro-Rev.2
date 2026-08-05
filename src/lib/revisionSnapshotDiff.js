@@ -39,7 +39,7 @@ const VALID_DELTA_TYPES = new Set([
 ]);
 const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low", "info"]);
 
-const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+export const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
 export function normalizeDeltaType(raw) {
   if (!raw) return "other";

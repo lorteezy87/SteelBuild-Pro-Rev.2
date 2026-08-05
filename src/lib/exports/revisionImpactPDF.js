@@ -9,19 +9,11 @@
  * html2canvas). `now` is injected so the generated date is deterministic in tests.
  */
 import { jsPDF } from "jspdf";
-
-const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
-const SEV_RGB = {
-  critical: [248, 81, 73], high: [240, 136, 62], medium: [210, 153, 34],
-  low: [63, 185, 80], info: [139, 148, 158],
-};
-// Mirrors RevisionDeltaCard's DELTA_LABEL; inlined so this stays a React-free lib.
-const DELTA_LABEL = {
-  grid_shift: "Grid shift", connection_change: "Connection", dimension_change: "Dimension",
-  detail_revised: "Detail", callout_added: "Callout +", callout_removed: "Callout -",
-  material_change: "Material", elevation_change: "Elevation", sheet_added: "Sheet +",
-  sheet_removed: "Sheet -", other: "Other",
-};
+import {
+  REVISION_IMPACT_SEV_ORDER as SEV_ORDER,
+  REVISION_IMPACT_SEV_RGB as SEV_RGB,
+  REVISION_IMPACT_DELTA_LABEL as DELTA_LABEL,
+} from "./revisionImpactPdfHelpers";
 
 // Local YYYY-MM-DD (NOT toISOString — that's UTC and rolls over wrong after ~5pm MST).
 function fmtDate(d) {

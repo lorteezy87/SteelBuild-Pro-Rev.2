@@ -9,17 +9,7 @@ import { jsPDF } from "jspdf";
 import { formatLocalDate } from "@/utils/dates";
 import { computeBackchargeAmount, computeTmTicketTotal, sumTmTickets } from "./cost";
 import { BACKCHARGE_REASON_LABELS, BACKCHARGE_STATUS_LABELS } from "./types";
-
-const C = {
-  black: [15, 17, 24],
-  accent: [0, 175, 215],
-  muted: [100, 110, 130],
-  border: [210, 215, 225],
-  rowEven: [245, 247, 250],
-  errorFill: [254, 242, 242],
-  error: [220, 38, 38],
-  white: [255, 255, 255],
-};
+import { DEFENSE_PDF_COLORS as C } from "./defensePdfHelpers";
 
 const money = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const dt = (d) => (d ? formatLocalDate(d) : "—");

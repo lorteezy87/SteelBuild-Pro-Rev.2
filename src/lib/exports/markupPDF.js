@@ -19,23 +19,12 @@
  */
 
 import { jsPDF } from "jspdf";
+import {
+  MARKUP_PDF_COLORS as C,
+  MARKUP_STATUS_COLOR as STATUS_COLOR,
+} from "./markupPdfHelpers";
 
 // ── Color palette (RGB) — match generateTransmittal.js for visual parity ──
-const C = {
-  black:   [15, 17, 24],
-  accent:  [200, 155, 32],
-  muted:   [100, 110, 130],
-  border:  [210, 215, 225],
-  rowEven: [245, 247, 250],
-  rowOdd:  [255, 255, 255],
-  white:   [255, 255, 255],
-};
-
-const STATUS_COLOR = {
-  open:      [202, 138, 4],
-  addressed: [22, 163, 74],
-  rejected:  [220, 38, 38],
-};
 
 // ── Pure helpers (exported for tests) ────────────────────────────────────
 

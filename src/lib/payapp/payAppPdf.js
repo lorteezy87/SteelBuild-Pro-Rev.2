@@ -9,8 +9,8 @@ import { jsPDF } from "jspdf";
 import { formatLocalDate } from "@/utils/dates";
 import { formatMoney, sumMoney } from "@/lib/money";
 import { computeG702, lineFigures } from "./g702";
+import { PAY_APP_PDF_COLORS as C } from "./payAppPdfHelpers";
 
-const C = { black: [15, 17, 24], accent: [0, 120, 150], muted: [100, 110, 130], border: [200, 206, 216], rowEven: [245, 247, 250], white: [255, 255, 255] };
 const m = (v) => formatMoney(v);
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
