@@ -2,6 +2,9 @@
 /** @deprecated Prefer `@/pages/shared/filterLiveRecords` — re-export kept for local imports. */
 export { filterLiveRecords } from "@/pages/shared/filterLiveRecords";
 
+/** @deprecated Prefer `@/pages/shared/nextFilterToggle`. */
+export { nextFilterToggle } from "@/pages/shared/nextFilterToggle";
+
 export type PunchItemLike = {
   status?: string | null;
   category?: string | null;
@@ -59,3 +62,21 @@ export const PUNCHLIST_CATEGORIES = [
 
 export const PUNCHLIST_PRIORITIES = ["Critical", "High", "Medium", "Low"] as const;
 
+export function punchlistCommandSubtitle(
+  completionRate: number,
+  criticalCount: number,
+): string {
+  return `${completionRate}% complete · ${criticalCount} critical · close-out checklist`;
+}
+
+export function createEmptyPunchlistFilters(): {
+  filterStatus: string;
+  filterCategory: string;
+  filterPriority: string;
+} {
+  return {
+    filterStatus: "all",
+    filterCategory: "all",
+    filterPriority: "all",
+  };
+}

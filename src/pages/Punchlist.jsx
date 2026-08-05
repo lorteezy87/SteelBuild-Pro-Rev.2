@@ -3,6 +3,9 @@ import {
   filterPunchlist,
   computePunchlistStats,
   toggleIdInList,
+  nextFilterToggle,
+  punchlistCommandSubtitle,
+  createEmptyPunchlistFilters,
   PUNCHLIST_STATUSES,
   PUNCHLIST_CATEGORIES,
   PUNCHLIST_PRIORITIES,
@@ -237,7 +240,7 @@ export default function Punchlist() {
         title="Punchlist"
         count={filtered.length}
         unit=" · ITEMS"
-        subtitle={`${completionRate}% complete · ${stats.critical} critical · close-out checklist`}
+        subtitle={punchlistCommandSubtitle(completionRate, stats.critical)}
       >
         <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
           Add Item
@@ -260,15 +263,15 @@ export default function Punchlist() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
         <KpiTile compact label="Total"       value={stats.total}      color="var(--accent)" />
         <KpiTile compact label="Completed"   value={stats.completed}  color="var(--status-success)"
-                 active={filterStatus === "Completed"} onClick={() => setFilterStatus(filterStatus === "Completed" ? "all" : "Completed")} />
+                 active={filterStatus === "Completed"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "Completed"))} />
         <KpiTile compact label="In Progress" value={stats.inProgress} color="var(--status-warning)"
-                 active={filterStatus === "In Progress"} onClick={() => setFilterStatus(filterStatus === "In Progress" ? "all" : "In Progress")} />
+                 active={filterStatus === "In Progress"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "In Progress"))} />
         <KpiTile compact label="Open"        value={stats.open}       color="var(--status-error)"
-                 active={filterStatus === "Open"} onClick={() => setFilterStatus(filterStatus === "Open" ? "all" : "Open")} />
+                 active={filterStatus === "Open"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "Open"))} />
         <KpiTile compact label="On Hold"     value={stats.onHold}     color="var(--status-review)"
-                 active={filterStatus === "On Hold"} onClick={() => setFilterStatus(filterStatus === "On Hold" ? "all" : "On Hold")} />
+                 active={filterStatus === "On Hold"} onClick={() => setFilterStatus(nextFilterToggle(filterStatus, "On Hold"))} />
         <KpiTile compact label="Critical"    value={stats.critical}   color="var(--status-error)"
-                 active={filterPriority === "Critical"} onClick={() => setFilterPriority(filterPriority === "Critical" ? "all" : "Critical")} />
+                 active={filterPriority === "Critical"} onClick={() => setFilterPriority(nextFilterToggle(filterPriority, "Critical"))} />
       </div>
 
       {/* Filters */}
@@ -317,9 +320,10 @@ export default function Punchlist() {
         emptyActionLabel="+ New Item"
         onEmptyAction={() => { setEditing(null); setShowForm(true); }}
         onClearFilters={() => {
-          setFilterStatus("all");
-          setFilterCategory("all");
-          setFilterPriority("all");
+          const empty = createEmptyPunchlistFilters();
+          setFilterStatus(empty.filterStatus);
+          setFilterCategory(empty.filterCategory);
+          setFilterPriority(empty.filterPriority);
         }}
       >
         <PunchlistList

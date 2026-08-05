@@ -4,6 +4,12 @@ import {
   filterPunchlist,
   computePunchlistStats,
   toggleIdInList,
+  nextFilterToggle,
+  punchlistCommandSubtitle,
+  createEmptyPunchlistFilters,
+  PUNCHLIST_STATUSES,
+  PUNCHLIST_CATEGORIES,
+  PUNCHLIST_PRIORITIES,
 } from "../punchlistPageHelpers";
 
 describe("punchlistPageHelpers", () => {
@@ -26,16 +32,23 @@ describe("punchlistPageHelpers", () => {
   });
 });
 
-import {
-  PUNCHLIST_STATUSES,
-  PUNCHLIST_CATEGORIES,
-  PUNCHLIST_PRIORITIES,
-} from "../punchlistPageHelpers";
-
 describe("punchlist filter tokens", () => {
   it("exposes status/category/priority catalogs", () => {
     expect(PUNCHLIST_STATUSES).toContain("Deferred");
     expect(PUNCHLIST_CATEGORIES[0]).toBe("Structural");
     expect(PUNCHLIST_PRIORITIES).toEqual(["Critical", "High", "Medium", "Low"]);
+  });
+
+  it("toggles KPI filter and builds subtitle", () => {
+    expect(nextFilterToggle("all", "Open")).toBe("Open");
+    expect(nextFilterToggle("Open", "Open")).toBe("all");
+    expect(punchlistCommandSubtitle(33, 2)).toBe(
+      "33% complete · 2 critical · close-out checklist",
+    );
+    expect(createEmptyPunchlistFilters()).toEqual({
+      filterStatus: "all",
+      filterCategory: "all",
+      filterPriority: "all",
+    });
   });
 });
