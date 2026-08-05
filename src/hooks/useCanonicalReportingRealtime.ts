@@ -29,15 +29,34 @@ export function canonicalReportingQueryKeys(projectId: string) {
   ];
 }
 
+
+/**
+ * Invalidate piece-lifecycle caches so the 3D Fab color mode (and boards)
+ * refetch after Production / Logistics / release mutations. Critical because
+ * the app uses a 30s staleTime and disables refetchOnWindowFocus — without
+ * this, Model3DTab keeps painting the previous lifecycle_status.
+ *
+ * Prefer `invalidatePieceControlQueries` for write handlers (broader scopes).
+ * This helper covers the realtime / reporting key set used by the 3D tab.
+ */
+export function invalidateCanonicalPieceCaches(
+  queryClient: { invalidateQueries: (opts: { queryKey: readonly unknown[] }) => unknown },
+  projectId: string,
+) {
+  return Promise.all(
+    canonicalReportingQueryKeys(projectId).map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey }),
+    ),
+  );
+}
+
 export function useCanonicalReportingRealtime(projectId?: string) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!projectId) return;
     const invalidate = () => {
-      for (const queryKey of canonicalReportingQueryKeys(projectId)) {
-        queryClient.invalidateQueries({ queryKey });
-      }
+      void invalidateCanonicalPieceCaches(queryClient, projectId);
     };
     let channel = supabase.channel(`canonical-reporting:${projectId}`);
     for (const table of CANONICAL_REPORTING_REALTIME_TABLES) {

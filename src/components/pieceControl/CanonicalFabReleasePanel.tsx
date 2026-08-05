@@ -8,6 +8,7 @@ import {
   type CanonicalReleaseGate,
 } from "@/lib/pieceControl/releaseRepository";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { invalidatePieceControlQueries } from "@/lib/pieceControl/queryKeys";
 
 interface CanonicalFabReleasePanelProps {
   projectId: string;
@@ -209,6 +210,8 @@ export default function CanonicalFabReleasePanel({
       setExceptionOpen(false);
       setExceptionReason("");
       await Promise.all([
+        // Lifecycle write-through → 3D Fab colors (staleTime 30s, no focus refetch).
+        invalidatePieceControlQueries(queryClient, projectId, "production"),
         queryClient.invalidateQueries({ queryKey: ["canonical-release-gate", workPackageId] }),
         queryClient.invalidateQueries({ queryKey: ["piece-relationships", projectId] }),
         queryClient.invalidateQueries({ queryKey: ["piece-register", projectId] }),
