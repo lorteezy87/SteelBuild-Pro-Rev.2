@@ -57,6 +57,7 @@ import {
   ScheduleTaskRecord,
   PhotoRecord,
   PunchlistItemRecord,
+  filterFieldTaskRows,
 } from "./fieldTodayControlCenter.derive";
 import { PROGRESS_STEPS, clampPercent } from "@/lib/field/fieldToday";
 
@@ -236,23 +237,10 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
   );
 
   // Apply search + status filter to table rows
-  const filtered = useMemo(() => {
-    let rows = s.tableRows;
-    if (statusFilter && statusFilter !== "all") {
-      rows = rows.filter((r) => r.urgencyBucket === statusFilter);
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      rows = rows.filter(
-        (r) =>
-          r.activity.toLowerCase().includes(q) ||
-          r.type.toLowerCase().includes(q) ||
-          r.location.toLowerCase().includes(q) ||
-          r.reportedBy.toLowerCase().includes(q),
-      );
-    }
-    return rows;
-  }, [s.tableRows, statusFilter, search]);
+  const filtered = useMemo(
+    () => filterFieldTaskRows(s.tableRows, statusFilter, search),
+    [s.tableRows, statusFilter, search],
+  );
 
   // ── Hero summary chips ──
   const chips = [

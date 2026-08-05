@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildFieldTodaySummary,
+  filterFieldTaskRows,
   ScheduleTaskRecord,
   PhotoRecord,
   PunchlistItemRecord,
@@ -167,5 +168,20 @@ describe("buildFieldTodaySummary", () => {
       expect(empty.openPunchRows).toHaveLength(0);
       expect(empty.photoThumbnails).toHaveLength(0);
     });
+  });
+});
+
+describe("filterFieldTaskRows", () => {
+  const rows = [
+    { id: "1", activity: "Bolt up", type: "Task", location: "Grid A", reportedBy: "Crew 1", urgencyBucket: "overdue" },
+    { id: "2", activity: "Deck weld", type: "Task", location: "Roof", reportedBy: "Crew 2", urgencyBucket: "due-today" },
+    { id: "3", activity: "Punch list", type: "Punch", location: "Grid B", reportedBy: "QA", urgencyBucket: "overdue" },
+  ] as any;
+
+  it("filters by urgency bucket and free-text", () => {
+    expect(filterFieldTaskRows(rows, "overdue", "").map((r) => r.id)).toEqual(["1", "3"]);
+    expect(filterFieldTaskRows(rows, "all", "deck").map((r) => r.id)).toEqual(["2"]);
+    expect(filterFieldTaskRows(rows, "overdue", "grid b").map((r) => r.id)).toEqual(["3"]);
+    expect(filterFieldTaskRows(rows, "all", "")).toHaveLength(3);
   });
 });

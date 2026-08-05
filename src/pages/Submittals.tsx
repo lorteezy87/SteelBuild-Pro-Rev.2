@@ -47,6 +47,10 @@ import SubmittalFormModal from "./submittals/SubmittalFormModal";
 import StatusSuggestStrip from "./submittals/StatusSuggestStrip";
 import { useSubmittalsPageMutations } from "./submittals/useSubmittalsPageMutations";
 import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types";
+import {
+  buildDrawingSetsById,
+  buildRoundsBySubmittal,
+} from "./submittals/submittalsPageHelpers";
 
 /**
  * Submittals — formal transmittal register.
@@ -177,17 +181,14 @@ export default function Submittals() {
     staleTime: 60_000,
   });
 
-  const drawingSetsById: DrawingSetsById = useMemo(() => {
-    // Bridge the generated DB row to the page's domain `DrawingSet` view (same
-    // data, nullable columns modeled as optional). Cast preserves runtime; the
-    // map only ever holds real drawing-set rows. Removable once `types` models
-    // the nullable columns directly.
-    const map = new Map<string, DrawingSet>();
-    for (const set of drawingSets) {
-      if (set?.id) map.set(set.id, set as DrawingSet);
-    }
-    return map;
-  }, [drawingSets]);
+  // Bridge the generated DB row to the page's domain `DrawingSet` view (same
+  // data, nullable columns modeled as optional). Cast preserves runtime; the
+  // map only ever holds real drawing-set rows. Removable once `types` models
+  // the nullable columns directly.
+  const drawingSetsById: DrawingSetsById = useMemo(
+    () => buildDrawingSetsById(drawingSets as DrawingSet[]),
+    [drawingSets],
+  );
 
   // ── Rounds for the selected submittal ────────────────────────────
   const { data: allRounds = [] } = useQuery({
@@ -198,17 +199,10 @@ export default function Submittals() {
     enabled: !!projectId,
     staleTime: 30_000,
   });
-  const roundsBySubmittal = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    for (const r of allRounds) {
-      if (!map[r.submittal_id]) map[r.submittal_id] = [];
-      map[r.submittal_id].push(r);
-    }
-    for (const arr of Object.values(map)) {
-      arr.sort((a, b) => (a.round_number || 1) - (b.round_number || 1));
-    }
-    return map;
-  }, [allRounds]);
+  const roundsBySubmittal = useMemo(
+    () => buildRoundsBySubmittal(allRounds as any[]),
+    [allRounds],
+  );
 
   // ── RFIs for linked-entity picker ────────────────────────────────
   const { data: allRfis = [] } = useQuery({

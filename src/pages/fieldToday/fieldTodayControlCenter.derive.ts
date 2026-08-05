@@ -283,3 +283,26 @@ export function buildFieldTodaySummary(
     syncTone: pendingSync > 0 ? "warn" : "neutral",
   };
 }
+
+/** Apply status-chip + free-text search to Field Today table rows. */
+export function filterFieldTaskRows(
+  rows: FieldTaskRow[],
+  statusFilter: string,
+  search: string,
+): FieldTaskRow[] {
+  let list = rows || [];
+  if (statusFilter && statusFilter !== "all") {
+    list = list.filter((r) => r.urgencyBucket === statusFilter);
+  }
+  if (search.trim()) {
+    const q = search.trim().toLowerCase();
+    list = list.filter(
+      (r) =>
+        r.activity.toLowerCase().includes(q) ||
+        r.type.toLowerCase().includes(q) ||
+        r.location.toLowerCase().includes(q) ||
+        r.reportedBy.toLowerCase().includes(q),
+    );
+  }
+  return list;
+}

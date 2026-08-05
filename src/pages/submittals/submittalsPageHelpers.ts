@@ -1,0 +1,69 @@
+/**
+ * Pure helpers for Submittals page shell (index maps / related RFIs).
+ */
+import type { DrawingSet, DrawingSetsById } from "./types";
+
+export function buildDrawingSetsById(
+  drawingSets: Array<{ id?: string | null } & Partial<DrawingSet>>,
+): DrawingSetsById {
+  const map = new Map<string, DrawingSet>();
+  for (const set of drawingSets || []) {
+    if (set?.id) map.set(set.id, set as DrawingSet);
+  }
+  return map;
+}
+
+export type RoundLike = {
+  submittal_id?: string | null;
+  round_number?: number | null;
+  [k: string]: unknown;
+};
+
+/** Group rounds by submittal_id, sorted by round_number ascending. */
+export function buildRoundsBySubmittal<T extends RoundLike>(
+  allRounds: T[],
+): Record<string, T[]> {
+  const map: Record<string, T[]> = {};
+  for (const r of allRounds || []) {
+    const sid = r.submittal_id;
+    if (!sid) continue;
+    if (!map[sid]) map[sid] = [];
+    map[sid].push(r);
+  }
+  for (const arr of Object.values(map)) {
+    arr.sort((a, b) => (a.round_number || 1) - (b.round_number || 1));
+  }
+  return map;
+}
+
+export type SubmittalLinkLike = {
+  drawing_set_ids?: string[] | null;
+  linked_rfi_ids?: string[] | null;
+};
+
+export type RfiLinkLike = {
+  id?: string | null;
+  drawing_set_id?: string | null;
+  [k: string]: unknown;
+};
+
+/**
+ * RFIs on the same drawing set(s) as the submittal, excluding those already
+ * manually linked via linked_rfi_ids.
+ */
+export function filterRelatedSetRfis<T extends RfiLinkLike>(
+  submittal: SubmittalLinkLike | null | undefined,
+  allRfis: T[],
+): T[] {
+  const setIds = Array.isArray(submittal?.drawing_set_ids) ? submittal!.drawing_set_ids! : [];
+  if (!setIds.length) return [];
+  const linkedManual = new Set(
+    Array.isArray(submittal?.linked_rfi_ids) ? submittal!.linked_rfi_ids! : [],
+  );
+  return (allRfis || []).filter(
+    (rfi) =>
+      Boolean(rfi?.drawing_set_id) &&
+      setIds.includes(rfi.drawing_set_id as string) &&
+      !linkedManual.has(rfi.id as string),
+  );
+}

@@ -33,6 +33,7 @@ import {
   type SubmittalComponent,
 } from "@/lib/submittalComponents";
 import { BIC_CHOICES, STATUSES, STATUS_CFG, TYPES } from "./format";
+import { filterRelatedSetRfis } from "./submittalsPageHelpers";
 import { SubmittalTypeChips } from "./components";
 import type { DrawingSet, Submittal, SubmittalRoundRecord } from "./types";
 
@@ -199,19 +200,10 @@ export function SubmittalDetail({
     [submittal, rounds, cycleStats, today],
   );
   const navigate = useNavigate();
-  const relatedSetRfis = useMemo(() => {
-    const setIds = Array.isArray(submittal?.drawing_set_ids) ? submittal.drawing_set_ids : [];
-    if (!setIds.length) return [];
-    const linkedManual = new Set(
-      Array.isArray(submittal?.linked_rfi_ids) ? submittal.linked_rfi_ids : [],
-    );
-    return allRfis.filter(
-      (rfi) =>
-        Boolean(rfi?.drawing_set_id) &&
-        setIds.includes(rfi.drawing_set_id as string) &&
-        !linkedManual.has(rfi.id as string),
-    );
-  }, [submittal, allRfis]);
+  const relatedSetRfis = useMemo(
+    () => filterRelatedSetRfis(submittal, allRfis),
+    [submittal, allRfis],
+  );
   const lineage = useMemo(
     () => getSubmittalLineage(submittal, allSubmittals),
     [submittal, allSubmittals],
