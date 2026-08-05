@@ -62,6 +62,8 @@ import {
   ELEMENT_BUCKET_ORDER,
   DRILLDOWN_ROW_CAP,
   SCHEDULE_ROWS,
+  DRILL_TH_STYLE,
+  DRILL_TD_STYLE,
 } from "./triageBoardHelpers";
 
 // These shared screens are still .jsx; cast at the boundary (removable
@@ -496,12 +498,8 @@ export function ModelMappingSection({ summary, elements, onImport }: { summary?:
   );
 }
 
-const drillTh: CSSProperties = {
-  textAlign: "left", padding: "7px 12px", fontFamily: "var(--font-mono)",
-  fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase",
-  color: textMuted, borderBottom: `1px solid ${border}`,
-};
-const drillTd: CSSProperties = { padding: "6px 12px", borderBottom: `1px solid ${border}`, color: "var(--text-secondary)" };
+const drillTh = DRILL_TH_STYLE;
+const drillTd = DRILL_TD_STYLE;
 
 // ── Sequence Readiness rollup ───────────────────────────────────────────────
 // The sequence-aware view: group packages by erection sequence and show how far

@@ -10,7 +10,7 @@ import { PHASES } from "@/utils/phases";
 import { formatDateShort } from "@/components/shared/formatters";
 import { isSummaryTask as isSummaryTaskCanonical } from "@/lib/schedule/summaryTasks";
 
-const CLOSED_STATUSES = ["complete", "completed", "closed", "cancelled", "canceled"];
+export const CLOSED_STATUSES = ["complete", "completed", "closed", "cancelled", "canceled"];
 
 export function dateValue(value) {
   if (!value) return null;

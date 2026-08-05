@@ -18,7 +18,10 @@ import {
   AreaChart, Area, ReferenceLine,
 } from "recharts";
 import { formatCurrencyShort, formatCurrency } from "@/components/shared/formatters";
-import { COST_CHART_LEGEND_STYLE as LEGEND_STYLE } from "./costControlCenterHelpers";
+import {
+  COST_CHART_LEGEND_STYLE as LEGEND_STYLE,
+  COST_CHART_EMPTY_STYLE,
+} from "./costControlCenterHelpers";
 import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
 import type { BarChartDatum, CumulativeDatum, PieDatum } from "./costControlCenter.derive";
 import { getCategoryPieColor } from "./costChartColors";
@@ -58,13 +61,7 @@ function CustomTooltip({ active, payload, label, chartTheme }: {
 
 // ─── Axis style helpers ──────────────────────────────────────────────────────
 
-const EMPTY_STYLE: React.CSSProperties = {
-  textAlign: "center",
-  padding: 32,
-  color: "var(--text-muted)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-};
+const EMPTY_STYLE = COST_CHART_EMPTY_STYLE;
 
 // ─── Card wrapper ─────────────────────────────────────────────────────────────
 

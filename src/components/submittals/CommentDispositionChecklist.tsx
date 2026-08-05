@@ -7,6 +7,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import {
+import { COMMENT_DISPOSITION_INPUT_STYLE } from "./commentDispositionChecklistHelpers";
   COMMENT_DISPOSITION_STATUSES,
   collectUnresolvedRequiredComments,
   type CommentDispositionStatus,
@@ -258,12 +259,4 @@ export default function CommentDispositionChecklist({
   );
 }
 
-const inputStyle: CSSProperties = {
-  borderRadius: 2,
-  border: "1px solid var(--divider)",
-  background: "var(--bg-surface, transparent)",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  padding: "6px 8px",
-};
+const inputStyle = COMMENT_DISPOSITION_INPUT_STYLE;

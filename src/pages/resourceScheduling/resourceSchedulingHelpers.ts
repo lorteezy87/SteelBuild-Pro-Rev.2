@@ -39,7 +39,7 @@ export type DisplayResourceEntry = {
 
 export type ResourceFocus = "all" | "personnel" | "equipment" | "available" | "issues" | string;
 
-const ACTIVE_PHASE_STATUSES_EXCLUDED = ["Complete", "On Hold"];
+export const ACTIVE_PHASE_STATUSES_EXCLUDED = ["Complete", "On Hold"];
 
 /** Top-level resources (no parent crew). */
 export function filterTopLevelResources<T extends ResourceLike>(resources: T[]): T[] {
@@ -593,7 +593,7 @@ export type ResourceSidebarRow = {
   heatBg: string;
 };
 
-const RESOURCE_SIDEBAR_TYPES = [
+export const RESOURCE_SIDEBAR_TYPES = [
   "Person",
   "Crew",
   "Labor",

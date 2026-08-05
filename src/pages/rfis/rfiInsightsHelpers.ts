@@ -72,7 +72,7 @@ export function rfisByMonth(
   return out;
 }
 
-const CLOSED_FOR_OPEN = new Set(["Answered", "Closed"]);
+export const CLOSED_FOR_OPEN = new Set(["Answered", "Closed"]);
 
 export function filterOpenRfisForInsights<
   T extends { status?: string | null },

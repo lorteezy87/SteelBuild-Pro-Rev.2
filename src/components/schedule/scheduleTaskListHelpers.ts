@@ -5,7 +5,7 @@ import { PHASES, PHASE_NUMBER, derivePhase } from "../../utils/phases";
 import { buildTreeOrder } from "./scheduleTree";
 import { formatDateShort } from "../shared/formatters";
 
-const PRIORITY_ORDER = ["Critical", "High", "Normal", "Low"];
+export const PRIORITY_ORDER = ["Critical", "High", "Normal", "Low"];
 
 export function filterScheduleTasksByPriorityStatus<
   T extends { priority?: string | null; status?: string | null },

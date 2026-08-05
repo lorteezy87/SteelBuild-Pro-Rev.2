@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 /** Pure chrome helpers. */
 
 export const PHASE_OPTIONS = ["All", "Labor", "Materials", "Subcontractor", "Equipment", "Misc.", "Overhead"] as const;
@@ -7,4 +8,13 @@ export const COST_CHART_LEGEND_STYLE = {
   fontSize: 9,
   color: "var(--text-secondary)",
 } as const;
+
+
+export const COST_CHART_EMPTY_STYLE: CSSProperties = {
+  textAlign: "center",
+  padding: 32,
+  color: "var(--text-muted)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+};
 

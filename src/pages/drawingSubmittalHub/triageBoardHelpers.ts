@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+import { border, textMuted } from "./format";
 /** Pure chrome constants for Detailing triage board panels. */
 
 export const ELEMENT_BUCKET_ORDER = [
@@ -21,4 +23,21 @@ export const SCHEDULE_ROWS: Array<[string, string]> = [
   ["erectionReleaseRequiredBy", "Erection release by"],
 ];
 
+
+export const DRILL_TH_STYLE: CSSProperties = {
+  textAlign: "left",
+  padding: "7px 12px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  color: textMuted,
+  borderBottom: `1px solid ${border}`,
+};
+
+export const DRILL_TD_STYLE: CSSProperties = {
+  padding: "6px 12px",
+  borderBottom: `1px solid ${border}`,
+  color: "var(--text-secondary)",
+};
 

@@ -7,7 +7,7 @@ import { exportToCSV } from "@/lib/csv";
 import { addWeeks } from "./format";
 import type { Json } from "@/types/supabase";
 
-const TERMINAL = new Set(["Received", "Cancelled"]);
+export const TERMINAL = new Set(["Received", "Cancelled"]);
 
 export type ProcurementRawLike = {
   id?: string;

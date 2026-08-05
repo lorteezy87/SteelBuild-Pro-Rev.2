@@ -33,7 +33,7 @@ export function clampToEnum(value, choices) {
 // Header synonym → canonical column. Lower-cased + stripped of non-
 // alphanumerics on lookup, so "Submittal #", "submittal_number",
 // "SubmittalNumber" all collapse to the same key.
-const HEADER_SYNONYMS = {
+export const HEADER_SYNONYMS = {
   // submittal_number
   submittalnumber: "submittal_number",
   submittal: "submittal_number",
@@ -83,7 +83,7 @@ const HEADER_SYNONYMS = {
   fabricator: "submitted_by",
 };
 
-const CANONICAL_FIELDS = [
+export const CANONICAL_FIELDS = [
   "submittal_number", "title", "discipline", "submittal_type",
   "status", "ball_in_court", "required_date", "submitted_date",
   "spec_section", "submitted_by", "notes",

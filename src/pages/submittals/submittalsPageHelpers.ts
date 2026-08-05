@@ -121,7 +121,7 @@ export function isSplitEligibleStatus(status: string | null | undefined): boolea
 }
 
 /** Closed-ish statuses that do not count as date-overdue for the detail panel. */
-const NON_OVERDUE_STATUSES = new Set([
+export const NON_OVERDUE_STATUSES = new Set([
   "Approved",
   "Approved as Noted",
   "Released for Fabrication",
