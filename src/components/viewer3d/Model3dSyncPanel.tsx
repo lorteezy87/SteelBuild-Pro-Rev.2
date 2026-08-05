@@ -11,6 +11,7 @@ import {
   summarizeModelLinkHealth,
   type ModelElementLinkRow,
 } from "@/lib/pieceControl/modelElementLink";
+import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -37,18 +38,26 @@ export default function Model3dSyncPanel({
       const linked = Number(summary.linked ?? 0);
       const unmatched = Number(summary.unmatched ?? 0);
       const ambiguous = Number(summary.ambiguous ?? 0);
+      const viaClient = summary.used_client_fallback
+        ? " (client fallback — apply Piece Control migrations when ready)"
+        : "";
       if (linked === 0 && unmatched === 0 && ambiguous === 0) {
-        toast.success("3D marks are already in sync with the Piece Register.");
+        toast.success(
+          `3D marks are already in sync with the Piece Register.${viaClient}`,
+        );
         return;
       }
       toast.success(
         `Synced ${linked.toLocaleString()} mark${linked === 1 ? "" : "s"}` +
           (unmatched ? ` · ${unmatched.toLocaleString()} unmatched` : "") +
-          (ambiguous ? ` · ${ambiguous.toLocaleString()} ambiguous` : ""),
+          (ambiguous ? ` · ${ambiguous.toLocaleString()} ambiguous` : "") +
+          viaClient,
       );
     },
     onError: (error: Error) =>
-      toast.error(error?.message || "Could not sync 3D marks to pieces."),
+      toast.error(
+        presentPieceControlError(error, "Could not sync 3D marks to pieces."),
+      ),
   });
 
   if (!projectId) return null;
