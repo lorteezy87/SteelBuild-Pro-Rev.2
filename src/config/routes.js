@@ -44,6 +44,7 @@ export const ROUTE_LIFECYCLES = Object.freeze(["active", "internal"]);
 export const STATIC_ROUTE_METADATA = {
   "/": { lifecycle: "active", kind: "entry" },
   "/Landing": { lifecycle: "active", kind: "entry" },
+  "/DesktopConnect": { lifecycle: "internal", kind: "entry" },
   "/GanttChart": { lifecycle: "legacy", kind: "redirect", target: "/Schedule" },
   "/RFIHub": { lifecycle: "legacy", kind: "redirect", target: "/RFIs" },
   "/Financials": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },

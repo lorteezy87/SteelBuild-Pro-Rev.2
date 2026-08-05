@@ -18,6 +18,10 @@ import { landingForRole } from "@/lib/landingForRole";
 //   - Landing  at "/Landing"
 const Dashboard = lazyWithRetry(() => import("@/pages/Dashboard"));
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
+const DesktopConnect = lazyWithRetry(() => import("@/pages/DesktopConnect"));
+
+/** Internal handoff pages render fullscreen — no sidebar/topbar chrome. */
+const STANDALONE_LAYOUT_PAGES = new Set(["DesktopConnect"]);
 
 /**
  * Wrap each lazy page in Suspense + per-page error boundary. Keyed by `label`
@@ -137,7 +141,9 @@ export default function AppRoutes() {
       <Route element={<LayoutRoute />}>
         <Route index element={<IndexRoute />} />
 
-        {Object.entries(PAGES).map(([path, Page]) => (
+        {Object.entries(PAGES)
+          .filter(([path]) => !STANDALONE_LAYOUT_PAGES.has(path))
+          .map(([path, Page]) => (
           <Route
             key={path}
             // Reports owns nested routes (`/Reports/<slug>`) for the
@@ -195,6 +201,15 @@ export default function AppRoutes() {
         {/* /GanttChart was retired — redirect old deep-links to /Schedule */}
         <Route path="GanttChart" element={<Navigate to={STATIC_ROUTE_METADATA["/GanttChart"].target} replace />} />
       </Route>
+
+      <Route
+        path="DesktopConnect"
+        element={
+          <LazyRoute label="DesktopConnect">
+            <DesktopConnect />
+          </LazyRoute>
+        }
+      />
 
       {/* 404 — outside layout */}
       <Route path="*" element={<PageNotFound />} />
