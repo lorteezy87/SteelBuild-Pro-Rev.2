@@ -5,7 +5,7 @@ import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { Search } from "lucide-react";
 import { useProjectContext } from "@/components/shared/ProjectContext";
-import { filterQuickNavModules, buildSearchDisplayItems } from "./globalSearchHelpers";
+import { filterQuickNavModules, buildSearchDisplayItems, runCachedGlobalSearch } from "./globalSearchHelpers";
 
 // Stable empty array — prevents infinite re-render loops from useCallback/useEffect
 // dependency chains when queries are disabled and would otherwise return new [] refs.
@@ -148,68 +148,20 @@ export default function GlobalSearchModal({ open, onClose }) {
   const runSearch = useCallback((q) => {
     if (!q || q.length < 2) { setResults(EMPTY); setLoading(false); return; }
     setLoading(true);
-
-    const ql = q.toLowerCase();
-    const currentProjectId = activeProject?.id;
-
-    // Helper: filter results by project scope
-    const scopeFilter = (items) => {
-      if (searchScope === "project" && currentProjectId) {
-        return items.filter(i => i.project_id === currentProjectId || i.projectId === currentProjectId);
-      }
-      return items; // "all" scope returns everything
-    };
-
-    const searchResults = [];
-
-    // Contacts-only mode: skip other entities
-    if (searchScope === "contacts") {
-      cachedContacts
-        .filter(c => c.first_name?.toLowerCase().includes(ql) || c.last_name?.toLowerCase().includes(ql) || c.company?.toLowerCase().includes(ql) || c.email?.toLowerCase().includes(ql))
-        .slice(0, 12)
-        .forEach(c => searchResults.push({
-          type: "Contact", id: c.id,
-          title: `${c.first_name} ${c.last_name}`,
-          subtitle: [c.company, c.role, c.email].filter(Boolean).join(" · ") || "—",
-          status: c.contact_type, projectId: c.project_id, page: "Contacts",
-        }));
-      setResults(searchResults);
-      setLoading(false);
-      return;
-    }
-
-    // Filter from cached data — no network calls!
-    cachedProjects
-      .filter(p => p.name?.toLowerCase().includes(ql) || p.project_number?.toLowerCase().includes(ql))
-      .filter(p => searchScope !== "project" || !currentProjectId || p.id === currentProjectId)
-      .forEach(p => searchResults.push({ type: "Project", id: p.id, title: p.name, subtitle: `${p.project_number} · ${p.phase || "—"}`, status: p.health_status, projectId: p.id, page: "Projects" }));
-
-    scopeFilter(cachedRFIs)
-      .filter(r => r.rfi_number?.toLowerCase().includes(ql) || r.title?.toLowerCase().includes(ql) || r.description?.toLowerCase().includes(ql))
-      .slice(0, 5)
-      .forEach(r => searchResults.push({ type: "RFI", id: r.id, title: `${r.rfi_number} · ${r.title}`, subtitle: searchScope === "all" ? `${r.project_name || "—"} · ${r.status}` : `${r.project_name} · ${r.status}`, status: r.priority, projectId: r.project_id, page: "RFIs" }));
-
-    scopeFilter(cachedDrawings)
-      .filter(d => d.sheet_number?.toLowerCase().includes(ql) || d.title?.toLowerCase().includes(ql))
-      .slice(0, 5)
-      .forEach(d => searchResults.push({ type: "Drawing", id: d.id, title: `${d.sheet_number} · ${d.title}`, subtitle: searchScope === "all" ? `${d.project_name || "—"} · ${d.stage}` : `${d.project_name} · ${d.stage}`, status: d.stage, projectId: d.project_id, page: "Documents" }));
-
-    scopeFilter(cachedWPs)
-      .filter(w => w.wp_number?.toLowerCase().includes(ql) || w.name?.toLowerCase().includes(ql))
-      .slice(0, 5)
-      .forEach(w => searchResults.push({ type: "WorkPackage", id: w.id, title: `${w.wp_number} · ${w.name}`, subtitle: searchScope === "all" ? `${w.project_name || "—"} · ${w.status}` : `${w.project_name} · ${w.status}`, status: w.status, projectId: w.project_id, page: "WorkPackages" }));
-
-    scopeFilter(cachedCOs)
-      .filter(c => c.co_number?.toLowerCase().includes(ql) || c.title?.toLowerCase().includes(ql))
-      .slice(0, 5)
-      .forEach(c => searchResults.push({ type: "ChangeOrder", id: c.id, title: `${c.co_number} · ${c.title}`, subtitle: searchScope === "all" ? `${c.project_name || "—"} · ${c.status}` : `${c.project_name} · ${c.status}`, status: c.status, projectId: c.project_id, page: "ChangeOrders" }));
-
-    cachedContacts
-      .filter(c => c.first_name?.toLowerCase().includes(ql) || c.last_name?.toLowerCase().includes(ql) || c.company?.toLowerCase().includes(ql))
-      .slice(0, 5)
-      .forEach(c => searchResults.push({ type: "Contact", id: c.id, title: `${c.first_name} ${c.last_name}`, subtitle: `${c.company || "—"} · ${c.role || "—"}`, status: c.contact_type, projectId: c.project_id, page: "Contacts" }));
-
-    setResults(searchResults.slice(0, 12));
+    const searchResults = runCachedGlobalSearch({
+      query: q,
+      searchScope,
+      activeProjectId: activeProject?.id,
+      caches: {
+        projects: cachedProjects,
+        rfis: cachedRFIs,
+        drawings: cachedDrawings,
+        workPackages: cachedWPs,
+        changeOrders: cachedCOs,
+        contacts: cachedContacts,
+      },
+    });
+    setResults(searchResults);
     setLoading(false);
   }, [cachedProjects, cachedRFIs, cachedDrawings, cachedWPs, cachedCOs, cachedContacts, searchScope, activeProject]);
 
