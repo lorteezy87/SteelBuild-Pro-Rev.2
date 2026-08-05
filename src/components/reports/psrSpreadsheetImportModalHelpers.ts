@@ -49,3 +49,8 @@ export const btnGhost: Record<string, string | number> = {
   textTransform: "uppercase",
   cursor: "pointer",
 };
+
+export const displayStyle = {
+  fontFamily: "'Space Grotesk', var(--font-display)",
+} as const;
+

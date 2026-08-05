@@ -7,6 +7,8 @@ import {
   costCodeSpendPct,
   PHASE_CONFIG,
   HEALTH_CONFIG,
+  PROJECT_DETAIL_TABS,
+  monoStyle,
 } from "../projectDetailViewHelpers";
 
 describe("buildOverviewMetrics", () => {
@@ -125,3 +127,11 @@ describe("project detail chrome configs", () => {
     expect(HEALTH_CONFIG["At Risk"].dot).toBe("#EF4444");
   });
 });
+
+describe("PROJECT_DETAIL_TABS / monoStyle", () => {
+  it("lists overview first", () => {
+    expect(PROJECT_DETAIL_TABS[0].id).toBe("overview");
+    expect(monoStyle.fontFamily).toContain("Mono");
+  });
+});
+

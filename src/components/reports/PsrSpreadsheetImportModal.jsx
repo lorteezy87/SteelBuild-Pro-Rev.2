@@ -18,9 +18,9 @@ import {
   selectStyle,
   btnPrimary,
   btnGhost,
+  displayStyle as display,
 } from "./psrSpreadsheetImportModalHelpers";
 
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 
 export default function PsrSpreadsheetImportModal({
   open,

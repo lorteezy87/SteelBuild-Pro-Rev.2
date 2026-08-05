@@ -6,6 +6,7 @@ import {
   selectStyle,
   btnPrimary,
   btnGhost,
+  displayStyle,
 } from "../psrSpreadsheetImportModalHelpers";
 
 describe("psrSpreadsheetImportModalHelpers", () => {
@@ -20,3 +21,10 @@ describe("psrSpreadsheetImportModalHelpers", () => {
     expect(btnGhost.background).toBe("transparent");
   });
 });
+
+describe("displayStyle", () => {
+  it("uses Space Grotesk", () => {
+    expect(displayStyle.fontFamily).toContain("Space Grotesk");
+  });
+});
+

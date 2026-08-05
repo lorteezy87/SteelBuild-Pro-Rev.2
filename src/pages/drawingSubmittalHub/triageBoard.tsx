@@ -58,6 +58,11 @@ import {
   InlineDetailingControl,
   InlineOwnerControl,
 } from "./inlineControls";
+import {
+  ELEMENT_BUCKET_ORDER,
+  DRILLDOWN_ROW_CAP,
+  SCHEDULE_ROWS,
+} from "./triageBoardHelpers";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -302,12 +307,6 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
 // this section makes the mapping visible (and importable) before the viewer
 // lands, so model data quality is established first.
 
-const ELEMENT_BUCKET_ORDER = [
-  "rfi_blocked", "behind_schedule", "in_detailing", "in_review",
-  "fab_ready", "erection_ready", "unmapped",
-] as const;
-
-const DRILLDOWN_ROW_CAP = 100;
 
 // The drill-down can open from EITHER chip row: a detailing-status bucket
 // (resolved via the summary's id sets) or a fabrication-status bucket (resolved
@@ -637,14 +636,6 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onComp
 
 // ── Backward schedule + readiness panel ─────────────────────────────────────
 
-const SCHEDULE_ROWS: Array<[string, string]> = [
-  ["detailingStart", "Detailing start"],
-  ["internalReviewDue", "Internal review"],
-  ["submitBy", "Submit by"],
-  ["approvalNeededBy", "Approval by"],
-  ["fabReleaseRequiredBy", "Fab release by"],
-  ["erectionReleaseRequiredBy", "Erection release by"],
-];
 
 interface ReadinessPanelProps {
   readiness: any;

@@ -144,3 +144,18 @@ export const HEALTH_CONFIG: Record<string, { color: string; dot: string }> = {
   Watch: { color: "var(--status-warning)", dot: "#F59E0B" },
   "At Risk": { color: "var(--status-error)", dot: "#EF4444" },
 };
+
+export const monoStyle = { fontFamily: "JetBrains Mono, monospace" } as const;
+
+/** Tab ids + labels (icons stay in the view component). */
+export const PROJECT_DETAIL_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "handoff", label: "Handoff" },
+  { id: "workpkgs", label: "Work Pkgs" },
+  { id: "schedule", label: "Schedule" },
+  { id: "drawings", label: "Drawings" },
+  { id: "rfis", label: "RFIs" },
+  { id: "deliveries", label: "Deliveries" },
+  { id: "commercial", label: "Commercial" },
+] as const;
+

@@ -19,20 +19,25 @@ import {
   buildDeliveriesTabMetrics,
   PHASE_CONFIG,
   HEALTH_CONFIG,
+  monoStyle as mono,
+  PROJECT_DETAIL_TABS,
 } from '@/components/projects/projectDetailViewHelpers';
 
-const mono = { fontFamily: 'JetBrains Mono, monospace' };
+const TAB_ICONS = {
+  overview: BarChart2,
+  handoff: ClipboardCheck,
+  workpkgs: CheckSquare,
+  schedule: Calendar,
+  drawings: FileText,
+  rfis: AlertTriangle,
+  deliveries: Package,
+  commercial: DollarSign,
+};
 
-const TABS = [
-  { id: 'overview',   label: 'Overview',    icon: BarChart2 },
-  { id: 'handoff',    label: 'Handoff',     icon: ClipboardCheck },
-  { id: 'workpkgs',   label: 'Work Pkgs',   icon: CheckSquare },
-  { id: 'schedule',   label: 'Schedule',    icon: Calendar },
-  { id: 'drawings',   label: 'Drawings',    icon: FileText },
-  { id: 'rfis',       label: 'RFIs',        icon: AlertTriangle },
-  { id: 'deliveries', label: 'Deliveries',  icon: Package },
-  { id: 'commercial', label: 'Commercial',  icon: DollarSign },
-];
+const TABS = PROJECT_DETAIL_TABS.map((t) => ({
+  ...t,
+  icon: TAB_ICONS[t.id],
+}));
 
 function KpiStrip({ items }) {
   return (
