@@ -1,3 +1,4 @@
+import { buildLookaheadWeeks, tasksIntersectingWeek } from "./lookaheadPlannerHelpers";
 import React, { useMemo } from "react";
 
 // Schedule audit fix (bug class 5): the previous implementation
@@ -32,34 +33,12 @@ export default function LookaheadPlanner({ tasks }) {
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   }, []);
 
-  const weeks = useMemo(() => {
-    // Anchor week 1 at the Monday on/before todayUtc. getUTCDay(): Sun=0..Sat=6.
-    // For Monday-start weeks, offset = (day + 6) % 7.
-    const offset = (todayUtc.getUTCDay() + 6) % 7;
-    const week1Start = new Date(todayUtc);
-    week1Start.setUTCDate(week1Start.getUTCDate() - offset);
-    const result = [];
-    for (let i = 0; i < 6; i++) {
-      const start = new Date(week1Start);
-      start.setUTCDate(start.getUTCDate() + i * 7);
-      const end = new Date(start);
-      end.setUTCDate(end.getUTCDate() + 6);
-      result.push({ start, end, num: i + 1 });
-    }
-    return result;
-  }, [todayUtc]);
+  // Anchor week 1 at the Monday on/before todayUtc. getUTCDay(): Sun=0..Sat=6.
+  // For Monday-start weeks, offset = (day + 6) % 7.
+  const weeks = useMemo(() => buildLookaheadWeeks(todayUtc, 6), [todayUtc]);
 
-  const getTasksForWeek = (weekStart, weekEnd) => {
-    return tasks.filter((task) => {
-      const s = parseTaskDate(task.start_date);
-      const e = parseTaskDate(task.end_date);
-      const taskStart = s || e; // single-date tasks degenerate to a point
-      const taskEnd   = e || s;
-      if (!taskStart || !taskEnd) return false;
-      // Closed-interval intersection: [taskStart, taskEnd] ∩ [weekStart, weekEnd]
-      return taskStart <= weekEnd && taskEnd >= weekStart;
-    });
-  };
+  const getTasksForWeek = (weekStart, weekEnd) =>
+    tasksIntersectingWeek(tasks, weekStart, weekEnd, parseTaskDate);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

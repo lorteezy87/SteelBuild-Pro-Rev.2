@@ -42,25 +42,10 @@ export default function SheetResponseGrid({
   saving = false,
 }) {
   // Build initial state from existing responses or default
-  const initialRows = useMemo(() => {
-    const existingMap = new Map();
-    existingResponses.forEach((r) => {
-      existingMap.set(r.drawing_id, r);
-    });
-
-    return drawings.map((d) => {
-      const existing = existingMap.get(d.id);
-      return {
-        id: existing?.id,
-        drawing_id: d.id,
-        sheet_number: d.sheet_number || d.drawing_number || "",
-        title: d.title || d.drawing_title || "",
-        discipline: d.discipline || "",
-        response_status: existing?.response_status || "No Exception",
-        reviewer_comment: existing?.reviewer_comment || "",
-      };
-    });
-  }, [drawings, existingResponses]);
+  const initialRows = useMemo(
+    () => buildSheetResponseInitialRows(drawings, existingResponses),
+    [drawings, existingResponses],
+  );
 
   const [rows, setRows] = useState(initialRows);
   const [applyAllStatus, setApplyAllStatus] = useState("");
