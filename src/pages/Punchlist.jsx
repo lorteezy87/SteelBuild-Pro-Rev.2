@@ -1,3 +1,9 @@
+import {
+  filterLiveRecords,
+  filterPunchlist,
+  computePunchlistStats,
+  toggleIdInList,
+} from "./punchlist/punchlistPageHelpers";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
@@ -37,7 +43,7 @@ export default function Punchlist() {
   });
 
   const toggleSelect = (id) => {
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    setSelectedIds((prev) => toggleIdInList(prev, id));
   };
   const clearSelection = () => setSelectedIds([]);
 
@@ -57,7 +63,7 @@ export default function Punchlist() {
 
   useRealtimeInvalidation("punchlist_items", projectId, [["punchlist", projectId]]);
 
-  const punchlist = React.useMemo(() => rawPunchlist.filter((r) => !r.is_deleted), [rawPunchlist]);
+  const punchlist = React.useMemo(() => filterLiveRecords(rawPunchlist), [rawPunchlist]);
 
   // Field Hub rows deep-link here with ?id=<item>; open it for edit/close.
   useAutoOpenEdit(
@@ -211,23 +217,8 @@ export default function Punchlist() {
     }
   };
 
-  const filtered = punchlist.filter((item) => {
-    const statusMatch = filterStatus === "all" || item.status === filterStatus;
-    const categoryMatch = filterCategory === "all" || item.category === filterCategory;
-    const priorityMatch = filterPriority === "all" || item.priority === filterPriority;
-    return statusMatch && categoryMatch && priorityMatch;
-  });
-
-  const stats = {
-    total: punchlist.length,
-    open: punchlist.filter((i) => i.status === "Open").length,
-    inProgress: punchlist.filter((i) => i.status === "In Progress").length,
-    completed: punchlist.filter((i) => i.status === "Completed").length,
-    onHold: punchlist.filter((i) => i.status === "On Hold").length,
-    critical: punchlist.filter((i) => i.priority === "Critical").length,
-  };
-
-  const completionRate = punchlist.length > 0 ? Math.round((stats.completed / punchlist.length) * 100) : 0;
+  const filtered = filterPunchlist(punchlist, { filterStatus, filterCategory, filterPriority });
+  const { completionRate, ...stats } = computePunchlistStats(punchlist);
 
   const statuses = ["Open", "In Progress", "Completed", "On Hold", "Deferred"];
   const categories = ["Structural", "Connections", "Painting/Coating", "Hardware", "Fit-Up", "Cleanup", "Documentation", "Other"];

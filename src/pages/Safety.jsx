@@ -1,4 +1,9 @@
 import { useProjectId } from "@/hooks/useProjectId";
+import {
+  filterLiveRecords,
+  filterSafetyIncidents,
+  computeSafetyStats,
+} from "./safety/safetyPageHelpers";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -36,7 +41,7 @@ export default function Safety() {
 
   useRealtimeInvalidation("safety_incidents", projectId, [["safety-incidents", projectId]]);
 
-  const incidents = React.useMemo(() => rawIncidents.filter((r) => !r.is_deleted), [rawIncidents]);
+  const incidents = React.useMemo(() => filterLiveRecords(rawIncidents), [rawIncidents]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -113,22 +118,8 @@ export default function Safety() {
     updateMut.mutate({ id: incident.id, status: newStatus });
   };
 
-  const filtered = incidents.filter((i) => {
-    const typeMatch = filterType === "all" || i.incident_type === filterType;
-    const severityMatch = filterSeverity === "all" || i.severity === filterSeverity;
-    const statusMatch = filterStatus === "all" || i.status === filterStatus;
-    return typeMatch && severityMatch && statusMatch;
-  });
-
-  const stats = {
-    total: incidents.length,
-    critical: incidents.filter((i) => i.severity === "Critical").length,
-    high: incidents.filter((i) => i.severity === "High").length,
-    injuries: incidents.filter((i) => i.incident_type === "Injury").length,
-    nearMisses: incidents.filter((i) => i.incident_type === "Near Miss").length,
-    hazards: incidents.filter((i) => i.incident_type === "Hazard").length,
-    open: incidents.filter((i) => i.status === "Open").length,
-  };
+  const filtered = filterSafetyIncidents(incidents, { filterType, filterSeverity, filterStatus });
+  const stats = computeSafetyStats(incidents);
 
   const types = ["Injury", "Near Miss", "Hazard", "Property Damage", "Environmental", "Behavioral", "Equipment Failure", "Other"];
   const severities = ["Critical", "High", "Medium", "Low"];

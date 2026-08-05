@@ -1,4 +1,10 @@
 import { useProjectId } from "@/hooks/useProjectId";
+import {
+  filterLiveRecords,
+  filterInspections,
+  computeInspectionStats,
+  nextStatusFilterToggle,
+} from "./inspections/inspectionsPageHelpers";
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -63,7 +69,7 @@ export default function Inspections() {
 
   useRealtimeInvalidation("inspections", projectId, [["inspections", projectId]]);
 
-  const inspections = React.useMemo(() => rawInspections.filter((r) => !r.is_deleted), [rawInspections]);
+  const inspections = React.useMemo(() => filterLiveRecords(rawInspections), [rawInspections]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -188,28 +194,12 @@ export default function Inspections() {
     }
   };
 
-  const filtered = inspections.filter((i) => {
-    const typeMatch = filterType === "all" || i.inspection_type === filterType;
-    const statusMatch = filterStatus === "all" || i.status === filterStatus;
-    return typeMatch && statusMatch;
-  });
-
-  const stats = {
-    total: inspections.length,
-    scheduled: inspections.filter((i) => i.status === "Scheduled").length,
-    inProgress: inspections.filter((i) => i.status === "In Progress").length,
-    completed: inspections.filter((i) => i.status === "Completed").length,
-    approved: inspections.filter((i) => i.sign_off_status === "Approved").length,
-    rejected: inspections.filter((i) => i.sign_off_status === "Rejected").length,
-  };
+  const filtered = filterInspections(inspections, { filterType, filterStatus });
+  const stats = computeInspectionStats(inspections);
 
   // Click stat card to filter
   const handleStatClick = (statusValue) => {
-    if (filterStatus === statusValue) {
-      setFilterStatus("all");
-    } else {
-      setFilterStatus(statusValue);
-    }
+    setFilterStatus(nextStatusFilterToggle(filterStatus, statusValue));
   };
 
   return (
