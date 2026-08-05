@@ -11,6 +11,7 @@
 import React from "react";
 import { CATEGORY_COLORS } from "@/components/shared/costCodes";
 import { formatCurrencyShort } from "@/components/shared/formatters";
+import { buildBurndownSeries, burndownColor, buildMonthlySpendTrend } from "./expensesPageHelpers";
 
 export function MiniProgressRing({ ratio, size = 32, stroke = 3, color = "var(--accent)" }) {
   const r = (size - stroke) / 2;
@@ -104,20 +105,8 @@ export function BudgetDonutChart({ segments, totalCommitted }) {
 }
 
 export function BurndownSparkline({ expenses, totalBudget }) {
-  if (!expenses.length || totalBudget <= 0) return null;
-
-  const sorted = [...expenses]
-    .filter((e) => e.payment_status !== "Voided")
-    .sort((a, b) => new Date(a.expense_date) - new Date(b.expense_date));
-
-  if (sorted.length === 0) return null;
-
-  const points = [{ x: 0, y: totalBudget }];
-  let running = totalBudget;
-  sorted.forEach((e, i) => {
-    running -= Number(e.amount) || 0;
-    points.push({ x: i + 1, y: running });
-  });
+  const points = buildBurndownSeries(expenses, totalBudget);
+  if (!points.length) return null;
 
   const w = 120;
   const h = 28;
@@ -135,11 +124,7 @@ export function BurndownSparkline({ expenses, totalBudget }) {
   const polyline = svgPoints.map((p) => `${p.sx},${p.sy}`).join(" ");
 
   const remaining = points[points.length - 1].y;
-  const pctRemaining = totalBudget > 0 ? (remaining / totalBudget) * 100 : 0;
-  const color =
-    pctRemaining < 10 ? "var(--status-error)" :
-    pctRemaining < 20 ? "var(--status-warning)" :
-                        "var(--status-success)";
+  const color = burndownColor(remaining, totalBudget);
 
   const fillPoints = `0,${h} ${polyline} ${w},${h}`;
 
@@ -152,26 +137,7 @@ export function BurndownSparkline({ expenses, totalBudget }) {
 }
 
 export function MonthlyTrendChart({ expenses }) {
-  const now = new Date();
-  const months = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({
-      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      label: d.toLocaleString("default", { month: "short" }),
-      total: 0,
-    });
-  }
-
-  const active = expenses.filter((e) => e.payment_status !== "Voided");
-  active.forEach((e) => {
-    if (!e.expense_date) return;
-    const d = new Date(e.expense_date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const m = months.find((mm) => mm.key === key);
-    if (m) m.total += Number(e.amount) || 0;
-  });
-
+  const months = buildMonthlySpendTrend(expenses);
   const maxVal = Math.max(...months.map((m) => m.total), 1);
   const w = 220;
   const h = 70;

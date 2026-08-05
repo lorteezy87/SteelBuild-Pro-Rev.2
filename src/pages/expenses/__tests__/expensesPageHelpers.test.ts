@@ -88,3 +88,45 @@ describe("expense alert dismiss helpers", () => {
     expect(nextDismissedAlertKeys(["a"], "a")).toEqual(["a"]);
   });
 });
+
+import {
+  buildBurndownSeries,
+  burndownColor,
+  buildMonthlySpendTrend,
+} from "../expensesPageHelpers";
+
+describe("expense chart series", () => {
+  it("builds burndown remaining series", () => {
+    const points = buildBurndownSeries(
+      [
+        { expense_date: "2026-01-02", amount: 100, payment_status: "Paid" },
+        { expense_date: "2026-01-01", amount: 50, payment_status: "Paid" },
+        { expense_date: "2026-01-03", amount: 999, payment_status: "Voided" },
+      ],
+      200,
+    );
+    expect(points[0]).toEqual({ x: 0, y: 200 });
+    expect(points[1]).toEqual({ x: 1, y: 150 }); // Jan 1 first
+    expect(points[2]).toEqual({ x: 2, y: 50 });
+    expect(buildBurndownSeries([], 100)).toEqual([]);
+    expect(burndownColor(5, 100)).toBe("var(--status-error)");
+    expect(burndownColor(15, 100)).toBe("var(--status-warning)");
+    expect(burndownColor(50, 100)).toBe("var(--status-success)");
+  });
+
+  it("builds 6-month spend trend", () => {
+    const now = new Date(2026, 5, 15); // June 2026
+    const months = buildMonthlySpendTrend(
+      [
+        { expense_date: "2026-06-01", amount: 10, payment_status: "Paid" },
+        { expense_date: "2026-05-01", amount: 20, payment_status: "Paid" },
+        { expense_date: "2026-05-02", amount: 5, payment_status: "Voided" },
+      ],
+      now,
+    );
+    expect(months).toHaveLength(6);
+    expect(months[months.length - 1].key).toBe("2026-06");
+    expect(months[months.length - 1].total).toBe(10);
+    expect(months[months.length - 2].total).toBe(20);
+  });
+});

@@ -253,3 +253,62 @@ export function nextDismissedAlertKeys(
   if ((dismissedKeys || []).includes(key)) return dismissedKeys;
   return [...(dismissedKeys || []), key];
 }
+
+export type BurndownPoint = { x: number; y: number };
+
+/** Running remaining budget series for the burndown sparkline (non-voided, date-sorted). */
+export function buildBurndownSeries(
+  expenses: ExpenseLike[] | null | undefined,
+  totalBudget: number,
+): BurndownPoint[] {
+  if (!expenses?.length || totalBudget <= 0) return [];
+  const sorted = [...expenses]
+    .filter((e) => e.payment_status !== "Voided")
+    .sort(
+      (a, b) =>
+        new Date(a.expense_date as string).getTime()
+        - new Date(b.expense_date as string).getTime(),
+    );
+  if (sorted.length === 0) return [];
+  const points: BurndownPoint[] = [{ x: 0, y: totalBudget }];
+  let running = totalBudget;
+  sorted.forEach((e, i) => {
+    running -= Number(e.amount) || 0;
+    points.push({ x: i + 1, y: running });
+  });
+  return points;
+}
+
+export function burndownColor(remaining: number, totalBudget: number): string {
+  const pctRemaining = totalBudget > 0 ? (remaining / totalBudget) * 100 : 0;
+  if (pctRemaining < 10) return "var(--status-error)";
+  if (pctRemaining < 20) return "var(--status-warning)";
+  return "var(--status-success)";
+}
+
+export type MonthlySpendBucket = { key: string; label: string; total: number };
+
+/** Last 6 calendar months of non-voided spend (labels from `now`). */
+export function buildMonthlySpendTrend(
+  expenses: ExpenseLike[] | null | undefined,
+  now: Date = new Date(),
+): MonthlySpendBucket[] {
+  const months: MonthlySpendBucket[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: d.toLocaleString("default", { month: "short" }),
+      total: 0,
+    });
+  }
+  const active = (expenses || []).filter((e) => e.payment_status !== "Voided");
+  active.forEach((e) => {
+    if (!e.expense_date) return;
+    const d = new Date(e.expense_date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const m = months.find((mm) => mm.key === key);
+    if (m) m.total += Number(e.amount) || 0;
+  });
+  return months;
+}
