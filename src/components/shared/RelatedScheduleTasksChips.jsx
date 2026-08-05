@@ -25,6 +25,7 @@ import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
 import { computeEffectiveDates } from '@/services/scheduleCascade';
+import { asIdArray, filterTasksLinkedToTarget } from './relatedScheduleTasksHelpers';
 
 const VALID_FIELDS = new Set([
   'related_rfi_ids',
@@ -35,16 +36,6 @@ const VALID_FIELDS = new Set([
 // Match the asIdArray idiom used in the entity wrapper / DailyLogForm —
 // JSONB columns can come back as arrays OR stringified JSON depending on
 // the supabase-js path. We tolerate both.
-function asIdArray(v) {
-  if (Array.isArray(v)) return v;
-  if (typeof v === 'string') {
-    try {
-      const parsed = JSON.parse(v);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  }
-  return [];
-}
 
 // Format a YYYY-MM-DD date as "MMM D" — small chip footprint, no year.
 function fmtMD(iso) {
@@ -100,12 +91,10 @@ export default function RelatedScheduleTasksChips({
   // ScheduleGantt uses.
   const effective = useMemo(() => computeEffectiveDates(tasks), [tasks]);
 
-  const linkedTasks = useMemo(() => {
-    if (!targetId) return [];
-    return tasks.filter((t) =>
-      asIdArray(t[relatedField]).includes(targetId)
-    );
-  }, [tasks, relatedField, targetId]);
+  const linkedTasks = useMemo(
+    () => filterTasksLinkedToTarget(tasks, relatedField, targetId),
+    [tasks, relatedField, targetId],
+  );
 
   if (!projectId || !targetId) return null;
   if (isLoading) {
