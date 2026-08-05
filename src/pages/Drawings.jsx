@@ -76,6 +76,11 @@ import DrawingContextMenu from "@/components/drawings/DrawingContextMenu";
 import DrawingsPageModals from "./drawings/DrawingsPageModals";
 import DrawingsPageToolbar from "./drawings/DrawingsPageToolbar";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
+import AttachRevisionToSubmittalModal from "@/components/submittals/AttachRevisionToSubmittalModal";
+import {
+  ensureSetLinked,
+  openLinkedSubmittalsForSet,
+} from "@/lib/submittalLinkGlue";
 
 // ── Design-system chrome (Claude Design redesign) ─────────────────────────
 import { PhaseChevron } from "@/components/design-system";
@@ -114,6 +119,9 @@ export default function Drawings({ embedded = false } = {}) {
   const [uploadSetOpen, setUploadSetOpen] = useState(false);
   const [logImportOpen, setLogImportOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
+  /** Event glue: after revision upload, optional attach-to-open-submittal prompt. */
+  const [attachPrompt, setAttachPrompt] = useState(null);
+  const [attachBusy, setAttachBusy] = useState(false);
   // Overlay compare — the sheet whose revisions are being diffed (or null).
   const [compareDrawing, setCompareDrawing] = useState(null);
   const [reportSet, setReportSet] = useState(null);
@@ -884,7 +892,20 @@ export default function Drawings({ embedded = false } = {}) {
         }}
         revisionOpen={revisionOpen}
         onCloseRevision={() => setRevisionOpen(false)}
-        onRevisionComplete={() => { void invalidate(); setRevisionOpen(false); }}
+        onRevisionComplete={(payload) => {
+          void invalidate();
+          setRevisionOpen(false);
+          const setId = payload?.setId;
+          if (!setId) return;
+          const candidates = openLinkedSubmittalsForSet(setId, submittals);
+          if (candidates.length === 0) return;
+          setAttachPrompt({
+            setId,
+            setName: payload?.setName || null,
+            revisionLabel: payload?.revisionLabel || null,
+            candidates,
+          });
+        }}
         drawingSetRecords={drawingSetRecords}
         compareDrawing={compareDrawing}
         onCloseCompare={() => setCompareDrawing(null)}
@@ -900,6 +921,39 @@ export default function Drawings({ embedded = false } = {}) {
           if (typeof run === "function") run();
         }}
       />
+
+      {attachPrompt && (
+        <AttachRevisionToSubmittalModal
+          open
+          setName={attachPrompt.setName}
+          revisionLabel={attachPrompt.revisionLabel}
+          candidates={attachPrompt.candidates}
+          busy={attachBusy}
+          onDismiss={() => setAttachPrompt(null)}
+          onAttach={async (submittalId) => {
+            setAttachBusy(true);
+            try {
+              const row = submittals.find((s) => s.id === submittalId);
+              if (!row || !openLinkedSubmittalsForSet(attachPrompt.setId, [row]).length) {
+                toast.error("That submittal is no longer open — refresh and try again.");
+                setAttachPrompt(null);
+                await invalidate();
+                return;
+              }
+              const nextIds = ensureSetLinked(row.drawing_set_ids, attachPrompt.setId);
+              await entities.Submittal.update(submittalId, { drawing_set_ids: nextIds });
+              toast.success("Revision kept linked to open submittal");
+              setAttachPrompt(null);
+              await invalidate();
+              await invalidateEntity(qc, "submittal", projectId);
+            } catch (err) {
+              toast.error(err?.message || "Failed to attach revision to submittal");
+            } finally {
+              setAttachBusy(false);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
