@@ -12,6 +12,15 @@ import { toast } from "sonner";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { BulkActionBar, Button } from "@/components/design-system";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
+import {
+  splitSetupItems,
+  computeSetupStats,
+  collectKnownAssignees,
+  computeActionItemStats,
+  filterActionItems,
+  buildExecutionQueue,
+  resolveToggleStatus,
+} from "./actionItems/actionItemsPageHelpers";
 import { daysUntil } from "@/lib/dateMath";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ActionItemsControlCenter from "./actionItems/ActionItemsControlCenter";
@@ -240,81 +249,43 @@ export default function ActionItems() {
   // ─── Split SETUP checklist items from regular action items ──────────────
   const [setupCollapsed, setSetupCollapsed] = useState(false);
 
-  const setupItems = useMemo(() =>
-    allItems
-      .filter((ai) => ai.category === "SETUP")
-      .sort((a, b) => (a.metadata?.sort_order ?? 99) - (b.metadata?.sort_order ?? 99)),
-    [allItems]
+  const { setupItems, actionItems } = useMemo(
+    () => splitSetupItems(allItems),
+    [allItems],
   );
 
-  const actionItems = useMemo(() =>
-    allItems.filter((ai) => ai.category !== "SETUP"),
-    [allItems]
+  const setupStats = useMemo(
+    () => computeSetupStats(setupItems),
+    [setupItems],
   );
-
-  const setupStats = useMemo(() => {
-    const total = setupItems.length;
-    const complete = setupItems.filter((si) => si.status === ACTION_ITEM_STATUS.COMPLETE).length;
-    return { total, complete, pct: total > 0 ? Math.round((complete / total) * 100) : 0 };
-  }, [setupItems]);
 
   // ─── Derived: unique assignees (for bulk-assign dropdown) ────────────────
-  const knownAssignees = useMemo(() => {
-    const names = new Set();
-    for (const ai of actionItems) {
-      if (ai.assigned_to) names.add(ai.assigned_to);
-    }
-    return Array.from(names).sort();
-  }, [actionItems]);
+  const knownAssignees = useMemo(
+    () => collectKnownAssignees(actionItems),
+    [actionItems],
+  );
 
-  const stats = useMemo(() => ({
-    total:      actionItems.length,
-    open:       actionItems.filter((ai) => ai.status === ACTION_ITEM_STATUS.OPEN).length,
-    inProgress: actionItems.filter((ai) => ai.status === ACTION_ITEM_STATUS.IN_PROGRESS).length,
-    complete:   actionItems.filter((ai) => ai.status === ACTION_ITEM_STATUS.COMPLETE).length,
-    cancelled:  actionItems.filter((ai) => ai.status === ACTION_ITEM_STATUS.CANCELLED).length,
-    critical:   actionItems.filter((ai) => ai.priority === PRIORITY.CRITICAL).length,
-  }), [actionItems]);
+  const stats = useMemo(
+    () => computeActionItemStats(actionItems),
+    [actionItems],
+  );
 
-  const filtered = useMemo(() => actionItems.filter((ai) => {
-    const statusMatch   = filterStatus   === "all" || ai.status   === filterStatus;
-    const priorityMatch = filterPriority === "all" || ai.priority === filterPriority;
-    const searchMatch   = !search.trim() ||
-      ai.title?.toLowerCase().includes(search.toLowerCase()) ||
-      ai.description?.toLowerCase().includes(search.toLowerCase()) ||
-      ai.assigned_to?.toLowerCase().includes(search.toLowerCase());
-    return statusMatch && priorityMatch && searchMatch;
-  }), [actionItems, filterStatus, filterPriority, search]);
+  const filtered = useMemo(
+    () => filterActionItems(actionItems, { filterStatus, filterPriority, search }),
+    [actionItems, filterStatus, filterPriority, search],
+  );
 
-  const executionQueue = useMemo(() => {
-    const activeItems = actionItems.filter((ai) => ai.status !== ACTION_ITEM_STATUS.COMPLETE && ai.status !== ACTION_ITEM_STATUS.CANCELLED);
-    const score = (ai) => {
-      const days = ai.due_date ? daysUntil(ai.due_date) : null;
-      let value = 0;
-      if (ai.priority === PRIORITY.CRITICAL) value += 50;
-      else if (ai.priority === PRIORITY.HIGH) value += 35;
-      else if (ai.priority === PRIORITY.MEDIUM) value += 20;
-      if (days !== null && days < 0) value += 60 + Math.min(30, Math.abs(days) * 4);
-      else if (days === 0) value += 45;
-      else if (days === 1) value += 30;
-      else if (days === 2) value += 20;
-      if (!ai.assigned_to) value += 12;
-      if (ai.metadata?.created_from === "production_meeting_parser") value += 8;
-      return value;
-    };
-    return activeItems
-      .map((ai) => ({ ...ai, _daysUntil: ai.due_date ? daysUntil(ai.due_date) : null, _executionScore: score(ai) }))
-      .sort((a, b) => b._executionScore - a._executionScore)
-      .slice(0, 8);
-  }, [actionItems]);
+  const executionQueue = useMemo(
+    () => buildExecutionQueue(actionItems, daysUntil),
+    [actionItems],
+  );
 
   // ─── Handlers ────────────────────────────────────────────────────────────
   const handleResolve = (item) => {
-    const isComplete = item.status === ACTION_ITEM_STATUS.COMPLETE;
     updateMut.mutate({
       id: item.id,
       data: {
-        status: isComplete ? ACTION_ITEM_STATUS.OPEN : ACTION_ITEM_STATUS.COMPLETE,
+        status: resolveToggleStatus(item.status),
       },
     });
   };
