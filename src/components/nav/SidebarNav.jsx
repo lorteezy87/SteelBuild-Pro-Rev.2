@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { PAGE_ICON, FallbackIcon } from "@/config/pageIcons";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
@@ -73,6 +74,7 @@ export default function SidebarNav({
   const isLightTheme = theme === "light";
   // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
   const { pinned_modules } = useUserPrefs();
+  const { isPageVisible } = useModuleAccess();
   const [collapsed, setCollapsed] = useState(() => {
     // Light (the command theme) shows EVERY group expanded so all modules are
     // visible at once — matches the mockup's full sidebar list. Dark (legacy)
@@ -174,8 +176,16 @@ export default function SidebarNav({
     });
   }, []);
 
+  // Groups with gated-off pages removed (and emptied groups dropped).
+  const visibleGroups = useMemo(
+    () => SIDEBAR_GROUPS
+      .map((g) => ({ ...g, items: g.items.filter((it) => isPageVisible(it.page)) }))
+      .filter((g) => g.items.length > 0),
+    [isPageVisible],
+  );
+
   const favoriteItems = useMemo(() => {
-    const flat = SIDEBAR_GROUPS.flatMap((g) =>
+    const flat = visibleGroups.flatMap((g) =>
       g.items.map((it) => ({ ...it, _group: g.label }))
     );
     // Union of star-favorites (localStorage) + Settings "Pinned Modules" pref,
@@ -187,12 +197,12 @@ export default function SidebarNav({
     return merged
       .map((p) => flat.find((it) => it.page === p))
       .filter(Boolean);
-  }, [favorites, pinned_modules]);
+  }, [favorites, pinned_modules, visibleGroups]);
 
   // Recents filtered against the flat registry so a deleted/renamed
   // page falls out cleanly instead of rendering a dead entry.
   const recentItems = useMemo(() => {
-    const flat = SIDEBAR_GROUPS.flatMap((g) =>
+    const flat = visibleGroups.flatMap((g) =>
       g.items.map((it) => ({ ...it, _group: g.label }))
     );
     return recents
@@ -200,7 +210,7 @@ export default function SidebarNav({
       .filter(Boolean)
       .filter((it) => it.page !== currentPageName)
       .slice(0, 3);
-  }, [recents, currentPageName]);
+  }, [recents, currentPageName, visibleGroups]);
 
   const openGlobalSearch = () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
@@ -394,7 +404,7 @@ export default function SidebarNav({
           />
         )}
 
-        {SIDEBAR_GROUPS.map((group, groupIdx) => {
+        {visibleGroups.map((group, groupIdx) => {
           const isCollapsed = group.collapsible && collapsed[group.label];
           const isActiveGroup = group.items.some((it) => it.page === currentPageName);
           return (
@@ -568,6 +578,13 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
   // (localStorage "sbp-nav-groups"). A missing/falsy entry means expanded.
   const [groupCollapsed, setGroupCollapsed] = useState(loadSidebarState);
   const effectiveCollapsed = forceRail || collapsed;
+  const { isPageVisible } = useModuleAccess();
+  const visibleGroups = useMemo(
+    () => SIDEBAR_GROUPS
+      .map((g) => ({ ...g, items: g.items.filter((it) => isPageVisible(it.page)) }))
+      .filter((g) => g.items.length > 0),
+    [isPageVisible],
+  );
 
   const toggleGroup = useCallback((label) => {
     setGroupCollapsed((prev) => {
@@ -609,7 +626,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
       </button>
 
       <nav className="sb-dashboard-reference-nav">
-        {SIDEBAR_GROUPS.map((group) => {
+        {visibleGroups.map((group) => {
           // Every category is collapsible here (incl. OVERVIEW), unlike the default
           // sidebar which pins OVERVIEW open — so ignore group.collapsible.
           const isGroupCollapsed = !!groupCollapsed[group.label];

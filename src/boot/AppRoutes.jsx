@@ -7,6 +7,8 @@ import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 import ProjectScopedRoute from "@/components/shared/ProjectScopedRoute";
 import LayoutRoute from "@/boot/LayoutRoute";
 import PageLoader from "@/boot/PageLoader";
+import { isGatedPage } from "@/config/moduleGating";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectRole } from "@/hooks/useProjectRole";
@@ -28,6 +30,20 @@ const STANDALONE_LAYOUT_PAGES = new Set(["DesktopConnect"]);
  * so React tears down and rebuilds the boundary on route changes — that's
  * what lets a previously-errored page recover when the user navigates back.
  */
+/**
+ * Blocks direct-URL access to a deprioritized (gated) module when its
+ * feature flag is off. Non-gated pages render immediately. While flags are
+ * still loading we hold on a loader instead of redirecting, so a deep-link
+ * to an enabled module doesn't bounce home on first paint.
+ */
+function ModuleGate({ page, children }) {
+  const { pageEnabled } = useModuleAccess();
+  if (!isGatedPage(page)) return children;
+  const enabled = pageEnabled(page);
+  if (enabled === undefined) return <PageLoader />;
+  return enabled ? children : <Navigate to="/" replace />;
+}
+
 function LazyRoute({ label, children }) {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -152,13 +168,15 @@ export default function AppRoutes() {
             path={path === "Reports" ? "Reports/*" : path}
             element={
               <LazyRoute label={path}>
-                {PROJECT_SCOPED_PAGES.has(path) ? (
-                  <ProjectScopedRoute>
+                <ModuleGate page={path}>
+                  {PROJECT_SCOPED_PAGES.has(path) ? (
+                    <ProjectScopedRoute>
+                      <Page />
+                    </ProjectScopedRoute>
+                  ) : (
                     <Page />
-                  </ProjectScopedRoute>
-                ) : (
-                  <Page />
-                )}
+                  )}
+                </ModuleGate>
               </LazyRoute>
             }
           />
