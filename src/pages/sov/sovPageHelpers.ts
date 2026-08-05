@@ -66,3 +66,5 @@ export function filterSovLinesForControlCenter(
     })
     .sort(sortSovLines);
 }
+
+export const STATUS_CHIPS = ["All", "Draft", "Submitted", "Certified", "Paid"] as const;

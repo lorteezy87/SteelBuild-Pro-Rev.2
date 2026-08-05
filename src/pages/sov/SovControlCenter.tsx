@@ -19,6 +19,9 @@ import { photoFor } from "@/config/launcherConfig";
 import { buildSovSummary, calcRow } from "./sovControlCenter.derive";
 import type { SovLineItem, SovSummary } from "./sovControlCenter.derive";
 import { fmtMoney, fmtFull, sovStatusTone } from "./format";
+import {
+  STATUS_CHIPS,
+} from "./sovPageHelpers";
 // Note: formatCurrency/formatPercent from formatters.jsx are available if needed
 // but we use local fmtFull/fmtMoney below to stay strictly typed in this file.
 
@@ -58,7 +61,6 @@ export interface SovControlCenterProps {
 // Columns
 // ---------------------------------------------------------------------------
 
-const STATUS_CHIPS = ["All", "Draft", "Submitted", "Certified", "Paid"];
 
 function buildColumns(
   effectiveRetainage: number | null,

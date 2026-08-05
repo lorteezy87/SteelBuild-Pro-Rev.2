@@ -6,7 +6,13 @@
  * component is presentation-only.
  */
 import { useMemo } from "react";
-import { fmtDate, phaseTone, healthTone } from "./projectsControlCenterHelpers";
+import {
+  fmtDate,
+  phaseTone,
+  healthTone,
+  PROJECT_PHASE_FILTERS as PHASES,
+  PROJECT_HEALTH_VALUES as HEALTH_VALUES,
+} from "./projectsControlCenterHelpers";
 import {
 
   FolderKanban,
@@ -77,19 +83,7 @@ export interface ProjectsControlCenterProps {
   onOpenProject: (p: ProjectRecord) => void;
 }
 
-const PHASES = [
-  "All",
-  "Pre-Construction",
-  "Detailing",
-  "Procurement",
-  "Fabrication",
-  "Delivery",
-  "Installation",
-  "Erection",
-  "Closeout",
-];
 
-const HEALTH_VALUES = ["On Track", "Watch", "At Risk"];
 
 // ── Component ─────────────────────────────────────────────────────
 export default function ProjectsControlCenter(props: ProjectsControlCenterProps) {

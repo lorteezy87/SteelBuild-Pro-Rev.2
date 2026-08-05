@@ -30,6 +30,8 @@ import {
   labelStyle,
   selectStyle,
   optionCard,
+  ACCENT_PRESETS,
+  FONT_SCALE_PRESETS,
 } from "./displayTabHelpers";
 
 const Toggle = ({ checked, onChange }) => (
@@ -38,19 +40,7 @@ const Toggle = ({ checked, onChange }) => (
   </div>
 );
 
-const ACCENT_PRESETS = [
-  { id: 'gold',  label: 'Gold',  swatch: '#C89B20' },
-  { id: 'teal',  label: 'Teal',  swatch: '#0D9488' },
-  { id: 'blue',  label: 'Blue',  swatch: '#2563EB' },
-  { id: 'amber', label: 'Amber', swatch: '#F59E0B' },
-  { id: 'slate', label: 'Slate', swatch: '#64748B' },
-];
 
-const FONT_SCALE_PRESETS = [
-  { id: 'sm', label: 'Small',  scale: '94%' },
-  { id: 'md', label: 'Normal', scale: '100%' },
-  { id: 'lg', label: 'Large',  scale: '112%' },
-];
 
 export default function DisplayTab({ preferences, onSave, isSaving }) {
   const { theme, accent, fontScale, contrast, motion,

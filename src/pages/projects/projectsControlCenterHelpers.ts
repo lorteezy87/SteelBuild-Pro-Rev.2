@@ -48,3 +48,17 @@ export function healthTone(health?: string | null): ProjectPillTone {
       return "neutral";
   }
 }
+
+export const PROJECT_PHASE_FILTERS = [
+  "All",
+  "Pre-Construction",
+  "Detailing",
+  "Procurement",
+  "Fabrication",
+  "Delivery",
+  "Installation",
+  "Erection",
+  "Closeout",
+] as const;
+
+export const PROJECT_HEALTH_VALUES = ["On Track", "Watch", "At Risk"] as const;

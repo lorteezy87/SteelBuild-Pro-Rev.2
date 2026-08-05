@@ -119,3 +119,5 @@ export function shiftedByDays(effective) {
   const value = Number(effective?.shiftedBy);
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
+
+export const RIVET_COLLAPSED_KEY = "steelbuild:schedule-brief-collapsed";

@@ -35,17 +35,11 @@ import { photoFor } from "@/config/launcherConfig";
 import { buildCoSummary, coStatusTone } from "./coControlCenter.derive";
 import type { CoRecord } from "./coControlCenter.derive";
 import { formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
+import {
+  STATUS_FILTERS,
+} from "./changeOrdersPageHelpers";
 
 // Status chips shown in FilterBar
-const STATUS_FILTERS = [
-  "All",
-  "Draft",
-  "Submitted",
-  "Under Review",
-  "Approved",
-  "Rejected",
-  "Void",
-] as const;
 
 /** Scroll the full DataTable into view when a panel "View all" fires. */
 function scrollToTable() {

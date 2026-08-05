@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {resolveEffectiveRetainage,
+import {
+  resolveEffectiveRetainage,
   filterSovLines,
-  filterSovLinesForControlCenter} from "../sovPageHelpers";
+  filterSovLinesForControlCenter,
+  STATUS_CHIPS,
+} from "../sovPageHelpers";
 
 describe("sovPageHelpers", () => {
   it("resolves retainage modes", () => {
@@ -24,3 +27,8 @@ describe("sovPageHelpers", () => {
   });
 });
 
+describe("STATUS_CHIPS", () => {
+  it("includes Certified", () => {
+    expect(STATUS_CHIPS).toContain("Certified");
+  });
+});

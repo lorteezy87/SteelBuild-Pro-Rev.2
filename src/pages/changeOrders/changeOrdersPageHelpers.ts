@@ -161,3 +161,13 @@ export function buildChangeOrderPrefillFromRfi(
     schedule_impact_days: Number(rfi.schedule_impact_days) || 0,
   };
 }
+
+export const STATUS_FILTERS = [
+  "All",
+  "Draft",
+  "Submitted",
+  "Under Review",
+  "Approved",
+  "Rejected",
+  "Void",
+] as const;

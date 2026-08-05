@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildGroups, UNGROUPED_KEY } from "../drawingsGridHelpers";
+import {
+  buildGroups,
+  UNGROUPED_KEY,
+  EXPAND_LS_KEY,
+} from "../drawingsGridHelpers";
 
 describe("buildGroups", () => {
   it("groups by set id and ungrouped", () => {
@@ -15,5 +19,11 @@ describe("buildGroups", () => {
     const un = groups.find((g) => g.key === UNGROUPED_KEY);
     expect(named?.sheets.map((s: any) => s.sheet_number)).toEqual(["S1", "S2"]);
     expect(un?.sheets).toHaveLength(1);
+  });
+});
+
+describe("EXPAND_LS_KEY", () => {
+  it("names expanded sets key", () => {
+    expect(EXPAND_LS_KEY).toContain("expanded-sets");
   });
 });

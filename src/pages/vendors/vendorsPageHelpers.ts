@@ -210,3 +210,5 @@ export function vendorBulkDeleteTitle(count: number): string {
 export function vendorBulkDeleteDescription(count: number): string {
   return `Permanently delete ${count} selected vendor${count === 1 ? "" : "s"}? This cannot be undone.`;
 }
+
+export const STATUS_LABELS = ["All", "Active", "Inactive", "Probation", "Suspended"] as const;

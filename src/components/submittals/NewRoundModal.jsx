@@ -4,6 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import {
+  BIC_CHOICES,
+} from "./newRoundModalHelpers";
 
 /**
  * NewRoundModal — create a new submittal round.
@@ -26,11 +29,6 @@ import { toast } from "sonner";
 
 // Standardized across the submittal modals — see src/pages/Submittals.jsx
 // for the canonical list and stage-mapping rationale.
-const BIC_CHOICES = [
-  "Detailer", "S&H", "Contractor", "Subcontractor",
-  "EOR", "Architect", "AOR",
-  "GC", "Owner",
-];
 
 function todayISO() {
   const d = new Date();

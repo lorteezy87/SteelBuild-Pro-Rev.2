@@ -5,6 +5,7 @@ import {
   uniqueVendorTypes,
   buildVendorCsvRows,
   VENDOR_CSV_HEADERS,
+  STATUS_LABELS,
 } from "../vendorsPageHelpers";
 
 describe("vendorsPageHelpers", () => {
@@ -50,5 +51,11 @@ describe("vendor empty filters and bulk copy", () => {
     expect(vendorBulkDeleteTitle(2)).toBe("Delete 2 Vendors");
     expect(vendorBulkDeleteDescription(1)).toContain("1 selected vendor?");
     expect(vendorBulkDeleteDescription(3)).toContain("3 selected vendors?");
+  });
+});
+
+describe("STATUS_LABELS", () => {
+  it("includes Probation", () => {
+    expect(STATUS_LABELS).toContain("Probation");
   });
 });

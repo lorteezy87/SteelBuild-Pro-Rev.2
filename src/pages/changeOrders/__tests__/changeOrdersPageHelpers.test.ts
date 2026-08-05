@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import {sourceRfiLabel,
+import {
+  sourceRfiLabel,
   filterChangeOrders,
   nextSelectedToggle,
-  selectAllOrNone, buildChangeOrdersCsvString, changeOrdersCsvFilename} from "../changeOrdersPageHelpers";
+  selectAllOrNone,
+  buildChangeOrdersCsvString,
+  changeOrdersCsvFilename,
+  STATUS_FILTERS,
+} from "../changeOrdersPageHelpers";
 
 describe("changeOrdersPageHelpers", () => {
   it("builds source RFI banner label", () => {
@@ -68,5 +73,11 @@ describe("buildChangeOrderPrefillFromRfi", () => {
   it("falls back when rfi_number missing", () => {
     const prefill = buildChangeOrderPrefillFromRfi({ id: "r2", subject: "hold" }, null);
     expect(prefill.title).toBe("RFI: hold");
+  });
+});
+
+describe("STATUS_FILTERS", () => {
+  it("includes Under Review", () => {
+    expect(STATUS_FILTERS).toContain("Under Review");
   });
 });

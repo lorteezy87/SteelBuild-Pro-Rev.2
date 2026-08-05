@@ -1,3 +1,4 @@
+import { RIVET_COLLAPSED_KEY } from "../rivetBriefHelpers";
 import { describe, it, expect } from "vitest";
 import { PHASES } from "@/utils/phases";
 import {
@@ -157,5 +158,11 @@ describe("shiftedByDays", () => {
     expect(shiftedByDays({ shiftedBy: 4 })).toBe(4);
     expect(shiftedByDays({ shiftedBy: -2 })).toBe(0);
     expect(shiftedByDays({})).toBe(0);
+  });
+});
+
+describe("RIVET_COLLAPSED_KEY", () => {
+  it("storage key", () => {
+    expect(RIVET_COLLAPSED_KEY).toContain("schedule-brief-collapsed");
   });
 });

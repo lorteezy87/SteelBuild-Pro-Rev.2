@@ -24,7 +24,10 @@ import {
   buildReportsSummary,
   type ReportCatalogEntry,
 } from "./reportsHubControlCenter.derive";
-import { categoryTone } from "./reportsHubControlCenterHelpers";
+import {
+  categoryTone,
+  CATEGORY_FILTERS,
+} from "./reportsHubControlCenterHelpers";
 
 // ── Local helpers ──────────────────────────────────────────────────────────────
 
@@ -46,15 +49,6 @@ const CATEGORY_ACCENT: Record<string, string> = {
 };
 
 // ── Category filter values ─────────────────────────────────────────────────────
-const CATEGORY_FILTERS = [
-  "All",
-  "Portfolio",
-  "Financial",
-  "Risk",
-  "Schedule",
-  "Cost",
-  "Team",
-];
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 

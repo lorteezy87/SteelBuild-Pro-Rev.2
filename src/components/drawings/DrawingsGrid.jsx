@@ -3,10 +3,14 @@ import { STAGE_MAP, mono } from "./drawingsConfig";
 import StageChip from "./StageChip";
 import { OverdueBadge, RFILinkBadge, SupersededBadge } from "./DrawingBadges";
 import { isOverdue } from "./drawingsUtils";
-import { buildGroups, UNGROUPED_KEY, UNGROUPED_LABEL } from "./drawingsGridHelpers";
+import {
+  buildGroups,
+  UNGROUPED_KEY,
+  UNGROUPED_LABEL,
+  EXPAND_LS_KEY,
+} from "./drawingsGridHelpers";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 
-const EXPAND_LS_KEY = "sbp-drawings-grid-expanded-sets";
 
 function ActionBtn({ label, onClick, danger, disabled, title }) {
   const [hovered, setHovered] = React.useState(false);

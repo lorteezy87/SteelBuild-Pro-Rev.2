@@ -4,6 +4,8 @@ import {
   labelStyle,
   selectStyle,
   optionCard,
+  ACCENT_PRESETS,
+  FONT_SCALE_PRESETS,
 } from "../displayTabHelpers";
 
 describe("buildPrefs", () => {
@@ -21,5 +23,12 @@ describe("display tab styles", () => {
     expect(selectStyle.fontSize).toBe(12);
     expect(optionCard(true).background).toBe("var(--accent-muted)");
     expect(optionCard(false).cursor).toBe("pointer");
+  });
+});
+
+describe("display presets", () => {
+  it("accent and font scale", () => {
+    expect(ACCENT_PRESETS.some((p) => p.id === "gold")).toBe(true);
+    expect(FONT_SCALE_PRESETS.some((p) => p.id === "md")).toBe(true);
   });
 });

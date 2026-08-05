@@ -15,8 +15,10 @@ import {
   copyStyle, phaseRowStyle, recoveryRowStyle, morningPlanRowStyle, criticalTaskStyle, logicTaskStyle, varianceTaskStyle,
   ownershipTaskStyle, varianceDaysStyle, handoffTaskStyle, dateChipStyle, taskRowStyle, taskNameStyle, taskMetaStyle, emptyStyle,
 } from "@/components/schedule/rivetBriefStyles";
+import {
+  RIVET_COLLAPSED_KEY,
+} from "./rivetBriefHelpers";
 
-const RIVET_COLLAPSED_KEY = "steelbuild:schedule-brief-collapsed";
 
 export default function ScheduleRivetBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
   const [copyState, setCopyState] = useState("idle");

@@ -86,3 +86,5 @@ export function buildGroups(drawings, drawingSets) {
       return compareDrawingSetPackages(a, b);
     });
 }
+
+export const EXPAND_LS_KEY = "sbp-drawings-grid-expanded-sets";

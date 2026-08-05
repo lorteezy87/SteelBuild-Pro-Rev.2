@@ -15,3 +15,13 @@ export function categoryTone(
       return "neutral";
   }
 }
+
+export const CATEGORY_FILTERS = [
+  "All",
+  "Portfolio",
+  "Financial",
+  "Risk",
+  "Schedule",
+  "Cost",
+  "Team",
+] as const;

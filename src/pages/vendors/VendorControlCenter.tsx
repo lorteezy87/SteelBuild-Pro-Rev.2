@@ -20,10 +20,12 @@ import {
 } from "./vendorControlCenter.derive";
 import type { VendorRecord, VendorStatsMap } from "./vendorControlCenter.derive";
 import { formatCurrencyShort, formatDate } from "@/components/shared/formatters";
+import {
+  STATUS_LABELS,
+} from "./vendorsPageHelpers";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const STATUS_LABELS = ["All", "Active", "Inactive", "Probation", "Suspended"] as const;
 
 /** Scroll the DataTable into view when a DecisionPanel fires "View all". */
 function scrollToTable() {
