@@ -17,6 +17,7 @@ import {
   dayCellStyle,
   toolBtn,
   fieldPlanBlockerChipColors,
+  fieldPlanTaskBorderColor,
 } from "./fieldPlanStyleHelpers";
 
 export {
@@ -55,13 +56,7 @@ export function BlockerChip({ chip }) {
 export function TaskCard({ task }) {
   const complete = task.status === "Complete";
   const blocked = task._isBlocked;
-  const borderColor = complete
-    ? "var(--status-success)"
-    : blocked
-    ? "var(--status-error)"
-    : task.status === "In Progress"
-    ? "var(--accent)"
-    : "var(--border-strong)";
+  const borderColor = fieldPlanTaskBorderColor(task);
 
   return (
     <div

@@ -34,7 +34,7 @@ import {
   PAY_APP_STATUS_LABELS,
 } from "./payApplicationsControlCenter.derive";
 import type { PayApplication } from "@/lib/payapp/types";
-import { PAY_APP_STATUS_FILTERS } from "./payApplicationsPageHelpers";
+import { PAY_APP_STATUS_FILTERS, payAppStatusLabel } from "./payApplicationsPageHelpers";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,10 +45,7 @@ function scrollToTable() {
   document.querySelector(".payapp-cc .cmd-table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function statusLabel(status: string | null | undefined): string {
-  if (!status) return "Draft";
-  return PAY_APP_STATUS_LABELS[status as keyof typeof PAY_APP_STATUS_LABELS] || status;
-}
+const statusLabel = payAppStatusLabel;
 
 // ---------------------------------------------------------------------------
 // Props

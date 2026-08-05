@@ -2,6 +2,7 @@
  * Pure helpers for PayApplications page shell.
  */
 import { sumMoney } from "@/lib/money";
+import { PAY_APP_STATUS_LABELS } from "@/lib/payapp/types";
 
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -46,3 +47,13 @@ export const PAY_APP_STATUS_FILTERS = [
   { key: "paid", label: "Paid" },
   { key: "void", label: "Void" },
 ] as const;
+
+
+/** Human label for a pay application status code. */
+export function payAppStatusLabel(status: string | null | undefined): string {
+  if (!status) return "Draft";
+  return (
+    PAY_APP_STATUS_LABELS[status as keyof typeof PAY_APP_STATUS_LABELS] || status
+  );
+}
+

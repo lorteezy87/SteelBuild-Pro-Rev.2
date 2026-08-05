@@ -128,3 +128,11 @@ export const STATUS_COLOR: Record<string, string> = {
   "On Hold": GANTT_STATUS_HEX.delayed,
   "Not Started": GANTT_STATUS_HEX.notStarted,
 };
+
+/** Mono font style merge for SiteMapView chrome. */
+export function siteMapMono(
+  style: Record<string, string | number> = {},
+): Record<string, string | number> {
+  return { fontFamily: "var(--font-mono)", ...style };
+}
+

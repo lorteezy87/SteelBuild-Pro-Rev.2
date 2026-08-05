@@ -59,3 +59,15 @@ export function fieldPlanBlockerChipColors(severity: string | null | undefined):
   }
   return { color: "var(--status-success)", bg: "var(--success-muted)" };
 }
+
+/** Left-border color for Field Plan task cards. */
+export function fieldPlanTaskBorderColor(task: {
+  status?: string | null;
+  _isBlocked?: boolean;
+}): string {
+  if (task.status === "Complete") return "var(--status-success)";
+  if (task._isBlocked) return "var(--status-error)";
+  if (task.status === "In Progress") return "var(--accent)";
+  return "var(--border-strong)";
+}
+

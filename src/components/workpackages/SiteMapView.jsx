@@ -6,11 +6,10 @@ import {
   summarizeZoneHealth,
   PHASE_COLOR,
   STATUS_COLOR,
+  siteMapMono,
 } from "./siteMapHelpers";
 
-function mono(style = {}) {
-  return { fontFamily: "var(--font-mono)", ...style };
-}
+const mono = siteMapMono;
 
 function MiniBar({ value = 0, color = "var(--accent)", height = 4 }) {
   const pct = Math.min(100, Math.max(0, value));

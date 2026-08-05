@@ -19,6 +19,8 @@ import "@/styles/command.css";
 import {
   statusToneForDoc,
   KNOWN_CATEGORIES,
+  fileTypeBadgeStyle,
+  formatDocsListDate,
 } from "./documentsControlCenterHelpers";
 import {
   PageHero,
@@ -49,31 +51,13 @@ function fileTypeBadge(fileType?: string | null) {
   const key = (fileType || "other").toLowerCase();
   const style = LIST_FILETYPE_STYLES[key as keyof typeof LIST_FILETYPE_STYLES] ?? FILETYPE_FALLBACK;
   return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "1px 6px",
-        borderRadius: 3,
-        fontFamily: "var(--font-mono)",
-        fontSize: 9,
-        fontWeight: 700,
-        letterSpacing: "0.04em",
-        textTransform: "uppercase",
-        background: style.bg,
-        color: style.color,
-      }}
-    >
+    <span style={fileTypeBadgeStyle(style.bg, style.color)}>
       {key === "other" ? "—" : key}
     </span>
   );
 }
 
-function fmtDate(dateStr?: string | null): string {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
+const fmtDate = formatDocsListDate;
 
 function scrollToTable() {
   document.querySelector(".docs-cc .cmd-table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
