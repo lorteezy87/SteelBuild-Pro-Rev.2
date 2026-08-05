@@ -86,3 +86,56 @@ export function computeDailyLogMetrics(filteredLogs: DailyLogLike[]) {
   );
   return { totalManHours, avgCrewSize, safetyIncidents, delayHours };
 }
+
+export const DAILY_LOG_DATE_PRESETS = [
+  { key: "today", label: "Today" },
+  { key: "week", label: "This Week" },
+  { key: "month", label: "This Month" },
+  { key: "all", label: "All Time" },
+] as const;
+
+export type DailyLogCopySource = {
+  crew_name?: string | null;
+  headcount?: number | null;
+  superintendent?: string | null;
+  equipment_used?: string | null;
+  date?: string | null;
+  [k: string]: unknown;
+};
+
+/** Most recent log by date (null when empty). */
+export function pickMostRecentDailyLog<T extends DailyLogCopySource>(
+  logs: T[],
+): T | null {
+  if (!(logs || []).length) return null;
+  return [...logs].sort(
+    (a, b) => new Date(String(b.date || 0)).getTime() - new Date(String(a.date || 0)).getTime(),
+  )[0];
+}
+
+/** Prefill form seed when copying yesterday/most-recent log. */
+export function buildCopyFromRecentLogSeed(
+  mostRecent: DailyLogCopySource,
+  todayIso: string,
+): {
+  crew_name: string;
+  headcount: number;
+  superintendent: string;
+  equipment_used: string;
+  activities: string;
+  delays: string;
+  safety_notes: string;
+  date: string;
+} {
+  return {
+    crew_name: mostRecent.crew_name || "",
+    headcount: mostRecent.headcount || 0,
+    superintendent: mostRecent.superintendent || "",
+    equipment_used: mostRecent.equipment_used || "",
+    activities: "",
+    delays: "",
+    safety_notes: "",
+    date: todayIso,
+  };
+}
+

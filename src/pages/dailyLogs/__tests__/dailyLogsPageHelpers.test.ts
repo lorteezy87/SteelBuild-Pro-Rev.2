@@ -31,3 +31,34 @@ describe("dailyLogsPageHelpers", () => {
     expect(m.delayHours).toBe(1);
   });
 });
+
+import {
+  DAILY_LOG_DATE_PRESETS,
+  pickMostRecentDailyLog,
+  buildCopyFromRecentLogSeed,
+} from "../dailyLogsPageHelpers";
+
+describe("daily log copy helpers", () => {
+  it("presets and pick most recent", () => {
+    expect(DAILY_LOG_DATE_PRESETS[0].key).toBe("today");
+    const most = pickMostRecentDailyLog([
+      { date: "2026-01-01", crew_name: "A" },
+      { date: "2026-02-01", crew_name: "B" },
+    ]);
+    expect(most?.crew_name).toBe("B");
+    expect(pickMostRecentDailyLog([])).toBeNull();
+  });
+
+  it("builds copy seed", () => {
+    const seed = buildCopyFromRecentLogSeed(
+      { crew_name: "Crew", headcount: 4, superintendent: "Sam", equipment_used: "Crane" },
+      "2026-08-05",
+    );
+    expect(seed).toMatchObject({
+      crew_name: "Crew",
+      headcount: 4,
+      activities: "",
+      date: "2026-08-05",
+    });
+  });
+});

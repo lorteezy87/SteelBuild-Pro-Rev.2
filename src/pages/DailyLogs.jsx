@@ -29,6 +29,9 @@ import {
   filterLiveDailyLogs,
   filterDailyLogs,
   computeDailyLogMetrics,
+  DAILY_LOG_DATE_PRESETS,
+  pickMostRecentDailyLog,
+  buildCopyFromRecentLogSeed,
 } from "./dailyLogs/dailyLogsPageHelpers";
 
 import { findById } from "@/pages/shared/findById";
@@ -171,36 +174,19 @@ export default function DailyLogs() {
   };
 
   const handleCopyFromYesterday = () => {
-    if (logs.length === 0) {
+    const mostRecent = pickMostRecentDailyLog(logs);
+    if (!mostRecent) {
       toast.error("No previous logs to copy from");
       return;
     }
-    const sorted = [...logs].sort(
-      (a, b) => new Date(b.date) - new Date(a.date)
-    );
-    const mostRecent = sorted[0];
     const today = new Date().toISOString().slice(0, 10);
-    setEditing({
-      crew_name: mostRecent.crew_name || "",
-      headcount: mostRecent.headcount || 0,
-      superintendent: mostRecent.superintendent || "",
-      equipment_used: mostRecent.equipment_used || "",
-      activities: "",
-      delays: "",
-      safety_notes: "",
-      date: today,
-    });
+    setEditing(buildCopyFromRecentLogSeed(mostRecent, today));
     setShowForm(true);
   };
 
   const selectedProject = findById(projects, projectId);
 
-  const datePresets = [
-    { key: "today", label: "Today" },
-    { key: "week", label: "This Week" },
-    { key: "month", label: "This Month" },
-    { key: "all", label: "All Time" },
-  ];
+  const datePresets = DAILY_LOG_DATE_PRESETS;
 
   const presetBtnStyle = (active) => ({
     background: active ? "var(--accent)" : "var(--bg-surface)",
