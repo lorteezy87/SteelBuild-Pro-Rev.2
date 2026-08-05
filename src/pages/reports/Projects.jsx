@@ -23,6 +23,10 @@ import {
   exportTableCSV,
 } from "./utils";
 import { mono, PROJECT_HEALTH_COLORS } from "./constants";
+import {
+  buildProjectsReportRows,
+  filterProjectsReportRows,
+} from "./projectsReportHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -62,41 +66,15 @@ export default function Projects() {
     queryFn: () => entities.WorkPackage.list(),
   });
 
-  const rows = useMemo(() => {
-    return projects.map((p) => {
-      const pWPs = workPackages.filter((w) => w.project_id === p.id);
-      const pctComplete = pWPs.length
-        ? pWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / pWPs.length
-        : 0;
-      return {
-        id: p.id,
-        name: p.name || "Untitled Project",
-        number: p.project_number || `P-${p.id}`,
-        client: p.general_contractor || p.client || "",
-        phase: p.phase || "",
-        health: p.health_status || "",
-        startDate: p.start_date,
-        targetDate: p.target_completion_date,
-        contractValue: Number(p.original_contract_value) || 0,
-        pctComplete,
-      };
-    });
-  }, [projects, workPackages]);
+  const rows = useMemo(
+    () => buildProjectsReportRows({ projects, workPackages }),
+    [projects, workPackages],
+  );
 
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter((r) =>
-        r.name.toLowerCase().includes(q) ||
-        r.number.toLowerCase().includes(q) ||
-        r.client.toLowerCase().includes(q)
-      );
-    }
-    if (phaseFilter !== "all") out = out.filter((r) => r.phase === phaseFilter);
-    if (healthFilter !== "all") out = out.filter((r) => r.health === healthFilter);
-    return out;
-  }, [rows, search, phaseFilter, healthFilter]);
+  const filtered = useMemo(
+    () => filterProjectsReportRows(rows, { search, phaseFilter, healthFilter }),
+    [rows, search, phaseFilter, healthFilter],
+  );
 
   const columns = useMemo(() => [
     {

@@ -21,10 +21,10 @@ import { mono } from "./constants";
 import {
   RISK_CATEGORIES,
   RISK_STATUSES,
-  computeScore,
   severityColor,
 } from "./risks/severity";
 import RiskFormModal from "@/components/risks/RiskFormModal";
+import { buildRiskListRows, filterRiskListRows } from "./risksListHelpers";
 
 function SeverityBadge({ severity }) {
   const color = severityColor(severity);
@@ -100,43 +100,22 @@ export default function Risks() {
     [projects]
   );
 
-  const rows = useMemo(() => {
-    return risks.map((r) => {
-      const p = projectById[r.project_id];
-      return {
-        ...r,
-        score: computeScore(r.probability, r.impact),
-        projectLabel: p
-          ? `${p.project_number ? p.project_number + " — " : ""}${p.name}`
-          : "—",
-      };
-    });
-  }, [risks, projectById]);
+  const rows = useMemo(
+    () => buildRiskListRows({ risks, projectById }),
+    [risks, projectById],
+  );
 
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (projectFilter !== "all") {
-      out = out.filter((r) => r.project_id === projectFilter);
-    }
-    if (severityFilter !== "all") {
-      out = out.filter((r) => r.severity === severityFilter);
-    }
-    if (statusFilter !== "all") {
-      out = out.filter((r) => r.status === statusFilter);
-    }
-    if (categoryFilter !== "all") {
-      out = out.filter((r) => r.category === categoryFilter);
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter((r) =>
-        [r.title, r.owner, r.category, r.description, r.trigger_event]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q))
-      );
-    }
-    return out;
-  }, [rows, projectFilter, severityFilter, statusFilter, categoryFilter, search]);
+  const filtered = useMemo(
+    () =>
+      filterRiskListRows(rows, {
+        projectFilter,
+        severityFilter,
+        statusFilter,
+        categoryFilter,
+        search,
+      }),
+    [rows, projectFilter, severityFilter, statusFilter, categoryFilter, search],
+  );
 
   const columns = useMemo(
     () => [

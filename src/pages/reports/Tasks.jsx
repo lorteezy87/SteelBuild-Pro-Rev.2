@@ -16,6 +16,10 @@ import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput, SelectFilter } from "./ReportFilters";
 import { exportTableCSV, formatDate, formatPercent } from "./utils";
 import { mono, body } from "./constants";
+import {
+  buildTasksReportRows,
+  filterTasksReportRows,
+} from "./tasksReportHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -45,42 +49,22 @@ export default function Tasks() {
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
-  const rows = useMemo(() => {
-    return tasks.map((t) => {
-      const proj = projectsById.get(t.project_id);
-      return {
-        id: t.id,
-        taskName: t.task_name || "Untitled task",
-        projectId: t.project_id,
-        projectName: proj?.name || "—",
-        projectNumber: proj?.project_number || "",
-        phase: t.phase || "",
-        type: t.task_type || "Task",
-        status: t.status || "Not Started",
-        startDate: t.start_date,
-        endDate: t.end_date,
-        pct: Number(t.percent_complete) || 0,
-        assignedTo: t.assigned_to || "",
-      };
-    });
-  }, [tasks, projectsById]);
+  const rows = useMemo(
+    () => buildTasksReportRows({ tasks, projectsById }),
+    [tasks, projectsById],
+  );
 
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (projectFilter !== "all") out = out.filter((r) => r.projectId === projectFilter);
-    if (phaseFilter !== "all") out = out.filter((r) => r.phase === phaseFilter);
-    if (typeFilter !== "all") out = out.filter((r) => r.type === typeFilter);
-    if (statusFilter !== "all") out = out.filter((r) => r.status === statusFilter);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter((r) =>
-        r.taskName.toLowerCase().includes(q) ||
-        r.projectName.toLowerCase().includes(q) ||
-        r.assignedTo.toLowerCase().includes(q)
-      );
-    }
-    return out;
-  }, [rows, search, projectFilter, phaseFilter, typeFilter, statusFilter]);
+  const filtered = useMemo(
+    () =>
+      filterTasksReportRows(rows, {
+        search,
+        projectFilter,
+        phaseFilter,
+        typeFilter,
+        statusFilter,
+      }),
+    [rows, search, projectFilter, phaseFilter, typeFilter, statusFilter],
+  );
 
   const columns = useMemo(() => [
     {
