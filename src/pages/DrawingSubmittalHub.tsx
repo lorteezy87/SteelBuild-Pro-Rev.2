@@ -24,10 +24,7 @@ import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { computeFabReady } from "@/lib/submittalAnalytics";
-import { computeDetailingReadiness } from "@/lib/detailingReadiness";
-import { summarizeElementStatuses } from "@/services/modelElementStatus";
 import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
-import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
@@ -49,19 +46,28 @@ import {
   validateDueDateWrite,
 } from "./drawingSubmittalHub/format";
 import type { Drawing as HubDrawing, DrawingRevision as HubDrawingRevision, DrawingSet as HubDrawingSet, Submittal as HubSubmittal } from "./drawingSubmittalHub/types";
+import {
+  buildHealthByKey,
+  buildActiveWpById,
+  buildOpenRfiIds,
+  buildReadinessByKey,
+  buildModelMappingSummary,
+  buildRevisionImpactFromDrawings,
+  findDrawingById,
+  buildHubTabCounts,
+} from "./drawingSubmittalHub/drawingSubmittalHubPageHelpers";
 import { FleetHealthStrip, LeadTimesModal } from "./drawingSubmittalHub/components";
 import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
 import RevisionImpactPanel from "./drawingSubmittalHub/RevisionImpactPanel";
 import { ApprovalMatrixPanel } from "./drawingSubmittalHub/ApprovalMatrixPanel";
-import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
+import { summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
 import { buildRevisionSummary } from "@/lib/revisionSummary";
 import { saveRevisionSummary, getLatestSummariesByProject } from "@/lib/revisionSummaryRepo";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { buildRfiPrefillFromSummary, createRfiAndLink } from "@/lib/rfiFromDelta";
-import { isRfiOpen } from "@/lib/entityPredicates";
 const RevisionDeepDiveModal = lazyWithRetry(() => import("@/components/drawings/RevisionImpactReportModal"));
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
@@ -214,13 +220,10 @@ export default function DrawingSubmittalHub() {
 
   // Per-set Drawing Health Score (slice 2) — deterministic; feeds the Register
   // Health column + the Control Board fleet rollup.
-  const healthByKey = useMemo(() => {
-    const m = new Map<string, any>();
-    for (const pkg of setPackages) {
-      m.set(pkg.key, calculateDrawingHealthScore(pkg, { rfis: rfis as any[], revisions: drawingRevisions as any[] }));
-    }
-    return m;
-  }, [setPackages, rfis, drawingRevisions]);
+  const healthByKey = useMemo(
+    () => buildHealthByKey(setPackages, rfis as any[], drawingRevisions as any[]),
+    [setPackages, rfis, drawingRevisions],
+  );
   const fleetHealth = useMemo(() => summarizeFleetHealth([...healthByKey.values()]), [healthByKey]);
 
   // Revision Summary (slice 3): on upload, build the instant digest from fresh
@@ -307,80 +310,37 @@ export default function DrawingSubmittalHub() {
   };
 
   // Lookup maps for readiness: WP by id, and the set of OPEN rfi ids.
-  const wpById = useMemo(() => {
-    const m = new Map<string, any>();
-    for (const wp of (workPackages as any[]) || []) {
-      if (wp && !wp.is_deleted && wp.id) m.set(String(wp.id), wp);
-    }
-    return m;
-  }, [workPackages]);
+  const wpById = useMemo(
+    () => buildActiveWpById(workPackages as any[]),
+    [workPackages],
+  );
 
-  const openRfiIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of (rfis as any[]) || []) {
-      if (r && !r.is_deleted && r.id && isRfiOpen(r)) s.add(String(r.id));
-    }
-    return s;
-  }, [rfis]);
+  const openRfiIds = useMemo(
+    () => buildOpenRfiIds(rfis as any[]),
+    [rfis],
+  );
 
   // Per-package readiness read-model, keyed by package key.
-  const readinessByKey = useMemo(() => {
-    const m = new Map<string, any>();
-    for (const pkg of setPackages) {
-      const wpIds: string[] = Array.isArray((pkg.parent as any)?.linked_work_package_ids)
-        ? (pkg.parent as any).linked_work_package_ids
-        : [];
-      // earliest-starting linked WP is the most constraining erection date
-      let workPackage: any = null;
-      for (const id of wpIds) {
-        const wp = wpById.get(String(id));
-        if (!wp) continue;
-        if (!workPackage || (wp.scheduled_start_date && (!workPackage.scheduled_start_date || wp.scheduled_start_date < workPackage.scheduled_start_date))) {
-          workPackage = wp;
-        }
-      }
-      m.set(pkg.key, computeDetailingReadiness({
-        pkg: pkg.parent,
-        submittals: pkg.submittals,
-        sheets: pkg.sheets,
-        project: activeProject,
-        workPackage,
-        openRfiIds,
-      }));
-    }
-    return m;
-  }, [setPackages, wpById, openRfiIds, activeProject]);
+  const readinessByKey = useMemo(
+    () => buildReadinessByKey(setPackages, wpById, openRfiIds, activeProject),
+    [setPackages, wpById, openRfiIds, activeProject],
+  );
 
   // 3D model mapping rollup: element status buckets derived from the SAME
   // per-package readiness models above, so the (future) viewer coloring can
   // never disagree with the hub numbers. Elements resolve to a package via
   // their drawing_set link, or via their sheet's package.
-  const modelMappingSummary = useMemo(() => {
-    const readinessBySetId = new Map<string, any>();
-    const sheetSetIdByDrawingId = new Map<string, string>();
-    for (const pkg of setPackages) {
-      const r: any = readinessByKey.get(pkg.key);
-      if (!r) continue;
-      const enriched = { ...r, atRisk: r.scheduleRisk?.atRisk };
-      const target = pkg.setId ? String(pkg.setId) : pkg.key;
-      readinessBySetId.set(target, enriched);
-      if (pkg.setId) readinessBySetId.set(pkg.key, enriched);
-      for (const s of (pkg.sheets as any[]) || []) {
-        if (s?.id) sheetSetIdByDrawingId.set(String(s.id), target);
-      }
-    }
-    return summarizeElementStatuses(modelElements as any[], readinessBySetId, sheetSetIdByDrawingId);
-  }, [modelElements, setPackages, readinessByKey]);
+  const modelMappingSummary = useMemo(
+    () => buildModelMappingSummary(modelElements as any[], setPackages, readinessByKey as any),
+    [modelElements, setPackages, readinessByKey],
+  );
 
   // Revision Impact Tracker: change-revisions joined to their sheet's downstream
   // status (fabricated / delivered / in-field), worst impact first.
-  const revisionImpact = useMemo(() => {
-    const drawingsById = new Map<string, any>();
-    for (const d of (drawings as any[]) || []) {
-      if (d && d.id) drawingsById.set(String(d.id), d);
-    }
-    return computeRevisionImpact({ revisions: drawingRevisions as any[], drawingsById });
-  }, [drawings, drawingRevisions]);
+  const revisionImpact = useMemo(
+    () => buildRevisionImpactFromDrawings(drawings as any[], drawingRevisions as any[]),
+    [drawings, drawingRevisions],
+  );
 
   // Slice 4 — enrich each change-revision for the Revision Impact board (set,
   // work package, linked RFIs, fab-blocked, affected pieces). Logic + tests live
@@ -398,7 +358,7 @@ export default function DrawingSubmittalHub() {
 
   // Sheet selected for the revision overlay compare (Revision Impact rows).
   const compareDrawing = useMemo(
-    () => ((drawings as any[]) || []).find((d: any) => String(d?.id) === String(compareDrawingId)) || null,
+    () => findDrawingById(drawings as any[], compareDrawingId),
     [drawings, compareDrawingId],
   );
 
@@ -425,13 +385,18 @@ export default function DrawingSubmittalHub() {
     [submittals, setPackages, readinessByKey, workdayDues],
   );
 
-  const tabCounts = useMemo(() => ({
-    overview: triage.openItems.length,
-    process: setPackages.length + triage.unlinkedSubmittalItems.length,
-    drawings: drawingKpis.totalSets,
-    submittals: kpis.total,
-    matrix: drawingSets.filter((set) => !set?.is_deleted).length,
-  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSets, kpis.total, drawingSets]);
+  const tabCounts = useMemo(
+    () =>
+      buildHubTabCounts({
+        openItemsLength: triage.openItems.length,
+        unlinkedSubmittalItemsLength: triage.unlinkedSubmittalItems.length,
+        setPackagesLength: setPackages.length,
+        totalSets: drawingKpis.totalSets,
+        submittalsTotal: kpis.total,
+        drawingSets: drawingSets as any[],
+      }),
+    [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSets, kpis.total, drawingSets],
+  );
 
   // ── Inline quick-action mutations (Next Decision card) ────────────────
   const invalidateHub = async () => {
