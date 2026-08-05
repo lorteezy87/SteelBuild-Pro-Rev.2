@@ -24,29 +24,7 @@ import {
   severityColor,
 } from "@/pages/reports/risks/severity";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-
-const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "var(--radius-input)",
-  padding: "8px 12px",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  color: "var(--text-muted)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  display: "block",
-  marginBottom: 4,
-};
+import { inputStyle, labelStyle } from "./riskFormModalStyleHelpers";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
