@@ -12,6 +12,8 @@ import {
   sortSovByLineNumber,
   sumSovScheduledValue,
   sumSovBilledFromPercent,
+  sumChangeOrderBreakdown,
+  sumSovBillingTotals,
 } from "./contractManagementHelpers";
 
 // Local aliases so the ~30 call sites below don't need to change.
@@ -264,17 +266,7 @@ export function ContractOverviewPanel({ project, approvedCOTotal, pendingCOTotal
 export function ChangeOrdersTab({ changeOrders }) {
   const cos = useMemo(() => sortChangeOrdersByNumber(changeOrders), [changeOrders]);
 
-  const totals = useMemo(() => {
-    let approved = 0, pending = 0, rejected = 0, rejectedCount = 0;
-    for (const co of cos) {
-      const amt = Number(co.co_amount) || 0;
-      const s = (co.status || "").trim();
-      if (s === "Approved") approved += amt;
-      else if (s === "Rejected") { rejected += amt; rejectedCount++; }
-      else pending += amt;
-    }
-    return { total: cos.length, approved, pending, rejected, rejectedCount };
-  }, [cos]);
+  const totals = useMemo(() => sumChangeOrderBreakdown(cos), [cos]);
 
   return (
     <div>
@@ -351,21 +343,10 @@ export function ChangeOrdersTab({ changeOrders }) {
 export function BillingSOVTab({ sovItems, expenses, onAddSOV, onEditSOV, onDeleteSOV }) {
   const items = useMemo(() => sortSovByLineNumber(sovItems), [sovItems]);
 
-  const totals = useMemo(() => {
-    let scheduled = 0, billed = 0, retainage = 0;
-    for (const item of items) {
-      const sv = Number(item.scheduled_value) || 0;
-      const prog = Math.min(100, Math.max(0, Number(item.current_percent_complete) || 0)) / 100;
-      const ret = Math.min(100, Math.max(0, Number(item.retainage_percent) || 0)) / 100;
-      const billedAmt = sv * prog;
-      const retainageAmt = billedAmt * ret;
-      scheduled += sv;
-      billed += billedAmt;
-      retainage += retainageAmt;
-    }
-    const totalExpenses = (expenses || []).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-    return { scheduled, billed, retainage, netReceived: billed - retainage, totalExpenses };
-  }, [items, expenses]);
+  const totals = useMemo(
+    () => sumSovBillingTotals(items, expenses),
+    [items, expenses],
+  );
 
   return (
     <div>
@@ -481,17 +462,7 @@ export function BillingSOVTab({ sovItems, expenses, onAddSOV, onEditSOV, onDelet
 export function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
   const originalValue = Number(project?.original_contract_value) || 0;
 
-  const coBreakdown = useMemo(() => {
-    let approved = 0, rejected = 0, pending = 0;
-    for (const co of (changeOrders || [])) {
-      const amt = Number(co.co_amount) || 0;
-      const s = (co.status || "").trim();
-      if (s === "Approved") approved += amt;
-      else if (s === "Rejected") rejected += amt;
-      else pending += amt;
-    }
-    return { approved, rejected, pending };
-  }, [changeOrders]);
+  const coBreakdown = useMemo(() => sumChangeOrderBreakdown(changeOrders), [changeOrders]);
 
   const sovTotal = useMemo(() => sumSovScheduledValue(sovItems), [sovItems]);
   const billedTotal = useMemo(() => sumSovBilledFromPercent(sovItems), [sovItems]);

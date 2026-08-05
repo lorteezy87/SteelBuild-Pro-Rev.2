@@ -98,3 +98,21 @@ export const fmtDate = (d: unknown): string =>
   d ? formatLocalDate(d as string, 'en-US', { month: 'short', day: 'numeric' }) : '—';
 
 export const todayISO = (): string => new Date().toISOString().slice(0, 10);
+
+export function groupProcurementByCategory<
+  T extends { procurement_category?: string | null },
+>(items: T[]): Array<[string, T[]]> {
+  const map = new Map<string, T[]>();
+  for (const i of items || []) {
+    const cat = i.procurement_category || "Other";
+    if (!map.has(cat)) map.set(cat, []);
+    map.get(cat)!.push(i);
+  }
+  return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+export function sumWeightTons(
+  rows: Array<{ weight_tons?: number | string | null }>,
+): number {
+  return (rows || []).reduce((s, r) => s + (Number(r.weight_tons) || 0), 0);
+}

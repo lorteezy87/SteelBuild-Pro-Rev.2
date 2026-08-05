@@ -4,6 +4,8 @@ import {
   PROCUREMENT_CATEGORIES, CAT_COLORS, PIPELINE_STATUSES, ALL_STATUSES,
   iStyle, labelStyle, sectionLabelStyle,
   daysBetween, addWeeks, fmtDate, todayISO,
+  groupProcurementByCategory,
+  sumWeightTons,
 } from "./format";
 
 // StatusBadge is a still-.jsx component; cast at the boundary.
@@ -288,15 +290,10 @@ export function ListView({ items, wpById, onEdit, onDelete }) {
 export function BoardView({ items, wpById, onEdit }) {
   // Bucket by category. Render only categories that have rows so the
   // board doesn't show 10 empty columns on a small project.
-  const groups = useMemo(() => {
-    const map = new Map();
-    for (const i of items) {
-      const cat = i.procurement_category || 'Other';
-      if (!map.has(cat)) map.set(cat, []);
-      map.get(cat).push(i);
-    }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [items]);
+  const groups = useMemo(
+    () => groupProcurementByCategory(items),
+    [items],
+  );
 
   if (groups.length === 0) {
     return (
@@ -321,7 +318,7 @@ export function BoardView({ items, wpById, onEdit }) {
     }}>
       {groups.map(([cat, rows]) => {
         const color = CAT_COLORS[cat] || 'var(--text-muted)';
-        const tons = rows.reduce((s, r) => s + (Number(r.weight_tons) || 0), 0);
+        const tons = sumWeightTons(rows);
         return (
           <div
             key={cat}
