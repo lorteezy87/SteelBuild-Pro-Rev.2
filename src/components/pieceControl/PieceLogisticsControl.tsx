@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { selectNonContainerPieces } from "./pieceLogisticsHelpers";
 import {
   keepPreviousData,
   useMutation,
@@ -134,7 +135,7 @@ export function PieceLogisticsControl({
   );
   const events = snapshotQuery.data?.events ?? [];
   const leafPieces = useMemo(
-    () => pieces.filter((piece) => !piece.is_container),
+    () => selectNonContainerPieces(pieces),
     [pieces],
   );
 

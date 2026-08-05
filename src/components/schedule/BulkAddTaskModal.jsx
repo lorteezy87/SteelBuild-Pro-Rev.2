@@ -1,46 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { PHASES } from "../../utils/phases";
 import DateOrTbdInput from "./DateOrTbdInput";
-import { addDaysIso } from "../../services/scheduleCascade";
+import { addDays, daysBetween, emptyBulkTaskRow } from "./bulkAddTaskHelpers";
 
 const TASK_TYPES = ["Task", "Fabrication", "Delivery", "Install", "Submittal", "RFI", "Milestone"];
 const STATUSES   = ["Not Started", "In Progress", "Complete", "On Hold", "Cancelled"];
 const PRIORITIES = ["Low", "Normal", "High", "Critical"];
-
-const today = () => new Date().toISOString().split("T")[0];
-
-/** Add `days` calendar days to a YYYY-MM-DD string. Returns YYYY-MM-DD. */
-function addDays(dateStr, days) {
-  if (!dateStr || !Number.isFinite(days)) return null;
-  // UTC-safe: local-parse (new Date(str+"T00:00:00")) + toISOString() shifts the
-  // day under a non-zero UTC offset. addDaysIso does the arithmetic in UTC.
-  return addDaysIso(dateStr, days);
-}
-
-/** Compute the day-count between two YYYY-MM-DD strings. */
-function daysBetween(start, end) {
-  if (!start || !end) return null;
-  const s = new Date(start + "T00:00:00");
-  const e = new Date(end + "T00:00:00");
-  if (isNaN(s) || isNaN(e)) return null;
-  return Math.round((e - s) / 86400000);
-}
-
-function emptyRow(id) {
-  return {
-    _id:            id,
-    task_name:      "",
-    task_type:      "Task",
-    phase:          "Fabrication",
-    start_date:     today(),
-    end_date:       today(),
-    duration:       0,
-    status:         "Not Started",
-    priority:       "Normal",
-    resource_names: "",
-    parent_task_id: null,
-  };
-}
 
 const CELL = {
   padding: "0 7px",
@@ -99,7 +64,7 @@ const ROW_ERROR_BG = "var(--danger-muted)";
 const PANEL_BG = "var(--bg-surface-secondary)";
 
 export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName, isSaving, existingTasks }) {
-  const [rows, setRows] = useState(() => [emptyRow(1), emptyRow(2), emptyRow(3)]);
+  const [rows, setRows] = useState(() => [emptyBulkTaskRow(1), emptyBulkTaskRow(2), emptyBulkTaskRow(3)]);
   const [nextId, setNextId] = useState(4);
   const [errors, setErrors] = useState({});
   const gridRef = useRef(null);
@@ -108,7 +73,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
   // previous bulk-add session are never carried over.
   useEffect(() => {
     if (open) {
-      setRows([emptyRow(1), emptyRow(2), emptyRow(3)]);
+      setRows([emptyBulkTaskRow(1), emptyBulkTaskRow(2), emptyBulkTaskRow(3)]);
       setNextId(4);
       setErrors({});
     }
@@ -163,7 +128,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
 
     // If going past the last row, add one first
     if (!e.shiftKey && targetRow >= rows.length) {
-      setRows((prev) => [...prev, emptyRow(nextId)]);
+      setRows((prev) => [...prev, emptyBulkTaskRow(nextId)]);
       setNextId((n) => n + 1);
       // Focus after React re-renders the new row
       requestAnimationFrame(() => {
@@ -180,7 +145,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
   }, [rows.length, nextId]);
 
   const addRow = () => {
-    setRows((prev) => [...prev, emptyRow(nextId)]);
+    setRows((prev) => [...prev, emptyBulkTaskRow(nextId)]);
     setNextId((n) => n + 1);
   };
 
@@ -222,7 +187,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
   };
 
   const handleClose = () => {
-    setRows([emptyRow(1), emptyRow(2), emptyRow(3)]);
+    setRows([emptyBulkTaskRow(1), emptyBulkTaskRow(2), emptyBulkTaskRow(3)]);
     setNextId(4);
     setErrors({});
     onClose();
