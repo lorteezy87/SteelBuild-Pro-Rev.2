@@ -6,6 +6,9 @@ import {
   Activity, DollarSign, Package, Loader2
 } from "lucide-react";
 import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, BarChart, Bar
+} from "recharts";
 import {
   fmt$,
   fmtShort$,
@@ -18,9 +21,6 @@ import {
   buildCrewTeamRows,
   selectRecentLogs,
 } from "./projectDrilldownHelpers";
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, BarChart, Bar
-} from "recharts";
 
 function SectionHeader({ title, icon: Icon }) {
   return (

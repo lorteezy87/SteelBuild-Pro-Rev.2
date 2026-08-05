@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
 import { filterSearchableTasks } from "./searchableTaskPickerHelpers";
+import {
   drawerBorder,
   drawerControlStyle,
   drawerMutedBorder,
