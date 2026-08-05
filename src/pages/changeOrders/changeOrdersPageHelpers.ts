@@ -55,3 +55,64 @@ export function nextSelectedToggle(prev: Set<string>, id: string): Set<string> {
 export function selectAllOrNone(checked: boolean, ids: string[]): Set<string> {
   return checked ? new Set(ids) : new Set();
 }
+
+export const CHANGE_ORDERS_CSV_HEADERS = [
+  "CO #",
+  "Title",
+  "Status",
+  "Reason Code",
+  "Amount",
+  "Sched Impact (d)",
+  "Submitted",
+  "Approved",
+  "Approved By",
+] as const;
+
+export type ChangeOrderCsvLike = {
+  co_number?: string | number | null;
+  title?: string | null;
+  status?: string | null;
+  reason_code?: string | null;
+  co_amount?: string | number | null;
+  schedule_impact_days?: string | number | null;
+  submitted_date?: string | null;
+  approved_date?: string | null;
+  approved_by?: string | null;
+};
+
+export function buildChangeOrdersCsvRows(rows: ChangeOrderCsvLike[]): string[][] {
+  return (rows || []).map((c) => [
+    String(c.co_number || ""),
+    c.title || "",
+    c.status || "",
+    c.reason_code || "",
+    String(c.co_amount ?? ""),
+    String(c.schedule_impact_days ?? ""),
+    c.submitted_date || "",
+    c.approved_date || "",
+    c.approved_by || "",
+  ]);
+}
+
+export function buildChangeOrdersCsvString(rows: ChangeOrderCsvLike[]): string {
+  const header = CHANGE_ORDERS_CSV_HEADERS.join(",");
+  const body = buildChangeOrdersCsvRows(rows).map((cols) =>
+    [
+      cols[0],
+      `"${String(cols[1]).replace(/"/g, '""')}"`,
+      cols[2],
+      cols[3],
+      cols[4],
+      cols[5],
+      cols[6],
+      cols[7],
+      `"${String(cols[8]).replace(/"/g, '""')}"`,
+    ].join(","),
+  );
+  return [header, ...body].join("\n");
+}
+
+export function changeOrdersCsvFilename(projectName: string): string {
+  return `change-orders-${(projectName || "project").replace(/\s+/g, "-")}.csv`;
+}
+

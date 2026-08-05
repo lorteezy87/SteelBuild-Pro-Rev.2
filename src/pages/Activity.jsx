@@ -12,9 +12,9 @@ import {
   uniqueActivityEntities,
   filterActivities,
   activityHasActiveFilters,
-  ACTIVITY_CSV_HEADERS,
-  buildActivityCsvRows,
+  buildActivityCsvRows, buildActivityCsvString, activityCsvFilename,
 } from "./activity/activityPageHelpers";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 
 const DATE_RANGES = [
   { value: "all", label: "All Time" },
@@ -84,17 +84,8 @@ export default function ActivityPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = [...ACTIVITY_CSV_HEADERS];
-    // Same snake_case-first, camelCase-fallback pattern as the filter helpers.
-    const rows = buildActivityCsvRows(filtered);
-
-    const csv = [headers, ...rows].map((r) => r.map((cell) => `"${cell}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `activity-audit-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
+    const csv = buildActivityCsvString(buildActivityCsvRows(filtered));
+    downloadTextFile(csv, activityCsvFilename(), "text/csv;charset=utf-8");
   };
 
   const selectTriggerClass = "bg-transparent text-slate-50 px-3 py-2 text-sm rounded-md flex h-9 w-full items-center justify-between whitespace-nowrap border border-input shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1";

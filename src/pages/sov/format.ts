@@ -131,3 +131,12 @@ export const SOV_CSV_HEADERS = [
   "Prev %", "Curr %", "This Period", "To Date", "Balance",
   "Retainage", "Net", "Status",
 ];
+
+export function buildSovCsvString(
+  rows: ReturnType<typeof buildSovCsvRows>,
+): string {
+  return [SOV_CSV_HEADERS, ...rows]
+    .map((r) => r.map((c) => `"${c ?? ""}"`).join(","))
+    .join("\n");
+}
+

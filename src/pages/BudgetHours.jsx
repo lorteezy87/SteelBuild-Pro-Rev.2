@@ -36,6 +36,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
 import BudgetHoursControlCenter from "./budgetHours/BudgetHoursControlCenter";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 import ScopeItemFormModal from "./budgetHours/ScopeItemFormModal";
 
 /* ─────────────────────────────────────────────
@@ -45,8 +46,7 @@ import {
   filterLiveBudgetRows,
   buildWpsById,
   filterCommandBudgetRows,
-  BUDGET_HOURS_CSV_HEADERS,
-  buildBudgetHoursCsvRows,
+  buildBudgetHoursCsvRows, buildBudgetHoursCsvString,
 } from "./budgetHours/budgetHoursControlCenter.derive";
 import {
   PresetDialog,
@@ -259,16 +259,8 @@ export default function BudgetHours() {
     });
 
     const handleExportCsv = () => {
-      const headers = [...BUDGET_HOURS_CSV_HEADERS];
-      const exportRows = buildBudgetHoursCsvRows(commandFiltered);
-      const csv = [headers, ...exportRows].map((row) => row.map((c) => `"${c ?? ""}"`).join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "budget_hours.csv";
-      a.click();
-      URL.revokeObjectURL(url);
+      const csv = buildBudgetHoursCsvString(buildBudgetHoursCsvRows(commandFiltered));
+      downloadTextFile(csv, "budget_hours.csv", "text/csv;charset=utf-8");
     };
 
     return (

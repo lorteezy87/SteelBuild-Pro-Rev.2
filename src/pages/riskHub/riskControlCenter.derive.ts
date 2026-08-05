@@ -306,3 +306,12 @@ export interface ConstraintRecord {
   project_area: string | null;
   created_at: string | null;
 }
+
+export function buildRiskCsvString(
+  rows: ReturnType<typeof buildRiskCsvRows>,
+): string {
+  return rows
+    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+}
+

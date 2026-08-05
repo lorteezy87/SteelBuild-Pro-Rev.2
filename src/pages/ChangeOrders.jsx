@@ -48,7 +48,10 @@ import {
   filterChangeOrders,
   nextSelectedToggle,
   selectAllOrNone,
+  buildChangeOrdersCsvString,
+  changeOrdersCsvFilename,
 } from "./changeOrders/changeOrdersPageHelpers";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 import { BulkActionBar } from "@/components/design-system";
@@ -372,29 +375,12 @@ export default function ChangeOrders() {
   const projectName = projects.find((p) => p.id === projectId)?.name || "";
 
   const exportCsv = () => {
-    const rows = [
-      ["CO #", "Title", "Status", "Reason Code", "Amount", "Sched Impact (d)", "Submitted", "Approved", "Approved By"].join(","),
-      ...filtered.map((c) =>
-        [
-          c.co_number || "",
-          `"${(c.title || "").replace(/"/g, '""')}"`,
-          c.status || "",
-          c.reason_code || "",
-          c.co_amount ?? "",
-          c.schedule_impact_days ?? "",
-          c.submitted_date || "",
-          c.approved_date || "",
-          `"${(c.approved_by || "").replace(/"/g, '""')}"`,
-        ].join(",")
-      ),
-    ].join("\n");
-    const blob = new Blob([rows], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `change-orders-${projectName.replace(/\s+/g, "-")}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const csv = buildChangeOrdersCsvString(filtered);
+    downloadTextFile(
+      csv,
+      changeOrdersCsvFilename(projectName),
+      "text/csv;charset=utf-8",
+    );
   };
 
   const modals = (

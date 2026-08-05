@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
-import {
-  buildRiskSummary,
+import {buildRiskSummary,
   type RiskSignal,
-  type ConstraintRecord,
-} from "../riskControlCenter.derive";
+  type ConstraintRecord, buildRiskCsvString} from "../riskControlCenter.derive";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -265,5 +263,11 @@ describe("flat risks filter/csv", () => {
     expect(filterFlatRisks(flat, { search: "rfi", categoryFilter: "All" })).toHaveLength(1);
     expect(formatRiskExposureMoney(1500)).toBe("$2K");
     expect(buildRiskCsvRows(flat)[0][0]).toBe("Risk");
+  });
+});
+
+describe("buildRiskCsvString", () => {
+  it("quotes and joins rows", () => {
+    expect(buildRiskCsvString([["a", 'b"c']])).toBe('"a","b""c"');
   });
 });

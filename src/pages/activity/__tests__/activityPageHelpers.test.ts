@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {
-  getDateCutoff,
+import {getDateCutoff,
   uniqueActivityUsers,
   uniqueActivityEntities,
   filterActivities,
   activityHasActiveFilters,
   buildActivityCsvRows,
-  ACTIVITY_CSV_HEADERS,
-} from "../activityPageHelpers";
+  ACTIVITY_CSV_HEADERS, buildActivityCsvString, activityCsvFilename} from "../activityPageHelpers";
 
 const NOW = new Date("2026-08-05T12:00:00Z");
 
@@ -80,5 +78,14 @@ describe("activityPageHelpers", () => {
     );
     expect(rows[0]).toEqual(["TS", "u", "x", "RFI", "R1", "P", "d"]);
     expect(ACTIVITY_CSV_HEADERS).toHaveLength(7);
+  });
+});
+
+describe("buildActivityCsvString", () => {
+  it("joins header and quoted rows", () => {
+    const csv = buildActivityCsvString([["a", "b"]]);
+    expect(csv.split("\n").length).toBeGreaterThan(1);
+    expect(csv).toContain('"a"');
+    expect(activityCsvFilename(new Date("2026-08-05T00:00:00Z"))).toBe("activity-audit-2026-08-05.csv");
   });
 });

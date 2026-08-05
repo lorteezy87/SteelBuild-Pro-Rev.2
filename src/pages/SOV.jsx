@@ -16,15 +16,15 @@ import {
   buildSovStaged,
 } from "../lib/importSovSpreadsheet";
 import SovControlCenter from "./sov/SovControlCenter";
+import { downloadTextFile } from "@/lib/exports/fabRelease";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button as DsButton } from "@/components/design-system";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { SovNoProjectGuard } from "./sov/components";
 import {
-  buildSovCsvRows,
+  buildSovCsvRows, buildSovCsvString,
   calcSovLine,
-  SOV_CSV_HEADERS,
 } from "./sov/format";
 import {
   resolveEffectiveRetainage,
@@ -262,15 +262,8 @@ export default function SOV() {
   );
 
   const exportCSV = () => {
-    const rows = buildSovCsvRows(filtered, calc);
-    const csv = [SOV_CSV_HEADERS, ...rows].map(r => r.map(c => `"${c ?? ""}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "sov.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    const csv = buildSovCsvString(buildSovCsvRows(filtered, calc));
+    downloadTextFile(csv, "sov.csv", "text/csv;charset=utf-8");
   };
 
   const nextSovId = "";

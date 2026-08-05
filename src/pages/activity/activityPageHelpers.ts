@@ -97,3 +97,16 @@ export function buildActivityCsvRows(
     a.description ?? "—",
   ]);
 }
+
+export function buildActivityCsvString(
+  rows: ReturnType<typeof buildActivityCsvRows>,
+): string {
+  return [[...ACTIVITY_CSV_HEADERS], ...rows]
+    .map((r) => r.map((cell) => `"${cell}"`).join(","))
+    .join("\n");
+}
+
+export function activityCsvFilename(now: Date = new Date()): string {
+  return `activity-audit-${now.toISOString().split("T")[0]}.csv`;
+}
+

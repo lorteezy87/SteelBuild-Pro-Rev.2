@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  sourceRfiLabel,
+import {sourceRfiLabel,
   filterChangeOrders,
   nextSelectedToggle,
-  selectAllOrNone,
-} from "../changeOrdersPageHelpers";
+  selectAllOrNone, buildChangeOrdersCsvString, changeOrdersCsvFilename} from "../changeOrdersPageHelpers";
 
 describe("changeOrdersPageHelpers", () => {
   it("builds source RFI banner label", () => {
@@ -29,5 +27,16 @@ describe("changeOrdersPageHelpers", () => {
     expect([...nextSelectedToggle(new Set(["a"]), "a")]).toEqual([]);
     expect([...selectAllOrNone(true, ["1", "2"])].sort()).toEqual(["1", "2"]);
     expect([...selectAllOrNone(false, ["1", "2"])]).toEqual([]);
+  });
+});
+
+describe("buildChangeOrdersCsvString", () => {
+  it("builds header and quoted title/approved_by", () => {
+    const csv = buildChangeOrdersCsvString([
+      { co_number: 1, title: 'Say "hi"', status: "Draft", approved_by: 'A "B"' },
+    ]);
+    expect(csv.split("\n")[0]).toContain("CO #");
+    expect(csv).toContain('"Say ""hi"""');
+    expect(changeOrdersCsvFilename("My Project")).toBe("change-orders-My-Project.csv");
   });
 });

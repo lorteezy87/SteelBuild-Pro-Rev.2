@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  resolveEffectiveRetainage,
+import {resolveEffectiveRetainage,
   filterSovLines,
-  filterSovLinesForControlCenter,
-} from "../sovPageHelpers";
+  filterSovLinesForControlCenter} from "../sovPageHelpers";
 
 describe("sovPageHelpers", () => {
   it("resolves retainage modes", () => {
@@ -25,3 +23,4 @@ describe("sovPageHelpers", () => {
     ).toEqual(["A"]);
   });
 });
+

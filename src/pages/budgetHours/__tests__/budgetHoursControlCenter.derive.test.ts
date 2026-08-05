@@ -3,12 +3,10 @@
  * Pure logic only — no React, no network.
  */
 import { describe, it, expect } from "vitest";
-import {
-  buildBudgetHoursSummary,
+import {buildBudgetHoursSummary,
   variancePct,
   fmtPct,
-  varianceTone,
-} from "../budgetHoursControlCenter.derive";
+  varianceTone, buildBudgetHoursCsvString} from "../budgetHoursControlCenter.derive";
 import type { BudgetHourRow } from "../budgetHoursControlCenter.derive";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -221,5 +219,13 @@ describe("buildBudgetHoursSummary", () => {
     const s = buildBudgetHoursSummary(rows);
     expect(s.standardCount).toBe(2);
     expect(s.specialtyCount).toBe(1);
+  });
+});
+
+describe("buildBudgetHoursCsvString", () => {
+  it("wraps rows with headers", () => {
+    const csv = buildBudgetHoursCsvString([["a", "b"]]);
+    expect(csv).toContain('"a"');
+    expect(csv.split("\n").length).toBeGreaterThan(1);
   });
 });

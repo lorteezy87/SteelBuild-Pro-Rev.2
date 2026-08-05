@@ -402,3 +402,12 @@ export function buildBudgetHoursCsvRows(
     r.notes || "",
   ]);
 }
+
+export function buildBudgetHoursCsvString(
+  rows: ReturnType<typeof buildBudgetHoursCsvRows>,
+): string {
+  return [[...BUDGET_HOURS_CSV_HEADERS], ...rows]
+    .map((row) => row.map((c) => `"${c ?? ""}"`).join(","))
+    .join("\n");
+}
+
