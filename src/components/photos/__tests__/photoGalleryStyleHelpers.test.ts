@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { navButtonStyle, panelButtonStyle, editInputStyle } from "../photoGalleryStyleHelpers";
+import { navButtonStyle, panelButtonStyle, editInputStyle, CATEGORY_COLORS, PHOTO_CATEGORIES } from "../photoGalleryStyleHelpers";
 
 describe("photo gallery styles", () => {
   it("navButtonStyle positions by side", () => {
@@ -13,5 +13,12 @@ describe("photo gallery styles", () => {
   });
   it("editInputStyle is stable", () => {
     expect(editInputStyle.fontSize).toBe(12);
+  });
+});
+
+describe("photo category chrome", () => {
+  it("category colors", () => {
+    expect(CATEGORY_COLORS.Safety).toBe("var(--status-error)");
+    expect(PHOTO_CATEGORIES).toContain("Punchlist");
   });
 });

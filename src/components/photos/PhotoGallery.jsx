@@ -21,18 +21,13 @@ import PhotoThumb from "./PhotoThumb";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { formatPhotoDate as formatDate, formatPhotoGroupKey as formatGroupKey } from "./photoGalleryFormatHelpers";
 import { filterAndSortPhotos, groupPhotosByMonth } from "./photoGalleryHelpers";
-import { navButtonStyle, editInputStyle, panelButtonStyle } from "./photoGalleryStyleHelpers";
-
-const CATEGORY_COLORS = {
-  Progress: "var(--status-info)",
-  Safety: "var(--status-error)",
-  Issue: "var(--status-warning)",
-  Delivery: "var(--status-success)",
-  Punchlist: "var(--accent)",
-  Other: "var(--text-muted)",
-};
-
-const CATEGORIES = ["Progress", "Safety", "Issue", "Delivery", "Punchlist", "Other"];
+import {
+  navButtonStyle,
+  editInputStyle,
+  panelButtonStyle,
+  CATEGORY_COLORS,
+  PHOTO_CATEGORIES as CATEGORIES,
+} from "./photoGalleryStyleHelpers";
 
 
 export default function PhotoGallery({ photos = [] }) {

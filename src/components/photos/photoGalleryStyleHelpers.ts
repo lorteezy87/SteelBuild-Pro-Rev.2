@@ -75,3 +75,21 @@ export function panelButtonStyle({
     opacity: disabled ? 0.5 : 1,
   };
 }
+
+export const CATEGORY_COLORS: Record<string, string> = {
+  Progress: "var(--status-info)",
+  Safety: "var(--status-error)",
+  Issue: "var(--status-warning)",
+  Delivery: "var(--status-success)",
+  Punchlist: "var(--accent)",
+  Other: "var(--text-muted)",
+};
+
+export const PHOTO_CATEGORIES = [
+  "Progress",
+  "Safety",
+  "Issue",
+  "Delivery",
+  "Punchlist",
+  "Other",
+] as const;
