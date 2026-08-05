@@ -41,17 +41,15 @@ const cellLabelStyle = {
   letterSpacing: "0.05em",
 };
 
-// Coerce whatever's in user_overrides into a clean { email: boolean } map.
-function coerceOverrides(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const out = {};
-  for (const [k, v] of Object.entries(value)) {
-    if (typeof v === "boolean" && typeof k === "string" && k.length > 0) {
-      out[k.toLowerCase()] = v;
-    }
-  }
-  return out;
-}
+import {
+  coerceOverrides,
+  countEnabledFlags,
+  countOverrideEntries,
+  isValidOverrideEmail,
+  isValidFlagKey,
+  mergeOverride,
+  removeOverride,
+} from "./featureFlags/featureFlagsPageHelpers";
 
 function FeatureFlagsAdminContent() {
   const qc = useQueryClient();
@@ -65,11 +63,8 @@ function FeatureFlagsAdminContent() {
     staleTime: 30 * 1000,
   });
 
-  const enabledCount = useMemo(() => flags.filter((f) => f.enabled).length, [flags]);
-  const overrideCount = useMemo(
-    () => flags.reduce((sum, f) => sum + Object.keys(coerceOverrides(f.user_overrides)).length, 0),
-    [flags],
-  );
+  const enabledCount = useMemo(() => countEnabledFlags(flags), [flags]);
+  const overrideCount = useMemo(() => countOverrideEntries(flags), [flags]);
 
   const invalidate = React.useCallback(() => {
     qc.invalidateQueries({ queryKey: ["feature_flags_admin"] });
@@ -114,11 +109,11 @@ function FeatureFlagsAdminContent() {
   const handleAddOverride = (flag) => {
     const draft = overrideDrafts[flag.id] || { email: "", enabled: true };
     const email = (draft.email || "").trim().toLowerCase();
-    if (!email || !email.includes("@")) {
+    if (!isValidOverrideEmail(email)) {
       toast.error("Enter a valid email");
       return;
     }
-    const overrides = { ...coerceOverrides(flag.user_overrides), [email]: !!draft.enabled };
+    const overrides = mergeOverride(flag.user_overrides, email, !!draft.enabled);
     updateMut.mutate(
       { id: flag.id, updates: { user_overrides: overrides } },
       {
@@ -130,8 +125,7 @@ function FeatureFlagsAdminContent() {
   };
 
   const handleRemoveOverride = (flag, email) => {
-    const overrides = { ...coerceOverrides(flag.user_overrides) };
-    delete overrides[email];
+    const overrides = removeOverride(flag.user_overrides, email);
     updateMut.mutate({ id: flag.id, updates: { user_overrides: overrides } });
   };
 
@@ -141,7 +135,7 @@ function FeatureFlagsAdminContent() {
       toast.error("flag_key is required");
       return;
     }
-    if (!/^[a-z0-9_]+$/.test(key)) {
+    if (!isValidFlagKey(key)) {
       toast.error("flag_key must be lowercase letters, numbers, and underscores");
       return;
     }

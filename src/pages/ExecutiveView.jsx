@@ -13,6 +13,23 @@ import {
 } from "recharts";
 import TrueHealthChart from "../components/dashboard/TrueHealthChart";
 import { CommandBar } from "@/components/design-system";
+import {
+  sumContractValue,
+  sumApprovedCoValue,
+  countApprovedCos,
+  sumWpHours,
+  countOpenRfis,
+  countAtRiskProjects,
+  countDelayedTasks,
+  countTasksCompleteThisWeek,
+  buildRfiSeverity,
+  buildHealthData,
+  buildPhaseData,
+  buildLaborByProject,
+  buildWaterfallData,
+  buildRfiAging,
+  buildProjectBudgetData,
+} from "./executiveView/executiveViewPageHelpers";
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -64,102 +81,49 @@ export default function ExecutiveView() {
   const { data: wps = [] } = useQuery({ queryKey: ["work-packages-global"], queryFn: () => entities.WorkPackage.list() });
   const { data: tasks = [] } = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => entities.ScheduleTask.list() });
 
-  const totalContract = projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
-  const approvedCOVal = cos.filter((c) => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+  const totalContract = sumContractValue(projects);
+  const approvedCOVal = sumApprovedCoValue(cos);
   const revisedTotal = totalContract + approvedCOVal;
   const { budget: totalBudget, actual: totalSpend } = computeCostCodeTotals(codes);
-  const totalBudgetHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0) + (Number(w.field_hours_budget) || 0), 0);
-  const totalActualHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0) + (Number(w.field_hours_actual) || 0), 0);
+  const { budget: totalBudgetHrs, actual: totalActualHrs } = sumWpHours(wps);
+  const delayedTaskCount = countDelayedTasks(tasks);
 
   const kpis = [
     { label: "Portfolio Value", value: formatCurrency(revisedTotal), color: "green" },
     { label: "Total Spend", value: formatCurrency(totalSpend), sub: `of ${formatCurrency(totalBudget)} budget`, color: totalSpend > totalBudget ? "rose" : "blue" },
-    { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${cos.filter((c) => c.status === "Approved").length} orders`, color: "purple" },
+    { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${countApprovedCos(cos)} orders`, color: "purple" },
     { label: "Labor Burn", value: formatBudgetPercent(totalBudgetHrs > 0 ? totalActualHrs / totalBudgetHrs * 100 : 0), sub: `${totalActualHrs.toLocaleString()} hrs actual`, color: "amber" },
-    { label: "Open RFIs", value: rfis.filter((r) => r.status === "Open" || r.status === "Under Review").length, color: "blue" },
-    { label: "At Risk Projects", value: projects.filter((p) => p.health_status === "At Risk").length, color: "rose" },
+    { label: "Open RFIs", value: countOpenRfis(rfis), color: "blue" },
+    { label: "At Risk Projects", value: countAtRiskProjects(projects), color: "rose" },
     {
       label: 'Delayed Tasks',
-      value: tasks.filter(t => t.status === 'Delayed').length,
-      color: tasks.filter(t => t.status === 'Delayed').length > 0 ? 'rose' : 'green',
+      value: delayedTaskCount,
+      color: delayedTaskCount > 0 ? 'rose' : 'green',
     },
     {
       label: 'Complete This Week',
-      value: tasks.filter(t => {
-        if (t.status !== 'Complete') return false;
-        const d = new Date(t.end_date || t.updated_date || '');
-        const now = new Date();
-        const weekAgo = new Date(now - 7 * 86400000);
-        return d >= weekAgo && d <= now;
-      }).length,
+      value: countTasksCompleteThisWeek(tasks),
       color: 'green',
     },
   ];
 
   // Charts data
-  const projectBudgetData = projects.map((p) => {
-    const pc = codes.filter((c) => c.project_id === p.id);
-    const approvedCO = cos.filter((c) => c.project_id === p.id && c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-    const pcTotals = computeCostCodeTotals(pc);
-    return {
-      name: p.project_number || p.name?.slice(0, 10),
-      budget: pcTotals.budget,
-      actual: pcTotals.actual,
-      revised: (Number(p.original_contract_value) || 0) + approvedCO,
-    };
-  });
+  const projectBudgetData = buildProjectBudgetData(projects, codes, cos, computeCostCodeTotals);
 
-  const rfiSeverity = [
-    { name: "Critical", value: rfis.filter((r) => r.priority === "Critical").length },
-    { name: "High",     value: rfis.filter((r) => r.priority === "High").length },
-    { name: "Medium",   value: rfis.filter((r) => r.priority === "Medium").length },
-    { name: "Low",      value: rfis.filter((r) => r.priority === "Low").length },
-  ].filter((d) => d.value > 0);
+  const rfiSeverity = buildRfiSeverity(rfis);
   const rfiSeverityColors = ["var(--status-error)", "var(--status-warning)", "var(--status-info)", "var(--text-muted)"];
 
-  const laborData = projects.map((p) => {
-    const pw = wps.filter((w) => w.project_id === p.id);
-    return {
-      name: p.project_number || p.name?.slice(0, 8),
-      budget: pw.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0) + (Number(w.field_hours_budget) || 0), 0),
-      actual: pw.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0) + (Number(w.field_hours_actual) || 0), 0),
-    };
-  });
+  const laborData = buildLaborByProject(projects, wps);
 
-  const waterfallData = [{ name: "Original", value: totalContract, fill: "var(--accent)" }];
-  cos.filter((c) => c.status === "Approved").forEach((c) => {
-    waterfallData.push({ name: c.co_number, value: Number(c.co_amount) || 0, fill: (Number(c.co_amount) || 0) >= 0 ? "var(--status-success)" : "var(--status-error)" });
-  });
-  waterfallData.push({ name: "Revised", value: revisedTotal, fill: "var(--phase-detailing)" });
+  const waterfallData = buildWaterfallData(totalContract, revisedTotal, cos);
 
-  const healthData = [
-    { name: "On Track", value: projects.filter((p) => p.health_status === "On Track").length },
-    { name: "Watch",    value: projects.filter((p) => p.health_status === "Watch").length },
-    { name: "At Risk",  value: projects.filter((p) => p.health_status === "At Risk").length },
-  ].filter((d) => d.value > 0);
+  const healthData = buildHealthData(projects);
 
   // Phase donut
-  const phaseData = [
-    { name: "Detailing",   value: projects.filter(p => p.phase === "Detailing").length,   color: "var(--phase-detailing)" },
-    { name: "Fabrication", value: projects.filter(p => p.phase === "Fabrication").length, color: "var(--phase-fab)" },
-    { name: "Delivery",    value: projects.filter(p => p.phase === "Delivery").length,    color: "var(--phase-delivery)" },
-    { name: "Erection",    value: projects.filter(p => p.phase === "Erection").length,    color: "var(--phase-erection)" },
-    { name: "Closeout",    value: projects.filter(p => p.phase === "Closeout").length,    color: "var(--phase-closeout)" },
-  ].filter(d => d.value > 0);
+  const phaseData = buildPhaseData(projects);
 
   // RFI aging table
-  const rfiAging = projects.map(p => {
-    const pRFIs = rfis.filter(r => r.project_id === p.id);
-    const open = pRFIs.filter(r => !["Answered", "Closed"].includes(r.status));
-    const overdue = open.filter(r => r.date_required && new Date(r.date_required) < new Date());
-    const avgDays = open.length > 0
-      ? Math.round(open.reduce((s, r) => {
-          const start = new Date(r.submitted_date || r.created_date || new Date());
-          return s + Math.floor((new Date() - start) / 86400000);
-        }, 0) / open.length)
-      : 0;
-    return { name: p.name, number: p.project_number, open: open.length, overdue: overdue.length, avgDays };
-  }).filter(r => r.open > 0).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
+  const rfiAging = buildRfiAging(projects, rfis);
 
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>

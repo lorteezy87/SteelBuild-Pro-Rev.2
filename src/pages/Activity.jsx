@@ -7,6 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import ActivityFeed from "../components/shared/ActivityFeed";
 import LoadingSkeleton from "../components/shared/LoadingSkeleton";
 
+import {
+  uniqueActivityUsers,
+  uniqueActivityEntities,
+  filterActivities,
+  activityHasActiveFilters,
+  ACTIVITY_CSV_HEADERS,
+  buildActivityCsvRows,
+} from "./activity/activityPageHelpers";
+
 const DATE_RANGES = [
   { value: "all", label: "All Time" },
   { value: "today", label: "Today" },
@@ -14,17 +23,6 @@ const DATE_RANGES = [
   { value: "30d", label: "Last 30 Days" },
   { value: "90d", label: "Last 90 Days" },
 ];
-
-function getDateCutoff(range) {
-  if (range === "all") return null;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (range === "today") return today;
-  const days = parseInt(range);
-  const cutoff = new Date(today);
-  cutoff.setDate(cutoff.getDate() - days);
-  return cutoff;
-}
 
 export default function ActivityPage() {
   const navigate = useNavigate();
@@ -53,31 +51,30 @@ export default function ActivityPage() {
   // the real column names, keeping legacy fallbacks in case a future
   // seed switches back to camelCase.
   const uniqueUsers = useMemo(
-    () => [...new Set(activities.map((a) => a.performed_by ?? a.userName).filter(Boolean))],
+    () => uniqueActivityUsers(activities),
     [activities]
   );
 
   const uniqueEntities = useMemo(
-    () => [...new Set(activities.map((a) => a.entity_type ?? a.entityType).filter(Boolean))],
+    () => uniqueActivityEntities(activities),
     [activities]
   );
 
   const filtered = useMemo(() => {
-    const dateCutoff = getDateCutoff(dateRange);
-    return activities.filter((a) => {
-      const pid = a.project_id ?? a.projectId;
-      const user = a.performed_by ?? a.userName;
-      const ent  = a.entity_type ?? a.entityType;
-      const ts   = a.timestamp ?? a.created_at;
-      const projectMatch = filterProject === "all" || pid === filterProject;
-      const userMatch    = filterUser === "all"    || user === filterUser;
-      const entityMatch  = filterEntity === "all"  || ent === filterEntity;
-      const dateMatch    = !dateCutoff || (ts && new Date(ts) >= dateCutoff);
-      return projectMatch && userMatch && entityMatch && dateMatch;
+    return filterActivities(activities, {
+      filterProject,
+      filterUser,
+      filterEntity,
+      dateRange,
     });
   }, [activities, filterProject, filterUser, filterEntity, dateRange]);
 
-  const hasActiveFilters = filterProject !== "all" || filterUser !== "all" || filterEntity !== "all" || dateRange !== "all";
+  const hasActiveFilters = activityHasActiveFilters({
+    filterProject,
+    filterUser,
+    filterEntity,
+    dateRange,
+  });
 
   const handleClearFilters = () => {
     setFilterProject("all");
@@ -87,18 +84,9 @@ export default function ActivityPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = ["Timestamp", "User", "Action", "Entity Type", "Entity", "Project", "Description"];
-    const rows = filtered.map((a) => [
-      // Same snake_case-first, camelCase-fallback pattern as the
-      // filter block above so CSV export stays in sync with the feed.
-      new Date(a.timestamp ?? a.created_at).toLocaleString(),
-      a.performed_by ?? a.userName ?? "",
-      a.action ?? "",
-      a.entity_type ?? a.entityType ?? "",
-      a.entity_name ?? a.entityName ?? "",
-      a.project_name ?? a.projectName ?? "—",
-      a.description ?? "—",
-    ]);
+    const headers = [...ACTIVITY_CSV_HEADERS];
+    // Same snake_case-first, camelCase-fallback pattern as the filter helpers.
+    const rows = buildActivityCsvRows(filtered);
 
     const csv = [headers, ...rows].map((r) => r.map((cell) => `"${cell}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
