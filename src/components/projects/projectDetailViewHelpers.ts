@@ -159,3 +159,71 @@ export const PROJECT_DETAIL_TABS = [
   { id: "commercial", label: "Commercial" },
 ] as const;
 
+export const WP_STATUS_COLOR: Record<string, string> = {
+  "Not Started": "var(--text-muted)",
+  "In Progress": "var(--accent)",
+  Complete: "var(--status-success)",
+  "On Hold": "var(--status-warning)",
+};
+
+export const WP_PHASE_COLORS: Record<string, string> = {
+  Detailing: "#0D9488",
+  Fabrication: "var(--accent)",
+  Delivery: "#06B6D4",
+  Erection: "#22C55E",
+};
+
+export const SCHEDULE_STATUS_COLOR: Record<string, string> = {
+  "Not Started": "var(--text-muted)",
+  "In Progress": "var(--accent)",
+  Complete: "var(--status-success)",
+  Delayed: "var(--status-error)",
+  "On Hold": "var(--status-warning)",
+};
+
+export const DRAWING_STAGE_COLOR: Record<string, string> = {
+  Released: "var(--status-success)",
+  IFC: "var(--status-success)",
+  OFS: "var(--accent)",
+  BFA: "var(--accent)",
+  OFA: "var(--status-warning)",
+  IFA: "var(--status-info)",
+  "Not Started": "var(--text-muted)",
+};
+
+export const RFI_STATUS_COLOR: Record<string, string> = {
+  Open: "var(--status-warning)",
+  "Under Review": "var(--accent)",
+  Answered: "var(--status-success)",
+  Closed: "var(--text-muted)",
+};
+
+export const RFI_PRIO_COLOR: Record<string, string> = {
+  Critical: "var(--status-error)",
+  High: "var(--status-warning)",
+  Medium: "var(--accent)",
+  Low: "var(--text-muted)",
+};
+
+export const DELIVERY_STATUS_COLOR: Record<string, string> = {
+  Scheduled: "var(--accent)",
+  "In Transit": "var(--status-warning)",
+  Delivered: "var(--status-success)",
+  Partial: "var(--status-warning)",
+  Rejected: "var(--status-error)",
+};
+
+export const CO_STATUS_COLOR: Record<string, string> = {
+  Approved: "var(--status-success)",
+  Rejected: "var(--status-error)",
+  "Under Review": "var(--accent)",
+  Submitted: "var(--status-warning)",
+  Draft: "var(--text-muted)",
+  Void: "var(--text-muted)",
+};
+
+export const WP_TAB_GRID = "1fr 90px 80px 80px 70px 90px";
+export const DRAWINGS_TAB_GRID = "90px 1fr 80px 80px 80px";
+export const RFIS_TAB_GRID = "80px 1fr 70px 80px 80px";
+export const DELIVERIES_TAB_GRID = "1fr 100px 90px 90px 80px";
+export const CO_TAB_GRID = "90px 1fr 90px 90px 90px";

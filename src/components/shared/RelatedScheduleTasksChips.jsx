@@ -26,13 +26,7 @@ import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
 import { computeEffectiveDates } from '@/services/scheduleCascade';
 import { filterTasksLinkedToTarget } from './relatedScheduleTasksHelpers';
-import { fmtMD } from "./relatedScheduleTasksChipsHelpers";
-
-const VALID_FIELDS = new Set([
-  'related_rfi_ids',
-  'related_change_order_ids',
-  'related_action_item_ids',
-]);
+import { fmtMD, VALID_RELATED_FIELDS as VALID_FIELDS } from "./relatedScheduleTasksChipsHelpers";
 
 // Match the asIdArray idiom used in the entity wrapper / DailyLogForm —
 // JSONB columns can come back as arrays OR stringified JSON depending on

@@ -38,3 +38,11 @@ export function toFiniteNumber(v: unknown): number {
   return Number.isFinite(Number(v)) ? Number(v) : 0;
 }
 
+export const PAY_APP_STATUS_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "draft", label: "Draft" },
+  { key: "submitted", label: "Submitted" },
+  { key: "approved", label: "Approved" },
+  { key: "paid", label: "Paid" },
+  { key: "void", label: "Void" },
+] as const;

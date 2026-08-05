@@ -21,6 +21,17 @@ import {
   HEALTH_CONFIG,
   monoStyle as mono,
   PROJECT_DETAIL_TABS,
+  WP_STATUS_COLOR,
+  WP_PHASE_COLORS,
+  SCHEDULE_STATUS_COLOR,
+  DRAWING_STAGE_COLOR,
+  RFI_STATUS_COLOR,
+  RFI_PRIO_COLOR,
+  DELIVERY_STATUS_COLOR,
+  CO_STATUS_COLOR,
+  WP_TAB_GRID,
+  DRAWINGS_TAB_GRID,
+  RFIS_TAB_GRID,
 } from '@/components/projects/projectDetailViewHelpers';
 
 const TAB_ICONS = {
@@ -166,18 +177,8 @@ function OverviewTab({ project, workPackages, rfis, changeOrders, deliveries }) 
 
 // ── WORK PACKAGES TAB ──
 function WorkPackagesTab({ workPackages }) {
-  const STATUS_COLOR = {
-    'Not Started': 'var(--text-muted)',
-    'In Progress': 'var(--accent)',
-    'Complete':    'var(--status-success)',
-    'On Hold':     'var(--status-warning)',
-  };
-  const PHASE_COLORS = {
-    Detailing:   '#0D9488',
-    Fabrication: 'var(--accent)',
-    Delivery:    '#06B6D4',
-    Erection:    '#22C55E',
-  };
+  const STATUS_COLOR = WP_STATUS_COLOR;
+  const PHASE_COLORS = WP_PHASE_COLORS;
 
   if (!workPackages.length) return <EmptyState label="No Work Packages" />;
 
@@ -192,7 +193,7 @@ function WorkPackagesTab({ workPackages }) {
         { label: 'Total Tonnage', value: `${totalTonnage.toFixed(1)}T` },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 80px 70px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: WP_TAB_GRID, gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['Work Package','Phase','Status','% Done','Tons','Shop Hrs'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
@@ -200,7 +201,7 @@ function WorkPackagesTab({ workPackages }) {
         {workPackages.map(w => {
           const pct = Number(w.percent_complete) || 0;
           return (
-            <div key={w.id} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 80px 70px 90px', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: `3px solid ${PHASE_COLORS[w.phase] || 'var(--accent)'}` }}>
+            <div key={w.id} style={{ display: 'grid', gridTemplateColumns: WP_TAB_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: `3px solid ${PHASE_COLORS[w.phase] || 'var(--accent)'}` }}>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{w.name}</div>
                 {w.wp_number && <div style={{ ...mono, fontSize: 8, color: 'var(--text-muted)', marginTop: 2 }}>{w.wp_number}</div>}
@@ -227,13 +228,7 @@ function WorkPackagesTab({ workPackages }) {
 
 // ── SCHEDULE TAB ──
 function ScheduleTab({ scheduleTasks }) {
-  const STATUS_COLOR = {
-    'Not Started': 'var(--text-muted)',
-    'In Progress': 'var(--accent)',
-    'Complete':    'var(--status-success)',
-    'Delayed':     'var(--status-error)',
-    'On Hold':     'var(--status-warning)',
-  };
+  const STATUS_COLOR = SCHEDULE_STATUS_COLOR;
 
   if (!scheduleTasks.length) return <EmptyState label="No Schedule Tasks" />;
 
@@ -266,15 +261,7 @@ function ScheduleTab({ scheduleTasks }) {
 
 // ── DRAWINGS TAB ──
 function DrawingsTab({ drawings }) {
-  const STAGE_COLOR = {
-    'Released':    'var(--status-success)',
-    'IFC':         'var(--status-success)',
-    'OFS':         'var(--accent)',
-    'BFA':         'var(--accent)',
-    'OFA':         'var(--status-warning)',
-    'IFA':         'var(--status-info)',
-    'Not Started': 'var(--text-muted)',
-  };
+  const STAGE_COLOR = DRAWING_STAGE_COLOR;
 
   if (!drawings.length) return <EmptyState label="No Drawings" />;
 
@@ -289,7 +276,7 @@ function DrawingsTab({ drawings }) {
         { label: 'Overdue', value: overdue, color: overdue > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: DRAWINGS_TAB_GRID, gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['Sheet #', 'Title', 'Discipline', 'Stage', 'Due'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
@@ -297,7 +284,7 @@ function DrawingsTab({ drawings }) {
         {drawings.map(d => {
           const od = isDrawingOverdue(d);
           return (
-            <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 80px 80px', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: od ? '3px solid var(--status-error)' : '3px solid transparent' }}>
+            <div key={d.id} style={{ display: 'grid', gridTemplateColumns: DRAWINGS_TAB_GRID, gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: od ? '3px solid var(--status-error)' : '3px solid transparent' }}>
               <div style={{ ...mono, fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>{d.sheet_number || '—'}</div>
               <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</div>
               <div style={{ ...mono, fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{d.discipline?.slice(0,8) || '—'}</div>
@@ -313,18 +300,8 @@ function DrawingsTab({ drawings }) {
 
 // ── RFIs TAB ──
 function RFIsTab({ rfis }) {
-  const STATUS_COLOR = {
-    'Open':         'var(--status-warning)',
-    'Under Review': 'var(--accent)',
-    'Answered':     'var(--status-success)',
-    'Closed':       'var(--text-muted)',
-  };
-  const PRIO_COLOR = {
-    Critical: 'var(--status-error)',
-    High:     'var(--status-warning)',
-    Medium:   'var(--accent)',
-    Low:      'var(--text-muted)',
-  };
+  const STATUS_COLOR = RFI_STATUS_COLOR;
+  const PRIO_COLOR = RFI_PRIO_COLOR;
 
   if (!rfis.length) return <EmptyState label="No RFIs" />;
 
@@ -339,7 +316,7 @@ function RFIsTab({ rfis }) {
         { label: 'Answered', value: answered, color: 'var(--status-success)' },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 70px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: RFIS_TAB_GRID, gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['RFI #', 'Title', 'Priority', 'Status', 'Due'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
@@ -347,7 +324,7 @@ function RFIsTab({ rfis }) {
         {rfis.map(r => {
           const od = isRfiOverdue(r);
           return (
-            <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 70px 80px 80px', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: od ? '3px solid var(--status-error)' : `3px solid ${PRIO_COLOR[r.priority] || 'transparent'}` }}>
+            <div key={r.id} style={{ display: 'grid', gridTemplateColumns: RFIS_TAB_GRID, gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: od ? '3px solid var(--status-error)' : `3px solid ${PRIO_COLOR[r.priority] || 'transparent'}` }}>
               <div style={{ ...mono, fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>{r.rfi_number || '—'}</div>
               <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
               <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: PRIO_COLOR[r.priority] || 'var(--text-muted)', textTransform: 'uppercase' }}>{r.priority || '—'}</div>
@@ -363,13 +340,7 @@ function RFIsTab({ rfis }) {
 
 // ── DELIVERIES TAB ──
 function DeliveriesTab({ deliveries }) {
-  const STATUS_COLOR = {
-    Scheduled:   'var(--accent)',
-    'In Transit':'var(--status-warning)',
-    Delivered:   'var(--status-success)',
-    Partial:     'var(--status-warning)',
-    Rejected:    'var(--status-error)',
-  };
+  const STATUS_COLOR = DELIVERY_STATUS_COLOR;
 
   if (!deliveries.length) return <EmptyState label="No Deliveries" />;
 
@@ -405,14 +376,6 @@ function DeliveriesTab({ deliveries }) {
 
 // ── COMMERCIAL TAB ──
 function CommercialTab({ project, changeOrders, costCodes }) {
-  const CO_STATUS_COLOR = {
-    Approved:      'var(--status-success)',
-    Rejected:      'var(--status-error)',
-    'Under Review':'var(--accent)',
-    Submitted:     'var(--status-warning)',
-    Draft:         'var(--text-muted)',
-    Void:          'var(--text-muted)',
-  };
 
   const {
     totalBudget,

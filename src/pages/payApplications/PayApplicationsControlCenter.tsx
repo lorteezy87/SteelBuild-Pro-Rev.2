@@ -34,6 +34,7 @@ import {
   PAY_APP_STATUS_LABELS,
 } from "./payApplicationsControlCenter.derive";
 import type { PayApplication } from "@/lib/payapp/types";
+import { PAY_APP_STATUS_FILTERS } from "./payApplicationsPageHelpers";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -208,14 +209,7 @@ export default function PayApplicationsControlCenter(props: PayApplicationsContr
     },
   ];
 
-  const STATUS_FILTERS = [
-    { key: "all",       label: "All" },
-    { key: "draft",     label: "Draft" },
-    { key: "submitted", label: "Submitted" },
-    { key: "approved",  label: "Approved" },
-    { key: "paid",      label: "Paid" },
-    { key: "void",      label: "Void" },
-  ];
+  const STATUS_FILTERS = PAY_APP_STATUS_FILTERS;
 
   return (
     <div className="payapp-cc">

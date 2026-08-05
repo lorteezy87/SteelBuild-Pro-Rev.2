@@ -6,6 +6,10 @@ import { useFormValidation } from "@/hooks/useFormValidation";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import {
+  DELIVERY_FORM_STATUSES,
+  isWorkPackageFabComplete,
+} from "./deliveryFormModalHelpers";
 
 export default function DeliveryFormModal({ projectId, onClose, delivery = null }) {
   const qc = useQueryClient();
@@ -13,7 +17,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   const trapRef = useFocusTrap(true);
   const isEdit = !!delivery;
 
-  const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"];
+  const statusList = DELIVERY_FORM_STATUSES;
 
   const emptyForm = {
     project_id: projectId || "",
@@ -116,12 +120,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   const isFabComplete = () => {
     if (!formData.work_package_id) return true;
     const wp = workPackages.find(w => w.id === formData.work_package_id);
-    if (!wp) return true;
-    const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
-    const rank = PHASE_RANK[wp.phase] ?? 0;
-    if (rank >= 2) return true;
-    if (rank === 1 && wp.status === "Complete") return true;
-    return false;
+    return isWorkPackageFabComplete(wp);
   };
 
   const handleSubmit = () => {
