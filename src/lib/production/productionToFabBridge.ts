@@ -65,6 +65,14 @@ export interface ProductionBridgeSummary {
   mode: string;
 }
 
+export interface SyncProductionBridgeOpts {
+  /**
+   * When true, allow pieces.lifecycle_status to move backward (operator bulk
+   * stage correction). Import path leaves this false so EPM never regresses.
+   */
+  allowLifecycleRegress?: boolean;
+}
+
 const UPDATE_CHUNK = 200;
 
 async function batchUpdateByIds(
@@ -91,6 +99,7 @@ async function batchUpdateByIds(
 export async function syncProductionRowsToModelAndPieces(
   projectId: string,
   rows: StagedProductionRow[],
+  opts?: SyncProductionBridgeOpts,
 ): Promise<ProductionBridgeSummary> {
   const summary: ProductionBridgeSummary = {
     modelElementsUpdated: 0,
@@ -101,6 +110,8 @@ export async function syncProductionRowsToModelAndPieces(
   if (!projectId || !rows?.length) return summary;
 
   // Build mark → furthest-along fab status (if the same mark appears twice).
+  // When allowLifecycleRegress is on, still prefer the highest rank among the
+  // staged batch so conflicting marks in one bulk stay deterministic.
   const fabByMark = new Map<string, FabStatus>();
   for (const row of rows) {
     const mark = normalizeMark(row.piece_mark);
@@ -199,8 +210,17 @@ export async function syncProductionRowsToModelAndPieces(
     const leaf = candidates[0];
     const currentRank = fabRank(leaf.lifecycle_status);
     const nextRank = fabRank(fab);
-    // Never regress lifecycle from an EPM import.
-    if (nextRank < 0 || nextRank <= currentRank) {
+    // Import path never regresses. Explicit operator bulk may pass
+    // allowLifecycleRegress to apply corrections (e.g. Shipped → Cut).
+    if (nextRank < 0) {
+      summary.piecesSkipped += 1;
+      continue;
+    }
+    if (!opts?.allowLifecycleRegress && nextRank <= currentRank) {
+      summary.piecesSkipped += 1;
+      continue;
+    }
+    if (opts?.allowLifecycleRegress && nextRank === currentRank) {
       summary.piecesSkipped += 1;
       continue;
     }
