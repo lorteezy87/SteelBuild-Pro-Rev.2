@@ -3,17 +3,10 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/components/shared/OrgContext';
 import { exportWorkspace, downloadWorkspaceExport } from '@/lib/workspaceExport';
-
-const labelStyle = {
-  fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
-  color: 'var(--text-muted)', letterSpacing: '0.12em',
-  textTransform: 'uppercase', marginBottom: 12, display: 'block',
-};
-
-const sectionStyle = {
-  background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
-  borderRadius: 8, padding: '18px 16px', marginBottom: 20,
-};
+import {
+  SETTINGS_LABEL_STYLE as labelStyle,
+  SETTINGS_SECTION_STYLE as sectionStyle,
+} from './settingsTabStyleHelpers';
 
 const ActionBtn = ({ onClick, disabled, color, children }) => (
   <button onClick={onClick} disabled={disabled} style={{ padding: '8px 14px', background: `var(--${color}-muted)`, border: `1px solid var(--${color}-border)`, borderRadius: 6, color: `var(--${color})`, fontWeight: 600, fontSize: 11, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: 'var(--font-body)' }}>

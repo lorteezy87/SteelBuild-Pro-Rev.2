@@ -2,13 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { COST_CODES, COST_CODES_GROUPED } from "../shared/costCodes";
-
-const empty = {
-  cost_code_number: "", description: "",
-  budget_amount: 0, actual_cost: 0, committed_cost: 0,
-  forecast_to_complete: 0, project_id: "", project_name: "", notes: "",
-  phase: "Materials" // kept for backwards compat with CostCode entity
-};
+import { EMPTY_COST_CODE_FORM as empty } from "./costCodeFormModalHelpers";
 
 export default function CostCodeFormModal({ open, onClose, onSave, costCode, projects = [], existingCodes = [] }) {
   const [form, setForm] = useState(empty);

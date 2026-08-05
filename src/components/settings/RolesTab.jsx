@@ -2,12 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
 import { formatLocalDate } from "@/utils/dates";
-
-const labelStyle = {
-  fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
-  color: 'var(--text-muted)', letterSpacing: '0.12em',
-  textTransform: 'uppercase', marginBottom: 12, display: 'block',
-};
+import { SETTINGS_LABEL_STYLE as labelStyle } from './settingsTabStyleHelpers';
 
 const PermBadge = ({ type }) => {
   const config = {

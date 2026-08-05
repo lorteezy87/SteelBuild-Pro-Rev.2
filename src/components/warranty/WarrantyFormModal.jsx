@@ -2,46 +2,11 @@ import React, { useEffect, useState } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
-
-const emptyForm = {
-  project_id: "",
-  warranty_type: "Material",
-  component_description: "",
-  vendor_name: "",
-  vendor_contact: "",
-  vendor_phone: "",
-  vendor_email: "",
-  warranty_term_years: "1",
-  coverage_percentage: "100",
-  start_date: new Date().toISOString().split("T")[0],
-  expiration_date: "",
-  exclusions: "",
-  is_active: true,
-  notes: "",
-};
-
-const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "8px",
-  padding: "8px 12px",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "9px",
-  color: "var(--text-muted)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  display: "block",
-  marginBottom: "4px",
-};
+import {
+  EMPTY_WARRANTY_FORM as emptyForm,
+  WARRANTY_INPUT_STYLE as inputStyle,
+  WARRANTY_LABEL_STYLE as labelStyle,
+} from "./warrantyFormModalHelpers";
 
 export default function WarrantyFormModal({ projectId, warranty = null, onClose, onSave, isSaving = false }) {
   const trapRef = useFocusTrap(true);

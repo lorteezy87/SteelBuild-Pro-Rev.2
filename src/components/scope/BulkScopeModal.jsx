@@ -5,7 +5,17 @@ import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Upload, FileText } from "lucide-react";
-import { parseInput, TYPES, SCOPE_CATEGORIES as CATEGORIES } from "./bulkScopeHelpers";
+import {
+  parseInput,
+  TYPES,
+  SCOPE_CATEGORIES as CATEGORIES,
+  BULK_SCOPE_MONO as mono,
+  BULK_SCOPE_DISPLAY as display,
+  BULK_SCOPE_INPUT_STYLE as inputStyle,
+  BULK_SCOPE_BTN_PRIMARY as btnPrimary,
+  BULK_SCOPE_BTN_GHOST as btnGhost,
+  BULK_SCOPE_BTN_ICON as btnIcon,
+} from "./bulkScopeHelpers";
 
 /**
  * Bulk add / import for Scope & Exclusions.
@@ -284,30 +294,3 @@ function HintLine({ text }) {
 
 
 
-// ─── Style tokens ────────────────────────────────────────────────────
-const mono    = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const inputStyle = {
-  width: "100%", padding: "8px 10px",
-  background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2,
-  color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12,
-  boxSizing: "border-box",
-};
-const btnPrimary = {
-  padding: "8px 24px", background: "var(--accent)", color: "var(--on-accent)",
-  border: "none", borderRadius: 2,
-  fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
-  letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",
-};
-const btnGhost = {
-  padding: "8px 18px", background: "transparent",
-  border: "1px solid var(--border-default)", borderRadius: 2,
-  color: "var(--text-muted)",
-  fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
-  letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",
-};
-const btnIcon = {
-  background: "transparent", border: "none",
-  color: "var(--text-muted)", cursor: "pointer", padding: 4,
-  display: "flex", alignItems: "center",
-};

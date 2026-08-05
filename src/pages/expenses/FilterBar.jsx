@@ -10,18 +10,7 @@ import React from "react";
 import { Upload, Download, X } from "lucide-react";
 import { COST_CODES_GROUPED } from "@/components/shared/costCodes";
 import { EXPENSE_TYPES, PAYMENT_STATUSES } from "./constants";
-
-const selectStyle = {
-  background: "var(--bg-surface-low)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  padding: "6px 10px",
-  color: "var(--text-secondary)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  outline: "none",
-  cursor: "pointer",
-};
+import { EXPENSE_FILTER_SELECT_STYLE as selectStyle } from "./filterBarHelpers";
 
 export default function FilterBar({
   search, onSearchChange,

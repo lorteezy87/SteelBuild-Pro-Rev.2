@@ -5,15 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency, roundCurrency } from "../shared/formatters";
-
-const empty = {
-  project_id: "", project_name: "", application_number: 1,
-  period_from: null, period_to: null, line_item_number: 1,
-  description: "", scheduled_value: 0,
-  previous_percent_complete: 0, current_percent_complete: 0,
-  retainage_percent: 10, status: "Draft",
-  submitted_date: null, payment_received_date: null,
-};
+import { EMPTY_SOV_FORM as empty } from "./sovFormModalHelpers";
 
 export default function SOVFormModal({ open, onClose, onSave, sov, projects = [], nextId, activeProject }) {
   const [form, setForm] = useState(empty);

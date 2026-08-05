@@ -19,6 +19,7 @@ import React, { useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { DonutChartSVG } from "../reports/charts";
 import { buildRfiInsightsStats } from "./rfiInsightsHelpers";
+import { RFI_INSIGHT_CARD as CARD } from "./rfiInsightsHelpers";
 
 /**
  * Small unit-agnostic bar chart for RFI counts. Reusing the reports
@@ -83,12 +84,6 @@ function CountBarChart({ data = [], width = 420, height = 170 }) {
   );
 }
 
-const CARD = {
-  background: "var(--bg-surface)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "var(--radius-card)",
-  padding: "12px 14px",
-};
 
 
 function StatTile({ label, value, color, sub }) {

@@ -6,16 +6,7 @@ import PhoenixModal, { btnPrimary, btnSecondary, btnDanger, inputStyle, inputDis
 // the read-only Margin $ helper / Original Contract Value fields below.
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 import { buildChangeOrderPayload } from "./changeOrderPayload";
-
-const empty = {
-  project_id: "", project_name: "", title: "", description: "",
-  reason_code: "Owner Request", status: "Draft", cost_code_id: "",
-  submitted_date: new Date().toISOString().split("T")[0],
-  approved_date: null, co_amount: 0, margin_percent: 0, schedule_impact_days: 0,
-  approved_by: "", notes: "", attachments: "",
-  co_number: "",
-  source_rfi_id: null, sov_line_item_id: "", sov_line_number: null,
-};
+import { EMPTY_CHANGE_ORDER_FORM as empty } from "./coFormModalHelpers";
 
 export default function COFormModal({ open, onClose, onSave, onDelete = null, isSaving, co, projects = [], nextNumber, prefill = null, sovItems = [], sourceRfiLabel = "" }) {
   const [form, setForm] = useState(empty);

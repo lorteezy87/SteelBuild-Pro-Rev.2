@@ -9,8 +9,8 @@
 
 import React from "react";
 import { generateTransmittal } from "@/lib/generateTransmittal";
+import { TRANSMITTAL_PURPOSES as PURPOSES, TRANSMITTAL_INPUT_STYLE as inputStyle } from "./transmittalModalHelpers";
 
-const PURPOSES = ["For Review", "For Approval", "For Construction", "For Record", "For Information", "Resubmitted"];
 
 export default function TransmittalModal({
   open,
@@ -141,17 +141,6 @@ export default function TransmittalModal({
     </div>
   );
 }
-
-const inputStyle = {
-  width: "100%",
-  padding: "8px 10px",
-  background: "var(--hover-bg)",
-  border: "1px solid var(--border-default)",
-  color: "var(--text-primary)",
-  borderRadius: 6,
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-};
 
 function Label({ children }) {
   return (

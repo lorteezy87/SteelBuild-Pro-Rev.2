@@ -3,17 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
 import { toast } from 'sonner';
 import { CATEGORY_COLORS } from '@/components/shared/costCodes';
-
-const labelStyle = {
-  fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
-  color: 'var(--text-muted)', letterSpacing: '0.12em',
-  textTransform: 'uppercase', marginBottom: 12, display: 'block',
-};
-
-const sectionStyle = {
-  background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
-  borderRadius: 8, padding: '18px 16px', marginBottom: 20,
-};
+import {
+  SETTINGS_LABEL_STYLE as labelStyle,
+  SETTINGS_SECTION_STYLE as sectionStyle,
+} from './settingsTabStyleHelpers';
 
 export default function CostCodesTab() {
   const qc = useQueryClient();

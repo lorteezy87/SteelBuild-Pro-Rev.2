@@ -100,3 +100,11 @@ export function buildRfiInsightsStats(
     monthly: rfisByMonth(rfis, now),
   };
 }
+
+export const RFI_INSIGHT_CARD = {
+  background: "var(--bg-surface)",
+  border: "1px solid var(--border-default)",
+  borderRadius: "var(--radius-card)",
+  padding: "12px 14px",
+} as const;
+

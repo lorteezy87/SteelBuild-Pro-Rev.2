@@ -6,45 +6,11 @@ import { MapPin } from "lucide-react";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { asArray } from "@/lib/coerce";
-
-const emptyForm = {
-  project_id: "",
-  description: "",
-  category: "Other",
-  location: "",
-  assigned_to: "",
-  priority: "Medium",
-  status: "Open",
-  target_completion_date: "",
-  percent_complete: "0",
-  notes: "",
-  photos: [],
-  drawing_id: "",
-  inspection_id: "",
-};
-
-const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "8px",
-  padding: "8px 12px",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "9px",
-  color: "var(--text-muted)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  display: "block",
-  marginBottom: "4px",
-};
+import {
+  EMPTY_PUNCHLIST_FORM as emptyForm,
+  PUNCHLIST_INPUT_STYLE as inputStyle,
+  PUNCHLIST_LABEL_STYLE as labelStyle,
+} from "./punchlistFormModalHelpers";
 
 export default function PunchlistFormModal({ projectId, item = null, onClose, onSave, isSaving = false }) {
   const { fieldErrors, runValidation, clearField } = useFormValidation("punchlist_item");

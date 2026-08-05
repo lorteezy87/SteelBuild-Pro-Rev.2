@@ -96,3 +96,54 @@ export const SCOPE_CATEGORIES = [
   "Other",
 ] as const;
 
+export const BULK_SCOPE_MONO = { fontFamily: "var(--font-mono)" } as const;
+export const BULK_SCOPE_DISPLAY = {
+  fontFamily: "'Space Grotesk', var(--font-display)",
+} as const;
+export const BULK_SCOPE_INPUT_STYLE: Record<string, string | number> = {
+  width: "100%",
+  padding: "8px 10px",
+  background: "var(--bg-page)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 2,
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  boxSizing: "border-box",
+};
+export const BULK_SCOPE_BTN_PRIMARY: Record<string, string | number> = {
+  padding: "8px 24px",
+  background: "var(--accent)",
+  color: "var(--on-accent)",
+  border: "none",
+  borderRadius: 2,
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
+export const BULK_SCOPE_BTN_GHOST: Record<string, string | number> = {
+  padding: "8px 18px",
+  background: "transparent",
+  border: "1px solid var(--border-default)",
+  borderRadius: 2,
+  color: "var(--text-muted)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
+export const BULK_SCOPE_BTN_ICON: Record<string, string | number> = {
+  background: "transparent",
+  border: "none",
+  color: "var(--text-muted)",
+  cursor: "pointer",
+  padding: 4,
+  display: "flex",
+  alignItems: "center",
+};
+

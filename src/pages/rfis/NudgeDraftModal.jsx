@@ -3,16 +3,10 @@ import { Modal, Button } from "@/components/design-system";
 import { toast } from "sonner";
 import { buildRfiNudge, parseEmails } from "@/lib/rfiNudge";
 import { sendEmail } from "@/services/emailSendService";
-
-const fieldStyle = {
-  width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)",
-  borderRadius: 6, padding: "8px 10px", fontFamily: "var(--font-body)", fontSize: 12,
-  color: "var(--text-primary)", outline: "none",
-};
-const labelStyle = {
-  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)",
-  letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4, display: "block",
-};
+import {
+  NUDGE_FIELD_STYLE as fieldStyle,
+  NUDGE_LABEL_STYLE as labelStyle,
+} from "./nudgeDraftModalHelpers";
 
 /**
  * NudgeDraftModal — review-and-send a pre-drafted RFI follow-up.
