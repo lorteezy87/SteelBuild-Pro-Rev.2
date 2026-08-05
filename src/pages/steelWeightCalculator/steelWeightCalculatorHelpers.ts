@@ -298,3 +298,19 @@ export function removeRunningTotalById<T extends { id?: string }>(
 ): T[] {
   return (rows || []).filter((r) => r.id !== id);
 }
+
+/** First designation in a shape family, or empty for dynamic families. */
+export function designationForFamily(
+  family: { shapes?: Array<{ designation?: string }> } | null | undefined,
+): string {
+  return family?.shapes?.[0]?.designation || "";
+}
+
+/** Resolve family by key with fallback to first family. */
+export function resolveShapeFamily<T extends { key: string }>(
+  families: T[],
+  familyKey: string,
+): T {
+  return (families || []).find((f) => f.key === familyKey) || families[0];
+}
+

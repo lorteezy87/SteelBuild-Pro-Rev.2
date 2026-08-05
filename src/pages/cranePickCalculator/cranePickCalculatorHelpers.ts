@@ -2,6 +2,18 @@
  * Pure format / summary helpers for Crane Pick Calculator.
  */
 
+import {
+  calculateTotalLoad,
+  calculateSlingTension,
+  calculateLAF,
+  calculateUtilization,
+  getCapacityStatus,
+  getAngleStatus,
+  angleFromHeightSpan,
+  buildWarnings,
+} from "@/utils/riggingCalculations";
+
+
 export const STATUS_LABEL = {
   green:  "OK",
   yellow: "CAUTION",
@@ -217,5 +229,130 @@ export function buildPickSnapshot(d: {
     workingRadius: d.workingRadius,
     counterweight: d.counterweight,
     warnings: d.warnings,
+  };
+}
+
+export type CranePickFormState = {
+  pieceWeight: string;
+  riggingWeight: string;
+  numLegs: number;
+  angleMode: string;
+  angleDeg: string;
+  hspanH: string;
+  hspanS: string;
+  craneCapacity: string;
+  heightSpanMode: string;
+};
+
+export type CranePickDerived = {
+  piece: number;
+  rigging: number;
+  cap: number;
+  effectiveAngle: number;
+  totalLoad: number;
+  laf: number;
+  tensionPerLeg: number;
+  utilization: number;
+  capacityStatus: string;
+  angleStatus: string | null;
+  errors: string[];
+  hasValidResults: boolean;
+  warnings: ReturnType<typeof buildWarnings>;
+};
+
+/** Live derived engineering values for the crane pick form (pure). */
+export function buildCranePickDerived(form: CranePickFormState): CranePickDerived {
+  const piece = parseFloat(form.pieceWeight);
+  const rigging = parseFloat(form.riggingWeight || "0");
+  const cap = parseFloat(form.craneCapacity);
+
+  const effectiveAngle = computeEffectiveSlingAngle({
+    numLegs: form.numLegs,
+    angleMode: form.angleMode,
+    heightSpanMode: form.heightSpanMode,
+    angleDeg: form.angleDeg,
+    hspanH: form.hspanH,
+    hspanS: form.hspanS,
+    angleFromHeightSpan,
+  });
+
+  const totalLoad = calculateTotalLoad(piece, rigging);
+  const laf = form.numLegs === 1 ? 1 : calculateLAF(effectiveAngle);
+  const tensionPerLeg = calculateSlingTension(totalLoad, form.numLegs, effectiveAngle);
+  const utilization = calculateUtilization(totalLoad, cap);
+  const capacityStatus = getCapacityStatus(utilization);
+  // Single-leg vertical picks don't have a meaningful sling-angle risk.
+  const angleStatus = form.numLegs === 1 ? null : getAngleStatus(effectiveAngle);
+
+  const errors = buildCranePickValidationErrors({
+    pieceWeight: form.pieceWeight,
+    piece,
+    rigging,
+    craneCapacity: form.craneCapacity,
+    cap,
+    numLegs: form.numLegs,
+    effectiveAngle,
+  });
+
+  const hasValidResults =
+    errors.length === 0 &&
+    Number.isFinite(totalLoad) &&
+    Number.isFinite(tensionPerLeg) &&
+    Number.isFinite(utilization);
+
+  const warnings = hasValidResults
+    ? buildWarnings({
+        angleStatus,
+        capacityStatus,
+        angleDegrees: effectiveAngle,
+        utilizationPercent: utilization,
+      })
+    : [];
+
+  return {
+    piece,
+    rigging,
+    cap,
+    effectiveAngle,
+    totalLoad,
+    laf,
+    tensionPerLeg,
+    utilization,
+    capacityStatus,
+    angleStatus,
+    errors,
+    hasValidResults,
+    warnings,
+  };
+}
+
+/** Reset form fields for Clear All (pure seed). */
+export function createEmptyCranePickForm(degreesMode: string): {
+  pieceWeight: string;
+  riggingWeight: string;
+  numLegs: number;
+  angleMode: string;
+  angleDeg: string;
+  hspanH: string;
+  hspanS: string;
+  craneCapacity: string;
+  craneModel: string;
+  boomLength: string;
+  workingRadius: string;
+  counterweight: string;
+} {
+  return {
+    pieceWeight: "",
+    riggingWeight: "0",
+    numLegs: 2,
+    angleMode: degreesMode,
+    angleDeg: "60",
+    hspanH: "",
+    hspanS: "",
+    craneCapacity: "",
+    craneModel: "",
+    boomLength: "",
+    workingRadius: "",
+    counterweight: "",
   };
 }

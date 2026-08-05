@@ -129,3 +129,19 @@ describe("running total mutators", () => {
     expect(removeRunningTotalById(next, "id1")).toEqual([]);
   });
 });
+
+import { designationForFamily, resolveShapeFamily } from "../steelWeightCalculatorHelpers";
+
+describe("shape family helpers", () => {
+  it("resolves family and first designation", () => {
+    const families = [
+      { key: "w", shapes: [{ designation: "W12x26" }] },
+      { key: "plate", shapes: [] },
+    ];
+    expect(resolveShapeFamily(families, "plate").key).toBe("plate");
+    expect(resolveShapeFamily(families, "missing").key).toBe("w");
+    expect(designationForFamily(families[0])).toBe("W12x26");
+    expect(designationForFamily(families[1])).toBe("");
+    expect(designationForFamily(null)).toBe("");
+  });
+});

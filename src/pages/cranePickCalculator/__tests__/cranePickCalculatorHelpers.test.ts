@@ -113,3 +113,71 @@ describe("crane pick validation/snapshot", () => {
     expect(snap.angleDegrees).toBe(60);
   });
 });
+
+import { buildCranePickDerived, createEmptyCranePickForm } from "../cranePickCalculatorHelpers";
+
+describe("buildCranePickDerived", () => {
+  it("computes a valid multi-leg pick", () => {
+    const d = buildCranePickDerived({
+      pieceWeight: "10000",
+      riggingWeight: "500",
+      numLegs: 2,
+      angleMode: "degrees",
+      angleDeg: "60",
+      hspanH: "",
+      hspanS: "",
+      craneCapacity: "20000",
+      heightSpanMode: "height-span",
+    });
+    expect(d.errors).toEqual([]);
+    expect(d.hasValidResults).toBe(true);
+    expect(d.totalLoad).toBe(10500);
+    expect(d.effectiveAngle).toBe(60);
+    expect(d.utilization).toBeCloseTo(52.5, 5);
+  });
+
+  it("flags missing capacity and zero angle", () => {
+    const d = buildCranePickDerived({
+      pieceWeight: "",
+      riggingWeight: "0",
+      numLegs: 2,
+      angleMode: "degrees",
+      angleDeg: "0",
+      hspanH: "",
+      hspanS: "",
+      craneCapacity: "",
+      heightSpanMode: "height-span",
+    });
+    expect(d.hasValidResults).toBe(false);
+    expect(d.errors.length).toBeGreaterThan(0);
+  });
+
+  it("single-leg uses 90° and null angle status", () => {
+    const d = buildCranePickDerived({
+      pieceWeight: "1000",
+      riggingWeight: "0",
+      numLegs: 1,
+      angleMode: "degrees",
+      angleDeg: "30",
+      hspanH: "",
+      hspanS: "",
+      craneCapacity: "5000",
+      heightSpanMode: "height-span",
+    });
+    expect(d.effectiveAngle).toBe(90);
+    expect(d.angleStatus).toBeNull();
+    expect(d.laf).toBe(1);
+  });
+});
+
+describe("createEmptyCranePickForm", () => {
+  it("seeds clear-all defaults", () => {
+    expect(createEmptyCranePickForm("degrees")).toMatchObject({
+      pieceWeight: "",
+      riggingWeight: "0",
+      numLegs: 2,
+      angleMode: "degrees",
+      angleDeg: "60",
+    });
+  });
+});

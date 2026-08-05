@@ -7,16 +7,6 @@
  */
 
 import React, { useMemo, useState } from "react";
-import {
-  calculateTotalLoad,
-  calculateSlingTension,
-  calculateLAF,
-  calculateUtilization,
-  getCapacityStatus,
-  getAngleStatus,
-  angleFromHeightSpan,
-  buildWarnings,
-} from "@/utils/riggingCalculations";
 import CalcKey from "@/components/calculators/CalcKey";
 import CalcTape from "@/components/calculators/CalcTape";
 import useCalcTape from "@/components/calculators/useCalcTape";
@@ -24,9 +14,9 @@ import "@/components/calculators/calc.css";
 import {
   pickTapeExpr,
   keycapButtonStyle,
-  buildCranePickValidationErrors,
-  computeEffectiveSlingAngle,
   buildPickSnapshot,
+  buildCranePickDerived,
+  createEmptyCranePickForm,
 } from "./cranePickCalculator/cranePickCalculatorHelpers";
 import {
   PICK_TAPE_KEY,
@@ -73,84 +63,53 @@ export default function CranePickCalculator() {
   // Parse all inputs once — downstream computations propagate NaN for
   // anything that isn't a valid positive number, which lets the UI
   // gate results off of Number.isFinite checks rather than try/catch.
-  const piece   = parseFloat(pieceWeight);
-  const rigging = parseFloat(riggingWeight || "0");
-  const cap     = parseFloat(craneCapacity);
-
-  const effectiveAngle = useMemo(() => {
-    // vertical pick — angle is irrelevant (numLegs === 1 → 90°)
-    return computeEffectiveSlingAngle({
-      numLegs,
-      angleMode,
-      heightSpanMode: ANGLE_MODES.HEIGHT_SPAN,
-      angleDeg,
-      hspanH,
-      hspanS,
-      angleFromHeightSpan,
-    });
-  }, [angleMode, angleDeg, hspanH, hspanS, numLegs]);
-
-  const totalLoad = useMemo(
-    () => calculateTotalLoad(piece, rigging),
-    [piece, rigging]
-  );
-  const laf = useMemo(
-    () => (numLegs === 1 ? 1 : calculateLAF(effectiveAngle)),
-    [numLegs, effectiveAngle]
-  );
-  const tensionPerLeg = useMemo(
-    () => calculateSlingTension(totalLoad, numLegs, effectiveAngle),
-    [totalLoad, numLegs, effectiveAngle]
-  );
-  const utilization = useMemo(
-    () => calculateUtilization(totalLoad, cap),
-    [totalLoad, cap]
-  );
-  const capacityStatus = getCapacityStatus(utilization);
-  // Single-leg vertical picks don't have a meaningful sling-angle risk
-  // (nothing to splay), so suppress the angle status for that case.
-  const angleStatus = numLegs === 1 ? null : getAngleStatus(effectiveAngle);
-
-  // ── Input validation ───────────────────────────────────────
-  // Collect every failure upfront so the user sees a single "fix
-  // these" list rather than whack-a-mole errors as fields clear.
-  const errors = useMemo(
+  const derived = useMemo(
     () =>
-      buildCranePickValidationErrors({
+      buildCranePickDerived({
         pieceWeight,
-        piece,
-        rigging,
-        craneCapacity,
-        cap,
+        riggingWeight,
         numLegs,
-        effectiveAngle,
+        angleMode,
+        angleDeg,
+        hspanH,
+        hspanS,
+        craneCapacity,
+        heightSpanMode: ANGLE_MODES.HEIGHT_SPAN,
       }),
-    [pieceWeight, piece, rigging, craneCapacity, cap, numLegs, effectiveAngle],
+    [pieceWeight, riggingWeight, numLegs, angleMode, angleDeg, hspanH, hspanS, craneCapacity],
   );
 
-  const hasValidResults = errors.length === 0
-    && Number.isFinite(totalLoad)
-    && Number.isFinite(tensionPerLeg)
-    && Number.isFinite(utilization);
-
-  const warnings = useMemo(
-    () => (hasValidResults ? buildWarnings({
-      angleStatus,
-      capacityStatus,
-      angleDegrees: effectiveAngle,
-      utilizationPercent: utilization,
-    }) : []),
-    [hasValidResults, angleStatus, capacityStatus, effectiveAngle, utilization]
-  );
+  const {
+    piece,
+    rigging,
+    cap,
+    effectiveAngle,
+    totalLoad,
+    laf,
+    tensionPerLeg,
+    utilization,
+    capacityStatus,
+    angleStatus,
+    errors,
+    hasValidResults,
+    warnings,
+  } = derived;
 
   // ── Actions ────────────────────────────────────────────────
   const clearAll = () => {
-    setPieceWeight(""); setRiggingWeight("0");
-    setNumLegs(2);
-    setAngleMode(ANGLE_MODES.DEGREES);
-    setAngleDeg("60"); setHspanH(""); setHspanS("");
-    setCraneCapacity("");
-    setCraneModel(""); setBoomLength(""); setWorkingRadius(""); setCounterweight("");
+    const empty = createEmptyCranePickForm(ANGLE_MODES.DEGREES);
+    setPieceWeight(empty.pieceWeight);
+    setRiggingWeight(empty.riggingWeight);
+    setNumLegs(empty.numLegs);
+    setAngleMode(empty.angleMode);
+    setAngleDeg(empty.angleDeg);
+    setHspanH(empty.hspanH);
+    setHspanS(empty.hspanS);
+    setCraneCapacity(empty.craneCapacity);
+    setCraneModel(empty.craneModel);
+    setBoomLength(empty.boomLength);
+    setWorkingRadius(empty.workingRadius);
+    setCounterweight(empty.counterweight);
   };
 
   // Build a self-contained snapshot of the current pick for the summary modal

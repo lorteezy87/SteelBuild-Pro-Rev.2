@@ -33,6 +33,8 @@ import {
   sumRunningWeight,
   appendRunningTotalRow,
   removeRunningTotalById,
+  designationForFamily,
+  resolveShapeFamily,
 } from "./steelWeightCalculator/steelWeightCalculatorHelpers";
 import {
   mono,
@@ -94,7 +96,7 @@ export default function SteelWeightCalculator() {
 
   // ── Derived helpers ────────────────────────────────────────────
   const family = useMemo(
-    () => SHAPE_FAMILIES.find((f) => f.key === familyKey) || SHAPE_FAMILIES[0],
+    () => resolveShapeFamily(SHAPE_FAMILIES, familyKey),
     [familyKey]
   );
 
@@ -102,12 +104,8 @@ export default function SteelWeightCalculator() {
   // that family (or clear if dynamic).
   const handleFamilyChange = (key) => {
     setFamilyKey(key);
-    const fam = SHAPE_FAMILIES.find((f) => f.key === key);
-    if (fam?.shapes?.length) {
-      setDesignation(fam.shapes[0].designation);
-    } else {
-      setDesignation("");
-    }
+    const fam = resolveShapeFamily(SHAPE_FAMILIES, key);
+    setDesignation(designationForFamily(fam));
     setResult(null);
     setError(null);
   };
