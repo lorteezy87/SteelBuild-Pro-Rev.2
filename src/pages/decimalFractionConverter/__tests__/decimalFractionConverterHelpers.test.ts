@@ -4,6 +4,9 @@ import {
   numOrZero,
   trimNumber,
   toggleStyle,
+  resultCardStyle,
+  deltaLineStyle,
+  inlineErrorStyle,
 } from "../decimalFractionConverterHelpers";
 
 describe("decimalFractionConverterHelpers", () => {
@@ -46,5 +49,13 @@ describe("fraction-to-decimal pure helpers", () => {
 
   it("formats preview", () => {
     expect(formatFeetInchesPreview(10, 2, { num: 1, den: 4 }, numOrZero)).toBe(`10'-2 1/4"`);
+  });
+});
+
+describe("decimal fraction residual styles", () => {
+  it("result card and error chrome", () => {
+    expect(resultCardStyle.padding).toBe("14px 16px");
+    expect(deltaLineStyle.fontSize).toBe(9);
+    expect(inlineErrorStyle.color).toBe("var(--status-review)");
   });
 });

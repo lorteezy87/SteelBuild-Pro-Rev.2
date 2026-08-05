@@ -12,6 +12,10 @@ import {
   resolveFractionParts,
   validateFractionToDecimalInputs,
   formatFeetInchesPreview,
+  resultCardStyle,
+  deltaLineStyle,
+  inlineErrorStyle,
+  mono,
 } from "./decimalFractionConverterHelpers";
 import {
   decimalFeetToFtIn,
@@ -22,8 +26,6 @@ import {
 } from "@/utils/fractionConversion";
 import { convert, CONVERSIONS } from "@/utils/unitConversions";
 import CalcKey from "@/components/calculators/CalcKey";
-
-const mono = { fontFamily: "var(--font-mono)" };
 
 export const cardStyle = {
   background: "var(--bg-surface)",
@@ -610,23 +612,3 @@ export function OutputRow({ label, value, onCopy, suffix }) {
   );
 }
 
-// ── Shared styles ─────────────────────────────────────────────────
-const resultCardStyle = {
-  background: "var(--bg-surface-low)",
-  border: "1px solid var(--divider)",
-  borderRadius: 6,
-  padding: "14px 16px",
-};
-const deltaLineStyle = {
-  ...mono, fontSize: 9, color: "var(--text-muted)",
-  letterSpacing: "0.08em", marginTop: 6,
-};
-const inlineErrorStyle = {
-  ...mono,
-  fontSize: 11, fontWeight: 600,
-  color: "var(--status-review)",
-  background: "var(--status-review-muted, rgba(249,115,22,0.12))",
-  border: "1px solid var(--status-review-border, rgba(249,115,22,0.40))",
-  padding: "6px 10px", borderRadius: 4,
-  marginTop: 6,
-};

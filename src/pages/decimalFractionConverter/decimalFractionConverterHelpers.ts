@@ -1,7 +1,8 @@
 /**
  * Pure helpers for Decimal/Fraction Converter.
  */
-const mono = { fontFamily: "var(--font-mono)" };
+
+export const mono: Record<string, string> = { fontFamily: "var(--font-mono)" };
 
 // Keep mode keys in sync with page DECIMAL_MODES.
 export const DECIMAL_MODE_FEET = "feet";
@@ -93,3 +94,30 @@ export function formatFeetInchesPreview(
     : `${i}"`;
   return `${f}'-${inchPart}`;
 }
+
+export const resultCardStyle: Record<string, string | number> = {
+  background: "var(--bg-surface-low)",
+  border: "1px solid var(--divider)",
+  borderRadius: 6,
+  padding: "14px 16px",
+};
+
+export const deltaLineStyle: Record<string, string | number> = {
+  ...mono,
+  fontSize: 9,
+  color: "var(--text-muted)",
+  letterSpacing: "0.08em",
+  marginTop: 6,
+};
+
+export const inlineErrorStyle: Record<string, string | number> = {
+  ...mono,
+  fontSize: 11,
+  fontWeight: 600,
+  color: "var(--status-review)",
+  background: "var(--status-review-muted, rgba(249,115,22,0.12))",
+  border: "1px solid var(--status-review-border, rgba(249,115,22,0.40))",
+  padding: "6px 10px",
+  borderRadius: 4,
+  marginTop: 6,
+};
