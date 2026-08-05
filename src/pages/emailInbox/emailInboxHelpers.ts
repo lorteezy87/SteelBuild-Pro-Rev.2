@@ -1,6 +1,8 @@
 /**
  * Pure helpers for Email Inbox page (filter, stats, labels, selection).
  */
+import { findById } from "@/pages/shared/findById";
+import { toggleSelectionId } from "@/pages/shared/selectionHelpers";
 import { DEFAULT_LABELS, FOLDERS } from "./constants";
 import type { EmailAttachment, EmailMessage } from "./types";
 
@@ -114,20 +116,18 @@ export function nextSelectedIdsForToggleAll(
   return new Set(filtered.map((m) => m.id));
 }
 
+/** @deprecated Prefer toggleSelectionId from shared selectionHelpers. */
 export function nextSelectedIdsForToggle(
   selectedIds: Set<string>,
   id: string,
 ): Set<string> {
-  const next = new Set(selectedIds);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
+  return toggleSelectionId(selectedIds, id);
 }
 
+/** @deprecated Prefer findById from shared. */
 export function findMessageById<T extends { id?: string | null }>(
   messages: T[],
   selectedId: string | null | undefined,
 ): T | null {
-  if (!selectedId) return null;
-  return (messages || []).find((m) => m.id === selectedId) || null;
+  return findById(messages, selectedId);
 }

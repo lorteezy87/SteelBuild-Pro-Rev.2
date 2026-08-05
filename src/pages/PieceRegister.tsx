@@ -87,6 +87,7 @@ import {
   allRowsSelected,
   buildSelectedPieceImpact,
   IMPORT_DECISION_TONE,
+  EMPTY_PIECE_REGISTER_FILTERS,
 } from "./pieceRegister/registerHelpers";
 import { PieceRegisterArchiveDialog } from "./pieceRegister/PieceRegisterArchiveDialog";
 import { PieceRegisterRegisterView } from "./pieceRegister/PieceRegisterRegisterView";
@@ -97,15 +98,7 @@ import {
 } from "./pieceRegister/overviewDerive";
 import PieceRegisterOverview from "./pieceRegister/PieceRegisterOverview";
 
-const EMPTY_FILTERS: PieceRegisterFilters = {
-  search: "",
-  workPackageId: "",
-  profile: "",
-  grade: "",
-  lifecycle: "",
-  source: "",
-  hold: "all",
-};
+const EMPTY_FILTERS = EMPTY_PIECE_REGISTER_FILTERS;
 
 const REGISTER_VIEWS = [
   { id: "overview", label: "Overview", icon: Boxes },

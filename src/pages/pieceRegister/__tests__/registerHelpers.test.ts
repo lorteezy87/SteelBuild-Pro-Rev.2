@@ -112,3 +112,18 @@ describe("IMPORT_DECISION_TONE", () => {
     expect(IMPORT_DECISION_TONE.unchanged).toBe("neutral");
   });
 });
+
+import {
+  EMPTY_PIECE_REGISTER_FILTERS,
+  PIECE_REGISTER_VIEW_IDS,
+  resolvePieceRegisterView,
+} from "../registerHelpers";
+
+describe("piece register view + empty filters", () => {
+  it("defaults view and empty filters", () => {
+    expect(resolvePieceRegisterView("board")).toBe("board");
+    expect(resolvePieceRegisterView("nope")).toBe("overview");
+    expect(EMPTY_PIECE_REGISTER_FILTERS.hold).toBe("all");
+    expect(PIECE_REGISTER_VIEW_IDS).toContain("register");
+  });
+});

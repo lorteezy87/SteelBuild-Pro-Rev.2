@@ -177,3 +177,34 @@ export const IMPORT_DECISION_TONE: Record<string, PillTone> = {
   invalid: "danger",
 };
 
+export const EMPTY_PIECE_REGISTER_FILTERS: PieceRegisterFilters = {
+  search: "",
+  workPackageId: "",
+  profile: "",
+  grade: "",
+  lifecycle: "",
+  source: "",
+  hold: "all",
+};
+
+export const PIECE_REGISTER_VIEW_IDS = [
+  "overview",
+  "register",
+  "board",
+  "import",
+  "relationships",
+  "production",
+  "logistics",
+  "settings",
+] as const;
+
+export type PieceRegisterViewId = (typeof PIECE_REGISTER_VIEW_IDS)[number];
+
+export function resolvePieceRegisterView(
+  id: string | null | undefined,
+  fallback: PieceRegisterViewId = "overview",
+): PieceRegisterViewId {
+  return (PIECE_REGISTER_VIEW_IDS as readonly string[]).includes(id || "")
+    ? (id as PieceRegisterViewId)
+    : fallback;
+}
