@@ -44,3 +44,19 @@ describe("submittalsPageHelpers", () => {
     expect(filterRelatedSetRfis({ drawing_set_ids: [] }, rfis)).toEqual([]);
   });
 });
+
+
+import { findRowById, buildSpinOffInitial, toggleSelectionId } from "../submittalsPageHelpers";
+
+describe("submittal selection helpers", () => {
+  it("finds rows and builds spin-off seed", () => {
+    expect(findRowById([{ id: "a" }, { id: "b" }], "b")?.id).toBe("b");
+    expect(findRowById([{ id: "a" }], null)).toBeNull();
+    expect(buildSpinOffInitial({ discipline: "Structural", drawing_set_ids: ["s1"] })).toEqual({
+      discipline: "Structural",
+      drawing_set_ids: ["s1"],
+    });
+    expect(buildSpinOffInitial(null)).toEqual({ drawing_set_ids: [] });
+    expect([...toggleSelectionId(new Set(["a"]), "b")].sort()).toEqual(["a", "b"]);
+  });
+});

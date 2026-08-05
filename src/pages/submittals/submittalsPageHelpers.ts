@@ -67,3 +67,35 @@ export function filterRelatedSetRfis<T extends RfiLinkLike>(
       !linkedManual.has(rfi.id as string),
   );
 }
+
+
+export function findRowById<T extends { id?: string | null }>(
+  rows: T[],
+  id: string | null | undefined,
+): T | null {
+  if (!id) return null;
+  return (rows || []).find((r) => r.id === id) ?? null;
+}
+
+export type SpinOffParentLike = {
+  discipline?: string | null;
+  drawing_set_ids?: string[] | null;
+};
+
+/** Prefill seed when spinning off a child submittal from a parent. */
+export function buildSpinOffInitial(
+  parent: SpinOffParentLike | null | undefined,
+): { discipline?: string; drawing_set_ids: string[] } {
+  if (!parent) return { drawing_set_ids: [] };
+  return {
+    discipline: parent.discipline ?? undefined,
+    drawing_set_ids: Array.isArray(parent.drawing_set_ids) ? parent.drawing_set_ids : [],
+  };
+}
+
+export function toggleSelectionId(prev: Set<string>, id: string): Set<string> {
+  const next = new Set(prev);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}

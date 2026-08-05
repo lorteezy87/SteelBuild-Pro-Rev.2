@@ -50,6 +50,9 @@ import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types"
 import {
   buildDrawingSetsById,
   buildRoundsBySubmittal,
+  findRowById,
+  buildSpinOffInitial,
+  toggleSelectionId,
 } from "./submittals/submittalsPageHelpers";
 
 /**
@@ -381,18 +384,13 @@ export default function Submittals() {
   );
   const reviewsAtRisk = reviewForecast.summary.atRisk + reviewForecast.summary.late;
 
-  const selected = (selectedId ? rows.find((r) => r.id === selectedId) : null) ?? null;
-  const editing = (editingId ? rows.find((r) => r.id === editingId) : null) ?? null;
+  const selected = findRowById(rows, selectedId);
+  const editing = findRowById(rows, editingId);
   // Phase 3 splitting: the parent being spun off from (if any), and the child's
   // prefilled seed — carry the parent's project + drawing sets so the child
   // starts scoped to the same package; everything else (number/title) is fresh.
-  const spinOffParent = (spinOffParentId ? rows.find((r) => r.id === spinOffParentId) : null) ?? null;
-  const spinOffInitial: Partial<Submittal> = spinOffParent
-    ? {
-        discipline: spinOffParent.discipline ?? undefined,
-        drawing_set_ids: Array.isArray(spinOffParent.drawing_set_ids) ? spinOffParent.drawing_set_ids : [],
-      }
-    : {};
+  const spinOffParent = findRowById(rows, spinOffParentId);
+  const spinOffInitial: Partial<Submittal> = buildSpinOffInitial(spinOffParent);
 
   // Domain-view bridges for the typed child components. The queries yield
   // generated DB rows (nullable string columns); the child props use the page's
@@ -408,11 +406,7 @@ export default function Submittals() {
 
   // ── Selection helpers ─────────────────────────────────────────────
   const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) => toggleSelectionId(prev, id));
   }, []);
   // toggleAll uses the *filtered* list, not all rows — matches the
   // RFI pattern. Without this, "select all" while a status filter
