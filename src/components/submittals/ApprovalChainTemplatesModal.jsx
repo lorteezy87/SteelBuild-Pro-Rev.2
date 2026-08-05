@@ -16,6 +16,7 @@ import { Plus, X, ArrowUp, ArrowDown, Trash2, Pencil } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { getChainTemplates, normalizeChain } from "@/lib/approvalChains";
+import { normalizeCustomApprovalTemplates } from "./approvalChainTemplatesHelpers";
 import { BIC_CHOICES } from "@/pages/submittals/format";
 
 const mono = { fontFamily: "var(--font-mono)" };
@@ -92,14 +93,15 @@ export default function ApprovalChainTemplatesModal({ open, onClose }) {
   const project = activeProject;
 
   // Custom (project-defined) templates only — the built-ins are shown read-only.
-  const initialCustom = useMemo(() => {
-    const raw = project?.metadata?.approval_chain_templates;
-    return Array.isArray(raw)
-      ? raw
-          .map((t) => ({ key: t.key || newKey(), name: t.name || "", steps: (normalizeChain(t.steps) || []).map((s) => s.party) }))
-          .filter((t) => t.steps.length > 0)
-      : [];
-  }, [project]);
+  const initialCustom = useMemo(
+    () =>
+      normalizeCustomApprovalTemplates(
+        project?.metadata?.approval_chain_templates,
+        normalizeChain,
+        newKey,
+      ),
+    [project],
+  );
 
   const builtins = useMemo(
     () => getChainTemplates(project).filter((t) => !t.custom),

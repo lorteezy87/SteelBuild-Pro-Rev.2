@@ -27,6 +27,11 @@ import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { BrandLogo } from "./BrandLogo";
+import {
+  filterVisibleSidebarGroups,
+  resolveFavoriteItems,
+  resolveRecentItems,
+} from "./sidebarNavHelpers";
 
 // ── Local storage helpers ───────────────────────────────────────────
 const RAIL_LS_KEY    = "sbp-sidebar-rail";
@@ -178,39 +183,21 @@ export default function SidebarNav({
 
   // Groups with gated-off pages removed (and emptied groups dropped).
   const visibleGroups = useMemo(
-    () => SIDEBAR_GROUPS
-      .map((g) => ({ ...g, items: g.items.filter((it) => isPageVisible(it.page)) }))
-      .filter((g) => g.items.length > 0),
+    () => filterVisibleSidebarGroups(SIDEBAR_GROUPS, isPageVisible),
     [isPageVisible],
   );
 
-  const favoriteItems = useMemo(() => {
-    const flat = visibleGroups.flatMap((g) =>
-      g.items.map((it) => ({ ...it, _group: g.label }))
-    );
-    // Union of star-favorites (localStorage) + Settings "Pinned Modules" pref,
-    // deduped, favorites first.
-    const merged = [
-      ...favorites,
-      ...(pinned_modules || []).filter((p) => !favorites.includes(p)),
-    ];
-    return merged
-      .map((p) => flat.find((it) => it.page === p))
-      .filter(Boolean);
-  }, [favorites, pinned_modules, visibleGroups]);
+  const favoriteItems = useMemo(
+    () => resolveFavoriteItems(visibleGroups, favorites, pinned_modules),
+    [favorites, pinned_modules, visibleGroups],
+  );
 
   // Recents filtered against the flat registry so a deleted/renamed
   // page falls out cleanly instead of rendering a dead entry.
-  const recentItems = useMemo(() => {
-    const flat = visibleGroups.flatMap((g) =>
-      g.items.map((it) => ({ ...it, _group: g.label }))
-    );
-    return recents
-      .map((p) => flat.find((it) => it.page === p))
-      .filter(Boolean)
-      .filter((it) => it.page !== currentPageName)
-      .slice(0, 3);
-  }, [recents, currentPageName, visibleGroups]);
+  const recentItems = useMemo(
+    () => resolveRecentItems(visibleGroups, recents, currentPageName, 3),
+    [recents, currentPageName, visibleGroups],
+  );
 
   const openGlobalSearch = () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
