@@ -16,7 +16,7 @@
 import { supabase } from "@/lib/supabase";
 import { assertSetUnlocked } from "./setLock";
 
-const VALID_STAMP_TYPES = [
+export const VALID_STAMP_TYPES = [
   "approved_for_fabrication",
   "approved_as_noted",
   "revise_and_resubmit",

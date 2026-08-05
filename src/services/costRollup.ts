@@ -84,7 +84,7 @@ export interface ProjectSpend {
   committed: number;
 }
 
-const VOIDED = new Set(["voided", "void"]);
+export const VOIDED = new Set(["voided", "void"]);
 const isVoided = (e: ExpenseLike) => VOIDED.has(String(e?.payment_status ?? "").toLowerCase());
 const isPaid = (e: ExpenseLike) => String(e?.payment_status ?? "").toLowerCase() === "paid";
 

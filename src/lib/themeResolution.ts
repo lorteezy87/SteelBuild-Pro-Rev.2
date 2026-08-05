@@ -2,7 +2,7 @@ export const THEME_STORAGE_KEY = "sbp-theme";
 export type ThemeMode = "dark" | "light";
 export type ThemeSource = "user" | "system";
 
-const ALLOWED = new Set<ThemeMode>(["dark", "light"]);
+export const ALLOWED = new Set<ThemeMode>(["dark", "light"]);
 
 export type ThemeStorage = {
   getItem(key: string): string | null;

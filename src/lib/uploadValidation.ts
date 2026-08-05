@@ -73,7 +73,7 @@ export const DANGEROUS_EXTENSIONS: ReadonlySet<string> = new Set([
  * and "attachment" profiles. Kept generous on purpose — the DMS is a catch-all
  * repository for whatever a project produces.
  */
-const DOCUMENT_EXTENSIONS = [
+export const DOCUMENT_EXTENSIONS = [
   // Documents / office
   "pdf", "doc", "docx", "rtf", "txt", "md", "csv", "tsv",
   "xls", "xlsx", "xlsm", "ppt", "pptx", "odt", "ods", "odp",
@@ -86,7 +86,7 @@ const DOCUMENT_EXTENSIONS = [
   "zip", "7z", "rar", "gz", "tgz", "xml", "json",
 ];
 
-const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "heic", "heif", "gif", "bmp", "tif", "tiff"];
+export const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "heic", "heif", "gif", "bmp", "tif", "tiff"];
 
 /**
  * Per-workflow profiles. Size caps are deliberately generous (DoS ceiling, not a

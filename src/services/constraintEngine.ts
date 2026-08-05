@@ -55,11 +55,11 @@ export interface GeneratedConstraint {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const PRIORITIES = new Set(["Critical", "High", "Medium", "Low"]);
-const CLOSED_STATUSES = new Set(["closed", "close", "complete", "completed", "cancelled", "canceled", "resolved"]);
-const NON_BLOCKING_RFI_STATUSES = new Set(["draft", "answered", ...CLOSED_STATUSES]);
-const NON_BLOCKING_DELIVERY_STATUSES = new Set(["delivered", "received", "complete", "completed", "cancelled", "canceled", "closed"]);
-const RELEASED_DRAWING_STATES = new Set([
+export const PRIORITIES = new Set(["Critical", "High", "Medium", "Low"]);
+export const CLOSED_STATUSES = new Set(["closed", "close", "complete", "completed", "cancelled", "canceled", "resolved"]);
+export const NON_BLOCKING_RFI_STATUSES = new Set(["draft", "answered", ...CLOSED_STATUSES]);
+export const NON_BLOCKING_DELIVERY_STATUSES = new Set(["delivered", "received", "complete", "completed", "cancelled", "canceled", "closed"]);
+export const RELEASED_DRAWING_STATES = new Set([
   "released",
   "ifc",
   "issued for construction",
@@ -68,7 +68,7 @@ const RELEASED_DRAWING_STATES = new Set([
   "approved as noted",
   "approved_as_noted",
 ]);
-const PRODUCTION_PHASES = new Set(["fabrication", "delivery", "erection", "installation", "closeout"]);
+export const PRODUCTION_PHASES = new Set(["fabrication", "delivery", "erection", "installation", "closeout"]);
 
 function normalize(value: any): string {
   return String(value || "").trim().toLowerCase();

@@ -56,7 +56,7 @@ export class DesktopConnectQueryError extends Error {
   }
 }
 
-const REQUIRED_DESKTOP_CONNECT_PARAMS = ["state", "challenge", "publicKey"] as const;
+export const REQUIRED_DESKTOP_CONNECT_PARAMS = ["state", "challenge", "publicKey"] as const;
 
 export function parseDesktopConnectQuery(search: string): DesktopConnectQuery {
   const trimmed = search.trim();

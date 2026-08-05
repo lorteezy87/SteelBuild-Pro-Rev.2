@@ -93,7 +93,7 @@ export function computeBackwardDates(erectionStart, leadDays = DEFAULT_LEAD_DAYS
 
 // Risk milestones: each required-by date and the minimum operational state that
 // means the milestone is "met". (internalReviewDue is informational, not gated.)
-const RISK_MILESTONES = [
+export const RISK_MILESTONES = [
   { key: "detailingStart",            label: "Detailing not started", requires: "In Detailing" },
   { key: "submitBy",                  label: "Not submitted",         requires: "IFA" },
   { key: "approvalNeededBy",          label: "Not approved",          requires: "BFA" },

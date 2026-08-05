@@ -43,8 +43,8 @@ export type CommentDispositionGateResult =
   | { ok: true }
   | { ok: false; unresolvedCount: number; reason: string; unresolved: CommentDispositionLike[] };
 
-const SENT_OFA = new Set(["Submitted", "Under Review"]);
-const RR_SOURCES = new Set(["Revise and Resubmit", "Rejected"]);
+export const SENT_OFA = new Set(["Submitted", "Under Review"]);
+export const RR_SOURCES = new Set(["Revise and Resubmit", "Rejected"]);
 
 const hasOverride = (reason: string | null | undefined): boolean =>
   String(reason ?? "").trim().length > 0;

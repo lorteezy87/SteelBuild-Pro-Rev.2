@@ -19,7 +19,7 @@ export const PRIVILEGE_META_KEYS = [
   'role', 'roles', 'is_admin', 'isAdmin', 'admin', 'permissions', 'perms',
 ] as const;
 
-const BLOCKED = new Set<string>(PRIVILEGE_META_KEYS);
+export const BLOCKED = new Set<string>(PRIVILEGE_META_KEYS);
 
 /** Copy of `meta` with every privilege-bearing key removed. */
 export function stripPrivilegeMeta(meta: Record<string, unknown>): Record<string, unknown> {

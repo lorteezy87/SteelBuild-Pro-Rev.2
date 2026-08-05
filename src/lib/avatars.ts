@@ -6,7 +6,7 @@
  * across the app without storing anything per user.
  */
 
-const AVATAR_COLORS = [
+export const AVATAR_COLORS = [
   "#3B82F6", // blue
   "#10B981", // green
   "#F59E0B", // amber

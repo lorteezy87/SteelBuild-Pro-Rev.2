@@ -46,8 +46,8 @@ export const DETAILING_STATE_ORDER = [
   ...RELEASE_STATES,
 ];
 
-const DRAFTING_SET = new Set(DRAFTING_STATES);
-const RELEASE_SET = new Set(RELEASE_STATES);
+export const DRAFTING_SET = new Set(DRAFTING_STATES);
+export const RELEASE_SET = new Set(RELEASE_STATES);
 
 /** True if `state` is one of the manual drafting states. */
 export function isDraftingState(state) {

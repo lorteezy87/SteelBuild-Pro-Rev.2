@@ -55,7 +55,7 @@ export interface SubmittalAction {
 
 // "Done" terminals — nothing to advance to. (Approved/AAN are terminal for the
 // approval *status* but still have forward workflow moves: scrub → IFC → release.)
-const DONE_TERMINALS = new Set<string>(["Released for Fabrication", "Void"]);
+export const DONE_TERMINALS = new Set<string>(["Released for Fabrication", "Void"]);
 
 /**
  * Optional routing overrides. Flag-gated behavior lives here so the default

@@ -26,7 +26,7 @@
 export const DEFAULT_CYCLE_DAYS = 14;
 export const MIN_BUCKET_SAMPLES = 3;
 
-const ACTIVE_REVIEW_STATUSES = new Set(["Submitted", "Under Review"]);
+export const ACTIVE_REVIEW_STATUSES = new Set(["Submitted", "Under Review"]);
 
 export interface RoundRow {
   submittal_id?: string | null;

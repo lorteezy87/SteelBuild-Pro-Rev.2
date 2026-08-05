@@ -23,7 +23,7 @@ const ROUTES: Readonly<Record<DesktopRecordEntityType, string>> = Object.freeze(
   submittal: "/Submittals",
 });
 
-const LOCAL_HTTP_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+export const LOCAL_HTTP_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export function buildRecordLink(input: BuildRecordLinkInput): string {
   const route = ROUTES[input.entityType];

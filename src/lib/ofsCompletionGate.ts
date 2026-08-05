@@ -58,7 +58,7 @@ export type OfsGateResult =
   | { ok: true }
   | { ok: false; missing: string[]; reason: string };
 
-const SENT_OFA_STATUSES = new Set(["Submitted", "Under Review"]);
+export const SENT_OFA_STATUSES = new Set(["Submitted", "Under Review"]);
 
 const hasOverride = (reason: string | null | undefined): boolean =>
   String(reason ?? "").trim().length > 0;

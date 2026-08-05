@@ -68,11 +68,11 @@ export interface GateOptions {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const CLOSED_STATUSES = new Set([
+export const CLOSED_STATUSES = new Set([
   "closed", "close", "complete", "completed", "cancelled", "canceled", "resolved", "void",
 ]);
 
-const PRODUCTION_PHASES = new Set([
+export const PRODUCTION_PHASES = new Set([
   "fabrication", "fab", "delivery", "shipping", "erection", "installation", "install", "closeout",
 ]);
 
