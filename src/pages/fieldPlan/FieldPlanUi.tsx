@@ -11,60 +11,23 @@ import {
   HORIZON_OPTIONS,
   UNASSIGNED_CREW,
 } from "./fieldPlanHelpers";
+import {
+  headerCellStyle,
+  crewCellStyle,
+  dayCellStyle,
+  toolBtn,
+  fieldPlanBlockerChipColors,
+} from "./fieldPlanStyleHelpers";
 
-export const headerCellStyle = {
-  padding: "10px 12px",
-  borderBottom: "1px solid var(--accent-border)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: "0.12em",
-  textTransform: "uppercase",
-  color: "var(--text-primary)",
-  textAlign: "left",
-};
-
-export const crewCellStyle = {
-  padding: "10px 12px",
-  borderBottom: "1px solid var(--divider)",
-  borderRight: "1px solid var(--divider)",
-  fontFamily: "var(--font-display)",
-  fontSize: 12,
-  fontWeight: 700,
-  color: "var(--text-primary)",
-  verticalAlign: "top",
-};
-
-export const dayCellStyle = {
-  padding: "6px 8px",
-  borderBottom: "1px solid var(--divider)",
-  borderRight: "1px solid var(--divider)",
-  verticalAlign: "top",
-  minHeight: 80,
-};
-
-export const toolBtn = {
-  padding: "6px 12px",
-  borderRadius: 6,
-  border: "1px solid var(--border-default)",
-  background: "transparent",
-  color: "var(--text-secondary)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  cursor: "pointer",
-};
+export {
+  headerCellStyle,
+  crewCellStyle,
+  dayCellStyle,
+  toolBtn,
+} from "./fieldPlanStyleHelpers";
 
 export function BlockerChip({ chip }) {
-  const color =
-    chip.severity === "danger" ? "var(--status-error)"
-    : chip.severity === "warn" ? "var(--status-warning)"
-    : "var(--status-success)";
-  const bg =
-    chip.severity === "danger" ? "var(--danger-muted)"
-    : chip.severity === "warn" ? "var(--warning-muted)"
-    : "var(--success-muted)";
+  const { color, bg } = fieldPlanBlockerChipColors(chip.severity);
   return (
     <span
       title={chip.label}

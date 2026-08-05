@@ -157,3 +157,41 @@ export const COMMON_FRACTIONS = [
   { num: 7, den: 8 },
   { num: 15, den: 16 },
 ] as const;
+
+/** Shared form chrome for decimal/fraction converter panels. */
+export const cardStyle: Record<string, string | number> = {
+  background: "var(--bg-surface)",
+  border: "1px solid var(--border-strong)",
+  borderRadius: 12,
+  overflow: "hidden",
+};
+
+export const inputStyle: Record<string, string | number> = {
+  width: "100%",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 6,
+  padding: "10px 12px",
+  color: "var(--text-primary)",
+  fontSize: 14,
+  ...mono,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+export const selectStyle: Record<string, string | number> = {
+  ...inputStyle,
+  padding: "9px 12px",
+  cursor: "pointer",
+};
+
+export const labelStyle: Record<string, string | number> = {
+  ...mono,
+  fontSize: 9,
+  color: "var(--text-muted)",
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  marginBottom: 6,
+  display: "block",
+};
+

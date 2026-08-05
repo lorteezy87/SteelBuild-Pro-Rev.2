@@ -20,6 +20,10 @@ import {
   SUB_MODES,
   SUB_MODE_TABS,
   COMMON_FRACTIONS,
+  cardStyle,
+  inputStyle,
+  selectStyle,
+  labelStyle,
 } from "./decimalFractionConverterHelpers";
 import {
   decimalFeetToFtIn,
@@ -31,36 +35,7 @@ import {
 import { convert, CONVERSIONS } from "@/utils/unitConversions";
 import CalcKey from "@/components/calculators/CalcKey";
 
-export { DECIMAL_MODES, SUB_MODES, SUB_MODE_TABS, COMMON_FRACTIONS };
-
-export const cardStyle = {
-  background: "var(--bg-surface)",
-  border: "1px solid var(--border-strong)",
-  borderRadius: 12,
-  overflow: "hidden",
-};
-export const inputStyle = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  padding: "10px 12px",
-  color: "var(--text-primary)",
-  fontSize: 14,
-  ...mono,
-  outline: "none",
-  boxSizing: "border-box",
-};
-export const selectStyle = { ...inputStyle, padding: "9px 12px", cursor: "pointer" };
-export const labelStyle = {
-  ...mono,
-  fontSize: 9,
-  color: "var(--text-muted)",
-  letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  marginBottom: 6,
-  display: "block",
-};
+export { DECIMAL_MODES, SUB_MODES, SUB_MODE_TABS, COMMON_FRACTIONS, cardStyle, inputStyle, selectStyle, labelStyle };
 
 // ══════════════════════════════════════════════════════════════════
 // PANEL A — Decimal → Fraction
