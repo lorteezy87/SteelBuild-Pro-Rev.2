@@ -37,6 +37,8 @@ import {
   removeOverride,
   createEmptyFlagDraft,
   createEmptyOverrideDraft,
+  nextOverrideDrafts,
+  nextNewFlagField,
 } from "./featureFlags/featureFlagsPageHelpers";
 
 function FeatureFlagsAdminContent() {
@@ -106,7 +108,7 @@ function FeatureFlagsAdminContent() {
       { id: flag.id, updates: { user_overrides: overrides } },
       {
         onSuccess: () => {
-          setOverrideDrafts((d) => ({ ...d, [flag.id]: createEmptyOverrideDraft() }));
+          setOverrideDrafts((d) => nextOverrideDrafts(d, flag.id, createEmptyOverrideDraft()));
         },
       },
     );
@@ -188,21 +190,21 @@ function FeatureFlagsAdminContent() {
           type="text"
           placeholder="flag_key (e.g. new_dashboard)"
           value={newFlag.flag_key}
-          onChange={(e) => setNewFlag((f) => ({ ...f, flag_key: e.target.value }))}
+          onChange={(e) => setNewFlag((f) => nextNewFlagField(f, "flag_key", e.target.value))}
           style={{ ...inputStyle, minWidth: 220 }}
         />
         <input
           type="text"
           placeholder="Description (optional)"
           value={newFlag.description}
-          onChange={(e) => setNewFlag((f) => ({ ...f, description: e.target.value }))}
+          onChange={(e) => setNewFlag((f) => nextNewFlagField(f, "description", e.target.value))}
           style={{ ...inputStyle, flex: 1, minWidth: 220 }}
         />
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-secondary)" }}>
           <input
             type="checkbox"
             checked={newFlag.enabled}
-            onChange={(e) => setNewFlag((f) => ({ ...f, enabled: e.target.checked }))}
+            onChange={(e) => setNewFlag((f) => nextNewFlagField(f, "enabled", e.target.checked))}
           />
           Enabled
         </label>
@@ -305,20 +307,20 @@ function FeatureFlagsAdminContent() {
                             placeholder="user@example.com"
                             value={draft.email}
                             onChange={(e) =>
-                              setOverrideDrafts((d) => ({
-                                ...d,
-                                [flag.id]: { ...draft, email: e.target.value },
-                              }))
+                              setOverrideDrafts((d) =>
+                                nextOverrideDrafts(d, flag.id, { email: e.target.value }),
+                              )
                             }
                             style={{ ...inputStyle, flex: 1, minWidth: 160 }}
                           />
                           <select
                             value={draft.enabled ? "on" : "off"}
                             onChange={(e) =>
-                              setOverrideDrafts((d) => ({
-                                ...d,
-                                [flag.id]: { ...draft, enabled: e.target.value === "on" },
-                              }))
+                              setOverrideDrafts((d) =>
+                                nextOverrideDrafts(d, flag.id, {
+                                  enabled: e.target.value === "on",
+                                }),
+                              )
                             }
                             style={{ ...inputStyle, padding: "7px 8px" }}
                           >

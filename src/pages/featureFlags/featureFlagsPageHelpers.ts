@@ -55,3 +55,21 @@ export function createEmptyFlagDraft(): { flag_key: string; description: string;
 export function createEmptyOverrideDraft(): { email: string; enabled: boolean } {
   return { email: "", enabled: true };
 }
+
+export function nextOverrideDrafts(
+  drafts: Record<string, { email: string; enabled: boolean }>,
+  flagId: string,
+  patch: Partial<{ email: string; enabled: boolean }>,
+  empty: { email: string; enabled: boolean } = createEmptyOverrideDraft(),
+): Record<string, { email: string; enabled: boolean }> {
+  const current = drafts[flagId] || empty;
+  return { ...drafts, [flagId]: { ...current, ...patch } };
+}
+
+export function nextNewFlagField<T extends Record<string, unknown>>(
+  prev: T,
+  field: keyof T | string,
+  value: unknown,
+): T {
+  return { ...prev, [field]: value };
+}

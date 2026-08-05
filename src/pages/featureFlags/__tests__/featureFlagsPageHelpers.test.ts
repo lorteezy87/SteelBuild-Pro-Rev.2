@@ -44,3 +44,14 @@ describe("flag drafts", () => {
     expect(createEmptyOverrideDraft().enabled).toBe(true);
   });
 });
+
+import { nextOverrideDrafts, nextNewFlagField } from "../featureFlagsPageHelpers";
+
+describe("draft mutators", () => {
+  it("patches new flag and override drafts", () => {
+    expect(nextNewFlagField({ a: 1 }, "a", 2).a).toBe(2);
+    const d = nextOverrideDrafts({}, "f1", { email: "a@b.com" });
+    expect(d.f1.email).toBe("a@b.com");
+    expect(d.f1.enabled).toBe(true);
+  });
+});
