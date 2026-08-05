@@ -15,7 +15,7 @@
  *   AlertChips / FilterBar / ExpenseTable / BulkActionBar.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
@@ -32,6 +32,20 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 import { safeNum, buildRedFlagAlerts, exportExpensesCSV } from "./expenses/utils";
+import {
+  filterActiveExpenses,
+  computeExpenseKpis,
+  remainingTone,
+  filterExpenses,
+  pruneSelectedIds,
+  computeSpendByCostCode,
+  computeCostCodeBudgetVsActual,
+  computeStatusBreakdown,
+  computeTopVendors,
+  nextKpiFilterState,
+  toggleSelectedId,
+  toggleSelectAllIds,
+} from "./expenses/expensesPageHelpers";
 import { computeCostCodeTotals } from "@/services/costRollup";
 import KpiStrip      from "./expenses/KpiStrip";
 import AnalyticsGrid from "./expenses/AnalyticsGrid";
@@ -206,171 +220,71 @@ export default function ExpensesPage() {
 
   /* ── KPI rollups ── */
   const totalBudget     = roundCurrency(computeCostCodeTotals(costCodes).budget);
-  const activeExpenses  = useMemo(() => expenses.filter((e) => e.payment_status !== "Voided"), [expenses]);
-  const totalCommitted  = roundCurrency(activeExpenses.reduce((s, e) => s + safeNum(e.amount), 0));
-  const totalPaid       = roundCurrency(activeExpenses.filter((e) => e.payment_status === "Paid").reduce((s, e) => s + safeNum(e.amount), 0));
-  const paidCount       = activeExpenses.filter((e) => e.payment_status === "Paid").length;
-  const totalRemaining  = roundCurrency(totalBudget - totalCommitted);
-  const pctUsed         = totalBudget > 0 ? Math.min(100, Math.round((totalCommitted / totalBudget) * 100)) : 0;
-  const totalOutstanding = roundCurrency(
-    activeExpenses
-      .filter((e) => e.payment_status === "Unpaid" || e.payment_status === "Pending Approval")
-      .reduce((s, e) => s + safeNum(e.amount), 0)
+  const activeExpenses  = useMemo(() => filterActiveExpenses(expenses), [expenses]);
+  const kpis = useMemo(
+    () => computeExpenseKpis(activeExpenses, totalBudget),
+    [activeExpenses, totalBudget],
   );
+  const totalCommitted = roundCurrency(kpis.totalCommitted);
+  const totalPaid = roundCurrency(kpis.totalPaid);
+  const paidCount = kpis.paidCount;
+  const totalRemaining = roundCurrency(kpis.totalRemaining);
+  const pctUsed = kpis.pctUsed;
+  const totalOutstanding = roundCurrency(kpis.totalOutstanding);
 
-  const remainingColor =
-    totalRemaining < 0 ? "var(--status-error)" :
-    100 - pctUsed < 10 ? "var(--status-warning)" :
-                         "var(--status-success)";
+  const remainingColor = remainingTone(totalRemaining, pctUsed);
   const remainingBorderColor = remainingColor;
 
   /* ── KPI click routing (with a special sentinel for Outstanding) ── */
   const handleKPIClick = (kpiKey) => {
-    if (activeKPI === kpiKey) {
-      setActiveKPI(null);
-      setStatusFilter("all");
-      return;
-    }
-    setActiveKPI(kpiKey);
-    if (kpiKey === "paid") setStatusFilter("Paid");
-    else if (kpiKey === "outstanding") setStatusFilter("_outstanding");
-    else setStatusFilter("all");
+    const next = nextKpiFilterState(activeKPI, kpiKey);
+    setActiveKPI(next.activeKPI);
+    setStatusFilter(next.statusFilter);
   };
 
-  /* ── Date-range filter helper ── */
-  const now = useMemo(() => new Date(), []);
-  const filterByDate = useCallback((e) => {
-    if (dateRangeFilter === "all") return true;
-    const d = new Date(e.expense_date);
-    if (dateRangeFilter === "this_month") {
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }
-    if (dateRangeFilter === "last_30") return now - d <= 30 * 86400000;
-    if (dateRangeFilter === "this_quarter") {
-      const q = Math.floor(now.getMonth() / 3);
-      return Math.floor(d.getMonth() / 3) === q && d.getFullYear() === now.getFullYear();
-    }
-    return true;
-  }, [dateRangeFilter, now]);
-
   /* ── Filtered list ── */
-  const filtered = useMemo(() => {
-    return expenses.filter((e) => {
-      const q = debouncedSearch.toLowerCase();
-      const matchSearch =
-        !q ||
-        e.description?.toLowerCase().includes(q) ||
-        e.expense_number?.toLowerCase().includes(q) ||
-        e.vendor?.toLowerCase().includes(q);
-      const matchCC = costCodeFilter === "all" || e.cost_code === costCodeFilter;
-      const matchType = typeFilter === "all" || e.expense_type === typeFilter;
-      const matchStatus =
-        statusFilter === "all" ? true :
-        statusFilter === "_outstanding"
-          ? e.payment_status === "Unpaid" || e.payment_status === "Pending Approval"
-          : e.payment_status === statusFilter;
-      const matchWP = wpFilter === "all" || e.work_package_id === wpFilter;
-      return matchSearch && matchCC && matchType && matchStatus && matchWP && filterByDate(e);
-    });
-  }, [expenses, debouncedSearch, costCodeFilter, typeFilter, statusFilter, wpFilter, filterByDate]);
+  const now = useMemo(() => new Date(), []);
+  const filtered = useMemo(
+    () => filterExpenses(expenses, {
+      debouncedSearch,
+      costCodeFilter,
+      typeFilter,
+      statusFilter,
+      wpFilter,
+      dateRangeFilter,
+      now,
+    }),
+    [expenses, debouncedSearch, costCodeFilter, typeFilter, statusFilter, wpFilter, dateRangeFilter, now],
+  );
 
   useEffect(() => {
     const visibleIds = new Set(filtered.map((expense) => expense.id));
-    setSelected((current) => {
-      const next = current.filter((id) => visibleIds.has(id));
-      return next.length === current.length && next.every((id, index) => id === current[index])
-        ? current
-        : next;
-    });
+    setSelected((current) => pruneSelectedIds(current, visibleIds));
   }, [filtered]);
 
   /* ── Spend by cost code (for donut) ── */
-  const spendByCostCode = useMemo(() => {
-    const map = {};
-    activeExpenses.forEach((e) => {
-      if (!e.cost_code) return;
-      map[e.cost_code] = (map[e.cost_code] || 0) + safeNum(e.amount);
-    });
-    const totalSpend = Object.values(map).reduce((s, v) => s + v, 0);
-    return COST_CODES
-      .filter((cc) => map[cc.code] > 0)
-      .map((cc) => ({
-        ...cc,
-        spend: map[cc.code],
-        pct: totalSpend > 0 ? Math.round((map[cc.code] / totalSpend) * 100) : 0,
-      }))
-      .sort((a, b) => b.spend - a.spend);
-  }, [activeExpenses]);
+  const spendByCostCode = useMemo(
+    () => computeSpendByCostCode(activeExpenses, COST_CODES),
+    [activeExpenses],
+  );
 
   /* ── Cost-code budget vs actual ── */
-  const costCodeBudgetVsActual = useMemo(() => {
-    const spendMap = {};
-    activeExpenses.forEach((e) => {
-      if (!e.cost_code) return;
-      spendMap[e.cost_code] = (spendMap[e.cost_code] || 0) + safeNum(e.amount);
-    });
-    const items = [];
-    const seen = new Set();
-    costCodes.forEach((cc) => {
-      const code = cc.cost_code_number || cc.code;
-      if (!code || seen.has(code)) return;
-      seen.add(code);
-      const meta = COST_CODES.find((c) => c.code === code) || {};
-      const budget = safeNum(cc.budget_amount);
-      const actual = spendMap[code] || 0;
-      if (budget > 0 || actual > 0) {
-        items.push({
-          code,
-          name: meta.name || cc.name || code,
-          category: meta.category || cc.category || "Misc.",
-          budget,
-          actual,
-          pctUsed: budget > 0 ? Math.round((actual / budget) * 100) : actual > 0 ? 999 : 0,
-        });
-      }
-    });
-    // Also include cost codes with spend but no budget record
-    Object.entries(spendMap).forEach(([code, actual]) => {
-      if (seen.has(code)) return;
-      const meta = COST_CODES.find((c) => c.code === code) || {};
-      items.push({
-        code,
-        name: meta.name || code,
-        category: meta.category || "Misc.",
-        budget: 0,
-        actual,
-        pctUsed: 999,
-      });
-    });
-    return items.sort((a, b) => b.actual - a.actual);
-  }, [activeExpenses, costCodes]);
+  const costCodeBudgetVsActual = useMemo(
+    () => computeCostCodeBudgetVsActual(activeExpenses, costCodes, COST_CODES),
+    [activeExpenses, costCodes],
+  );
 
   /* ── Payment status breakdown ── */
-  const statusBreakdown = useMemo(() => {
-    const map = {};
-    expenses.forEach((e) => {
-      const s = e.payment_status || "Unknown";
-      if (!map[s]) map[s] = { count: 0, total: 0 };
-      map[s].count++;
-      map[s].total += safeNum(e.amount);
-    });
-    return Object.entries(map)
-      .map(([status, d]) => ({ status, ...d }))
-      .sort((a, b) => b.total - a.total);
-  }, [expenses]);
+  const statusBreakdown = useMemo(
+    () => computeStatusBreakdown(expenses),
+    [expenses],
+  );
 
   /* ── Top vendors ── */
-  const topVendors = useMemo(() => {
-    const map = {};
-    activeExpenses.forEach((e) => {
-      const v = e.vendor?.trim() || "(No Vendor)";
-      map[v] = (map[v] || 0) + safeNum(e.amount);
-    });
-    return Object.entries(map)
-      .map(([vendor, total]) => ({ vendor, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
-  }, [activeExpenses]);
+  const topVendors = useMemo(
+    () => computeTopVendors(activeExpenses),
+    [activeExpenses],
+  );
 
   /* ── Red-flag alerts ── */
   const redFlagAlerts = useMemo(
@@ -380,8 +294,8 @@ export default function ExpensesPage() {
   const visibleAlerts = redFlagAlerts.filter((a) => !dismissedAlerts.includes(a.key));
 
   /* ── Selection + CSV handlers ── */
-  const toggleSelect = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-  const toggleAll = () => setSelected(selected.length === filtered.length ? [] : filtered.map((e) => e.id));
+  const toggleSelect = (id) => setSelected((s) => toggleSelectedId(s, id));
+  const toggleAll = () => setSelected(toggleSelectAllIds(selected, filtered.map((e) => e.id)));
   const handleExportCSV = () => exportExpensesCSV(filtered, activeProject?.name);
 
   /* ── Shared modals rendered inside the canonical control center ── */
