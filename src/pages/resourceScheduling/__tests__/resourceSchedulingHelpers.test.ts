@@ -537,3 +537,16 @@ describe("computeResourceRowLoad / buildResourceRowDropStyle", () => {
     expect(style.hoverBackground).toContain("248,81,73");
   });
 });
+
+import { createEmptyNewResource, nextNewResourceField } from "../resourceSchedulingHelpers";
+
+describe("new resource form seed", () => {
+  it("creates empty form and patches fields immutably", () => {
+    const empty = createEmptyNewResource();
+    expect(empty.resource_type).toBe("Person");
+    expect(empty.name).toBe("");
+    const next = nextNewResourceField(empty, "name", "Crew A");
+    expect(next.name).toBe("Crew A");
+    expect(empty.name).toBe("");
+  });
+});

@@ -53,6 +53,7 @@ import {
   snapDropWindow,
   computeResourceRowLoad,
   buildResourceRowDropStyle,
+  createEmptyNewResource,
 } from "./resourceScheduling/resourceSchedulingHelpers";
 
 // Only mounted while the edit dialog is open — keep it off the board's chunk.
@@ -87,15 +88,14 @@ export default function ResourceScheduling() {
   const [hoverTooltip, setHoverTooltip] = useState(null);
   const [showNewResource, setShowNewResource] = useState(false);
   const [resourceFocus, setResourceFocus] = useState("all");
-  const emptyNewRes = { name: "", resource_type: "Person", role: "", capacity: "", unit: "hours", cost_rate: "", availability: "Available", notes: "", parent_resource_id: "" };
-  const [newRes, setNewRes] = useState(emptyNewRes);
+  const [newRes, setNewRes] = useState(() => createEmptyNewResource());
 
   const createResMut = useMutation({
     mutationFn: (data: any) => entities.Resource.create({ ...data, project_id: activeProject?.id, project_name: activeProject?.name || "" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["resources"] });
       setShowNewResource(false);
-      setNewRes(emptyNewRes);
+      setNewRes(createEmptyNewResource());
       toast.success("Resource created");
     },
     onError: (err) => toast.error(err.message || "Failed to create resource"),

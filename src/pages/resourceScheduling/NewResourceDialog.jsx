@@ -1,5 +1,6 @@
 import React from "react";
 import { toast } from "sonner";
+import { nextNewResourceField } from "./resourceSchedulingHelpers";
 
 /**
  * Inline "New Resource" dialog used by the Crew Scheduling page.
@@ -69,12 +70,12 @@ export default function NewResourceDialog({
                 {label}
               </div>
               {type === "select" ? (
-                <select value={newRes[key]} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} style={inputStyle}>
+                <select value={newRes[key]} onChange={(e) => setNewRes(p => nextNewResourceField(p, key, e.target.value))} style={inputStyle}>
                   {options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               ) : type === "parent-select" ? (
                 <>
-                  <select value={newRes[key] || ""} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} style={inputStyle}>
+                  <select value={newRes[key] || ""} onChange={(e) => setNewRes(p => nextNewResourceField(p, key, e.target.value))} style={inputStyle}>
                     <option value="">— None (top-level) —</option>
                     {topLevelResources.map(r => (
                       <option key={r.id} value={r.id}>
@@ -91,7 +92,7 @@ export default function NewResourceDialog({
               ) : type === "textarea" ? (
                 <textarea
                   value={newRes[key]}
-                  onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))}
+                  onChange={(e) => setNewRes(p => nextNewResourceField(p, key, e.target.value))}
                   placeholder={placeholder}
                   style={{ ...inputStyle, minHeight: 50, resize: "vertical", boxSizing: "border-box" }}
                 />
@@ -99,7 +100,7 @@ export default function NewResourceDialog({
                 <input
                   type={type}
                   value={newRes[key]}
-                  onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))}
+                  onChange={(e) => setNewRes(p => nextNewResourceField(p, key, e.target.value))}
                   placeholder={placeholder}
                   style={{ ...inputStyle, boxSizing: "border-box" }}
                 />

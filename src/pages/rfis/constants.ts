@@ -68,3 +68,20 @@ export const DENSITY_PRESETS = {
 };
 
 export const INSIGHTS_LS_KEY = "sbp-rfi-insights-collapsed";
+
+/** Agenda panel group accent colors. */
+export const AGENDA_GROUP_ACCENT: Record<string, string> = {
+  Overdue: "var(--status-error)",
+  Blocking: "var(--status-warning)",
+  "Due Soon": "var(--status-warning)",
+  "Awaiting Response": "var(--status-info)",
+};
+
+/** Agenda row priority text colors. */
+export const AGENDA_PRIORITY_COLOR: Record<string, string> = {
+  Critical: "var(--status-error)",
+  High: "var(--status-warning)",
+  Medium: "var(--status-info)",
+  Low: "var(--text-muted)",
+};
+

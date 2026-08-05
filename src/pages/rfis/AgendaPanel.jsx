@@ -2,23 +2,10 @@ import React from "react";
 import { BicPill } from "@/components/design-system";
 import { AGENDA_GROUPS } from "@/lib/commandCenter/rfiAgenda";
 import { downloadRfiAgendaCsv } from "./utils";
-
-const GROUP_ACCENT = {
-  Overdue: "var(--status-error)",
-  Blocking: "var(--status-warning)",
-  "Due Soon": "var(--status-warning)",
-  "Awaiting Response": "var(--status-info)",
-};
-
-const PRIORITY_COLOR = {
-  Critical: "var(--status-error)",
-  High: "var(--status-warning)",
-  Medium: "var(--status-info)",
-  Low: "var(--text-muted)",
-};
+import { AGENDA_GROUP_ACCENT, AGENDA_PRIORITY_COLOR } from "./constants";
 
 function AgendaRow({ item, onOpenRfi }) {
-  const accent = GROUP_ACCENT[item.group] || "var(--text-muted)";
+  const accent = AGENDA_GROUP_ACCENT[item.group] || "var(--text-muted)";
   return (
     <button
       type="button"
@@ -44,7 +31,7 @@ function AgendaRow({ item, onOpenRfi }) {
         {item.reason}
       </span>
       {item.priority && (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: PRIORITY_COLOR[item.priority] || "var(--text-muted)", whiteSpace: "nowrap" }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: AGENDA_PRIORITY_COLOR[item.priority] || "var(--text-muted)", whiteSpace: "nowrap" }}>
           {item.priority}
         </span>
       )}
@@ -105,7 +92,7 @@ export default function AgendaPanel({ agenda, onOpenRfi, onClose }) {
         AGENDA_GROUPS.map((group) => {
           const items = agenda.groups[group];
           if (!items || items.length === 0) return null;
-          const accent = GROUP_ACCENT[group];
+          const accent = AGENDA_GROUP_ACCENT[group];
           return (
             <div key={group}>
               <div style={{

@@ -819,3 +819,37 @@ export function buildResourceRowDropStyle(load: ResourceRowLoad): ResourceRowDro
   };
 }
 
+/** Default create-resource dialog form seed. */
+export function createEmptyNewResource(): {
+  name: string;
+  resource_type: string;
+  role: string;
+  capacity: string;
+  unit: string;
+  cost_rate: string;
+  availability: string;
+  notes: string;
+  parent_resource_id: string;
+} {
+  return {
+    name: "",
+    resource_type: "Person",
+    role: "",
+    capacity: "",
+    unit: "hours",
+    cost_rate: "",
+    availability: "Available",
+    notes: "",
+    parent_resource_id: "",
+  };
+}
+
+/** Patch one field on the new-resource draft (immutable). */
+export function nextNewResourceField<T extends Record<string, unknown>>(
+  prev: T,
+  field: keyof T | string,
+  value: unknown,
+): T {
+  return { ...prev, [field]: value };
+}
+
