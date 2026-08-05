@@ -47,3 +47,15 @@ describe("buildLookAheadWindow", () => {
     expect(formatLookAheadWindowDate(w0.start)).toMatch(/2026/);
   });
 });
+
+import { lookAheadCommandSubtitle } from "../lookAheadScheduleHelpers";
+
+describe("lookAheadCommandSubtitle", () => {
+  it("joins formatted window", () => {
+    const a = new Date("2026-06-01");
+    const b = new Date("2026-06-14");
+    expect(lookAheadCommandSubtitle(a, b, (d) => d.toISOString().slice(0, 10))).toBe(
+      "2026-06-01 – 2026-06-14",
+    );
+  });
+});

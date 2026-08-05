@@ -154,3 +154,23 @@ describe("resolveCostUnit", () => {
     expect(resolveCostUnit("nope", ["lb", "ton"])).toBe("lb");
   });
 });
+
+import {
+  formatWeightLb,
+  formatWeightTons,
+  formatLbPerFt,
+  formatGrandTotalClipboard,
+  formatResultAux,
+  formatFixed2,
+} from "../steelWeightCalculatorHelpers";
+
+describe("steel weight display formatters", () => {
+  it("formats weights and clipboard", () => {
+    expect(formatWeightLb(12.3)).toBe("12.30 lb");
+    expect(formatWeightTons(1.2)).toBe("1.200 T");
+    expect(formatLbPerFt(45.6)).toBe("45.600 lb/ft");
+    expect(formatGrandTotalClipboard(10)).toBe("10.00 lb");
+    expect(formatResultAux({ totalTons: 0.5, qty: 3 })).toBe("0.500 T · 3 pc");
+    expect(formatFixed2(1.2)).toBe("1.20");
+  });
+});

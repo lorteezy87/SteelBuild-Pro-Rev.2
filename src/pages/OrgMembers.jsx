@@ -32,6 +32,9 @@ import {
   removeStagedAt,
   summarizeInviteSendResults,
   keepFailedStagedRows,
+  normalizeInviteEmail,
+  isValidInviteEmail,
+  seatsRemaining,
 } from "./orgMembers/orgMembersPageHelpers";
 
 export default function OrgMembers() {
@@ -104,7 +107,7 @@ export default function OrgMembers() {
     [stagedSkipped],
   );
 
-  const seatsLeft = cap.unlimited ? Infinity : Math.max(0, (cap.limit ?? 0) - cap.used);
+  const seatsLeft = seatsRemaining(cap.used, cap.limit, cap.unlimited);
 
   const setStagedRole = (idx, nextRole) =>
     setStaged((rows) => updateStagedRoleAt(rows, idx, nextRole));
@@ -143,9 +146,9 @@ export default function OrgMembers() {
 
   const sendInvite = async (e) => {
     e.preventDefault();
-    const addr = email.trim().toLowerCase();
+    const addr = normalizeInviteEmail(email);
     if (!addr || !orgId || busy) return;
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) { toast.error("Enter a valid email"); return; }
+    if (!isValidInviteEmail(addr)) { toast.error("Enter a valid email"); return; }
     if (atMemberLimit) { toast.error(`Your ${plan.name} plan includes ${memberLimit} member${memberLimit === 1 ? "" : "s"}. Upgrade to add more.`); return; }
     setBusy(true);
     try {

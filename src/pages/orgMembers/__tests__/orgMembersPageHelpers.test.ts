@@ -41,3 +41,22 @@ describe("summarizeInviteSendResults", () => {
     expect(s.errorToast).toMatch(/Couldn't create invites/);
   });
 });
+
+import {
+  normalizeInviteEmail,
+  isValidInviteEmail,
+  seatsRemaining,
+} from "../orgMembersPageHelpers";
+
+describe("org invite email and seats", () => {
+  it("normalizes and validates email", () => {
+    expect(normalizeInviteEmail("  Ada@X.com ")).toBe("ada@x.com");
+    expect(isValidInviteEmail("ada@x.com")).toBe(true);
+    expect(isValidInviteEmail("nope")).toBe(false);
+  });
+
+  it("seatsRemaining", () => {
+    expect(seatsRemaining(2, 5, false)).toBe(3);
+    expect(seatsRemaining(2, 5, true)).toBe(Infinity);
+  });
+});

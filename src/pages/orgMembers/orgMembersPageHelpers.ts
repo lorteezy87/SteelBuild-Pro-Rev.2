@@ -71,3 +71,22 @@ export function keepFailedStagedRows<T extends { email?: string | null }>(
   return (rows || []).filter((row) => failedEmails.has(row.email as string));
 }
 
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+export function normalizeInviteEmail(email: string | null | undefined): string {
+  return (email || "").trim().toLowerCase();
+}
+
+export function isValidInviteEmail(email: string | null | undefined): boolean {
+  return EMAIL_RE.test(normalizeInviteEmail(email));
+}
+
+export function seatsRemaining(
+  used: number,
+  limit: number | null | undefined,
+  unlimited: boolean,
+): number {
+  if (unlimited) return Infinity;
+  return Math.max(0, (limit ?? 0) - used);
+}

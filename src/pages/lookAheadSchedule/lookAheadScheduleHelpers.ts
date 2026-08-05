@@ -83,3 +83,11 @@ export function formatLookAheadWindowDate(d: Date): string {
   });
 }
 
+
+export function lookAheadCommandSubtitle(
+  windowStart: Date,
+  windowEnd: Date,
+  fmt: (d: Date) => string = formatLookAheadWindowDate,
+): string {
+  return `${fmt(windowStart)} – ${fmt(windowEnd)}`;
+}

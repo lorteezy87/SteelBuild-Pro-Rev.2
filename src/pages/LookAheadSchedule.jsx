@@ -18,6 +18,7 @@ import {
   computeLookAheadStats,
   buildLookAheadWindow,
   formatLookAheadWindowDate,
+  lookAheadCommandSubtitle,
 } from "./lookAheadSchedule/lookAheadScheduleHelpers";
 import {
   PHASE_COLORS,
@@ -151,7 +152,7 @@ export default function LookAheadSchedule() {
         title="2-Week Look-Ahead"
         count={items.length}
         unit=" · ACTIVITIES"
-        subtitle={`${fmtWindow(windowStart)} – ${fmtWindow(windowEnd)}`}
+        subtitle={lookAheadCommandSubtitle(windowStart, windowEnd, fmtWindow)}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 6px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 6 }}>
           <button

@@ -35,6 +35,12 @@ import {
   resolveShapeFamily,
   writeRows,
   resolveCostUnit,
+  formatWeightLb,
+  formatWeightTons,
+  formatLbPerFt,
+  formatGrandTotalClipboard,
+  formatResultAux,
+  formatFixed2,
 } from "./steelWeightCalculator/steelWeightCalculatorHelpers";
 import {
   mono,
@@ -170,7 +176,7 @@ export default function SteelWeightCalculator() {
 
   const copyGrandTotal = async () => {
     try {
-      await navigator.clipboard.writeText(`${grandTotal.toFixed(2)} lb`);
+      await navigator.clipboard.writeText(formatGrandTotalClipboard(grandTotal));
       toast.success("Copied");
     } catch {
       toast.error("Copy failed");
@@ -509,19 +515,19 @@ export default function SteelWeightCalculator() {
                   {/* LCD-style headline value — click to copy total lbs. */}
                   <div style={{ marginBottom: 14 }}>
                     <CalcDisplay
-                      value={`${result.totalWeight.toFixed(2)} lb`}
-                      aux={`${result.totalTons.toFixed(3)} T · ${result.qty} pc`}
+                      value={formatWeightLb(result.totalWeight)}
+                      aux={formatResultAux(result)}
                       onCopy={copyGrandTotal}
                     />
                   </div>
 
-                  <ResultRow label="lb/ft (reference)"    value={`${result.lbPerFt.toFixed(3)} lb/ft`} />
+                  <ResultRow label="lb/ft (reference)"    value={formatLbPerFt(result.lbPerFt)} />
                   <ResultRow label="Length"               value={result.lengthDisplay} />
                   <ResultRow label="Quantity"             value={`${result.qty}`} />
                   <div style={{ height: 1, background: "var(--divider)", margin: "12px 0" }} />
-                  <ResultRow label="Weight per piece"     value={`${result.pieceWeight.toFixed(2)} lb`} emphasize />
-                  <ResultRow label="Total weight"         value={`${result.totalWeight.toFixed(2)} lb`} emphasize />
-                  <ResultRow label="Total weight (tons)"  value={`${result.totalTons.toFixed(3)} T`} emphasize highlight />
+                  <ResultRow label="Weight per piece"     value={formatWeightLb(result.pieceWeight)} emphasize />
+                  <ResultRow label="Total weight"         value={formatWeightLb(result.totalWeight)} emphasize />
+                  <ResultRow label="Total weight (tons)"  value={formatWeightTons(result.totalTons)} emphasize highlight />
                   {rateNum > 0 && (
                     <>
                       <div style={{ height: 1, background: "var(--divider)", margin: "12px 0" }} />
@@ -632,8 +638,8 @@ export default function SteelWeightCalculator() {
                       <td style={tdLeft}>{r.shape}</td>
                       <td style={tdRight}>{r.qty}</td>
                       <td style={tdRight}>{r.lengthDisplay}</td>
-                      <td style={tdRight}>{r.pieceWeight.toFixed(2)}</td>
-                      <td style={tdRight}>{r.totalWeight.toFixed(2)}</td>
+                      <td style={tdRight}>{formatFixed2(r.pieceWeight)}</td>
+                      <td style={tdRight}>{formatFixed2(r.totalWeight)}</td>
                       <td style={tdRight}>
                         {Number(r.cost) > 0 ? usd.format(Number(r.cost)) : "—"}
                       </td>
@@ -677,7 +683,7 @@ export default function SteelWeightCalculator() {
                       borderTop: "2px solid var(--border-default)",
                       textAlign: "right",
                     }}>
-                      {grandTotal.toFixed(2)} lb
+                      {formatWeightLb(grandTotal)}
                     </td>
                     <td style={{
                       ...mono, fontSize: 12, fontWeight: 800,
@@ -695,7 +701,7 @@ export default function SteelWeightCalculator() {
                       borderTop: "2px solid var(--border-default)",
                       textAlign: "right",
                     }}>
-                      {(grandTotal / 2000).toFixed(3)} T
+                      {formatWeightTons(grandTotal / 2000)}
                     </td>
                   </tr>
                 </tbody>

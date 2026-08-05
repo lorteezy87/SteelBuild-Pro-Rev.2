@@ -324,3 +324,30 @@ export function resolveShapeFamily<T extends { key: string }>(
   return (families || []).find((f) => f.key === familyKey) || families[0];
 }
 
+
+export function formatWeightLb(n: number): string {
+  return `${Number(n || 0).toFixed(2)} lb`;
+}
+
+export function formatWeightTons(n: number): string {
+  return `${Number(n || 0).toFixed(3)} T`;
+}
+
+export function formatLbPerFt(n: number): string {
+  return `${Number(n || 0).toFixed(3)} lb/ft`;
+}
+
+export function formatGrandTotalClipboard(grandTotal: number): string {
+  return formatWeightLb(grandTotal);
+}
+
+export function formatResultAux(result: {
+  totalTons?: number;
+  qty?: number;
+}): string {
+  return `${formatWeightTons(result.totalTons ?? 0)} · ${result.qty ?? 0} pc`;
+}
+
+export function formatFixed2(n: number): string {
+  return Number(n || 0).toFixed(2);
+}
