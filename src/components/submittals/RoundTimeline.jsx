@@ -2,6 +2,11 @@ import React, { useState } from "react";
 import { formatDate } from "../shared/formatters";
 import { buildApprovalCycles } from "@/lib/submittalCycles";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
+import {
+  ROUND_STATUS_COLORS,
+  DEFAULT_COLOR,
+  daysBetween,
+} from "./roundTimelineHelpers";
 
 /**
  * RoundTimeline — vertical APPROVAL-CYCLE timeline for a submittal.
@@ -21,29 +26,6 @@ import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
  *   submittalId   — parent submittal UUID (informational)
  *   onReturnRound — callback(roundId) when user marks a round returned
  */
-
-// Status → color palette matching STATUS_CFG in Submittals.jsx so the
-// timeline chips feel like siblings of the table badges.
-const ROUND_STATUS_COLORS = {
-  "Draft":               { color: "var(--text-muted)", bg: "color-mix(in srgb, var(--text-muted) 16%, transparent)" },
-  "Submitted":           { color: "var(--status-info)", bg: "var(--info-muted)"   },
-  "Under Review":        { color: "var(--accent)", bg: "var(--accent-muted)"  },
-  "Approved":            { color: "var(--status-success)", bg: "var(--success-muted)"  },
-  "Approved as Noted":   { color: "var(--status-success-bright)", bg: "color-mix(in srgb, var(--status-success-bright) 18%, transparent)"  },
-  "Revise and Resubmit": { color: "var(--status-review)", bg: "var(--status-review-muted)"  },
-  "Rejected":            { color: "var(--status-error)", bg: "var(--danger-muted)"   },
-  "Released for Fabrication": { color: "var(--status-info)", bg: "var(--info-muted)" },
-  "Void":                { color: "var(--text-muted)", bg: "color-mix(in srgb, var(--text-muted) 14%, transparent)" },
-};
-const DEFAULT_COLOR = { color: "var(--text-muted)", bg: "color-mix(in srgb, var(--text-muted) 16%, transparent)" };
-
-function daysBetween(isoA, isoB) {
-  if (!isoA || !isoB) return null;
-  const a = new Date(isoA);
-  const b = new Date(isoB);
-  if (isNaN(a) || isNaN(b)) return null;
-  return Math.round(Math.abs(b - a) / 86_400_000);
-}
 
 export default function RoundTimeline({ rounds = [], submittal = null, submittalId, onReturnRound }) {
   if (rounds.length === 0) {
