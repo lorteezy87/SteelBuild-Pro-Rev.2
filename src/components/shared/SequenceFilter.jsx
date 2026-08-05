@@ -8,23 +8,9 @@
  */
 
 import React, { useMemo } from "react";
-import { buildSequenceFilterTags } from "./sequenceFilterHelpers";
+import { buildSequenceFilterTags, sequenceFilterChipStyle } from "./sequenceFilterHelpers";
 
-const chipStyle = (active) => ({
-  padding: "4px 10px",
-  borderRadius: 14,
-  border: `1px solid ${active ? "var(--accent)" : "var(--divider)"}`,
-  background: active ? "rgba(200,155,32,0.12)" : "transparent",
-  color: active ? "var(--accent)" : "var(--text-secondary)",
-  fontSize: 11,
-  fontFamily: "var(--font-mono)",
-  fontWeight: 800,
-  letterSpacing: "0.06em",
-  cursor: "pointer",
-  transition: "all 0.15s ease",
-  whiteSpace: "nowrap",
-  textTransform: "uppercase",
-});
+const chipStyle = sequenceFilterChipStyle;
 
 export default function SequenceFilter({ items = [], value, onChange, label = "Area / Sequence" }) {
   // Natural (numeric-aware) sort so steel sequences order 1, 2, 10 — not the

@@ -9,20 +9,9 @@ import {
   SAFETY_SEVERITIES,
   SAFETY_STATUS_FILTERS,
 } from "./safetyPageHelpers";
+import { pageFilterChipStyle } from "@/components/shared/pageFilterChipHelpers";
 
-const chipStyle = (active) => ({
-  background: active ? "var(--accent)" : "var(--bg-surface-low)",
-  color: active ? "white" : "var(--text-secondary)",
-  border: "none",
-  borderRadius: "var(--radius-btn)",
-  padding: "5px 12px",
-  fontFamily: "var(--font-body)",
-  fontSize: "8px",
-  fontWeight: 700,
-  cursor: "pointer",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-});
+const chipStyle = pageFilterChipStyle;
 
 export function SafetyKpiStrip({
   stats,

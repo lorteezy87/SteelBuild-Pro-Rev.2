@@ -9,6 +9,7 @@ import {
   PUNCHLIST_CATEGORIES,
   PUNCHLIST_PRIORITIES,
 } from "./punchlistPageHelpers";
+import { pageFilterChipStyle } from "@/components/shared/pageFilterChipHelpers";
 /** Presentational close-out signature modal for Punchlist. */
 export function CloseoutSignatureModal({ count, signature, onSignatureChange, onCancel, onConfirm, isSaving }) {
   return (
@@ -76,19 +77,7 @@ export function CloseoutSignatureModal({ count, signature, onSignatureChange, on
 }
 
 
-const chipStyle = (active) => ({
-  background: active ? "var(--accent)" : "var(--bg-surface-low)",
-  color: active ? "white" : "var(--text-secondary)",
-  border: "none",
-  borderRadius: "var(--radius-btn)",
-  padding: "5px 12px",
-  fontFamily: "var(--font-body)",
-  fontSize: "8px",
-  fontWeight: 700,
-  cursor: "pointer",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-});
+const chipStyle = pageFilterChipStyle;
 
 export function PunchlistCompletionCard({ completionRate }) {
   return (
