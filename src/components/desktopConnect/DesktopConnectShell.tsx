@@ -1,4 +1,13 @@
 import type { ReactNode } from "react";
+import {
+  DESKTOP_CONNECT_PAGE_STYLE,
+  DESKTOP_CONNECT_CARD_STYLE,
+  DESKTOP_CONNECT_BRAND_STYLE,
+  DESKTOP_CONNECT_PRODUCT_STYLE,
+  DESKTOP_CONNECT_TITLE_STYLE,
+  DESKTOP_CONNECT_SUBTITLE_STYLE,
+  DESKTOP_CONNECT_FOOTER_STYLE,
+} from "./desktopConnectHelpers";
 
 interface DesktopConnectShellProps {
   title: string;
@@ -15,86 +24,31 @@ interface DesktopConnectShellProps {
  */
 export function DesktopConnectShell({ title, subtitle, children, footer }: DesktopConnectShellProps) {
   return (
-    <div
-      style={{
-        minHeight: "100dvh",
-        display: "grid",
-        placeItems: "center",
-        padding: 24,
-        background: "var(--bg-base, #0D1117)",
-      }}
-    >
+    <div style={DESKTOP_CONNECT_PAGE_STYLE}>
       <section
-        style={{
-          width: "100%",
-          maxWidth: 460,
-          background: "var(--bg-surface-secondary, #161B22)",
-          border: "1px solid var(--border-default)",
-          borderRadius: 14,
-          padding: "32px 28px",
-          boxShadow: "0 24px 60px rgba(0, 0, 0, 0.45)",
-        }}
+        style={DESKTOP_CONNECT_CARD_STYLE}
         aria-labelledby="desktop-connect-title"
       >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: "var(--accent)",
-            fontWeight: 800,
-          }}
-        >
+        <div style={DESKTOP_CONNECT_BRAND_STYLE}>
           SteelBuild Pro
         </div>
-        <p
-          style={{
-            margin: "10px 0 0",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            color: "var(--text-muted)",
-          }}
-        >
+        <p style={DESKTOP_CONNECT_PRODUCT_STYLE}>
           Desktop Command Center
         </p>
         <h1
           id="desktop-connect-title"
-          style={{
-            fontFamily: "'Space Grotesk', var(--font-display)",
-            fontSize: 24,
-            fontWeight: 600,
-            color: "var(--text-primary)",
-            margin: "10px 0 6px",
-            lineHeight: 1.25,
-          }}
+          style={DESKTOP_CONNECT_TITLE_STYLE}
         >
           {title}
         </h1>
         {subtitle ? (
-          <p
-            style={{
-              color: "var(--text-muted)",
-              fontSize: 13,
-              lineHeight: 1.6,
-              margin: "0 0 22px",
-            }}
-          >
+          <p style={DESKTOP_CONNECT_SUBTITLE_STYLE}>
             {subtitle}
           </p>
         ) : null}
         {children}
         {footer ? (
-          <p
-            style={{
-              margin: "20px 0 0",
-              fontSize: 11,
-              lineHeight: 1.5,
-              color: "var(--text-muted)",
-            }}
-          >
+          <p style={DESKTOP_CONNECT_FOOTER_STYLE}>
             {footer}
           </p>
         ) : null}

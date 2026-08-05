@@ -1,4 +1,4 @@
-const NATURAL_COMPARE_OPTIONS = { numeric: true, sensitivity: "base" };
+export const NATURAL_COMPARE_OPTIONS = { numeric: true, sensitivity: "base" };
 
 function firstPresent(values) {
   for (const value of values) {
