@@ -5,9 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Upload, FileText } from "lucide-react";
-import { parseInput, TYPES } from "./bulkScopeHelpers";
-
-const CATEGORIES = ["Structural", "Misc Metals", "Connections", "Coatings", "Erection", "Engineering", "Other"];
+import { parseInput, TYPES, SCOPE_CATEGORIES as CATEGORIES } from "./bulkScopeHelpers";
 
 /**
  * Bulk add / import for Scope & Exclusions.

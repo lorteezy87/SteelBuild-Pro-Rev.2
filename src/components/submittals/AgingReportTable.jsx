@@ -13,17 +13,12 @@ import React, { useMemo, useState } from "react";
 import { computeAgingReport } from "@/lib/submittalAnalytics";
 import { sortAgingReportRows } from "./agingReportHelpers";
 import { formatShortDate } from "@/utils/dates";
-import { td, stuckColor } from "./agingReportTableHelpers";
-
-const THRESHOLDS = [3, 7, 14, 30];
-const COLUMNS = [
-  { key: "number",     label: "Number",     align: "left"   },
-  { key: "title",      label: "Title",      align: "left"   },
-  { key: "status",     label: "Status",     align: "left"   },
-  { key: "bic",        label: "BIC",        align: "left"   },
-  { key: "daysStuck",  label: "Days Stuck", align: "right"  },
-  { key: "lastActivityIso", label: "Last Activity", align: "right" },
-];
+import {
+  td,
+  stuckColor,
+  AGING_THRESHOLDS as THRESHOLDS,
+  AGING_COLUMNS as COLUMNS,
+} from "./agingReportTableHelpers";
 
 export default function AgingReportTable({ submittals = [], isLoading = false }) {
   const [thresholdDays, setThresholdDays] = useState(7);

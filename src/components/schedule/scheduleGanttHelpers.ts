@@ -440,3 +440,21 @@ export const BAR_RADIUS = 4;
 /** Header row height (px) for ScheduleGantt chrome. */
 export const HEAD_H = 40;
 
+/** Quick-filter chip catalog (ScheduleGanttToolbar). */
+export const GANTT_QUICK_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "lookahead", label: "14-Day" },
+  { key: "critical", label: "Critical" },
+  { key: "delayed", label: "Delayed" },
+  { key: "stalled", label: "Stalled" },
+  { key: "overdue", label: "Overdue" },
+  { key: "tbd", label: "TBD" },
+  { key: "logic", label: "Logic Gaps" },
+  { key: "unassigned", label: "No Owner" },
+  { key: "shifted", label: "Variance" },
+  { key: "deps", label: "Linked" },
+  { key: "unlinked", label: "Unlinked" },
+  { key: "milestones", label: "Milestones" },
+  { key: "weather", label: "Weather" },
+] as const;
+

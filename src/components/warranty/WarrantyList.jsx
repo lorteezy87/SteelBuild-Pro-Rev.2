@@ -1,16 +1,6 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
-
-const TYPE_COLORS = {
-  Material: "var(--status-info)",
-  "Structural Steel": "var(--accent)",
-  Connections: "var(--status-warning)",
-  Coating: "var(--status-success)",
-  Welds: "var(--text-muted)",
-  Installation: "var(--status-info)",
-  Equipment: "var(--accent)",
-  Other: "var(--text-muted)",
-};
+import { WARRANTY_TYPE_COLORS as TYPE_COLORS } from "./warrantyListHelpers";
 
 export default function WarrantyList({ warranties }) {
   const [expanded, setExpanded] = useState(null);

@@ -12,11 +12,7 @@ import { formatDate } from "../shared/formatters";
  *   forecast — SubmittalForecast object
  */
 
-const RISK_CFG = {
-  low:    { color: "var(--status-success)", bg: "var(--success-muted)", border: "var(--success-border)" },
-  medium: { color: "var(--status-warning)", bg: "var(--warning-muted)", border: "var(--warning-border)" },
-  high:   { color: "var(--status-error)", bg: "var(--danger-muted)", border: "var(--danger-border)" },
-};
+import { FORECAST_RISK_CFG as RISK_CFG } from "./submittalForecastCardHelpers";
 
 function Metric({ label, value, accent }) {
   return (

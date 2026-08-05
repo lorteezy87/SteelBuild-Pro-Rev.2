@@ -8,25 +8,9 @@
 // the container (they'd need ~40 props here, which would couple more than it
 // decouples).
 import { GANTT_BASELINE_VAR, GANTT_GRID_VAR, GANTT_PANEL_STRONG_VAR, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
+import { GANTT_QUICK_FILTERS as QUICK_FILTERS } from "./scheduleGanttHelpers";
 
-// Quick-filter definitions live with the chips that render them (the only
-// consumer). Moved out of ScheduleGantt verbatim.
-export const QUICK_FILTERS = [
-  { key: "all", label: "All" },
-  { key: "lookahead", label: "14-Day" },
-  { key: "critical", label: "Critical" },
-  { key: "delayed", label: "Delayed" },
-  { key: "stalled", label: "Stalled" },
-  { key: "overdue", label: "Overdue" },
-  { key: "tbd", label: "TBD" },
-  { key: "logic", label: "Logic Gaps" },
-  { key: "unassigned", label: "No Owner" },
-  { key: "shifted", label: "Variance" },
-  { key: "deps", label: "Linked" },
-  { key: "unlinked", label: "Unlinked" },
-  { key: "milestones", label: "Milestones" },
-  { key: "weather", label: "Weather" },
-];
+export { QUICK_FILTERS };
 
 /** Top-bar KPI counts (TOTAL / COMPLETE / IN PROGRESS / OVERDUE / CRITICAL, + VARIANCE/TBD when present). */
 export function GanttStatsBar({ totalTasks, completeTasks, inProgressTasks, overdueTasks, criticalTasks, shiftedTasks, unscheduledTasks }) {

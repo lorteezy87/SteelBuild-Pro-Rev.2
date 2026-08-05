@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from "react";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, FormField } from "@/components/shared/PhoenixModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const TYPES = ["Fabricator", "Supplier", "Subcontractor", "Material Supplier", "Equipment Rental", "Service Provider", "Testing Lab", "Other"];
-
-const empty = {
-  company_name: "", vendor_type: "Supplier", contact_person: "", title: "",
-  phone: "", email: "", address: "", city: "", state: "", zip: "",
-  website: "", certifications: "", certifications_expiry: "", insurance_provider: "",
-  insurance_expiry: "", years_in_business: "", status: "Active",
-  pricing_tier: "Standard", payment_terms: "Net 30", is_preferred: false,
-};
+import {
+  VENDOR_TYPES as TYPES,
+  EMPTY_VENDOR_FORM as empty,
+} from "./vendorFormModalHelpers";
 
 export default function VendorFormModal({ open, onClose, onSave, vendor }) {
   const [form, setForm] = useState(empty);

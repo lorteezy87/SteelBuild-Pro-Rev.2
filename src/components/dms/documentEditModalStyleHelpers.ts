@@ -24,3 +24,46 @@ export const LABEL_STYLE: Record<string, string | number> = {
   marginBottom: 4,
   display: "block",
 };
+
+export const DOCUMENT_STATUS_OPTIONS = [
+  "Draft",
+  "Under Review",
+  "Approved",
+  "Approved with Comments",
+  "Revise & Resubmit",
+  "Rejected",
+  "Issued",
+  "Superseded",
+  "Archived",
+  "Void",
+] as const;
+
+export const DOCUMENT_CATEGORY_OPTIONS = [
+  "Blueprint",
+  "Shop Drawing",
+  "IFC Model",
+  "Specification",
+  "Submittal",
+  "Transmittal",
+  "RFI Response",
+  "Change Order",
+  "Contract",
+  "Photo",
+  "Report",
+  "Correspondence",
+  "Permit",
+  "Inspection Report",
+  "Other",
+] as const;
+
+export const DOCUMENT_DISCIPLINE_OPTIONS = [
+  "Structural",
+  "Architectural",
+  "MEP",
+  "Civil",
+  "Misc Metals",
+  "Geotechnical",
+  "General",
+  "Other",
+] as const;
+

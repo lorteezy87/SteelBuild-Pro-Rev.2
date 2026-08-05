@@ -16,14 +16,7 @@ import {
   computeCycleTime,
   filterByDaysWindow,
 } from "@/lib/submittalAnalytics";
-
-const WINDOWS = [
-  { key: 30,  label: "30d"  },
-  { key: 60,  label: "60d"  },
-  { key: 90,  label: "90d"  },
-  { key: 365, label: "1y"   },
-  { key: 0,   label: "All"  },
-];
+import { CYCLE_TIME_WINDOWS as WINDOWS } from "./cycleTimeCardHelpers";
 
 export default function CycleTimeCard({ submittals = [], roundsBySubmittal = null, isLoading = false }) {
   const [windowDays, setWindowDays] = useState(90);

@@ -1,19 +1,9 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
-
-const RESULT_COLORS = {
-  Pass: "var(--status-success)",
-  Fail: "var(--status-error)",
-  "Conditional Pass": "var(--status-warning)",
-  Inconclusive: "var(--text-muted)",
-};
-
-const STATUS_COLORS = {
-  Pending: "var(--status-warning)",
-  Reviewed: "var(--status-info)",
-  Approved: "var(--status-success)",
-  Rejected: "var(--status-error)",
-};
+import {
+  RESULT_COLORS,
+  QC_STATUS_COLORS as STATUS_COLORS,
+} from "./qcListHelpers";
 
 export default function QCList({ records = [] }) {
   const [expanded, setExpanded] = useState(null);

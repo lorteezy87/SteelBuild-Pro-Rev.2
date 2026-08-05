@@ -1,27 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { parseBulkDurationValue, isBulkDurationValid, validateBulkDurationInput } from "./bulkDurationEditHelpers";
-
-const monoLabel = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: "0.12em",
-  textTransform: "uppercase",
-  color: "var(--text-muted)",
-};
-
-const FIELD_STYLE = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 8,
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 14,
-  padding: "8px 10px",
-  outline: "none",
-  textAlign: "center",
-};
+import {
+  parseBulkDurationValue,
+  isBulkDurationValid,
+  validateBulkDurationInput,
+  BULK_DURATION_MONO_LABEL as monoLabel,
+  BULK_DURATION_FIELD_STYLE as FIELD_STYLE,
+} from "./bulkDurationEditHelpers";
 
 export default function BulkDurationEditModal({ open, count = 0, isSaving = false, onClose, onSubmit }) {
   const [mode, setMode] = useState("set");

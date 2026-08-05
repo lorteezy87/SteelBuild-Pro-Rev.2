@@ -3,11 +3,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-import { INPUT_STYLE, LABEL_STYLE } from "./documentEditModalStyleHelpers";
-
-const STATUS_OPTIONS = ["Draft", "Under Review", "Approved", "Approved with Comments", "Revise & Resubmit", "Rejected", "Issued", "Superseded", "Archived", "Void"];
-const CATEGORY_OPTIONS = ["Blueprint", "Shop Drawing", "IFC Model", "Specification", "Submittal", "Transmittal", "RFI Response", "Change Order", "Contract", "Photo", "Report", "Correspondence", "Permit", "Inspection Report", "Other"];
-const DISCIPLINE_OPTIONS = ["Structural", "Architectural", "MEP", "Civil", "Misc Metals", "Geotechnical", "General", "Other"];
+import {
+  INPUT_STYLE,
+  LABEL_STYLE,
+  DOCUMENT_STATUS_OPTIONS as STATUS_OPTIONS,
+  DOCUMENT_CATEGORY_OPTIONS as CATEGORY_OPTIONS,
+  DOCUMENT_DISCIPLINE_OPTIONS as DISCIPLINE_OPTIONS,
+} from "./documentEditModalStyleHelpers";
 
 export default function DocumentEditModal({ projectId, doc, onClose }) {
   const qc = useQueryClient();

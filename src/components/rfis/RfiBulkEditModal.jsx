@@ -14,9 +14,11 @@ import React, { useState } from "react";
  * selected RFI. Only fields the user explicitly edits are sent on submit.
  */
 
-const PRIORITIES = ["Critical", "High", "Medium", "Low"];
-const STATUSES = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
-const BIC_CHOICES = ["Contractor", "EOR", "Architect", "GC", "Owner"];
+import {
+  RFI_BULK_PRIORITIES as PRIORITIES,
+  RFI_BULK_STATUSES as STATUSES,
+  RFI_BULK_BIC_CHOICES as BIC_CHOICES,
+} from "./rfiBulkEditModalHelpers";
 
 export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {
   // "unchanged" sentinel lets us send a subset of fields on submit.

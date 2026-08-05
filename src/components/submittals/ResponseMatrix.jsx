@@ -13,21 +13,11 @@ import React from "react";
  *   rows    — MatrixRow[]    { key, sheet_number, title, cells: { [roundId]: { response_status, reviewer_comment } } }
  */
 
-const RESPONSE_COLORS = {
-  "No Exception":        { color: "var(--status-success)", bg: "var(--success-muted)" },
-  "Approved as Noted":   { color: "var(--status-success-bright)", bg: "color-mix(in srgb, var(--status-success-bright) 15%, transparent)" },
-  "Revise and Resubmit": { color: "var(--status-review)", bg: "var(--status-review-muted)" },
-  "Rejected":            { color: "var(--status-error)", bg: "var(--danger-muted)" },
-  "See Comments":        { color: "var(--status-info)", bg: "var(--info-muted)" },
-};
-const RESPONSE_ABBR = {
-  "No Exception": "NE",
-  "Approved as Noted": "AAN",
-  "Revise and Resubmit": "R&R",
-  "Rejected": "REJ",
-  "See Comments": "SC",
-};
-const DEFAULT_COLOR = { color: "var(--text-muted)", bg: "var(--bg-surface-low)" };
+import {
+  RESPONSE_COLORS,
+  RESPONSE_ABBR,
+  DEFAULT_RESPONSE_COLOR as DEFAULT_COLOR,
+} from "./responseMatrixHelpers";
 
 export default function ResponseMatrix({ columns = [], rows = [] }) {
   if (!columns.length || !rows.length) {

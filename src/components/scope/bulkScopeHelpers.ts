@@ -85,3 +85,14 @@ export function splitCsv(line) {
   out.push(cur);
   return out;
 }
+
+export const SCOPE_CATEGORIES = [
+  "Structural",
+  "Misc Metals",
+  "Connections",
+  "Coatings",
+  "Erection",
+  "Engineering",
+  "Other",
+] as const;
+

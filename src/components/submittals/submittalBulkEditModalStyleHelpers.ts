@@ -24,3 +24,37 @@ export const controlSurfaceStyle: Record<string, string | number> = {
   boxShadow: "0 1px 0 var(--hover-bg) inset",
   colorScheme: "dark",
 };
+
+export const SUBMITTAL_BULK_STATUSES = [
+  "Draft",
+  "Submitted",
+  "Under Review",
+  "Approved",
+  "Approved as Noted",
+  "Revise and Resubmit",
+  "Rejected",
+  "Released for Fabrication",
+  "Void",
+] as const;
+
+export const SUBMITTAL_BULK_BIC_CHOICES = [
+  "Detailer",
+  "S&H",
+  "Contractor",
+  "Subcontractor",
+  "EOR",
+  "Architect",
+  "AOR",
+  "GC",
+  "Owner",
+] as const;
+
+export const SUBMITTAL_BULK_TYPES = [
+  "Shop Drawing",
+  "Product Data",
+  "Sample",
+  "Mock-up",
+  "Calculation",
+  "Other",
+] as const;
+

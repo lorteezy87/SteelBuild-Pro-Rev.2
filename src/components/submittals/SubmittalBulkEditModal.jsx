@@ -1,31 +1,11 @@
 import React, { useState } from "react";
-import { modalSurfaceStyle, controlSurfaceStyle } from "./submittalBulkEditModalStyleHelpers";
-
-const STATUSES = [
-  "Draft",
-  "Submitted",
-  "Under Review",
-  "Approved",
-  "Approved as Noted",
-  "Revise and Resubmit",
-  "Rejected",
-  "Released for Fabrication",
-  "Void",
-];
-
-const BIC_CHOICES = [
-  "Detailer",
-  "S&H",
-  "Contractor",
-  "Subcontractor",
-  "EOR",
-  "Architect",
-  "AOR",
-  "GC",
-  "Owner",
-];
-
-const TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
+import {
+  modalSurfaceStyle,
+  controlSurfaceStyle,
+  SUBMITTAL_BULK_STATUSES as STATUSES,
+  SUBMITTAL_BULK_BIC_CHOICES as BIC_CHOICES,
+  SUBMITTAL_BULK_TYPES as TYPES,
+} from "./submittalBulkEditModalStyleHelpers";
 
 export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit, busy = false }) {
   const [status, setStatus] = useState("");
