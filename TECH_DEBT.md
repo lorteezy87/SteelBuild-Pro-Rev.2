@@ -65,6 +65,13 @@ checklist and are not counted as resolved by documentation alone.
 
 ## Active items
 
+> **2026-08-05:** Enterprise Tier 1 **code** gaps closed via PR #236 — see
+> [`docs/runbooks/tier1-enterprise-status.md`](docs/runbooks/tier1-enterprise-status.md).
+> Remaining blockers are owner-only (PITR, secrets, Stripe Tax dashboard, counsel,
+> branch protection). PR hygiene playbook:
+> [`.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md`](.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md).
+
+
 _Updated 2026-07-14. RLS is enabled everywhere and the **org boundary is wired
 into the access layer** (no cross-tenant reads), billing + plan enforcement are
 live, and data export works. A 2026-07-01 enterprise-readiness audit
