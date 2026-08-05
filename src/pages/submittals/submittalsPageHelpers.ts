@@ -3,6 +3,7 @@
  */
 import type { DrawingSet, DrawingSetsById } from "./types";
 import { findById } from "@/pages/shared/findById";
+import { sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 
 export function buildDrawingSetsById(
   drawingSets: Array<{ id?: string | null } & Partial<DrawingSet>>,
@@ -12,6 +13,16 @@ export function buildDrawingSetsById(
     if (set?.id) map.set(set.id, set as DrawingSet);
   }
   return map;
+}
+
+/** Sets not already linked and not deleted, ordered for the picker. */
+export function filterAvailableDrawingSets<
+  T extends { id?: string | null; is_deleted?: boolean | null },
+>(allSets: T[] | null | undefined, linkedIds: string[] | null | undefined): T[] {
+  const value = linkedIds || [];
+  return sortDrawingSetPackages(
+    (allSets || []).filter((set) => !value.includes(set.id as string) && !set.is_deleted),
+  );
 }
 
 export type RoundLike = {

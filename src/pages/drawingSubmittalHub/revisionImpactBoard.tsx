@@ -6,6 +6,10 @@ import { GitCompareArrows, Search } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { GridCell, GridHeaderCell, Td, Th } from "./primitives";
 import { accent, border, error, mono, surface1, textMuted, textPrimary, warning } from "./format";
+import {
+  filterRevisionImpactRows,
+  shouldVirtualizeRevisionImpact,
+} from "./revisionImpact.derive";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -145,18 +149,14 @@ function RevisionVirtualList({ rows, onCompareRevision }: { rows: any[]; onCompa
  */
 export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }: { rows?: any[]; onCompareRevision?: (drawingId: string) => void; isLoading?: boolean }) {
   const [search, setSearch] = useState("");
-  const filtered = useMemo(() => {
-    if (!search) return rows;
-    const q = search.toLowerCase();
-    return rows.filter((r) =>
-      (r.sheetNumber || "").toLowerCase().includes(q) ||
-      (r.setName || "").toLowerCase().includes(q) ||
-      (r.wpNames || []).join(" ").toLowerCase().includes(q));
-  }, [rows, search]);
+  const filtered = useMemo(
+    () => filterRevisionImpactRows(rows, search),
+    [rows, search],
+  );
 
   // Above this many rows, render the virtualized grid instead of a full <table>
   // so large projects stay fast. Small lists keep the exact table below.
-  const shouldVirtualize = filtered.length > 100;
+  const shouldVirtualize = shouldVirtualizeRevisionImpact(filtered.length);
 
   if (isLoading) return <LoadingSkeleton />;
 

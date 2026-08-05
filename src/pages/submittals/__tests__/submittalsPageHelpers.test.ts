@@ -3,6 +3,7 @@ import {
   buildDrawingSetsById,
   buildRoundsBySubmittal,
   filterRelatedSetRfis,
+  filterAvailableDrawingSets,
 } from "../submittalsPageHelpers";
 
 describe("submittalsPageHelpers", () => {
@@ -130,5 +131,17 @@ describe("nextSubmittalFormField", () => {
     const next = nextSubmittalFormField(prev, "title", "B");
     expect(next).toEqual({ title: "B", status: "Draft" });
     expect(prev.title).toBe("A");
+  });
+});
+
+describe("filterAvailableDrawingSets", () => {
+  it("excludes linked and deleted, ordered by set package sort", () => {
+    const sets = [
+      { id: "a", set_name: "Alpha", set_number: 2, is_deleted: false },
+      { id: "b", set_name: "Beta", set_number: 1, is_deleted: false },
+      { id: "c", set_name: "Gone", set_number: 3, is_deleted: true },
+    ] as any[];
+    expect(filterAvailableDrawingSets(sets, ["a"]).map((s) => s.id)).toEqual(["b"]);
+    expect(filterAvailableDrawingSets(sets, []).map((s) => s.id)).toEqual(["b", "a"]);
   });
 });

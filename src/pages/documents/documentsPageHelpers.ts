@@ -83,3 +83,59 @@ export function buildFolderBreadcrumbPath<T extends FolderLike>(
   return path;
 }
 
+export type BulkFolderLine = {
+  name: string;
+  depth: number;
+  lineIndex: number;
+};
+
+/**
+ * Parse the bulk-create textarea into folders with parent relationships.
+ * Tabs count as one level; otherwise 2 spaces = one level.
+ */
+export function parseBulkFolderInput(text: string | null | undefined): BulkFolderLine[] {
+  if (!text) return [];
+  const lines = String(text).split(/\r?\n/);
+  const out: BulkFolderLine[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+
+    const match = line.match(/^([\t ]*)/);
+    const lead = match ? match[1] : "";
+    let depth = 0;
+    if (lead.includes("\t")) {
+      depth = (lead.match(/\t/g) || []).length;
+    } else {
+      depth = Math.floor(lead.length / 2);
+    }
+    out.push({
+      name: line.trim(),
+      depth,
+      lineIndex: i + 1,
+    });
+  }
+  return out;
+}
+
+/**
+ * Indent sequence warnings for bulk folder create.
+ * First line can't be deeper than 0; no depth jump > 1.
+ */
+export function validateBulkFolderIndent(
+  parsed: BulkFolderLine[] | null | undefined,
+): string[] {
+  const warnings: string[] = [];
+  let prevDepth = -1;
+  for (const item of parsed || []) {
+    if (prevDepth === -1 && item.depth > 0) {
+      warnings.push(`Line ${item.lineIndex}: first folder can't be indented (treated as root).`);
+    }
+    if (prevDepth >= 0 && item.depth > prevDepth + 1) {
+      warnings.push(`Line ${item.lineIndex}: indented too deep (jumped ${item.depth - prevDepth} levels).`);
+    }
+    prevDepth = item.depth;
+  }
+  return warnings;
+}
+

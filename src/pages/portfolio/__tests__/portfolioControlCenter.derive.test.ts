@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildPortfolioSummary,
   healthTone,
+  filterPortfolioRows,
   type ProjectRecord,
   type PortfolioRelated,
 } from "../portfolioControlCenter.derive";
@@ -297,5 +298,31 @@ describe("buildPortfolioSummary – late deliveries", () => {
     };
     const { allRows } = buildPortfolioSummary(projects, related);
     expect(allRows[0].lateDeliveries).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// filterPortfolioRows
+// ---------------------------------------------------------------------------
+
+describe("filterPortfolioRows", () => {
+  const rows = [
+    { id: "1", name: "Alpha Tower", project_number: "P-100", health: "On Track" },
+    { id: "2", name: "Beta Bridge", project_number: "P-200", health: "At Risk" },
+    { id: "3", name: "Gamma Yard", project_number: "P-300", health: "Watch" },
+  ];
+
+  it("filters by health chip", () => {
+    expect(filterPortfolioRows(rows, { healthFilter: "At Risk" }).map((r) => r.id)).toEqual(["2"]);
+  });
+
+  it("filters by name/number search", () => {
+    expect(filterPortfolioRows(rows, { search: "bridge" }).map((r) => r.id)).toEqual(["2"]);
+    expect(filterPortfolioRows(rows, { search: "p-100" }).map((r) => r.id)).toEqual(["1"]);
+  });
+
+  it("combines health + search and All/empty", () => {
+    expect(filterPortfolioRows(rows, { search: "", healthFilter: "All" })).toHaveLength(3);
+    expect(filterPortfolioRows(rows, { search: "p-", healthFilter: "Watch" }).map((r) => r.id)).toEqual(["3"]);
   });
 });

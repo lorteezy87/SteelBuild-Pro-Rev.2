@@ -26,6 +26,13 @@
 
 import React, { useState } from "react";
 import { X, FolderPlus } from "lucide-react";
+import {
+  parseBulkFolderInput,
+  validateBulkFolderIndent,
+} from "./documentsPageHelpers";
+
+// Re-export for any callers that imported from this modal file.
+export { parseBulkFolderInput } from "./documentsPageHelpers";
 
 const overlay = {
   position: "fixed", inset: 0,
@@ -77,40 +84,6 @@ const btn = (variant = "secondary", disabled = false) => ({
   display: "inline-flex", alignItems: "center", gap: 6,
 });
 
-/**
- * Parse the textarea into a list of folders to create with their
- * parent relationships. Returns an array of:
- *   { name, depth, lineIndex }
- * The caller turns `depth` into the actual parent_folder_id by
- * walking the list and tracking a stack of recently-created ids.
- */
-export function parseBulkFolderInput(text) {
-  if (!text) return [];
-  const lines = String(text).split(/\r?\n/);
-  const out = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) continue;
-
-    // Count leading whitespace. Tabs count as one level; otherwise 2 spaces
-    // = one level. Mixed indents are tolerated by floor-rounding.
-    const match = line.match(/^([\t ]*)/);
-    const lead = match ? match[1] : "";
-    let depth = 0;
-    if (lead.includes("\t")) {
-      depth = (lead.match(/\t/g) || []).length;
-    } else {
-      depth = Math.floor(lead.length / 2);
-    }
-    out.push({
-      name: line.trim(),
-      depth,
-      lineIndex: i + 1,
-    });
-  }
-  return out;
-}
-
 export default function BulkCreateFoldersModal({
   open,
   parentLabel = "(Root)",
@@ -127,17 +100,7 @@ export default function BulkCreateFoldersModal({
   // Validate the indent sequence — first line can't be deeper than 0,
   // and each subsequent line can't jump more than one level deeper than
   // the previous one. We surface these as warnings under the textarea.
-  const warnings = [];
-  let prevDepth = -1;
-  for (const item of parsed) {
-    if (prevDepth === -1 && item.depth > 0) {
-      warnings.push(`Line ${item.lineIndex}: first folder can't be indented (treated as root).`);
-    }
-    if (prevDepth >= 0 && item.depth > prevDepth + 1) {
-      warnings.push(`Line ${item.lineIndex}: indented too deep (jumped ${item.depth - prevDepth} levels).`);
-    }
-    prevDepth = item.depth;
-  }
+  const warnings = validateBulkFolderIndent(parsed);
 
   const handleSubmit = async () => {
     if (!parsed.length || submitting) return;

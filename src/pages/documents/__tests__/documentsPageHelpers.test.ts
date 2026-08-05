@@ -5,7 +5,8 @@ import {nextActiveFilters,
   pruneSelectionToAllowed,
   toggleSelectionId,
   selectionFromDocs,
-  removeIdFromSelection, selectDocsByIds, countDocsForStatusTab} from "../documentsPageHelpers";
+  removeIdFromSelection, selectDocsByIds, countDocsForStatusTab,
+  parseBulkFolderInput, validateBulkFolderIndent} from "../documentsPageHelpers";
 
 describe("documentsPageHelpers", () => {
   it("filter mutators", () => {
@@ -40,5 +41,33 @@ describe("selectDocsByIds / countDocsForStatusTab", () => {
   it("counts status tabs", () => {
     expect(countDocsForStatusTab(docs, "all")).toBe(3);
     expect(countDocsForStatusTab(docs, "Approved")).toBe(2);
+  });
+});
+
+describe("parseBulkFolderInput / validateBulkFolderIndent", () => {
+  it("parses names with space and tab depths", () => {
+    const text = "Root\n  Child\n\tGrand\n";
+    const parsed = parseBulkFolderInput(text);
+    expect(parsed).toEqual([
+      { name: "Root", depth: 0, lineIndex: 1 },
+      { name: "Child", depth: 1, lineIndex: 2 },
+      { name: "Grand", depth: 1, lineIndex: 3 },
+    ]);
+  });
+
+  it("returns empty for blank input", () => {
+    expect(parseBulkFolderInput("")).toEqual([]);
+    expect(parseBulkFolderInput(null)).toEqual([]);
+  });
+
+  it("warns on first-line indent and depth jumps", () => {
+    const parsed = parseBulkFolderInput("  TooDeep\nRoot\n    Jump");
+    const warnings = validateBulkFolderIndent(parsed);
+    expect(warnings.some((w) => w.includes("first folder"))).toBe(true);
+    expect(warnings.some((w) => w.includes("indented too deep"))).toBe(true);
+  });
+
+  it("accepts sequential indent", () => {
+    expect(validateBulkFolderIndent(parseBulkFolderInput("A\n  B\n    C"))).toEqual([]);
   });
 });

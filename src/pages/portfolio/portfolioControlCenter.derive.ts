@@ -323,3 +323,21 @@ export function healthTone(health: EnrichedProject["health"]): "danger" | "warn"
   if (health === "Watch") return "warn";
   return "good";
 }
+
+/** Client-side DataTable filter: health chip + name/number search. */
+export function filterPortfolioRows<
+  T extends { health?: string | null; name?: string | null; project_number?: string | null },
+>(
+  allRows: T[] | null | undefined,
+  opts: { search?: string; healthFilter?: string },
+): T[] {
+  const q = (opts.search || "").trim().toLowerCase();
+  const healthFilter = opts.healthFilter || "All";
+  return (allRows || []).filter((p) => {
+    const matchesHealth = healthFilter === "All" || p.health === healthFilter;
+    const matchesSearch =
+      !q ||
+      `${p.name || ""} ${p.project_number || ""}`.toLowerCase().includes(q);
+    return matchesHealth && matchesSearch;
+  });
+}

@@ -131,3 +131,27 @@ export function findMessageById<T extends { id?: string | null }>(
 ): T | null {
   return findById(messages, selectedId);
 }
+
+/**
+ * Link-to-existing modal search: match subject/title/description/question,
+ * cap at `limit` (default 20). Empty query → first `limit` records.
+ */
+export function filterLinkSearchRecords<
+  T extends {
+    subject?: string | null;
+    title?: string | null;
+    description?: string | null;
+    question?: string | null;
+  },
+>(records: T[] | null | undefined, searchQuery: string, limit = 20): T[] {
+  const list = records || [];
+  if (!searchQuery.trim()) return list.slice(0, limit);
+  const q = searchQuery.toLowerCase();
+  return list
+    .filter(
+      (r) =>
+        (r.subject || r.title || "").toLowerCase().includes(q)
+        || (r.description || r.question || "").toLowerCase().includes(q),
+    )
+    .slice(0, limit);
+}

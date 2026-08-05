@@ -7,17 +7,11 @@ import { Lock, Search } from "lucide-react";
 import { SectionCard, StatusPill } from "@/components/desktop/module";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
-import { effectiveDetailingState } from "@/lib/detailingPackageState";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { usePermissions } from "@/services/permissions";
 import {
   accent,
   border,
-  currentRevisionForPackage,
-  dueInfoFor,
-  getSubmittalDueDate,
-  isClosedPackage,
   mono,
   success,
   surface1,
@@ -36,6 +30,11 @@ import {
   Th,
 } from "./primitives";
 import { HealthBreakdownDialog } from "./fleetHealthStrip";
+import {
+  buildDrawingRegisterRows,
+  filterDrawingRegisterRows,
+  sortDrawingRegisterRows,
+} from "./drawingRegister.derive";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -258,66 +257,17 @@ export function DrawingRegisterTable({
   };
 
   const rows = useMemo(() => {
-    return (setPackages || [])
-      .map((pkg: any) => {
-        const sheets: any[] = pkg.sheets || [];
-        const submittals: any[] = pkg.submittals || [];
-        const latestSubmittal = submittals.slice().sort((a, b) => (b.round_number || 1) - (a.round_number || 1))[0] || null;
-        const sheetCount = sheets.length || (pkg.parent?.sheet_count ?? 0);
-        // Per-sheet "released" count is DISPLAY ONLY (the n/total badge). It still
-        // reads the legacy columns to show progress, but it MUST NOT decide the
-        // package's released/done state — that is submittal-governed below.
-        const releasedCount = sheets.filter((d) => d.stage === "Released" || d.set_approval_status === "approved").length;
-        // §20-21: the package's released/done state is the submittal authority, via
-        // the SAME predicate as the hub's "Sets Released" KPI (isClosedPackage), so
-        // the Released column and the KPI never disagree. A stale legacy
-        // set_approval_status="approved" on a sheet can no longer force "Released"
-        // while a governing submittal is still mid-flow.
-        const done = isClosedPackage(pkg);
-        // Operational (coalesced) state drives the Status chip so it agrees with the
-        // Released column — a mid-flow submittal can't render alongside a green
-        // "Released", and a released package reads "Released" in both columns.
-        const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);
-        const due = dueInfoFor(getSubmittalDueDate(latestSubmittal), { closed: done, useWorkdays: workdayDues });
-        const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
-        // §20-21: the displayed Rev is a per-set rollup of the AUTHORITATIVE
-        // current revision (drawing_revisions.is_current via currentRevByDrawingId)
-        // — the code of the highest-version sheet — NOT the drift-prone, free-text
-        // drawings.revision_number. currentRevisionForPackage already falls back
-        // to the legacy number, then "—", when no sheet has a current revision.
-        const maxRev = currentRevisionForPackage(sheets, currentRevByDrawingId || new Map());
-        const stageCounts: Record<string, number> = {};
-        for (const d of sheets) if (d.stage) stageCounts[d.stage] = (stageCounts[d.stage] || 0) + 1;
-        const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-        return {
-          pkg, due, sheetCount, releasedCount, discipline, maxRev, dominantStage,
-          // `status` (raw latest-submittal status) is retained for the search
-          // filter below ONLY — it does NOT drive the Status cell, which renders
-          // from `effectiveState` (the coalesced operational state).
-          status: latestSubmittal?.status || null, effectiveState, done, late: !!due.overdue && !done,
-          health: healthByKey?.get(pkg.key) || null,
-          locked: !!pkg.parent?.is_locked,
-          lockedReason: pkg.parent?.locked_reason || null,
-          revSummary: pkg.setId ? (summariesBySet?.get(String(pkg.setId)) || null) : null,
-          setNo: pkg.parent ? formatDrawingSetNumber(pkg.parent) : "TBD",
-        };
-      })
-      .filter((r) => {
-        if (!search) return true;
-        const q = search.toLowerCase();
-        return (r.pkg.name || "").toLowerCase().includes(q)
-          || String(r.setNo).toLowerCase().includes(q)
-          || (r.discipline || "").toLowerCase().includes(q)
-          || (r.status || "").toLowerCase().includes(q);
-      })
-      .sort((a, b) => {
-        if (sortByHealth) {
-          const sa = a.health?.score ?? 101;
-          const sb = b.health?.score ?? 101;
-          return sortByHealth === "asc" ? sa - sb : sb - sa;
-        }
-        return compareDrawingSetPackages(a.pkg.parent || a.pkg, b.pkg.parent || b.pkg);
-      });
+    const built = buildDrawingRegisterRows({
+      setPackages: setPackages || [],
+      healthByKey,
+      currentRevByDrawingId,
+      summariesBySet,
+      workdayDues,
+    });
+    return sortDrawingRegisterRows(
+      filterDrawingRegisterRows(built, search),
+      sortByHealth,
+    );
   }, [setPackages, search, healthByKey, sortByHealth, summariesBySet, currentRevByDrawingId, workdayDues]);
 
   // Above this many rows, render the virtualized grid instead of a full <table>

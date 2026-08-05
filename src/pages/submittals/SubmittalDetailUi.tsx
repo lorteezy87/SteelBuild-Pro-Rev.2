@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
  */
 import type { CSSProperties, ReactNode } from "react";
 import { formatDate } from "@/components/shared/formatters";
-import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
+import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import {
   DRAWING_TYPES,
   DRAWING_TYPE_ABBR,
@@ -16,6 +16,10 @@ import {
   type DrawingType,
   type SubmittalComponent,
 } from "@/lib/submittalComponents";
+import {
+  buildDrawingSetsById,
+  filterAvailableDrawingSets,
+} from "./submittalsPageHelpers";
 
 export function DetailSection({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -293,15 +297,9 @@ interface LinkedDrawingSetsProps {
 
 export function LinkedDrawingSets({ value = [], allSets = [], onChange }: LinkedDrawingSetsProps) {
   const [picking, setPicking] = useState(false);
-  const setsById = useMemo(() => {
-    const map = new Map<string, DrawingSet>();
-    allSets.forEach((set) => {
-      if (set.id) map.set(set.id, set);
-    });
-    return map;
-  }, [allSets]);
+  const setsById = useMemo(() => buildDrawingSetsById(allSets), [allSets]);
   const available = useMemo(
-    () => sortDrawingSetPackages(allSets.filter((set) => !value.includes(set.id as string) && !set.is_deleted)),
+    () => filterAvailableDrawingSets(allSets, value),
     [allSets, value],
   );
 

@@ -19,6 +19,7 @@ import {
   secondaryBtnStyle,
 } from "./constants";
 import type { EmailAttachment, EmailMessage, OutboundAttachment, ReplyMode } from "./types";
+import { filterLinkSearchRecords } from "./emailInboxHelpers";
 
 // design-system Modal is still .jsx — type it permissively at the boundary
 // until the design system is converted. Removable once it is typed.
@@ -323,14 +324,10 @@ export function LinkToExistingModal({ message, projectId, onClose, onSuccess }: 
 
   const records: any[] = searchType === "rfi" ? rfis : searchType === "action_item" ? actionItems : submittals;
 
-  const filteredRecords = useMemo(() => {
-    if (!searchQuery.trim()) return records.slice(0, 20);
-    const q = searchQuery.toLowerCase();
-    return records.filter((r) =>
-      (r.subject || r.title || "").toLowerCase().includes(q)
-      || (r.description || r.question || "").toLowerCase().includes(q)
-    ).slice(0, 20);
-  }, [records, searchQuery]);
+  const filteredRecords = useMemo(
+    () => filterLinkSearchRecords(records, searchQuery),
+    [records, searchQuery],
+  );
 
   const handleLink = async (record: any) => {
     setSaving(true);

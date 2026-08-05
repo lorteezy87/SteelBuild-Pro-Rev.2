@@ -27,11 +27,13 @@ import { photoFor } from "@/config/launcherConfig";
 import {
   buildPortfolioSummary,
   healthTone,
+  filterPortfolioRows,
   type ProjectRecord,
   type PortfolioRelated,
   type EnrichedProject,
   type PortfolioPanelRow,
 } from "./portfolioControlCenter.derive";
+import { buildIdMap } from "@/pages/shared/buildIdMap";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -106,16 +108,10 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
   );
 
   // Client-side filter for the DataTable
-  const filteredRows = useMemo<EnrichedProject[]>(() => {
-    const q = search.trim().toLowerCase();
-    return summary.allRows.filter((p) => {
-      const matchesHealth = healthFilter === "All" || p.health === healthFilter;
-      const matchesSearch =
-        !q ||
-        `${p.name || ""} ${p.project_number || ""}`.toLowerCase().includes(q);
-      return matchesHealth && matchesSearch;
-    });
-  }, [summary.allRows, search, healthFilter]);
+  const filteredRows = useMemo<EnrichedProject[]>(
+    () => filterPortfolioRows(summary.allRows, { search, healthFilter }),
+    [summary.allRows, search, healthFilter],
+  );
 
   // Hero chips
   const heroChips = [
@@ -293,11 +289,10 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
   );
 
   // Build enriched-by-id lookup so panel rows can call onOpenProject
-  const byId = useMemo(() => {
-    const m = new Map<string, EnrichedProject>();
-    for (const p of summary.allRows) m.set(p.id, p);
-    return m;
-  }, [summary.allRows]);
+  const byId = useMemo(
+    () => buildIdMap(summary.allRows),
+    [summary.allRows],
+  );
 
   return (
     <div className="portfolio-cc">

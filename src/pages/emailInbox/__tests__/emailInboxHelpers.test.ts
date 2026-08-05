@@ -12,6 +12,7 @@ import {
   nextSelectedIdsForToggleAll,
   nextSelectedIdsForToggle,
   findMessageById,
+  filterLinkSearchRecords,
 } from "../emailInboxHelpers";
 import type { EmailMessage } from "../types";
 
@@ -106,4 +107,22 @@ describe("emailInboxHelpers", () => {
     expect(findMessageById(messages, null)).toBeNull();
     expect(findMessageById(messages, "missing")).toBeNull();
   });
+  it("filters link-search records with cap", () => {
+    const records = [
+      { subject: "RFI-1 Anchor", description: "bolts" },
+      { title: "Action item", question: "when?" },
+      { subject: "Other", description: "zzz" },
+    ];
+    expect(filterLinkSearchRecords(records, "").map((r: any) => r.subject || r.title)).toEqual([
+      "RFI-1 Anchor",
+      "Action item",
+      "Other",
+    ]);
+    expect(filterLinkSearchRecords(records, "anchor")).toEqual([records[0]]);
+    expect(filterLinkSearchRecords(records, "when")).toEqual([records[1]]);
+    const many = Array.from({ length: 30 }, (_, i) => ({ subject: `S${i}` }));
+    expect(filterLinkSearchRecords(many, "")).toHaveLength(20);
+    expect(filterLinkSearchRecords(many, "", 5)).toHaveLength(5);
+  });
+
 });
