@@ -32,7 +32,8 @@ import {
 } from "@/components/command";
 import type { Column, KpiCellDef, PillTone } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
-import { buildCommandCenterSummary } from "./commandCenterControlCenter.derive";
+import { buildCommandCenterSummary,
+  filterCommandCenterActionItems } from "./commandCenterControlCenter.derive";
 import type {
   CommandCenterSources,
   ActionItem,
@@ -138,22 +139,14 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
   const summary = useMemo(() => buildCommandCenterSummary(sources), [sources]);
 
   // ── Filter action items ─────────────────────────────────────────────────
-  const filteredItems = useMemo(() => {
-    let items = summary.actionItems;
-    if (typeFilter !== "All") {
-      items = items.filter((i) => i.itemType === typeFilter);
-    }
-    if (search) {
-      const q = search.toLowerCase();
-      items = items.filter(
-        (i) =>
-          i.title.toLowerCase().includes(q) ||
-          (i.status || "").toLowerCase().includes(q) ||
-          (i.owner || "").toLowerCase().includes(q)
-      );
-    }
-    return items;
-  }, [summary.actionItems, typeFilter, search]);
+  const filteredItems = useMemo(
+    () =>
+      filterCommandCenterActionItems(summary.actionItems, {
+        typeFilter,
+        search,
+      }),
+    [summary.actionItems, typeFilter, search],
+  );
 
   // ── Hero chips ──────────────────────────────────────────────────────────
   const chips = [

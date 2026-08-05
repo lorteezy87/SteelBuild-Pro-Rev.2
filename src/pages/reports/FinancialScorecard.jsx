@@ -39,9 +39,10 @@ import {
   buildScorecardKpis,
   computeOverallScorecardScore,
 } from "./financialScorecardHelpers";
+import { healthColor as mapHealthColor } from "./financialKpisHelpers";
 
 function healthColor(h) {
-  return HEALTH_COLORS[h] || "var(--text-muted)";
+  return mapHealthColor(h, HEALTH_COLORS);
 }
 
 /* ─── KPI Card ────────────────────────────────────────────────────── */

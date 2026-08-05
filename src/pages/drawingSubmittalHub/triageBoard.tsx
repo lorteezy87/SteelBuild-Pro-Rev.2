@@ -1,3 +1,4 @@
+import { resolveTriageBucketMembers } from "./drawingSubmittalHubPageHelpers";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ComponentType, CSSProperties } from "react";
@@ -333,16 +334,10 @@ export function ModelMappingSection({ summary, elements, onImport }: { summary?:
   // sets so the list always agrees with the chip counts (same engine, same
   // truth); fab buckets filter elements by fab_status directly (the query layer
   // already excludes deleted rows; the !is_deleted guard is belt-and-suspenders).
-  const bucketMembers = useMemo(() => {
-    if (!openBucket) return [];
-    if (openBucket.kind === "fab") {
-      const key = openBucket.key;
-      return (elements || []).filter((el) => el?.id && !el.is_deleted && el.fab_status === key);
-    }
-    if (!summary) return [];
-    const ids = new Set(summary.idsByStatus?.[openBucket.key] || []);
-    return (elements || []).filter((el) => el?.id && ids.has(String(el.id)));
-  }, [openBucket, summary, elements]);
+  const bucketMembers = useMemo(
+    () => resolveTriageBucketMembers(openBucket, elements, summary),
+    [openBucket, summary, elements],
+  );
 
   // Header meta for the open drill-down: fab buckets use FAB_STATUS_META,
   // detailing buckets use ELEMENT_STATUS_META. The member table columns are

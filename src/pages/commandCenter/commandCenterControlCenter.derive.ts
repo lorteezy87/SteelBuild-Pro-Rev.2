@@ -570,3 +570,27 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
     actionItems,
   };
 }
+
+
+/** Filter command-center action items by type chip + free-text search. */
+export function filterCommandCenterActionItems<
+  T extends { itemType?: string | null; title?: string | null; status?: string | null; owner?: string | null },
+>(
+  items: T[],
+  opts: { typeFilter?: string; search?: string } = {},
+): T[] {
+  let out = items || [];
+  if (opts.typeFilter && opts.typeFilter !== "All") {
+    out = out.filter((i) => i.itemType === opts.typeFilter);
+  }
+  if (opts.search) {
+    const q = opts.search.toLowerCase();
+    out = out.filter(
+      (i) =>
+        (i.title || "").toLowerCase().includes(q) ||
+        (i.status || "").toLowerCase().includes(q) ||
+        (i.owner || "").toLowerCase().includes(q),
+    );
+  }
+  return out;
+}

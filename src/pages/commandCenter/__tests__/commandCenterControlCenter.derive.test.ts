@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildCommandCenterSummary } from "../commandCenterControlCenter.derive";
+import {
+  buildCommandCenterSummary,
+  filterCommandCenterActionItems,
+} from "../commandCenterControlCenter.derive";
 import type { CommandCenterSources } from "../commandCenterControlCenter.derive";
 
 // Helper to create a minimal source bundle.
@@ -175,5 +178,18 @@ describe("buildCommandCenterSummary", () => {
     expect(s.kpis.budgetVariance).toBe(2);
     // both pending COs count in openActionItems
     expect(s.kpis.openActionItems).toBe(2);
+  });
+});
+
+
+describe("filterCommandCenterActionItems", () => {
+  const items = [
+    { title: "RFI weld", itemType: "RFI", status: "Open", owner: "Alice" },
+    { title: "CO extra", itemType: "CO", status: "Submitted", owner: "Bob" },
+  ];
+  it("filters by type and search", () => {
+    expect(filterCommandCenterActionItems(items, { typeFilter: "RFI" })).toHaveLength(1);
+    expect(filterCommandCenterActionItems(items, { search: "bob" })).toHaveLength(1);
+    expect(filterCommandCenterActionItems(items, { typeFilter: "All", search: "" })).toHaveLength(2);
   });
 });

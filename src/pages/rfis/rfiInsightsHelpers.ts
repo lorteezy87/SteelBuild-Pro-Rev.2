@@ -1,5 +1,8 @@
 /** Pure helpers for RFI Insights strip charts/stats. */
 
+import { isOverdue } from "./utils";
+import { oldestOpenRFIAgeDays, rfiAgingBuckets } from "../dashboard/projectMetrics";
+
 export function avgAgeDays(
   openRfis: Array<{ submitted_date?: string | null; created_at?: string | null }>,
   now: Date = new Date(),
@@ -67,4 +70,33 @@ export function rfisByMonth(
     if (slot) slot.value += 1;
   }
   return out;
+}
+
+const CLOSED_FOR_OPEN = new Set(["Answered", "Closed"]);
+
+export function filterOpenRfisForInsights<
+  T extends { status?: string | null },
+>(rfis: T[]): T[] {
+  return (rfis || []).filter((r) => !CLOSED_FOR_OPEN.has(String(r.status || "")));
+}
+
+export function buildRfiInsightsStats(
+  rfis: Array<Record<string, any>> = [],
+  now: Date = new Date(),
+) {
+  const openRfis = filterOpenRfisForInsights(rfis);
+  const overdue = (rfis || []).filter((r) => isOverdue(r));
+  const critical = (rfis || []).filter(
+    (r) => r.priority === "Critical" && r.status !== "Closed",
+  );
+  return {
+    totalOpen: openRfis.length,
+    avgAge: avgAgeDays(openRfis, now),
+    oldest: oldestOpenRFIAgeDays(rfis),
+    overdue: overdue.length,
+    critical: critical.length,
+    buckets: rfiAgingBuckets(rfis),
+    bicSegments: ballInCourtSegments(openRfis),
+    monthly: rfisByMonth(rfis, now),
+  };
 }

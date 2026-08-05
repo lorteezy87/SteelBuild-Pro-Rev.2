@@ -177,3 +177,28 @@ export function buildHubTabCounts(opts: {
     matrix: (opts.drawingSets || []).filter((set) => !set?.is_deleted).length,
   };
 }
+
+
+export type TriageOpenBucket =
+  | { kind: "detail"; key: string }
+  | { kind: "fab"; key: string }
+  | null
+  | undefined;
+
+/** Members belonging to the open triage drill-down bucket. */
+export function resolveTriageBucketMembers(
+  openBucket: TriageOpenBucket,
+  elements: Array<{ id?: string | null; is_deleted?: boolean | null; fab_status?: string | null }> = [],
+  summary?: { idsByStatus?: Record<string, Array<string | number>> } | null,
+) {
+  if (!openBucket) return [];
+  if (openBucket.kind === "fab") {
+    const key = openBucket.key;
+    return (elements || []).filter(
+      (el) => el?.id && !el.is_deleted && el.fab_status === key,
+    );
+  }
+  if (!summary) return [];
+  const ids = new Set((summary.idsByStatus?.[openBucket.key] || []).map(String));
+  return (elements || []).filter((el) => el?.id && ids.has(String(el.id)));
+}

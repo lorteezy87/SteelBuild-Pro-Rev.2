@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   avgAgeDays,
   ballInCourtSegments,
+  buildRfiInsightsStats,
   rfisByMonth,
 } from "../rfiInsightsHelpers";
 
@@ -39,3 +40,17 @@ describe("rfiInsightsHelpers", () => {
     expect(months.find((m) => m.key === "2026-07")?.value).toBe(1);
   });
 });
+
+  it("buildRfiInsightsStats aggregates open/overdue/critical", () => {
+    const stats = buildRfiInsightsStats([
+      { status: "Open", priority: "Critical", submitted_date: "2026-07-01", date_required: "2026-07-15" },
+      { status: "Closed", priority: "Critical", submitted_date: "2026-07-01" },
+      { status: "Answered", priority: "High", submitted_date: "2026-07-01" },
+      { status: "Open", priority: "Medium", submitted_date: "2026-08-01", ball_in_court: "Architect" },
+    ]);
+    expect(stats.totalOpen).toBe(2);
+    expect(stats.critical).toBe(1);
+    expect(stats.overdue).toBeGreaterThanOrEqual(1);
+    expect(stats.bicSegments.length).toBeGreaterThan(0);
+    expect(stats.monthly).toHaveLength(6);
+  });

@@ -18,9 +18,7 @@
 import React, { useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { DonutChartSVG } from "../reports/charts";
-import { rfiAgingBuckets, oldestOpenRFIAgeDays } from "../dashboard/projectMetrics";
-import { isOverdue } from "./utils";
-import { avgAgeDays, ballInCourtSegments, rfisByMonth } from "./rfiInsightsHelpers";
+import { buildRfiInsightsStats } from "./rfiInsightsHelpers";
 
 /**
  * Small unit-agnostic bar chart for RFI counts. Reusing the reports
@@ -163,21 +161,7 @@ function PaneTitle({ children }) {
 }
 
 export default function RfiInsightsStrip({ rfis, collapsed, onToggleCollapsed }) {
-  const stats = useMemo(() => {
-    const openRfis = rfis.filter((r) => !["Answered", "Closed"].includes(r.status));
-    const overdue = rfis.filter((r) => isOverdue(r));
-    const critical = rfis.filter((r) => r.priority === "Critical" && !["Closed"].includes(r.status));
-    return {
-      totalOpen: openRfis.length,
-      avgAge: avgAgeDays(openRfis),
-      oldest: oldestOpenRFIAgeDays(rfis),
-      overdue: overdue.length,
-      critical: critical.length,
-      buckets: rfiAgingBuckets(rfis),
-      bicSegments: ballInCourtSegments(openRfis),
-      monthly: rfisByMonth(rfis),
-    };
-  }, [rfis]);
+  const stats = useMemo(() => buildRfiInsightsStats(rfis), [rfis]);
 
   return (
     <div className="rfi-insights-strip">
