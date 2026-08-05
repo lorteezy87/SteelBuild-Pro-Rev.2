@@ -25,25 +25,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/components/shared/ThemeContext';
-import { buildPrefs } from "./displayTabHelpers";
-
-const labelStyle = {
-  fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
-  color: 'var(--text-muted)', letterSpacing: '0.12em',
-  textTransform: 'uppercase', marginBottom: 12, display: 'block',
-};
-
-const selectStyle = {
-  width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)',
-  borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box',
-};
-
-const optionCard = (isSelected) => ({
-  padding: '14px', background: isSelected ? 'var(--accent-muted)' : 'var(--bg-surface-low)',
-  border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border-default)'}`,
-  borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s', textAlign: 'center',
-});
+import {
+  buildPrefs,
+  labelStyle,
+  selectStyle,
+  optionCard,
+} from "./displayTabHelpers";
 
 const Toggle = ({ checked, onChange }) => (
   <div onClick={onChange} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: checked ? 'flex-end' : 'flex-start', width: 44, height: 24, background: checked ? 'var(--status-success)' : 'var(--bg-surface-high)', borderRadius: 12, padding: '2px 4px', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0 }}>
