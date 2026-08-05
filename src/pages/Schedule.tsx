@@ -9,7 +9,10 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
-import { computePhaseWbs } from "./schedule/wbs";
+import {
+  computePhaseWbs,
+  filterUnattemptedWbsBackfill,
+} from "./schedule/wbs";
 import { computeBulkParentOptions } from "./schedule/scheduleTaskHelpers";
 import { normalizeSchedulePhase, computePhaseCounts, selectLinkedSubmittalDocs } from "./schedule/schedulePageHelpers";
 import type { ScheduleTask } from "./schedule/types";
@@ -143,7 +146,7 @@ export default function Schedule() {
   // a rejected write (e.g. read-only role) is not retried every refetch.
   const attemptedWbsRef = useRef(new Set<string>());
   useEffect(() => {
-    const todo = wbsBackfill.filter(({ id }) => !attemptedWbsRef.current.has(id));
+    const todo = filterUnattemptedWbsBackfill(wbsBackfill, attemptedWbsRef.current);
     if (todo.length === 0) return;
     todo.forEach(({ id }) => attemptedWbsRef.current.add(id));
     batchProcess(

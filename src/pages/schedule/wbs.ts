@@ -131,3 +131,12 @@ export function sanitizeScheduleTaskUpdatePayload(data: ScheduleTask): Sanitized
 
   return { id, fields };
 }
+
+/** Drop WBS backfill rows already attempted this session (RLS/retry guard). */
+export function filterUnattemptedWbsBackfill<T extends { id: string }>(
+  rows: T[],
+  attemptedIds: Set<string>,
+): T[] {
+  return (rows || []).filter(({ id }) => !attemptedIds.has(id));
+}
+
