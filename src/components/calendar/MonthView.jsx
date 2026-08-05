@@ -18,11 +18,10 @@ import {
   isWeekend,
   sameDay,
   toIsoDate,
-  fromIsoDate,
-  rangesOverlap,
   dowShort,
 } from "@/lib/calendarMath";
 import EventPill from "./EventPill";
+import { bucketEventsByDay } from "./calendarViewHelpers";
 
 const MAX_VISIBLE = 3;
 const DAY_HEADERS_SUN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -35,17 +34,7 @@ export default function MonthView({ focus, today, events, onDayClick, onEventCli
   // Pre-bucket events by ISO date for fast lookup. A multi-day event
   // ends up in every day it spans — that's deliberate so it shows up on
   // each day cell of the month grid.
-  const eventsByDay = useMemo(() => {
-    const map = new Map();
-    for (const d of days) {
-      const iso = toIsoDate(d);
-      const list = events.filter((ev) =>
-        rangesOverlap(d, d, fromIsoDate(ev.start), fromIsoDate(ev.end || ev.start))
-      );
-      map.set(iso, list);
-    }
-    return map;
-  }, [days, events]);
+  const eventsByDay = useMemo(() => bucketEventsByDay(days, events), [days, events]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>

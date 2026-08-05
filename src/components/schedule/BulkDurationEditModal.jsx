@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { parseBulkDurationValue, isBulkDurationValid, validateBulkDurationInput } from "./bulkDurationEditHelpers";
 
 const monoLabel = {
   fontFamily: "var(--font-mono)",
@@ -32,16 +33,13 @@ export default function BulkDurationEditModal({ open, count = 0, isSaving = fals
     setValue("");
   }, [open]);
 
-  const parsed = parseInt(value, 10);
-  const isValid = Number.isFinite(parsed) && (mode === "set" ? parsed >= 0 : parsed !== 0);
+  const parsed = parseBulkDurationValue(value);
+  const isValid = isBulkDurationValid(value, mode);
 
-  const validation = useMemo(() => {
-    if (value === "") return "Enter a duration value.";
-    if (!Number.isFinite(parsed)) return "Must be a whole number.";
-    if (mode === "set" && parsed < 0) return "Duration cannot be negative.";
-    if (mode !== "set" && parsed === 0) return "Offset must be non-zero.";
-    return "";
-  }, [value, parsed, mode]);
+  const validation = useMemo(
+    () => validateBulkDurationInput(value, mode),
+    [value, mode],
+  );
 
   const handleSubmit = () => {
     if (validation || isSaving) return;

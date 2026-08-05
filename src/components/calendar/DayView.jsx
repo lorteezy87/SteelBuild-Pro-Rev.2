@@ -11,30 +11,17 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { fromIsoDate, rangesOverlap, formatLongDate } from "@/lib/calendarMath";
+import { formatLongDate } from "@/lib/calendarMath";
 import { EVENT_TYPE_GROUPS } from "@/lib/calendarEvents";
 import EventPill from "./EventPill";
+import { eventsForDay, groupEventsByType } from "./calendarViewHelpers";
 
 const COLLAPSE_AT = 10;
 
 export default function DayView({ focus, events, onEventClick }) {
-  const dayEvents = useMemo(
-    () => events.filter((ev) =>
-      rangesOverlap(focus, focus, fromIsoDate(ev.start), fromIsoDate(ev.end || ev.start))
-    ),
-    [focus, events]
-  );
+  const dayEvents = useMemo(() => eventsForDay(focus, events), [focus, events]);
 
-  const grouped = useMemo(() => {
-    const map = new Map();
-    EVENT_TYPE_GROUPS.forEach((g) => map.set(g.key, []));
-    dayEvents.forEach((ev) => {
-      const arr = map.get(ev.type) || [];
-      arr.push(ev);
-      map.set(ev.type, arr);
-    });
-    return map;
-  }, [dayEvents]);
+  const grouped = useMemo(() => groupEventsByType(dayEvents), [dayEvents]);
 
   if (dayEvents.length === 0) {
     return (

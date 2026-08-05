@@ -11,6 +11,10 @@ import {
 import { modePresentation } from "@/lib/pieceControl/presentation";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import { PieceControlModeBadge } from "./PieceControlModeBadge";
+import {
+  presentReadinessText,
+  buildPilotReadinessExportRows,
+} from "./pieceControlPilotReadinessHelpers";
 
 interface PieceControlPilotReadinessProps {
   projectId: string;
@@ -24,33 +28,6 @@ const nextModes: Record<PieceControlMode, PieceControlMode[]> = {
   pilot: ["off", "shadow", "live"],
   live: ["off", "shadow"],
 };
-
-function presentReadinessText(value: string) {
-  if (/^No active actionable canonical piece scope$/i.test(value)) {
-    return "No active pieces are in the Piece Register";
-  }
-  if (
-    /^Canonical station configuration must contain six stations totaling 100 percent$/i.test(
-      value,
-    )
-  ) {
-    return "Fabrication station setup must contain six stations totaling 100 percent";
-  }
-  return value
-    .replaceAll("_", " ")
-    .replace(
-      /\bcanonical versus legacy\b/gi,
-      "Piece Register versus existing production records",
-    )
-    .replace(/\bcanonical release gate\b/gi, "fabrication release checks")
-    .replace(/\bcanonical piece scope\b/gi, "Piece Register scope")
-    .replace(/\bcanonical\b/gi, "Piece Register")
-    .replace(/\blegacy\b/gi, "existing production records")
-    .replace(/\bbefore pilot\b/gi, "for Pilot workflow")
-    .replace(/\bbefore live mode\b/gi, "for Live workflow")
-    .replace(/\bpilot transition\b/gi, "Pilot workflow")
-    .replace(/\blive transition\b/gi, "Live workflow");
-}
 
 export function PieceControlPilotReadiness({
   projectId,
@@ -109,37 +86,10 @@ export function PieceControlPilotReadiness({
       ),
   });
 
-  const exportRows = useMemo(() => {
-    const report = query.data?.report;
-    if (!report) return [];
-    return [
-      ...Object.entries(report.metrics).map(([metric, value]) => [
-        "Metric",
-        presentReadinessText(metric),
-        value,
-      ]),
-      ...report.data_quality_warnings.map((warning) => [
-        "Data quality warning",
-        presentReadinessText(warning),
-        "",
-      ]),
-      ...report.hard_release_blockers.map((blocker) => [
-        "Hard release blocker",
-        presentReadinessText(blocker),
-        "",
-      ]),
-      ...report.pilot_transition_blockers.map((blocker) => [
-        presentReadinessText("Pilot transition blocker"),
-        presentReadinessText(blocker),
-        "",
-      ]),
-      ...report.live_transition_blockers.map((blocker) => [
-        presentReadinessText("Live transition blocker"),
-        presentReadinessText(blocker),
-        "",
-      ]),
-    ];
-  }, [query.data]);
+  const exportRows = useMemo(
+    () => buildPilotReadinessExportRows(query.data?.report),
+    [query.data],
+  );
 
   if (query.isLoading) {
     return (

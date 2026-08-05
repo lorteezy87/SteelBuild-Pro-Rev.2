@@ -12,23 +12,14 @@ import {
   isWeekend,
   sameDay,
   toIsoDate,
-  fromIsoDate,
-  rangesOverlap,
   dowShort,
 } from "@/lib/calendarMath";
 import EventPill from "./EventPill";
+import { bucketEventsByDay } from "./calendarViewHelpers";
 
 export default function WeekView({ focus, today, events, onDayClick, onEventClick, weekStart = "sunday" }) {
   const days = useMemo(() => buildWeekGrid(focus, weekStart), [focus, weekStart]);
-  const eventsByDay = useMemo(() => {
-    const map = new Map();
-    for (const d of days) {
-      map.set(toIsoDate(d), events.filter((ev) =>
-        rangesOverlap(d, d, fromIsoDate(ev.start), fromIsoDate(ev.end || ev.start))
-      ));
-    }
-    return map;
-  }, [days, events]);
+  const eventsByDay = useMemo(() => bucketEventsByDay(days, events), [days, events]);
 
   return (
     <div

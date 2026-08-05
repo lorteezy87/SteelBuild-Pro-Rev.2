@@ -6,6 +6,7 @@ import { PieceProductionControl } from "@/components/pieceControl/PieceProductio
 import { PieceLogisticsControl } from "@/components/pieceControl/PieceLogisticsControl";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import "@/styles/piece-control-command.css";
+import { buildDrawingIdRecord } from "./wpFormModalHelpers";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -37,11 +38,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
   const [tab, setTab] = useState("overview");
   const { activeProject } = useProjectContext();
 
-  const drawingMap = useMemo(() => {
-    const m = {};
-    drawings.forEach((d) => (m[d.id] = d));
-    return m;
-  }, [drawings]);
+  const drawingMap = useMemo(() => buildDrawingIdRecord(drawings), [drawings]);
 
   if (!wp) return null;
 

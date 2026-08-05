@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+import { filterSearchableTasks } from "./searchableTaskPickerHelpers";
   drawerBorder,
   drawerControlStyle,
   drawerMutedBorder,
@@ -38,18 +39,10 @@ export default function SearchableTaskPicker({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return tasks.slice(0, 50);
-    const q = query.toLowerCase();
-    return tasks
-      .filter((t) => {
-        const name = (t.task_name || "").toLowerCase();
-        const wbs = (t.wbs_code || "").toLowerCase();
-        const phase = (t.phase || "").toLowerCase();
-        return name.includes(q) || wbs.includes(q) || phase.includes(q);
-      })
-      .slice(0, 50);
-  }, [tasks, query]);
+  const filtered = useMemo(
+    () => filterSearchableTasks(tasks, query, 50),
+    [tasks, query],
+  );
 
   useEffect(() => {
     setHighlightIdx(0);

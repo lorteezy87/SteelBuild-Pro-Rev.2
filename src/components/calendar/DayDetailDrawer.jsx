@@ -8,28 +8,15 @@
 
 import React, { useEffect, useMemo } from "react";
 import { X } from "lucide-react";
-import { fromIsoDate, rangesOverlap, formatLongDate } from "@/lib/calendarMath";
+import { formatLongDate } from "@/lib/calendarMath";
 import { EVENT_TYPE_GROUPS } from "@/lib/calendarEvents";
 import EventPill from "./EventPill";
+import { eventsForDay, groupEventsByType } from "./calendarViewHelpers";
 
 export default function DayDetailDrawer({ day, events, onClose, onEventClick, onJumpToDay }) {
-  const list = useMemo(() => {
-    if (!day) return [];
-    return events.filter((ev) =>
-      rangesOverlap(day, day, fromIsoDate(ev.start), fromIsoDate(ev.end || ev.start))
-    );
-  }, [day, events]);
+  const list = useMemo(() => eventsForDay(day, events), [day, events]);
 
-  const grouped = useMemo(() => {
-    const map = new Map();
-    EVENT_TYPE_GROUPS.forEach((g) => map.set(g.key, []));
-    list.forEach((ev) => {
-      const arr = map.get(ev.type) || [];
-      arr.push(ev);
-      map.set(ev.type, arr);
-    });
-    return map;
-  }, [list]);
+  const grouped = useMemo(() => groupEventsByType(list), [list]);
 
   // Esc to close
   useEffect(() => {

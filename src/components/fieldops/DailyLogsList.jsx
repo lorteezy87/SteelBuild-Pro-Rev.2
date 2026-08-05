@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { formatLocalDate } from "@/utils/dates";
+import { buildIdMap } from "@/pages/shared/buildIdMap";
 
 function asArray(v) {
   if (Array.isArray(v)) return v;
@@ -66,17 +67,9 @@ export default function DailyLogsList({ logs = [] }) {
     enabled: projectIds.length > 0,
   });
 
-  const actionItemMap = useMemo(() => {
-    const m = new Map();
-    actionItems.forEach((a) => m.set(a.id, a));
-    return m;
-  }, [actionItems]);
+  const actionItemMap = useMemo(() => buildIdMap(actionItems), [actionItems]);
 
-  const rfiMap = useMemo(() => {
-    const m = new Map();
-    rfis.forEach((r) => m.set(r.id, r));
-    return m;
-  }, [rfis]);
+  const rfiMap = useMemo(() => buildIdMap(rfis), [rfis]);
 
   if (logs.length === 0) {
     return (

@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "../shared/formatters";
+import { summarizeSovStaged, formatSovCostLabel } from "./sovImportReviewHelpers";
 
 /**
  * SovImportReviewModal — pre-import review for the SOV importer.
@@ -18,18 +19,12 @@ import { formatCurrency } from "../shared/formatters";
  *  - importing: boolean (disables/labels the confirm button while writing)
  */
 export default function SovImportReviewModal({ open, onClose, staged = [], onConfirm, importing = false }) {
-  const { valid, invalid, autoMapped, validRecords } = useMemo(() => {
-    const v = staged.filter((s) => s.valid);
-    return {
-      valid: v.length,
-      invalid: staged.length - v.length,
-      autoMapped: staged.filter((s) => s.valid && s.autoMapped).length,
-      validRecords: v.map((s) => s.record),
-    };
-  }, [staged]);
+  const { valid, invalid, autoMapped, validRecords } = useMemo(
+    () => summarizeSovStaged(staged),
+    [staged],
+  );
 
-  const costLabel = (r) =>
-    r.cost_code ? `${r.cost_code}${r.cost_code_name ? ` — ${r.cost_code_name}` : ""}` : "—";
+  const costLabel = formatSovCostLabel;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>

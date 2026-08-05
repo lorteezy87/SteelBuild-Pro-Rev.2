@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { buildIdMap, filterUnlinkedItems } from "./linkedEntitiesHelpers";
 
 /**
  * LinkedEntities — reusable chip-list + picker components for linking
@@ -29,15 +30,11 @@ function LinkedEntityList({
   const [picking, setPicking] = useState(false);
 
   // Index items by id for O(1) chip lookups.
-  const byId = useMemo(() => {
-    const m = new Map();
-    allItems.forEach((item) => m.set(item.id, item));
-    return m;
-  }, [allItems]);
+  const byId = useMemo(() => buildIdMap(allItems), [allItems]);
 
   // Items available for linking (not already linked).
   const available = useMemo(
-    () => allItems.filter((item) => !value.includes(item.id)),
+    () => filterUnlinkedItems(allItems, value),
     [allItems, value],
   );
 
