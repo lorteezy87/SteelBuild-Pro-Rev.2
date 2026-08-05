@@ -18,34 +18,13 @@ import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import { buildSovSummary, calcRow } from "./sovControlCenter.derive";
 import type { SovLineItem, SovSummary } from "./sovControlCenter.derive";
+import { fmtMoney, fmtFull, sovStatusTone } from "./format";
 // Note: formatCurrency/formatPercent from formatters.jsx are available if needed
 // but we use local fmtFull/fmtMoney below to stay strictly typed in this file.
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Compact dollar formatter for KPI strip (no cents on large numbers). */
-function fmtMoney(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n.toFixed(0)}`;
-}
-
-/** Full dollar format for table cells. */
-function fmtFull(n: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency", currency: "USD",
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
-  }).format(n);
-}
-
-function statusTone(status: string | null | undefined) {
-  if (status === "Paid" || status === "Certified") return "good" as const;
-  if (status === "Submitted") return "warn" as const;
-  if (status === "Draft") return "neutral" as const;
-  return "neutral" as const;
-}
 
 /** Scroll the full table into view when a panel's "View all" fires. */
 function scrollToTable() {
@@ -163,7 +142,7 @@ function buildColumns(
     {
       key: "status",
       header: "Status",
-      render: (r) => <Pill tone={statusTone(r.status as string | null)}>{r.status || "Draft"}</Pill>,
+      render: (r) => <Pill tone={sovStatusTone(r.status as string | null)}>{r.status || "Draft"}</Pill>,
     },
   ];
 }

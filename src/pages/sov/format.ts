@@ -154,3 +154,25 @@ export function downloadSovCsv(
   );
 }
 
+/** Compact dollar formatter for KPI strip (no cents on large numbers). */
+export function fmtMoney(n: number): string {
+  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n.toFixed(0)}`;
+}
+
+/** Full dollar format for table cells. */
+export function fmtFull(n: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency", currency: "USD",
+    minimumFractionDigits: 0, maximumFractionDigits: 0,
+  }).format(n);
+}
+
+export function sovStatusTone(status: string | null | undefined) {
+  if (status === "Paid" || status === "Certified") return "good" as const;
+  if (status === "Submitted") return "warn" as const;
+  if (status === "Draft") return "neutral" as const;
+  return "neutral" as const;
+}
+
