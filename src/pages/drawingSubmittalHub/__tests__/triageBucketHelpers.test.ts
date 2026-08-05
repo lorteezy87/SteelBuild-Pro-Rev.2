@@ -27,3 +27,22 @@ describe("resolveTriageBucketMembers", () => {
     expect(rows.map((r) => r.id)).toEqual(["3", "4"]);
   });
 });
+
+import { topPipelineStatuses, buildCriticalTriageItems } from "../drawingSubmittalHubPageHelpers";
+
+describe("topPipelineStatuses / buildCriticalTriageItems", () => {
+  it("ranks pipeline counts", () => {
+    expect(topPipelineStatuses({ A: 1, B: 5, C: 3 }, 2)).toEqual([["B", 5], ["C", 3]]);
+  });
+
+  it("dedupes critical items by id after urgency sort", () => {
+    const urgency = (a: any, b: any) => a.rank - b.rank;
+    const triage = {
+      overdue: [{ id: "1", rank: 2 }, { id: "2", rank: 1 }],
+      needsAction: [{ id: "1", rank: 0 }, { id: "3", rank: 3 }],
+      dueSoon: [{ id: "4", rank: 4 }],
+    };
+    const crit = buildCriticalTriageItems(triage as any, urgency, 3);
+    expect(crit.map((c: any) => c.id)).toEqual(["1", "2", "3"]);
+  });
+});

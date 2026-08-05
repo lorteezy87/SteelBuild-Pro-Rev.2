@@ -1,4 +1,4 @@
-import { resolveTriageBucketMembers } from "./drawingSubmittalHubPageHelpers";
+import { resolveTriageBucketMembers, topPipelineStatuses, buildCriticalTriageItems } from "./drawingSubmittalHubPageHelpers";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ComponentType, CSSProperties } from "react";
@@ -94,17 +94,9 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
   const focusTone = getActionTone(focusItem);
-  const topStatuses = Object.entries(triage.pipelineCounts)
-    .sort((a, b) => (b[1] as number) - (a[1] as number))
-    .slice(0, 6);
+  const topStatuses = topPipelineStatuses(triage.pipelineCounts, 6);
   const focusRoute = focusItem?.routeTab || "matrix";
-  const criticalItems = Array.from(
-    new Map(
-      [...triage.overdue, ...triage.needsAction, ...triage.dueSoon]
-        .sort(itemUrgency)
-        .map((item: any) => [item.id, item]),
-    ).values(),
-  ).slice(0, 12) as any[];
+  const criticalItems = buildCriticalTriageItems(triage, itemUrgency, 12) as any[];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

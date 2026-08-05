@@ -5,6 +5,7 @@ import { entities } from "@/api/supabaseClient";
 import { formatCurrency, formatCurrencyShort, formatDate } from "@/components/shared/formatters";
 import { mono, body, HEALTH_COLOR, safeNumber } from "../utils";
 import { DrawerTile, drawerTd, drawerTdRight, FinancialDrawer } from "../DrawerAtoms";
+import { sortDrawerRows, nextDrawerSort } from "../drawerHelpers";
 
 export function LaborDrawer({ open, onClose, kpi, selectedProject }) {
   const qc = useQueryClient();
@@ -46,27 +47,13 @@ export function LaborDrawer({ open, onClose, kpi, selectedProject }) {
   const barColor = HEALTH_COLOR[kpi.health] || HEALTH_COLOR.amber;
   const rows = kpi.laborRows || [];
 
-  const sortFn = (a, b) => {
-    const aVal = a[sortCol] ?? "";
-    const bVal = b[sortCol] ?? "";
-    const numA = Number(aVal);
-    const numB = Number(bVal);
-    if (Number.isFinite(numA) && Number.isFinite(numB)) {
-      return sortDir === "asc" ? numA - numB : numB - numA;
-    }
-    const sA = String(aVal).toLowerCase();
-    const sB = String(bVal).toLowerCase();
-    if (sA < sB) return sortDir === "asc" ? -1 : 1;
-    if (sA > sB) return sortDir === "asc" ? 1 : -1;
-    return 0;
-  };
-
   const toggleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(col); setSortDir("desc"); }
+    const next = nextDrawerSort(sortCol, sortDir, col);
+    setSortCol(next.sortCol);
+    setSortDir(next.sortDir);
   };
 
-  const sortedRows = [...rows].sort(sortFn);
+  const sortedRows = sortDrawerRows(rows, sortCol, sortDir);
 
   const renderTh = (col, label, right = false) => (
     <th

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { formatCurrency, formatCurrencyShort, formatDate } from "@/components/shared/formatters";
 import { mono, body, HEALTH_COLOR, safeNumber } from "../utils";
 import { DrawerTile, ChartLegend, drawerTd, drawerTdRight, FinancialDrawer } from "../DrawerAtoms";
+import { partitionChangeOrders, sortDrawerRows, nextDrawerSort } from "../drawerHelpers";
 
 export function COImpactDrawer({ open, onClose, kpi, changeOrders: allCOs, selectedProject }) {
   const [sortCol, setSortCol] = useState("co_amount");
@@ -11,31 +12,16 @@ export function COImpactDrawer({ open, onClose, kpi, changeOrders: allCOs, selec
 
   const barColor = HEALTH_COLOR[kpi.health] || HEALTH_COLOR.amber;
 
-  const approved = allCOs.filter(c => c.status === "Approved");
-  const pending = allCOs.filter(c => ["Submitted", "Under Review"].includes(c.status));
-
-  const sortFn = (a, b) => {
-    const aVal = a[sortCol] ?? "";
-    const bVal = b[sortCol] ?? "";
-    const numA = Number(aVal);
-    const numB = Number(bVal);
-    if (Number.isFinite(numA) && Number.isFinite(numB)) {
-      return sortDir === "asc" ? numA - numB : numB - numA;
-    }
-    const sA = String(aVal).toLowerCase();
-    const sB = String(bVal).toLowerCase();
-    if (sA < sB) return sortDir === "asc" ? -1 : 1;
-    if (sA > sB) return sortDir === "asc" ? 1 : -1;
-    return 0;
-  };
+  const { approved, pending } = partitionChangeOrders(allCOs);
 
   const toggleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(col); setSortDir("desc"); }
+    const next = nextDrawerSort(sortCol, sortDir, col);
+    setSortCol(next.sortCol);
+    setSortDir(next.sortDir);
   };
 
-  const sortedApproved = [...approved].sort(sortFn);
-  const sortedPending = [...pending].sort(sortFn);
+  const sortedApproved = sortDrawerRows(approved, sortCol, sortDir);
+  const sortedPending = sortDrawerRows(pending, sortCol, sortDir);
 
   const originalCV = safeNumber(selectedProject?.original_contract_value);
   const approvedVal = kpi.approved.totalValue;

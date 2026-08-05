@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { formatCurrency, formatDate } from "@/components/shared/formatters";
 import { mono, body, HEALTH_COLOR, safeNumber, periodDisplay } from "../utils";
 import { DrawerTile, drawerTd, drawerTdRight, FinancialDrawer } from "../DrawerAtoms";
+import { enrichBillingRows, sortDrawerRows, nextDrawerSort } from "../drawerHelpers";
 
 const SOV_STATUS_COLORS = {
   "Draft":     "var(--text-muted)",
@@ -23,53 +24,15 @@ export function BillingDrawer({ open, onClose, kpi, sovItems }) {
   //   positive → days from submitted to payment (paid)
   //   negative → days outstanding (submitted, not yet paid) — displayed in amber
   //   null     → not submitted yet
-  const today = Date.now();
-  const enrichedRows = sovItems.map(item => {
-    const scheduled = safeNumber(item.scheduled_value);
-    const curPct = safeNumber(item.current_percent_complete);
-    const billedToDate = scheduled * curPct / 100;
-
-    let dtp = null;
-    if (item.submitted_date && item.payment_received_date) {
-      const s = new Date(item.submitted_date);
-      const p = new Date(item.payment_received_date);
-      dtp = Math.max(0, Math.round((p - s) / 86400000));
-    } else if (item.submitted_date) {
-      const s = new Date(item.submitted_date);
-      dtp = -Math.max(0, Math.round((today - s) / 86400000));
-    }
-
-    return {
-      ...item,
-      _scheduled: scheduled,
-      _curPct: curPct,
-      _billedToDate: billedToDate,
-      _daysToPayment: dtp,
-      _period: periodDisplay(item.period_from, item.period_to),
-    };
-  });
-
-  const sortFn = (a, b) => {
-    const aVal = a[sortCol] ?? "";
-    const bVal = b[sortCol] ?? "";
-    const numA = Number(aVal);
-    const numB = Number(bVal);
-    if (Number.isFinite(numA) && Number.isFinite(numB)) {
-      return sortDir === "asc" ? numA - numB : numB - numA;
-    }
-    const sA = String(aVal).toLowerCase();
-    const sB = String(bVal).toLowerCase();
-    if (sA < sB) return sortDir === "asc" ? -1 : 1;
-    if (sA > sB) return sortDir === "asc" ? 1 : -1;
-    return 0;
-  };
+  const enrichedRows = enrichBillingRows(sovItems, { safeNumber, periodDisplay });
 
   const toggleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(col); setSortDir("desc"); }
+    const next = nextDrawerSort(sortCol, sortDir, col);
+    setSortCol(next.sortCol);
+    setSortDir(next.sortDir);
   };
 
-  const sortedRows = [...enrichedRows].sort(sortFn);
+  const sortedRows = sortDrawerRows(enrichedRows, sortCol, sortDir);
 
   const renderTh = (col, label, right = false) => (
     <th

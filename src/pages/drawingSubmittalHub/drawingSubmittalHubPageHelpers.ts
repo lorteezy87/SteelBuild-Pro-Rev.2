@@ -202,3 +202,36 @@ export function resolveTriageBucketMembers(
   const ids = new Set((summary.idsByStatus?.[openBucket.key] || []).map(String));
   return (elements || []).filter((el) => el?.id && ids.has(String(el.id)));
 }
+
+/** Top pipeline status counts for the triage board chip strip. */
+export function topPipelineStatuses(
+  pipelineCounts: Record<string, number> | null | undefined,
+  limit = 6,
+): Array<[string, number]> {
+  return Object.entries(pipelineCounts || {})
+    .sort((a, b) => (b[1] as number) - (a[1] as number))
+    .slice(0, limit) as Array<[string, number]>;
+}
+
+/**
+ * Critical work queue: overdue + needsAction + dueSoon, urgency-sorted,
+ * id-deduped, capped.
+ */
+export function buildCriticalTriageItems<T extends { id?: string | null }>(
+  triage: {
+    overdue?: T[];
+    needsAction?: T[];
+    dueSoon?: T[];
+  } | null | undefined,
+  itemUrgency: (a: T, b: T) => number,
+  limit = 12,
+): T[] {
+  const t = triage || {};
+  return Array.from(
+    new Map(
+      [...(t.overdue || []), ...(t.needsAction || []), ...(t.dueSoon || [])]
+        .sort(itemUrgency)
+        .map((item) => [item.id, item]),
+    ).values(),
+  ).slice(0, limit) as T[];
+}

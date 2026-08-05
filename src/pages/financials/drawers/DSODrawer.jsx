@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { formatCurrency, formatDate } from "@/components/shared/formatters";
 import { mono, body, HEALTH_COLOR, safeNumber, agingTintBg } from "../utils";
 import { DrawerTile, drawerTd, drawerTdRight, FinancialDrawer } from "../DrawerAtoms";
+import { buildCompletedPaymentCycles, sortDrawerRows, nextDrawerSort } from "../drawerHelpers";
 
 // ── DSO (Days Sales Outstanding) Detail Drawer (Phase 4 Step 5) ─────
 //
@@ -20,37 +21,11 @@ export function DSODrawer({ open, onClose, kpi, sovItems }) {
   const outstanding = kpi.outstandingInvoices || [];
 
   // ── Completed cycles: SOV items with BOTH dates set ──
-  const completedCycles = (sovItems || [])
-    .filter(item => item.submitted_date && item.payment_received_date)
-    .map(item => {
-      const submitted = new Date(item.submitted_date);
-      const paid = new Date(item.payment_received_date);
-      const dtp = Math.max(0, Math.round((paid - submitted) / 86400000));
-      return {
-        ...item,
-        _daysToPayment: dtp,
-        _scheduled: safeNumber(item.scheduled_value),
-      };
-    });
+  const completedCycles = buildCompletedPaymentCycles(sovItems, safeNumber);
 
   // ── Sort helpers (separate state per table) ──
-  const makeSortFn = (col, dir) => (a, b) => {
-    const aVal = a[col] ?? "";
-    const bVal = b[col] ?? "";
-    const numA = Number(aVal);
-    const numB = Number(bVal);
-    if (Number.isFinite(numA) && Number.isFinite(numB)) {
-      return dir === "asc" ? numA - numB : numB - numA;
-    }
-    const sA = String(aVal).toLowerCase();
-    const sB = String(bVal).toLowerCase();
-    if (sA < sB) return dir === "asc" ? -1 : 1;
-    if (sA > sB) return dir === "asc" ? 1 : -1;
-    return 0;
-  };
-
-  const sortedOutstanding = [...outstanding].sort(makeSortFn(outSortCol, outSortDir));
-  const sortedCompleted = [...completedCycles].sort(makeSortFn(cmpSortCol, cmpSortDir));
+  const sortedOutstanding = sortDrawerRows(outstanding, outSortCol, outSortDir);
+  const sortedCompleted = sortDrawerRows(completedCycles, cmpSortCol, cmpSortDir);
 
   const renderTh = (col, label, activeCol, activeDir, toggleFn, right = false) => (
     <th
