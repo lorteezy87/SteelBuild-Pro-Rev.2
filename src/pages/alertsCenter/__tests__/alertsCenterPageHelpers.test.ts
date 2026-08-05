@@ -28,3 +28,11 @@ describe("alertsCenterPageHelpers", () => {
     expect(severityStyle("Critical").border).toBe("var(--status-error)");
   });
 });
+
+import { ALERT_SEVERITY_FILTERS } from "../AlertsCenterUi";
+
+describe("ALERT_SEVERITY_FILTERS", () => {
+  it("includes all + four severities", () => {
+    expect(ALERT_SEVERITY_FILTERS).toEqual(["all", "Critical", "High", "Medium", "Low"]);
+  });
+});

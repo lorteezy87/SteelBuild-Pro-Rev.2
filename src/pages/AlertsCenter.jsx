@@ -1,20 +1,20 @@
 import React, { useState, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { AlertTriangle, Bell, CheckCheck, RefreshCw, Loader2, ExternalLink } from "lucide-react";
+import { CheckCheck, RefreshCw, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
-import { formatDate } from "../components/shared/formatters";
-import StatusBadge from "../components/shared/StatusBadge";
 import { useAlerts } from "@/hooks/useAlerts";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import {
-  resolveAlertPath,
   filterAlerts,
   uniqueAlertTypes,
-  severityStyle,
 } from "./alertsCenter/alertsCenterPageHelpers";
+import {
+  AlertsFilterBar,
+  AlertsErrorState,
+  AlertsEmptyState,
+  AlertCard,
+} from "./alertsCenter/AlertsCenterUi";
 
 export default function AlertsCenter() {
   const navigate = useNavigate();
@@ -41,9 +41,6 @@ export default function AlertsCenter() {
   );
 
   const alertTypes = useMemo(() => uniqueAlertTypes(alerts), [alerts]);
-
-  const btnActive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--accent-muted)", color: "var(--accent-light)" };
-  const btnInactive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--bg-surface-low)", color: "var(--text-muted)" };
 
   return (
     <div className="sb-dashboard-reference-page">
@@ -89,88 +86,37 @@ export default function AlertsCenter() {
         </button>
       </CommandBar>
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
-        {["all", "Critical", "High", "Medium", "Low"].map(s => (
-          <button key={s} onClick={() => setSeverityFilter(s)} style={severityFilter === s ? btnActive : btnInactive}>
-            {s === "all" ? "ALL" : s.toUpperCase()}
-          </button>
-        ))}
-        <div style={{ width: 1, background: "var(--bg-surface-high)", margin: "0 4px" }} />
-        {["all", ...alertTypes].map(t => (
-          <button key={t} onClick={() => setTypeFilter(t)} style={typeFilter === t ? btnActive : btnInactive}>
-            {t === "all" ? "ALL TYPES" : t}
-          </button>
-        ))}
-      </div>
+      <AlertsFilterBar
+        severityFilter={severityFilter}
+        typeFilter={typeFilter}
+        alertTypes={alertTypes}
+        onSeverityFilter={setSeverityFilter}
+        onTypeFilter={setTypeFilter}
+      />
 
       {isLoading ? (
         <LoadingSkeleton variant="table" rows={6} />
       ) : isError ? (
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
-        }}>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-            Couldn’t load alerts
-          </p>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
-            {toUserErrorMessage(error, "Something went wrong. Try again.")}
-          </p>
-          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
-        </div>
+        <AlertsErrorState
+          errorMessage={toUserErrorMessage(error, "Something went wrong. Try again.")}
+          onRetry={() => refetch()}
+        />
       ) : filtered.length === 0 ? (
-        <div className="sbd-card" style={{ padding: "60px 24px", textAlign: "center" }}>
-          <Bell style={{ width: 36, height: 36, color: "var(--text-muted)", margin: "0 auto 12px" }} />
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-secondary)", fontWeight: 500, marginBottom: 4 }}>No active alerts</p>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>
-            Alerts appear when module workflows detect overdue RFIs, deliveries, and similar conditions. Cross-module scan is not deployed.
-          </p>
-        </div>
+        <AlertsEmptyState />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map(alert => {
-            const sev = severityStyle(alert.severity);
-            return (
-              <div key={alert.id} style={{ background: sev.bg, border: "none", borderLeft: `3px solid ${sev.border}`, borderRadius: "var(--radius-card)", overflow: "hidden", opacity: alert.is_read ? 0.60 : 1, transition: "opacity 0.2s" }}>
-                <div style={{ padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <AlertTriangle style={{ width: 15, height: 15, marginTop: 2, flexShrink: 0, color: sev.border }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{alert.title}</span>
-                      <StatusBadge status={alert.severity} />
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-surface-high)", color: "var(--text-muted)", borderRadius: 4, padding: "1px 6px", letterSpacing: "0.08em" }}>{alert.alert_type}</span>
-                      {!alert.is_read && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />}
-                    </div>
-                    <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>{alert.description || alert.message}</p>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{formatDate(alert.created_at || alert.created_date)}</span>
-                      {alert.project_name && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)" }}>· {alert.project_name}</span>}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    {resolveAlertPath(alert, createPageUrl) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        onClick={() => {
-                          markRead(alert);
-                          navigate(resolveAlertPath(alert, createPageUrl));
-                        }}
-                      >
-                        <ExternalLink className="w-3 h-3 mr-1" />Open
-                      </Button>
-                    )}
-                    {!alert.is_read && (
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => markRead(alert)}>Mark Read</Button>
-                    )}
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" style={{ color: "rgba(200,210,230,0.7)" }} onClick={() => dismiss(alert)}>Dismiss</Button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {filtered.map((alert) => (
+            <AlertCard
+              key={alert.id}
+              alert={alert}
+              onOpen={(a, path) => {
+                markRead(a);
+                navigate(path);
+              }}
+              onMarkRead={markRead}
+              onDismiss={dismiss}
+            />
+          ))}
         </div>
       )}
     </div>

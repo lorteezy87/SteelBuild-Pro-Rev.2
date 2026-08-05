@@ -64,6 +64,16 @@ export function readRows(): unknown[] {
   }
 }
 
+/** Persist running-total rows to localStorage. */
+export function writeRows(rows: unknown[]): void {
+  writeLS(LS_ROWS, JSON.stringify(rows || []));
+}
+
+/** Prefer saved unit when it is in the allowed list. */
+export function resolveCostUnit(saved: string, units: readonly string[]): string {
+  return (units as readonly string[]).includes(saved) ? saved : units[0];
+}
+
 /** CSV-cell escaping: wrap in quotes + double any embedded quotes when needed. */
 export function csvCell(value: unknown): string {
   const s = String(value ?? "");

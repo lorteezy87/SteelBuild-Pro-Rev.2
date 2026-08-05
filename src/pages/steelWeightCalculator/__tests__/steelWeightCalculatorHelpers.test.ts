@@ -145,3 +145,12 @@ describe("shape family helpers", () => {
     expect(designationForFamily(null)).toBe("");
   });
 });
+
+import { resolveCostUnit } from "../steelWeightCalculatorHelpers";
+
+describe("resolveCostUnit", () => {
+  it("keeps allowed units and falls back", () => {
+    expect(resolveCostUnit("lb", ["lb", "ton"])).toBe("lb");
+    expect(resolveCostUnit("nope", ["lb", "ton"])).toBe("lb");
+  });
+});

@@ -18,10 +18,8 @@ import CalcDisplay from "@/components/calculators/CalcDisplay";
 import {
   LS_RATE,
   LS_UNIT,
-  LS_ROWS,
   LENGTH_MODES,
   usd,
-  parseLengthFeet,
   readLS,
   writeLS,
   readRows,
@@ -35,6 +33,8 @@ import {
   removeRunningTotalById,
   designationForFamily,
   resolveShapeFamily,
+  writeRows,
+  resolveCostUnit,
 } from "./steelWeightCalculator/steelWeightCalculatorHelpers";
 import {
   mono,
@@ -69,10 +69,9 @@ export default function SteelWeightCalculator() {
 
   // Cost — rate + unit, rehydrated from localStorage.
   const [rate, setRate] = useState(() => readLS(LS_RATE, ""));
-  const [costUnit, setCostUnit] = useState(() => {
-    const saved = readLS(LS_UNIT, COST_UNITS[0]);
-    return COST_UNITS.includes(saved) ? saved : COST_UNITS[0];
-  });
+  const [costUnit, setCostUnit] = useState(() =>
+    resolveCostUnit(readLS(LS_UNIT, COST_UNITS[0]), COST_UNITS),
+  );
 
   // Results state — populated on Calculate, cleared when inputs change.
   const [result, setResult] = useState(null);
@@ -84,13 +83,7 @@ export default function SteelWeightCalculator() {
   // ── Persistence side-effects ───────────────────────────────────
   useEffect(() => { writeLS(LS_RATE, rate); }, [rate]);
   useEffect(() => { writeLS(LS_UNIT, costUnit); }, [costUnit]);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(LS_ROWS, JSON.stringify(runningTotal));
-    } catch {
-      /* quota / private-mode — ignore */
-    }
-  }, [runningTotal]);
+  useEffect(() => { writeRows(runningTotal); }, [runningTotal]);
 
   const rateNum = useMemo(() => parsePositiveRate(rate), [rate]);
 
