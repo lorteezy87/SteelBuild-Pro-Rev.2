@@ -38,8 +38,8 @@
 import { PHASES, PHASE_ABBREV, PHASE_NUMBER } from "@/utils/phases";
 
 // Fast-lookup sets for validation.
-const VALID_PHASES  = new Set(PHASES);
-const VALID_ABBREVS = new Set(Object.values(PHASE_ABBREV));
+export const VALID_PHASES  = new Set(PHASES);
+export const VALID_ABBREVS = new Set(Object.values(PHASE_ABBREV));
 
 // ── Scope-type catalogue ────────────────────────────────────────────
 //

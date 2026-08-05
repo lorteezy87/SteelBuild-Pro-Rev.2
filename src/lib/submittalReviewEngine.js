@@ -48,13 +48,13 @@ export const RECOMMENDATIONS = {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const TERMINAL = new Set([
+export const TERMINAL = new Set([
   "Approved", "Approved as Noted", "Released for Fabrication", "Void",
 ]);
-const DETAILER_CLASS = new Set([
+export const DETAILER_CLASS = new Set([
   "Detailer", "S&H", "Contractor", "Subcontractor",
 ]);
-const REVIEWER_CLASS = new Set(["EOR", "Architect", "AOR"]);
+export const REVIEWER_CLASS = new Set(["EOR", "Architect", "AOR"]);
 const DAY_MS = 86_400_000;
 
 // ── Stage 1: INTAKE ──────────────────────────────────────────────────────────

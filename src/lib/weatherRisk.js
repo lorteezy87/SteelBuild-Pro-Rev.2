@@ -24,12 +24,20 @@
  */
 
 // ── Tunables ────────────────────────────────────────────────────────
-const FORECAST_TTL_MS   = 30 * 60 * 1000;    // 30 min
-const HEAVY_RAIN_MM     = 12;                // ~½ inch in a day → washout
-const HIGH_GUST_KPH     = 55;                // ≈ 34 mph — crane/lift concern
-const HEAT_CEILING_C    = 38;                // ≈ 100°F
-const FREEZE_FLOOR_C    = 0;
-const SNOW_PROB_PCT     = 40;                // 40% snow probability
+export const WEATHER_RISK_THRESHOLDS = {
+  forecastTtlMs: 30 * 60 * 1000, // 30 min
+  heavyRainMm: 12, // ~½ inch in a day → washout
+  highGustKph: 55, // ≈ 34 mph — crane/lift concern
+  heatCeilingC: 38, // ≈ 100°F
+  freezeFloorC: 0,
+  snowProbPct: 40, // 40% snow probability
+};
+const FORECAST_TTL_MS   = WEATHER_RISK_THRESHOLDS.forecastTtlMs;
+const HEAVY_RAIN_MM     = WEATHER_RISK_THRESHOLDS.heavyRainMm;
+const HIGH_GUST_KPH     = WEATHER_RISK_THRESHOLDS.highGustKph;
+const HEAT_CEILING_C    = WEATHER_RISK_THRESHOLDS.heatCeilingC;
+const FREEZE_FLOOR_C    = WEATHER_RISK_THRESHOLDS.freezeFloorC;
+const SNOW_PROB_PCT     = WEATHER_RISK_THRESHOLDS.snowProbPct;
 
 const GEOCODE_CACHE_KEY = "sbp-weather-geocode-v1";
 const FORECAST_MEMORY_CACHE = new Map(); // lat,lon → { at, data }

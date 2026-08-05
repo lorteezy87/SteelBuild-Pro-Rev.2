@@ -36,10 +36,16 @@ const HEADER_H      = 52;    // pt — title band at top of each page
 const FOOTER_H      = 22;    // pt — page number strip at bottom
 
 // Brand-ish colours (RGB) to match the app
-const C_ACCENT   = [200, 155, 32];
-const C_MUTED    = [110, 118, 132];
-const C_BORDER   = [215, 219, 227];
-const C_TEXT     = [20,  24,  32];
+export const GANTT_PDF_PALETTE = {
+  accent: [200, 155, 32],
+  muted: [110, 118, 132],
+  border: [215, 219, 227],
+  text: [20, 24, 32],
+};
+const C_ACCENT   = GANTT_PDF_PALETTE.accent;
+const C_MUTED    = GANTT_PDF_PALETTE.muted;
+const C_BORDER   = GANTT_PDF_PALETTE.border;
+const C_TEXT     = GANTT_PDF_PALETTE.text;
 
 /**
  * Format a Date as "MMM D, YYYY" using UTC to avoid TZ wobble.

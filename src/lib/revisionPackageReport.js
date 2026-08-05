@@ -10,7 +10,7 @@
 
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
 
-const SEVERITIES = ["critical", "high", "medium", "low", "info"];
+export const SEVERITIES = ["critical", "high", "medium", "low", "info"];
 
 /**
  * How far downstream a sheet already is — the "expensive to change" signal.

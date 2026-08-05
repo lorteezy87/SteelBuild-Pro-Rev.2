@@ -38,8 +38,8 @@ export interface CreateFromSetInitial {
   status?: string;
 }
 
-const SENT_STATUSES = new Set(["Submitted", "Under Review"]);
-const VERDICT_STATUSES = new Set([
+export const SENT_STATUSES = new Set(["Submitted", "Under Review"]);
+export const VERDICT_STATUSES = new Set([
   "Approved",
   "Approved as Noted",
   "Revise and Resubmit",
