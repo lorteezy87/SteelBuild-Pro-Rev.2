@@ -16,6 +16,7 @@ import { useOrg } from "@/components/shared/OrgContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { usePlan } from "@/hooks/usePlan";
 import { seatCapacity } from "@/lib/billing/plans";
+import { isNativePlatform } from "@/lib/native/platform";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import {
@@ -51,6 +52,9 @@ export default function OrgMembers() {
   // enforces the same limit when an invitation is accepted.
   const { plan } = usePlan();
   const navigate = useNavigate();
+  // Sign-in-only native build: hide the "Upgrade" (→ billing) upsells; plans are
+  // managed on the web. The seat/plan-limit messages themselves still show.
+  const native = isNativePlatform();
   const memberLimit = plan.limits.members;
   const cap = seatCapacity(members.length, invites.length, memberLimit);
   const atMemberLimit = cap.atLimit;
