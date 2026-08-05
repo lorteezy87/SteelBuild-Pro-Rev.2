@@ -30,6 +30,7 @@ import {
 } from "./rfiAttachmentUpload";
 import { releaseHoldsForRfiMarks } from "@/lib/rfiPieceHolds";
 
+import { findById } from "@/pages/shared/findById";
 type RfiRow = {
   id: string;
   project_id?: string | null;
@@ -224,7 +225,7 @@ export function useRfiPageMutations(args: {
         const uploadedBy = await auth.me?.()
           .then((user: { email?: string }) => user?.email)
           .catch(() => "");
-        const project = projects.find((p) => p.id === (rfiRecord?.project_id || projectId));
+        const project = findById(projects, rfiRecord?.project_id || projectId);
         const now = new Date().toISOString();
 
         for (const file of files) {
@@ -281,7 +282,7 @@ export function useRfiPageMutations(args: {
             data: {
               ...data,
               project_name:
-                projects.find((p) => p.id === ((data.project_id as string) || projectId))?.name ||
+                findById(projects, (data.project_id as string) || projectId)?.name ||
                 (data.project_name as string) ||
                 editingRFI.project_name ||
                 "",
@@ -308,7 +309,7 @@ export function useRfiPageMutations(args: {
             ...data,
             rfi_number: num,
             project_name:
-              projects.find((p) => p.id === ((data.project_id as string) || projectId))?.name ||
+              findById(projects, (data.project_id as string) || projectId)?.name ||
               (data.project_name as string) ||
               "",
           });

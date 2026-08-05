@@ -12,6 +12,7 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 import { ProjectCloseoutLessons } from "./projectCloseout/ProjectCloseoutUi";
 
+import { findById } from "@/pages/shared/findById";
 export default function ProjectCloseout() {
   const projectId = useProjectId();
   const [activeTab, setActiveTab] = useState("checklist");
@@ -37,9 +38,7 @@ export default function ProjectCloseout() {
         : entities.ProjectCloseout.list(),
   });
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const projectCloseout = closeouts[0] || null;
   const qc = useQueryClient();

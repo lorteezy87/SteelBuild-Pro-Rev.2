@@ -33,6 +33,7 @@ import {
 } from "./actionItems/actionItemMutationHelpers";
 
 /** Lightweight CSV export for the canonical presentation path. */
+import { findById } from "@/pages/shared/findById";
 function exportActionItemsToCSV(items) {
   downloadTextFile(buildActionItemsCsvString(items), "action-items.csv", "text/csv;charset=utf-8");
 }
@@ -203,7 +204,7 @@ export default function ActionItems() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;
+  const selectedProject = findById(projects, projectId);
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId],
@@ -336,7 +337,7 @@ export default function ActionItems() {
   }
 
   // Canonical Action Items control center ─────────────────────────────────
-    const activeProject = projects.find((p) => p.id === projectId);
+    const activeProject = findById(projects, projectId);
     const projectHealth = activeProject?.health_status || null;
     const percentComplete =
       activeProject?.scope_complete_pct_override != null

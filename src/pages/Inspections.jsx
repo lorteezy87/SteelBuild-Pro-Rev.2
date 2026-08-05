@@ -18,6 +18,7 @@ import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
+import { findById } from "@/pages/shared/findById";
 const TYPES = [
   "Steel Fabrication",
   "Welds",
@@ -77,9 +78,7 @@ export default function Inspections() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState(null);

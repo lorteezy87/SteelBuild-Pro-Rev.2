@@ -1,3 +1,4 @@
+import { findById } from "@/pages/shared/findById";
 /** Pure helpers for FieldHub page shell. */
 
 export function filterLiveFieldRecords<T extends { is_deleted?: boolean | null }>(
@@ -18,7 +19,7 @@ export function resolveProjectName(
   projectId: string | null | undefined,
   fallback = "All Projects",
 ): string {
-  return projects.find((p) => p.id === projectId)?.name || fallback;
+  return findById(projects, projectId)?.name || fallback;
 }
 
 export function buildFieldHubVisibleTabs<T extends { key: string; label: string }>(

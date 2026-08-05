@@ -11,6 +11,7 @@ import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Upload } from "lucide-react";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
+import { findById } from "@/pages/shared/findById";
 export default function Photos() {
   const projectId = useProjectId();
   const [showUpload, setShowUpload] = useState(false);
@@ -42,9 +43,7 @@ export default function Photos() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const filtered = filterPhotos(photos, { filterDate, filterCategory });
   const stats = computePhotoStats(photos);

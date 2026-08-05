@@ -31,6 +31,7 @@ import {
   computeDailyLogMetrics,
 } from "./dailyLogs/dailyLogsPageHelpers";
 
+import { findById } from "@/pages/shared/findById";
 export default function DailyLogs() {
   const projectId = useProjectId();
   const { can } = usePermissions();
@@ -192,9 +193,7 @@ export default function DailyLogs() {
     setShowForm(true);
   };
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const datePresets = [
     { key: "today", label: "Today" },

@@ -30,13 +30,8 @@ export function buildPayAppContract(
   };
 }
 
-export function findById<T extends { id?: string | null }>(
-  rows: T[],
-  id: string | null | undefined,
-): T | null {
-  if (!id) return null;
-  return (rows || []).find((a) => a.id === id) || null;
-}
+/** @deprecated Prefer `@/pages/shared/findById` — re-export kept for local imports. */
+export { findById } from "@/pages/shared/findById";
 
 /** Coerce form/input values to finite numbers (else 0). */
 export function toFiniteNumber(v: unknown): number {

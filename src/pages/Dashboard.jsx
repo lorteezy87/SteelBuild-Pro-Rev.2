@@ -16,6 +16,7 @@ import {
   filterRowsByProjectIdExcludingDeleted,
 } from "./dashboard/dashboardPageHelpers";
 // Canonical control-center loading uses the same query set for all project views.
+import { findById } from "@/pages/shared/findById";
 const DashboardControlCenter = lazyWithRetry(() => import("./dashboardCC/DashboardControlCenter"));
 const PortfolioControlCenter = lazyWithRetry(() => import("./portfolio/PortfolioControlCenter"));
 
@@ -234,7 +235,7 @@ export default function Dashboard() {
 
   const onOpenProjectFromPortfolioCommand = useCallback((project) => {
     if (!project?.id) return;
-    const match = projects.find((p) => p.id === project.id);
+    const match = findById(projects, project.id);
     setActiveProject(match ? match : project);
   }, [projects, setActiveProject]);
 

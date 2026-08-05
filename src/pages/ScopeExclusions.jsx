@@ -26,6 +26,7 @@ import {
   ScopeBulkActionBar,
 } from "./scopeExclusions/ScopeExclusionsUi";
 
+import { findById } from "@/pages/shared/findById";
 export default function ScopeExclusions() {
   const projectId = useProjectId();
   const qc = useQueryClient();
@@ -129,9 +130,7 @@ export default function ScopeExclusions() {
     }
   };
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const filtered = useMemo(
     () => filterScopeItems(scopeItems, { filterType, filterCategory, search, hideCompleted }),

@@ -63,6 +63,7 @@ import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 // modals/filter are still .jsx; their destructured `= []` prop defaults make
 // TS infer `never[]` props. These boundary casts are removable once those
 // shared/feature components are typed.
+import { findById } from "@/pages/shared/findById";
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
@@ -106,7 +107,7 @@ export default function WorkPackages() {
   });
 
   const liveProjectIds = useMemo(() => buildLiveProjectIdSet(projects), [projects]);
-  const selectedProject = projects.find((p) => p.id === projectId) || null;
+  const selectedProject = findById(projects, projectId);
   const effectiveProjectId = selectedProject?.id || null;
   const workPackages = useMemo(
     () =>

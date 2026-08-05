@@ -38,6 +38,7 @@ import { buildRfiAlertPayload } from "./rfis/rfiMutationHelpers";
 import { planRfiOverdueAlerts } from "./rfis/rfiOverdueAlerts";
 import { useRfiPageMutations } from "./rfis/useRfiPageMutations";
 
+import { findById } from "@/pages/shared/findById";
 export default function RFIs() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -190,11 +191,11 @@ export default function RFIs() {
     );
   }
 
-  const activeProjectName = projects.find((p) => p.id === projectId)?.name || "All Projects";
+  const activeProjectName = findById(projects, projectId)?.name || "All Projects";
 
   // Project-level context for the RFI Control Center hero (real, from the project
   // record + work-package progress — same %-complete source as the Projects page).
-  const activeProject = projects.find((p) => p.id === projectId);
+  const activeProject = findById(projects, projectId);
   const projectHealth = activeProject?.health_status || null;
   const percentComplete =
     activeProject?.scope_complete_pct_override != null
@@ -257,7 +258,7 @@ export default function RFIs() {
       <RfiLogImportModal
         open={showLogImport}
         projectId={projectId}
-        projectName={projects.find((p) => p.id === projectId)?.name}
+        projectName={findById(projects, projectId)?.name}
         projects={projects}
         onClose={() => setShowLogImport(false)}
       />

@@ -58,6 +58,7 @@ import {
  * only adds existing user_profiles rows.
  */
 
+import { findById } from "@/pages/shared/findById";
 function ProjectMembersContent() {
   const qc = useQueryClient();
   const { user: currentUser } = useAuth();
@@ -310,7 +311,7 @@ function ProjectMembersContent() {
     removeMemberMut.mutate(removeTarget.id);
   };
 
-  const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const selectedProject = findById(projects, selectedProjectId);
 
   return (
     <div className="sb-dashboard-reference-page">

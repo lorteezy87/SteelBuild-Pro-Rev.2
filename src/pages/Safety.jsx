@@ -18,6 +18,7 @@ import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
+import { findById } from "@/pages/shared/findById";
 export default function Safety() {
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
@@ -49,9 +50,7 @@ export default function Safety() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState(null);

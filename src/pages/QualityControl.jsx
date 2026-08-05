@@ -11,6 +11,7 @@ import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { filterLiveRecords, filterQcRecords, computeQcStats } from "./qualityControl/qualityControlPageHelpers";
 
+import { findById } from "@/pages/shared/findById";
 export default function QualityControl() {
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
@@ -67,9 +68,7 @@ export default function QualityControl() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const hasActiveFilters = filterType !== "all" || filterResult !== "all" || filterStatus !== null || searchQuery.trim() !== "";
 

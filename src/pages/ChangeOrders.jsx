@@ -56,6 +56,7 @@ import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 import { BulkActionBar } from "@/components/design-system";
 
+import { findById } from "@/pages/shared/findById";
 export default function ChangeOrders() {
   const qc = useQueryClient();
   const projectId = useProjectId();
@@ -320,7 +321,7 @@ export default function ChangeOrders() {
   // The canonical control center owns summary, filtering, status presentation,
   // and row rendering. The page retains server-backed queries and mutation
   // authority so financial and permission behavior cannot diverge.
-  const liveProject = projects.find((p) => p.id === projectId) || activeProject;
+  const liveProject = findById(projects, projectId) || activeProject;
   const baseContract = Number(liveProject?.original_contract_value) || 0;
   const revisedContract = computeRevisedContractValue(liveProject, cos);
 
@@ -372,7 +373,7 @@ export default function ChangeOrders() {
     );
   }
 
-  const projectName = projects.find((p) => p.id === projectId)?.name || "";
+  const projectName = findById(projects, projectId)?.name || "";
 
   const exportCsv = () => {
     const csv = buildChangeOrdersCsvString(filtered);

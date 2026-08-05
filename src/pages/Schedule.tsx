@@ -23,6 +23,7 @@ import { useTaskSelection } from "./schedule/useTaskSelection";
 import { useScheduleMutations } from "./schedule/useScheduleMutations";
 import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
 
+import { findById } from "@/pages/shared/findById";
 export default function Schedule() {
   const [searchParams] = useSearchParams();
   const projectId = useProjectId();
@@ -114,7 +115,7 @@ export default function Schedule() {
   // stay as rows in the drawings table and are hidden from the Gantt.
   // See src/lib/autoScheduleDetailing.js for that path.)
 
-  const selectedProject: any = projects.find((p) => p.id === projectId) || null;
+  const selectedProject: any = findById(projects, projectId);
 
   // Weather risk for the project's address. Open-Meteo is free + keyless
   // so no credit spend; the lib caches geocoding + forecast so repeated

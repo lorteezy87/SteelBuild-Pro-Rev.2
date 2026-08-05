@@ -11,6 +11,7 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 import { filterWarranties, computeWarrantyStats } from "./warranty/warrantyPageHelpers";
 
+import { findById } from "@/pages/shared/findById";
 export default function Warranty() {
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
@@ -37,9 +38,7 @@ export default function Warranty() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState(null);

@@ -44,6 +44,7 @@ import { Plus, Search } from "lucide-react";
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
 import { buildConstraintPrefillFromRfi } from "./constraints/rfiConstraintHandoff";
 
+import { findById } from "@/pages/shared/findById";
 const EMPTY_ENGINE_SOURCES = {
   rfis: [],
   submittals: [],
@@ -307,7 +308,7 @@ export default function Constraints() {
   return (
     <div className="sb-dashboard-reference-page">
     <OperationsPageShell
-      eyebrow={activeProject?.name || projects.find((p) => p.id === projectId)?.name || "All Projects"}
+      eyebrow={activeProject?.name || findById(projects, projectId)?.name || "All Projects"}
       title="Constraint Log"
       subtitle="Track upstream blockers, due dates, priority, mitigation, and the work packages they affect before field execution is held up."
       meta={[

@@ -23,6 +23,7 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 import { CloseoutSignatureModal } from "./punchlist/PunchlistUi";
 
+import { findById } from "@/pages/shared/findById";
 export default function Punchlist() {
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
@@ -79,9 +80,7 @@ export default function Punchlist() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const createMut = useMutation({
     mutationFn: (data) => entities.PunchlistItem.create(withProjectId(data, projectId)),

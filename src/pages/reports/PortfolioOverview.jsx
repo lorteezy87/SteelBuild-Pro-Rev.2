@@ -67,6 +67,7 @@ import {
   ExecutiveCallout,
 } from "./portfolioOverview/components";
 
+import { findById } from "@/pages/shared/findById";
 export default function PortfolioOverview() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -225,7 +226,7 @@ export default function PortfolioOverview() {
   const urgentItems = useMemo(() => {
     const items = [];
     overdueRFIs.slice(0, 6).forEach((r) => {
-      const proj = projects.find((p) => p.id === r.project_id);
+      const proj = findById(projects, r.project_id);
       items.push({
         kind: "RFI",
         title: r.rfi_number || r.title || "RFI",
@@ -236,7 +237,7 @@ export default function PortfolioOverview() {
       });
     });
     pendingCOs.slice(0, 4).forEach((c) => {
-      const proj = projects.find((p) => p.id === c.project_id);
+      const proj = findById(projects, c.project_id);
       items.push({
         kind: "CO",
         title: c.co_number || "CO",
@@ -247,7 +248,7 @@ export default function PortfolioOverview() {
       });
     });
     lateDeliveries.slice(0, 4).forEach((d) => {
-      const proj = projects.find((p) => p.id === d.project_id);
+      const proj = findById(projects, d.project_id);
       items.push({
         kind: "DELIVERY",
         title: d.po_number || d.vendor || "Delivery",
@@ -498,7 +499,7 @@ export default function PortfolioOverview() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {topRisks.map((r) => {
-              const proj = projects.find((p) => p.id === r.project_id);
+              const proj = findById(projects, r.project_id);
               return (
                 <div
                   key={r.id}

@@ -14,6 +14,7 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 import { filterChangeRequests, computeChangeRequestStats } from "./changeRequests/changeRequestsPageHelpers";
 
+import { findById } from "@/pages/shared/findById";
 export default function ChangeRequests() {
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
@@ -43,9 +44,7 @@ export default function ChangeRequests() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const selectedProject = projectId
-    ? projects.find((p) => p.id === projectId)
-    : null;
+  const selectedProject = findById(projects, projectId);
 
   const filtered = filterChangeRequests(changeRequests, { filterStatus, filterPriority });
 

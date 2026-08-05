@@ -44,11 +44,6 @@ export function computeContactStats(contacts: ContactLike[]) {
   };
 }
 
-export function findById<T extends { id?: string | null }>(
-  rows: T[],
-  id: string | null | undefined,
-): T | null {
-  if (!id) return null;
-  return (rows || []).find((r) => r.id === id) || null;
-}
+/** @deprecated Prefer `@/pages/shared/findById` — re-export kept for local imports. */
+export { findById } from "@/pages/shared/findById";
 
