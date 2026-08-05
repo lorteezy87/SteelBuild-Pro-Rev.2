@@ -34,7 +34,9 @@
          scales sharply at any size and iOS rounds the apple-touch-icon from
          the square field. (Replaced the prior PNG set; see public/favicon.svg.) -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <!-- iOS home-screen icon: a 180×180 PNG (iOS does not reliably render SVG
+         apple-touch-icons). -->
+    <link rel="apple-touch-icon" href="/steelbuild-pro-icon-180.png" />
 
     <!-- Apply persisted theme before first paint to avoid FOUC -->
     <script>

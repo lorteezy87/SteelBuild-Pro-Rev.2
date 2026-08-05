@@ -31,9 +31,24 @@
     "test:e2e:staging:readonly": "playwright test e2e/smoke.spec.ts e2e/daily-workflow.spec.ts && playwright test e2e/staging-auth-boundary.spec.ts",
     "test:e2e:staging:mutations": "playwright test e2e/fab-release-gate.spec.ts e2e/piece-control-pilot.spec.ts",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:install": "playwright install chromium"
+    "test:e2e:install": "playwright install chromium",
+    "cap:add:ios": "cap add ios",
+    "cap:sync": "npm run build && cap sync ios",
+    "cap:copy": "cap copy ios",
+    "cap:open": "cap open ios",
+    "ios": "npm run cap:sync && cap open ios"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/camera": "^8.2.2",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/keyboard": "^8.0.5",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/share": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@hookform/resolvers": "^4.1.2",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
@@ -95,6 +110,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "@eslint/js": "^9.19.0",
     "@playwright/test": "^1.61.0",
     "@sentry/vite-plugin": "^5.3.0",
