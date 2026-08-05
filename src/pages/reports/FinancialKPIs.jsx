@@ -14,46 +14,31 @@
  */
 
 import React, { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { entities } from "@/api/supabaseClient";
+import { createPageUrl } from "@/utils";
 import {
-  useQuery } from "@tanstack/react-query";,
-  import { useNavigate } from "react-router-dom";,
-  import { entities } from "@/api/supabaseClient";,
-  import { createPageUrl } from "@/utils";,
-  import {,
   calcContractValue,
   calcEVM,
   calcWpProgress,
   calcLaborBurn,
-  } from "@/utils/projectKpis";,
-  import ReportShell from "./ReportShell";,
-  import { FilterBar,
-  SearchInput } from "./ReportFilters";,
-  import { mono,
-  body,
-  CARD,
-  CARD_TITLE,
-  LABEL,
-  HEALTH_COLORS } from "./constants";,
-  import {,
+} from "@/utils/projectKpis";
+import ReportShell from "./ReportShell";
+import { FilterBar, SearchInput } from "./ReportFilters";
+import { mono, body, CARD, CARD_TITLE, LABEL, HEALTH_COLORS } from "./constants";
+import {
   formatCurrency,
   formatCurrencyFull,
   formatPercent,
   exportTableCSV,
-  } from "./utils";,
-  import {,
-  ScatterChart,
-  Scatter,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RTooltip,
-  ResponsiveContainer,
-  Cell,
-  BarChart,
-  Bar,
-  } from "recharts";,
-  import { getChartTheme } from "@/components/shared/RechartsThemeConfig";,
-  import {,
+} from "./utils";
+import {
+  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
+  ResponsiveContainer, Cell, BarChart, Bar,
+} from "recharts";
+import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
+import {
   trafficLight,
   healthColor as healthColorFromMap,
   buildProjectFinancialMetrics,
