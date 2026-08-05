@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { PHASES, PHASE_COLORS, PHASE_NUMBER, derivePhase } from "../../utils/phases";
+import { PHASE_COLORS } from "../../utils/phases";
 import { formatDateShort } from "../shared/formatters";
 import DateOrTbdInput from "./DateOrTbdInput";
-import { buildTreeOrder } from "./scheduleTree";
+import {
+  filterScheduleTasksByPriorityStatus,
+  groupScheduleTasksByPhase,
+} from "./scheduleTaskListHelpers";
 
 const PRIORITY_COLORS = {
   Critical: "var(--status-error)",
@@ -33,11 +36,6 @@ const TASK_LIST_COLUMNS = [
   { key: "actions", label: "" },
 ];
 
-const sortByDate = (a, b) => {
-  if (!a.start_date) return 1;
-  if (!b.start_date) return -1;
-  return new Date(a.start_date) - new Date(b.start_date);
-};
 
 export function getScheduleTaskRowKey(task, index, phase = "task") {
   const id = String(task?.id || "").trim();
@@ -158,42 +156,12 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
   };
 
   // Apply filters
-  const filtered = tasks.filter((t) => {
-    const prioMatch = filterPriority === "all" || t.priority === filterPriority;
-    const statusMatch = filterStatus === "all" || t.status === filterStatus;
-    return prioMatch && statusMatch;
-  });
+  const filtered = filterScheduleTasksByPriorityStatus(tasks, { filterPriority, filterStatus });
 
-  const grouped = useMemo(() => {
-    const priorityOrder = ["Critical", "High", "Normal", "Low"];
-    const orderSource = [...filtered];
-
-    if (sortBy === "priority") {
-      orderSource.sort((a, b) => priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority));
-    } else if (sortBy === "start_date") {
-      orderSource.sort(sortByDate);
-    }
-
-    return PHASES.map((phase) => {
-      const ordered = buildTreeOrder(
-        orderSource.filter((t) => derivePhase(t) === phase),
-        { rootPrefix: PHASE_NUMBER[phase] ?? null }
-      );
-      const taskById = new Map(ordered.map((task) => [task.id, task]));
-      const visibleTasks = ordered.filter((task) => {
-        let parentId = task.parent_task_id;
-        while (parentId) {
-          if (collapsedTasks[parentId]) return false;
-          const parent = taskById.get(parentId);
-          if (!parent) break;
-          parentId = parent.parent_task_id;
-        }
-        return true;
-      });
-
-      return { phase, tasks: visibleTasks, totalTasks: ordered.length };
-    }).filter((g) => g.tasks.length > 0);
-  }, [collapsedTasks, filtered, sortBy]);
+  const grouped = useMemo(
+    () => groupScheduleTasksByPhase(filtered, { sortBy, collapsedTasks }),
+    [collapsedTasks, filtered, sortBy],
+  );
 
   const selectStyle = {
     background: "var(--bg-input)",
