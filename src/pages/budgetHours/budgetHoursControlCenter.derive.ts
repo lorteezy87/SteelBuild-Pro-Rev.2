@@ -320,3 +320,85 @@ export function buildBudgetHoursSummary(
     misses,
   };
 }
+
+export function buildWpsById<T extends { id?: string | null }>(wps: T[]): Map<string, T> {
+  const m = new Map<string, T>();
+  for (const w of wps || []) {
+    if (w?.id) m.set(w.id, w);
+  }
+  return m;
+}
+
+export type BudgetCommandFilter = {
+  categoryFilter: string;
+  overBudgetOnly: boolean;
+  search: string;
+};
+
+/** Table filter for the command center: exclude Misses + category/over-budget/search. */
+export function filterCommandBudgetRows<
+  T extends {
+    category?: string | null;
+    is_specialty?: boolean | null;
+    shop_hours_budget?: number | null;
+    field_hours_budget?: number | null;
+    shop_hours_actual?: number | null;
+    field_hours_actual?: number | null;
+    scope_item?: string | null;
+    notes?: string | null;
+  },
+>(rows: T[], opts: BudgetCommandFilter): T[] {
+  return (rows || [])
+    .filter((r) => r.category !== "Misses")
+    .filter((r) => {
+      if (opts.categoryFilter === "Standard") return r.category === "Standard" && !r.is_specialty;
+      if (opts.categoryFilter === "Specialty") return r.category === "Specialty" || r.is_specialty;
+      return true;
+    })
+    .filter((r) => {
+      if (!opts.overBudgetOnly) return true;
+      const tb = (Number(r.shop_hours_budget) || 0) + (Number(r.field_hours_budget) || 0);
+      const ta = (Number(r.shop_hours_actual) || 0) + (Number(r.field_hours_actual) || 0);
+      return ta > tb && tb > 0;
+    })
+    .filter((r) => {
+      const q = (opts.search || "").trim().toLowerCase();
+      if (!q) return true;
+      return (
+        (r.scope_item || "").toLowerCase().includes(q) ||
+        (r.notes || "").toLowerCase().includes(q)
+      );
+    });
+}
+
+export const BUDGET_HOURS_CSV_HEADERS = [
+  "Scope Item",
+  "Category",
+  "Shop Budget",
+  "Shop Actual",
+  "Field Budget",
+  "Field Actual",
+  "Notes",
+] as const;
+
+export function buildBudgetHoursCsvRows(
+  rows: Array<{
+    scope_item?: string | null;
+    category?: string | null;
+    shop_hours_budget?: number | null;
+    shop_hours_actual?: number | null;
+    field_hours_budget?: number | null;
+    field_hours_actual?: number | null;
+    notes?: string | null;
+  }>,
+): Array<Array<string | number>> {
+  return (rows || []).map((r) => [
+    r.scope_item ?? "",
+    r.category ?? "",
+    Number(r.shop_hours_budget) || 0,
+    Number(r.shop_hours_actual) || 0,
+    Number(r.field_hours_budget) || 0,
+    Number(r.field_hours_actual) || 0,
+    r.notes || "",
+  ]);
+}

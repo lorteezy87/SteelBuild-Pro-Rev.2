@@ -43,6 +43,10 @@ import ScopeItemFormModal from "./budgetHours/ScopeItemFormModal";
 ───────────────────────────────────────────── */
 import {
   filterLiveBudgetRows,
+  buildWpsById,
+  filterCommandBudgetRows,
+  BUDGET_HOURS_CSV_HEADERS,
+  buildBudgetHoursCsvRows,
 } from "./budgetHours/budgetHoursControlCenter.derive";
 import {
   PresetDialog,
@@ -90,11 +94,7 @@ export default function BudgetHours() {
     queryFn: () => (projectId ? entities.WorkPackage.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
   });
-  const wpsById = useMemo(() => {
-    const m = new Map();
-    wps.forEach((w) => m.set(w.id, w));
-    return m;
-  }, [wps]);
+  const wpsById = useMemo(() => buildWpsById(wps), [wps]);
 
   /* ── Mutations ──
      Audit + cache invalidation mirror the canonical Deliveries pattern:
@@ -252,39 +252,15 @@ export default function BudgetHours() {
   /* ── Canonical Budget Hours control center ── */
     // Apply search + category + over-budget filter for the DataTable.
     // Misses rows are always excluded from the table (they have their own panel).
-    const commandFiltered = rows
-      .filter((r) => r.category !== "Misses")
-      .filter((r) => {
-        if (categoryFilter === "Standard") return r.category === "Standard" && !r.is_specialty;
-        if (categoryFilter === "Specialty") return r.category === "Specialty" || r.is_specialty;
-        return true;
-      })
-      .filter((r) => {
-        if (!overBudgetOnly) return true;
-        // Quick over-budget check: total actual > total budget (ignoring WP rollup for filter — full math in derive)
-        const tb = (Number(r.shop_hours_budget) || 0) + (Number(r.field_hours_budget) || 0);
-        const ta = (Number(r.shop_hours_actual) || 0) + (Number(r.field_hours_actual) || 0);
-        return ta > tb && tb > 0;
-      })
-      .filter((r) => {
-        const q = search.trim().toLowerCase();
-        if (!q) return true;
-        return (
-          (r.scope_item || "").toLowerCase().includes(q) ||
-          (r.notes || "").toLowerCase().includes(q)
-        );
-      });
+    const commandFiltered = filterCommandBudgetRows(rows, {
+      categoryFilter,
+      overBudgetOnly,
+      search,
+    });
 
     const handleExportCsv = () => {
-      const headers = ["Scope Item", "Category", "Shop Budget", "Shop Actual", "Field Budget", "Field Actual", "Notes"];
-      const exportRows = commandFiltered.map((r) => [
-        r.scope_item, r.category,
-        Number(r.shop_hours_budget) || 0,
-        Number(r.shop_hours_actual) || 0,
-        Number(r.field_hours_budget) || 0,
-        Number(r.field_hours_actual) || 0,
-        r.notes || "",
-      ]);
+      const headers = [...BUDGET_HOURS_CSV_HEADERS];
+      const exportRows = buildBudgetHoursCsvRows(commandFiltered);
       const csv = [headers, ...exportRows].map((row) => row.map((c) => `"${c ?? ""}"`).join(",")).join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
