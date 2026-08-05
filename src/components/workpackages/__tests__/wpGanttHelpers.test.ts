@@ -8,6 +8,10 @@ import {
   buildGanttTicks,
   buildWeekendBands,
   startOfDay,
+  PHASE_COLOR,
+  LEFT_COL,
+  ROW_H,
+  HEADER_H,
 } from "../wpGanttHelpers";
 
 describe("getWPDates", () => {
@@ -63,5 +67,14 @@ describe("buildGanttTicks / weekendBands", () => {
     const end = addDays(start, 7);
     expect(buildWeekendBands(start, end, 6)).toEqual([]);
     expect(buildWeekendBands(start, end, 18).length).toBeGreaterThan(0);
+  });
+});
+
+describe("wp gantt chrome", () => {
+  it("phase colors and layout constants", () => {
+    expect(PHASE_COLOR.Detailing).toBeTruthy();
+    expect(LEFT_COL).toBe(340);
+    expect(ROW_H).toBe(38);
+    expect(HEADER_H).toBe(56);
   });
 });

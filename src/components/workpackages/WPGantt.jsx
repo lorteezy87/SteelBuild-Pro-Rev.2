@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { GANTT_PHASE_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
+import { GANTT_TODAY_HEX } from "@/lib/ganttTheme";
 import {
   addDays,
   daysBetween,
@@ -12,19 +12,11 @@ import {
   buildGanttDateRange,
   buildGanttTicks,
   buildWeekendBands,
+  PHASE_COLOR,
+  LEFT_COL,
+  ROW_H,
+  HEADER_H,
 } from "./wpGanttHelpers";
-
-// ─── Phase colors (matches page) ────────────────────────────────────
-const PHASE_COLOR = {
-  Detailing:   GANTT_PHASE_HEX.Detailing,
-  Fabrication: GANTT_PHASE_HEX.Fabrication,
-  Delivery:    GANTT_PHASE_HEX.Delivery,
-  Erection:    GANTT_PHASE_HEX.Erection,
-};
-
-const LEFT_COL = 340;
-const ROW_H    = 38;
-const HEADER_H = 56;
 
 // ─── Zoom level config ───────────────────────────────────────────────
 const ZOOM_LEVELS = [

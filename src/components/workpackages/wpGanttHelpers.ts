@@ -1,3 +1,4 @@
+import { GANTT_PHASE_HEX } from "@/lib/ganttTheme";
 /**
  * Pure date/range/conflict helpers for WPGantt.
  */
@@ -154,3 +155,14 @@ export function buildWeekendBands(
   }
   return bands;
 }
+
+export const PHASE_COLOR: Record<string, string> = {
+  Detailing: GANTT_PHASE_HEX.Detailing,
+  Fabrication: GANTT_PHASE_HEX.Fabrication,
+  Delivery: GANTT_PHASE_HEX.Delivery,
+  Erection: GANTT_PHASE_HEX.Erection,
+};
+
+export const LEFT_COL = 340;
+export const ROW_H = 38;
+export const HEADER_H = 56;
