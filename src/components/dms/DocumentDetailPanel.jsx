@@ -9,28 +9,9 @@ import {
   buildDocumentVersionStack,
   buildLinkedDocumentEntities,
   fileSizeMbFromKb,
+  STATUS_COLORS,
+  ENTITY_LABELS,
 } from "./documentDetailPanelHelpers";
-
-const STATUS_COLORS = {
-  "Draft":                   { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
-  "Under Review":            { bg: "var(--warning-muted)", color: "var(--status-warning)" },
-  "Approved":                { bg: "var(--success-muted)", color: "var(--status-success)" },
-  "Approved with Comments":  { bg: "color-mix(in srgb, var(--status-success) 10%, transparent)", color: "var(--status-success)" },
-  "Revise & Resubmit":       { bg: "var(--warning-muted)", color: "var(--status-warning)" },
-  "Rejected":                { bg: "var(--danger-muted)", color: "var(--status-error)" },
-  "Superseded":              { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
-  "Issued":                  { bg: "var(--info-muted)", color: "var(--status-info)" },
-  "Archived":                { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
-  "Void":                    { bg: "color-mix(in srgb, var(--status-error) 10%, transparent)", color: "var(--status-error)" },
-};
-
-const ENTITY_LABELS = {
-  work_package_id: { label: "Work Package", color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
-  rfi_id:          { label: "RFI",          color: "var(--status-warning)", bg: "var(--warning-muted)", border: "var(--warning-border)" },
-  delivery_id:     { label: "Delivery",     color: "var(--status-info)", bg: "var(--info-muted)", border: "var(--info-border)" },
-  change_order_id: { label: "Change Order", color: "var(--status-error)", bg: "var(--danger-muted)", border: "var(--danger-border)" },
-  submittal_id:    { label: "Submittal",    color: "var(--status-warning)", bg: "var(--warning-muted)", border: "var(--warning-border)" },
-};
 
 export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, onEdit }) {
   const [activeTab, setActiveTab] = useState("details");

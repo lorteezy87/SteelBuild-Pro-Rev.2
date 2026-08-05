@@ -3,6 +3,8 @@ import {
   buildDocumentVersionStack,
   buildLinkedDocumentEntities,
   fileSizeMbFromKb,
+  STATUS_COLORS,
+  ENTITY_LABELS,
 } from "../documentDetailPanelHelpers";
 
 describe("buildDocumentVersionStack", () => {
@@ -21,5 +23,16 @@ describe("buildLinkedDocumentEntities / fileSize", () => {
     const labels = { rfi_id: { label: "RFI", color: "c", bg: "b", border: "x" } };
     expect(buildLinkedDocumentEntities({ rfi_id: "r1" }, labels)[0].value).toBe("r1");
     expect(fileSizeMbFromKb(2048)).toBe("2.0");
+  });
+});
+
+describe("document detail chrome maps", () => {
+  it("status colors", () => {
+    expect(STATUS_COLORS.Approved.color).toBe("var(--status-success)");
+    expect(STATUS_COLORS.Void.color).toBe("var(--status-error)");
+  });
+  it("entity labels", () => {
+    expect(ENTITY_LABELS.rfi_id.label).toBe("RFI");
+    expect(ENTITY_LABELS.work_package_id.color).toBe("var(--accent)");
   });
 });
