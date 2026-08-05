@@ -34,12 +34,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { RowWithAliases } from '@/api/supabaseClient';
-import type { Json } from '@/types/supabase';
 import { useProjectId } from '@/hooks/useProjectId';
 import { useAutoOpenCreate } from '@/hooks/useAutoOpenCreate';
 import { toUserErrorMessage, withProjectId } from '@/lib/mutations/standardMutation';
 import { exportToCSV } from '@/lib/csv';
-import { PROCUREMENT_CATEGORIES, ALL_STATUSES, addWeeks } from './procurement/format';
+import { PROCUREMENT_CATEGORIES, ALL_STATUSES } from './procurement/format';
 import ProcurementControlCenter from './procurement/ProcurementControlCenter';
 import { ProcurementFormModal } from './procurement/components';
 import DeleteDialog from '@/components/shared/DeleteDialog';
@@ -47,6 +46,14 @@ import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
 import { Button as ButtonBase } from '@/components/design-system';
 const Button = ButtonBase as any;
 import type { ProcurementItem } from './procurement/procurementControlCenter.derive';
+import {
+  filterProcurementSubset,
+  enrichProcurementItems,
+  filterAndSortEnriched,
+  buildWpById,
+  buildProcurementCsvRow,
+  PROCUREMENT_CSV_HEADERS,
+} from './procurement/procurementPageHelpers';
 
 
 export default function Procurement() {
@@ -110,7 +117,7 @@ export default function Procurement() {
   // useMemo(filter !is_deleted) pattern Budget Hours uses so the page
   // can't accidentally render a tombstoned row.
   const items = useMemo(
-    () => rawItems.filter((r) => !r.is_deleted && r.procurement_category),
+    () => filterProcurementSubset(rawItems),
     [rawItems],
   );
 
@@ -165,76 +172,27 @@ export default function Procurement() {
 
   // Compute per-row derivations once so list/pipeline/board all share
   // the same isLate / isOverdue / leadShipDate semantics.
-  const enriched = useMemo(() => items.map(item => {
-    const required = item.required_date ? new Date(item.required_date) : null;
-    const promised = item.scheduled_date ? new Date(item.scheduled_date) : null;
-    const isLate = required && promised && promised > required
-      && !['Received', 'Cancelled'].includes(item.status);
-    const isOverdue = required && !['Received', 'Cancelled'].includes(item.status)
-      && required < today;
-    const diff = required && promised ? +promised - +required : NaN;
-    const daysExposure = Number.isFinite(diff) ? Math.ceil(diff / 86400000) : null;
+  const enriched = useMemo(
+    () => enrichProcurementItems(items, today),
+    [items, today],
+  );
 
-    // Lead-time math: when both order_placed and lead_time_weeks are set,
-    // the implied ship date is order_placed + weeks*7. Surface it as
-    // computedShipDate so list cells can render either the user-entered
-    // expected_ship_date OR the computed one with a "calc" suffix.
-    const computedShipDate = (item.order_placed_date && item.lead_time_weeks)
-      ? addWeeks(item.order_placed_date, Number(item.lead_time_weeks))
-      : null;
-    const effectiveShipDate = item.expected_ship_date || computedShipDate;
+  const filtered = useMemo(
+    () =>
+      filterAndSortEnriched(enriched, {
+        filterCat,
+        filterStatus,
+        search,
+      }),
+    [enriched, filterCat, filterStatus, search],
+  );
 
-    // Long-lead slip = the implied ship date is later than the required
-    // date AND the row isn't already received/cancelled. This is the
-    // signal a PM most cares about - items that won't make their need-by.
-    const longLeadSlipping = !!(
-      item.is_long_lead
-      && effectiveShipDate
-      && item.required_date
-      && new Date(effectiveShipDate) > new Date(item.required_date)
-      && !['Received', 'Cancelled'].includes(item.status)
-    );
-
-    return {
-      ...item,
-      isLate,
-      isOverdue,
-      daysExposure,
-      computedShipDate,
-      effectiveShipDate,
-      longLeadSlipping,
-    };
-  }), [items, today]);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return enriched.filter(item => {
-      if (filterCat !== 'all' && item.procurement_category !== filterCat) return false;
-      if (filterStatus !== 'all' && item.status !== filterStatus) return false;
-      if (q && !(
-        item.description?.toLowerCase().includes(q) ||
-        item.vendor?.toLowerCase().includes(q) ||
-        item.po_number?.toLowerCase().includes(q)
-      )) return false;
-      return true;
-    }).sort((a, b) => {
-      if (a.isOverdue && !b.isOverdue) return -1;
-      if (!a.isOverdue && b.isOverdue) return 1;
-      if (a.isLate && !b.isLate) return -1;
-      if (!a.isLate && b.isLate) return 1;
-      return 0;
-    });
-  }, [enriched, filterCat, filterStatus, search]);
 
 
   const selectedProject = projects.find(p => p.id === projectId);
 
   // Fast WP lookup for the linkage display
-  const wpById = useMemo(() => {
-    const m = new Map();
-    for (const w of workPackages) if (w?.id) m.set(w.id, w);
-    return m;
-  }, [workPackages]);
+  const wpById = useMemo(() => buildWpById(workPackages), [workPackages]);
 
 
   const handleSetFilterStatus = (s) => {
@@ -247,39 +205,8 @@ export default function Procurement() {
   };
 
   const handleExportCSV = () => {
-    const headers = [
-      'Item', 'Category', 'Vendor', 'PO Number', 'Status',
-      'Required Date', 'Promised Date', 'Order Placed', 'Expected Ship',
-      'Lead (wk)', 'Long Lead', 'Weight (T)', 'Pieces',
-      'Cost Estimate', 'Work Package', 'Notes',
-    ];
-    // metadata is jsonb (Json | null). cost_estimate is only ever stored as a
-    // string (see procurement form), but the Json type also admits object/array
-    // members — read it only when metadata is a plain object, then keep the
-    // original `value || ''` semantics for the string/number it can actually be.
-    const costEstimate = (meta: Json | null | undefined): string | number => {
-      if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return '';
-      const v = meta.cost_estimate;
-      return (typeof v === 'string' || typeof v === 'number') ? (v || '') : '';
-    };
-    const rows = filtered.map((i) => [
-      i.description || '',
-      i.procurement_category || '',
-      i.vendor || '',
-      i.po_number || '',
-      i.status || '',
-      i.required_date || '',
-      i.scheduled_date || '',
-      i.order_placed_date || '',
-      i.expected_ship_date || i.computedShipDate || '',
-      i.lead_time_weeks ?? '',
-      i.is_long_lead ? 'Yes' : 'No',
-      Number(i.weight_tons || 0) || '',
-      Number(i.pieces || 0) || '',
-      costEstimate(i.metadata),
-      i.work_package_id ? (wpById.get(i.work_package_id)?.wp_number || wpById.get(i.work_package_id)?.name || '') : '',
-      i.notes || '',
-    ]);
+    const headers = [...PROCUREMENT_CSV_HEADERS];
+    const rows = filtered.map((i) => buildProcurementCsvRow(i, wpById));
     const stamp = new Date().toISOString().slice(0, 10);
     exportToCSV({
       filename: `procurement-${selectedProject?.name?.replace(/\W+/g, '-') || 'project'}-${stamp}.csv`,
