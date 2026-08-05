@@ -20,6 +20,7 @@ import { PLANS } from "@/lib/billing/plans";
 import { startCheckout, openBillingPortal } from "@/lib/billing/billingService";
 import { isNativePlatform } from "@/lib/native/platform";
 import BillingControlCenter from "./billing/BillingControlCenter";
+import { countPendingInvites } from "./billing/billingPageHelpers";
 import { listOrgMembers, listInvitations } from "@/lib/org/repository";
 import { entities } from "@/api/supabaseClient";
 
@@ -95,7 +96,7 @@ export default function Billing() {
 
   const memberCount = orgMembers.length;
   const pendingCount = useMemo(
-    () => orgInvites.filter((i) => i.status === "pending").length,
+    () => countPendingInvites(orgInvites),
     [orgInvites],
   );
   const projectCount = projects.length;

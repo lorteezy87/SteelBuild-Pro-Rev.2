@@ -5,6 +5,9 @@ import {
   formatLongDate,
   shiftDate,
   indexProjectsById,
+  buildProjectNoteRows,
+  projectIdsWithRows,
+  filterAvailableProjects,
 } from "../productionNotesHelpers";
 
 describe("productionNotesHelpers", () => {
@@ -25,6 +28,35 @@ describe("productionNotesHelpers", () => {
   });
 
   it("indexes projects", () => {
-    expect(indexProjectsById([{ id: "a", name: "A" }, { id: "b" }]).a.name).toBe("A");
+    expect(indexProjectsById([{ id: "a", name: "A" }, { id: "b" }]).get("a")?.name).toBe("A");
+  });
+
+  it("groups notes and filters available projects", () => {
+    const projectsById = indexProjectsById([
+      { id: "p1", name: "Alpha", project_number: "A-1" },
+      { id: "p2", name: "Beta", project_number: "B-1" },
+    ]);
+    const rows = buildProjectNoteRows(
+      [
+        { project_id: "p2", content: "b" },
+        { project_id: "p1", content: "a" },
+        { project_id: "gone", content: "x" },
+        { project_id: null, content: "skip" },
+      ] as any,
+      projectsById,
+    );
+    expect(rows.map((r) => r.projectId)).toEqual(["p1", "p2"]);
+    const withRows = projectIdsWithRows(rows);
+    expect(
+      filterAvailableProjects(
+        [
+          { id: "p1", name: "Alpha", project_number: "A-1" },
+          { id: "p2", name: "Beta", project_number: "B-1" },
+          { id: "p3", name: "Gamma", project_number: "G-1" },
+        ],
+        withRows,
+        "gam",
+      ).map((p) => p.id),
+    ).toEqual(["p3"]);
   });
 });

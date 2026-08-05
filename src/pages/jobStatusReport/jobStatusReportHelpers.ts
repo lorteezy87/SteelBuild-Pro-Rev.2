@@ -70,3 +70,59 @@ export function sortProjectsByHealthThenName(projects: any[]) {
     return String(a.name || "").localeCompare(String(b.name || ""));
   });
 }
+
+export function enrichProjectsWithReadiness<T>(
+  projects: T[],
+  nowMs: number = Date.now(),
+): Array<T & { _readiness: ReturnType<typeof computeReadiness> }> {
+  return (projects || []).map((p) => ({ ...p, _readiness: computeReadiness(p, nowMs) }));
+}
+
+export function computeJobStatusKpis(
+  enriched: Array<{ _readiness: { status: string }; health_status?: string | null }>,
+  nowMs: number = Date.now(),
+) {
+  const readyCount = enriched.filter((p) => p._readiness.status === "ready").length;
+  const needsReviewCount = enriched.filter((p) => p._readiness.status === "needs-review").length;
+  const missingDataCount = enriched.filter((p) => p._readiness.status === "missing-data").length;
+  const atRiskCount = enriched.filter((p) => p.health_status === "At Risk").length;
+  const weekAgo = nowMs - 7 * 86400000;
+  const generatedThisWeek = enriched.filter((p) => {
+    const d = getPsrReportDate(p);
+    return d && new Date(d).getTime() >= weekAgo;
+  }).length;
+  return { readyCount, needsReviewCount, missingDataCount, atRiskCount, generatedThisWeek };
+}
+
+export function filterJobStatusProjects<
+  T extends {
+    name?: string | null;
+    project_number?: string | null;
+    client?: string | null;
+    health_status?: string | null;
+    _readiness: { status: string };
+  },
+>(
+  enriched: T[],
+  opts: { search: string; healthFilter: string; readinessFilter: string },
+): T[] {
+  const q = (opts.search || "").trim().toLowerCase();
+  return (enriched || [])
+    .filter((p) => {
+      if (q) {
+        const match =
+          (p.name || "").toLowerCase().includes(q) ||
+          (p.project_number || "").toLowerCase().includes(q) ||
+          (p.client || "").toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (opts.healthFilter !== "all" && p.health_status !== opts.healthFilter) return false;
+      if (opts.readinessFilter !== "all" && p._readiness.status !== opts.readinessFilter) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const aOrder = HEALTH_SORT_ORDER[a.health_status as keyof typeof HEALTH_SORT_ORDER] ?? 3;
+      const bOrder = HEALTH_SORT_ORDER[b.health_status as keyof typeof HEALTH_SORT_ORDER] ?? 3;
+      return aOrder - bOrder;
+    });
+}

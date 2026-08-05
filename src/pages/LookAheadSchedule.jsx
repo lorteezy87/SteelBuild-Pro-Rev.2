@@ -13,6 +13,7 @@ import { deriveOperationalConstraints } from "@/services/constraintEngine";
 import { summarizeBlockingConstraints } from "@/services/scheduleGatekeeper";
 import {
   buildWpLabelById,
+  buildRfisById,
   groupLookAheadItems,
   computeLookAheadStats,
 } from "./lookAheadSchedule/lookAheadScheduleHelpers";
@@ -66,7 +67,7 @@ export default function LookAheadSchedule() {
     enabled: !!activeProject?.id,
   });
   const rfisById = useMemo(
-    () => Object.fromEntries(rfis.map((r) => [String(r.id), r])),
+    () => buildRfisById(rfis),
     [rfis],
   );
   const wpLabelById = useMemo(

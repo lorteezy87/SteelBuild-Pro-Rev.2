@@ -3,6 +3,7 @@ import {
   computeReadiness,
   sortProjectsByHealthThenName,
 } from "../jobStatusReportHelpers";
+// extended below
 
 describe("jobStatusReportHelpers", () => {
   it("computes readiness", () => {
@@ -32,5 +33,30 @@ describe("jobStatusReportHelpers", () => {
       { name: "M", health_status: "Watch" },
     ]);
     expect(sorted.map((p) => p.name)).toEqual(["A", "M", "Z"]);
+  });
+});
+
+import {
+  enrichProjectsWithReadiness,
+  computeJobStatusKpis,
+  filterJobStatusProjects,
+} from "../jobStatusReportHelpers";
+
+describe("jobStatusReport page helpers", () => {
+  it("enriches, kpis, and filters", () => {
+    const projects = [
+      { id: "1", name: "Alpha", health_status: "At Risk", phase: "Fabrication", original_contract_value: 1, target_completion_date: "2026-01-01", project_manager: "Ada" },
+      { id: "2", name: "Beta", health_status: "On Track", phase: "Detailing", original_contract_value: 1, target_completion_date: "2026-01-01", project_manager: "Bob" },
+    ];
+    const enriched = enrichProjectsWithReadiness(projects);
+    expect(enriched[0]._readiness).toBeTruthy();
+    const kpis = computeJobStatusKpis(enriched);
+    expect(kpis.atRiskCount).toBe(1);
+    const filtered = filterJobStatusProjects(enriched, {
+      search: "alpha",
+      healthFilter: "all",
+      readinessFilter: "all",
+    });
+    expect(filtered.map((p) => p.id)).toEqual(["1"]);
   });
 });

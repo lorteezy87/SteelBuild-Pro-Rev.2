@@ -3,6 +3,7 @@ import {
   buildWpLabelById,
   groupLookAheadItems,
   computeLookAheadStats,
+  buildRfisById,
 } from "../lookAheadScheduleHelpers";
 
 describe("lookAheadScheduleHelpers", () => {
@@ -31,5 +32,9 @@ describe("lookAheadScheduleHelpers", () => {
       { status: "Delayed", percent_complete: 10 },
     ]);
     expect(stats).toEqual({ total: 3, inProgress: 1, complete: 1, delayed: 1, avgProgress: 53 });
+  });
+
+  it("builds rfi id map", () => {
+    expect(buildRfisById([{ id: "r1", title: "A" }]).r1.title).toBe("A");
   });
 });

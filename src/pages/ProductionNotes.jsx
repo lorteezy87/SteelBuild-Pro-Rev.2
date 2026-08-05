@@ -28,6 +28,9 @@ import {
   formatLongDate,
   shiftDate,
   indexProjectsById,
+  buildProjectNoteRows,
+  projectIdsWithRows,
+  filterAvailableProjects,
 } from "./productionNotes/productionNotesHelpers";
 import {
   ProjectRow,
@@ -128,37 +131,20 @@ export default function ProductionNotes() {
   );
 
   // Each project's bullets, in insertion order. Skip optimistic-only projects.
-  const projectRows = useMemo(() => {
-    const grouped = new Map();
-    notes.forEach((n) => {
-      if (!n.project_id) return;
-      if (!grouped.has(n.project_id)) grouped.set(n.project_id, []);
-      grouped.get(n.project_id).push(n);
-    });
-    // Sort by project name for stable ordering.
-    return Array.from(grouped.entries())
-      .map(([projectId, bullets]) => ({
-        projectId,
-        project: projectsById.get(projectId),
-        bullets,
-      }))
-      .filter((r) => r.project) // hide rows whose project was deleted
-      .sort((a, b) => (a.project?.name || "").localeCompare(b.project?.name || ""));
-  }, [notes, projectsById]);
+  const projectRows = useMemo(
+    () => buildProjectNoteRows(notes, projectsById),
+    [notes, projectsById],
+  );
 
-  const projectsWithRows = useMemo(() => new Set(projectRows.map((r) => r.projectId)), [projectRows]);
+  const projectsWithRows = useMemo(
+    () => projectIdsWithRows(projectRows),
+    [projectRows],
+  );
 
-  const availableProjects = useMemo(() => {
-    const q = projectPickerQuery.trim().toLowerCase();
-    return projects
-      .filter((p) => !projectsWithRows.has(p.id))
-      .filter((p) =>
-        !q ||
-        (p.name || "").toLowerCase().includes(q) ||
-        (p.project_number || "").toLowerCase().includes(q)
-      )
-      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  }, [projects, projectsWithRows, projectPickerQuery]);
+  const availableProjects = useMemo(
+    () => filterAvailableProjects(projects, projectsWithRows, projectPickerQuery),
+    [projects, projectsWithRows, projectPickerQuery],
+  );
 
   // ─── Actions ────────────────────────────────────────────────────────────
   const addProjectRow = (project) => {

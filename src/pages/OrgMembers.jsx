@@ -25,6 +25,12 @@ import {
 } from "@/lib/org/repository";
 import { prepareOnboardingInvites, clampOrgRole } from "@/lib/org/onboardingInvites";
 import TeamControlCenter from "./team/TeamControlCenter";
+import {
+  buildStagedSkippedNote,
+  countOwners,
+  updateStagedRoleAt,
+  removeStagedAt,
+} from "./orgMembers/orgMembersPageHelpers";
 
 export default function OrgMembers() {
   const { user } = useAuth();
@@ -46,7 +52,7 @@ export default function OrgMembers() {
     queryKey: ["org-invites", orgId], queryFn: () => listInvitations(orgId), enabled: !!orgId,
   });
 
-  const ownerCount = useMemo(() => members.filter((m) => m.role === "owner").length, [members]);
+  const ownerCount = useMemo(() => countOwners(members), [members]);
 
   // Plan seat gating counts current members and pending invites. The server
   // enforces the same limit when an invitation is accepted.
@@ -91,21 +97,16 @@ export default function OrgMembers() {
     }
   }, [prefill, orgId, loadingMembers, loadingInvites, members, invites, isOwner]);
 
-  const stagedSkippedNote = useMemo(() => {
-    if (!stagedSkipped) return "";
-    const parts = [];
-    if (stagedSkipped.alreadyMember) parts.push(`${stagedSkipped.alreadyMember} already on the team`);
-    if (stagedSkipped.alreadyInvited) parts.push(`${stagedSkipped.alreadyInvited} already invited`);
-    if (stagedSkipped.invalid) parts.push(`${stagedSkipped.invalid} invalid`);
-    if (stagedSkipped.duplicate) parts.push(`${stagedSkipped.duplicate} duplicate`);
-    return parts.length ? `Skipped ${parts.join(", ")}.` : "";
-  }, [stagedSkipped]);
+  const stagedSkippedNote = useMemo(
+    () => buildStagedSkippedNote(stagedSkipped),
+    [stagedSkipped],
+  );
 
   const seatsLeft = cap.unlimited ? Infinity : Math.max(0, (cap.limit ?? 0) - cap.used);
 
   const setStagedRole = (idx, nextRole) =>
-    setStaged((rows) => rows.map((row, i) => (i === idx ? { ...row, role: nextRole } : row)));
-  const removeStaged = (idx) => setStaged((rows) => rows.filter((_, i) => i !== idx));
+    setStaged((rows) => updateStagedRoleAt(rows, idx, nextRole));
+  const removeStaged = (idx) => setStaged((rows) => removeStagedAt(rows, idx));
 
   const sendStaged = async () => {
     if (sendingStaged || staged.length === 0 || !orgId) return;

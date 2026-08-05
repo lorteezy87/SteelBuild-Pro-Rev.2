@@ -15,11 +15,11 @@ const today = new Date().toLocaleDateString("en-US", {
   timeZone: "America/Phoenix",
 });
 import { CommandBar } from "@/components/design-system";
-import { getPsrReportDate } from "@/lib/importPsrSpreadsheet";
 
 import {
-  HEALTH_SORT_ORDER,
-  computeReadiness,
+  enrichProjectsWithReadiness,
+  computeJobStatusKpis,
+  filterJobStatusProjects,
 } from "./jobStatusReport/jobStatusReportHelpers";
 import {
   FilterChip,
@@ -44,44 +44,26 @@ export default function JobStatusReport() {
 
   /* ── Enrich projects with readiness ── */
   const enriched = useMemo(
-    () => projects.map(p => ({ ...p, _readiness: computeReadiness(p) })),
-    [projects]
+    () => enrichProjectsWithReadiness(projects),
+    [projects],
   );
 
   /* ── Operational KPIs ── */
-  const kpis = useMemo(() => {
-    const readyCount        = enriched.filter(p => p._readiness.status === "ready").length;
-    const needsReviewCount  = enriched.filter(p => p._readiness.status === "needs-review").length;
-    const missingDataCount  = enriched.filter(p => p._readiness.status === "missing-data").length;
-    const atRiskCount       = enriched.filter(p => p.health_status === "At Risk").length;
-    const weekAgo           = Date.now() - 7 * 86400000;
-    const generatedThisWeek = enriched.filter(p => {
-      const d = getPsrReportDate(p);
-      return d && new Date(d).getTime() >= weekAgo;
-    }).length;
-    return { readyCount, needsReviewCount, missingDataCount, atRiskCount, generatedThisWeek };
-  }, [enriched]);
+  const kpis = useMemo(
+    () => computeJobStatusKpis(enriched),
+    [enriched],
+  );
 
   /* ── Filtering ── */
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return enriched.filter(p => {
-      if (q) {
-        const match =
-          (p.name || "").toLowerCase().includes(q) ||
-          (p.project_number || "").toLowerCase().includes(q) ||
-          (p.client || "").toLowerCase().includes(q);
-        if (!match) return false;
-      }
-      if (healthFilter !== "all" && p.health_status !== healthFilter) return false;
-      if (readinessFilter !== "all" && p._readiness.status !== readinessFilter) return false;
-      return true;
-    }).sort((a, b) => {
-      const aOrder = HEALTH_SORT_ORDER[a.health_status] ?? 3;
-      const bOrder = HEALTH_SORT_ORDER[b.health_status] ?? 3;
-      return aOrder - bOrder;
-    });
-  }, [enriched, search, healthFilter, readinessFilter]);
+  const filtered = useMemo(
+    () =>
+      filterJobStatusProjects(enriched, {
+        search,
+        healthFilter,
+        readinessFilter,
+      }),
+    [enriched, search, healthFilter, readinessFilter],
+  );
 
   return (
     <div className="sb-dashboard-reference-page" style={{ maxWidth: 1280, margin: "0 auto", paddingBottom: 40 }}>

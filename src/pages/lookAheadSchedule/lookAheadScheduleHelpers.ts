@@ -51,3 +51,9 @@ export function computeLookAheadStats(
       : 0;
   return { total, inProgress, complete, delayed, avgProgress };
 }
+
+export function buildRfisById<T extends { id?: string | null }>(
+  rfis: T[],
+): Record<string, T> {
+  return Object.fromEntries((rfis || []).map((r) => [String(r.id), r]));
+}
