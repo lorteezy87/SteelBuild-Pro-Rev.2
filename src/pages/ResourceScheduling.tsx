@@ -36,6 +36,17 @@ import {
   UndoToastBanner,
 } from "./resourceScheduling/components";
 import { buildScheduleStats } from "./resourceScheduling/format";
+import {
+  filterTopLevelResources,
+  buildMembersByParentId,
+  buildEffectiveCapacityById,
+  buildDisplayResources,
+  filterWorkPackagesByPhase,
+  partitionScheduledWorkPackages,
+  filterFocusedDisplayResources,
+  isShopWorkPackage,
+  toIsoDate,
+} from "./resourceScheduling/resourceSchedulingHelpers";
 
 // Only mounted while the edit dialog is open — keep it off the board's chunk.
 const ResourceFormModal = lazyWithRetry(() => import("@/components/resources/ResourceFormModal"));
@@ -125,36 +136,21 @@ export default function ResourceScheduling() {
   // members' capacities. Members can be toggled visible under the crew
   // row via the expand chevron.
   const topLevelResources = useMemo(
-    () => resources.filter(r => !r.parent_resource_id),
+    () => filterTopLevelResources(resources),
     [resources],
   );
-  const membersByParentId = useMemo(() => {
-    const map = {};
-    for (const r of resources) {
-      if (r.parent_resource_id) {
-        (map[r.parent_resource_id] = map[r.parent_resource_id] || []).push(r);
-      }
-    }
-    return map;
-  }, [resources]);
-
-  // Effective capacity = own + sum of direct children.
-  const effectiveCapacityById = useMemo(() => {
-    const map = {};
-    for (const r of resources) {
-      map[r.id] = Number(r.capacity) || 0;
-    }
-    for (const r of resources) {
-      if (r.parent_resource_id && map[r.parent_resource_id] !== undefined) {
-        map[r.parent_resource_id] += Number(r.capacity) || 0;
-      }
-    }
-    return map;
-  }, [resources]);
+  const membersByParentId = useMemo(
+    () => buildMembersByParentId(resources),
+    [resources],
+  );
+  const effectiveCapacityById = useMemo(
+    () => buildEffectiveCapacityById(resources),
+    [resources],
+  );
 
   // Expand/collapse state for crew rows. Crew IDs in this set show their
   // members below the crew row.
-  const [expandedCrews, setExpandedCrews] = useState(() => new Set());
+  const [expandedCrews, setExpandedCrews] = useState<Set<string>>(() => new Set());
   const toggleCrew = useCallback((crewId) => {
     setExpandedCrews(prev => {
       const next = new Set(prev);
@@ -168,17 +164,10 @@ export default function ResourceScheduling() {
   // members indented underneath. Individual resources without a parent
   // appear as their own row, same as before. Members whose parent is
   // collapsed are hidden.
-  const displayResources = useMemo(() => {
-    const out = [];
-    for (const r of topLevelResources) {
-      const children = membersByParentId[r.id] || [];
-      out.push({ resource: r, isMember: false, hasMembers: children.length > 0, memberCount: children.length });
-      if (expandedCrews.has(r.id)) {
-        for (const c of children) out.push({ resource: c, isMember: true, hasMembers: false, memberCount: 0 });
-      }
-    }
-    return out;
-  }, [topLevelResources, membersByParentId, expandedCrews]);
+  const displayResources = useMemo(
+    () => buildDisplayResources(topLevelResources, membersByParentId, expandedCrews),
+    [topLevelResources, membersByParentId, expandedCrews],
+  );
 
   // Capacity view data (uses same workPackages query)
   const capacity = useMemo(() => computeCapacityFromWorkPackages(workPackages), [workPackages]);
@@ -206,24 +195,12 @@ export default function ResourceScheduling() {
   );
 
   // Filter WPs
-  const filteredWorkPackages = useMemo(() => {
-    return workPackages.filter((wp) => {
-      const phaseMatch = filterPhase === "all" || wp.phase === filterPhase;
-      return phaseMatch;
-    });
-  }, [workPackages, filterPhase]);
-
-  // Separate scheduled vs unscheduled
-  const scheduledWps = useMemo(
-    () => filteredWorkPackages.filter(
-      (wp) => (wp.scheduled_start_date || wp.released_date) && wp.scheduled_end_date
-    ),
-    [filteredWorkPackages],
+  const filteredWorkPackages = useMemo(
+    () => filterWorkPackagesByPhase(workPackages, filterPhase),
+    [workPackages, filterPhase],
   );
-  const unscheduledWps = useMemo(
-    () => filteredWorkPackages.filter(
-      (wp) => !(wp.scheduled_start_date || wp.released_date) || !wp.scheduled_end_date
-    ),
+  const { scheduled: scheduledWps, unscheduled: unscheduledWps } = useMemo(
+    () => partitionScheduledWorkPackages(filteredWorkPackages),
     [filteredWorkPackages],
   );
 
@@ -237,18 +214,10 @@ export default function ResourceScheduling() {
     [effectiveCapacityById, filteredWorkPackages, resources, scheduledWps],
   );
 
-  const focusedDisplayResources = useMemo(() => {
-    if (resourceFocus === "all") return displayResources;
-    return displayResources.filter((entry) => {
-      const row = resourceGuruPlan.rowById.get(entry.resource.id);
-      if (!row) return resourceFocus === "all";
-      if (resourceFocus === "personnel") return row.isPersonnel;
-      if (resourceFocus === "equipment") return row.isEquipment;
-      if (resourceFocus === "available") return !row.unavailable && row.remainingHours > 0;
-      if (resourceFocus === "issues") return row.overAllocated || row.unavailable || row.nearCapacity;
-      return true;
-    });
-  }, [displayResources, resourceFocus, resourceGuruPlan.rowById]);
+  const focusedDisplayResources = useMemo(
+    () => filterFocusedDisplayResources(displayResources, resourceFocus, resourceGuruPlan.rowById),
+    [displayResources, resourceFocus, resourceGuruPlan.rowById],
+  );
 
   const scheduleStats = useMemo(
     () => buildScheduleStats(filteredWorkPackages, scheduledWps, topLevelResources, effectiveCapacityById),
@@ -439,7 +408,7 @@ export default function ResourceScheduling() {
       const wp = workPackages.find((w) => w.id === d.wpId);
       const totalHrs = Number(wp?.shop_hours_budget) || Number(wp?.field_hours_budget) || 0;
       const dailyLoad = totalHrs > 0 ? (totalHrs / durationDays).toFixed(1) : null;
-      const isShop = (wp as any)?.location === "Shop" || wp?.phase === "Fabrication" || wp?.phase === "Detailing";
+      const isShop = isShopWorkPackage(wp);
 
       setDragTooltip({
         x: e.clientX,
@@ -489,7 +458,7 @@ export default function ResourceScheduling() {
     // field_hours_budget, field_hours_actual. Scheduling dates are on
     // scheduled_start_date / scheduled_end_date (migration 042).
     const droppedWp = workPackages.find((w) => w.id === d.wpId);
-    const isShop = (droppedWp as any)?.location === "Shop" || droppedWp?.phase === "Fabrication" || droppedWp?.phase === "Detailing";
+    const isShop = isShopWorkPackage(droppedWp);
     const totalEstHrs = Number(droppedWp?.shop_hours_budget) || Number(droppedWp?.field_hours_budget) || 0;
     const autoHours: Record<string, any> = {};
     if (totalEstHrs > 0) {
@@ -503,7 +472,7 @@ export default function ResourceScheduling() {
     // Compute the new scheduling window. newStart comes from the drop
     // position above; newEnd was already computed on line ~551 from
     // newStart + d.durationMs. Reuse both here.
-    const iso = (dt) => dt.toISOString().split("T")[0];
+    const iso = toIsoDate;
     const newStartISO = iso(newStart);
     const newEndISO   = iso(newEnd);
 
