@@ -38,6 +38,10 @@ import {
 import type { DashActivityRow, ModuleTile } from "./dashboardControlCenter.derive";
 import { getPageIcon } from "@/config/pageIcons";
 import { PieceControlDashboardPanel } from "@/components/pieceControl/PieceControlDashboardPanel";
+import {
+  activityTone,
+  alertPriorityTone,
+} from "./dashboardControlCenterHelpers";
 
 // ── Prop type matches what Dashboard.jsx already passes to ProjectDashboard ───
 
@@ -69,20 +73,6 @@ interface DashboardControlCenterProps {
 // ── Tone mapping helpers ──────────────────────────────────────────────────────
 
 type PillTone = "neutral" | "good" | "warn" | "danger" | "info";
-
-function activityTone(tone: string): PillTone {
-  if (tone === "approved") return "good";
-  if (tone === "waiting") return "warn";
-  if (tone === "open") return "danger";
-  if (tone === "progress") return "info";
-  return "neutral";
-}
-
-function alertPriorityTone(priority: "high" | "medium" | "low"): PillTone {
-  if (priority === "high") return "danger";
-  if (priority === "medium") return "warn";
-  return "neutral";
-}
 
 // ── Module Tile grid ──────────────────────────────────────────────────────────
 
