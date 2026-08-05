@@ -38,20 +38,18 @@ import {
   ResponsiveContainer, Cell, BarChart, Bar,
 } from "recharts";
 import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
+import {
+  trafficLight,
+  healthColor as healthColorFromMap,
+  buildProjectFinancialMetrics,
+  filterFinancialProjectMetrics,
+  aggregateFinancialKpis,
+} from "./financialKpisHelpers";
 
-/* ─── Helpers ─────────────────────────────────────────────────────── */
-
-function trafficLight(value, thresholds) {
-  // thresholds = { green: [lo, hi], amber: [lo, hi] }
-  // anything outside green+amber = red
-  if (value == null) return "neutral";
-  if (value >= thresholds.green[0] && value <= thresholds.green[1]) return "good";
-  if (value >= thresholds.amber[0] && value <= thresholds.amber[1]) return "watch";
-  return "risk";
-}
+/* ─── Presentational helpers ──────────────────────────────────────── */
 
 function healthColor(health) {
-  return HEALTH_COLORS[health] || "var(--text-muted)";
+  return healthColorFromMap(health, HEALTH_COLORS);
 }
 
 function HealthDot({ health, label }) {
@@ -96,20 +94,6 @@ function SectionHeader({ children }) {
   );
 }
 
-/* latestCertifiedPerLineItem — deduplicate SOV rows */
-function latestCertifiedPerLineItem(sovItems) {
-  const map = new Map();
-  for (const s of sovItems) {
-    if (!["Certified", "Paid"].includes(s.status)) continue;
-    const key = `${s.project_id}::${s.line_item_number}`;
-    const existing = map.get(key);
-    if (!existing || (Number(s.application_number) || 0) > (Number(existing.application_number) || 0)) {
-      map.set(key, s);
-    }
-  }
-  return [...map.values()];
-}
-
 /* ─── Component ───────────────────────────────────────────────────── */
 
 export default function FinancialKPIs() {
@@ -148,171 +132,30 @@ export default function FinancialKPIs() {
   });
 
   /* ── Per-project computed metrics ── */
-  const projectMetrics = useMemo(() => {
-    return projects.map((p) => {
-      const pWPs = workPackages.filter((w) => w.project_id === p.id);
-      const pCOs = changeOrders.filter((c) => c.project_id === p.id);
-      const pExp = expenses.filter((e) => e.project_id === p.id && e.payment_status !== "Voided");
-      const pSOV = sovItems.filter((s) => s.project_id === p.id);
-
-      const cv = calcContractValue(p, pCOs);
-      const evm = calcEVM(pWPs);
-      const wp = calcWpProgress(pWPs);
-      const labor = calcLaborBurn(pWPs);
-
-      const committed = pExp.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-      const paid = pExp.filter((e) => e.payment_status === "Paid")
-        .reduce((s, e) => s + (Number(e.amount) || 0), 0);
-
-      // Billing from deduped SOV
-      const certLines = latestCertifiedPerLineItem(pSOV);
-      const billed = certLines.reduce(
-        (s, l) => s + (Number(l.scheduled_value) || 0) * ((Number(l.current_percent_complete) || 0) / 100),
-        0
-      );
-      const collected = certLines
-        .filter((l) => l.payment_received_date)
-        .reduce(
-          (s, l) => s + (Number(l.scheduled_value) || 0) * ((Number(l.current_percent_complete) || 0) / 100),
-          0
-        );
-      const retention = certLines.reduce(
-        (s, l) => {
-          const toDate = (Number(l.scheduled_value) || 0) * ((Number(l.current_percent_complete) || 0) / 100);
-          return s + toDate * ((Number(l.retainage_percent) || 0) / 100);
-        },
-        0
-      );
-
-      // DSO from SOV payment cycles
-      const dsoValues = [];
-      for (const s of pSOV) {
-        if (s.submitted_date && s.payment_received_date && ["Certified", "Paid"].includes(s.status)) {
-          const days = Math.ceil(
-            (new Date(s.payment_received_date).getTime() - new Date(s.submitted_date).getTime()) / 86400000
-          );
-          if (days > 0) dsoValues.push(days);
-        }
-      }
-      const avgDSO = dsoValues.length > 0
-        ? Math.round(dsoValues.reduce((a, b) => a + b, 0) / dsoValues.length)
-        : null;
-
-      // Budget health
-      const budgetUsedPct = cv.revised > 0 ? (committed / cv.revised) * 100 : 0;
-      const budgetHealth = trafficLight(budgetUsedPct, {
-        green: [0, 85], amber: [85.01, 95],
-      });
-
-      // CPI health
-      const cpiHealth = evm.cpi != null
-        ? trafficLight(evm.cpi, { green: [0.95, 999], amber: [0.85, 0.9499] })
-        : "neutral";
-
-      // Billing position
-      const billingRatio = committed > 0 ? billed / committed : null;
-      const billingHealth = billingRatio != null
-        ? trafficLight(billingRatio, { green: [0.9, 1.1], amber: [0.75, 0.8999] })
-        : "neutral";
-
-      // Projected margin
-      const projectedFinal = committed > 0 ? committed * (cv.revised / Math.max(committed, 1)) : 0;
-      const marginPct = cv.revised > 0 ? ((cv.revised - committed) / cv.revised) * 100 : 0;
-      const marginHealth = trafficLight(marginPct, {
-        green: [15, 999], amber: [5, 14.99],
-      });
-
-      // CO growth
-      const coGrowthPct = cv.original > 0
-        ? (cv.approvedCOTotal / cv.original) * 100
-        : 0;
-
-      return {
-        id: p.id,
-        name: p.name || "Untitled",
-        number: p.project_number || `P-${p.id}`,
-        phase: p.phase || "",
-        healthStatus: p.health_status || "",
-        original: cv.original,
-        revised: cv.revised,
-        approvedCOs: cv.approvedCOTotal,
-        pendingCOs: cv.pendingCOValue,
-        committed,
-        paid,
-        billed,
-        collected,
-        retention,
-        unbilled: Math.max(0, cv.revised - billed),
-        arOutstanding: Math.max(0, billed - collected),
-        cpi: evm.cpi,
-        spi: evm.spi,
-        eac: evm.eac,
-        vac: evm.vac,
-        bac: evm.bac,
-        ev: evm.ev,
-        ac: evm.ac,
-        wpPct: wp.pct,
-        laborBurnPct: labor.burnPct,
-        budgetUsedPct,
-        budgetHealth,
-        cpiHealth,
-        billingHealth,
-        billingRatio,
-        marginPct,
-        marginHealth,
-        coGrowthPct,
-        avgDSO,
-        raw: p,
-      };
-    });
-  }, [projects, workPackages, expenses, changeOrders, sovItems]);
+  const projectMetrics = useMemo(
+    () =>
+      buildProjectFinancialMetrics({
+        projects,
+        workPackages,
+        changeOrders,
+        expenses,
+        sovItems,
+        calcContractValue,
+        calcEVM,
+        calcWpProgress,
+        calcLaborBurn,
+      }),
+    [projects, workPackages, expenses, changeOrders, sovItems],
+  );
 
   /* ── Filtered ── */
-  const filtered = useMemo(() => {
-    if (!search.trim()) return projectMetrics;
-    const q = search.trim().toLowerCase();
-    return projectMetrics.filter(
-      (r) => r.name.toLowerCase().includes(q) || r.number.toLowerCase().includes(q)
-    );
-  }, [projectMetrics, search]);
+  const filtered = useMemo(
+    () => filterFinancialProjectMetrics(projectMetrics, search),
+    [projectMetrics, search],
+  );
 
   /* ── Aggregate KPIs ── */
-  const agg = useMemo(() => {
-    const totalRevised = filtered.reduce((s, r) => s + r.revised, 0);
-    const totalCommitted = filtered.reduce((s, r) => s + r.committed, 0);
-    const totalBilled = filtered.reduce((s, r) => s + r.billed, 0);
-    const totalCollected = filtered.reduce((s, r) => s + r.collected, 0);
-    const totalRetention = filtered.reduce((s, r) => s + r.retention, 0);
-    const totalUnbilled = filtered.reduce((s, r) => s + r.unbilled, 0);
-    const totalAR = filtered.reduce((s, r) => s + r.arOutstanding, 0);
-
-    // Weighted CPI/SPI (weighted by BAC)
-    const totalBAC = filtered.reduce((s, r) => s + r.bac, 0);
-    const totalEV = filtered.reduce((s, r) => s + r.ev, 0);
-    const totalAC = filtered.reduce((s, r) => s + r.ac, 0);
-    const portfolioCPI = totalAC > 0 ? totalEV / totalAC : null;
-    const portfolioSPI = totalBAC > 0 ? totalEV / totalBAC : null;
-
-    // Weighted margin
-    const portfolioMargin = totalRevised > 0
-      ? ((totalRevised - totalCommitted) / totalRevised) * 100
-      : 0;
-
-    // Average DSO
-    const dsoProjects = filtered.filter((r) => r.avgDSO != null);
-    const avgDSO = dsoProjects.length > 0
-      ? Math.round(dsoProjects.reduce((s, r) => s + r.avgDSO, 0) / dsoProjects.length)
-      : null;
-
-    // Backlog
-    const totalBacklog = Math.max(0, totalRevised - totalBilled);
-
-    return {
-      totalRevised, totalCommitted, totalBilled, totalCollected,
-      totalRetention, totalUnbilled, totalAR, totalBacklog,
-      portfolioCPI, portfolioSPI, portfolioMargin, avgDSO,
-    };
-  }, [filtered]);
+  const agg = useMemo(() => aggregateFinancialKpis(filtered), [filtered]);
 
   /* ── Alerts ── */
   const alerts = useMemo(() => {
