@@ -1,26 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DateOrTbdInput from "./DateOrTbdInput";
-
-const FIELD_STYLE = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 8,
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 13,
-  padding: "8px 10px",
-  outline: "none",
-};
-
-const monoLabel = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: "0.12em",
-  textTransform: "uppercase",
-  color: "var(--text-muted)",
-};
+import { FIELD_STYLE, monoLabel } from "./bulkDateEditModalStyleHelpers";
 
 function DateField({ label, enabled, mode, value, onEnabledChange, onModeChange, onValueChange }) {
   return (
