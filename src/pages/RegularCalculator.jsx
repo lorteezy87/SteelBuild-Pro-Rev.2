@@ -48,6 +48,7 @@ import {
   computeAux,
   parseEntryString,
 } from "./regularCalculator/regularCalculatorHelpers";
+import { KbRow } from "./regularCalculator/RegularCalculatorUi";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -399,11 +400,3 @@ export default function RegularCalculator() {
 }
 
 // ── UI primitives ────────────────────────────────────────────────────
-function KbRow({ k, label }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", ...mono, fontSize: 10 }}>
-      <span style={{ color: "var(--text-secondary)" }}>{k}</span>
-      <span style={{ color: "var(--text-muted)" }}>{label}</span>
-    </div>
-  );
-}
