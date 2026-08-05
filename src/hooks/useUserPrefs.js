@@ -40,7 +40,7 @@ export const DASHBOARD_KPI_IDS = [
   "rfis_blocking_fab",
 ];
 
-const DEFAULTS = {
+export const USER_PREF_DEFAULTS = {
   default_project_id: null,
   auto_refresh_secs: 0,         // 0 = off
   week_start: "sunday",         // sunday | monday
@@ -51,6 +51,8 @@ const DEFAULTS = {
   dashboard_density: "normal",  // compact | normal | comfortable
   show_welcome: true,
 };
+
+const DEFAULTS = USER_PREF_DEFAULTS;
 
 /**
  * Returns a stable object with the wired-up prefs filled in.

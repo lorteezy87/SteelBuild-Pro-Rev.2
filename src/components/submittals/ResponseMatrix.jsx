@@ -17,49 +17,25 @@ import {
   RESPONSE_COLORS,
   RESPONSE_ABBR,
   DEFAULT_RESPONSE_COLOR as DEFAULT_COLOR,
+  RESPONSE_MATRIX_EMPTY_STYLE,
+  RESPONSE_MATRIX_TH_STYLE as th,
+  RESPONSE_MATRIX_TD_STYLE as td,
+  RESPONSE_MATRIX_WRAP_STYLE,
+  RESPONSE_MATRIX_TABLE_STYLE,
 } from "./responseMatrixHelpers";
 
 export default function ResponseMatrix({ columns = [], rows = [] }) {
   if (!columns.length || !rows.length) {
     return (
-      <div style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 10,
-        color: "var(--text-muted)",
-        fontStyle: "italic",
-        padding: "6px 0",
-      }}>
+      <div style={RESPONSE_MATRIX_EMPTY_STYLE}>
         No per-sheet reviewer responses recorded yet.
       </div>
     );
   }
 
-  const th = {
-    fontFamily: "var(--font-mono)",
-    fontSize: 8.5,
-    fontWeight: 700,
-    color: "var(--text-muted)",
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    padding: "6px 8px",
-    borderBottom: "1px solid var(--divider)",
-    background: "var(--bg-surface-low)",
-    whiteSpace: "nowrap",
-  };
-  const td = {
-    padding: "5px 8px",
-    borderBottom: "1px solid var(--divider)",
-    verticalAlign: "middle",
-  };
-
   return (
-    <div style={{
-      border: "1px solid var(--border-default)",
-      borderRadius: 6,
-      overflow: "auto",
-      maxHeight: 320,
-    }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-body)", fontSize: 11 }}>
+    <div style={RESPONSE_MATRIX_WRAP_STYLE}>
+      <table style={RESPONSE_MATRIX_TABLE_STYLE}>
         <thead>
           <tr>
             <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, zIndex: 1 }}>Sheet</th>
