@@ -38,4 +38,9 @@ recipes over narratives.
 - PieceRegister: helpers/SelectFilter/ArchiveDialog extracted + wired (see pieceRegister/*).
 - Next candidates: Onboarding.jsx (~1.1k), ResourceScheduling.tsx (~800), register table/import workspace slices.
 - Always: byte-identical pure extracts first; wire page; full pieceRegister tests + typecheck ratchets.
+## Large-page thinning progress (2026-08-05 cont.)
+
+- PieceRegister **~1586 → ~992 LOC** via RegisterView + ImportView + helpers/dialog/SelectFilter
+- OnboardingUi.jsx presentational extract (TextField/StepItem/TemplateCard/SectionHeader) → **~1163 → ~1107**
+- ResourceScheduling already heavily extracted (helpers + board chrome); next is drag-handler hook if needed
 
