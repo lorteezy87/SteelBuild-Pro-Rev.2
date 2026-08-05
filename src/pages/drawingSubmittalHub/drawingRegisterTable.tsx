@@ -37,6 +37,7 @@ import {
   collectAllSheetsFromPackages,
   collectExistingSetNames,
 } from "./drawingRegister.derive";
+import { REGISTER_GRID_COLS } from "./drawingRegisterTableHelpers";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -66,8 +67,6 @@ interface RegisterRowHandlers {
 // rows use this exact string, so they always align). Widths approximate the
 // table's auto-layout: a wide set-name column, content columns, then the
 // right-aligned numeric / action columns.
-const REGISTER_GRID_COLS =
-  "minmax(220px, 2.4fr) minmax(64px, 0.8fr) minmax(80px, 0.9fr) 64px minmax(120px, 1.1fr) minmax(96px, 1fr) minmax(80px, 0.8fr) minmax(96px, 1fr) 56px minmax(150px, 1fr)";
 
 // ⚠ MIRROR of the table-branch <Td> cells in DrawingRegisterTable (the
 // !shouldVirtualize branch). Any column add/edit MUST be made in BOTH places.

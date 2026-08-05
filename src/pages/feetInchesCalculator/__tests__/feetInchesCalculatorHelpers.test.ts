@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {applyOp, OPS, fracLabel, parseFeetInchesEntry} from "../feetInchesCalculatorHelpers";
+import {
+  applyOp,
+  OPS,
+  fracLabel,
+  parseFeetInchesEntry,
+  monoStyle,
+} from "../feetInchesCalculatorHelpers";
 
 describe("applyOp", () => {
   it("adds subtracts multiplies divides ticks", () => {
@@ -23,5 +29,11 @@ describe("parseFeetInchesEntry", () => {
   });
   it("parses lengths outside mul/div mode", () => {
     expect(parseFeetInchesEntry("12'", false)).not.toBeNull();
+  });
+});
+
+describe("monoStyle", () => {
+  it("mono font", () => {
+    expect(monoStyle.fontFamily).toContain("mono");
   });
 });

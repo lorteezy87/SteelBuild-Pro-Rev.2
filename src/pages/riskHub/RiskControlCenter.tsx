@@ -36,6 +36,7 @@ import {
 import {
   severityTone,
   mitigationTone,
+  BASE_CATEGORIES,
 } from "./riskControlCenterHelpers";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -59,7 +60,6 @@ function scrollToTable() {
 
 // ── Category chips ─────────────────────────────────────────────────────────────
 
-const BASE_CATEGORIES = ["All", "Open RFIs", "Rejected Submittals", "Schedule Slips", "Late Procurement", "Failed Inspections", "Unsigned Change Orders"];
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 

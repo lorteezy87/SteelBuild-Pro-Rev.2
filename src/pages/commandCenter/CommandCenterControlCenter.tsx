@@ -39,7 +39,11 @@ import type {
   ActionItem,
   PanelRow,
 } from "./commandCenterControlCenter.derive";
-import { urgencyTone, panelToneToPillTone } from "./commandCenterControlCenterHelpers";
+import {
+  urgencyTone,
+  panelToneToPillTone,
+  TYPE_CHIPS,
+} from "./commandCenterControlCenterHelpers";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -63,7 +67,6 @@ export interface CommandCenterControlCenterProps {
 
 // ── Type filter chip labels ───────────────────────────────────────────────
 
-const TYPE_CHIPS = ["All", "RFI", "SUB", "CO", "DEL", "WP"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 

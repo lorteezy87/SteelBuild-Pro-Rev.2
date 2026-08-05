@@ -96,10 +96,10 @@ export function headerPatch(form: TransmittalFormState) {
 
 export const EMPTY_TRANSMITTAL_FORM = {
   transmittal_number: "",
-  direction: "incoming",
+  direction: "incoming" as const,
   party: "",
   subject: "",
   date: "",
   notes: "",
-} as const;
+};
 

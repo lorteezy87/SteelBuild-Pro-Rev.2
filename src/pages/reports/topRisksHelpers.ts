@@ -41,3 +41,5 @@ export function buildTopRisksList<T extends RiskLike>(
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 }
+
+export const MITIGATION_EXCERPT_LEN = 200;

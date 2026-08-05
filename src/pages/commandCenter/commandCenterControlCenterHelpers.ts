@@ -28,3 +28,5 @@ export function panelToneToPillTone(t: PanelTone): PillTone {
       return "neutral";
   }
 }
+
+export const TYPE_CHIPS = ["All", "RFI", "SUB", "CO", "DEL", "WP"] as const;

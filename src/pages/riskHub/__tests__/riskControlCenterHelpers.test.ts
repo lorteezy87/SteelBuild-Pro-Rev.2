@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  severityTone, mitigationTone,
+  severityTone,
+  mitigationTone,
+  BASE_CATEGORIES,
 } from "../riskControlCenterHelpers";
 
 describe("risk hub tones", () => {
@@ -11,5 +13,11 @@ describe("risk hub tones", () => {
     expect(mitigationTone(null)).toBe("neutral");
     expect(mitigationTone("In Progress")).toBe("warn");
     expect(mitigationTone("Open")).toBe("neutral");
+  });
+});
+
+describe("BASE_CATEGORIES", () => {
+  it("starts with All", () => {
+    expect(BASE_CATEGORIES[0]).toBe("All");
   });
 });

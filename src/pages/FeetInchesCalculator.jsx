@@ -46,8 +46,10 @@ import {
   CutListOptimizerPanel,
   ConversionRow,
 } from "./feetInchesCalculator/FeetInchesCalculatorUi";
+import {
+  monoStyle as mono,
+} from "./feetInchesCalculator/feetInchesCalculatorHelpers";
 
-const mono = { fontFamily: "var(--font-mono)" };
 
 // ── Component ───────────────────────────────────────────────────────
 export default function FeetInchesCalculator() {

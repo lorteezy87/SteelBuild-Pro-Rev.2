@@ -23,9 +23,12 @@ import {
 } from "./risks/severity";
 import RiskFormModal from "@/components/risks/RiskFormModal";
 
-import { excerptText, buildTopRisksList } from "./topRisksHelpers";
+import {
+  excerptText,
+  buildTopRisksList,
+  MITIGATION_EXCERPT_LEN,
+} from "./topRisksHelpers";
 
-const MITIGATION_EXCERPT_LEN = 200;
 
 function RiskCard({ risk, onEdit, projectLabel }) {
   const color = severityColor(risk.severity);

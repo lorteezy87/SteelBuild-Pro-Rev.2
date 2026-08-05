@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { excerptText, buildTopRisksList } from "../topRisksHelpers";
+import {
+  excerptText,
+  buildTopRisksList,
+  MITIGATION_EXCERPT_LEN,
+} from "../topRisksHelpers";
 
 describe("topRisksHelpers", () => {
   it("excerpts text", () => {
@@ -26,5 +30,11 @@ describe("topRisksHelpers", () => {
     expect(list).toHaveLength(1);
     expect(list[0].id).toBe("1");
     expect(list[0].score).toBe(9);
+  });
+});
+
+describe("MITIGATION_EXCERPT_LEN", () => {
+  it("is 200", () => {
+    expect(MITIGATION_EXCERPT_LEN).toBe(200);
   });
 });

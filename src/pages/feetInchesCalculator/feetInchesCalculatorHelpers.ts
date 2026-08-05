@@ -113,3 +113,4 @@ export function createEmptyFeetInchesState(): {
   return { accum: 0, pendingOp: null, entry: "", mulDivMode: false };
 }
 
+export const monoStyle = { fontFamily: "var(--font-mono)" } as const;

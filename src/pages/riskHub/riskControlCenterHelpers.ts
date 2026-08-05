@@ -16,3 +16,5 @@ export function mitigationTone(
   if (status === "Open") return "neutral";
   return "neutral";
 }
+
+export const BASE_CATEGORIES = ["All", "Open RFIs", "Rejected Submittals", "Schedule Slips", "Late Procurement", "Failed Inspections", "Unsigned Change Orders"] as const;
