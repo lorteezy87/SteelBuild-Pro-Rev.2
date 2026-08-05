@@ -38,3 +38,19 @@ export const MODEL3D_TOOL_BTN = {
   letterSpacing: "0.05em",
   cursor: "pointer" as const,
 };
+
+export const MODEL3D_HINT_STYLE: Record<string, string | number> = {
+  color: "var(--text-muted)",
+  fontSize: 12,
+  lineHeight: 1.5,
+};
+
+export const MODEL3D_LINK_BTN: Record<string, string | number> = {
+  background: "none",
+  border: "none",
+  color: "var(--accent)",
+  cursor: "pointer",
+  textDecoration: "underline",
+  font: "inherit",
+  padding: 0,
+};

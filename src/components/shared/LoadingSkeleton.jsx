@@ -1,4 +1,5 @@
 import React from "react";
+import { SKELETON_SHIMMER_STYLE as shimmerStyle } from "./loadingSkeletonHelpers";
 
 /* ── Inject shimmer keyframe once ──────────────────────────────────── */
 let _shimmerInjected = false;
@@ -14,14 +15,6 @@ function ensureShimmer() {
   `;
   document.head.appendChild(style);
 }
-
-const shimmerStyle = {
-  background:
-    "linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-surface-high) 50%, var(--bg-surface) 75%)",
-  backgroundSize: "800px 100%",
-  animation: "skeleton-shimmer 1.6s ease-in-out infinite",
-  borderRadius: 8,
-};
 
 /* ── Variant: KPI strip ────────────────────────────────────────────── */
 function KPISkeleton({ count = 4 }) {

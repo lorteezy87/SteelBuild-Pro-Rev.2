@@ -29,14 +29,11 @@ import {
   MODEL3D_MONO as mono,
   MODEL3D_VIEWER_TOOLS as viewerTools,
   MODEL3D_TOOL_BTN as toolBtn,
+  MODEL3D_HINT_STYLE as hintStyle,
+  MODEL3D_LINK_BTN as linkBtn,
 } from "./model3dTabHelpers";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
-
-const linkBtn = {
-  background: "none", border: "none", color: "var(--accent)", cursor: "pointer",
-  textDecoration: "underline", font: "inherit", padding: 0,
-};
 
 const saveBanner = {
   position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 3,
@@ -659,8 +656,6 @@ function Row({ label, value, strong, small }) {
     </div>
   );
 }
-
-const hintStyle = { color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 };
 
 function Swatch({ color, label, count }) {
   return (

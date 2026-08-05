@@ -9,6 +9,13 @@
 
 import React from "react";
 import { STAGES, mono } from "./drawingsConfig";
+import {
+  resolveStageFilterLabel,
+  activeFilterPillStyle,
+  activeFilterXStyle,
+  activeFilterClearAllStyle,
+  activeFilterByLabelStyle,
+} from "./activeFilterPillsHelpers";
 
 export default function ActiveFilterPills({
   search,
@@ -27,52 +34,17 @@ export default function ActiveFilterPills({
     pills.push({ key: "discipline", label: `DISCIPLINE: ${discipline}`, onClear: onClearDiscipline });
   }
   if (stageFilter && stageFilter !== "ALL") {
-    // Translate the internal keys (_overdue / _inReview / _priority / stage-key)
-    // into something the user will recognize.
-    let stageLabel = stageFilter;
-    if (stageFilter === "_overdue")  stageLabel = "OVERDUE";
-    else if (stageFilter === "_inReview") stageLabel = "IN REVIEW";
-    else if (stageFilter === "_priority") stageLabel = "PRIORITY";
-    else if (stageFilter === "Released") stageLabel = "IFC ONLY";
-    else {
-      const s = STAGES.find(x => x.key === stageFilter);
-      if (s) stageLabel = s.label;
-    }
+    const stageLabel = resolveStageFilterLabel(stageFilter, STAGES);
     pills.push({ key: "stage", label: `STAGE: ${stageLabel}`, onClear: onClearStage });
   }
   if (pills.length === 0) return null;
 
-  const pillStyle = {
-    ...mono,
-    fontSize: 9,
-    fontWeight: 700,
-    letterSpacing: "0.08em",
-    padding: "4px 6px 4px 10px",
-    borderRadius: "var(--radius-badge)",
-    border: "1px solid rgba(200,155,32,0.35)",
-    background: "rgba(200,155,32,0.10)",
-    color: "var(--accent)",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  };
-  const xStyle = {
-    ...mono,
-    fontSize: 11,
-    fontWeight: 800,
-    lineHeight: 1,
-    padding: "2px 5px",
-    marginLeft: 2,
-    borderRadius: 3,
-    border: "1px solid transparent",
-    background: "transparent",
-    color: "var(--accent)",
-    cursor: "pointer",
-  };
+  const pillStyle = activeFilterPillStyle(mono);
+  const xStyle = activeFilterXStyle(mono);
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 14 }}>
-      <span style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", color: "var(--text-muted)", marginRight: 2 }}>
+      <span style={activeFilterByLabelStyle(mono)}>
         FILTERING BY
       </span>
       {pills.map(p => (
@@ -85,12 +57,7 @@ export default function ActiveFilterPills({
         <button
           type="button"
           onClick={onClearAll}
-          style={{
-            ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-            padding: "4px 10px", borderRadius: "var(--radius-badge)",
-            border: "1px solid var(--border-default)",
-            background: "none", color: "var(--text-muted)", cursor: "pointer",
-          }}
+          style={activeFilterClearAllStyle(mono)}
         >
           CLEAR ALL
         </button>

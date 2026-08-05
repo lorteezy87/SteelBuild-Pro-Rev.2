@@ -5,162 +5,29 @@
  * only shared styles it borrows are taskNameStyle / emptyStyle.
  */
 import { taskNameStyle, emptyStyle } from "@/components/schedule/rivetBriefStyles";
-
-function riskTone(level) {
-  if (level === "HIGH") return "var(--status-error)";
-  if (level === "MEDIUM") return "var(--status-warning)";
-  return "var(--status-success)";
-}
+import {
+  riskTone,
+  aiRiskPanelStyle,
+  AI_RISK_HEADER_STYLE as aiRiskHeaderStyle,
+  AI_RISK_EYEBROW_STYLE as aiRiskEyebrowStyle,
+  AI_RISK_TITLE_STYLE as aiRiskTitleStyle,
+  aiRiskDelayStyle,
+  aiRiskScoreStyle,
+  AI_RISK_SUMMARY_STYLE as aiRiskSummaryStyle,
+  AI_RISK_COLUMNS_STYLE as aiRiskColumnsStyle,
+  AI_RISK_SECTION_STYLE as aiRiskSectionStyle,
+  AI_RISK_SECTION_TITLE_STYLE as aiRiskSectionTitleStyle,
+  AI_RISK_TASK_STYLE as aiRiskTaskStyle,
+  AI_RISK_TEXT_STYLE as aiRiskTextStyle,
+  AI_RISK_LIST_STYLE as aiRiskListStyle,
+  AI_RISK_LIST_ITEM_STYLE as aiRiskListItemStyle,
+  AI_RISK_FOOTER_STYLE as aiRiskFooterStyle,
+} from "@/components/schedule/scheduleAiRiskCardHelpers";
 
 export function ScheduleAiRiskCard({ insight }) {
   if (!insight) return null;
 
   const tone = riskTone(insight.riskLevel);
-
-  function aiRiskPanelStyle(tone) {
-    return {
-      gridColumn: "span 6",
-      border: `1px solid color-mix(in srgb, ${tone} 34%, var(--border-default))`,
-      borderRadius: 16,
-      background: `linear-gradient(135deg, color-mix(in srgb, ${tone} 10%, var(--bg-surface-high)), var(--bg-surface-low))`,
-      boxShadow: `inset 3px 0 0 ${tone}, var(--shadow-lg)`,
-      padding: 14,
-    };
-  }
-
-  const aiRiskHeaderStyle = {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 14,
-    marginBottom: 10,
-  };
-
-  const aiRiskEyebrowStyle = {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 900,
-    letterSpacing: "0.14em",
-    textTransform: "uppercase",
-    color: "var(--status-info)",
-  };
-
-  const aiRiskTitleStyle = {
-    display: "flex",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
-    fontFamily: "var(--font-mono)",
-    fontSize: 12,
-    fontWeight: 900,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    color: "var(--text-primary)",
-  };
-
-  function aiRiskDelayStyle(tone) {
-    return {
-      display: "inline-flex",
-      alignItems: "center",
-      minHeight: 22,
-      padding: "0 8px",
-      borderRadius: 999,
-      border: `1px solid color-mix(in srgb, ${tone} 42%, transparent)`,
-      background: `color-mix(in srgb, ${tone} 12%, transparent)`,
-      color: tone,
-      whiteSpace: "nowrap",
-    };
-  }
-
-  function aiRiskScoreStyle(tone) {
-    return {
-      width: 48,
-      height: 48,
-      borderRadius: 14,
-      display: "grid",
-      placeItems: "center",
-      border: `1px solid color-mix(in srgb, ${tone} 45%, transparent)`,
-      background: `color-mix(in srgb, ${tone} 12%, var(--bg-surface-high))`,
-      color: tone,
-      fontFamily: "var(--font-mono)",
-      fontSize: 13,
-      fontWeight: 900,
-      flexShrink: 0,
-    };
-  }
-
-  const aiRiskSummaryStyle = {
-    margin: "0 0 12px",
-    color: "var(--text-secondary)",
-    fontFamily: "var(--font-body)",
-    fontSize: 13,
-    lineHeight: 1.48,
-  };
-
-  const aiRiskColumnsStyle = {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr)",
-    gap: 10,
-    alignItems: "stretch",
-  };
-
-  const aiRiskSectionStyle = {
-    border: "1px solid var(--border-default)",
-    borderRadius: 12,
-    background: "var(--bg-surface-low)",
-    padding: 11,
-    minWidth: 0,
-  };
-
-  const aiRiskSectionTitleStyle = {
-    fontFamily: "var(--font-mono)",
-    fontSize: 8,
-    fontWeight: 900,
-    letterSpacing: "0.12em",
-    textTransform: "uppercase",
-    color: "var(--text-muted)",
-    marginBottom: 8,
-  };
-
-  const aiRiskTaskStyle = {
-    borderTop: "1px solid var(--border-default)",
-    paddingTop: 8,
-  };
-
-  const aiRiskTextStyle = {
-    marginTop: 5,
-    fontFamily: "var(--font-body)",
-    fontSize: 12,
-    lineHeight: 1.38,
-    color: "var(--text-secondary)",
-  };
-
-  const aiRiskListStyle = {
-    margin: 0,
-    paddingLeft: 17,
-    display: "grid",
-    gap: 7,
-  };
-
-  const aiRiskListItemStyle = {
-    fontFamily: "var(--font-body)",
-    fontSize: 12,
-    lineHeight: 1.38,
-    color: "var(--text-secondary)",
-  };
-
-  const aiRiskFooterStyle = {
-    marginTop: 10,
-    paddingTop: 9,
-    borderTop: "1px solid var(--border-default)",
-    fontFamily: "var(--font-mono)",
-    fontSize: 8,
-    fontWeight: 800,
-    letterSpacing: "0.10em",
-    textTransform: "uppercase",
-    color: "var(--text-muted)",
-  };
 
   return (
     <div style={aiRiskPanelStyle(tone)}>

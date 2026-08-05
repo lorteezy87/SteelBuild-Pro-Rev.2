@@ -3,6 +3,10 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft, AlertTriangle } from "lucide-react";
 import { sheetReviewFlags } from "@/components/drawings/intakeReview";
 import { DISCIPLINES } from "../upload/uploadWizardConstants";
+import {
+  REVIEW_META_FIELD_STYLE as metaFieldStyle,
+  REVIEW_META_LABEL_STYLE as metaLabelStyle,
+} from "./reviewStepHelpers";
 
 // ─── Review: verify AI-extracted sheets ───────────────────────────────
 export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [] }) {
@@ -59,27 +63,6 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
       border: "1px solid rgba(132,204,22,0.3)", verticalAlign: "middle",
     }}>✦ AI</span>
   ) : null;
-
-  const metaFieldStyle = {
-    width: "100%",
-    background: "var(--bg-surface-low)",
-    border: "1px solid var(--bg-surface-high)",
-    borderRadius: 6,
-    padding: "5px 8px",
-    color: "var(--text-primary)",
-    fontFamily: "var(--font-body)",
-    fontSize: 12,
-    boxSizing: "border-box",
-  };
-  const metaLabelStyle = {
-    display: "block",
-    fontFamily: "var(--font-mono)",
-    fontSize: 8,
-    letterSpacing: "0.12em",
-    color: "var(--text-muted)",
-    marginBottom: 3,
-    textTransform: "uppercase",
-  };
 
   return (
     <div>

@@ -7,11 +7,14 @@ import { AuthContext } from "@/lib/AuthContext";
 import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
 import {
   formatRelative,
-  COMMENT_STATUS_ORDER,
   COMMENT_STATUS_COLOR,
   COMMENT_STATUS_LABEL,
   nextCommentStatus,
   commentThreadQueryKey as QKEY,
+  commentStatusIcon,
+  commentStatusBadgeStyle,
+  commentAuthorInitials as initials,
+  extractMentions,
 } from "./commentThreadHelpers";
 
 /**
@@ -280,23 +283,10 @@ function CommentRow({ c, canModify = false, onDelete, onCycleStatus }) {
   const statusKey = c.status || "open";
   const statusColor = COMMENT_STATUS_COLOR[statusKey] || COMMENT_STATUS_COLOR.open;
   const statusLabel = COMMENT_STATUS_LABEL[statusKey] || statusKey.toUpperCase();
-  const statusIcon = statusKey === "addressed" ? "✓" : statusKey === "rejected" ? "✗" : statusKey === "clarification" ? "?" : "○";
+  const statusIcon = commentStatusIcon(statusKey);
   // Shared badge style; only the cursor + element type differ between the
   // interactive (author/pm) and read-only (everyone else) variants.
-  const statusBadgeStyle = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 3,
-    padding: "1px 7px",
-    borderRadius: 8,
-    background: statusColor,
-    color: "var(--on-accent)",
-    border: "none",
-    fontFamily: "var(--font-mono)",
-    fontSize: 8,
-    fontWeight: 700,
-    letterSpacing: "0.08em",
-  };
+  const statusBadgeStyle = commentStatusBadgeStyle(statusColor);
   return (
     <div
       onMouseEnter={() => setHovering(true)}
@@ -373,18 +363,6 @@ function CommentRow({ c, canModify = false, onDelete, onCycleStatus }) {
       </div>
     </div>
   );
-}
-
-function initials(name) {
-  if (!name) return "U";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-function extractMentions(body) {
-  const matches = body.match(/@[\w.-]+/g) || [];
-  return [...new Set(matches.map((m) => m.slice(1)))];
 }
 
 function renderBodyWithMentions(body) {

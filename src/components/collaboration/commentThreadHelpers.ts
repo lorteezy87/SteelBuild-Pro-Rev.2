@@ -44,3 +44,43 @@ export function commentThreadQueryKey(
 ) {
   return ["comments", entityType, entityId] as const;
 }
+
+/** Pure status glyph for comment status chips. */
+export function commentStatusIcon(statusKey: string | null | undefined): string {
+  if (statusKey === "addressed") return "✓";
+  if (statusKey === "rejected") return "✗";
+  if (statusKey === "clarification") return "?";
+  return "○";
+}
+
+/** Pure badge chrome for comment status (cursor applied by caller). */
+export function commentStatusBadgeStyle(statusColor: string): Record<string, string | number> {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    padding: "1px 7px",
+    borderRadius: 8,
+    background: statusColor,
+    color: "var(--on-accent)",
+    border: "none",
+    fontFamily: "var(--font-mono)",
+    fontSize: 8,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+  };
+}
+
+/** Pure initials for comment author avatar. */
+export function commentAuthorInitials(name: string | null | undefined): string {
+  if (!name) return "U";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/** Pure @mention extractor for comment body. */
+export function extractMentions(body: string | null | undefined): string[] {
+  const matches = String(body || "").match(/@[\w.-]+/g) || [];
+  return [...new Set(matches.map((m) => m.slice(1)))];
+}
