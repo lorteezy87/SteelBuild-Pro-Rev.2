@@ -212,3 +212,44 @@ export function vendorBulkDeleteDescription(count: number): string {
 }
 
 export const STATUS_LABELS = ["All", "Active", "Inactive", "Probation", "Suspended"] as const;
+
+/** Tone for vendor insurance/license expiry: expired | soon | ok | none. */
+export function vendorExpiryTone(
+  days: number | null,
+): "expired" | "soon" | "ok" | "none" {
+  if (days === null) return "none";
+  if (days < 0) return "expired";
+  if (days <= 30) return "soon";
+  return "ok";
+}
+
+export function vendorExpiryCellStyle(
+  tone: "expired" | "soon" | "ok" | "none",
+): Record<string, string | number> | null {
+  if (tone === "expired") {
+    return {
+      color: "var(--status-error)",
+      fontFamily: "var(--font-mono)",
+      fontSize: 11,
+    };
+  }
+  if (tone === "soon") {
+    return {
+      color: "var(--status-warning)",
+      fontFamily: "var(--font-mono)",
+      fontSize: 11,
+    };
+  }
+  return null;
+}
+
+export function formatVendorExpiryLabel(
+  formattedDate: string,
+  days: number | null,
+  tone: "expired" | "soon" | "ok" | "none",
+): string {
+  if (tone === "expired") return `${formattedDate} · expired`;
+  if (tone === "soon" && days !== null) return `${formattedDate} · ${days}d`;
+  return formattedDate;
+}
+

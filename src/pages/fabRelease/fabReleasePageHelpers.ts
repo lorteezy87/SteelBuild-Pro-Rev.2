@@ -59,3 +59,31 @@ export function groupByStatusOrder<T extends { _signals?: { status?: string } }>
   }
   return groups;
 }
+
+/** Command pill tone for a fab readiness score (0–100). */
+export function readinessTone(score: number): "good" | "warn" | "danger" {
+  if (score >= 80) return "good";
+  if (score >= 50) return "warn";
+  return "danger";
+}
+
+export type FabSignalFlag = { severity?: string | null; label?: string | null };
+
+/** Highest-severity signal label for a work package (high → medium → dash). */
+export function topBlockerLabel(wp: {
+  _signals?: { flags?: FabSignalFlag[] } | null;
+}): string {
+  const flags = wp._signals?.flags || [];
+  const high = flags.filter((f) => f.severity === "high");
+  if (high.length > 0) return high[0].label || "-";
+  const med = flags.filter((f) => f.severity === "medium");
+  if (med.length > 0) return med[0].label || "-";
+  return "-";
+}
+
+/** Format tonnage for fab release KPI/table cells. */
+export function formatFabTons(n: number | string | undefined): string {
+  const v = Number(n);
+  return Number.isFinite(v) && v > 0 ? `${v.toFixed(1)}T` : "-";
+}
+

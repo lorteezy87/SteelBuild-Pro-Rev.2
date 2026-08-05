@@ -33,3 +33,12 @@ export const IMPORT_BTN_GHOST: Record<string, string | number> = {
   textTransform: "uppercase",
   cursor: "pointer",
 };
+
+/** Format a weight value as localized pounds with # suffix. */
+export function formatLbs(v: unknown): string {
+  if (v == null) return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  return `${n.toLocaleString()}#`;
+}
+

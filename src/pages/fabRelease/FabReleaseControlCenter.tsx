@@ -15,23 +15,20 @@ import { photoFor } from "@/config/launcherConfig";
 import { buildFabReleaseSummary, riskTone, stageTone, stageLabel } from "./fabReleaseControlCenter.derive";
 import type { EnrichedWorkPackage, FabMetrics } from "./types";
 import { formatDate } from "./format";
+import {
+  readinessTone,
+  topBlockerLabel as resolveTopBlockerLabel,
+  formatFabTons,
+} from "./fabReleasePageHelpers";
 
-function fmtTons(n: number | string | undefined): string {
-  const v = Number(n);
-  return Number.isFinite(v) && v > 0 ? `${v.toFixed(1)}T` : "-";
-}
+const fmtTons = formatFabTons;
 
 function readinessPill(score: number) {
-  const tone = score >= 80 ? "good" : score >= 50 ? "warn" : "danger";
-  return <Pill tone={tone}>{score}%</Pill>;
+  return <Pill tone={readinessTone(score)}>{score}%</Pill>;
 }
 
 function topBlockerLabel(wp: EnrichedWorkPackage): string {
-  const high = wp._signals.flags.filter((f) => f.severity === "high");
-  if (high.length > 0) return high[0].label;
-  const med = wp._signals.flags.filter((f) => f.severity === "medium");
-  if (med.length > 0) return med[0].label;
-  return "-";
+  return resolveTopBlockerLabel(wp);
 }
 
 export interface FabReleaseControlCenterProps {

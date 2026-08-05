@@ -22,6 +22,9 @@ import type { VendorRecord, VendorStatsMap } from "./vendorControlCenter.derive"
 import { formatCurrencyShort, formatDate } from "@/components/shared/formatters";
 import {
   STATUS_LABELS,
+  vendorExpiryTone,
+  vendorExpiryCellStyle,
+  formatVendorExpiryLabel,
 } from "./vendorsPageHelpers";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -39,13 +42,11 @@ function scrollToTable() {
 function expiryCell(dateStr?: string | null) {
   if (!dateStr) return <span className="cmd-row__meta">—</span>;
   const d = daysUntilExpiry(dateStr);
-  if (d !== null && d < 0) {
-    return <span style={{ color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 11 }}>{formatDate(dateStr)} · expired</span>;
-  }
-  if (d !== null && d <= 30) {
-    return <span style={{ color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 11 }}>{formatDate(dateStr)} · {d}d</span>;
-  }
-  return <span>{formatDate(dateStr)}</span>;
+  const tone = vendorExpiryTone(d);
+  const style = vendorExpiryCellStyle(tone);
+  const label = formatVendorExpiryLabel(formatDate(dateStr), d, tone);
+  if (style) return <span style={style}>{label}</span>;
+  return <span>{label}</span>;
 }
 
 /** Company cell — preferred star prefix. */

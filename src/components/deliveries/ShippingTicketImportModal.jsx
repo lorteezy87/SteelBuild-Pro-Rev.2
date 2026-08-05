@@ -15,6 +15,7 @@ import {
   AI_ACCENT as AI,
   IMPORT_BTN_PRIMARY,
   IMPORT_BTN_GHOST,
+  formatLbs,
 } from "./shippingTicketImportModalHelpers";
 
 
@@ -613,12 +614,7 @@ function Td({ children, mono: isMono, accent, right }) {
   );
 }
 
-function fmtLbs(v) {
-  if (v == null) return "—";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return String(v);
-  return `${n.toLocaleString()}#`;
-}
+const fmtLbs = formatLbs;
 
 const btnPrimary = IMPORT_BTN_PRIMARY;
 const btnGhost = IMPORT_BTN_GHOST;

@@ -477,3 +477,14 @@ export const GANTT_QUICK_FILTERS = [
   { key: "weather", label: "Weather" },
 ] as const;
 
+/**
+ * Place gantt bar label inside when width can fit the name, else outside.
+ */
+export function resolveLabelPlacement(
+  name: string | null | undefined,
+  widthPx: number,
+): "inside" | "outside" {
+  const required = Math.max(36, (name?.length || 0) * 5.5 + 16);
+  return widthPx >= required ? "inside" : "outside";
+}
+

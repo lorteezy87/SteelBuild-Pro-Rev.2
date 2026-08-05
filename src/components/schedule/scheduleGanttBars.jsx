@@ -28,7 +28,11 @@ import {
   sanitizeTaskName,
   statusColor,
 } from "./scheduleTaskUtils";
-import { BAR_RADIUS, ganttBarShellStyle } from "./scheduleGanttHelpers";
+import {
+  BAR_RADIUS,
+  ganttBarShellStyle,
+  resolveLabelPlacement,
+} from "./scheduleGanttHelpers";
 
 const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
@@ -253,10 +257,6 @@ export function GateDiamond({ left, color, active, kind, title }) {
 // The outside label uses position:absolute against the bar shell, so
 // it never widens the shell's bounding box (which would shift any
 // dependency arrow targeting this task).
-function resolveLabelPlacement(name, widthPx) {
-  const required = Math.max(36, (name?.length || 0) * 5.5 + 16);
-  return widthPx >= required ? "inside" : "outside";
-}
 
 // Shared geometry so every status variant of TaskBar lays out
 // identically — anything position-sensitive (left, width, vertical

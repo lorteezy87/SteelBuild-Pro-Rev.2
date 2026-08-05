@@ -33,7 +33,12 @@ import { photoFor } from "@/config/launcherConfig";
 import { buildProcurementSummary, isOverdue, isLate, daysUntil } from "./procurementControlCenter.derive";
 import type { ProcurementItem } from "./procurementControlCenter.derive";
 import { PROCUREMENT_CATEGORIES, ALL_STATUSES, fmtDate } from "./format";
-import { procStatusTone } from "./procurementControlCenterHelpers";
+import {
+  procStatusTone,
+  needByTone,
+  needByCellStyle,
+  formatNeedByLabel,
+} from "./procurementControlCenterHelpers";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -57,16 +62,20 @@ export interface ProcurementControlCenterProps {
 
 /** Need-by date cell — shows overdue badge when past. */
 function needByCell(item: ProcurementItem) {
-  if (!item.required_date) return <span style={{ color: "var(--text-muted)", fontSize: 11 }}>No date</span>;
-  if (isOverdue(item)) {
-    const days = Math.abs(daysUntil(item.required_date) ?? 0);
-    return <span style={{ color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700 }}>{item.required_date} · {days}d late</span>;
+  const tone = needByTone(item, isOverdue, daysUntil);
+  const style = needByCellStyle(tone);
+  if (tone === "none") {
+    return <span style={style}>{formatNeedByLabel(item.required_date, tone, 0)}</span>;
   }
-  const diff = daysUntil(item.required_date);
-  if (diff !== null && diff <= 7) {
-    return <span style={{ color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700 }}>{item.required_date} · {diff}d</span>;
+  if (tone === "overdue") {
+    const days = Math.abs(daysUntil(item.required_date!) ?? 0);
+    return <span style={style}>{formatNeedByLabel(item.required_date, tone, days)}</span>;
   }
-  return <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{item.required_date}</span>;
+  if (tone === "soon") {
+    const diff = daysUntil(item.required_date!) ?? 0;
+    return <span style={style}>{formatNeedByLabel(item.required_date, tone, diff)}</span>;
+  }
+  return <span style={style}>{formatNeedByLabel(item.required_date, tone, 0)}</span>;
 }
 
 /** Scroll to the DataTable below the panels. */

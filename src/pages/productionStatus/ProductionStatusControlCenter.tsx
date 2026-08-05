@@ -33,7 +33,12 @@ import {
   localTodayISO,
 } from "./productionStatusControlCenter.derive";
 import ProductionStatusBulkBar from "./ProductionStatusBulkBar";
-import { STAGE_FILTERS } from "./productionStatusControlCenterHelpers";
+import {
+  STAGE_FILTERS,
+  isShipDateOverdue,
+  shipDateCellStyle,
+  formatShipDateLabel,
+} from "./productionStatusControlCenterHelpers";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,11 +50,10 @@ function fmtPct(n: number): string {
 /** ISO date cell — mono, compact, highlights past-due pieces. */
 function shipDateCell(p: PieceProductionRow, today: string) {
   if (!p.ship_date) return <span style={{ color: "var(--cmd-meta)" }}>—</span>;
-  const overdue = p.status !== "Shipped" && p.ship_date < today;
+  const overdue = isShipDateOverdue(p.status, p.ship_date, today);
   return (
-    <span style={overdue ? { color: "var(--cmd-danger)", fontWeight: 600 } : { fontFamily: "var(--font-mono)", fontSize: 11 }}>
-      {p.ship_date}
-      {overdue ? " · late" : ""}
+    <span style={shipDateCellStyle(overdue)}>
+      {formatShipDateLabel(p.ship_date, overdue)}
     </span>
   );
 }
