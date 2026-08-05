@@ -16,6 +16,7 @@
  */
 
 import React, { useMemo } from "react";
+import { buildIdMap } from "@/pages/shared/buildIdMap";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import {
@@ -63,10 +64,7 @@ export default function RevenueDashboard() {
     queryFn: () => entities.SOVItem.list(),
   });
 
-  const projectsById = useMemo(
-    () => new Map(projects.map((p) => [p.id, p])),
-    [projects]
-  );
+  const projectsById = useMemo(() => buildIdMap(projects), [projects]);
 
   const billed = totalBilled(sovItems);
   const collected = cashCollected(sovItems);

@@ -111,8 +111,6 @@ export function groupProcurementByCategory<
   return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-export function sumWeightTons(
-  rows: Array<{ weight_tons?: number | string | null }>,
-): number {
-  return (rows || []).reduce((s, r) => s + (Number(r.weight_tons) || 0), 0);
+export function sumWeightTons(rows: ReadonlyArray<any> | null | undefined): number {
+  return (rows || []).reduce((s, r) => s + (Number(r?.weight_tons) || 0), 0);
 }

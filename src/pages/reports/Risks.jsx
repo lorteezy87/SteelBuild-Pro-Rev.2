@@ -10,6 +10,7 @@
  */
 
 import React, { useMemo, useState } from "react";
+import { buildIdMap } from "@/pages/shared/buildIdMap";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
@@ -95,10 +96,7 @@ export default function Risks() {
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
   });
-  const projectById = useMemo(
-    () => Object.fromEntries(projects.map((p) => [p.id, p])),
-    [projects]
-  );
+  const projectById = useMemo(() => Object.fromEntries(buildIdMap(projects)), [projects]);
 
   const rows = useMemo(
     () => buildRiskListRows({ risks, projectById }),

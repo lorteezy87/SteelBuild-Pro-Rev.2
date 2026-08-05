@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { filterProjectsList } from "./projects/projectsPageHelpers";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -105,14 +106,10 @@ export default function Projects() {
   };
 
   /* ── Filtered list ── */
-  const filtered = useMemo(() => projects.filter(p => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || p.name?.toLowerCase().includes(q) || p.project_number?.toLowerCase().includes(q) || p.client?.toLowerCase().includes(q) || p.general_contractor?.toLowerCase().includes(q);
-    return matchSearch
-      && (phaseFilter === "all"   || p.phase === phaseFilter)
-      && (healthFilter === "all"  || p.health_status === healthFilter)
-      && (jobTypeFilter === "all" || p.job_type === jobTypeFilter);
-  }), [projects, search, phaseFilter, healthFilter, jobTypeFilter]);
+  const filtered = useMemo(
+    () => filterProjectsList(projects, { search, phaseFilter, healthFilter, jobTypeFilter }),
+    [projects, search, phaseFilter, healthFilter, jobTypeFilter],
+  );
 
   const canCreate = !atProjectLimit;
 

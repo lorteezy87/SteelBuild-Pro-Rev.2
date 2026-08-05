@@ -45,7 +45,7 @@ export default function Timeline() {
     queryFn: () => entities.ScheduleTask.list(),
   });
 
-  const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+  const projectsById = useMemo(() => buildIdMap(projects), [projects]);
 
   const filteredTasks = useMemo(
     () =>

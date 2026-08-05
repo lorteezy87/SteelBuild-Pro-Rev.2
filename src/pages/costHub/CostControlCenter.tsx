@@ -45,6 +45,13 @@ import {
   costStatusTone,
   downloadCostControlCsv,
   filterCostCodeRows,
+  selectOverBudgetCodes,
+  rankOverBudgetByOverage,
+  sumCostCodeBudgets,
+  sumCostCodeEac,
+  contingencyRemaining as computeContingencyRemaining,
+  sumConsumedContingency,
+  buildCoPipelineCounts,
 } from "./costControlCenter.derive";
 import CostChartRow from "./CostChartRow";
 import { persistCostCode } from "./costCodeSave";
@@ -93,7 +100,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   );
 
   const overBudgetCodes = useMemo(
-    () => costCodeRows.filter((r) => r.is_over),
+    () => selectOverBudgetCodes(costCodeRows),
     [costCodeRows],
   );
 
@@ -115,37 +122,23 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   const coAging = useMemo(() => buildCoAging(changeOrders), [changeOrders]);
 
   // CO pipeline counts
-  const coPending = changeOrders.filter((co) =>
-    ["Submitted", "Under Review"].includes(co.status ?? ""),
-  ).length;
-  const coApproved = changeOrders.filter((co) => co.status === "Approved").length;
-  const coStale = coAging.filter((co) => co.isStale).length;
-  const topStaleCOs = coAging.filter((co) => co.isStale).slice(0, 5);
+  const { coPending, coApproved, coStale, topStaleCOs, staleCOsCount } = useMemo(
+    () => buildCoPipelineCounts(changeOrders, coAging),
+    [changeOrders, coAging],
+  );
 
   // Budget from cost-code budgets; EAC from the expense-rolled actuals
   // (costCodeRows) + forecast-to-complete, consistent with the Actual/Committed KPIs.
-  const totalBudget = useMemo(
-    () => costCodes.reduce((s, c) => s + Number(c.budget_amount || 0), 0),
-    [costCodes],
-  );
-  const totalEAC = useMemo(
-    () => costCodeRows.reduce((s, c) => s + Number(c.actual_cost || 0) + Number(c.forecast_to_complete || 0), 0),
-    [costCodeRows],
-  );
+  const totalBudget = useMemo(() => sumCostCodeBudgets(costCodes), [costCodes]);
+  const totalEAC = useMemo(() => sumCostCodeEac(costCodeRows), [costCodeRows]);
 
   // Budget Used %
   const budgetUsedPct = totalBudget > 0 ? (summary.committed / totalBudget) * 100 : 0;
 
-  // Stale CO count for KPI
-  const staleCOsCount = coAging.filter((co) => co.isStale).length;
-
   // Contingency left: total budget + project contingency - consumed overages
   const contingency = Number((project as Record<string, unknown>)?.contingency_amount ?? 0);
-  const consumedContingency = costCodeRows.reduce((s, c) => {
-    const v = Number(c.actual_cost || 0) - Number(c.budget_amount || 0);
-    return s + Math.max(0, v);
-  }, 0);
-  const contingencyRemaining = Math.max(0, contingency - consumedContingency);
+  const consumedContingency = sumConsumedContingency(costCodeRows);
+  const contingencyRemaining = computeContingencyRemaining(contingency, costCodeRows);
 
   // ── Hero ──
   const heroChips = [
@@ -312,11 +305,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
         </DecisionPanel>
 
         <DecisionPanel title="Margin at Risk">
-          {overBudgetCodes
-            .slice()
-            .sort((a, b) => (b.committed_cost - b.revised_budget) - (a.committed_cost - a.revised_budget))
-            .slice(0, 6)
-            .map((r) => {
+          {rankOverBudgetByOverage(overBudgetCodes, 6).map((r) => {
               const overage = r.committed_cost - r.revised_budget;
               return (
                 <div key={r.id} className="cmd-row is-clickable" onClick={() => handleRowClick(r)}>

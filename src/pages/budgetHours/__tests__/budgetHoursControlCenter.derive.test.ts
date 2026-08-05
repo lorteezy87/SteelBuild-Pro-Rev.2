@@ -249,10 +249,10 @@ describe("enrichBudgetHourTableRows", () => {
       field_hours_actual: 999,
       metadata: { linked_work_package_ids: ["wp1", "wp2"] },
     })];
-    const wps = new Map([
+    const wps = new Map<string, any>([
       ["wp1", { id: "wp1", shop_hours_actual: 3, field_hours_actual: 1 }],
       ["wp2", { id: "wp2", shop_hours_actual: 2, field_hours_actual: 4 }],
-    ] as any);
+    ]);
     const enriched = enrichBudgetHourTableRows(rows, wps);
     expect(enriched[0]._shopActual).toBe(5);
     expect(enriched[0]._fieldActual).toBe(5);

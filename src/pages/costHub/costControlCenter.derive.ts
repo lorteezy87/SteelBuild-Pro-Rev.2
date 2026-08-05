@@ -321,3 +321,97 @@ export function filterCostCodeRows<
     return true;
   });
 }
+
+/** Cost codes flagged over budget. */
+export function selectOverBudgetCodes<T extends { is_over?: boolean | null }>(
+  costCodeRows: T[] | null | undefined,
+): T[] {
+  return (costCodeRows || []).filter((r) => r.is_over);
+}
+
+/** Rank over-budget codes by committed overage (desc), capped. */
+export function rankOverBudgetByOverage<
+  T extends {
+    committed_cost?: number | string | null;
+    revised_budget?: number | string | null;
+  },
+>(overBudgetCodes: T[] | null | undefined, limit = 6): T[] {
+  return [...(overBudgetCodes || [])]
+    .sort(
+      (a, b) =>
+        (Number(b.committed_cost) - Number(b.revised_budget))
+        - (Number(a.committed_cost) - Number(a.revised_budget)),
+    )
+    .slice(0, limit);
+}
+
+export function sumCostCodeBudgets(
+  costCodes: Array<{ budget_amount?: number | string | null }> | null | undefined,
+): number {
+  return (costCodes || []).reduce((s, c) => s + Number(c.budget_amount || 0), 0);
+}
+
+export function sumCostCodeEac(
+  costCodeRows: Array<{
+    actual_cost?: number | string | null;
+    forecast_to_complete?: number | string | null;
+  }> | null | undefined,
+): number {
+  return (costCodeRows || []).reduce(
+    (s, c) => s + Number(c.actual_cost || 0) + Number(c.forecast_to_complete || 0),
+    0,
+  );
+}
+
+/** Sum of positive actual-over-budget overages (contingency consumed). */
+export function sumConsumedContingency(
+  costCodeRows: Array<{
+    actual_cost?: number | string | null;
+    budget_amount?: number | string | null;
+  }> | null | undefined,
+): number {
+  return (costCodeRows || []).reduce((s, c) => {
+    const v = Number(c.actual_cost || 0) - Number(c.budget_amount || 0);
+    return s + Math.max(0, v);
+  }, 0);
+}
+
+export function contingencyRemaining(
+  contingencyAmount: number | string | null | undefined,
+  costCodeRows: Array<{
+    actual_cost?: number | string | null;
+    budget_amount?: number | string | null;
+  }> | null | undefined,
+): number {
+  const contingency = Number(contingencyAmount ?? 0);
+  return Math.max(0, contingency - sumConsumedContingency(costCodeRows));
+}
+
+export type CoPipelineCounts = {
+  coPending: number;
+  coApproved: number;
+  coStale: number;
+  staleCOsCount: number;
+  topStaleCOs: CoAgingRow[];
+};
+
+/** CO pipeline KPI counts from change orders + aging rows. */
+export function buildCoPipelineCounts(
+  changeOrders: Array<{ status?: string | null }> | null | undefined,
+  coAging: CoAgingRow[] | null | undefined,
+): CoPipelineCounts {
+  const cos = changeOrders || [];
+  const aging = coAging || [];
+  const coPending = cos.filter((co) =>
+    ["Submitted", "Under Review"].includes(co.status ?? ""),
+  ).length;
+  const coApproved = cos.filter((co) => co.status === "Approved").length;
+  const stale = aging.filter((co) => co.isStale);
+  return {
+    coPending,
+    coApproved,
+    coStale: stale.length,
+    staleCOsCount: stale.length,
+    topStaleCOs: stale.slice(0, 5),
+  };
+}

@@ -8,6 +8,7 @@
  */
 
 import React, { useMemo, useState } from "react";
+import { buildIdMap } from "@/pages/shared/buildIdMap";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
@@ -45,10 +46,7 @@ export default function UpcomingMilestones() {
     queryFn: () => entities.ScheduleTask.list(),
   });
 
-  const projectsById = useMemo(
-    () => new Map(projects.map((p) => [p.id, p])),
-    [projects]
-  );
+  const projectsById = useMemo(() => buildIdMap(projects), [projects]);
 
   const rows = useMemo(
     () =>

@@ -9,6 +9,7 @@
  */
 
 import React, { useMemo, useState } from "react";
+import { buildIdMap } from "@/pages/shared/buildIdMap";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import ReportShell from "./ReportShell";
@@ -245,10 +246,7 @@ export default function TopRisks() {
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
   });
-  const projectById = useMemo(
-    () => Object.fromEntries(projects.map((p) => [p.id, p])),
-    [projects]
-  );
+  const projectById = useMemo(() => Object.fromEntries(buildIdMap(projects)), [projects]);
 
   const top = useMemo(
     () =>

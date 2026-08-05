@@ -8,6 +8,7 @@ import CommandCenterControlCenter from "./commandCenter/CommandCenterControlCent
 import {
   COMMAND_CENTER_STALE_TIME_MS as STALE_TIME,
   COMMAND_CENTER_EMPTY_LIST as EMPTY_LIST,
+  buildCommandCenterProjectMap,
 } from "./commandCenter/commandCenterPageHelpers";
 
 
@@ -93,13 +94,10 @@ export default function CommandCenter() {
   const isLoading = projLoading || rfiLoading || submittalsLoading;
 
   // ── Project map ─────────────────────────────────────────────────────
-  const projectMap = useMemo(() => {
-    const m = {};
-    for (const p of projects) {
-      m[p.id] = { project_number: p.project_number, name: p.name, gc_name: p.gc_name };
-    }
-    return m;
-  }, [projects]);
+  const projectMap = useMemo(
+    () => buildCommandCenterProjectMap(projects),
+    [projects],
+  );
 
   // ── Render ──────────────────────────────────────────────────────────
   if (isLoading) {
