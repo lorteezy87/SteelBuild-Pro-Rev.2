@@ -14,6 +14,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import {
   appendRecordToCaches,
@@ -79,16 +80,25 @@ export function useCostCodes(projectId) {
   });
 
   const bulkDeleteCostCodes = useMutation({
-    // One chunked .in('id', ids) delete instead of N single-row round-trips.
+    // One chunked .in('id', ids) delete — throws on failure (no silent swallow).
     mutationFn: (ids) => entities.CostCode.bulkDelete(ids),
-    onSuccess: async () => { await invalidateEntity(qc, "cost_code", projectId); },
+    onSuccess: async (_result, ids) => {
+      const list = Array.isArray(ids) ? ids : [];
+      for (const id of list) removeRecordFromCaches(qc, queryKeys, id);
+      await invalidateEntity(qc, "cost_code", projectId);
+      toast.success(`Deleted ${list.length} cost code${list.length === 1 ? "" : "s"}`);
+    },
     onError: (error) => toastCrudError(error, "Bulk delete failed"),
   });
 
   const bulkUpdateCostCodes = useMutation({
     // Identical `data` patch across all ids → one chunked .in('id', ids) update.
     mutationFn: ({ ids, data }) => entities.CostCode.bulkUpdate(ids, data),
-    onSuccess: async () => { await invalidateEntity(qc, "cost_code", projectId); },
+    onSuccess: async (_result, vars) => {
+      await invalidateEntity(qc, "cost_code", projectId);
+      const n = Array.isArray(vars?.ids) ? vars.ids.length : 0;
+      toast.success(`Updated ${n} cost code${n === 1 ? "" : "s"}`);
+    },
     onError: (error) => toastCrudError(error, "Bulk update failed"),
   });
 
