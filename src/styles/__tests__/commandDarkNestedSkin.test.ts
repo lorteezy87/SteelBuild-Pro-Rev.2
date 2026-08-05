@@ -6,6 +6,9 @@ import { describe, expect, it } from "vitest";
  * Regression: nested data-skin="command" (Piece Register, Dashboard CC,
  * WorkPackageDetailModal) re-declared light --cmd-* tokens and overrode the
  * dark remap on <html>, leaving whole pages stuck light under SteelBuild Dark.
+ *
+ * Opaque panel follow-up: frosted color-mix surfaces made native selects and
+ * popouts unreadable — dark remap must use solid --sbd-bg-panel* tones.
  */
 describe("command dark theme covers nested data-skin", () => {
   const commandCss = readFileSync(
@@ -18,17 +21,24 @@ describe("command dark theme covers nested data-skin", () => {
   );
 
   it("remaps --cmd-* for descendant [data-skin=command] under steelbuild-dark", () => {
-    expect(commandCss).toContain("html.steelbuild-dark [data-skin=\"command\"]");
-    expect(commandCss).toContain(".steelbuild-dark [data-skin=\"command\"]");
-    expect(commandCss).toContain("[data-theme=\"dark\"] [data-skin=\"command\"]");
+    expect(commandCss).toContain('html.steelbuild-dark [data-skin="command"]');
+    expect(commandCss).toContain('.steelbuild-dark [data-skin="command"]');
+    expect(commandCss).toContain('[data-theme="dark"] [data-skin="command"]');
     // Solid page canvas — not translucent sbd glass alone
     expect(commandCss).toMatch(/--cmd-bg:\s*var\(--sbd-bg-page/);
-    expect(commandCss).toMatch(/--cmd-surface:\s*color-mix/);
+    // Opaque panel surface (not frosted color-mix — breaks menu readability)
+    expect(commandCss).toMatch(/--cmd-surface:\s*var\(--sbd-bg-panel/);
+    expect(commandCss).toMatch(/--cmd-menu:\s*var\(--sbd-bg-panel-hi/);
   });
 
   it("styles select options under nested command skins in dark mode", () => {
     expect(baseCss).toContain('html.steelbuild-dark [data-skin="command"] select option');
     expect(baseCss).toContain('[data-theme="dark"] [data-skin="command"] select option');
+  });
+
+  it("defines opaque popout helper used by nav menus", () => {
+    expect(baseCss).toMatch(/\.sbp-opaque-popout\s*\{/);
+    expect(baseCss).toMatch(/backdrop-filter:\s*none/);
   });
 });
 

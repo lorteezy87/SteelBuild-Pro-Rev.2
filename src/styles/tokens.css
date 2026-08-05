@@ -508,20 +508,24 @@ html.steelbuild-dark,
 [data-accent] html.steelbuild-dark,
 html .steelbuild-dark,
 .steelbuild-dark {
-  /* Surfaces — translucent over dark base */
+  /* Surfaces — frosted rgba for in-page glass; opaque solids for
+     elevated / input / secondary surfaces used by menus & popouts. */
   --bg-page:                  var(--sbd-bg-base) !important;
   --bg-base:                  var(--sbd-bg-base) !important;
-  --bg-surface:               var(--sbd-bg-surface) !important;
-  --bg-surface-low:           rgba(255,255,255,0.020) !important;
-  --bg-surface-high:          var(--sbd-bg-surface-hi) !important;
-  --bg-elevated:              var(--sbd-bg-elevated) !important;
-  --bg-input:                 var(--sbd-bg-input) !important;
-  --bg-card:                  var(--sbd-bg-surface) !important;
-  --bg-secondary:             var(--sbd-bg-surface) !important;
-  --bg-sidebar:               rgba(13,17,23,0.70) !important;
-  --bg-row-hover:             var(--sbd-bg-row-hover) !important;
-  --hover-bg:                 var(--sbd-bg-row-hover) !important;
-  --nav-bg:                   rgba(15,22,38,0.65) !important;
+  --bg-surface:               var(--sbd-bg-panel, #161B22) !important;
+  --bg-surface-low:           var(--sbd-bg-page, #0B0E11) !important;
+  --bg-surface-high:          var(--sbd-bg-panel-hi, #21262D) !important;
+  --bg-surface-secondary:     var(--sbd-bg-panel, #161B22) !important;
+  --bg-elevated:              var(--sbd-bg-panel-hi, #21262D) !important;
+  --bg-input:                 var(--sbd-bg-panel-input, #1C2128) !important;
+  --bg-card:                  var(--sbd-bg-panel, #161B22) !important;
+  --bg-secondary:             var(--sbd-bg-panel, #161B22) !important;
+  --bg-sidebar:               var(--sbd-bg-page, #0B0E11) !important;
+  --bg-row-hover:             var(--sbd-bg-panel-hover, #2D333B) !important;
+  --hover-bg:                 var(--sbd-bg-panel-hover, #2D333B) !important;
+  --bg-hover:                 var(--sbd-bg-panel-hover, #2D333B) !important;
+  --nav-bg:                   var(--sbd-bg-page, #0B0E11) !important;
+  /* Glass stays translucent — only for intentional backdrop-filter cards */
   --glass-bg:                 rgba(15,22,38,0.65) !important;
 
   /* Borders / dividers */
