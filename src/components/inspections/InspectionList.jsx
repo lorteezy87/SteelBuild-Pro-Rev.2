@@ -1,20 +1,6 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
-
-const STATUS_COLORS = {
-  Scheduled: "var(--status-info)",
-  "In Progress": "var(--status-warning)",
-  Completed: "var(--status-success)",
-  "On Hold": "var(--text-muted)",
-  Cancelled: "var(--status-error)",
-};
-
-const SIGNOFF_COLORS = {
-  Pending: "var(--status-warning)",
-  Approved: "var(--status-success)",
-  "Conditional Approval": "var(--status-info)",
-  Rejected: "var(--status-error)",
-};
+import { STATUS_COLORS, SIGNOFF_COLORS } from "./inspectionListHelpers";
 
 export default function InspectionList({ inspections, onConvertToPunchlist }) {
   const [expanded, setExpanded] = useState(null);
