@@ -16,10 +16,10 @@ import { todayLocalISO } from "@/lib/dateMath";
 
 // computeRevisionImpact severity → human downstream label + qualitative impact.
 // critical = in field > high = delivered > medium = fabricated > low = none yet.
-const SEV_LABEL = { critical: "in the field", high: "delivered", medium: "fabricated", low: null };
-const SEV_TO_IMPACT = { critical: "high", high: "medium", medium: "medium", low: "low" };
-const IMPACT_RANK = { none: 0, low: 1, medium: 2, high: 3 };
-const RANK_IMPACT = ["none", "low", "medium", "high"];
+export const SEV_LABEL = { critical: "in the field", high: "delivered", medium: "fabricated", low: null };
+export const SEV_TO_IMPACT = { critical: "high", high: "medium", medium: "medium", low: "low" };
+export const IMPACT_RANK = { none: 0, low: 1, medium: 2, high: 3 };
+export const RANK_IMPACT = ["none", "low", "medium", "high"];
 
 /**
  * @param {object} args

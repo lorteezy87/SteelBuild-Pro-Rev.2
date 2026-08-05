@@ -64,7 +64,7 @@ function sharedMarks(a: Set<string>, b: Set<string>): string[] {
 // more than broad ones (a whole drawing set). A single broad signal can't reach
 // the surface threshold (0.4) alone — it takes real wording overlap or a second
 // signal — which keeps false positives down.
-const WEIGHT = {
+export const RFI_DEDUP_WEIGHT = {
   drawingReference: 0.25,
   pieceMarks: 0.2,
   specSection: 0.2,
@@ -72,6 +72,8 @@ const WEIGHT = {
   areaSequence: 0.12,
   drawingSet: 0.1,
 };
+
+const WEIGHT = RFI_DEDUP_WEIGHT;
 
 export interface DuplicateMatch {
   rfi: Record<string, any>;
