@@ -28,6 +28,11 @@ import { entities } from "@/api/supabaseClient";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { usePermissions } from "@/services/permissions";
+import {
+  nextBudgetHourSortOrder,
+  buildBlankBudgetHourRow,
+  buildScopeCreatePayload,
+} from "./budgetHours/budgetHoursPageHelpers";
 import { logActivity } from "@/services/auditLogger";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toastCrudError } from "@/components/shared/crudFeedback";
@@ -138,19 +143,9 @@ export default function BudgetHours() {
   /* ── Handlers ── */
   const addBlankRow = () => {
     if (!projectId) return;
-    const maxSort = Math.max(0, ...rows.map((r) => Number(r.sort_order) || 0));
-    createMut.mutate({
-      project_id: projectId,
-      category: "Standard",
-      scope_item: "New Scope Item",
-      sort_order: maxSort + 10,
-      is_specialty: false,
-      shop_hours_budget: 0,
-      shop_hours_actual: 0,
-      field_hours_budget: 0,
-      field_hours_actual: 0,
-      metadata: {},
-    });
+    createMut.mutate(
+      buildBlankBudgetHourRow(projectId, nextBudgetHourSortOrder(rows)),
+    );
   };
 
   const applyPreset = async (preset) => {
@@ -191,9 +186,8 @@ export default function BudgetHours() {
         { onSuccess: () => { setScopeModalOpen(false); setScopeEditTarget(null); } }
       );
     } else {
-      const maxSort = Math.max(0, ...rows.map((r) => Number(r.sort_order) || 0));
       createMut.mutate(
-        { ...patch, project_id: projectId, sort_order: maxSort + 10, metadata: {} },
+        buildScopeCreatePayload(patch, projectId, nextBudgetHourSortOrder(rows)),
         { onSuccess: () => setScopeModalOpen(false) }
       );
     }

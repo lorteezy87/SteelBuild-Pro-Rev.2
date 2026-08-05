@@ -131,3 +131,12 @@ export function downloadActivityCsv(
   );
 }
 
+
+export function createEmptyActivityFilters(): ActivityFilterOpts {
+  return {
+    filterProject: "all",
+    filterUser: "all",
+    filterEntity: "all",
+    dateRange: "all",
+  };
+}

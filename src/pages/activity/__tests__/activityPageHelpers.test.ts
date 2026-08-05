@@ -89,3 +89,18 @@ describe("buildActivityCsvString", () => {
     expect(activityCsvFilename(new Date("2026-08-05T00:00:00Z"))).toBe("activity-audit-2026-08-05.csv");
   });
 });
+
+import { createEmptyActivityFilters, activityHasActiveFilters } from "../activityPageHelpers";
+
+describe("createEmptyActivityFilters", () => {
+  it("clears all dimensions to all", () => {
+    const empty = createEmptyActivityFilters();
+    expect(empty).toEqual({
+      filterProject: "all",
+      filterUser: "all",
+      filterEntity: "all",
+      dateRange: "all",
+    });
+    expect(activityHasActiveFilters(empty)).toBe(false);
+  });
+});
