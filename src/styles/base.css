@@ -140,11 +140,43 @@ select option:disabled {
   color: #7b8798 !important;
 }
 
+/* Floating menus / Radix popouts — never use frosted rgba fills. */
+.sbp-opaque-popout {
+  background-color: var(--bg-elevated, var(--sbd-bg-panel-hi, #21262D)) !important;
+  color: var(--text-primary, #f3f7ff);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+[data-theme="light"] .sbp-opaque-popout {
+  background-color: var(--bg-elevated, #ffffff) !important;
+  color: var(--text-primary, #16203a);
+}
+
+
+/* Dark native selects: opaque panel solids (not frosted rgba). */
+html.steelbuild-dark select,
+html.steelbuild-dark select option,
+html.steelbuild-dark select optgroup,
 .steelbuild-dark select,
 .steelbuild-dark select option,
-.steelbuild-dark select optgroup {
-  background-color: #07111f !important;
-  color: #f3f7ff !important;
+.steelbuild-dark select optgroup,
+[data-theme="dark"] select,
+[data-theme="dark"] select option,
+[data-theme="dark"] select optgroup {
+  background: var(--cmd-menu, var(--sbd-bg-panel-hi, #21262D)) !important;
+  color: var(--cmd-text, #f3f7ff) !important;
+}
+html.steelbuild-dark select option:checked,
+html.steelbuild-dark select option:hover,
+html.steelbuild-dark select option:focus,
+.steelbuild-dark select option:checked,
+.steelbuild-dark select option:hover,
+.steelbuild-dark select option:focus,
+[data-theme="dark"] select option:checked,
+[data-theme="dark"] select option:hover,
+[data-theme="dark"] select option:focus {
+  background: var(--cmd-menu-hover, var(--sbd-bg-panel-hover, #2D333B)) !important;
+  color: #ffffff !important;
 }
 
 /* LIGHT surfaces (light theme + the canonical light presentation): option panels must
@@ -198,7 +230,7 @@ html.steelbuild-dark [data-skin="command"] select optgroup,
 [data-theme="dark"] [data-skin="command"] select,
 [data-theme="dark"] [data-skin="command"] select option,
 [data-theme="dark"] [data-skin="command"] select optgroup {
-  background: var(--cmd-surface, #121820) !important;
+  background: var(--cmd-menu, var(--sbd-bg-panel-hi, #21262D)) !important;
   color: var(--cmd-text, #f3f7ff) !important;
 }
 html.steelbuild-dark[data-skin="command"] select option:checked,
@@ -207,7 +239,7 @@ html.steelbuild-dark [data-skin="command"] select option:checked,
 .steelbuild-dark [data-skin="command"] select option:checked,
 [data-theme="dark"][data-skin="command"] select option:checked,
 [data-theme="dark"] [data-skin="command"] select option:checked {
-  background: var(--cmd-row-hover, rgba(255,255,255,0.08)) !important;
+  background: var(--cmd-menu-hover, var(--sbd-bg-panel-hover, #2D333B)) !important;
   color: var(--cmd-text, #f3f7ff) !important;
 }
 html.steelbuild-dark[data-skin="command"] select option:disabled,
