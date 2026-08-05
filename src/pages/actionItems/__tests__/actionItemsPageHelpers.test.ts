@@ -39,3 +39,15 @@ describe("actionItemsPageHelpers", () => {
     expect(resolveToggleStatus(ACTION_ITEM_STATUS.OPEN)).toBe(ACTION_ITEM_STATUS.COMPLETE);
   });
 });
+
+
+import { buildActionItemsCsvRows, shiftDate, ACTION_ITEMS_CSV_HEADERS } from "../actionItemsPageHelpers";
+
+describe("action items csv and shiftDate", () => {
+  it("builds csv rows and shifts dates", () => {
+    expect(buildActionItemsCsvRows([{ id: "1", title: "T", status: "Open" }])[0][0]).toBe("1");
+    expect(ACTION_ITEMS_CSV_HEADERS).toHaveLength(9);
+    expect(shiftDate("2026-08-05", 3)).toBe("2026-08-08");
+    expect(shiftDate(null, 1)).toBeNull();
+  });
+});

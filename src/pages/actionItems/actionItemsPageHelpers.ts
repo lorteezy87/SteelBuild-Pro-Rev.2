@@ -106,3 +106,54 @@ export function resolveToggleStatus(currentStatus: string | null | undefined): s
   const isComplete = currentStatus === ACTION_ITEM_STATUS.COMPLETE;
   return isComplete ? ACTION_ITEM_STATUS.OPEN : ACTION_ITEM_STATUS.COMPLETE;
 }
+
+
+export const ACTION_ITEMS_CSV_HEADERS = [
+  "ID",
+  "Title",
+  "Status",
+  "Priority",
+  "Assigned To",
+  "Due Date",
+  "Category",
+  "Project Area",
+  "Meeting Reference",
+] as const;
+
+export function buildActionItemsCsvRows(
+  items: Array<{
+    id?: string | null;
+    title?: string | null;
+    status?: string | null;
+    priority?: string | null;
+    assigned_to?: string | null;
+    due_date?: string | null;
+    category?: string | null;
+    project_area?: string | null;
+    meeting_reference?: string | null;
+  }>,
+): Array<Array<string>> {
+  return (items || []).map((ai) => [
+    ai.id ?? "",
+    ai.title || "",
+    ai.status || "",
+    ai.priority || "",
+    ai.assigned_to || "",
+    ai.due_date || "",
+    ai.category || "",
+    ai.project_area || "",
+    ai.meeting_reference || "",
+  ]);
+}
+
+/** Shift a YYYY-MM-DD date string forward by N days (local calendar math). */
+export function shiftDate(dateStr: string | null | undefined, days: number): string | null {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}

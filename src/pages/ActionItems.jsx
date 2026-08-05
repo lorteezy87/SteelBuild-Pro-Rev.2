@@ -20,6 +20,9 @@ import {
   filterActionItems,
   buildExecutionQueue,
   resolveToggleStatus,
+  buildActionItemsCsvRows,
+  ACTION_ITEMS_CSV_HEADERS,
+  shiftDate,
 } from "./actionItems/actionItemsPageHelpers";
 import { daysUntil } from "@/lib/dateMath";
 import { calcWpProgress } from "@/utils/projectKpis";
@@ -31,20 +34,7 @@ import {
 
 /** Lightweight CSV export for the canonical presentation path. */
 function exportActionItemsToCSV(items) {
-  const rows = [
-    ["ID", "Title", "Status", "Priority", "Assigned To", "Due Date", "Category", "Project Area", "Meeting Reference"],
-    ...items.map((ai) => [
-      ai.id,
-      ai.title || "",
-      ai.status || "",
-      ai.priority || "",
-      ai.assigned_to || "",
-      ai.due_date || "",
-      ai.category || "",
-      ai.project_area || "",
-      ai.meeting_reference || "",
-    ]),
-  ];
+  const rows = [[...ACTION_ITEMS_CSV_HEADERS], ...buildActionItemsCsvRows(items)];
   const csv = rows
     .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
     .join("\n");
@@ -70,21 +60,6 @@ const PRIORITY_COLORS = {
   [PRIORITY.MEDIUM]: "var(--status-info)",
   [PRIORITY.LOW]: "var(--text-muted)",
 };
-
-/**
- * Shift a YYYY-MM-DD date string forward by N days, returning a new
- * YYYY-MM-DD string. Uses local date math (no TZ surprises).
- */
-function shiftDate(dateStr, days) {
-  if (!dateStr) return null;
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + days);
-  const yyyy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
 
 export default function ActionItems() {
   const projectId = useProjectId();
