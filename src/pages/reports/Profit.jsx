@@ -35,6 +35,11 @@ import {
 } from "./utils";
 import KPICard from "./KPICard";
 import { mono } from "./constants";
+import {
+  buildProfitRows,
+  filterProfitRows,
+  sumProfitTotals,
+} from "./profitHelpers";
 
 export default function Profit() {
   const navigate = useNavigate();
@@ -54,62 +59,24 @@ export default function Profit() {
     queryFn: () => entities.Expense.list(),
   });
 
-  const rows = useMemo(() => {
-    return projects.map((p) => {
-      const pCOs = changeOrders.filter((c) => c.project_id === p.id);
-      const pExpenses = expenses.filter((e) => e.project_id === p.id);
-      const original = Number(p.original_contract_value) || 0;
-      const approvedCOTotal = pCOs
-        .filter((c) => c.status === "Approved")
-        .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-      const revised = revisedContractValue(p, pCOs);
-      const projected = projectedFinalCost(pExpenses, p);
-      const profit = revised - projected;
-      const margin = revised ? (profit / revised) * 100 : 0;
-      return {
-        id: p.id,
-        name: p.name || "Untitled Project",
-        number: p.project_number || `P-${p.id}`,
-        phase: p.phase || "",
-        original,
-        approvedCOTotal,
-        revised,
-        projected,
-        profit,
-        margin,
-      };
-    });
-  }, [projects, changeOrders, expenses]);
+  const rows = useMemo(
+    () =>
+      buildProfitRows({
+        projects,
+        changeOrders,
+        expenses,
+        revisedContractValue,
+        projectedFinalCost,
+      }),
+    [projects, changeOrders, expenses],
+  );
 
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.number.toLowerCase().includes(q)
-      );
-    }
-    if (phaseFilter !== "all") out = out.filter((r) => r.phase === phaseFilter);
-    return out;
-  }, [rows, search, phaseFilter]);
+  const filtered = useMemo(
+    () => filterProfitRows(rows, { search, phaseFilter }),
+    [rows, search, phaseFilter],
+  );
 
-  const totals = useMemo(() => {
-    const t = filtered.reduce(
-      (acc, r) => {
-        acc.original += r.original;
-        acc.approvedCOTotal += r.approvedCOTotal;
-        acc.revised += r.revised;
-        acc.projected += r.projected;
-        acc.profit += r.profit;
-        return acc;
-      },
-      { original: 0, approvedCOTotal: 0, revised: 0, projected: 0, profit: 0 }
-    );
-    t.margin = t.revised ? (t.profit / t.revised) * 100 : 0;
-    return t;
-  }, [filtered]);
+  const totals = useMemo(() => sumProfitTotals(filtered), [filtered]);
 
   const columns = useMemo(
     () => [

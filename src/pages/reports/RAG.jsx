@@ -16,21 +16,13 @@ import ReportShell from "./ReportShell";
 import { formatDate, formatCurrencyFull } from "./utils";
 import { mono, body, CARD, PROJECT_HEALTH_COLORS } from "./constants";
 
+import {
+  RAG_LABEL,
+  buildRagCards,
+  countRagBuckets,
+} from "./ragHelpers";
+
 const SUPPORTED_PHASES = new Set(PHASES);
-
-const RAG_RANK = { "At Risk": 0, "Watch": 1, "On Track": 2, "On Hold": 3, "Unknown": 4 };
-const RAG_LABEL = {
-  "At Risk": "RED",
-  "Watch": "AMBER",
-  "On Track": "GREEN",
-  "On Hold": "HOLD",
-  "Unknown": "—",
-};
-
-function ragBucket(status) {
-  if (status === "On Track" || status === "Watch" || status === "At Risk" || status === "On Hold") return status;
-  return "Unknown";
-}
 
 export default function RAG() {
   const navigate = useNavigate();
@@ -39,31 +31,8 @@ export default function RAG() {
     queryFn: () => entities.Project.list(),
   });
 
-  const cards = useMemo(() => {
-    return projects
-      .map((p) => ({
-        id: p.id,
-        name: p.name || "Untitled Project",
-        number: p.project_number || `P-${p.id}`,
-        client: p.general_contractor || p.client || "",
-        phase: p.phase || "",
-        bucket: ragBucket(p.health_status),
-        targetDate: p.target_completion_date,
-        contractValue: Number(p.original_contract_value) || 0,
-      }))
-      .sort((a, b) => {
-        const ra = RAG_RANK[a.bucket] ?? 99;
-        const rb = RAG_RANK[b.bucket] ?? 99;
-        if (ra !== rb) return ra - rb;
-        return a.name.localeCompare(b.name);
-      });
-  }, [projects]);
-
-  const counts = useMemo(() => {
-    const c = { "At Risk": 0, "Watch": 0, "On Track": 0, "On Hold": 0, "Unknown": 0 };
-    cards.forEach((c2) => { c[c2.bucket] = (c[c2.bucket] || 0) + 1; });
-    return c;
-  }, [cards]);
+  const cards = useMemo(() => buildRagCards(projects), [projects]);
+  const counts = useMemo(() => countRagBuckets(cards), [cards]);
 
   return (
     <ReportShell

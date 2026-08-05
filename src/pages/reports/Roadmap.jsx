@@ -19,29 +19,21 @@ import { FilterBar, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
 import { mono, body, CARD } from "./constants";
 
+import {
+  quartersBetween,
+  yearOptions,
+  buildPhaseRangesByProject,
+  collectPhaseRangeDates,
+  resolveRoadmapRange,
+  filterProjectsWithPhaseRanges,
+  xForTimestamp,
+} from "./roadmapHelpers";
+
 const ROW_HEIGHT = 48;
 const HEADER_HEIGHT = 36;
 const LEFT_GUTTER = 220;
 const RIGHT_GUTTER = 16;
 const BAND_HEIGHT = 14;
-
-function quartersBetween(start, end) {
-  const out = [];
-  const d = new Date(start.getFullYear(), Math.floor(start.getMonth() / 3) * 3, 1);
-  while (d <= end) {
-    out.push(new Date(d));
-    d.setMonth(d.getMonth() + 3);
-  }
-  return out;
-}
-
-function yearOptions(allDates) {
-  const years = new Set();
-  allDates.forEach((d) => {
-    if (d) years.add(new Date(d).getFullYear());
-  });
-  return Array.from(years).sort((a, b) => a - b);
-}
 
 export default function Roadmap() {
   const navigate = useNavigate();
@@ -57,62 +49,37 @@ export default function Roadmap() {
   });
 
   // Compute per-project, per-phase date ranges
-  const phaseRangesByProject = useMemo(() => {
-    const m = {};
-    tasks.forEach((t) => {
-      if (!t.start_date || !t.end_date || !t.project_id || !PHASES.includes(t.phase)) return;
-      m[t.project_id] = m[t.project_id] || {};
-      const cur = m[t.project_id][t.phase];
-      const s = new Date(t.start_date).getTime();
-      const e = new Date(t.end_date).getTime();
-      if (!cur) m[t.project_id][t.phase] = { start: s, end: e };
-      else {
-        if (s < cur.start) cur.start = s;
-        if (e > cur.end) cur.end = e;
-      }
-    });
-    return m;
-  }, [tasks]);
+  const phaseRangesByProject = useMemo(
+    () => buildPhaseRangesByProject(tasks, PHASES),
+    [tasks],
+  );
 
-  const allDates = useMemo(() => {
-    const ds = [];
-    Object.values(phaseRangesByProject).forEach((phases) => {
-      Object.values(phases).forEach((r) => { ds.push(r.start); ds.push(r.end); });
-    });
-    return ds;
-  }, [phaseRangesByProject]);
+  const allDates = useMemo(
+    () => collectPhaseRangeDates(phaseRangesByProject),
+    [phaseRangesByProject],
+  );
 
   const years = useMemo(() => yearOptions(allDates), [allDates]);
 
-  const { rangeStart, rangeEnd } = useMemo(() => {
-    if (yearFilter !== "auto") {
-      const y = Number(yearFilter);
-      return { rangeStart: new Date(y, 0, 1), rangeEnd: new Date(y, 11, 31) };
-    }
-    if (allDates.length === 0) return { rangeStart: null, rangeEnd: null };
-    return {
-      rangeStart: new Date(Math.min(...allDates)),
-      rangeEnd: new Date(Math.max(...allDates)),
-    };
-  }, [yearFilter, allDates]);
+  const { rangeStart, rangeEnd } = useMemo(
+    () => resolveRoadmapRange(yearFilter, allDates),
+    [yearFilter, allDates],
+  );
 
   const quarters = useMemo(() => {
     if (!rangeStart || !rangeEnd) return [];
     return quartersBetween(rangeStart, rangeEnd);
   }, [rangeStart, rangeEnd]);
 
-  const visibleProjects = useMemo(() => {
-    return projects.filter((p) => phaseRangesByProject[p.id]);
-  }, [projects, phaseRangesByProject]);
+  const visibleProjects = useMemo(
+    () => filterProjectsWithPhaseRanges(projects, phaseRangesByProject),
+    [projects, phaseRangesByProject],
+  );
 
   const chartW = Math.max(900, quarters.length * 90 + LEFT_GUTTER + RIGHT_GUTTER);
   const innerW = chartW - LEFT_GUTTER - RIGHT_GUTTER;
-  const totalMs = rangeStart && rangeEnd ? rangeEnd - rangeStart : 0;
-  const xFor = (ts) => {
-    if (!totalMs) return LEFT_GUTTER;
-    const clamped = Math.max(rangeStart.getTime(), Math.min(rangeEnd.getTime(), ts));
-    return LEFT_GUTTER + ((clamped - rangeStart.getTime()) / totalMs) * innerW;
-  };
+  const xFor = (ts) =>
+    xForTimestamp(ts, rangeStart, rangeEnd, LEFT_GUTTER, innerW);
 
   const totalH = HEADER_HEIGHT + visibleProjects.length * ROW_HEIGHT;
 
