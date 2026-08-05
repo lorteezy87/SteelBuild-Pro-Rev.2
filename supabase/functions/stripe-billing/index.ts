@@ -228,6 +228,14 @@ async function handleRequest(req: Request): Promise<Response> {
       metadata: { org_id, plan: plan ?? "" },
       subscription_data: { metadata: { org_id, plan: plan ?? "" } },
       allow_promotion_codes: true,
+      // H14 — Stripe Tax / AZ TPT. Requires Stripe Tax enabled in the
+      // dashboard and prices marked taxable. Collect a billing address so
+      // Tax can resolve jurisdiction; customer_update lets Stripe persist
+      // the address on the Customer for future invoices.
+      automatic_tax: { enabled: true },
+      tax_id_collection: { enabled: true },
+      billing_address_collection: "required",
+      customer_update: { address: "auto", name: "auto" },
       success_url: `${origin}/Billing?status=success`,
       cancel_url: `${origin}/Billing?status=cancel`,
     });

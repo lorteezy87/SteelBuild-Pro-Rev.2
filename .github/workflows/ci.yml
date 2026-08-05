@@ -162,6 +162,40 @@ jobs:
       - name: Audit production dependencies (high+)
         run: npm audit --omit=dev --audit-level=high
 
+  # ── Supabase migration + edge-function drift (opt-in) ────────────────────
+  # H4/H5: catches repo vs remote drift for migrations and edge functions, and
+  # fails when deprecated orphan functions are still deployed. Opt-in via repo
+  # variable SUPABASE_DRIFT_ENABLED=true + secret SUPABASE_ACCESS_TOKEN.
+  supabase-drift:
+    name: Supabase drift check (opt-in)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ vars.SUPABASE_DRIFT_ENABLED == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check migration + edge-function drift
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "SUPABASE_DRIFT_ENABLED=true but SUPABASE_ACCESS_TOKEN is empty."
+            echo "Add the secret (owner-checklist §1) or unset the variable."
+            exit 1
+          fi
+          npm run supabase:drift
+
   # ── Gated production deploy ──────────────────────────────────────────────
   # Deploys to Vercel ONLY after the `ci` job above passes, on a push to main —
   # so a red lint / typecheck / test / build can no longer reach
