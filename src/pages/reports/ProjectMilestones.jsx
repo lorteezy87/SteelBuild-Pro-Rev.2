@@ -19,6 +19,10 @@ import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput, SelectFilter, ToggleGroup } from "./ReportFilters";
 import { exportTableCSV, formatDate } from "./utils";
 import { mono, body } from "./constants";
+import {
+  buildProjectMilestoneRows,
+  filterProjectMilestoneRows,
+} from "./projectMilestonesHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -45,47 +49,20 @@ export default function ProjectMilestones() {
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
-  const rows = useMemo(() => {
-    return tasks
-      .filter((t) => t.task_type === "Milestone" || t.is_milestone === true)
-      .map((t) => {
-        const proj = projectsById.get(t.project_id);
-        return {
-          id: t.id,
-          taskName: t.task_name || "Untitled milestone",
-          projectId: t.project_id,
-          projectName: proj?.name || "—",
-          projectNumber: proj?.project_number || "",
-          phase: t.phase || "",
-          startDate: t.start_date,
-          endDate: t.end_date,
-          status: t.status || "Not Started",
-        };
-      })
-      .sort((a, b) => {
-        const byProj = a.projectName.localeCompare(b.projectName);
-        if (byProj !== 0) return byProj;
-        const da = a.startDate ? new Date(a.startDate).getTime() : Infinity;
-        const db = b.startDate ? new Date(b.startDate).getTime() : Infinity;
-        return da - db;
-      });
-  }, [tasks, projectsById]);
+  const rows = useMemo(
+    () => buildProjectMilestoneRows({ tasks, projectsById }),
+    [tasks, projectsById],
+  );
 
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (projectFilter !== "all") out = out.filter((r) => r.projectId === projectFilter);
-    if (statusFilter === "open") out = out.filter((r) => r.status !== "Complete" && r.status !== "Cancelled");
-    if (statusFilter === "complete") out = out.filter((r) => r.status === "Complete");
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter((r) =>
-        r.taskName.toLowerCase().includes(q) ||
-        r.projectName.toLowerCase().includes(q) ||
-        r.projectNumber.toLowerCase().includes(q)
-      );
-    }
-    return out;
-  }, [rows, search, projectFilter, statusFilter]);
+  const filtered = useMemo(
+    () =>
+      filterProjectMilestoneRows(rows, {
+        search,
+        projectFilter,
+        statusFilter,
+      }),
+    [rows, search, projectFilter, statusFilter],
+  );
 
   const columns = useMemo(() => [
     {

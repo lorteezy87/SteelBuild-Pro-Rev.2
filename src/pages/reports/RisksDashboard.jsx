@@ -15,13 +15,15 @@ import { FilterBar, SelectFilter } from "./ReportFilters";
 import { BarChartSVG, DonutChartSVG } from "./charts";
 import { CARD, CARD_TITLE, mono } from "./constants";
 import { exportTableCSV } from "./utils";
-import {
-  RISK_CATEGORIES,
-  computeScore,
-  severityColor,
-  isActiveRisk,
-} from "./risks/severity";
+import { severityColor } from "./risks/severity";
 import RiskFormModal from "@/components/risks/RiskFormModal";
+import {
+  buildCategoryBarData,
+  buildSeveritySegments,
+  computeRisksDashboardKpis,
+  scopeRisksByProject,
+  topOpenRisks,
+} from "./risksDashboardHelpers";
 
 function KpiCell({ label, value, tone = "var(--text-primary)" }) {
   return (
@@ -75,59 +77,32 @@ export default function RisksDashboard() {
     queryFn: () => entities.Project.list(),
   });
 
-  const scoped = useMemo(() => {
-    if (projectFilter === "all") return risks;
-    return risks.filter((r) => r.project_id === projectFilter);
-  }, [risks, projectFilter]);
+  const scoped = useMemo(
+    () => scopeRisksByProject(risks, projectFilter),
+    [risks, projectFilter],
+  );
 
-  // KPIs
-  const total = scoped.length;
-  const open = scoped.filter((r) => r.status === "Open").length;
-  const mitigating = scoped.filter((r) => r.status === "Mitigating").length;
-  const mitigated = scoped.filter((r) => r.status === "Mitigated").length;
-  const closed = scoped.filter((r) => r.status === "Closed").length;
-  const criticalCount = scoped.filter((r) => r.severity === "Critical").length;
-  const avgScore = scoped.length
-    ? scoped.reduce((s, r) => s + computeScore(r.probability, r.impact), 0) /
-      scoped.length
-    : 0;
+  const {
+    total,
+    open,
+    mitigating,
+    mitigated,
+    closed,
+    criticalCount,
+    avgScore,
+  } = useMemo(() => computeRisksDashboardKpis(scoped), [scoped]);
 
-  // Severity donut segments (Critical → Low)
-  const severitySegments = useMemo(() => {
-    const counts = { Critical: 0, High: 0, Medium: 0, Low: 0 };
-    for (const r of scoped) {
-      if (counts[r.severity] !== undefined) counts[r.severity] += 1;
-    }
-    return ["Critical", "High", "Medium", "Low"]
-      .map((sev) => ({
-        label: sev,
-        value: counts[sev],
-        color: severityColor(sev),
-      }))
-      .filter((s) => s.value > 0);
-  }, [scoped]);
+  const severitySegments = useMemo(
+    () => buildSeveritySegments(scoped),
+    [scoped],
+  );
 
-  // Category bar — re-uses the BarChartSVG which expects {name, budget, actual}.
-  // We map "open" onto budget and "all" onto actual so the bars compare the
-  // two and the colours remain on-brand.
-  const categoryData = useMemo(() => {
-    return RISK_CATEGORIES.map((cat) => {
-      const all = scoped.filter((r) => r.category === cat).length;
-      const openCount = scoped.filter(
-        (r) => r.category === cat && isActiveRisk(r)
-      ).length;
-      return { name: cat, budget: all, actual: openCount };
-    }).filter((d) => d.budget > 0 || d.actual > 0);
-  }, [scoped]);
+  const categoryData = useMemo(
+    () => buildCategoryBarData(scoped),
+    [scoped],
+  );
 
-  // Top 5 open
-  const topOpen = useMemo(() => {
-    return [...scoped]
-      .filter(isActiveRisk)
-      .map((r) => ({ ...r, score: computeScore(r.probability, r.impact) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
-  }, [scoped]);
+  const topOpen = useMemo(() => topOpenRisks(scoped, 5), [scoped]);
 
   return (
     <ReportShell

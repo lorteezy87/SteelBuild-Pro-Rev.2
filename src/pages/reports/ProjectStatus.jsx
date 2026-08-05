@@ -21,11 +21,6 @@ import { useNavigate } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
-import {
-  revisedContractValue,
-  projectedFinalCost,
-  projectedMargin,
-} from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput, SelectFilter } from "./ReportFilters";
@@ -36,6 +31,11 @@ import {
   exportTableCSV,
 } from "./utils";
 import { mono, PROJECT_HEALTH_COLORS } from "./constants";
+import {
+  buildProjectStatusRows,
+  filterProjectStatusRows,
+  projectStatusPortfolioTotals,
+} from "./projectStatusHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -114,42 +114,15 @@ export default function ProjectStatus() {
     queryFn: () => entities.Expense.list(),
   });
 
-  const rows = useMemo(() => {
-    return projects.map((p) => {
-      const pCOs = changeOrders.filter((c) => c.project_id === p.id);
-      const pExpenses = expenses.filter((e) => e.project_id === p.id);
-      const revised = revisedContractValue(p, pCOs);
-      const projected = projectedFinalCost(pExpenses, p);
-      const margin = projectedMargin(p, pCOs, pExpenses);
-      return {
-        id: p.id,
-        name: p.name || "Untitled Project",
-        number: p.project_number || `P-${p.id}`,
-        phase: p.phase || "",
-        health: p.health_status || "",
-        jobType: p.job_type || "",
-        startDate: p.start_date || null,
-        targetDate: p.target_completion_date || null,
-        revised,
-        projected,
-        margin,
-      };
-    });
-  }, [projects, changeOrders, expenses]);
+  const rows = useMemo(
+    () => buildProjectStatusRows({ projects, changeOrders, expenses }),
+    [projects, changeOrders, expenses],
+  );
 
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.number.toLowerCase().includes(q)
-      );
-    }
-    if (phaseFilter !== "all") out = out.filter((r) => r.phase === phaseFilter);
-    return out;
-  }, [rows, search, phaseFilter]);
+  const filtered = useMemo(
+    () => filterProjectStatusRows(rows, { search, phaseFilter }),
+    [rows, search, phaseFilter],
+  );
 
   const columns = useMemo(
     () => [
@@ -272,11 +245,8 @@ export default function ProjectStatus() {
     [navigate]
   );
 
-  const totalRevised = filtered.reduce((s, r) => s + r.revised, 0);
-  const totalProjected = filtered.reduce((s, r) => s + r.projected, 0);
-  const portfolioMargin = totalRevised
-    ? ((totalRevised - totalProjected) / totalRevised) * 100
-    : 0;
+  const { totalRevised, totalProjected, portfolioMargin } =
+    projectStatusPortfolioTotals(filtered);
 
   return (
     <ReportShell

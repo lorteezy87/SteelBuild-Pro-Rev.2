@@ -18,22 +18,19 @@ import ReportShell from "./ReportShell";
 import { FilterBar, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
 import { mono, CARD } from "./constants";
+import {
+  filterTimelineTasks,
+  groupTasksByPhase,
+  monthsBetween,
+  timelineDateRange,
+  timelineXFor,
+} from "./timelineHelpers";
 
 const LANE_HEIGHT = 36;
 const BAR_HEIGHT = 18;
 const HEADER_HEIGHT = 32;
 const LEFT_GUTTER = 120;
 const RIGHT_GUTTER = 16;
-
-function monthsBetween(start, end) {
-  const months = [];
-  const d = new Date(start.getFullYear(), start.getMonth(), 1);
-  while (d <= end) {
-    months.push(new Date(d));
-    d.setMonth(d.getMonth() + 1);
-  }
-  return months;
-}
 
 export default function Timeline() {
   const navigate = useNavigate();
@@ -50,26 +47,19 @@ export default function Timeline() {
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
-      if (!t.start_date || !t.end_date) return false;
-      if (projectFilter !== "all" && t.project_id !== projectFilter) return false;
-      return PHASES.includes(t.phase);
-    });
-  }, [tasks, projectFilter]);
+  const filteredTasks = useMemo(
+    () =>
+      filterTimelineTasks(tasks, {
+        projectFilter,
+        phases: PHASES,
+      }),
+    [tasks, projectFilter],
+  );
 
-  const { minDate, maxDate } = useMemo(() => {
-    if (filteredTasks.length === 0) return { minDate: null, maxDate: null };
-    let mn = Infinity;
-    let mx = -Infinity;
-    filteredTasks.forEach((t) => {
-      const s = new Date(t.start_date).getTime();
-      const e = new Date(t.end_date).getTime();
-      if (s < mn) mn = s;
-      if (e > mx) mx = e;
-    });
-    return { minDate: new Date(mn), maxDate: new Date(mx) };
-  }, [filteredTasks]);
+  const { minDate, maxDate } = useMemo(
+    () => timelineDateRange(filteredTasks),
+    [filteredTasks],
+  );
 
   const months = useMemo(() => {
     if (!minDate || !maxDate) return [];
@@ -79,18 +69,19 @@ export default function Timeline() {
   const totalMs = minDate && maxDate ? maxDate - minDate : 0;
   const chartW = Math.max(800, months.length * 60);
   const innerW = chartW - LEFT_GUTTER - RIGHT_GUTTER;
-  const xFor = (date) => {
-    if (!totalMs) return LEFT_GUTTER;
-    const t = new Date(date).getTime();
-    return LEFT_GUTTER + ((t - minDate.getTime()) / totalMs) * innerW;
-  };
+  const xFor = (date) =>
+    timelineXFor({
+      date,
+      minDate,
+      totalMs,
+      leftGutter: LEFT_GUTTER,
+      innerW,
+    });
 
-  const tasksByPhase = useMemo(() => {
-    const m = {};
-    PHASES.forEach((p) => { m[p] = []; });
-    filteredTasks.forEach((t) => { if (m[t.phase]) m[t.phase].push(t); });
-    return m;
-  }, [filteredTasks]);
+  const tasksByPhase = useMemo(
+    () => groupTasksByPhase(filteredTasks, PHASES),
+    [filteredTasks],
+  );
 
   const totalH = HEADER_HEIGHT + PHASES.length * LANE_HEIGHT;
 
