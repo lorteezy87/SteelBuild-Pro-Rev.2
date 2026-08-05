@@ -24,7 +24,11 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { Button } from "@/components/design-system";
-import { isOverdue } from "./constraints/utils";
+import {
+  mergeConstraints,
+  computeConstraintKpis,
+  filterAndSortConstraints,
+} from "./constraints/constraintsPageHelpers";
 import KpiStrip from "./constraints/KpiStrip";
 import PriorityBar from "./constraints/PriorityBar";
 import OverdueStrip from "./constraints/OverdueStrip";
@@ -33,11 +37,10 @@ import EmptyState from "./constraints/EmptyState";
 import ListView from "./constraints/ListView";
 import BoardView from "./constraints/BoardView";
 import ConstraintFormModal from "./constraints/ConstraintFormModal";
-import { CONSTRAINT_TYPES, TYPE_COLORS, inputStyle } from "./constraints/constants";
+import { inputStyle } from "./constraints/constants";
 import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus, Search } from "lucide-react";
-import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
 import { buildConstraintPrefillFromRfi } from "./constraints/rfiConstraintHandoff";
 
@@ -202,75 +205,26 @@ export default function Constraints() {
   );
 
   const allConstraints = useMemo(
-    () => [...generatedConstraints, ...items],
+    () => mergeConstraints(generatedConstraints, items),
     [generatedConstraints, items],
   );
 
-  const kpis = useMemo(() => {
-    const open = allConstraints.filter((c) => !RESOLVED_STATUSES.includes(c.status));
-    const resolved = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.RESOLVED);
-    const closed = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.CLOSED);
-    const overdue = open.filter(isOverdue);
-    const critical = open.filter((c) => c.priority === PRIORITY.CRITICAL);
-    const inProg = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.IN_PROGRESS);
-    const generated = allConstraints.filter((c) => c._generated);
+  const kpis = useMemo(
+    () => computeConstraintKpis(allConstraints),
+    [allConstraints],
+  );
 
-    const oldestOpen = open.reduce((oldest, c) => {
-      const d = new Date(c.created_date || c.created_at || c.due_date || Date.now());
-      return !oldest || d < oldest ? d : oldest;
-    }, null);
-    const agedays = oldestOpen ? Math.floor((Date.now() - oldestOpen) / 86400000) : 0;
-
-    const byType = CONSTRAINT_TYPES.map((t) => ({
-      type: t,
-      count: open.filter((c) => c.constraint_type === t).length,
-      color: TYPE_COLORS[t],
-    }))
-      .filter((t) => t.count > 0)
-      .sort((a, b) => b.count - a.count);
-
-    const byPriority = Object.values(PRIORITY).map((p) => ({
-      priority: p,
-      count: open.filter((c) => c.priority === p).length,
-    }));
-
-    return { open, resolved, closed, overdue, critical, inProg, generated, agedays, byType, byPriority, total: allConstraints.length };
-  }, [allConstraints]);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return allConstraints
-      .filter((c) => {
-        if (filterType !== "all" && c.constraint_type !== filterType) return false;
-        if (filterStatus === "open" && RESOLVED_STATUSES.includes(c.status)) return false;
-        if (filterStatus !== "all" && filterStatus !== "open" && c.status !== filterStatus) return false;
-        if (filterPriority !== "all" && c.priority !== filterPriority) return false;
-        if (!matchesSequenceFilter(c, seqFilter)) return false;
-        if (
-          q &&
-          ![c.title, c.description, c.project_area, c.assigned_to, c.constraint_number, c._source_ref, c._source_type]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase()
-            .includes(q)
-        )
-          return false;
-        return true;
-      })
-      .sort((a, b) => {
-        const aResolved = RESOLVED_STATUSES.includes(a.status);
-        const bResolved = RESOLVED_STATUSES.includes(b.status);
-        if (aResolved !== bResolved) return aResolved ? 1 : -1;
-        const aP = PRIORITY_ORDER[a.priority] ?? 2;
-        const bP = PRIORITY_ORDER[b.priority] ?? 2;
-        if (aP !== bP) return aP - bP;
-        const aOverdue = isOverdue(a);
-        const bOverdue = isOverdue(b);
-        if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
-        if (a.due_date && b.due_date) return new Date(a.due_date) - new Date(b.due_date);
-        return 0;
-      });
-  }, [allConstraints, filterType, filterStatus, filterPriority, seqFilter, search]);
+  const filtered = useMemo(
+    () => filterAndSortConstraints(allConstraints, {
+      filterType,
+      filterStatus,
+      filterPriority,
+      search,
+      seqFilter,
+      matchesSequenceFilter,
+    }),
+    [allConstraints, filterType, filterStatus, filterPriority, seqFilter, search],
+  );
 
   const openCount = kpis.open.length;
   const overdueCount = kpis.overdue.length;
