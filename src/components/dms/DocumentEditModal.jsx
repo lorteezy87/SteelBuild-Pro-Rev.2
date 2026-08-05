@@ -3,29 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-
-const INPUT_STYLE = {
-  width: "100%",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "var(--radius-input)",
-  padding: "8px 10px",
-  color: "var(--text-primary)",
-  fontFamily: "var(--font-body)",
-  fontSize: 12,
-  boxSizing: "border-box",
-};
-
-const LABEL_STYLE = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  color: "var(--text-muted)",
-  textTransform: "uppercase",
-  marginBottom: 4,
-  display: "block",
-};
+import { INPUT_STYLE, LABEL_STYLE } from "./documentEditModalStyleHelpers";
 
 const STATUS_OPTIONS = ["Draft", "Under Review", "Approved", "Approved with Comments", "Revise & Resubmit", "Rejected", "Issued", "Superseded", "Archived", "Void"];
 const CATEGORY_OPTIONS = ["Blueprint", "Shop Drawing", "IFC Model", "Specification", "Submittal", "Transmittal", "RFI Response", "Change Order", "Contract", "Photo", "Report", "Correspondence", "Permit", "Inspection Report", "Other"];
