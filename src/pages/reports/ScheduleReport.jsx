@@ -20,6 +20,10 @@ import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput, SelectFilter } from "./ReportFilters";
 import { exportTableCSV, formatDate } from "./utils";
 import { mono, body } from "./constants";
+import {
+  buildScheduleReportRows,
+  filterScheduleReportRows,
+} from "./scheduleReportHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -63,45 +67,21 @@ export default function ScheduleReport() {
     [projects]
   );
 
-  const rows = useMemo(() => {
-    return tasks.map((t) => {
-      const proj = projectsById.get(t.project_id);
-      return {
-        id: t.id,
-        taskName: t.task_name || "Untitled task",
-        projectId: t.project_id,
-        projectName: proj?.name || "—",
-        projectNumber: proj?.project_number || "",
-        wbs: t.wbs_code || "",
-        phase: t.phase || "",
-        startDate: t.start_date || null,
-        endDate: t.end_date || null,
-        status: t.status || "Not Started",
-        assignee: t.assigned_to || "",
-        taskType: t.task_type || "",
-      };
-    });
-  }, [tasks, projectsById]);
+  const rows = useMemo(
+    () => buildScheduleReportRows(tasks, projectsById),
+    [tasks, projectsById],
+  );
 
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter(
-        (r) =>
-          r.taskName.toLowerCase().includes(q) ||
-          r.projectName.toLowerCase().includes(q) ||
-          r.wbs.toLowerCase().includes(q) ||
-          r.assignee.toLowerCase().includes(q)
-      );
-    }
-    if (phaseFilter !== "all") out = out.filter((r) => r.phase === phaseFilter);
-    if (statusFilter !== "all")
-      out = out.filter((r) => r.status === statusFilter);
-    if (typeFilter !== "all")
-      out = out.filter((r) => r.taskType === typeFilter);
-    return out;
-  }, [rows, search, phaseFilter, statusFilter, typeFilter]);
+  const filtered = useMemo(
+    () =>
+      filterScheduleReportRows(rows, {
+        search,
+        phaseFilter,
+        statusFilter,
+        typeFilter,
+      }),
+    [rows, search, phaseFilter, statusFilter, typeFilter],
+  );
 
   const columns = useMemo(
     () => [

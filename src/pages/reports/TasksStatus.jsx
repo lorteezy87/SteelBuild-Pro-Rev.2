@@ -14,6 +14,14 @@ import ReportShell from "./ReportShell";
 import { exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
 
+import {
+  TASK_STATUS_KEYS as STATUSES,
+  countTasksByStatus,
+  buildStatusPhaseMatrix,
+  phaseTotalsFromMatrix,
+  buildStatusPhaseTableRows,
+} from "./tasksStatusHelpers";
+
 const STATUS_COLORS = {
   "Not Started": "var(--text-muted)",
   "In Progress": "var(--accent)",
@@ -23,60 +31,31 @@ const STATUS_COLORS = {
   "Cancelled": "var(--text-disabled, var(--text-muted))",
 };
 
-const STATUSES = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold", "Cancelled"];
-
 export default function TasksStatus() {
   const { data: tasks = [] } = useQuery({
     queryKey: ["schedule-tasks-all"],
     queryFn: () => entities.ScheduleTask.list(),
   });
 
-  const totals = useMemo(() => {
-    const t = {};
-    STATUSES.forEach((s) => { t[s] = 0; });
-    tasks.forEach((row) => {
-      const s = row.status || "Not Started";
-      if (t[s] === undefined) t[s] = 0;
-      t[s] += 1;
-    });
-    return t;
-  }, [tasks]);
+  const totals = useMemo(() => countTasksByStatus(tasks, STATUSES), [tasks]);
 
   // status × phase matrix
-  const matrix = useMemo(() => {
-    const m = {};
-    PHASES.forEach((p) => {
-      m[p] = {};
-      STATUSES.forEach((s) => { m[p][s] = 0; });
-    });
-    tasks.forEach((row) => {
-      const phase = row.phase;
-      const status = row.status || "Not Started";
-      if (!m[phase]) return;
-      if (m[phase][status] === undefined) m[phase][status] = 0;
-      m[phase][status] += 1;
-    });
-    return m;
-  }, [tasks]);
+  const matrix = useMemo(
+    () => buildStatusPhaseMatrix(tasks, PHASES, STATUSES),
+    [tasks],
+  );
 
   // Determine per-phase max for bar scaling
-  const phaseTotals = useMemo(() => {
-    const out = {};
-    PHASES.forEach((p) => {
-      out[p] = STATUSES.reduce((s, st) => s + (matrix[p][st] || 0), 0);
-    });
-    return out;
-  }, [matrix]);
+  const phaseTotals = useMemo(
+    () => phaseTotalsFromMatrix(matrix, PHASES, STATUSES),
+    [matrix],
+  );
   const maxPhaseCount = Math.max(1, ...Object.values(phaseTotals));
 
-  const tableRows = useMemo(() => {
-    return PHASES.map((phase) => ({
-      id: phase,
-      phase,
-      ...STATUSES.reduce((acc, s) => ({ ...acc, [s]: matrix[phase][s] || 0 }), {}),
-      total: phaseTotals[phase] || 0,
-    }));
-  }, [matrix, phaseTotals]);
+  const tableRows = useMemo(
+    () => buildStatusPhaseTableRows(PHASES, matrix, phaseTotals, STATUSES),
+    [matrix, phaseTotals],
+  );
 
   const tableColumns = useMemo(() => ([
     { label: "Phase", key: "phase" },
