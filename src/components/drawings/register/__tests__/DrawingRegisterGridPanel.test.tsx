@@ -11,6 +11,7 @@ import "@testing-library/jest-dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 
 const ensureCurrentRevision = vi.fn().mockResolvedValue({ id: "rev-new", is_current: true });
@@ -67,9 +68,11 @@ function renderGrid() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   qc.invalidateQueries = invalidateQueries as any;
   return render(
-    <QueryClientProvider client={qc}>
-      <DrawingRegisterGridPanel projectId="proj-1" />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={qc}>
+        <DrawingRegisterGridPanel projectId="proj-1" />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 

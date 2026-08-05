@@ -6,6 +6,9 @@ import type { TransmittalRow } from "@/hooks/useTransmittals";
 import {
   IMPACT_STATUSES,
   filterRegisterRows,
+  listDrawingSetNames,
+  groupRegisterRowsBySet,
+  SET_FILTER_NONE,
   attachableRegisterRows,
   filterReviews,
   groupImpactsByStatus,
@@ -119,6 +122,41 @@ describe("filterRegisterRows", () => {
   it("tolerates null text fields without throwing", () => {
     const rows = [regRow({ sheet_number: null, sheet_title: null, discipline: null, drawing_set_name: null, current_status: null })];
     expect(filterRegisterRows(rows, "nomatch", "all")).toHaveLength(0);
+  });
+
+  it("gates by drawing set name when setFilter is set", () => {
+    const rows = [
+      regRow({ drawing_id: "a", drawing_set_name: "Main Steel - IFC" }),
+      regRow({ drawing_id: "b", drawing_set_name: "Misc Metals" }),
+      regRow({ drawing_id: "c", drawing_set_name: null }),
+    ];
+    expect(filterRegisterRows(rows, "", "all", "Misc Metals").map((r) => r.drawing_id)).toEqual(["b"]);
+    expect(filterRegisterRows(rows, "", "all", SET_FILTER_NONE).map((r) => r.drawing_id)).toEqual(["c"]);
+  });
+});
+
+describe("listDrawingSetNames / groupRegisterRowsBySet", () => {
+  it("lists unique sorted set names", () => {
+    const rows = [
+      regRow({ drawing_set_name: "Zeta" }),
+      regRow({ drawing_set_name: "Alpha" }),
+      regRow({ drawing_set_name: "Alpha" }),
+      regRow({ drawing_set_name: null }),
+    ];
+    expect(listDrawingSetNames(rows)).toEqual(["Alpha", "Zeta"]);
+  });
+
+  it("groups named sets first, unassigned last", () => {
+    const rows = [
+      regRow({ drawing_id: "u", drawing_set_name: null }),
+      regRow({ drawing_id: "b", drawing_set_name: "B Set" }),
+      regRow({ drawing_id: "a", drawing_set_name: "A Set" }),
+      regRow({ drawing_id: "a2", drawing_set_name: "A Set" }),
+    ];
+    const g = groupRegisterRowsBySet(rows);
+    expect(g.map((x) => x.setName)).toEqual(["A Set", "B Set", null]);
+    expect(g[0].rows.map((r) => r.drawing_id)).toEqual(["a", "a2"]);
+    expect(g[2].rows.map((r) => r.drawing_id)).toEqual(["u"]);
   });
 });
 
