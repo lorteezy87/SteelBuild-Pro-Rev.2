@@ -35,37 +35,13 @@ import {
   RECENTS_LS_KEY,
   MAX_RECENTS,
   FAVORITES_LS_KEY,
+  loadRailState,
+  saveRailState,
+  loadRecents,
+  saveRecents,
+  loadFavorites,
+  saveFavorites,
 } from "./sidebarNavHelpers";
-
-// ── Local storage helpers ───────────────────────────────────────────
-
-function loadRailState() {
-  try { return localStorage.getItem(RAIL_LS_KEY) === "1"; } catch { return false; }
-}
-function saveRailState(v) {
-  try { localStorage.setItem(RAIL_LS_KEY, v ? "1" : "0"); } catch { /* noop */ }
-}
-function loadRecents() {
-  try {
-    const raw = localStorage.getItem(RECENTS_LS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-function saveRecents(pages) {
-  try { localStorage.setItem(RECENTS_LS_KEY, JSON.stringify(pages)); } catch { /* noop */ }
-}
-
-// ── Favorites persistence ───────────────────────────────────────────
-
-function loadFavorites() {
-  try {
-    const raw = localStorage.getItem(FAVORITES_LS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-function saveFavorites(pages) {
-  try { localStorage.setItem(FAVORITES_LS_KEY, JSON.stringify(pages)); } catch { /* noop */ }
-}
 
 // ── Component ───────────────────────────────────────────────────────
 export default function SidebarNav({

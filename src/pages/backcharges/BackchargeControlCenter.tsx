@@ -23,15 +23,12 @@ import {
   BACKCHARGE_STATUSES,
 } from "@/lib/backcharge/types";
 import type { BackchargeStatus } from "@/lib/backcharge/types";
-import { backchargeTone } from "./backchargeControlCenterHelpers";
+import { backchargeTone, formatBackchargeMoney } from "./backchargeControlCenterHelpers";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Format a dollar amount for display (no cents unless non-zero). */
-function fmtMoney(n: number): string {
-  if (!n && n !== 0) return "$—";
-  return `$${Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
+const fmtMoney = formatBackchargeMoney;
 
 
 /** Indicates whether the backcharge has a defensible notice on record. */

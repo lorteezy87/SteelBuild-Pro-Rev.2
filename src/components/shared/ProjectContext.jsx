@@ -2,7 +2,13 @@ import { createContext, useState, useEffect, useContext, useMemo, useRef } from 
 import { entities } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 import { subscribeProjectUpdated } from "@/services/projectUpdateEvents";
-import { isLiveProject, sortProjects } from "./projectContextHelpers";
+import {
+  isLiveProject,
+  sortProjects,
+  PROJECTS_CACHE_KEY,
+  readProjectsCache,
+  writeProjectsCache,
+} from "./projectContextHelpers";
 
 export const ProjectContext = createContext({
   activeProject: null,
@@ -27,31 +33,6 @@ export const ProjectContext = createContext({
   projectLoadError: null,
 });
 
-const PROJECTS_CACHE_KEY = "sbp_projects_cache";
-
-
-function readProjectsCache() {
-  try {
-    const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    return sortProjects(list.filter(isLiveProject));
-  } catch {
-    return [];
-  }
-}
-
-function writeProjectsCache(projects) {
-  try {
-    const live = projects.filter(isLiveProject);
-    if (live.length > 0) {
-      localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(live));
-    } else {
-      localStorage.removeItem(PROJECTS_CACHE_KEY);
-    }
-  } catch {
-    /* ignore cache writes */
-  }
-}
 
 export function ProjectProvider({ children }) {
   // Pull the user's saved prefs so we can honour `default_project_id`

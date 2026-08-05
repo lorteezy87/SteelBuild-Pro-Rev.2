@@ -8,6 +8,9 @@ import {
   UNGROUPED_KEY,
   UNGROUPED_LABEL,
   EXPAND_LS_KEY,
+  loadExpandedSets,
+  saveExpandedSets,
+  approvalPillTone,
 } from "./drawingsGridHelpers";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 
@@ -43,52 +46,13 @@ function ActionBtn({ label, onClick, danger, disabled, title }) {
   );
 }
 
-function loadExpanded() {
-  try {
-    const raw = localStorage.getItem(EXPAND_LS_KEY);
-    if (!raw) return null;
-    return new Set(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
-
-function saveExpanded(set) {
-  try {
-    localStorage.setItem(EXPAND_LS_KEY, JSON.stringify([...set]));
-  } catch {
-    // noop
-  }
-}
-
-
+const loadExpanded = loadExpandedSets;
+const saveExpanded = saveExpandedSets;
 
 function ApprovalPill({ approval }) {
   if (!approval) return null;
-  const tone =
-    approval === "approved"
-      ? {
-          color: "var(--status-success)",
-          background: "rgba(16,185,129,0.12)",
-          border: "rgba(16,185,129,0.25)",
-        }
-      : approval === "rejected"
-        ? {
-            color: "var(--status-error)",
-            background: "var(--danger-muted)",
-            border: "var(--danger-border)",
-          }
-        : approval === "pending_review"
-          ? {
-              color: "var(--status-warning)",
-              background: "rgba(245,158,11,0.14)",
-              border: "rgba(245,158,11,0.25)",
-            }
-          : {
-              color: "var(--text-muted)",
-              background: "var(--bg-surface-high)",
-              border: "var(--border-default)",
-            };
+  const tone = approvalPillTone(approval);
+  if (!tone) return null;
 
   return (
     <span

@@ -22,3 +22,13 @@ export function backchargeTone(status: string | null | undefined): BackchargeTon
       return "neutral";
   }
 }
+
+/** Format a dollar amount for backcharge display (no cents unless non-zero path uses 0 max). */
+export function formatBackchargeMoney(n: number | null | undefined): string {
+  if (!n && n !== 0) return "$—";
+  return `$${Number(n).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+}
+

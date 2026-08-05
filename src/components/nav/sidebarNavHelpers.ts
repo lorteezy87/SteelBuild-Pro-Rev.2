@@ -50,3 +50,66 @@ export const RECENTS_LS_KEY = "sbp-sidebar-recents";
 export const MAX_RECENTS = 4;
 export const FAVORITES_LS_KEY = "sbp-sidebar-favorites";
 
+type StorageLike = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+};
+
+function storage(): StorageLike | null {
+  try {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+export function loadRailState(): boolean {
+  try {
+    return storage()?.getItem(RAIL_LS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveRailState(v: boolean): void {
+  try {
+    storage()?.setItem(RAIL_LS_KEY, v ? "1" : "0");
+  } catch {
+    /* noop */
+  }
+}
+
+export function loadRecents(): string[] {
+  try {
+    const raw = storage()?.getItem(RECENTS_LS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecents(pages: string[]): void {
+  try {
+    storage()?.setItem(RECENTS_LS_KEY, JSON.stringify(pages));
+  } catch {
+    /* noop */
+  }
+}
+
+export function loadFavorites(): string[] {
+  try {
+    const raw = storage()?.getItem(FAVORITES_LS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveFavorites(pages: string[]): void {
+  try {
+    storage()?.setItem(FAVORITES_LS_KEY, JSON.stringify(pages));
+  } catch {
+    /* noop */
+  }
+}
+

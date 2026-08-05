@@ -88,3 +88,60 @@ export function buildGroups(drawings, drawingSets) {
 }
 
 export const EXPAND_LS_KEY = "sbp-drawings-grid-expanded-sets";
+
+export function loadExpandedSets(): Set<string> | null {
+  try {
+    const raw =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem(EXPAND_LS_KEY)
+        : null;
+    if (!raw) return null;
+    return new Set(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function saveExpandedSets(set: Set<string>): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(EXPAND_LS_KEY, JSON.stringify([...set]));
+  } catch {
+    // noop
+  }
+}
+
+export function approvalPillTone(approval: string | null | undefined): {
+  color: string;
+  background: string;
+  border: string;
+} | null {
+  if (!approval) return null;
+  if (approval === "approved") {
+    return {
+      color: "var(--status-success)",
+      background: "rgba(16,185,129,0.12)",
+      border: "rgba(16,185,129,0.25)",
+    };
+  }
+  if (approval === "rejected") {
+    return {
+      color: "var(--status-error)",
+      background: "var(--danger-muted)",
+      border: "var(--danger-border)",
+    };
+  }
+  if (approval === "pending_review") {
+    return {
+      color: "var(--status-warning)",
+      background: "rgba(245,158,11,0.14)",
+      border: "rgba(245,158,11,0.25)",
+    };
+  }
+  return {
+    color: "var(--text-muted)",
+    background: "var(--bg-surface-high)",
+    border: "var(--border-default)",
+  };
+}
+
