@@ -58,7 +58,7 @@ jobs:
         run: node scripts/storage-backup.mjs
 
       - name: Retain verified backup manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: storage-backup-manifest-${{ github.run_id }}
           path: ${{ runner.temp }}/storage-backup-manifest.json
