@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { stripPrivilegeMeta } from '@/lib/authMeta';
 import { queryClientInstance } from '@/lib/query-client';
 import { clearPendingPhotos } from '@/lib/field/blobStore';
+import { assertTermsAccepted, TERMS_VERSION } from '@/lib/signupClickwrap';
 
 // Clear every trace of the previous user's tenant data from the browser so it
 // can never render for the next user on a shared device (M38): the React Query
@@ -60,7 +61,12 @@ export type AuthContextValue = {
   appPublicSettings: unknown;
   logout: () => Promise<void>;
   loginWithPassword: (creds: { email: string; password: string }) => Promise<LoginResult>;
-  signUpWithPassword: (creds: { email: string; password: string; fullName?: string }) => Promise<SignUpResult>;
+  signUpWithPassword: (creds: {
+    email: string;
+    password: string;
+    fullName?: string;
+    termsAccepted?: boolean;
+  }) => Promise<SignUpResult>;
   // H22 — self-serve credential recovery/rotation.
   isPasswordRecovery: boolean;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -262,15 +268,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signUpWithPassword = async (
-    { email, password, fullName }: { email: string; password: string; fullName?: string },
+    { email, password, fullName, termsAccepted }: {
+      email: string;
+      password: string;
+      fullName?: string;
+      termsAccepted?: boolean;
+    },
   ): Promise<SignUpResult> => {
     try {
+      // H12 clickwrap: Landing requires an affirmative checkbox before calling
+      // us. Refuse to mint acceptance metadata unless that flag is true so a
+      // non-UI caller cannot forge "accepted" without the UI gate.
+      try {
+        assertTermsAccepted(termsAccepted);
+      } catch (gateErr) {
+        const authErr: AuthError = {
+          type: 'auth_required',
+          message: gateErr instanceof Error ? gateErr.message : 'Terms acceptance required.',
+        };
+        return { success: false, error: authErr };
+      }
       // Record provable acceptance of the Terms of Service + Privacy Policy at
       // sign-up (H12). These land in user_metadata alongside full_name so each
       // account carries a durable, per-user acceptance timestamp + version.
       const signUpMeta: Record<string, unknown> = {
         terms_accepted_at: new Date().toISOString(),
-        terms_version: '2026-07-01',
+        terms_version: TERMS_VERSION,
+        terms_acceptance: 'clickwrap',
       };
       if (fullName) signUpMeta.full_name = fullName;
       const { data, error } = await supabase.auth.signUp({
