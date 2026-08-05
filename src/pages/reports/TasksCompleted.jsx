@@ -17,14 +17,12 @@ import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput, ToggleGroup } from "./ReportFilters";
 import { exportTableCSV, formatDate } from "./utils";
-import { mono, body } from "./constants";
+import { mono, body, SUPPORTED_PHASES } from "./constants";
 import {
   buildCompletedTaskRows,
   filterCompletedTaskRows,
   COMPLETED_WINDOWS as WINDOWS,
 } from "./tasksCompletedHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 export default function TasksCompleted() {
   const navigate = useNavigate();

@@ -15,15 +15,13 @@ import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { FilterBar, SearchInput, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
-import { mono, body, CARD } from "./constants";
+import { mono, body, CARD, SUPPORTED_PHASES } from "./constants";
 import {
   filterTaskBoardRows,
   groupTaskBoardColumns,
   mapTasksToBoardRows,
   TASK_BOARD_COLUMNS as COLUMNS,
 } from "./taskBoardHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 function TaskCard({ t, onClick }) {
   const phaseColor = SUPPORTED_PHASES.has(t.phase) ? PHASE_COLORS[t.phase] : "var(--text-muted)";

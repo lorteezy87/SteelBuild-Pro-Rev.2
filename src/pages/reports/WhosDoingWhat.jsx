@@ -15,13 +15,11 @@ import { createPageUrl } from "@/utils";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { formatDate, formatPercent } from "./utils";
-import { mono, body, CARD } from "./constants";
+import { mono, body, CARD, SUPPORTED_PHASES } from "./constants";
 import {
   countActiveTasks,
   groupInProgressByAssignee,
 } from "./whosDoingWhatHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 export default function WhosDoingWhat() {
   const navigate = useNavigate();

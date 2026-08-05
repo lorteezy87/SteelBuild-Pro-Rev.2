@@ -15,7 +15,7 @@ import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { FilterBar, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
-import { mono, body, CARD, PROJECT_HEALTH_COLORS } from "./constants";
+import { mono, body, CARD, PROJECT_HEALTH_COLORS, SUPPORTED_PHASES } from "./constants";
 import {
   buildPpmProjectBands,
   ppmDateRange,
@@ -28,8 +28,6 @@ import {
   RIGHT_GUTTER,
   BAR_HEIGHT,
 } from "./ppmRoadmapHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 export default function PPMRoadmap() {
   const navigate = useNavigate();

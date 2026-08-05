@@ -21,7 +21,7 @@ import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput, ToggleGroup } from "./ReportFilters";
 import KPICard from "./KPICard";
 import { exportTableCSV, formatDate } from "./utils";
-import { mono, body } from "./constants";
+import { mono, body, SUPPORTED_PHASES } from "./constants";
 import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
 import {
   startOfLocalDay,
@@ -31,8 +31,6 @@ import {
   filterAndSortTasksDue,
   computeTasksDueKpis,
 } from "./tasksDueThisWeekHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 export default function TasksDueThisWeek() {
   const navigate = useNavigate();

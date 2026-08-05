@@ -14,14 +14,12 @@ import { createPageUrl } from "@/utils";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { formatDate, formatCurrencyFull } from "./utils";
-import { mono, body, CARD } from "./constants";
+import { mono, body, CARD, SUPPORTED_PHASES } from "./constants";
 import {
   bucketProjectsByHealth,
   projectsHealthSubtitle,
   HEALTH_BUCKETS as BUCKETS,
 } from "./projectsHealthHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 function ProjectCard({ p, onClick }) {
   const phaseColor = SUPPORTED_PHASES.has(p.phase) ? PHASE_COLORS[p.phase] : "var(--text-muted)";

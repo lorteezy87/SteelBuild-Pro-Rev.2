@@ -14,15 +14,13 @@ import { createPageUrl } from "@/utils";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { formatDate, formatCurrencyFull } from "./utils";
-import { mono, body, CARD, PROJECT_HEALTH_COLORS } from "./constants";
+import { mono, body, CARD, PROJECT_HEALTH_COLORS, SUPPORTED_PHASES } from "./constants";
 
 import {
   RAG_LABEL,
   buildRagCards,
   countRagBuckets,
 } from "./ragHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 export default function RAG() {
   const navigate = useNavigate();

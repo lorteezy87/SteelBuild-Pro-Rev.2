@@ -18,14 +18,12 @@ import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { FilterBar, SelectFilter, SearchInput } from "./ReportFilters";
 import { exportTableCSV, formatDate } from "./utils";
-import { mono, body } from "./constants";
+import { mono, body, SUPPORTED_PHASES } from "./constants";
 import {
   buildUpcomingMilestoneRows,
   filterUpcomingMilestoneRows,
   MILESTONE_WINDOWS as WINDOWS,
 } from "./upcomingMilestonesHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 export default function UpcomingMilestones() {
   const navigate = useNavigate();

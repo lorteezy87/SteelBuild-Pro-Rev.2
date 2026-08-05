@@ -15,14 +15,12 @@ import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { FilterBar, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
-import { mono, body, CARD } from "./constants";
+import { mono, body, CARD, SUPPORTED_PHASES } from "./constants";
 import {
   countKeyActivities,
   groupUpcomingKeyActivities,
   KEY_ACTIVITY_WINDOWS as WINDOWS,
 } from "./upcomingKeyActivitiesHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 export default function UpcomingKeyActivities() {
   const navigate = useNavigate();

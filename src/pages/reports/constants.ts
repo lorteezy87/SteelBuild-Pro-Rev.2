@@ -5,6 +5,8 @@
  * pulling from the page shell.
  */
 
+import { PHASES } from "@/utils/phases";
+
 export const mono = { fontFamily: "var(--font-mono)" };
 export const body = { fontFamily: "var(--font-body)" };
 
@@ -72,3 +74,5 @@ export const PROJECT_HEALTH_COLORS = {
   "On Hold":  "var(--text-muted)",
 };
 
+/** Canonical phase set for report phase-color / filter gating. */
+export const SUPPORTED_PHASES = new Set(PHASES as readonly string[]);

@@ -22,13 +22,11 @@ import {
   formatPercent,
   exportTableCSV,
 } from "./utils";
-import { mono, PROJECT_HEALTH_COLORS } from "./constants";
+import { mono, PROJECT_HEALTH_COLORS, SUPPORTED_PHASES } from "./constants";
 import {
   buildProjectsReportRows,
   filterProjectsReportRows,
 } from "./projectsReportHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 function PhaseDot({ phase }) {
   const isCanonical = SUPPORTED_PHASES.has(phase);

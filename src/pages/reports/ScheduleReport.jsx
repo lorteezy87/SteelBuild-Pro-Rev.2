@@ -20,15 +20,13 @@ import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput, SelectFilter } from "./ReportFilters";
 import { exportTableCSV, formatDate } from "./utils";
-import { mono, body } from "./constants";
+import { mono, body, SUPPORTED_PHASES } from "./constants";
 import {
   buildScheduleReportRows,
   filterScheduleReportRows,
   SCHEDULE_STATUS_FILTERS as STATUSES,
   SCHEDULE_TYPE_FILTERS as TYPES,
 } from "./scheduleReportHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 export default function ScheduleReport() {
   const navigate = useNavigate();

@@ -15,15 +15,13 @@ import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput, SelectFilter } from "./ReportFilters";
 import { exportTableCSV, formatDate, formatPercent } from "./utils";
-import { mono, body } from "./constants";
+import { mono, body, SUPPORTED_PHASES } from "./constants";
 import {
   buildTasksReportRows,
   filterTasksReportRows,
   TASKS_REPORT_TYPES as TASK_TYPES,
   TASKS_REPORT_STATUSES as STATUSES,
 } from "./tasksReportHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 export default function Tasks() {
   const navigate = useNavigate();

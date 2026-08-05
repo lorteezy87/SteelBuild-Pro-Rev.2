@@ -31,7 +31,7 @@ import {
   formatPercent,
   exportTableCSV,
 } from "./utils";
-import { mono, PROJECT_HEALTH_COLORS } from "./constants";
+import { mono, PROJECT_HEALTH_COLORS, SUPPORTED_PHASES } from "./constants";
 import {
   buildPortfolioTrackerRows,
   filterPortfolioTrackerRows,
@@ -40,8 +40,6 @@ import {
 // Validate hardcoded health vocabulary against the PHASES list at
 // module load — every phase used as a column option must exist in
 // PHASES so a renamed canonical phase doesn't silently desync.
-const SUPPORTED_PHASES = new Set(PHASES);
-
 function HealthDot({ status }) {
   const color = PROJECT_HEALTH_COLORS[status] || "var(--text-muted)";
   return (

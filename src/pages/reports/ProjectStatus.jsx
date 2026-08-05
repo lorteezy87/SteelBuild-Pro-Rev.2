@@ -30,14 +30,12 @@ import {
   formatPercent,
   exportTableCSV,
 } from "./utils";
-import { mono, PROJECT_HEALTH_COLORS } from "./constants";
+import { mono, PROJECT_HEALTH_COLORS, SUPPORTED_PHASES } from "./constants";
 import {
   buildProjectStatusRows,
   filterProjectStatusRows,
   projectStatusPortfolioTotals,
 } from "./projectStatusHelpers";
-
-const SUPPORTED_PHASES = new Set(PHASES);
 
 function HealthDot({ status }) {
   const color = PROJECT_HEALTH_COLORS[status] || "var(--text-muted)";
