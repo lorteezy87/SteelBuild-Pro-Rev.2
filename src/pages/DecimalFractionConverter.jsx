@@ -18,6 +18,12 @@
  */
 
 import React, { useMemo, useState } from "react";
+import {
+  toggleStyle,
+  deltaDisplay,
+  numOrZero,
+  trimNumber,
+} from "./decimalFractionConverter/decimalFractionConverterHelpers";
 import { toast } from "sonner";
 import {
   decimalFeetToFtIn,
@@ -722,35 +728,3 @@ const inlineErrorStyle = {
   padding: "6px 10px", borderRadius: 4,
   marginTop: 6,
 };
-
-function toggleStyle(active) {
-  return {
-    ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-    padding: "6px 12px", borderRadius: 4, cursor: "pointer",
-    background: active ? "var(--accent)"      : "var(--bg-surface-low)",
-    color:      active ? "var(--accent-text)" : "var(--text-secondary)",
-    border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
-    textTransform: "uppercase",
-  };
-}
-
-function deltaDisplay(delta, mode) {
-  const abs = Math.abs(delta);
-  if (mode === DECIMAL_MODES.FEET) return `${abs.toFixed(5)} ft`;
-  return `${abs.toFixed(4)}"`;
-}
-
-function numOrZero(raw) {
-  if (raw == null || raw === "") return 0;
-  const n = parseFloat(raw);
-  return Number.isFinite(n) ? n : 0;
-}
-
-// Format a converted number cleanly: trim trailing zeros, but keep enough
-// precision for shop work (up to 6 significant decimals).
-function trimNumber(n) {
-  if (!Number.isFinite(n)) return "—";
-  // Round to 6 decimals, then strip trailing zeros / dot.
-  const fixed = n.toFixed(6);
-  return fixed.replace(/\.?0+$/, "");
-}
