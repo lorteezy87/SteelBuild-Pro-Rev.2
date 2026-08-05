@@ -69,3 +69,22 @@ export function filterScheduleReportRows(
   }
   return out;
 }
+
+export const SCHEDULE_STATUS_FILTERS = [
+  { key: "all", label: "All statuses" },
+  { key: "Not Started", label: "Not Started" },
+  { key: "In Progress", label: "In Progress" },
+  { key: "Complete", label: "Complete" },
+  { key: "Delayed", label: "Delayed" },
+  { key: "On Hold", label: "On Hold" },
+] as const;
+
+export const SCHEDULE_TYPE_FILTERS = [
+  { key: "all", label: "All types" },
+  { key: "Task", label: "Task" },
+  { key: "Milestone", label: "Milestone" },
+  { key: "Submittal", label: "Submittal" },
+  { key: "Fabrication", label: "Fabrication" },
+  { key: "Delivery", label: "Delivery" },
+  { key: "Install", label: "Install" },
+] as const;

@@ -16,20 +16,12 @@ import { mono, body, CARD, CARD_TITLE } from "./constants";
 
 import {
   TASK_STATUS_KEYS as STATUSES,
+  TASK_STATUS_COLORS as STATUS_COLORS,
   countTasksByStatus,
   buildStatusPhaseMatrix,
   phaseTotalsFromMatrix,
   buildStatusPhaseTableRows,
 } from "./tasksStatusHelpers";
-
-const STATUS_COLORS = {
-  "Not Started": "var(--text-muted)",
-  "In Progress": "var(--accent)",
-  "Complete": "var(--status-success)",
-  "Delayed": "var(--status-error)",
-  "On Hold": "var(--status-warning)",
-  "Cancelled": "var(--text-disabled, var(--text-muted))",
-};
 
 export default function TasksStatus() {
   const { data: tasks = [] } = useQuery({

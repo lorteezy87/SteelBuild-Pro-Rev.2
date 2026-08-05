@@ -45,3 +45,21 @@ describe("roadmapHelpers", () => {
     ).toBeGreaterThan(100);
   });
 });
+
+import {
+  ROW_HEIGHT,
+  HEADER_HEIGHT,
+  LEFT_GUTTER,
+  RIGHT_GUTTER,
+  BAND_HEIGHT,
+} from "../roadmapHelpers";
+
+describe("roadmap layout sizes", () => {
+  it("exports stable layout tokens", () => {
+    expect(ROW_HEIGHT).toBe(48);
+    expect(HEADER_HEIGHT).toBe(36);
+    expect(LEFT_GUTTER).toBe(220);
+    expect(RIGHT_GUTTER).toBe(16);
+    expect(BAND_HEIGHT).toBe(14);
+  });
+});

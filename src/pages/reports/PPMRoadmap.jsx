@@ -22,14 +22,14 @@ import {
   ppmXFor,
   quartersBetween,
   truncateProjectName,
+  ROW_HEIGHT,
+  HEADER_HEIGHT,
+  LEFT_GUTTER,
+  RIGHT_GUTTER,
+  BAR_HEIGHT,
 } from "./ppmRoadmapHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
-const ROW_HEIGHT = 32;
-const HEADER_HEIGHT = 36;
-const LEFT_GUTTER = 220;
-const RIGHT_GUTTER = 16;
-const BAR_HEIGHT = 18;
 
 export default function PPMRoadmap() {
   const navigate = useNavigate();

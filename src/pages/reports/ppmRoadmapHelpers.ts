@@ -59,3 +59,10 @@ export function truncateProjectName(name: string | null | undefined, max = 24): 
   const n = name || "—";
   return n.length > max ? n.slice(0, max) + "…" : n;
 }
+
+/** Layout sizes for PPM Roadmap (SVG). */
+export const ROW_HEIGHT = 32;
+export const HEADER_HEIGHT = 36;
+export const LEFT_GUTTER = 220;
+export const RIGHT_GUTTER = 16;
+export const BAR_HEIGHT = 18;

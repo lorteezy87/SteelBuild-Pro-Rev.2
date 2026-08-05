@@ -70,3 +70,10 @@ export function timelineXFor(input: {
     ((t - input.minDate.getTime()) / input.totalMs) * input.innerW
   );
 }
+
+/** Layout sizes for Timeline band chart (SVG). */
+export const LANE_HEIGHT = 36;
+export const BAR_HEIGHT = 18;
+export const HEADER_HEIGHT = 32;
+export const LEFT_GUTTER = 120;
+export const RIGHT_GUTTER = 16;

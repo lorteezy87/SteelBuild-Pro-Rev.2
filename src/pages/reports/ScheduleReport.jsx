@@ -24,28 +24,11 @@ import { mono, body } from "./constants";
 import {
   buildScheduleReportRows,
   filterScheduleReportRows,
+  SCHEDULE_STATUS_FILTERS as STATUSES,
+  SCHEDULE_TYPE_FILTERS as TYPES,
 } from "./scheduleReportHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
-
-const STATUSES = [
-  { key: "all", label: "All statuses" },
-  { key: "Not Started", label: "Not Started" },
-  { key: "In Progress", label: "In Progress" },
-  { key: "Complete", label: "Complete" },
-  { key: "Delayed", label: "Delayed" },
-  { key: "On Hold", label: "On Hold" },
-];
-
-const TYPES = [
-  { key: "all", label: "All types" },
-  { key: "Task", label: "Task" },
-  { key: "Milestone", label: "Milestone" },
-  { key: "Submittal", label: "Submittal" },
-  { key: "Fabrication", label: "Fabrication" },
-  { key: "Delivery", label: "Delivery" },
-  { key: "Install", label: "Install" },
-];
 
 export default function ScheduleReport() {
   const navigate = useNavigate();

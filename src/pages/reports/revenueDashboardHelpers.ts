@@ -115,3 +115,14 @@ export function buildPerProjectRevenueRows(input: {
     };
   });
 }
+
+/** Stable chart palette for revenue donuts. */
+export const REVENUE_PALETTE = [
+  "var(--status-info)",
+  "var(--accent)",
+  "var(--status-success)",
+  "var(--status-review)",
+  "var(--status-warning)",
+  "var(--status-review)",
+  "var(--text-muted)",
+] as const;

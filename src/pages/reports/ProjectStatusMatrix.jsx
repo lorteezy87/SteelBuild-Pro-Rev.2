@@ -16,8 +16,7 @@ import { formatCurrency } from "./utils";
 import SortHeader from "./SortHeader";
 import MiniProgressBar from "./MiniProgressBar";
 import { SkeletonTableRow } from "./skeletons";
-
-const GRID_COLS = "40px 2fr 90px 50px 100px 100px 80px 60px 50px 120px 60px";
+import { PROJECT_STATUS_MATRIX_GRID_COLS as GRID_COLS } from "./projectStatusMatrixHelpers";
 
 export default function ProjectStatusMatrix({
   title,

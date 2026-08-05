@@ -7,13 +7,7 @@
 
 import React from "react";
 import { mono, body, CARD } from "./constants";
-
-const SEVERITY_COLORS = {
-  critical: "var(--status-error)",
-  high:     "var(--status-warning)",
-  medium:   "var(--status-info)",
-  low:      "var(--text-muted)",
-};
+import { SEVERITY_COLORS } from "./urgentCardHelpers";
 
 export default function UrgentCard({ title, subtitle, severity, meta, onClick }) {
   const color = SEVERITY_COLORS[severity] || "var(--text-muted)";

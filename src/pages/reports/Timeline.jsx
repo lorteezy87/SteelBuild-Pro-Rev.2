@@ -24,13 +24,12 @@ import {
   monthsBetween,
   timelineDateRange,
   timelineXFor,
+  LANE_HEIGHT,
+  BAR_HEIGHT,
+  HEADER_HEIGHT,
+  LEFT_GUTTER,
+  RIGHT_GUTTER,
 } from "./timelineHelpers";
-
-const LANE_HEIGHT = 36;
-const BAR_HEIGHT = 18;
-const HEADER_HEIGHT = 32;
-const LEFT_GUTTER = 120;
-const RIGHT_GUTTER = 16;
 
 export default function Timeline() {
   const navigate = useNavigate();

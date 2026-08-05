@@ -20,16 +20,10 @@ import {
   filterTaskBoardRows,
   groupTaskBoardColumns,
   mapTasksToBoardRows,
+  TASK_BOARD_COLUMNS as COLUMNS,
 } from "./taskBoardHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
-
-const COLUMNS = [
-  { key: "Not Started", label: "Not Started", color: "var(--text-muted)" },
-  { key: "In Progress", label: "In Progress", color: "var(--accent)" },
-  { key: "Complete", label: "Complete", color: "var(--status-success)" },
-  { key: "Delayed", label: "Delayed", color: "var(--status-error)" },
-];
 
 function TaskCard({ t, onClick }) {
   const phaseColor = SUPPORTED_PHASES.has(t.phase) ? PHASE_COLORS[t.phase] : "var(--text-muted)";

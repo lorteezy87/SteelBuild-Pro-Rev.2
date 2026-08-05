@@ -19,22 +19,8 @@ import {
   lastNWeekKeys,
   isoWeekStart,
   buildWeeklyCostMatrix,
+  CATEGORY_COLORS,
 } from "./weeklyReportHelpers";
-
-// Stable color palette for cost categories — picked to avoid purple/pink
-// per CLAUDE.md, drawn from the existing CSS var palette.
-const CATEGORY_COLORS = [
-  "var(--accent)",
-  "var(--status-success)",
-  "var(--status-warning)",
-  "var(--status-info)",
-  "var(--status-error)",
-  "var(--phase-fab)",
-  "var(--phase-detailing)",
-  "var(--phase-erection)",
-  "var(--phase-closeout)",
-  "var(--text-secondary)",
-];
 
 export default function WeeklyCostCategories() {
   const { data: expenses = [] } = useQuery({

@@ -1,20 +1,12 @@
 import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
-import { extractDetails } from "./itemDetailDrawerHelpers";
+import { extractDetails, URGENCY_COLORS } from "./itemDetailDrawerHelpers";
 
 /**
  * Slide-out detail drawer for a single feed item.
  * Opens from the right side. Fixed header + scrollable body + pinned footer.
  */
-
-const URGENCY_COLORS = {
-  overdue:    "var(--status-error)",
-  "due-soon": "var(--status-warning)",
-  blocking:   "var(--accent)",
-  awaiting:   "var(--text-muted)",
-  normal:     "var(--border-default)",
-};
 
 const Row = ({ label, value }) => {
   if (value == null || value === "") return null;

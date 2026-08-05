@@ -88,3 +88,10 @@ export function groupTaskBoardColumns(
   }
   return grouped;
 }
+
+export const TASK_BOARD_COLUMNS = [
+  { key: "Not Started", label: "Not Started", color: "var(--text-muted)" },
+  { key: "In Progress", label: "In Progress", color: "var(--accent)" },
+  { key: "Complete", label: "Complete", color: "var(--status-success)" },
+  { key: "Delayed", label: "Delayed", color: "var(--status-error)" },
+] as const;

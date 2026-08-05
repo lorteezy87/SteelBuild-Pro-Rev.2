@@ -1,28 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, FormField } from "@/components/shared/PhoenixModal";
-
-const empty = {
-  project_number: "", name: "", client: "", general_contractor: "", engineer_of_record: "",
-  project_manager: "", superintendent: "", contract_type: "Lump Sum",
-  original_contract_value: 0, start_date: null, target_completion_date: null,
-  forecast_completion_date: null, phase: "Detailing", health_status: "On Track",
-  retainage_percent: 10, contingency_amount: 0, address: "", notes: "",
-  job_type: null,
-};
-
-// Kept in sync with the projects_job_type_check constraint added in
-// migration 063 — adding a value here without updating the migration
-// will fail at insert time.
-const JOB_TYPES = [
-  "Beams/Deck",
-  "Beams/Joists/Deck",
-  "Joist Deck",
-  "Tilt",
-  "Tilt Hybrid",
-  "Misc.",
-  "Other",
-];
+import { EMPTY_PROJECT_FORM as empty, JOB_TYPES } from "./projectFormModalHelpers";
 
 export default function ProjectFormModal({ open, onClose, onSave, project }) {
   const [form, setForm] = useState(empty);

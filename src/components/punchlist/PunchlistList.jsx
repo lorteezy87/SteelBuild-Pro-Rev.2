@@ -1,21 +1,7 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
 import { asArray } from "@/lib/coerce";
-
-const STATUS_COLORS = {
-  Open: "var(--status-error)",
-  "In Progress": "var(--status-warning)",
-  Completed: "var(--status-success)",
-  "On Hold": "var(--text-muted)",
-  Deferred: "var(--accent)",
-};
-
-const PRIORITY_COLORS = {
-  Critical: "var(--status-error)",
-  High: "var(--status-warning)",
-  Medium: "var(--status-info)",
-  Low: "var(--accent)",
-};
+import { STATUS_COLORS, PRIORITY_COLORS } from "./punchlistListHelpers";
 
 const CATEGORY_ICONS = {
   Structural: "🏗",

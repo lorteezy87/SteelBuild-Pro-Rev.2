@@ -70,3 +70,12 @@ export function buildStatusPhaseTableRows(
     total: phaseTotals[phase] || 0,
   }));
 }
+
+export const TASK_STATUS_COLORS: Record<string, string> = {
+  "Not Started": "var(--text-muted)",
+  "In Progress": "var(--accent)",
+  Complete: "var(--status-success)",
+  Delayed: "var(--status-error)",
+  "On Hold": "var(--status-warning)",
+  Cancelled: "var(--text-disabled, var(--text-muted))",
+};

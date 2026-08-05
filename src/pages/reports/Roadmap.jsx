@@ -27,13 +27,12 @@ import {
   resolveRoadmapRange,
   filterProjectsWithPhaseRanges,
   xForTimestamp,
+  ROW_HEIGHT,
+  HEADER_HEIGHT,
+  LEFT_GUTTER,
+  RIGHT_GUTTER,
+  BAND_HEIGHT,
 } from "./roadmapHelpers";
-
-const ROW_HEIGHT = 48;
-const HEADER_HEIGHT = 36;
-const LEFT_GUTTER = 220;
-const RIGHT_GUTTER = 16;
-const BAND_HEIGHT = 14;
 
 export default function Roadmap() {
   const navigate = useNavigate();

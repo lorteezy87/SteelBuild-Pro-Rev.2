@@ -99,3 +99,10 @@ export function xForTimestamp(
   const clamped = Math.max(rangeStart.getTime(), Math.min(rangeEnd.getTime(), ts));
   return leftGutter + ((clamped - rangeStart.getTime()) / totalMs) * innerW;
 }
+
+/** Layout sizes for Roadmap phase swim lanes (SVG). */
+export const ROW_HEIGHT = 48;
+export const HEADER_HEIGHT = 36;
+export const LEFT_GUTTER = 220;
+export const RIGHT_GUTTER = 16;
+export const BAND_HEIGHT = 14;

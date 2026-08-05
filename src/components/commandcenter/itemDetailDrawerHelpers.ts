@@ -89,3 +89,11 @@ export function extractDetails(item: any): Array<{ label: string; value: any }> 
 
   return details;
 }
+
+export const URGENCY_COLORS: Record<string, string> = {
+  overdue: "var(--status-error)",
+  "due-soon": "var(--status-warning)",
+  blocking: "var(--accent)",
+  awaiting: "var(--text-muted)",
+  normal: "var(--border-default)",
+};

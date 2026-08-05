@@ -117,3 +117,17 @@ export function formatWeekLabel(
 ): string {
   return isoWeekStart(yearWeekKey).toLocaleDateString("en-US", opts);
 }
+
+/** Stable color palette for cost categories (no purple/pink). */
+export const CATEGORY_COLORS = [
+  "var(--accent)",
+  "var(--status-success)",
+  "var(--status-warning)",
+  "var(--status-info)",
+  "var(--status-error)",
+  "var(--phase-fab)",
+  "var(--phase-detailing)",
+  "var(--phase-erection)",
+  "var(--phase-closeout)",
+  "var(--text-secondary)",
+] as const;

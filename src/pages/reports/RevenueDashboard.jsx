@@ -42,17 +42,8 @@ import {
   buildPerProjectRevenueRows,
   collectedPercent,
   decoratePositiveSegments,
+  REVENUE_PALETTE as PALETTE,
 } from "./revenueDashboardHelpers";
-
-const PALETTE = [
-  "var(--status-info)",
-  "var(--accent)",
-  "var(--status-success)",
-  "var(--status-review)",
-  "var(--status-warning)",
-  "var(--status-review)",
-  "var(--text-muted)",
-];
 
 export default function RevenueDashboard() {
   const { data: projects = [] } = useQuery({
