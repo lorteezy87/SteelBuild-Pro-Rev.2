@@ -32,6 +32,10 @@ import {
   exportTableCSV,
 } from "./utils";
 import { mono, PROJECT_HEALTH_COLORS } from "./constants";
+import {
+  buildPortfolioTrackerRows,
+  filterPortfolioTrackerRows,
+} from "./portfolioTrackerHelpers";
 
 // Validate hardcoded health vocabulary against the PHASES list at
 // module load — every phase used as a column option must exist in
@@ -118,56 +122,26 @@ export default function PortfolioTracker() {
     queryFn: () => entities.Expense.list(),
   });
 
-  const rows = useMemo(() => {
-    return projects.map((p) => {
-      const pWPs = workPackages.filter((w) => w.project_id === p.id);
-      const pctComplete = pWPs.length
-        ? pWPs.reduce(
-            (s, w) => s + (Number(w.percent_complete) || 0),
-            0
-          ) / pWPs.length
-        : 0;
-      const committed = expenses
-        .filter(
-          (e) => e.project_id === p.id && e.payment_status !== "Voided"
-        )
-        .reduce((s, e) => s + (Number(e.amount) || 0), 0);
-      return {
-        id: p.id,
-        name: p.name || "Untitled Project",
-        number: p.project_number || `P-${p.id}`,
-        client: p.general_contractor || p.client || "",
-        phase: p.phase || "",
-        health: p.health_status || "",
-        jobType: p.job_type || "",
-        startDate: p.start_date || null,
-        targetDate: p.target_completion_date || null,
-        contractValue: Number(p.original_contract_value) || 0,
-        committed,
-        pctComplete,
-        raw: p,
-      };
-    });
-  }, [projects, workPackages, expenses]);
+  const rows = useMemo(
+    () =>
+      buildPortfolioTrackerRows({
+        projects,
+        workPackages,
+        expenses,
+      }),
+    [projects, workPackages, expenses],
+  );
 
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.number.toLowerCase().includes(q) ||
-          r.client.toLowerCase().includes(q)
-      );
-    }
-    if (phaseFilter !== "all") out = out.filter((r) => r.phase === phaseFilter);
-    if (healthFilter !== "all")
-      out = out.filter((r) => r.health === healthFilter);
-    if (jobTypeFilter !== "all")
-      out = out.filter((r) => r.jobType === jobTypeFilter);
-    return out;
-  }, [rows, search, phaseFilter, healthFilter, jobTypeFilter]);
+  const filtered = useMemo(
+    () =>
+      filterPortfolioTrackerRows(rows, {
+        search,
+        phaseFilter,
+        healthFilter,
+        jobTypeFilter,
+      }),
+    [rows, search, phaseFilter, healthFilter, jobTypeFilter],
+  );
 
   const columns = useMemo(
     () => [

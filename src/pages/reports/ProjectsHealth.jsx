@@ -15,6 +15,10 @@ import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { formatDate, formatCurrencyFull } from "./utils";
 import { mono, body, CARD } from "./constants";
+import {
+  bucketProjectsByHealth,
+  projectsHealthSubtitle,
+} from "./projectsHealthHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -70,27 +74,8 @@ export default function ProjectsHealth() {
     queryFn: () => entities.Project.list(),
   });
 
-  const buckets = useMemo(() => {
-    const out = { "On Track": [], "Watch": [], "At Risk": [], "Unknown": [] };
-    for (const p of projects) {
-      const row = {
-        id: p.id,
-        name: p.name || "Untitled Project",
-        number: p.project_number || `P-${p.id}`,
-        client: p.general_contractor || p.client || "",
-        phase: p.phase || "",
-        targetDate: p.target_completion_date,
-        contractValue: Number(p.original_contract_value) || 0,
-      };
-      const h = p.health_status;
-      if (h === "On Track" || h === "Watch" || h === "At Risk") out[h].push(row);
-      else out["Unknown"].push(row);
-    }
-    Object.values(out).forEach((arr) => arr.sort((a, b) => a.name.localeCompare(b.name)));
-    return out;
-  }, [projects]);
-
-  const subtitle = `${buckets["On Track"].length} on track · ${buckets["Watch"].length} watch · ${buckets["At Risk"].length} at risk · ${buckets["Unknown"].length} on hold/unset`;
+  const buckets = useMemo(() => bucketProjectsByHealth(projects), [projects]);
+  const subtitle = projectsHealthSubtitle(buckets);
 
   return (
     <ReportShell

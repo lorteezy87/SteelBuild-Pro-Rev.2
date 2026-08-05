@@ -20,6 +20,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { DonutChartSVG } from "../reports/charts";
 import { rfiAgingBuckets, oldestOpenRFIAgeDays } from "../dashboard/projectMetrics";
 import { isOverdue } from "./utils";
+import { avgAgeDays, ballInCourtSegments, rfisByMonth } from "./rfiInsightsHelpers";
 
 /**
  * Small unit-agnostic bar chart for RFI counts. Reusing the reports
@@ -91,69 +92,6 @@ const CARD = {
   padding: "12px 14px",
 };
 
-function avgAgeDays(openRfis) {
-  if (!openRfis.length) return 0;
-  const now = new Date();
-  let sum = 0, n = 0;
-  for (const r of openRfis) {
-    const created = r.submitted_date || r.created_at;
-    if (!created) continue;
-    const d = new Date(created);
-    if (isNaN(d.getTime())) continue;
-    sum += Math.floor((now - d) / 86400000);
-    n += 1;
-  }
-  return n ? Math.round(sum / n) : 0;
-}
-
-function ballInCourtSegments(openRfis) {
-  // Pull --status-* values lazily so light/dark-mode switches keep
-  // segment colors consistent. The donut chart accepts hex/rgb/var
-  // strings directly.
-  const palette = {
-    Architect:  "var(--status-info)",
-    Engineer:   "var(--status-warning)",
-    GC:         "var(--accent)",
-    Owner:      "var(--status-info)",
-    Internal:   "var(--text-muted)",
-    Contractor: "var(--accent)",
-  };
-  const counts = {};
-  for (const r of openRfis) {
-    const k = r.ball_in_court || "Internal";
-    counts[k] = (counts[k] || 0) + 1;
-  }
-  return Object.entries(counts)
-    .filter(([, v]) => v > 0)
-    .map(([label, value]) => ({
-      label,
-      value,
-      color: palette[label] || "var(--text-muted)",
-    }));
-}
-
-function rfisByMonth(rfis) {
-  const now = new Date();
-  const out = [];
-  for (let i = 5; i >= 0; i -= 1) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push({
-      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      label: d.toLocaleString("default", { month: "short" }),
-      value: 0,
-    });
-  }
-  for (const r of rfis) {
-    const created = r.submitted_date || r.created_at;
-    if (!created) continue;
-    const d = new Date(created);
-    if (isNaN(d.getTime())) continue;
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const slot = out.find((m) => m.key === key);
-    if (slot) slot.value += 1;
-  }
-  return out;
-}
 
 function StatTile({ label, value, color, sub }) {
   return (
