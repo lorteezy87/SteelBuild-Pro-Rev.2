@@ -1,3 +1,5 @@
+// @ts-nocheck
+import { pruneSelectionToAllowed, selectionFromIds } from "@/pages/shared/selectionHelpers";
 /**
  * Pure helpers for the RFI Hub — date math, overdue checks, sequencing
  * repair, CSV export. No React, no state, no network.
@@ -250,9 +252,7 @@ export function buildProjectNameMap(projects) {
 
 
 export function pruneSelectedIds(selectedIds, sourceRows) {
-  const sourceIds = new Set((sourceRows || []).map((r) => r.id).filter(Boolean));
-  const next = new Set([...(selectedIds || [])].filter((id) => sourceIds.has(id)));
-  return next.size === (selectedIds?.size || 0) ? selectedIds : next;
+  return pruneSelectionToAllowed(selectedIds || new Set(), selectionFromIds(sourceRows || []));
 }
 
 export function filterRowsBySelectedIds(rows, selectedIds) {

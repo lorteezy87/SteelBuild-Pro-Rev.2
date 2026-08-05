@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * resourceScheduling/utils.js
+ * resourceScheduling/utils.ts
  *
  * Shared helpers + tokens for the Resource Scheduling feature.
  * Extracted from src/pages/ResourceScheduling.jsx as the first stage
