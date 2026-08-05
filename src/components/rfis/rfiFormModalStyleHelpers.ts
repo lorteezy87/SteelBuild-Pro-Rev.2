@@ -123,3 +123,29 @@ export const attachmentActionStyle: Record<string, string | number> = {
   textDecoration: "none",
   cursor: "pointer",
 };
+
+/** Quick-status pill chrome for RFIFormModal. */
+export function rfiStatusBtnStyle(
+  status: string,
+  activeStatus: string | null | undefined,
+): Record<string, string | number> {
+  const active = formStatusMatch(status, activeStatus);
+  return {
+    background: active ? "var(--accent)" : "var(--bg-surface)",
+    color: active ? "var(--on-accent)" : "var(--text-muted)",
+    border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
+    borderRadius: 6,
+    padding: "4px 10px",
+    fontFamily: "var(--font-mono)",
+    fontSize: 8,
+    fontWeight: 700,
+    cursor: "pointer",
+    transition: "all 0.15s",
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  };
+}
+
+function formStatusMatch(status: string, activeStatus: string | null | undefined): boolean {
+  return activeStatus === status;
+}

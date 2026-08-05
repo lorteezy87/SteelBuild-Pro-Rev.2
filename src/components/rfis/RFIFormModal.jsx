@@ -16,6 +16,7 @@ import {
   labelStyle,
   attachmentDropStyle,
   uploadButtonStyle,
+  rfiStatusBtnStyle,
 } from "./rfiFormModalStyleHelpers";
 import {
   SectionLabel,
@@ -328,14 +329,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     });
   };
 
-  const statusBtnStyle = (s) => ({
-    background: formData.status === s ? "var(--accent)" : "var(--bg-surface)",
-    color: formData.status === s ? "var(--on-accent)" : "var(--text-muted)",
-    border: `1px solid ${formData.status === s ? "var(--accent)" : "var(--border-default)"}`,
-    borderRadius: 6, padding: "4px 10px", fontFamily: "var(--font-mono)",
-    fontSize: 8, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
-    textTransform: "uppercase", letterSpacing: "0.06em",
-  });
+  const statusBtnStyle = (s) => rfiStatusBtnStyle(s, formData.status);
 
   const title = rfi
     ? `${rfi.rfi_number || "RFI"} — ${(rfi.title || "").slice(0, 30)}${(rfi.title || "").length > 30 ? "…" : ""}`
