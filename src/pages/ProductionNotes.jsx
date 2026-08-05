@@ -14,54 +14,27 @@
  * Deferred: print/PDF export, AI-generated bullets, drag-to-reorder.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Trash2, X, Highlighter, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { CommandBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import {
+  mostRecentTuesday,
+  formatLongDate,
+  shiftDate,
+  indexProjectsById,
+} from "./productionNotes/productionNotesHelpers";
+import {
+  ProjectRow,
+  navBtn,
+} from "./productionNotes/ProductionNotesUi";
 
-// ─── Date helpers ──────────────────────────────────────────────────────────
-const toISODate = (d) => {
-  const dt = d instanceof Date ? d : new Date(d);
-  const yyyy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-/**
- * Default meeting date = the most recent Tuesday on or before today.
- * (User runs the meeting on Tuesdays per the OneNote example "4/21/2026"
- * which was a Tuesday. This is documented in the commit body.)
- */
-const mostRecentTuesday = () => {
-  const today = new Date();
-  const dow = today.getDay(); // 0 = Sun, 2 = Tue
-  const diff = (dow - 2 + 7) % 7;
-  today.setDate(today.getDate() - diff);
-  return toISODate(today);
-};
-
-const formatLongDate = (iso) => {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt
-    .toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
-    .toUpperCase()
-    .replace(",", "");
-};
-
-const shiftDate = (iso, days) => {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + days);
-  return toISODate(dt);
-};
-
+// ─── Page orchestrator ─────────────────────────────────────────────────────
 export default function ProductionNotes() {
   const qc = useQueryClient();
 
@@ -149,11 +122,10 @@ export default function ProductionNotes() {
   });
 
   // ─── Derived: group notes by project ────────────────────────────────────
-  const projectsById = useMemo(() => {
-    const m = new Map();
-    projects.forEach((p) => m.set(p.id, p));
-    return m;
-  }, [projects]);
+  const projectsById = useMemo(
+    () => indexProjectsById(projects),
+    [projects],
+  );
 
   // Each project's bullets, in insertion order. Skip optimistic-only projects.
   const projectRows = useMemo(() => {
@@ -583,130 +555,3 @@ export default function ProductionNotes() {
 // ─── H4 fix: BulletRow + ProjectRow extracted to module scope ────────────────
 // Previously defined INSIDE ProductionNotes, causing re-creation on every
 // render which destroyed input focus and defeated optimistic updates.
-
-function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, onToggleHighlight, onDeleteBullet }) {
-  const [text, setText] = useState(note.content || "");
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    setText(note.content || "");
-  }, [note.id, note.content]);
-
-  const commit = () => {
-    const trimmed = text.replace(/\s+$/, "");
-    if (trimmed !== (note.content || "")) {
-      onUpdateBulletText(note, trimmed);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      commit();
-      if (isLast) {
-        if (text.trim()) onCreateNext();
-      } else {
-        const all = document.querySelectorAll(`[data-bullet-project="${projectId}"] [data-bullet-input]`);
-        const idx = Array.from(all).indexOf(e.currentTarget);
-        if (idx >= 0 && all[idx + 1]) all[idx + 1].focus();
-      }
-    } else if (e.key === "Backspace" && text === "" && !note._optimistic) {
-      e.preventDefault();
-      const all = document.querySelectorAll(`[data-bullet-project="${projectId}"] [data-bullet-input]`);
-      const idx = Array.from(all).indexOf(e.currentTarget);
-      onDeleteBullet(note);
-      setTimeout(() => {
-        const updated = document.querySelectorAll(`[data-bullet-project="${projectId}"] [data-bullet-input]`);
-        if (updated[idx - 1]) updated[idx - 1].focus();
-      }, 50);
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h") {
-      e.preventDefault();
-      onToggleHighlight(note);
-    }
-  };
-
-  const highlighted = !!note.is_high_priority;
-
-  return (
-    <div
-      style={{
-        display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 6px",
-        borderRadius: 4,
-        background: highlighted ? "color-mix(in srgb, var(--status-warning) 18%, transparent)" : "transparent",
-        borderLeft: highlighted ? "3px solid var(--status-warning)" : "3px solid transparent",
-        transition: "background 0.15s",
-      }}
-      className="bullet-row"
-    >
-      <span style={{ color: highlighted ? "var(--status-warning)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 14, lineHeight: 1.5, paddingTop: 1, userSelect: "none" }}>•</span>
-      <textarea
-        ref={inputRef}
-        data-bullet-input
-        value={text}
-        rows={1}
-        onChange={(e) => { setText(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
-        onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
-        onBlur={commit}
-        onKeyDown={handleKeyDown}
-        placeholder={isLast ? "Type a bullet — Enter for next, Ctrl+H to highlight" : ""}
-        style={{ flex: 1, background: "transparent", border: "none", outline: "none", resize: "none", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.55, padding: "1px 0", fontWeight: highlighted ? 600 : 400 }}
-      />
-      <div className="bullet-actions" style={{ display: "flex", gap: 4, opacity: 0.65, transition: "opacity 0.15s" }}>
-        <button title="Highlight (Ctrl+H)" onClick={() => onToggleHighlight(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: highlighted ? "color-mix(in srgb, var(--status-warning) 25%, transparent)" : "transparent", color: highlighted ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Highlighter size={12} />
-        </button>
-        <button title="Delete bullet" onClick={() => onDeleteBullet(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: "transparent", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--status-error)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
-          <Trash2 size={12} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ProjectRow({ row, onUpdateBulletText, onToggleHighlight, onDeleteBullet, onAddBullet }) {
-  const { project, bullets, projectId } = row;
-  const renderable = bullets.length > 0 ? bullets : [];
-
-  return (
-    <div data-bullet-project={projectId} style={{ display: "grid", gridTemplateColumns: "260px 1fr", borderTop: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
-      <div style={{ padding: "14px 18px", borderRight: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column", gap: 4, minHeight: 60 }}>
-        {project.project_number && (<span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em" }}>{project.project_number}</span>)}
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3, wordBreak: "break-word" }}>{project.name}</span>
-        {project.gc_name && (<span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.05em" }}>{project.gc_name}</span>)}
-      </div>
-      <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 2 }}>
-        {renderable.map((note, idx) => (
-          <BulletRow
-            key={note.id}
-            note={note}
-            projectId={projectId}
-            isLast={idx === renderable.length - 1}
-            onCreateNext={() => onAddBullet(projectId, "")}
-            onUpdateBulletText={onUpdateBulletText}
-            onToggleHighlight={onToggleHighlight}
-            onDeleteBullet={onDeleteBullet}
-          />
-        ))}
-        <button onClick={() => onAddBullet(projectId, "")} style={{ alignSelf: "flex-start", marginTop: 4, padding: "3px 8px", borderRadius: 4, border: "1px dashed var(--divider)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--divider)"; }}>
-          <Plus size={11} /> Add bullet
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Style helpers ───────────────────────────────────────────────────────────
-function navBtn() {
-  return {
-    width: 32,
-    height: 32,
-    borderRadius: "var(--radius-btn)",
-    border: "1px solid var(--border-default)",
-    background: "var(--bg-surface)",
-    color: "var(--text-secondary)",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  };
-}
