@@ -40,6 +40,12 @@ export function useSubmittalsPageMutations(args: {
   setShowBulkAdd: (open: boolean) => void;
   setShowNewRound: (open: boolean) => void;
   setShowSheetResponse: (round: unknown) => void;
+  /** Event glue: after a successful status-bearing update. */
+  onUpdateSettled?: (updated: unknown) => void;
+  /** Event glue: after a successful advance/round write. */
+  onAdvanceSettled?: (result: unknown) => void;
+  onUpdateError?: () => void;
+  onAdvanceError?: () => void;
 }) {
   const {
     projectId,
@@ -55,6 +61,10 @@ export function useSubmittalsPageMutations(args: {
     setShowBulkAdd,
     setShowNewRound,
     setShowSheetResponse,
+    onUpdateSettled,
+    onAdvanceSettled,
+    onUpdateError,
+    onAdvanceError,
   } = args;
 
   const qc = useQueryClient();
@@ -67,9 +77,13 @@ export function useSubmittalsPageMutations(args: {
       // Status moves can auto-queue a detailing task (submittalSmartTriggers).
       qc.invalidateQueries({ queryKey: ["action-items", projectId] }),
       qc.invalidateQueries({ queryKey: ["action-items"] }),
+      // Event glue hard path: hub/process boards recompute derived stage from SoT.
+      qc.invalidateQueries({ queryKey: ["drawings", projectId] }),
     ]);
     // Fan out the drawingSet family so Doc Control reflects any linked updates.
     await invalidateEntity(qc, "drawingSet", projectId);
+    await invalidateEntity(qc, "drawing", projectId);
+    await invalidateEntity(qc, "submittal", projectId);
   }, [qc, projectId]);
 
   const createMut = useMutation({
@@ -103,28 +117,36 @@ export function useSubmittalsPageMutations(args: {
       }
       return updated;
     },
-    onSuccess: async () => {
+    onSuccess: async (updated) => {
       await invalidate();
       toast.success("Updated");
+      onUpdateSettled?.(updated);
     },
-    onError: (err: unknown) => toast.error(formatSubmittalWriteError(err, "Update")),
+    onError: (err: unknown) => {
+      onUpdateError?.();
+      toast.error(formatSubmittalWriteError(err, "Update"));
+    },
   });
 
   // Verb CTA → the single audited write path: logs a submittal_rounds row +
   // patches atomically (activates the previously-empty round log).
   const advanceMut = useMutation({
     mutationFn: (input: Parameters<typeof addSubmittalRound>[0]) => addSubmittalRound(input),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       await invalidate();
       toast.success("Round logged");
       setReleaseBlock(null);
+      const updated = (result as any)?.submittal || ((result as any)?.id ? result : null);
+      onAdvanceSettled?.(updated);
     },
     onError: (err: unknown, variables) => {
       // A blocked "Release for Fabrication" opens the override dialog with the
       // pending move so a PM can release with a reason (or cancel + resolve).
       if (err instanceof FabReleaseBlockedError) {
+        // Keep pending suggest — override retry may still need the strip.
         setReleaseBlock({ input: variables, rfis: err.blockingRfiNumbers || [] });
       } else {
+        onAdvanceError?.();
         toast.error(formatSubmittalWriteError(err, "Advance"));
       }
     },

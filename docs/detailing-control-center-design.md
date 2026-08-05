@@ -4,6 +4,11 @@ Status: **APPROVED 2026-05-26** (design + all §9 decisions signed off). Maps th
 vision onto the *actual* current schema/code and proposes a minimal, additive plan
 that does not break the working drawings/submittals flow (the killer workflow /
 moat). Phase 1 in progress.
+**Event glue (2026-07-26):** create/link prefill, revision attach confirm, and
+post-status BIC/dates suggest strip — see
+`docs/superpowers/specs/2026-07-26-detailing-cc-event-glue-design.md` and
+`docs/superpowers/plans/2026-07-26-detailing-cc-event-glue.md`.
+
 
 Vision (verbatim intent): stop tracking *"was it submitted?"* and start tracking
 *"what operational state is this package in, and what does the schedule need from
