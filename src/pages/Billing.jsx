@@ -20,6 +20,7 @@ import { PLANS } from "@/lib/billing/plans";
 import { startCheckout, openBillingPortal } from "@/lib/billing/billingService";
 import { isNativePlatform } from "@/lib/native/platform";
 import BillingControlCenter from "./billing/BillingControlCenter";
+import { BillingStatusPill as StatusPill } from "./billing/BillingUi";
 import { countPendingInvites } from "./billing/billingPageHelpers";
 import { listOrgMembers, listInvitations } from "@/lib/org/repository";
 import { entities } from "@/api/supabaseClient";
@@ -204,20 +205,5 @@ export default function Billing() {
     >
       {planContent}
     </BillingControlCenter>
-  );
-}
-
-function StatusPill({ status, isActive, planKey }) {
-  if (planKey === "enterprise") return <Pill tone="var(--accent)">Enterprise</Pill>;
-  if (status === "past_due") return <Pill tone="var(--status-error)">Past due</Pill>;
-  if (status === "trialing") return <Pill tone="var(--status-info)">Trial</Pill>;
-  if (isActive) return <Pill tone="var(--status-success)">Active</Pill>;
-  return <Pill>Free</Pill>;
-}
-function Pill({ children, tone }) {
-  return (
-    <span style={{ padding: "3px 10px", borderRadius: 999, border: `1px solid ${tone ? `color-mix(in srgb, ${tone} 40%, var(--border-default))` : "var(--border-default)"}`, background: "var(--bg-surface-low)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: tone || "var(--text-muted)", letterSpacing: "0.05em" }}>
-      {children}
-    </span>
   );
 }
