@@ -4,6 +4,10 @@ import {
   uploadButtonStyle,
   inputStyle,
   compactInputStyle,
+  PHOTO_CATEGORIES,
+  MAX_PHOTO_DIMENSION,
+  PHOTO_COMPRESS_QUALITY,
+  MAX_PHOTO_FILES,
 } from "../photoUploadModalHelpers";
 
 describe("photoUploadModalHelpers", () => {
@@ -18,3 +22,13 @@ describe("photoUploadModalHelpers", () => {
     expect(compactInputStyle.padding).toBe("5px 7px");
   });
 });
+
+describe("photo upload constants", () => {
+  it("categories and limits", () => {
+    expect(PHOTO_CATEGORIES).toContain("Safety");
+    expect(MAX_PHOTO_DIMENSION).toBe(2400);
+    expect(PHOTO_COMPRESS_QUALITY).toBe(0.86);
+    expect(MAX_PHOTO_FILES).toBe(25);
+  });
+});
+

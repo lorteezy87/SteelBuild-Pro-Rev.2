@@ -41,6 +41,9 @@ import {
   viewToggleBtnBase,
   viewToggleBtnLast,
   viewToggleActiveStyle,
+  SCHEDULE_CHIPS,
+  RISK_CHIPS,
+  VIEW_OPTIONS,
 } from "./deliveryControlCenterStyleHelpers";
 
 // ---------------------------------------------------------------------------
@@ -98,28 +101,6 @@ export interface DeliveryControlCenterProps {
 // Schedule filter chips config
 // ---------------------------------------------------------------------------
 
-const SCHEDULE_CHIPS = [
-  { id: "all", label: "All Loads" },
-  { id: "late", label: "Late" },
-  { id: "today", label: "Today" },
-  { id: "week", label: "7 Days" },
-  { id: "ready", label: "Ready" },
-  { id: "unscheduled", label: "No Date" },
-  { id: "longLead", label: "Long Lead" },
-];
-
-const RISK_CHIPS = [
-  { id: "all", label: "All Risk" },
-  { id: "high", label: "Exceptions" },
-  { id: "medium", label: "Warnings" },
-  { id: "clear", label: "Clear" },
-];
-
-const VIEW_OPTIONS = [
-  { id: "register", label: "Register" },
-  { id: "dispatch", label: "Dispatch" },
-  { id: "schedule", label: "Schedule" },
-];
 
 // ---------------------------------------------------------------------------
 // Helper: date cell with overdue highlight

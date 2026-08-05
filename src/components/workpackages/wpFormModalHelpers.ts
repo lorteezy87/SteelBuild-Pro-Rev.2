@@ -2,6 +2,10 @@
  * Pure drawing-set grouping and hour-burn helpers for WPFormModal.
  */
 import { sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
+import {
+  inputStyle,
+  inputDisabledStyle,
+} from "@/components/shared/PhoenixModal";
 
 export const APPROVED_DRAWING_STAGES = [
   "Released",
@@ -146,4 +150,52 @@ export function buildDrawingIdRecord<T extends { id?: string | null }>(
     if (d?.id) m[d.id] = d;
   }
   return m;
+}
+
+/** Default empty form state for create mode. */
+export const EMPTY_WP_FORM = {
+  name: "",
+  project_id: "",
+  project_name: "",
+  phase: "Detailing",
+  released_date: "",
+  scheduled_start_date: "",
+  scheduled_end_date: "",
+  status: "Not Started",
+  tonnage: 0,
+  shop_hours_budget: 0,
+  shop_hours_actual: 0,
+  field_hours_budget: 0,
+  field_hours_actual: 0,
+  crew: "",
+  linked_drawing_ids: "",
+  linked_rfi_ids: "",
+  notes: "",
+  percent_complete: 0,
+  vif_confirmed: false,
+  vif_confirmed_by: "",
+  vif_confirmed_date: "",
+  load_list_complete: false,
+  sequence_confirmed: false,
+  area: "",
+  sequence_number: "",
+  trade_phase: "",
+  shipping_phase: "",
+  install_phase: "",
+};
+
+export const selectStyle = {
+  ...inputStyle,
+  cursor: "pointer",
+};
+
+/** Over-budget actual fields flip to error color. */
+export function calcStyle(val: unknown, ref: unknown) {
+  return {
+    ...inputDisabledStyle,
+    color:
+      Number(val) > Number(ref) && Number(ref) > 0
+        ? "var(--status-error)"
+        : "var(--text-muted)",
+  };
 }

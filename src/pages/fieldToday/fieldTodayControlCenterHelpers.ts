@@ -27,3 +27,11 @@ export function statusTone(status: string): FieldUrgencyPill {
       return "neutral";
   }
 }
+
+export const STATUS_CHIPS = [
+  { label: "All", value: "all" },
+  { label: "Overdue", value: "overdue" },
+  { label: "Due Today", value: "due-today" },
+  { label: "Active", value: "active" },
+  { label: "Unscheduled", value: "unscheduled" },
+] as const;

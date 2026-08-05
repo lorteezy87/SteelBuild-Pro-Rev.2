@@ -6,6 +6,9 @@ import {
   hasApprovedLinkedDrawings,
   computeHourBurns,
   buildDrawingIdRecord,
+  EMPTY_WP_FORM,
+  selectStyle,
+  calcStyle,
 } from "../wpFormModalHelpers";
 
 describe("buildDrawingSetOptions", () => {
@@ -90,3 +93,18 @@ describe("buildDrawingIdRecord", () => {
     expect(buildDrawingIdRecord([{ id: "x", name: "X" }]).x.name).toBe("X");
   });
 });
+
+describe("EMPTY_WP_FORM / selectStyle / calcStyle", () => {
+  it("starts Detailing / Not Started", () => {
+    expect(EMPTY_WP_FORM.phase).toBe("Detailing");
+    expect(EMPTY_WP_FORM.status).toBe("Not Started");
+  });
+  it("selectStyle is pointer", () => {
+    expect(selectStyle.cursor).toBe("pointer");
+  });
+  it("calcStyle flags over-budget", () => {
+    expect(calcStyle(120, 100).color).toBe("var(--status-error)");
+    expect(calcStyle(50, 100).color).toBe("var(--text-muted)");
+  });
+});
+

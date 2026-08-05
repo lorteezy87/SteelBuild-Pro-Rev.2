@@ -9,12 +9,11 @@ import {
   uploadButtonStyle,
   inputStyle,
   compactInputStyle,
+  PHOTO_CATEGORIES as CATEGORIES,
+  MAX_PHOTO_DIMENSION as MAX_DIMENSION,
+  PHOTO_COMPRESS_QUALITY as COMPRESS_QUALITY,
+  MAX_PHOTO_FILES as MAX_FILES,
 } from "./photoUploadModalHelpers";
-
-const CATEGORIES = ["Progress", "Safety", "Issue", "Delivery", "Punchlist", "Other"];
-const MAX_DIMENSION = 2400;
-const COMPRESS_QUALITY = 0.86;
-const MAX_FILES = 25;
 
 // ── Image compression: scale down very large photos and re-encode as JPEG ──
 async function compressImage(file) {

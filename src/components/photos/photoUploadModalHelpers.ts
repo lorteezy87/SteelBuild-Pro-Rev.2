@@ -56,3 +56,16 @@ export const compactInputStyle: Record<string, string | number> = {
   fontSize: 10,
   padding: "5px 7px",
 };
+
+export const PHOTO_CATEGORIES = [
+  "Progress",
+  "Safety",
+  "Issue",
+  "Delivery",
+  "Punchlist",
+  "Other",
+] as const;
+
+export const MAX_PHOTO_DIMENSION = 2400;
+export const PHOTO_COMPRESS_QUALITY = 0.86;
+export const MAX_PHOTO_FILES = 25;

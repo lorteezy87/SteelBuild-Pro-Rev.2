@@ -15,24 +15,10 @@ import {
   buildLinkedSetGroups,
   hasApprovedLinkedDrawings,
   computeHourBurns,
+  EMPTY_WP_FORM,
+  selectStyle,
+  calcStyle,
 } from "./wpFormModalHelpers";
-
-const empty = {
-  name: "", project_id: "", project_name: "", phase: "Detailing",
-  released_date: "", scheduled_start_date: "", scheduled_end_date: "",
-  status: "Not Started", tonnage: 0,
-  shop_hours_budget: 0, shop_hours_actual: 0,
-  field_hours_budget: 0, field_hours_actual: 0,
-  crew: "", linked_drawing_ids: "", linked_rfi_ids: "", notes: "", percent_complete: 0,
-  vif_confirmed: false, vif_confirmed_by: "", vif_confirmed_date: "",
-  load_list_complete: false, sequence_confirmed: false,
-  area: "", sequence_number: "", trade_phase: "", shipping_phase: "", install_phase: "",
-};
-
-const selectStyle = {
-  ...inputStyle,
-  cursor: "pointer",
-};
 
 const SectionDivider = ({ label }) => (
   <div style={{ gridColumn: "span 2", borderTop: "1px solid var(--divider)", paddingTop: 14, marginTop: 6 }}>
@@ -40,13 +26,8 @@ const SectionDivider = ({ label }) => (
   </div>
 );
 
-const calcStyle = (val, ref) => ({
-  ...inputDisabledStyle,
-  color: Number(val) > Number(ref) && Number(ref) > 0 ? "var(--status-error)" : "var(--text-muted)"
-});
-
 export default function WPFormModal({ open, onClose, onSave, wp, projects = [], nextNumber, allDrawings = [], defaultProjectId = "" }) {
-  const [form, setForm] = useState(empty);
+  const [form, setForm] = useState(EMPTY_WP_FORM);
   const [errors, setErrors] = useState({});
   const [linkedDrawingIds, setLinkedDrawingIds] = useState([]);
   const [setSearch, setSetSearch] = useState("");
@@ -97,7 +78,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
 
   useEffect(() => {
     if (wp) {
-      setForm({ ...empty, ...wp });
+      setForm({ ...EMPTY_WP_FORM, ...wp });
       const drawingIds = (wp.linked_drawing_ids || "").split(",").map(s => s.trim()).filter(Boolean);
       setLinkedDrawingIds(drawingIds);
     } else {
@@ -105,7 +86,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
       // is unlocked immediately — its drawings are already loaded for this
       // project, and without this the picker stays behind a "Select a project"
       // gate even though you're inside one. project_name is filled on save.
-      setForm({ ...empty, wp_number: nextNumber || "", project_id: defaultProjectId || "" });
+      setForm({ ...EMPTY_WP_FORM, wp_number: nextNumber || "", project_id: defaultProjectId || "" });
       setLinkedDrawingIds([]);
     }
     setErrors({});

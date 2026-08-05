@@ -60,7 +60,11 @@ import {
   filterFieldTaskRows,
 } from "./fieldTodayControlCenter.derive";
 import { PROGRESS_STEPS, clampPercent } from "@/lib/field/fieldToday";
-import { urgencyTone, statusTone } from "./fieldTodayControlCenterHelpers";
+import {
+  urgencyTone,
+  statusTone,
+  STATUS_CHIPS,
+} from "./fieldTodayControlCenterHelpers";
 
 // ── Photo thumbnail ─────────────────────────────────────────────────────────────
 // Stored photo file_url values are storage PATHS (not fetchable URLs), so an
@@ -142,13 +146,6 @@ function scrollToTable() {
 
 // ── Status filter chips ───────────────────────────────────────────────────────
 
-const STATUS_CHIPS = [
-  { label: "All",          value: "all" },
-  { label: "Overdue",      value: "overdue" },
-  { label: "Due Today",    value: "due-today" },
-  { label: "Active",       value: "active" },
-  { label: "Unscheduled",  value: "unscheduled" },
-];
 
 // ── Inline progress buttons (thumb-friendly, inline style only) ───────────────
 
