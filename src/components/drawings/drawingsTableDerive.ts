@@ -25,7 +25,7 @@ export const TABLE_HEADER_STYLE = {
   letterSpacing: "0.15em",
   color: "var(--text-muted)",
   textTransform: "uppercase",
-  padding: "10px 12px",
+  padding: "8px 12px",
   textAlign: "left",
   borderBottom: "1px solid var(--border-default)",
   whiteSpace: "nowrap",
@@ -33,9 +33,10 @@ export const TABLE_HEADER_STYLE = {
 };
 
 /**
- * Column definitions for the register table. `field: null` marks non-sortable
- * columns (approval / actions). Discipline and reviewer are hidden in the DOM
- * but kept for colSpan stability.
+ * Column definitions for the register table.
+ * Default visible: checkbox | sheet # | title | rev | stage | due | actions.
+ * Discipline, reviewer, submitted_date, and approval stay in the DOM for
+ * colSpan stability but are hidden — secondary data lives behind expand / ⋮.
  */
 export const TABLE_COLUMNS = [
   { key: "checkbox", field: null as null, label: "", width: 36 },
@@ -44,10 +45,10 @@ export const TABLE_COLUMNS = [
   { key: "discipline", field: "discipline", label: SORTABLE_FIELDS.discipline.label, hidden: true },
   { key: "revision_number", field: "revision_number", label: SORTABLE_FIELDS.revision_number.label },
   { key: "stage", field: "stage", label: SORTABLE_FIELDS.stage.label },
-  { key: "submitted_date", field: "submitted_date", label: SORTABLE_FIELDS.submitted_date.label, compactHide: true },
+  { key: "submitted_date", field: "submitted_date", label: SORTABLE_FIELDS.submitted_date.label, hidden: true },
   { key: "due_date", field: "due_date", label: SORTABLE_FIELDS.due_date.label },
   { key: "reviewer", field: "reviewer", label: SORTABLE_FIELDS.reviewer.label, hidden: true },
-  { key: "approval", field: null as null, label: "APPROVAL" },
+  { key: "approval", field: null as null, label: "APPROVAL", hidden: true },
   { key: "actions", field: null as null, label: "" },
 ];
 
@@ -113,9 +114,9 @@ export function buildFlatDrawingRows(sortedGroups: DrawingGroup[], expanded: Set
 
 /** Virtualizer row height estimate by flat row type. */
 export function estimateFlatRowHeight(row: FlatDrawingRow): number {
-  if (row.type === "group") return 62;
+  if (row.type === "group") return 48;
   if (row.type === "setOnlyInfo") return 120;
-  return 48;
+  return 44;
 }
 
 /** Sort arrow suffix for active column headers. */
