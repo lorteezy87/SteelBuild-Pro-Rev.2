@@ -20,16 +20,12 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseModelElementsCsv } from "@/lib/importModelElements";
-
-const mono    = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const ACCENT  = "var(--accent, #3B82F6)";
-
-const MATCH_BADGE = {
-  matched:   { label: "linked",    color: "var(--status-success)" },
-  ambiguous: { label: "ambiguous", color: "var(--status-warning)" },
-  none:      { label: "—",         color: "var(--text-muted)" },
-};
+import {
+  mono,
+  display,
+  ACCENT,
+  MATCH_BADGE,
+} from "./modelElementImportModalHelpers";
 
 export default function ModelElementImportModal({
   open,
