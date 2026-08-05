@@ -38,6 +38,7 @@ import {
   textMuted,
   textPrimary,
   warning,
+  REV_SEVERITY_TONE,
 } from "./format";
 import {
   DueChip,
@@ -571,8 +572,6 @@ export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[
 // ── Revision Impact Tracker ─────────────────────────────────────────────────
 // Revisions that landed on sheets already moving downstream (fabricated /
 // delivered / in field) — the rework / change-order exposure (design doc §7).
-
-const REV_SEVERITY_TONE: Record<string, string> = { critical: error, high: warning, medium: info, low: textMuted };
 
 export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onCompare?: (drawingId: string) => void }) {
   const shown = (rows || []).slice(0, 8);

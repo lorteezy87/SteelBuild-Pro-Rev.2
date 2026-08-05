@@ -22,6 +22,7 @@ import {
   toLocalDay,
   buildApprovalMatrixRows,
   summarizeApprovalMatrix,
+  REV_SEVERITY_TONE,
 } from "../format";
 
 // These guard the Arizona (MST, UTC-7, no DST) date-display bug: a date-only
@@ -747,5 +748,12 @@ describe("buildApprovalMatrixRows — working-day due display", () => {
     const def = buildApprovalMatrixRows(sets, subs).find((r) => r.id === "s1");
     expect(on?.due.days).toBe(7);
     expect(def?.due).toEqual(on?.due); // default arg === explicit false
+  });
+});
+
+describe("REV_SEVERITY_TONE", () => {
+  it("maps severity to token colors", () => {
+    expect(REV_SEVERITY_TONE.critical).toBeTruthy();
+    expect(REV_SEVERITY_TONE.low).toBeTruthy();
   });
 });

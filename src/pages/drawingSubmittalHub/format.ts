@@ -813,3 +813,10 @@ export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummar
   }
   return { noSubmittal, pending, approved, rejected, overdue, dueSoon, total: (matrixRows || []).length };
 }
+
+export const REV_SEVERITY_TONE: Record<string, string> = {
+  critical: error,
+  high: warning,
+  medium: info,
+  low: textMuted,
+};
