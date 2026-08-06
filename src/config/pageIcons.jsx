@@ -14,12 +14,13 @@ import {
   ClipboardList, Shield, ShieldAlert, FlaskConical, Camera,
   Contact2, Building2, UserCog, Settings as SettingsIcon,
   Ruler, Calculator, HardHat, ArrowLeftRight,
-  BookOpen,
+  BookOpen, StickyNote,
 } from "lucide-react";
 
 export const PAGE_ICON = {
   Dashboard: LayoutDashboard,
-  CommandCenter: Terminal,
+  CommandCenter: Terminal,
+
   ExecutiveView: BarChart3,
   Projects: Briefcase,
   ProjectsHub: Briefcase,
@@ -97,6 +98,7 @@ export const PAGE_ICON = {
   SteelWeightCalculator: Calculator,
   CranePickCalculator: HardHat,
   DecimalFractionConverter: ArrowLeftRight,
+  Notes: StickyNote,
 };
 
 export const FallbackIcon = Grid3x3;
@@ -105,4 +107,3 @@ export const FallbackIcon = Grid3x3;
 export function getPageIcon(page) {
   return PAGE_ICON[page] || FallbackIcon;
 }
-
