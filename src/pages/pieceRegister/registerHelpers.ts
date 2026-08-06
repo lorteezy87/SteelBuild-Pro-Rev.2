@@ -4,8 +4,13 @@ import type { PillTone } from "@/components/command";
  * Keep page-level useMemo wrappers; only move pure bodies here.
  */
 import type { PieceAttentionItem } from "@/lib/pieceControl/presentation";
+import type { PieceRelationshipSnapshot } from "@/lib/pieceControl/relationshipsRepository";
 import { pieceTons } from "@/lib/pieceControl/tonnage";
-import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
+import type { PieceWeightInputs } from "@/lib/pieceControl/types";
+import {
+  formatWorkPackageTitle,
+  type WorkPackageTitleSource,
+} from "@/lib/workPackages/formatWorkPackageTitle";
 import {
   buildPieceImpact,
   currentRevisionCodeForDrawing,
@@ -37,13 +42,16 @@ export function presentImportReconciliationText(value: string): string {
     : value;
 }
 
+type AttentionPiece = PieceWeightInputs & {
+  work_package_id?: string | null;
+  on_hold?: boolean | null;
+};
+
 /**
  * Apply attention-focus secondary filter on top of the primary filter bar.
  * Returns a new array; does not mutate `rows`.
  */
-export function applyAttentionFocus<
-  T extends { work_package_id?: string | null; on_hold?: boolean | null },
->(
+export function applyAttentionFocus<T extends AttentionPiece>(
   rows: T[],
   attentionFocus: PieceAttentionItem["key"] | null,
 ): T[] {
@@ -51,7 +59,7 @@ export function applyAttentionFocus<
     return rows.filter((piece) => !piece.work_package_id);
   }
   if (attentionFocus === "missing-weight") {
-    return rows.filter((piece) => pieceTons(piece as never) == null);
+    return rows.filter((piece) => pieceTons(piece) == null);
   }
   if (attentionFocus === "held") {
     return rows.filter((piece) => Boolean(piece.on_hold));
@@ -59,13 +67,18 @@ export function applyAttentionFocus<
   return rows;
 }
 
+type WorkPackageLabelSource = Exclude<
+  WorkPackageTitleSource,
+  null | undefined
+> & { id?: string };
+
 export function buildWorkPackageLabelMap(
-  workPackages: Array<{ id?: string; [k: string]: unknown }>,
+  workPackages: WorkPackageLabelSource[],
 ): Map<string, string> {
   return new Map(
     (workPackages || [])
-      .filter((wp): wp is { id: string; [k: string]: unknown } => Boolean(wp?.id))
-      .map((wp) => [wp.id, formatWorkPackageTitle(wp as never)]),
+      .filter((wp): wp is WorkPackageLabelSource & { id: string } => Boolean(wp?.id))
+      .map((wp) => [wp.id, formatWorkPackageTitle(wp)]),
   );
 }
 
@@ -111,29 +124,25 @@ export function allRowsSelected(
   );
 }
 
-export type PieceImpactSnapshotLike = {
-  pieces: Array<{
-    id: string;
-    piece_mark?: string | null;
-    lifecycle_status?: string | null;
-    on_hold?: boolean | null;
-  }>;
-  pieceDrawings: Array<{ piece_id: string; drawing_id: string }>;
-  commentDispositions: Array<{ related_piece_ids?: string[] | null }>;
-  drawings: unknown[];
-  drawingSets: unknown[];
-  submittals: unknown[];
-  sheetResponses: unknown[];
-  drawingRevisions: unknown[];
-  drawingReviews: unknown[];
-  drawingSignoffs: unknown[];
-};
+export type PieceImpactSnapshotLike = Pick<
+  PieceRelationshipSnapshot,
+  | "pieces"
+  | "pieceDrawings"
+  | "commentDispositions"
+  | "drawings"
+  | "drawingSets"
+  | "submittals"
+  | "sheetResponses"
+  | "drawingRevisions"
+  | "drawingReviews"
+  | "drawingSignoffs"
+>;
 
 /** Selected-piece impact panel model; null when no selection or piece missing. */
 export function buildSelectedPieceImpact(
   selectedPieceId: string | null | undefined,
   snapshot: PieceImpactSnapshotLike | null | undefined,
-) {
+): ReturnType<typeof buildPieceImpact> | null {
   if (!selectedPieceId || !snapshot) return null;
   const piece = snapshot.pieces.find((row) => row.id === selectedPieceId);
   if (!piece) return null;
@@ -152,18 +161,18 @@ export function buildSelectedPieceImpact(
       on_hold: piece.on_hold,
     },
     linkedDrawingIds,
-    drawings: snapshot.drawings as never,
+    drawings: snapshot.drawings,
     evidence: {
-      drawingSets: snapshot.drawingSets as never,
-      submittals: snapshot.submittals as never,
-      sheetResponses: snapshot.sheetResponses as never,
-      drawingRevisions: snapshot.drawingRevisions as never,
-      drawingReviews: snapshot.drawingReviews as never,
-      drawingSignoffs: snapshot.drawingSignoffs as never,
+      drawingSets: snapshot.drawingSets,
+      submittals: snapshot.submittals,
+      sheetResponses: snapshot.sheetResponses,
+      drawingRevisions: snapshot.drawingRevisions,
+      drawingReviews: snapshot.drawingReviews,
+      drawingSignoffs: snapshot.drawingSignoffs,
     },
-    commentDispositions: commentDispositions as never,
+    commentDispositions,
     currentRevisionCode: governingId
-      ? currentRevisionCodeForDrawing(governingId, snapshot.drawingRevisions as never)
+      ? currentRevisionCodeForDrawing(governingId, snapshot.drawingRevisions)
       : null,
   });
 }
