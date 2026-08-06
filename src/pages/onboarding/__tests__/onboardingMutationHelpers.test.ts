@@ -4,17 +4,31 @@ import {
   createSeedRecords,
   IMPORT_EXAMPLES,
   ROLE_OPTIONS,
+  type EntityClient,
+  type SeedRecord,
 } from "../onboardingMutationHelpers";
+
+function passthroughEntity(): EntityClient {
+  return {
+    bulkCreate: vi.fn(async (rows: SeedRecord[]) => rows),
+    create: vi.fn(async (record: SeedRecord) => record),
+  };
+}
 
 describe("bulkCreateWithFallback", () => {
   it("returns empty for empty records", async () => {
-    expect(await bulkCreateWithFallback({ bulkCreate: vi.fn(), create: vi.fn() }, [])).toEqual([]);
+    expect(await bulkCreateWithFallback(passthroughEntity(), [])).toEqual([]);
   });
 
   it("uses bulkCreate when it succeeds", async () => {
     const entity = {
-      bulkCreate: vi.fn(async (rows) => rows.map((r, i) => ({ ...r, id: i + 1 }))),
-      create: vi.fn(),
+      bulkCreate: vi.fn(async (rows: SeedRecord[]) =>
+        rows.map((record: SeedRecord, index: number) => ({
+          ...record,
+          id: index + 1,
+        })),
+      ),
+      create: vi.fn(async (record: SeedRecord) => record),
     };
     const out = await bulkCreateWithFallback(entity, [{ a: 1 }]);
     expect(out).toEqual([{ a: 1, id: 1 }]);
@@ -23,14 +37,14 @@ describe("bulkCreateWithFallback", () => {
 
   it("falls back to row creates and skips failures", async () => {
     const entity = {
-      bulkCreate: vi.fn(async () => {
+      bulkCreate: vi.fn(async (_rows: SeedRecord[]): Promise<SeedRecord[]> => {
         throw new Error("bulk down");
       }),
-      create: vi
-        .fn()
-        .mockResolvedValueOnce({ id: "ok" })
-        .mockRejectedValueOnce(new Error("dup")),
+      create: vi.fn(async (record: SeedRecord): Promise<SeedRecord> => record),
     };
+    entity.create
+      .mockResolvedValueOnce({ id: "ok" })
+      .mockRejectedValueOnce(new Error("dup"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const out = await bulkCreateWithFallback(entity, [{ a: 1 }, { a: 2 }]);
     expect(out).toEqual([{ id: "ok" }]);
@@ -41,14 +55,16 @@ describe("bulkCreateWithFallback", () => {
 describe("createSeedRecords", () => {
   it("wires drawing_set_id from created drawing sets", async () => {
     const drawingSets = {
-      bulkCreate: vi.fn(async (rows) => rows.map((r) => ({ ...r, id: "set-1" }))),
-      create: vi.fn(),
+      bulkCreate: vi.fn(async (rows: SeedRecord[]) =>
+        rows.map((record: SeedRecord) => ({ ...record, id: "set-1" })),
+      ),
+      create: vi.fn(async (record: SeedRecord) => record),
     };
     const drawings = {
-      bulkCreate: vi.fn(async (rows) => rows),
-      create: vi.fn(),
+      bulkCreate: vi.fn(async (rows: SeedRecord[]) => rows),
+      create: vi.fn(async (record: SeedRecord) => record),
     };
-    const entities = {
+    const entities: Record<string, EntityClient | undefined> = {
       DrawingSet: drawingSets,
       Drawing: drawings,
     };
@@ -57,7 +73,7 @@ describe("createSeedRecords", () => {
         drawingSets: [{ set_name: "IFC" }],
         drawings: [{ drawing_set_name: "IFC", sheet_number: "S1.01" }],
       },
-      entities as any,
+      entities,
       ["drawingSets", "drawings"],
     );
     expect(created.drawingSets).toHaveLength(1);
