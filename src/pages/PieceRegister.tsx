@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Archive,
   AlertTriangle,
   Boxes,
-  CheckCircle2,
   Database,
-  Download,
   Factory,
   FileUp,
   GitBranch,
   PackageOpen,
   LayoutGrid,
   Scale,
-  Search,
   Settings2,
   ShieldCheck,
   Truck,
@@ -26,16 +22,12 @@ import {
   DecisionPanel,
   KpiStrip,
   PageHero,
-  Pill,
   useCommandSkin,
-  type KpiCellDef,
-  type PillTone,
+  type KpiCellDef
 } from "@/components/command";
 import { PieceAttentionPanel } from "@/components/pieceControl/PieceAttentionPanel";
 import { PieceControlModeBadge } from "@/components/pieceControl/PieceControlModeBadge";
-import { PieceImpactPanel } from "@/components/pieceControl/PieceImpactPanel";
 import { PieceLifecycleStrip } from "@/components/pieceControl/PieceLifecycleStrip";
-import PieceRegisterBulkBar from "@/components/pieceControl/PieceRegisterBulkBar";
 import PieceRelationshipManager from "@/components/pieceControl/PieceRelationshipManager";
 import PackageBoard from "@/components/pieceControl/PackageBoard";
 import { PieceProductionControl } from "@/components/pieceControl/PieceProductionControl";
@@ -47,11 +39,7 @@ import { planBulkPieceAttributeUpdate } from "@/lib/pieceControl/bulkUpdatePiece
 import { bulkUpdatePieceAttributes } from "@/lib/pieceControl/bulkUpdateRepository";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
-import {
-  buildPieceImpact,
-  currentRevisionCodeForDrawing,
-} from "@/lib/pieceControl/drawingReleaseReady";
-import { PIECE_IMPORT_SOURCE_OPTIONS, readPieceImportFile } from "@/lib/pieceControl/importAdapters";
+import { readPieceImportFile } from "@/lib/pieceControl/importAdapters";
 import {
   collectAppliedPieceIds,
   collectAppliedPiecesByWpNumber,
@@ -61,12 +49,7 @@ import {
   collectAppliedPieceSheetHints,
   planImportDrawingLinks,
 } from "@/lib/pieceControl/importDrawingLink";
-import { downloadPieceRegisterCsvTemplate } from "@/lib/pieceControl/pieceRegisterCsvTemplate";
-import {
-  nextPieceRegisterSort,
-  sortPieceRegisterRows,
-  type PieceRegisterSort,
-} from "@/lib/pieceControl/pieceRegisterSort";
+import type { PieceRegisterSort } from "@/lib/pieceControl/pieceRegisterSort";
 import {
   buildPieceControlSummary,
   modePresentation,
@@ -92,95 +75,51 @@ import {
   stagePieceImportBatch,
 } from "@/lib/pieceControl/repository";
 import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
-import { pieceTons } from "@/lib/pieceControl/tonnage";
-import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
 import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
-import { filterPieceRegisterRows, type PieceRegisterFilters } from "./pieceRegister/filter";
+import type { PieceRegisterFilters } from "./pieceRegister/filter";
+import {
+  uniqueValues,
+  buildWorkPackageLabelMap,
+  buildPieceDisplayRows,
+  buildFilteredRegisterRows,
+  archiveConfirmationText as buildArchiveConfirmationText,
+  allRowsSelected,
+  buildSelectedPieceImpact,
+  IMPORT_DECISION_TONE,
+  EMPTY_PIECE_REGISTER_FILTERS,
+  PIECE_REGISTER_VIEW_LABELS,
+  PIECE_REGISTER_VIEW_IDS,
+} from "./pieceRegister/registerHelpers";
+import { PieceRegisterArchiveDialog } from "./pieceRegister/PieceRegisterArchiveDialog";
+import { PieceRegisterRegisterView } from "./pieceRegister/PieceRegisterRegisterView";
+import { PieceRegisterImportView } from "./pieceRegister/PieceRegisterImportView";
 import {
   deriveOverviewWorkPackages,
   selectUpcomingShipments,
 } from "./pieceRegister/overviewDerive";
 import PieceRegisterOverview from "./pieceRegister/PieceRegisterOverview";
 
-const EMPTY_FILTERS: PieceRegisterFilters = {
-  search: "",
-  workPackageId: "",
-  profile: "",
-  grade: "",
-  lifecycle: "",
-  source: "",
-  hold: "all",
-};
+const EMPTY_FILTERS = EMPTY_PIECE_REGISTER_FILTERS;
 
-const REGISTER_VIEWS = [
-  { id: "overview", label: "Overview", icon: Boxes },
-  { id: "register", label: "Register", icon: PackageOpen },
-  { id: "board", label: "Board", icon: LayoutGrid },
-  { id: "import", label: "Imports", icon: FileUp },
-  { id: "relationships", label: "Lots & links", icon: GitBranch },
-  { id: "production", label: "Production", icon: Factory },
-  { id: "logistics", label: "Logistics", icon: Truck },
-  { id: "settings", label: "Settings", icon: Settings2 },
-] as const;
+const REGISTER_VIEW_ICONS = {
+  overview: Boxes,
+  register: PackageOpen,
+  board: LayoutGrid,
+  import: FileUp,
+  relationships: GitBranch,
+  production: Factory,
+  logistics: Truck,
+  settings: Settings2,
+} as const;
 
-type PieceRegisterView = (typeof REGISTER_VIEWS)[number]["id"];
+const REGISTER_VIEWS = PIECE_REGISTER_VIEW_IDS.map((id) => ({
+  id,
+  label: PIECE_REGISTER_VIEW_LABELS[id],
+  icon: REGISTER_VIEW_ICONS[id],
+}));
 
-const decisionTone: Record<string, PillTone> = {
-  new: "good",
-  unchanged: "neutral",
-  update_candidate: "warn",
-  conflict: "danger",
-  invalid: "danger",
-};
-
-const naturalSortCollator = new Intl.Collator("en-US", {
-  numeric: true,
-  sensitivity: "base",
-});
-
-function uniqueValues(values: Array<string | null | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))]
-    .sort(naturalSortCollator.compare);
-}
-
-function presentImportReconciliationText(value: string): string {
-  return value === "mark has split lots but no active ALL root"
-    ? "This piece mark has split lots but no active parent record."
-    : value;
-}
-
-function SelectFilter({
-  value,
-  onChange,
-  label,
-  options,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  label: string;
-  options: Array<string | { value: string; label: string }>;
-}) {
-  const controlId = `piece-register-filter-${label.toLowerCase().replace(/\s+/g, "-")}`;
-  return (
-    <label className="piece-register-filter" htmlFor={controlId}>
-      {label}
-      <select
-        id={controlId}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="piece-register-filter__control"
-      >
-        <option value="">All</option>
-        {options.map((option) => {
-          const value = typeof option === "string" ? option : option.value;
-          const optionLabel = typeof option === "string" ? option : option.label;
-          return <option key={value} value={value}>{optionLabel}</option>;
-        })}
-      </select>
-    </label>
-  );
-}
+type PieceRegisterView = (typeof PIECE_REGISTER_VIEW_IDS)[number];
 
 export default function PieceRegister() {
   useCommandSkin();
@@ -244,41 +183,10 @@ export default function PieceRegister() {
     enabled: enabled && Boolean(selectedPieceId),
     staleTime: 15_000,
   });
-  const selectedPieceImpact = useMemo(() => {
-    if (!selectedPieceId || !impactSnapshotQuery.data) return null;
-    const snapshot = impactSnapshotQuery.data;
-    const piece = snapshot.pieces.find((row) => row.id === selectedPieceId);
-    if (!piece) return null;
-    const linkedDrawingIds = snapshot.pieceDrawings
-      .filter((link) => link.piece_id === selectedPieceId)
-      .map((link) => link.drawing_id);
-    const governingId = linkedDrawingIds[0] ?? null;
-    const commentDispositions = snapshot.commentDispositions.filter((row) =>
-      (row.related_piece_ids ?? []).includes(selectedPieceId),
-    );
-    return buildPieceImpact({
-      piece: {
-        id: piece.id,
-        piece_mark: piece.piece_mark,
-        lifecycle_status: piece.lifecycle_status,
-        on_hold: piece.on_hold,
-      },
-      linkedDrawingIds,
-      drawings: snapshot.drawings,
-      evidence: {
-        drawingSets: snapshot.drawingSets,
-        submittals: snapshot.submittals,
-        sheetResponses: snapshot.sheetResponses,
-        drawingRevisions: snapshot.drawingRevisions,
-        drawingReviews: snapshot.drawingReviews,
-        drawingSignoffs: snapshot.drawingSignoffs,
-      },
-      commentDispositions,
-      currentRevisionCode: governingId
-        ? currentRevisionCodeForDrawing(governingId, snapshot.drawingRevisions)
-        : null,
-    });
-  }, [impactSnapshotQuery.data, selectedPieceId]);
+  const selectedPieceImpact = useMemo(
+    () => buildSelectedPieceImpact(selectedPieceId, impactSnapshotQuery.data),
+    [impactSnapshotQuery.data, selectedPieceId],
+  );
 
   const batches = batchesQuery.data ?? [];
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) ?? batches[0] ?? null;
@@ -289,22 +197,11 @@ export default function PieceRegister() {
   });
 
   const workPackageMap = useMemo(
-    () => new Map(
-      (workPackagesQuery.data ?? []).map((wp: any) => [
-        wp.id,
-        formatWorkPackageTitle(wp),
-      ]),
-    ),
+    () => buildWorkPackageLabelMap(workPackagesQuery.data ?? []),
     [workPackagesQuery.data],
   );
   const displayRows = useMemo(
-    () => (piecesQuery.data ?? []).map((piece) => ({
-      ...piece,
-      workPackageLabel:
-        piece.work_package_id && workPackageMap.has(piece.work_package_id)
-          ? workPackageMap.get(piece.work_package_id)!
-          : "Unassigned",
-    })),
+    () => buildPieceDisplayRows(piecesQuery.data, workPackageMap),
     [piecesQuery.data, workPackageMap],
   );
   const overviewSnapshotQuery = useQuery({
@@ -325,24 +222,14 @@ export default function PieceRegister() {
     () => selectUpcomingShipments(overviewWorkPackages),
     [overviewWorkPackages],
   );
-  const filteredRows = useMemo(() => {
-    let rows = filterPieceRegisterRows(displayRows, filters);
-    if (attentionFocus === "unassigned") {
-      rows = rows.filter((piece) => !piece.work_package_id);
-    } else if (attentionFocus === "missing-weight") {
-      rows = rows.filter((piece) => pieceTons(piece) == null);
-    } else if (attentionFocus === "held") {
-      rows = rows.filter((piece) => piece.on_hold);
-    }
-    return sortPieceRegisterRows(rows, registerSort);
-  }, [attentionFocus, displayRows, filters, registerSort]);
+  const filteredRows = useMemo(
+    () => buildFilteredRegisterRows(displayRows, filters, attentionFocus, registerSort),
+    [attentionFocus, displayRows, filters, registerSort],
+  );
   const canBulkUpdate = enabled && !roleLoading && roleAtLeast(role, "field");
   const canArchive = enabled && !roleLoading && roleAtLeast(role, "admin");
-  const allFilteredSelected = filteredRows.length > 0
-    && filteredRows.every((piece) => selectedPieceIds.has(piece.id));
-  const archiveConfirmationText = selectedPieceIds.size === 1
-    ? "ARCHIVE 1 PIECE"
-    : `ARCHIVE ${selectedPieceIds.size} PIECES`;
+  const allFilteredSelected = allRowsSelected(filteredRows, selectedPieceIds);
+  const archiveConfirmationText = buildArchiveConfirmationText(selectedPieceIds.size);
 
   const profiles = useMemo(() => uniqueValues(displayRows.map((row) => row.profile)), [displayRows]);
   const grades = useMemo(() => uniqueValues(displayRows.map((row) => row.material_grade)), [displayRows]);
@@ -863,125 +750,17 @@ export default function PieceRegister() {
       </nav>
 
         {archiveOpen && (
-          <div
-            className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-            style={{ background: "color-mix(in srgb, var(--bg-void, #050810) 72%, transparent)" }}
-            role="presentation"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget && !archiveMutation.isPending) setArchiveOpen(false);
-            }}
-          >
-            <div
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="archive-piece-title"
-              className="w-full max-w-lg rounded-2xl p-6 shadow-2xl"
-              style={{
-                border: "1px solid var(--cmd-border, var(--border-default))",
-                background: "var(--cmd-surface, var(--bg-surface))",
-                color: "var(--cmd-text, var(--text-primary))",
-                boxShadow: "var(--shadow-lg)",
-              }}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className="rounded-xl p-2"
-                  style={{
-                    background: "var(--cmd-chip-danger-bg, var(--danger-muted))",
-                    color: "var(--cmd-danger-text, var(--status-error))",
-                  }}
-                >
-                  <Archive className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2
-                    id="archive-piece-title"
-                    className="text-xl font-black"
-                    style={{ color: "var(--cmd-text, var(--text-primary))" }}
-                  >
-                    Archive {selectedPieceIds.size} piece{selectedPieceIds.size === 1 ? "" : "s"}?
-                  </h2>
-                  <p
-                    className="mt-2 text-sm leading-6"
-                    style={{ color: "var(--cmd-text-muted, var(--text-muted))" }}
-                  >
-                    Archived pieces are removed from active Piece Control counts and workflows. Import batches,
-                    relationships, and audit history are retained. Split, held, released, or production-started
-                    pieces cannot be archived.
-                  </p>
-                </div>
-              </div>
-              <label
-                htmlFor="piece-archive-reason"
-                className="mt-5 grid gap-2 text-xs font-bold uppercase tracking-wider"
-                style={{ color: "var(--cmd-text-muted, var(--text-muted))" }}
-              >
-                Reason
-                <textarea
-                  id="piece-archive-reason"
-                  value={archiveReason}
-                  onChange={(event) => setArchiveReason(event.target.value)}
-                  rows={3}
-                  placeholder="Why should these pieces be removed from the active register?"
-                  className="resize-none rounded-lg px-3 py-2 text-sm font-medium normal-case tracking-normal"
-                  style={{
-                    border: "1px solid var(--cmd-border, var(--border-default))",
-                    background: "var(--cmd-surface, var(--bg-input, var(--bg-surface)))",
-                    color: "var(--cmd-text, var(--text-primary))",
-                  }}
-                />
-              </label>
-              <label
-                htmlFor="piece-archive-confirmation"
-                className="mt-4 grid gap-2 text-xs font-bold uppercase tracking-wider"
-                style={{ color: "var(--cmd-text-muted, var(--text-muted))" }}
-              >
-                Type {archiveConfirmationText} to confirm
-                <input
-                  id="piece-archive-confirmation"
-                  value={archiveConfirmation}
-                  onChange={(event) => setArchiveConfirmation(event.target.value)}
-                  placeholder={archiveConfirmationText}
-                  className="h-11 rounded-lg px-3 font-mono text-sm font-bold normal-case tracking-normal"
-                  style={{
-                    border: "1px solid var(--cmd-border, var(--border-default))",
-                    background: "var(--cmd-surface, var(--bg-input, var(--bg-surface)))",
-                    color: "var(--cmd-text, var(--text-primary))",
-                  }}
-                />
-              </label>
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  disabled={archiveMutation.isPending}
-                  onClick={() => setArchiveOpen(false)}
-                  className="h-10 rounded-lg px-4 text-sm font-bold disabled:opacity-50"
-                  style={{
-                    border: "1px solid var(--cmd-border, var(--border-default))",
-                    background: "transparent",
-                    color: "var(--cmd-text, var(--text-primary))",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={archiveMutation.isPending
-                    || archiveReason.trim().length === 0
-                    || archiveConfirmation !== archiveConfirmationText}
-                  onClick={() => archiveMutation.mutate()}
-                  className="h-10 rounded-lg px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{
-                    border: "none",
-                    background: "var(--cmd-danger, var(--status-error))",
-                    color: "var(--cmd-pill-on-solid, #fff)",
-                  }}
-                >
-                  {archiveMutation.isPending ? "Archiving..." : "Archive pieces"}
-                </button>
-              </div>
-            </div>
-          </div>
+          <PieceRegisterArchiveDialog
+            selectedCount={selectedPieceIds.size}
+            archiveReason={archiveReason}
+            archiveConfirmation={archiveConfirmation}
+            archiveConfirmationText={archiveConfirmationText}
+            isPending={archiveMutation.isPending}
+            onReasonChange={setArchiveReason}
+            onConfirmationChange={setArchiveConfirmation}
+            onCancel={() => setArchiveOpen(false)}
+            onConfirm={() => archiveMutation.mutate()}
+          />
         )}
 
         {activeView === "overview" && !piecesQuery.isLoading && !piecesQuery.error && (
@@ -1001,262 +780,44 @@ export default function PieceRegister() {
         )}
 
         {activeView === "register" && (
-          <section className="piece-register-workspace">
-        <div className="cmd-filterbar piece-register-filters">
-            <label htmlFor="piece-register-search" className="piece-register-filter piece-register-filter--search">
-              Search
-              <span className="cmd-search">
-                <Search size={15} />
-                <input
-                  id="piece-register-search"
-                  value={filters.search}
-                  onChange={(event) => updateRegisterFilters({ search: event.target.value })}
-                  placeholder="Mark, package, profile..."
-                  className="cmd-search__input"
-                />
-              </span>
-            </label>
-            <SelectFilter
-              label="Work package"
-              value={filters.workPackageId}
-              onChange={(value) => updateRegisterFilters({ workPackageId: value })}
-              options={(workPackagesQuery.data ?? []).map((wp: any) => ({
-                value: wp.id,
-                label: formatWorkPackageTitle(wp),
-              }))}
-            />
-            <SelectFilter label="Profile" value={filters.profile} onChange={(value) => updateRegisterFilters({ profile: value })} options={profiles} />
-            <SelectFilter label="Grade" value={filters.grade} onChange={(value) => updateRegisterFilters({ grade: value })} options={grades} />
-            <SelectFilter label="Lifecycle" value={filters.lifecycle} onChange={(value) => updateRegisterFilters({ lifecycle: value })} options={lifecycles} />
-            <SelectFilter label="Source" value={filters.source} onChange={(value) => updateRegisterFilters({ source: value })} options={sources} />
-            <label htmlFor="piece-register-filter-hold" className="piece-register-filter">
-              Hold
-              <select
-                id="piece-register-filter-hold"
-                value={filters.hold}
-                onChange={(event) => updateRegisterFilters({ hold: event.target.value as PieceRegisterFilters["hold"] })}
-                className="piece-register-filter__control"
-              >
-                <option value="all">All</option>
-                <option value="held">Held</option>
-                <option value="clear">Clear</option>
-              </select>
-            </label>
-            {attentionFocus ? (
-              <button
-                type="button"
-                className="cmd-chip-btn is-active piece-register-attention-filter"
-                onClick={clearRegisterFilters}
-              >
-                {attentionFocus === "unassigned"
-                  ? "Unassigned pieces"
-                  : attentionFocus === "missing-weight"
-                    ? "Missing weights"
-                    : "Held pieces"}
-                <span aria-hidden="true">×</span>
-              </button>
-            ) : null}
-        </div>
-
-        <div className="piece-register-table">
-          <div className="piece-register-table__head">
-            <div>
-              <h2>Piece register</h2>
-              <p>{filteredRows.length} of {displayRows.length} rows shown</p>
-            </div>
-            <div className="piece-register-table__head-actions">
-              <label className="piece-register-filter" htmlFor="piece-register-sort">
-                Sort by
-                <select
-                  id="piece-register-sort"
-                  className="piece-register-filter__control"
-                  value={`${registerSort.key}:${registerSort.direction}`}
-                  onChange={(event) => {
-                    const [key, direction] = event.target.value.split(":") as [
-                      PieceRegisterSort["key"],
-                      PieceRegisterSort["direction"],
-                    ];
-                    setRegisterSort({ key, direction });
-                  }}
-                >
-                  <option value="work_package:asc">Work package (A→Z)</option>
-                  <option value="work_package:desc">Work package (Z→A)</option>
-                  <option value="mark:asc">Mark (A→Z)</option>
-                  <option value="mark:desc">Mark (Z→A)</option>
-                  <option value="updated_at:desc">Last update (newest)</option>
-                  <option value="updated_at:asc">Last update (oldest)</option>
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={clearRegisterFilters}
-                className="cmd-btn cmd-btn--ghost"
-              >
-                Clear filters
-              </button>
-            </div>
-          </div>
-          {selectedPieceIds.size > 0 ? (
-            <PieceRegisterBulkBar
-              selectedCount={selectedPieceIds.size}
-              workPackages={(workPackagesQuery.data ?? []) as Array<{
-                id: string;
-                wp_number?: string | null;
-                name?: string | null;
-              }>}
-              canBulkUpdate={canBulkUpdate}
-              canArchive={canArchive}
-              pending={bulkPending}
-              onAssign={(workPackageId) => bulkAssignMutation.mutate(workPackageId)}
-              onUnassign={() => bulkUnassignMutation.mutate()}
-              onApplyAttributes={(values) => bulkAttrsMutation.mutate(values)}
-              onHold={(reason) => bulkHoldMutation.mutate({ onHold: true, reason })}
-              onClearHold={() => bulkHoldMutation.mutate({ onHold: false })}
-              onArchive={openArchiveDialog}
-            />
-          ) : null}
-          {selectedPieceId ? (
-            <DecisionPanel title="Piece impact">
-              <PieceImpactPanel
-                impact={selectedPieceImpact}
-                loading={impactSnapshotQuery.isLoading}
-              />
-            </DecisionPanel>
-          ) : null}
-          <div className="cmd-table-wrap piece-register-table__wrap">
-            <table className="cmd-table piece-register-table__table">
-              <thead>
-                <tr>
-                  <th>
-                    <input
-                      type="checkbox"
-                      aria-label="Select all visible pieces"
-                      checked={allFilteredSelected}
-                      disabled={!canBulkUpdate || filteredRows.length === 0}
-                      onChange={toggleAllFiltered}
-                      className="cmd-check"
-                    />
-                  </th>
-                  {(
-                    [
-                      { label: "Mark / lot", key: "mark" as const },
-                      { label: "Qty", key: null },
-                      { label: "Profile", key: null },
-                      { label: "Grade", key: null },
-                      { label: "Wt each", key: null },
-                      { label: "Wt total", key: null },
-                      { label: "Tons", key: null },
-                      { label: "Work package", key: "work_package" as const },
-                      { label: "Lifecycle", key: null },
-                      { label: "Hold", key: null },
-                      { label: "Source", key: null },
-                      { label: "Last update", key: "updated_at" as const },
-                    ] as const
-                  ).map((column) => (
-                    <th key={column.label}>
-                      {column.key ? (
-                        <button
-                          type="button"
-                          className="piece-register-sort-th"
-                          onClick={() =>
-                            setRegisterSort((current) =>
-                              nextPieceRegisterSort(current, column.key!),
-                            )
-                          }
-                        >
-                          {column.label}
-                          {registerSort.key === column.key
-                            ? registerSort.direction === "asc"
-                              ? " ↑"
-                              : " ↓"
-                            : ""}
-                        </button>
-                      ) : (
-                        column.label
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {piecesQuery.isLoading && (
-                  <tr><td colSpan={13} className="cmd-table__empty">Loading the project piece register...</td></tr>
-                )}
-                {piecesQuery.error && (
-                  <tr>
-                    <td colSpan={13} className="cmd-table__empty">
-                      <strong className="piece-register-error">The Piece Register could not be loaded.</strong>
-                      <div>
-                        {presentPieceControlError(
-                          piecesQuery.error,
-                          "Piece Register data could not be loaded.",
-                        )}
-                      </div>
-                      <button type="button" onClick={() => piecesQuery.refetch()} className="cmd-btn">Try again</button>
-                    </td>
-                  </tr>
-                )}
-                {!piecesQuery.isLoading && !piecesQuery.error && filteredRows.map((piece) => (
-                  <tr key={piece.id}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${piece.piece_mark} lot ${piece.lot_code}`}
-                        checked={selectedPieceIds.has(piece.id)}
-                        disabled={!canBulkUpdate}
-                        onChange={() => setSelectedPieceIds((current) => {
-                          const next = new Set(current);
-                          if (next.has(piece.id)) next.delete(piece.id);
-                          else next.add(piece.id);
-                          return next;
-                        })}
-                        className="cmd-check"
-                      />
-                    </td>
-                    <td>
-                      <div className="piece-register-mark">{piece.piece_mark}</div>
-                      <div className="piece-register-cell-meta">
-                        {piece.parent_piece_id ? `Child lot ${piece.lot_code}` : piece.lot_code === "ALL" ? "Root lot ALL" : `Container ${piece.lot_code}`}
-                      </div>
-                    </td>
-                    <td className="piece-register-number">{piece.quantity}</td>
-                    <td>{piece.profile || "—"}</td>
-                    <td>{piece.material_grade || "—"}</td>
-                    <td className="piece-register-number">{piece.weight_each_lbs == null ? "—" : Number(piece.weight_each_lbs).toFixed(1)}</td>
-                    <td className="piece-register-number">{piece.weight_total_lbs == null ? "—" : Number(piece.weight_total_lbs).toFixed(1)}</td>
-                    <td className="piece-register-number piece-register-number--strong">{pieceTons(piece) == null ? "—" : pieceTons(piece)!.toFixed(3)}</td>
-                    <td>{piece.workPackageLabel}</td>
-                    <td><span className="cmd-pill cmd-pill--neutral">{pieceLifecycleLabel(piece.lifecycle_status)}</span></td>
-                    <td>{piece.on_hold ? <span className="piece-register-hold">Held</span> : <span className="piece-register-cell-meta">Clear</span>}</td>
-                    <td>
-                      <div>{piece.source_system || "—"}</div>
-                      <div className="piece-register-cell-meta piece-register-cell-meta--truncate">{piece.external_ref || ""}</div>
-                    </td>
-                    <td className="piece-register-updated">{new Date(piece.updated_at).toLocaleString()}</td>
-                  </tr>
-                ))}
-                {!piecesQuery.isLoading && !piecesQuery.error && filteredRows.length === 0 && (
-                  <tr>
-                    <td colSpan={13} className="cmd-table__empty">
-                      <PackageOpen size={28} />
-                      <strong>
-                        {displayRows.length === 0 ? "No pieces have been imported yet." : "No pieces match these filters."}
-                      </strong>
-                      <button
-                        type="button"
-                        onClick={() => displayRows.length === 0 ? setActiveView("import") : clearRegisterFilters()}
-                        className="cmd-btn cmd-btn--primary"
-                      >
-                        {displayRows.length === 0 ? "Import pieces" : "Clear filters"}
-                      </button>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-          </section>
+          <PieceRegisterRegisterView
+            filters={filters}
+            updateRegisterFilters={updateRegisterFilters}
+            workPackages={(workPackagesQuery.data ?? []) as Array<{
+              id: string;
+              wp_number?: string | null;
+              name?: string | null;
+            }>}
+            profiles={profiles}
+            grades={grades}
+            lifecycles={lifecycles}
+            sources={sources}
+            attentionFocus={attentionFocus}
+            clearRegisterFilters={clearRegisterFilters}
+            filteredRows={filteredRows as any}
+            displayRows={displayRows as any}
+            registerSort={registerSort}
+            setRegisterSort={setRegisterSort}
+            selectedPieceIds={selectedPieceIds}
+            setSelectedPieceIds={setSelectedPieceIds}
+            canBulkUpdate={canBulkUpdate}
+            canArchive={canArchive}
+            bulkPending={bulkPending}
+            onBulkAssign={(workPackageId) => bulkAssignMutation.mutate(workPackageId)}
+            onBulkUnassign={() => bulkUnassignMutation.mutate()}
+            onBulkAttrs={(values) => bulkAttrsMutation.mutate(values)}
+            onBulkHold={(payload) => bulkHoldMutation.mutate(payload)}
+            onArchive={openArchiveDialog}
+            selectedPieceId={selectedPieceId}
+            selectedPieceImpact={selectedPieceImpact}
+            impactLoading={impactSnapshotQuery.isLoading}
+            allFilteredSelected={allFilteredSelected}
+            toggleAllFiltered={toggleAllFiltered}
+            piecesLoading={piecesQuery.isLoading}
+            piecesError={piecesQuery.error}
+            onRetryPieces={() => piecesQuery.refetch()}
+            onGoImport={() => setActiveView("import")}
+          />
         )}
 
         {activeView === "settings" && (
@@ -1337,249 +898,32 @@ export default function PieceRegister() {
         )}
 
         {activeView === "import" && (
-          <section className="piece-register-embedded-workspace piece-import-workspace">
-            <DecisionPanel title="Stage import">
-              <div className="piece-command-intro">
-                <span className="piece-command-intro__icon" aria-hidden="true">
-                  <FileUp size={18} />
-                </span>
-                <p>
-                  Download the standard CSV template, fill piece marks / WP / drawing sheet
-                  in one file, then stage for review. Staging makes no direct changes to the
-                  active register.
-                </p>
-              </div>
-              <div className="piece-command-form">
-                <button
-                  type="button"
-                  className="cmd-btn cmd-btn--ghost"
-                  onClick={() => downloadPieceRegisterCsvTemplate()}
-                >
-                  <Download size={14} aria-hidden="true" />
-                  {" "}Download CSV template
-                </button>
-                <label htmlFor="piece-import-source" className="piece-command-field">
-                  Source
-                  <select
-                    id="piece-import-source"
-                    value={sourceType}
-                    onChange={(event) => setSourceType(event.target.value as PieceImportSourceType)}
-                    className="piece-command-control"
-                  >
-                    {PIECE_IMPORT_SOURCE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label htmlFor="piece-import-file" className="piece-command-field">
-                  File
-                  <input
-                    id="piece-import-file"
-                    type="file"
-                    accept=".csv,.json,text/csv,application/json"
-                    onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
-                    className="piece-command-control piece-command-control--file"
-                  />
-                </label>
-                {importFile && (
-                  <p className="piece-import-file-summary">
-                    <strong>{importFile.name}</strong>
-                    <span>{importRows.length} rows ready to stage</span>
-                  </p>
-                )}
-                <button
-                  type="button"
-                  disabled={importRows.length === 0 || stageMutation.isPending}
-                  onClick={() => stageMutation.mutate()}
-                  className="cmd-btn cmd-btn--primary piece-import-stage-action"
-                >
-                  {stageMutation.isPending ? "Reconciling..." : "Stage for review"}
-                </button>
-              </div>
-            </DecisionPanel>
-
-            <DecisionPanel title="Import batches">
-              <div className="piece-import-batch-layout">
-                <div className="piece-import-batch-list" aria-label="Staged import batches">
-                  {batches.map((batch) => (
-                    <button
-                      type="button"
-                      key={batch.id}
-                      aria-pressed={selectedBatch?.id === batch.id}
-                      onClick={() => {
-                        setSelectedBatchId(batch.id);
-                        setApplyConfirmed(false);
-                      }}
-                      className={`piece-import-batch${selectedBatch?.id === batch.id ? " is-selected" : ""}`}
-                    >
-                      <span className="piece-import-batch__head">
-                        <strong>{batch.source_name || batch.source_type}</strong>
-                        <Pill tone={batch.status === "applied" ? "good" : batch.status === "approved" ? "info" : "warn"}>
-                          {batch.status.replace("_", " ")}
-                        </Pill>
-                      </span>
-                      <span className="piece-import-batch__meta">
-                        {batch.row_count} rows · {new Date(batch.created_at).toLocaleDateString()}
-                      </span>
-                    </button>
-                  ))}
-                  {batches.length === 0 && (
-                    <p className="piece-command-empty">No staged imports yet.</p>
-                  )}
-                </div>
-
-                <div className="piece-import-batch-detail">
-                  {selectedBatch ? (
-                    <>
-                      <div className="piece-import-batch-summary">
-                        <div>
-                          <h3>{selectedBatch.source_name || selectedBatch.source_type}</h3>
-                          <div className="piece-import-decisions">
-                            {Object.entries(selectedBatch.decision_counts ?? {}).map(([decision, count]) => (
-                              <Pill key={decision} tone={decisionTone[decision] ?? "neutral"}>
-                                {decision.replace("_", " ")}: {count}
-                              </Pill>
-                            ))}
-                          </div>
-                        </div>
-                        {selectedBatch.status === "pending_review" ? (
-                          <button
-                            type="button"
-                            disabled={approveMutation.isPending}
-                            onClick={() => approveMutation.mutate()}
-                            className="cmd-btn cmd-btn--primary"
-                          >
-                            Review complete · Approve
-                          </button>
-                        ) : selectedBatch.status === "approved" ? (
-                          <div className="piece-import-apply">
-                            <label
-                              className="piece-command-field"
-                              htmlFor="piece-import-assign-work-package"
-                            >
-                              Work package override (optional — or use CSV wp_number)
-                              <select
-                                id="piece-import-assign-work-package"
-                                className="piece-command-control"
-                                value={importTargetWorkPackageId}
-                                onChange={(event) =>
-                                  setImportTargetWorkPackageId(event.target.value)
-                                }
-                              >
-                                <option value="">Use CSV wp_number / leave unassigned</option>
-                                {(workPackagesQuery.data ?? []).map((wp: any) => (
-                                  <option key={wp.id} value={wp.id}>
-                                    {formatWorkPackageTitle(wp)}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label htmlFor="piece-import-apply-confirmation">
-                              <input
-                                id="piece-import-apply-confirmation"
-                                type="checkbox"
-                                checked={applyConfirmed}
-                                onChange={(event) => setApplyConfirmed(event.target.checked)}
-                              />
-                              Confirm eligible creates and updates
-                            </label>
-                            <button
-                              type="button"
-                              disabled={!applyConfirmed || applyMutation.isPending}
-                              onClick={() => applyMutation.mutate()}
-                              className="cmd-btn piece-import-apply__button"
-                            >
-                              {importTargetWorkPackageId
-                                ? "Apply, assign WP, and link drawings"
-                                : "Apply batch (CSV WP / sheet hints)"}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="piece-import-apply">
-                            <Pill tone="good">
-                              <CheckCircle2 size={13} />
-                              Applied
-                            </Pill>
-                            <label
-                              className="piece-command-field"
-                              htmlFor="piece-import-assign-work-package-applied"
-                            >
-                              Assign imported pieces to work package
-                              <select
-                                id="piece-import-assign-work-package-applied"
-                                className="piece-command-control"
-                                value={importTargetWorkPackageId}
-                                onChange={(event) =>
-                                  setImportTargetWorkPackageId(event.target.value)
-                                }
-                              >
-                                <option value="">Select package</option>
-                                {(workPackagesQuery.data ?? []).map((wp: any) => (
-                                  <option key={wp.id} value={wp.id}>
-                                    {formatWorkPackageTitle(wp)}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <button
-                              type="button"
-                              className="cmd-btn cmd-btn--primary"
-                              disabled={assignImportMutation.isPending}
-                              onClick={() => assignImportMutation.mutate()}
-                            >
-                              {importTargetWorkPackageId
-                                ? "Assign + link from import"
-                                : "Apply WP / drawing hints from import"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="cmd-table-wrap piece-import-results">
-                        <table className="cmd-table">
-                          <thead>
-                            <tr>
-                              <th>Row</th>
-                              <th>Mark</th>
-                              <th>Decision</th>
-                              <th>Profile</th>
-                              <th>Grade</th>
-                              <th>Warnings / resolution</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(batchRowsQuery.data ?? []).map((row) => (
-                              <tr key={row.id}>
-                                <td>{row.source_row_number}</td>
-                                <td><strong>{String(row.normalized_payload.piece_mark ?? "—")}</strong></td>
-                                <td>
-                                  <Pill tone={decisionTone[row.decision] ?? "neutral"}>
-                                    {row.decision.replace("_", " ")}
-                                  </Pill>
-                                </td>
-                                <td>{String(row.normalized_payload.profile ?? "—")}</td>
-                                <td>{String(row.normalized_payload.material_grade ?? "—")}</td>
-                                <td>
-                                  {row.warnings.map(presentImportReconciliationText).join("; ")
-                                    || (row.resolution
-                                      ? presentImportReconciliationText(row.resolution)
-                                      : "No exceptions")}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="piece-command-empty piece-command-empty--detail">
-                      <AlertTriangle size={24} />
-                      <p>Stage an import to review reconciliation results.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </DecisionPanel>
-          </section>
+          <PieceRegisterImportView
+            sourceType={sourceType}
+            setSourceType={setSourceType}
+            importFile={importFile}
+            importRows={importRows}
+            handleFile={handleFile}
+            stagePending={stageMutation.isPending}
+            onStage={() => stageMutation.mutate()}
+            batches={batches as any}
+            selectedBatch={selectedBatch as any}
+            setSelectedBatchId={setSelectedBatchId}
+            setApplyConfirmed={setApplyConfirmed}
+            applyConfirmed={applyConfirmed}
+            approvePending={approveMutation.isPending}
+            onApprove={() => approveMutation.mutate()}
+            applyPending={applyMutation.isPending}
+            onApply={() => applyMutation.mutate()}
+            importTargetWorkPackageId={importTargetWorkPackageId}
+            setImportTargetWorkPackageId={setImportTargetWorkPackageId}
+            workPackages={(workPackagesQuery.data ?? []) as any}
+            formatWorkPackageTitle={formatWorkPackageTitle}
+            batchRows={(batchRowsQuery.data ?? []) as any}
+            decisionTone={IMPORT_DECISION_TONE}
+            assignPending={assignImportMutation.isPending}
+            onAssignImport={() => assignImportMutation.mutate()}
+          />
         )}
       </div>
   );
