@@ -4,6 +4,9 @@
  */
 import { SEED_ENTITY_MAP } from "@/lib/onboardingTemplates";
 
+export type SeedPayloadKey = keyof typeof SEED_ENTITY_MAP;
+export type SeedRecord = Record<string, unknown>;
+
 export const SEED_ORDER = [
   "workPackages",
   "scheduleTasks",
@@ -18,7 +21,7 @@ export const SEED_ORDER = [
   "safetyIncidents",
   "inspections",
   "qualityControlRecords",
-] as const;
+] as const satisfies readonly SeedPayloadKey[];
 
 export const IMPORT_EXAMPLES: Record<string, string> = {
   rfis: "RFI #,Title,Question,Drawing Reference,Priority,Status\n001,Anchor bolt projection,Confirm projection at grid B/4,S1.02,High,Open",
@@ -33,27 +36,33 @@ export const INVALID_IMPORT_TARGET = "rfis";
 export const ROLE_OPTIONS = ["owner", "admin", "pm", "field", "viewer"] as const;
 
 export type EntityClient = {
-  bulkCreate: (records: unknown[]) => Promise<unknown[]>;
-  create: (record: unknown) => Promise<unknown>;
+  bulkCreate: (records: SeedRecord[]) => Promise<SeedRecord[]>;
+  create: (record: SeedRecord) => Promise<SeedRecord>;
 };
 
 export async function bulkCreateWithFallback(
   entity: EntityClient | null | undefined,
-  records: unknown[],
-): Promise<unknown[]> {
+  records: SeedRecord[],
+): Promise<SeedRecord[]> {
   if (!records.length) return [];
+  if (!entity) {
+    console.warn("[onboarding] entity client unavailable; seed rows skipped");
+    return [];
+  }
+
   try {
-    return await entity!.bulkCreate(records);
+    return await entity.bulkCreate(records);
   } catch (err) {
     console.warn("[onboarding] bulkCreate failed, falling back to row creates", err);
-    const created: unknown[] = [];
+    const created: SeedRecord[] = [];
     for (const record of records) {
       try {
-        created.push(await entity!.create(record));
-      } catch (rowErr: any) {
+        created.push(await entity.create(record));
+      } catch (rowErr: unknown) {
         // Skip a failing row (e.g. a duplicate unique key) instead of aborting
         // the seed and leaving an unhandled rejection.
-        console.warn("[onboarding] seed row skipped:", rowErr?.message || rowErr);
+        const detail = rowErr instanceof Error ? rowErr.message : String(rowErr);
+        console.warn("[onboarding] seed row skipped:", detail);
       }
     }
     return created;
@@ -61,29 +70,38 @@ export async function bulkCreateWithFallback(
 }
 
 export async function createSeedRecords(
-  seedPayloads: Record<string, any[]>,
+  seedPayloads: Partial<Record<SeedPayloadKey, SeedRecord[]>>,
   entities: Record<string, EntityClient | undefined>,
-  seedOrder: readonly string[] = SEED_ORDER,
-): Promise<Record<string, unknown[]>> {
-  const createdByKey: Record<string, unknown[]> = {};
+  seedOrder: readonly SeedPayloadKey[] = SEED_ORDER,
+): Promise<Partial<Record<SeedPayloadKey, SeedRecord[]>>> {
+  const createdByKey: Partial<Record<SeedPayloadKey, SeedRecord[]>> = {};
 
   for (const payloadKey of seedOrder) {
     const entityKey = SEED_ENTITY_MAP[payloadKey];
     const entity = entities[entityKey];
-    let records = seedPayloads[payloadKey] || [];
+    let records = seedPayloads[payloadKey] ?? [];
     if (!entity || records.length === 0) {
       createdByKey[payloadKey] = [];
       continue;
     }
 
-    if (payloadKey === "drawings" && (createdByKey.drawingSets as any[])?.length) {
-      const setIdByName = new Map(
-        (createdByKey.drawingSets as any[]).map((set) => [set.set_name, set.id]),
-      );
-      records = records.map((record) => ({
-        ...record,
-        drawing_set_id: setIdByName.get(record.drawing_set_name) || record.drawing_set_id || null,
-      }));
+    const createdDrawingSets = createdByKey.drawingSets ?? [];
+    if (payloadKey === "drawings" && createdDrawingSets.length > 0) {
+      const setIdByName = new Map<string, string>();
+      for (const set of createdDrawingSets) {
+        const setName = typeof set.set_name === "string" ? set.set_name : "";
+        if (setName && set.id != null) setIdByName.set(setName, String(set.id));
+      }
+
+      records = records.map((record) => {
+        const drawingSetName =
+          typeof record.drawing_set_name === "string" ? record.drawing_set_name : "";
+        return {
+          ...record,
+          drawing_set_id:
+            setIdByName.get(drawingSetName) ?? record.drawing_set_id ?? null,
+        };
+      });
     }
 
     createdByKey[payloadKey] = await bulkCreateWithFallback(entity, records);
