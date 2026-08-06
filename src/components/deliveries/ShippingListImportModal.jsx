@@ -26,13 +26,12 @@ import { resolveCanonicalShipTargets } from "@/lib/pieceControl/shippingCanonica
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
 import { summarizeShippingListCommit } from "@/lib/deliveries/summarizeShippingListCommit";
 import {
-import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
-import ImportStatChip from "@/components/shared/ImportStatChip";
   monoStyle as mono,
   displayStyle as display,
   ACCENT,
 } from "./shippingListImportModalHelpers";
-
+import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
+import ImportStatChip from "@/components/shared/ImportStatChip";
 
 export default function ShippingListImportModal({ open, projectId, projectName, onClose, onImported }) {
   const trapRef = useFocusTrap(open);
@@ -471,4 +470,3 @@ async function markCanonicalPiecesShipped(keptLoads, projectId) {
 
 const th = IMPORT_TABLE_TH_STYLE;
 const td = IMPORT_TABLE_TD_STYLE;
-
