@@ -37,13 +37,22 @@ describe("CanonicalFabReleasePanel theme tokens", () => {
 
 describe("Piece Register archive dialog theme tokens", () => {
   it("uses command/app tokens instead of light Tailwind dialog chrome", () => {
+    // Dialog lives in PieceRegisterArchiveDialog (extracted from the page).
     const source = readFileSync(
-      fileURLToPath(new URL("../../pages/PieceRegister.tsx", import.meta.url)),
+      fileURLToPath(
+        new URL("../../pages/pieceRegister/PieceRegisterArchiveDialog.tsx", import.meta.url),
+      ),
       "utf8",
     );
     expect(source).toContain('id="archive-piece-title"');
     expect(source).not.toMatch(/archive-piece-title[\s\S]{0,200}bg-white/);
     expect(source).toContain("var(--cmd-surface, var(--bg-surface))");
     expect(source).toContain("var(--cmd-danger, var(--status-error))");
+    // Page still mounts the extracted dialog.
+    const page = readFileSync(
+      fileURLToPath(new URL("../../pages/PieceRegister.tsx", import.meta.url)),
+      "utf8",
+    );
+    expect(page).toContain("PieceRegisterArchiveDialog");
   });
 });
