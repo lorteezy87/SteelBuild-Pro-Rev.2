@@ -26,9 +26,8 @@
 // Returns an array of row arrays. Pulling in papaparse for 30 lines of
 // parsing would be overkill.
 //
-// Perf: field text is taken via src.slice(start, end) instead of
-// character-by-character string concatenation (avoids quadratic reallocation
-// on large production-status CSVs).
+// Perf: field text is accumulated in a char array then joined once per
+// field (avoids quadratic string reallocation on large production CSVs).
 function firstNonEmptyLine(value) {
   return String(value || "").split(/\r?\n/).find((line) => line.trim()) || "";
 }
@@ -66,114 +65,48 @@ export function parseCsv(raw) {
   const delimiter = chooseDelimiter(src);
   const rows = [];
   let row = [];
-  let fieldStart = 0;
+  let fieldChars = [];
   let inQuotes = false;
   let i = 0;
   const n = src.length;
 
-  const pushField = (end) => {
-    // Unescape doubled quotes only when the field was quoted.
-    let field = src.slice(fieldStart, end);
-    if (field.length >= 2 && field.charCodeAt(0) === 0x22 /* " */) {
-      // Quoted field: outer quotes already excluded by advancing past them.
-      // Doubled quotes inside were left as-is by the scan; collapse them.
-      field = field.replace(/""/g, '"');
-    }
-    row.push(field);
+  const flushField = () => {
+    row.push(fieldChars.join(""));
+    fieldChars = [];
   };
-
-  // Re-scan with explicit quote handling so slice ranges stay correct.
-  // Reset and use a cleaner state machine that tracks fieldStart after
-  // entering/exiting quotes.
-  row = [];
-  fieldStart = 0;
-  inQuotes = false;
-  i = 0;
-  let fieldBuf = ""; // only used inside quoted sections for "" unescape
-  let usingBuf = false;
 
   while (i < n) {
     const c = src[i];
     if (inQuotes) {
       if (c === '"') {
-        if (src[i + 1] === '"') {
-          // Escaped quote — switch to buf mode and append a single quote.
-          if (!usingBuf) {
-            fieldBuf = src.slice(fieldStart, i);
-            usingBuf = true;
-          }
-          fieldBuf += '"';
-          i += 2;
-          continue;
-        }
-        // Closing quote
-        inQuotes = false;
-        i++;
-        continue;
+        if (src[i + 1] === '"') { fieldChars.push('"'); i += 2; continue; }
+        inQuotes = false; i++; continue;
       }
-      if (usingBuf) fieldBuf += c;
-      i++;
-      continue;
+      fieldChars.push(c); i++; continue;
     }
-    if (c === '"') {
-      inQuotes = true;
-      // Field content starts after the opening quote
-      fieldStart = i + 1;
-      usingBuf = false;
-      fieldBuf = "";
-      i++;
-      continue;
-    }
-    if (c === delimiter) {
-      if (usingBuf) {
-        row.push(fieldBuf);
-        usingBuf = false;
-        fieldBuf = "";
-      } else {
-        row.push(src.slice(fieldStart, i));
-      }
-      fieldStart = i + 1;
-      i++;
-      continue;
-    }
+    if (c === '"') { inQuotes = true; i++; continue; }
+    if (c === delimiter) { flushField(); i++; continue; }
     if (c === "\r") {
-      if (usingBuf) {
-        row.push(fieldBuf);
-        usingBuf = false;
-        fieldBuf = "";
-      } else {
-        row.push(src.slice(fieldStart, i));
-      }
+      flushField();
       if (row.some((v) => v && String(v).trim() !== "")) rows.push(row);
       row = [];
       if (src[i + 1] === "\n") i += 2; else i++;
-      fieldStart = i;
       continue;
     }
     if (c === "\n") {
-      if (usingBuf) {
-        row.push(fieldBuf);
-        usingBuf = false;
-        fieldBuf = "";
-      } else {
-        row.push(src.slice(fieldStart, i));
-      }
+      flushField();
       if (row.some((v) => v && String(v).trim() !== "")) rows.push(row);
       row = [];
-      i++;
-      fieldStart = i;
-      continue;
+      i++; continue;
     }
-    i++;
+    fieldChars.push(c); i++;
   }
-  // Trailing field / row
-  if (usingBuf) {
-    row.push(fieldBuf);
-  } else if (fieldStart < n || row.length > 0) {
-    row.push(src.slice(fieldStart, n));
-  }
-  if (row.length > 0 && row.some((v) => v && String(v).trim() !== "")) {
-    rows.push(row);
+  // Trailing field / row — but only push a row if there's something in
+  // it. Otherwise a CSV that ends with a newline would add a phantom
+  // empty row.
+  if (fieldChars.length > 0 || row.length > 0) {
+    flushField();
+    if (row.some((v) => v && String(v).trim() !== "")) rows.push(row);
   }
   return rows;
 }
