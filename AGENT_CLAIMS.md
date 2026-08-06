@@ -64,7 +64,7 @@ Notes:
 - 2026-07-27 · cursor-tablet-pm-kit-design-3d17 · Tablet PM layout kit Phase 0 (PR #160).
 - 2026-07-27 · cursor-project-archive-reappear-3d17 · Fix archived projects reappearing in switcher (PR #159); apply migration `20260727012111`.
 - 2026-07-27 · cursor-piece-wp-auto-assign-d3a1 · Piece↔WP auto-assign by sequence/area (PR #169); claim released after PR open.
-- 2026-07-27 · cursor-eng-quality-tier3-0569 · Eng quality Tier 3: MutationCache, edge reportError, org/billing types patch, ScheduleGantt/TaskDetailDrawer/Portfolio/SubmittalDetail extracts, schedule helpers TS conversion; schedule helpers TS conversion; claim released after PR open.
+- 2026-07-27 · cursor-eng-quality-tier3-0569 · Eng quality Tier 3: MutationCache, edge reportError, org/billing types patch, ScheduleGantt/TaskDetailDrawer/Portfolio/SubmittalDetail extracts, schedule helpers TS conversion; claim released after PR open.
 - 2026-07-27 · cursor-dual-theme-dark-0b3b · Dual-theme dark completion Phase 4 closed; claim released after docs/status/owner-lock cleanup.
 - 2026-07-27 · opus-command-ui-lock · Retired historical light-only `command_ui` owner lock. Command Control Centers now remain on `--cmd-*` under `[data-skin="command"]`; dark is maintained through token remap, not `.sbd-*` wrappers or `LayoutRoute` light forcing.
 - 2026-07-26 · cursor-ap-batch-deploy-d3a1 · Merged #139–#149 action-plan hygiene batch + production deploy.
