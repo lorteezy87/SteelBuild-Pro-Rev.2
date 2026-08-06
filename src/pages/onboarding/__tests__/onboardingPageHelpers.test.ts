@@ -77,3 +77,27 @@ describe("onboardingPageHelpers", () => {
     ])).toEqual([{ email: "a@x.com", role: "pm" }]);
   });
 });
+
+
+import { updateTeamRowAt, removeTeamRowAt, appendEmptyTeamRow } from "../onboardingPageHelpers";
+
+describe("team row mutators", () => {
+  it("updates removes appends", () => {
+    const rows = [
+      { email: "a", role: "member", discipline: "x" },
+      { email: "b", role: "admin", discipline: "y" },
+    ];
+    expect(updateTeamRowAt(rows, 1, "email", "c")[1].email).toBe("c");
+    expect(removeTeamRowAt(rows, 0)).toHaveLength(1);
+    expect(appendEmptyTeamRow(rows)).toHaveLength(3);
+  });
+});
+
+import { TEMPLATE_OPTIONS } from "../onboardingPageHelpers";
+
+describe("TEMPLATE_OPTIONS", () => {
+  it("includes sample project", () => {
+    expect(TEMPLATE_OPTIONS.length).toBeGreaterThan(0);
+    expect(TEMPLATE_OPTIONS[0].key).toBeTruthy();
+  });
+});

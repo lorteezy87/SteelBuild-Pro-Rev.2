@@ -5,6 +5,7 @@
 import {
   SAMPLE_PROJECT,
   SAMPLE_PROJECT_TEMPLATE_KEY,
+  PROJECT_TEMPLATES,
   addDaysIso,
   buildProjectPayload,
   todayIso,
@@ -108,3 +109,29 @@ export function buildInvitePrefill(teamRows: any[]) {
     .filter((row: any) => row.email.trim())
     .map((row: any) => ({ email: row.email.trim(), role: row.role }));
 }
+
+
+export function updateTeamRowAt<T extends Record<string, unknown>>(
+  rows: T[],
+  index: number,
+  field: keyof T | string,
+  value: unknown,
+): T[] {
+  return (rows || []).map((row, rowIndex) =>
+    rowIndex === index ? { ...row, [field]: value } : row,
+  );
+}
+
+export function removeTeamRowAt<T>(rows: T[], index: number): T[] {
+  return (rows || []).filter((_, rowIndex) => rowIndex !== index);
+}
+
+export function appendEmptyTeamRow<T extends { email: string; role: string; discipline: string }>(
+  rows: T[],
+  empty: T = { email: "", role: "member", discipline: "" } as T,
+): T[] {
+  return [...(rows || []), empty];
+}
+
+/** Sample + library templates offered on the onboarding project step. */
+export const TEMPLATE_OPTIONS = [SAMPLE_PROJECT, ...PROJECT_TEMPLATES];
