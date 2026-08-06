@@ -16,6 +16,11 @@
  * percent_complete uses an explicit percent column when present, otherwise the
  * canonical percent for the resolved stage. Raw per-station values are kept in
  * stage_data so nothing the customer sent is lost.
+ *
+ * Perf notes (large shop CSVs):
+ *   - Header detection uses a reverse alias→field map (O(1) per cell).
+ *   - Row fields are read once into locals; no repeated get() inside resolve.
+ *   - Empty rows are dropped during parseCsv (shared), not a second pass here.
  */
 
 import { parseCsv } from "@/lib/importRfiCsv";
@@ -201,6 +206,15 @@ const HEADER_ALIASES: Record<HeaderField, string[]> = {
   ship_date: ["ship date", "shipped date", "shipping date", "ship", "jobsite", "delivery date"],
 };
 
+/** O(1) reverse lookup: normalized alias → HeaderField (built once at module load). */
+const ALIAS_TO_FIELD: Map<string, HeaderField> = (() => {
+  const m = new Map<string, HeaderField>();
+  for (const [field, aliases] of Object.entries(HEADER_ALIASES) as [HeaderField, string[]][]) {
+    for (const a of aliases) m.set(a, field);
+  }
+  return m;
+})();
+
 const STATION_FIELDS: ReadonlyArray<{ field: StationDateField; stage: ProductionStage }> = [
   { field: "cut_date", stage: "Cut" },
   { field: "fit_date", stage: "Fit" },
@@ -224,12 +238,9 @@ export function detectHeaderMap(headerRow: unknown[] | null | undefined): Header
   (headerRow || []).forEach((cell, idx) => {
     const norm = normalizeHeader(cell);
     if (!norm) return;
-    for (const [field, aliases] of Object.entries(HEADER_ALIASES) as [HeaderField, string[]][]) {
-      if (map[field] !== undefined) continue;
-      if (aliases.includes(norm)) {
-        map[field] = idx;
-        break;
-      }
+    const field = ALIAS_TO_FIELD.get(norm);
+    if (field !== undefined && map[field] === undefined) {
+      map[field] = idx;
     }
   });
   return map.piece_mark !== undefined ? (map as HeaderMap) : null;
@@ -348,9 +359,8 @@ export function parseProductionCsv(
   options: ParseProductionOptions = {},
 ): ParseProductionResult {
   const { existing = [] } = options;
-  const grid = (parseCsv(rawCsv) as unknown[][]).filter((row) =>
-    row.some((cell) => String(cell).trim() !== ""),
-  );
+  // parseCsv already drops fully-empty rows
+  const grid = parseCsv(rawCsv) as unknown[][];
   if (grid.length === 0) return { ok: false, error: "Empty file", rows: [], stats: zeroStats(), skipped: [] };
 
   const headerMap = detectHeaderMap(grid[0]);
@@ -371,8 +381,11 @@ export function parseProductionCsv(
     if (mk && !existingByMark.has(mk)) existingByMark.set(mk, row);
   }
 
-  const get = (row: unknown[], field: HeaderField): string =>
-    headerMap[field] === undefined ? "" : String(row[headerMap[field]!] ?? "").trim();
+  const col = (field: HeaderField): number | undefined => headerMap[field];
+  const cell = (row: unknown[], field: HeaderField): string => {
+    const idx = col(field);
+    return idx === undefined ? "" : String(row[idx] ?? "").trim();
+  };
 
   const rows: StagedProductionRow[] = [];
   const skipped: SkippedProductionRow[] = [];
@@ -381,7 +394,7 @@ export function parseProductionCsv(
 
   for (let i = 1; i < grid.length; i += 1) {
     const raw = grid[i];
-    const pieceMark = get(raw, "piece_mark");
+    const pieceMark = cell(raw, "piece_mark");
     if (!pieceMark) {
       skipped.push({ line: i + 1, reason: "Missing piece mark" });
       stats.skipped += 1;
@@ -394,19 +407,29 @@ export function parseProductionCsv(
       // quantity into the mark's row. piece_production is one row per mark; the
       // first instance's resolved stage/dates represent the mark (instances of a
       // mark share station dates in the EPM export).
-      already.quantity = (already.quantity || 0) + (numOrNull(get(raw, "quantity")) ?? 1);
+      already.quantity = (already.quantity || 0) + (numOrNull(cell(raw, "quantity")) ?? 1);
       continue;
     }
 
+    // Read each needed column once
+    const statusVal = cell(raw, "status");
+    const percentVal = cell(raw, "percent_complete");
+    const cutVal = cell(raw, "cut_date");
+    const fitVal = cell(raw, "fit_date");
+    const weldVal = cell(raw, "weld_date");
+    const cleanVal = cell(raw, "clean_date");
+    const paintVal = cell(raw, "paint_date");
+    const shipVal = cell(raw, "ship_date");
+
     const resolved = resolveProduction({
-      status: get(raw, "status"),
-      percent_complete: get(raw, "percent_complete"),
-      cut_date: get(raw, "cut_date"),
-      fit_date: get(raw, "fit_date"),
-      weld_date: get(raw, "weld_date"),
-      clean_date: get(raw, "clean_date"),
-      paint_date: get(raw, "paint_date"),
-      ship_date: get(raw, "ship_date"),
+      status: statusVal,
+      percent_complete: percentVal,
+      cut_date: cutVal,
+      fit_date: fitVal,
+      weld_date: weldVal,
+      clean_date: cleanVal,
+      paint_date: paintVal,
+      ship_date: shipVal,
     });
 
     // No production signal at all (no station date, no status, no percent) =
@@ -427,16 +450,16 @@ export function parseProductionCsv(
       action,
       existing_id: existingRow?.id || null,
       piece_mark: pieceMark,
-      assembly_mark: get(raw, "assembly_mark") || null,
+      assembly_mark: cell(raw, "assembly_mark") || null,
       status: resolved.status,
       percent_complete: resolved.percent_complete,
       ship_date: resolved.ship_date,
       stage_data: resolved.stage_data,
-      quantity: numOrNull(get(raw, "quantity")) ?? 1,
-      weight: numOrNull(get(raw, "weight")),
-      sequence_number: get(raw, "sequence_number") || null,
-      erection_area: get(raw, "erection_area") || null,
-      external_ref: get(raw, "external_ref") || null,
+      quantity: numOrNull(cell(raw, "quantity")) ?? 1,
+      weight: numOrNull(cell(raw, "weight")),
+      sequence_number: cell(raw, "sequence_number") || null,
+      erection_area: cell(raw, "erection_area") || null,
+      external_ref: cell(raw, "external_ref") || null,
     };
     rows.push(stagedRow);
     byMark.set(markKey, stagedRow);
