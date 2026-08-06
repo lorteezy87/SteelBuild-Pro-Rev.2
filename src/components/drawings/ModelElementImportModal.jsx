@@ -21,13 +21,13 @@ import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseModelElementsCsv } from "@/lib/importModelElements";
 import {
-import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
-import ImportStatChip from "@/components/shared/ImportStatChip";
   mono,
   display,
   ACCENT,
   MATCH_BADGE,
 } from "./modelElementImportModalHelpers";
+import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
+import ImportStatChip from "@/components/shared/ImportStatChip";
 
 export default function ModelElementImportModal({
   open,
@@ -370,4 +370,3 @@ export default function ModelElementImportModal({
 
 const th = IMPORT_TABLE_TH_STYLE;
 const td = IMPORT_TABLE_TD_STYLE;
-
