@@ -24,14 +24,13 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 import { parseDrawingLog, classifyDrawingRows } from "@/lib/importDrawingLog";
 import {
-import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
-import ImportStatChip from "@/components/shared/ImportStatChip";
   logMeta,
   monoStyle as mono,
   displayStyle as display,
   ACCENT,
 } from "./drawingLogImportModalHelpers";
-
+import { IMPORT_TABLE_TH_STYLE, IMPORT_TABLE_TD_STYLE } from "@/components/shared/importTableChromeHelpers";
+import ImportStatChip from "@/components/shared/ImportStatChip";
 
 const isUniqueViolation = (e) => {
   const m = String(e?.message || e || "").toLowerCase();
@@ -358,4 +357,3 @@ export default function DrawingLogImportModal({ open, projectId, projectName, on
 
 const th = IMPORT_TABLE_TH_STYLE;
 const td = IMPORT_TABLE_TD_STYLE;
-
