@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -8,6 +8,8 @@ import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { batchProcess } from "@/utils/batchProcess";
 import { toast } from "sonner";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { filterAlertsForUser } from "@/lib/userPreferences/alerts";
 
 // Loose Alert shape — the entity client is still untyped (Phase 3). Once the entity
 // boundary is typed, this will be replaced with the generated Database row type.
@@ -25,6 +27,7 @@ export function useAlerts() {
   const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [generating, setGenerating] = useState(false);
+  const userPreferences = useUserPrefs();
 
   const {
     data: alerts = [],
@@ -43,6 +46,10 @@ export function useAlerts() {
   });
 
   useRealtimeInvalidation("alerts", projectId, [["alerts", projectId]]);
+  const visibleAlerts = useMemo(
+    () => filterAlertsForUser(alerts, userPreferences),
+    [alerts, userPreferences],
+  );
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
@@ -67,7 +74,7 @@ export function useAlerts() {
   };
 
   const markAllRead = async () => {
-    const unread = alerts.filter((a) => !a.is_read);
+    const unread = visibleAlerts.filter((a) => !a.is_read);
     if (unread.length === 0) return;
     try {
       const { succeeded, failed } = await batchProcess(unread, (a: Alert) =>
@@ -112,10 +119,10 @@ export function useAlerts() {
     }
   };
 
-  const unreadCount = alerts.filter((a) => !a.is_read && !a.is_dismissed).length;
+  const unreadCount = visibleAlerts.filter((a) => !a.is_read && !a.is_dismissed).length;
 
   return {
-    alerts,
+    alerts: visibleAlerts,
     isLoading,
     isError,
     error,

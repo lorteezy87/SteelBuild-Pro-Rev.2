@@ -83,7 +83,7 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
     onSave(updated);
   };
 
-  const categories = [...new Set(notifications.map(n => n.category))];
+  const categories = [...new Set(notifications.filter(n => !['notify_email', 'notify_daily_digest'].includes(n.key)).map(n => n.category))];
 
   return (
     <div>
@@ -91,20 +91,13 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
         Notifications
       </h2>
 
-      {/* Honest audit banner — saved-but-inert. The app currently
-          surfaces alerts via in-page toasts (sonner) that fire on
-          mutation success/failure regardless of these toggles, plus
-          the Alerts table that the dashboard reads from directly.
-          There is no server-driven push, email digest, or scheduled
-          dispatcher consuming these prefs yet. We persist your choice
-          so when the dispatcher ships your settings come along. */}
       <div
         style={{
           marginBottom: 24,
           padding: '12px 14px',
           background: 'var(--bg-surface-low)',
           border: '1px solid var(--border-default)',
-          borderLeft: '3px solid var(--status-warning)',
+          borderLeft: '3px solid var(--status-success)',
           borderRadius: 6,
           fontFamily: 'var(--font-body)',
           fontSize: 12,
@@ -112,19 +105,16 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
           lineHeight: 1.5,
         }}
       >
-        <strong style={{ color: 'var(--text-primary)' }}>Saved-but-inert.</strong>{' '}
-        Notification toggles, urgency thresholds, and quiet hours are persisted
-        to your profile but have no consumer in the current architecture —
-        SteelBuild Pro fires in-page toasts on mutation success and surfaces
-        the Alerts table on the dashboard regardless of these settings. When
-        the email digest / push dispatcher ships, your saved choices will
-        already be in place.
+        <strong style={{ color: 'var(--text-primary)' }}>Active for in-app alerts.</strong>{' '}
+        These choices now filter the alert bell, unread count, and Alerts Center.
+        Quiet hours apply in your profile timezone; urgent alerts only break
+        through when you allow them below.
       </div>
 
       {categories.map(category => (
         <div key={category} style={{ marginBottom: 28 }}>
           <label style={labelStyle}>{category}</label>
-          {notifications.filter(n => n.category === category).map(item => (
+          {notifications.filter(n => n.category === category && !['notify_email', 'notify_daily_digest'].includes(n.key)).map(item => (
             <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid var(--divider)' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
@@ -138,6 +128,19 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
           ))}
         </div>
       ))}
+
+      <div style={{ marginBottom: 28 }}>
+        <label style={labelStyle}>Delivery Channels</label>
+        {['Email notifications', 'Daily email digest'].map((label) => (
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid var(--divider)', opacity: 0.7 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Delivery service not configured</div>
+            </div>
+            <button type="button" disabled style={{ border: '1px solid var(--border-default)', borderRadius: 10, background: 'var(--bg-surface-low)', color: 'var(--text-muted)', padding: '4px 9px', fontFamily: 'var(--font-mono)', fontSize: 8 }}>UNAVAILABLE</button>
+          </div>
+        ))}
+      </div>
 
       {/* Urgency Thresholds */}
       <div style={{ marginTop: 28 }}>
