@@ -211,4 +211,3 @@
 - [ ] **Step 6: Run quality gates:** `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, `npm run typecheck:noimplicitany`, `npm test -- --run`, `npm run build`.
 - [ ] **Step 7: Start the app and verify desktop/mobile Settings paths**: appearance preview, preset apply, favorites, project ordering, format preview, alert filtering, reset, export, import, reload persistence, and save-error rollback.
 - [ ] **Step 8: Inspect `git diff --check` and `git status --short`**, then commit with `feat(settings): complete personalized settings control center`.
-
