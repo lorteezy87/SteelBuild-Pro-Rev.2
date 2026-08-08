@@ -3,7 +3,7 @@
  * No React, no mutations — page stays the orchestrator.
  */
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
-import { formatLocalDate } from "@/utils/dates";
+import { formatLocalDate, toLocalDay } from "@/utils/dates";
 import { addDays, subDays, isThisWeek } from "./utils";
 
 export type ResourceLike = {
@@ -174,12 +174,14 @@ export function computeTimelineWindow(
 ): TimelineWindow {
   const starts = workPackages
     .filter((wp) => wp.scheduled_start_date || wp.released_date)
-    .map((wp) => new Date((wp.scheduled_start_date || wp.released_date) as string).getTime())
-    .filter((t) => !isNaN(t));
+    .map((wp) => toLocalDay(wp.scheduled_start_date || wp.released_date))
+    .filter((date): date is Date => date !== null)
+    .map((date) => date.getTime());
   const ends = workPackages
     .filter((wp) => wp.scheduled_end_date)
-    .map((wp) => new Date(wp.scheduled_end_date as string).getTime())
-    .filter((t) => !isNaN(t));
+    .map((wp) => toLocalDay(wp.scheduled_end_date))
+    .filter((date): date is Date => date !== null)
+    .map((date) => date.getTime());
 
   const tStart =
     starts.length > 0
@@ -210,8 +212,9 @@ export function getBarStyle(
   const rawStart = wp.scheduled_start_date || wp.released_date;
   if (!rawStart || !wp.scheduled_end_date) return null;
 
-  const start = new Date(rawStart);
-  const end = new Date(wp.scheduled_end_date);
+  const start = toLocalDay(rawStart);
+  const end = toLocalDay(wp.scheduled_end_date);
+  if (!start || !end) return null;
   const left = Math.round(((+start - +timelineStart) / 86400000) * pxPerDay);
   const width = Math.max(
     Math.round(((+end - +start) / 86400000) * pxPerDay),
