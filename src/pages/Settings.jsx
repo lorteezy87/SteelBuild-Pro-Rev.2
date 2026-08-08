@@ -15,6 +15,8 @@ import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
 import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
 import SettingsControlCenter from "./settings/SettingsControlCenter";
 import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
+import { WorkspaceTab } from "@/components/settings/WorkspaceTab";
+import { sanitizeUserPreferences } from "@/lib/userPreferences/schema";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -24,6 +26,7 @@ const TAB_GROUPS = [
     tabs: [
       { id: 'profile',       label: 'Profile',       icon: '\u{1F464}', desc: 'Your account information' },
       { id: 'display',       label: 'Display',       icon: '\u{1F3A8}', desc: 'Theme, accent, accessibility, locale' },
+      { id: 'workspace',     label: 'My Workspace',  icon: '\u{2B50}', desc: 'Presets, favorite modules and projects' },
       { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules, KPI order, default project' },
       { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts, digests, and quiet hours' },
       { id: 'shortcuts',     label: 'Shortcuts',     icon: '⌨',    desc: 'Keyboard reference card' },
@@ -234,6 +237,7 @@ export default function Settings() {
         )}
         {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'display' && <DisplayTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
+        {activeTab === 'workspace' && <WorkspaceTab preferences={sanitizeUserPreferences(userPrefs)} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'shortcuts' && <ShortcutsTab />}
         {activeTab === 'roles' && <RolesTab user={user} />}
