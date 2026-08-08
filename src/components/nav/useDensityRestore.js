@@ -10,11 +10,12 @@ import { useEffect } from "react";
  * Extracted from Layout.jsx (see git history) so the chrome JSX is
  * separable from its preference-restore plumbing.
  */
-export function useDensityRestore() {
+export function useDensityRestore(preferredDensity) {
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("sbp-density");
-      if (saved) document.documentElement.setAttribute("data-density", saved);
+      const saved = preferredDensity || localStorage.getItem("sbp-density") || "normal";
+      document.documentElement.setAttribute("data-density", saved);
+      localStorage.setItem("sbp-density", saved);
     } catch { /* ignore */ }
-  }, []);
+  }, [preferredDensity]);
 }

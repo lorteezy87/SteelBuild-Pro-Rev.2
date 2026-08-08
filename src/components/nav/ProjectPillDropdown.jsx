@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Building2 } from "lucide-react";
+import { Building2, Star } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../shared/ProjectContext";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 
 export default function ProjectPillDropdown({ compact = false, align = "right", variant = "default" }) {
   // `activeProjects` excludes on-hold; the switcher never lists paused projects.
@@ -14,6 +16,8 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
   // project from the pill silently has no effect because the URL still
   // pins the page to the previous one. We clear them on every selection.
   const [searchParams, setSearchParams] = useSearchParams();
+  const { favorite_project_ids, show_project_numbers } = useUserPrefs();
+  const { savePatch } = useSaveUserPrefs();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
@@ -94,12 +98,12 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
     loading
       ? "Loading..."
       : activeProject
-        ? `${activeProject.name.slice(0, 20)} · ${activeProject.project_number || "—"}`
+        ? `${activeProject.name.slice(0, 20)}${show_project_numbers ? ` · ${activeProject.project_number || "—"}` : ""}`
         : projects.length === 0
           ? "NO PROJECTS"
           : "SELECT PROJECT";
   const displayLabel = activeProject && !loading
-    ? `${activeProject.project_number || "----"} \u00B7 ${(activeProject.name || "Project").toUpperCase()}`
+    ? `${show_project_numbers ? `${activeProject.project_number || "----"} \u00B7 ` : ""}${(activeProject.name || "Project").toUpperCase()}`
     : label;
 
   // Filter projects by search
@@ -113,9 +117,16 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
   });
 
   const sortAlpha = (arr) => [...arr].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const favorites = sortAlpha(filtered.filter((p) => favorite_project_ids.includes(p.id)));
   const grouped = {
-    active: sortAlpha(filtered.filter((p) => p.phase !== "Closeout")),
-    closeout: sortAlpha(filtered.filter((p) => p.phase === "Closeout")),
+    active: sortAlpha(filtered.filter((p) => p.phase !== "Closeout" && !favorite_project_ids.includes(p.id))),
+    closeout: sortAlpha(filtered.filter((p) => p.phase === "Closeout" && !favorite_project_ids.includes(p.id))),
+  };
+  const toggleFavorite = (projectId) => {
+    const next = favorite_project_ids.includes(projectId)
+      ? favorite_project_ids.filter((id) => id !== projectId)
+      : [...favorite_project_ids, projectId];
+    savePatch({ favorite_project_ids: next });
   };
 
   return (
@@ -207,7 +218,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
                 {activeProject?.name || "Select project"}
               </span>
               <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-muted)" }}>
-                Project ID: {activeProject?.project_number || "Not selected"}
+                {show_project_numbers ? `Project ID: ${activeProject?.project_number || "Not selected"}` : "Personal workspace"}
               </span>
             </span>
           ) : displayLabel}
@@ -299,6 +310,18 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
           )}
 
           {/* Active projects */}
+          {favorites.length > 0 && (
+            <div>
+              <div style={{ padding: "6px 8px 4px", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.16em", color: "var(--accent)", textTransform: "uppercase" }}>
+                Favorites ({favorites.length})
+              </div>
+              {favorites.map((p) => (
+                <ProjectOption key={p.id} project={p} isActive={activeProject?.id === p.id} openRFIs={rfiCountByProject[p.id] || 0} onClick={() => handleSelect(p)} isFavorite onToggleFavorite={() => toggleFavorite(p.id)} showProjectNumbers={show_project_numbers} />
+              ))}
+            </div>
+          )}
+
+          {/* Active projects */}
           {grouped.active.length > 0 && (
             <div>
               <div
@@ -320,6 +343,9 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
                   isActive={activeProject?.id === p.id}
                   openRFIs={rfiCountByProject[p.id] || 0}
                   onClick={() => handleSelect(p)}
+                  isFavorite={false}
+                  onToggleFavorite={() => toggleFavorite(p.id)}
+                  showProjectNumbers={show_project_numbers}
                 />
               ))}
             </div>
@@ -347,6 +373,9 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
                   isActive={activeProject?.id === p.id}
                   openRFIs={rfiCountByProject[p.id] || 0}
                   onClick={() => handleSelect(p)}
+                  isFavorite={false}
+                  onToggleFavorite={() => toggleFavorite(p.id)}
+                  showProjectNumbers={show_project_numbers}
                 />
               ))}
             </div>
@@ -358,7 +387,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
 }
 
 /* ── Individual project row ── */
-function ProjectOption({ project, isActive, openRFIs, onClick }) {
+function ProjectOption({ project, isActive, openRFIs, onClick, isFavorite, onToggleFavorite, showProjectNumbers }) {
   const [hovered, setHovered] = useState(false);
 
   const healthColor =
@@ -492,7 +521,7 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
               letterSpacing: "0.06em",
             }}
           >
-            {project.project_number || "—"} · {project.phase || "—"}
+            {showProjectNumbers ? `${project.project_number || "—"} · ` : ""}{project.phase || "—"}
           </span>
           {quickStat && (
             <span
@@ -509,6 +538,15 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
           )}
         </div>
       </div>
+
+      <button
+        type="button"
+        aria-label={`${isFavorite ? "Remove" : "Favorite"} ${project.name || "project"}`}
+        onClick={(event) => { event.stopPropagation(); onToggleFavorite(); }}
+        style={{ border: 0, background: "transparent", color: isFavorite ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", padding: 3, display: "grid", placeItems: "center" }}
+      >
+        <Star size={14} fill={isFavorite ? "currentColor" : "none"} />
+      </button>
 
       {/* Active checkmark */}
       {isActive && (

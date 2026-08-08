@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Pin, GripVertical, Eye, EyeOff } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
+import { NAVIGATION_FAVORITE_OPTIONS } from "@/lib/userPreferences/navigationFavorites";
+import { DEFAULT_LANDING_PAGE_IDS } from "@/lib/userPreferences/schema";
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -48,18 +50,7 @@ const sanitizeKpis = (arr) => {
 };
 
 // Pinnable navigation modules
-const AVAILABLE_MODULES = [
-  { id: 'Projects',      label: 'Projects' },
-  { id: 'Vendors',       label: 'Vendors' },
-  { id: 'Drawings',      label: 'Drawings' },
-  { id: 'RFIs',          label: 'RFIs' },
-  { id: 'ChangeOrders',  label: 'Change Orders' },
-  { id: 'Submittals',    label: 'Submittals' },
-  { id: 'Deliveries',    label: 'Deliveries' },
-  { id: 'DailyLogs',     label: 'Daily Logs' },
-  { id: 'Inspections',   label: 'Inspections' },
-  { id: 'WorkPackages',  label: 'Work Packages' },
-];
+const AVAILABLE_MODULES = NAVIGATION_FAVORITE_OPTIONS;
 
 // Pages offered as a "default landing". Each id MUST be a real route key
 // (see src/config/routes.js) so the index-route redirect resolves. Labels are
@@ -79,7 +70,12 @@ const LANDING_PAGES = [
   { id: 'Deliveries',          label: 'Deliveries' },
   { id: 'ChangeOrders',        label: 'Change Orders' },
   { id: 'JobStatusReport',     label: 'Job Status Report' },
+  { id: 'PieceRegister',       label: 'Piece Register' },
 ];
+
+if (import.meta.env.DEV && !LANDING_PAGES.every((page) => DEFAULT_LANDING_PAGE_IDS.includes(page.id))) {
+  throw new Error("Dashboard landing-page options must use the canonical preference allowlist");
+}
 
 export default function DashboardTab({ preferences, onSave, isSaving }) {
   // Pull the project list once so the "Default project" dropdown
@@ -95,7 +91,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
     default_landing:    preferences?.default_landing || 'Dashboard',
     default_project_id: preferences?.default_project_id || '',
     auto_refresh_secs:  preferences?.auto_refresh_secs ?? 0,
-    pinned_modules:     preferences?.pinned_modules || ['Projects', 'RFIs', 'Drawings'],
+    pinned_modules:     preferences?.pinned_modules || ['ProjectsHub', 'RFIs', 'DrawingSubmittalHub'],
     visible_kpis:       sanitizeKpis(preferences?.visible_kpis),
     kpi_order:          sanitizeKpis(preferences?.kpi_order),
     dashboard_density:  preferences?.dashboard_density || 'normal',
@@ -108,7 +104,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
       default_landing:    preferences.default_landing || 'Dashboard',
       default_project_id: preferences.default_project_id || '',
       auto_refresh_secs:  preferences.auto_refresh_secs ?? 0,
-      pinned_modules:     preferences.pinned_modules || ['Projects', 'RFIs', 'Drawings'],
+      pinned_modules:     preferences.pinned_modules || ['ProjectsHub', 'RFIs', 'DrawingSubmittalHub'],
       visible_kpis:       sanitizeKpis(preferences.visible_kpis),
       kpi_order:          sanitizeKpis(preferences.kpi_order),
       dashboard_density:  preferences.dashboard_density || 'normal',
@@ -119,7 +115,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
   const handleChange = (key, value) => {
     const updated = { ...prefs, [key]: value };
     setPrefs(updated);
-    onSave(updated);
+    onSave({ [key]: value });
   };
 
   const togglePinned = (moduleId) => {

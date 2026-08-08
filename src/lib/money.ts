@@ -8,6 +8,8 @@
  * pay-app / SOV / contract calculation so totals reconcile to the penny.
  */
 
+import { formatUserCurrency } from '@/lib/userPreferences/formatters';
+
 type Money = number | string | null | undefined;
 
 const n = (v: Money): number => {
@@ -76,7 +78,6 @@ export function moneyEquals(a: Money, b: Money): boolean {
 /** Format dollars for display: "$1,234.56" (or "($1,234.56)" for negatives via accounting). */
 export function formatMoney(dollars: Money, opts: { accounting?: boolean } = {}): string {
   const value = toDollars(toCents(dollars));
-  const abs = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (value < 0) return opts.accounting ? `($${abs})` : `-$${abs}`;
-  return `$${abs}`;
+  if (value < 0 && opts.accounting) return `(${formatUserCurrency(Math.abs(value))})`;
+  return formatUserCurrency(value);
 }

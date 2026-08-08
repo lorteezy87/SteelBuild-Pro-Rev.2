@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useContext, useCallback } from "react";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { auth } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
-import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import UserSettingsTab from "@/components/settings/UserSettingsTab.jsx";
 import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
@@ -15,6 +14,10 @@ import SystemTab from "@/components/settings/SystemTab.jsx";
 import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
 import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
 import SettingsControlCenter from "./settings/SettingsControlCenter";
+import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
+import { WorkspaceTab } from "@/components/settings/WorkspaceTab";
+import { sanitizeUserPreferences } from "@/lib/userPreferences/schema";
+import { PreferencesDataTab } from "@/components/settings/PreferencesDataTab";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -24,9 +27,11 @@ const TAB_GROUPS = [
     tabs: [
       { id: 'profile',       label: 'Profile',       icon: '\u{1F464}', desc: 'Your account information' },
       { id: 'display',       label: 'Display',       icon: '\u{1F3A8}', desc: 'Theme, accent, accessibility, locale' },
+      { id: 'workspace',     label: 'My Workspace',  icon: '\u{2B50}', desc: 'Presets, favorite modules and projects' },
       { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules, KPI order, default project' },
       { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts, digests, and quiet hours' },
       { id: 'shortcuts',     label: 'Shortcuts',     icon: '⌨',    desc: 'Keyboard reference card' },
+      { id: 'preferences-data', label: 'Reset & Portability', icon: '\u{1F4E6}', desc: 'Export, import, or reset personal settings' },
     ],
   },
   {
@@ -66,8 +71,8 @@ export default function Settings() {
   const [userPrefs, setUserPrefs] = useState({});
   const [showSaved, setShowSaved] = useState(false);
   const [hoveredTab, setHoveredTab] = useState(null);
-  const qc = useQueryClient();
   const isMobile = useIsMobile();
+  const preferenceSave = useSaveUserPrefs();
 
   const { data: userSettings } = useQuery({
     queryKey: ['user-settings', user?.id],
@@ -83,21 +88,23 @@ export default function Settings() {
     if (userSettings) setUserPrefs(userSettings);
   }, [userSettings]);
 
-  const updatePrefsMut = useMutation({
-    mutationFn: async (prefs) => auth.updateMe(prefs),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['user-settings'] });
-      toast.success('Settings saved');
-      setShowSaved(true);
-      setTimeout(() => setShowSaved(false), 2000);
-    },
-    onError: () => toast.error('Failed to save settings'),
-  });
-
   const handleSavePrefs = useCallback((prefs) => {
     setUserPrefs((prev) => ({ ...prev, ...prefs }));
-    updatePrefsMut.mutate(prefs);
-  }, [updatePrefsMut]);
+    preferenceSave.savePatch(prefs);
+  }, [preferenceSave.savePatch]);
+
+  const handleReplacePrefs = useCallback((prefs) => {
+    const sanitized = sanitizeUserPreferences(prefs);
+    setUserPrefs((prev) => ({ ...prev, ...sanitized }));
+    preferenceSave.saveAll(sanitized);
+  }, [preferenceSave.saveAll]);
+
+  useEffect(() => {
+    if (preferenceSave.syncState !== 'saved') return undefined;
+    setShowSaved(true);
+    const timer = setTimeout(() => setShowSaved(false), 2000);
+    return () => clearTimeout(timer);
+  }, [preferenceSave.syncState]);
 
   if (isLoadingAuth) {
     return <LoadingSkeleton variant="page" />;
@@ -231,15 +238,14 @@ export default function Settings() {
         {activeTab === 'profile' && (
           <UserSettingsTab
             user={user}
-            onSave={handleSavePrefs}
-            isSaving={updatePrefsMut.isPending}
-            lockIcon /* email is read-only; UserSettingsTab can use this to show a lock icon */
           />
         )}
-        {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
-        {activeTab === 'display' && <DisplayTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
-        {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
+        {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
+        {activeTab === 'display' && <DisplayTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
+        {activeTab === 'workspace' && <WorkspaceTab preferences={sanitizeUserPreferences(userPrefs)} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
+        {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'shortcuts' && <ShortcutsTab />}
+        {activeTab === 'preferences-data' && <PreferencesDataTab preferences={sanitizeUserPreferences(userPrefs)} onSave={handleReplacePrefs} onPatch={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'costcodes' && <CostCodesTab />}
         {activeTab === 'system' && <SystemTab user={user} />}
@@ -253,6 +259,7 @@ export default function Settings() {
       user={user}
       prefs={userPrefs}
       visibleSectionCount={visibleGroups.reduce((count, group) => count + group.tabs.length, 0)}
+      syncState={preferenceSave.syncState}
     >
       {settingsBody}
     </SettingsControlCenter>

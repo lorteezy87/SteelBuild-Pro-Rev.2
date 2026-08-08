@@ -67,27 +67,30 @@ vi.mock("@/lib/supabase", () => ({
 import Layout from "@/Layout";
 import { ProjectProvider } from "@/components/shared/ProjectContext";
 import { ThemeProvider } from "@/components/shared/ThemeContext";
+import { AuthContext } from "@/lib/AuthContext";
 
 function setViewport(width) {
   vi.stubGlobal("innerWidth", width);
   window.dispatchEvent(new Event("resize"));
 }
 
-function renderLayout({ currentPageName = "Dashboard" } = {}) {
+function renderLayout({ currentPageName = "Dashboard", authUser = null } = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <ThemeProvider>
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <ProjectProvider>
-            <Layout currentPageName={currentPageName}>
-              <div>Test child content</div>
-            </Layout>
-          </ProjectProvider>
-        </MemoryRouter>
-      </QueryClientProvider>
+      <AuthContext.Provider value={{ user: authUser }}>
+        <QueryClientProvider client={qc}>
+          <MemoryRouter>
+            <ProjectProvider>
+              <Layout currentPageName={currentPageName}>
+                <div>Test child content</div>
+              </Layout>
+            </ProjectProvider>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </AuthContext.Provider>
     </ThemeProvider>
   );
 }
@@ -115,6 +118,27 @@ describe("Layout (smoke)", () => {
   it("renders the skip-to-main-content accessibility link", () => {
     renderLayout();
     expect(screen.getByText(/skip to main content/i)).toBeInTheDocument();
+  });
+
+  it("hydrates saved appearance preferences when the app shell mounts", async () => {
+    renderLayout({
+      authUser: {
+        id: "user-1",
+        theme: "light",
+        accent_color: "teal",
+        font_scale: "lg",
+        contrast_mode: "high",
+        motion_mode: "reduced",
+      },
+    });
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute("data-theme", "light");
+      expect(document.documentElement).toHaveAttribute("data-accent", "teal");
+      expect(document.documentElement).toHaveAttribute("data-contrast", "high");
+      expect(document.documentElement).toHaveAttribute("data-motion", "reduced");
+      expect(document.documentElement.style.getPropertyValue("--font-scale")).toBe("1.12");
+    });
   });
 
   it("labels the hamburger when the viewport is phone-width", () => {

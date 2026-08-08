@@ -1,4 +1,6 @@
 import { createLocalDateFromDateOnly, todayLocalISO } from "@/lib/dateOnly";
+import { formatUserCurrency, formatUserDate, formatUserDateShort } from "@/lib/userPreferences/formatters";
+import { getRuntimeUserPreferences } from "@/lib/userPreferences/runtime";
 
 /** Round to 2 decimal places for currency — avoids IEEE 754 float drift */
 export const roundCurrency = (value) => {
@@ -18,20 +20,14 @@ export const formatCurrency = (value, decimals = 2) => {
   if (value == null || isNaN(num)) {
     return decimals === 0 ? "$0" : "$0.00";
   }
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(num);
+  return formatUserCurrency(num, decimals);
 };
 
 export const formatCurrencyShort = (value) => {
   const num = Number(value) || 0;
-  if (isNaN(num)) return "$0";
-  if (Math.abs(num) >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(num) >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
-  return `$${num.toFixed(0)}`;
+  const currency = getRuntimeUserPreferences().currency_format;
+  const locale = currency === "EUR" ? "de-DE" : currency === "CAD" ? "en-CA" : "en-US";
+  return new Intl.NumberFormat(locale, { style: "currency", currency, notation: "compact", maximumFractionDigits: 1 }).format(num);
 };
 
 export const parseUTCDate = (dateStr) => {
@@ -44,17 +40,13 @@ export const parseUTCDate = (dateStr) => {
 export const formatDate = (dateStr) => {
   const d = parseUTCDate(dateStr);
   if (!d) return "-";
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatUserDate(d);
 };
 
 export const formatDateShort = (dateStr) => {
   const d = parseUTCDate(dateStr);
   if (!d) return "-";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return formatUserDateShort(d);
 };
 
 export const formatPercent = (value, decimals = 0) => {

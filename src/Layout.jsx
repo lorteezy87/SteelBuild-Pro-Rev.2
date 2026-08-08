@@ -35,6 +35,8 @@ import { useGlobalSearchShortcut } from "./components/nav/useGlobalSearchShortcu
 import { useDensityRestore } from "./components/nav/useDensityRestore";
 import { useFocusMainOnRouteChange } from "./components/nav/useFocusMainOnRouteChange";
 import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRoute";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { setRuntimeUserPreferences } from "@/lib/userPreferences/runtime";
 
 // Shared components — use lazyWithRetry so stale-chunk 404s after a deploy
 // trigger a single page reload instead of a hard "LOAD ERROR" crash.
@@ -75,7 +77,7 @@ function SidebarNavFallback() {
 
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const { theme, applyPreferences } = useTheme();
   const isDarkTheme = theme === "dark";
   const isDashboardPage = REFERENCE_CHROME_PAGES.has(currentPageName);
   const appShellClassName = `app-shell ${isDashboardPage ? "dashboard-reference-shell " : ""}sbd-mesh-bg`;
@@ -91,9 +93,38 @@ export default function Layout({ children, currentPageName }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const { band, isPhone, isTablet } = useResponsiveBreakpoint();
   const useDashboardChrome = isDashboardPage && !isPhone;
+  const userPrefs = useUserPrefs();
+  // Shared non-React formatters read this synchronous snapshot. Updating it
+  // during the shell render ensures child pages format with the same prefs on
+  // their very first render after auth metadata changes.
+  setRuntimeUserPreferences(userPrefs);
+
+  // Hydrate account-backed appearance choices as soon as the authenticated
+  // shell mounts. DisplayTab also applies edits immediately, but it must not be
+  // the only entry point or a fresh device would ignore saved appearance prefs
+  // until the user opened Settings.
+  useEffect(() => {
+    applyPreferences(userPrefs);
+  }, [
+    applyPreferences,
+    userPrefs.accent_color,
+    userPrefs.contrast_mode,
+    userPrefs.font_scale,
+    userPrefs.motion_mode,
+    userPrefs.theme,
+  ]);
 
   // Density preference
-  useDensityRestore();
+  useDensityRestore(userPrefs.table_density);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-keyboard-hints", userPrefs.show_keyboard_hints ? "on" : "off");
+    root.setAttribute("data-project-numbers", userPrefs.show_project_numbers ? "on" : "off");
+  }, [
+    userPrefs.show_keyboard_hints,
+    userPrefs.show_project_numbers,
+  ]);
 
   // Active project
   const { activeProject: ctxActiveProject } = useProjectContext();

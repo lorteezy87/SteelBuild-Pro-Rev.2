@@ -69,4 +69,39 @@ describe("buildSettingsSummary", () => {
     const s = buildSettingsSummary({ role: "user" }, {}, 3);
     expect(s.themeLabel).toBeNull();
   });
+
+  it("derives the active personalization preset and density labels", () => {
+    const s = buildSettingsSummary(
+      { role: "user" },
+      { workspace_preset: "project_manager", table_density: "compact" },
+      7,
+    );
+    expect(s.presetLabel).toBe("Project Manager");
+    expect(s.densityLabel).toBe("Compact");
+  });
+
+  it("counts favorite projects and reports whether a default project is configured", () => {
+    const s = buildSettingsSummary(
+      { role: "user" },
+      { favorite_project_ids: ["p-1", "p-2"], default_project_id: "p-1" },
+      7,
+    );
+    expect(s.favoriteProjectCount).toBe(2);
+    expect(s.defaultProjectLabel).toBe("Selected");
+  });
+
+  it("omits optional personalization facts when their source is absent", () => {
+    const s = buildSettingsSummary({ role: "user" }, {}, 7);
+    expect(s.presetLabel).toBeNull();
+    expect(s.densityLabel).toBeNull();
+    expect(s.favoriteProjectCount).toBeNull();
+    expect(s.defaultProjectLabel).toBeNull();
+  });
+
+  it("formats the current preference sync state", () => {
+    expect(buildSettingsSummary({ role: "user" }, {}, 7, "saving").syncLabel).toBe("Saving…");
+    expect(buildSettingsSummary({ role: "user" }, {}, 7, "saved").syncLabel).toBe("Saved");
+    expect(buildSettingsSummary({ role: "user" }, {}, 7, "error").syncLabel).toBe("Needs attention");
+    expect(buildSettingsSummary({ role: "user" }, {}, 7).syncLabel).toBeNull();
+  });
 });

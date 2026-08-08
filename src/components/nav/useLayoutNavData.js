@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { batchProcess } from "@/utils/batchProcess";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { filterAlertsForUser } from "@/lib/userPreferences/alerts";
 
 /**
  * useLayoutNavData — single hook that owns every cross-module count + alert
@@ -36,6 +38,7 @@ import { batchProcess } from "@/utils/batchProcess";
  */
 export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}) {
   const qc = useQueryClient();
+  const userPreferences = useUserPrefs();
   const moduleCountsEnabled = !!projectId && includeModuleCounts;
 
   const { data: allAlerts = [] } = useQuery({
@@ -101,12 +104,17 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
     };
   }, [navRFIs, navDrawings, navDeliveries]);
 
+  const visibleAlerts = useMemo(
+    () => filterAlertsForUser(allAlerts, userPreferences),
+    [allAlerts, userPreferences],
+  );
+
   const alertSummary = useMemo(() => {
     const unreadAlerts = [];
     let rfiAlertCount = 0;
     let coAlertCount = 0;
 
-    for (const alert of allAlerts) {
+    for (const alert of visibleAlerts) {
       if (!alert.is_read && !alert.is_dismissed) {
         unreadAlerts.push(alert);
       }
@@ -124,7 +132,7 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
       rfiAlertCount,
       coAlertCount,
     };
-  }, [allAlerts]);
+  }, [visibleAlerts]);
 
   const { unreadAlerts, unreadCount, rfiAlertCount, coAlertCount } = alertSummary;
 
@@ -158,7 +166,7 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
   const markAllRead = () => markAllReadMut.mutate();
 
   return {
-    allAlerts,
+    allAlerts: visibleAlerts,
     unreadAlerts,
     unreadCount,
     overdueRFICount,

@@ -18,7 +18,7 @@ const TIMEZONES = [
   'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu',
 ];
 
-export default function UserSettingsTab({ user, onSave }) {
+export default function UserSettingsTab({ user }) {
   const [form, setForm] = useState({
     full_name: user?.full_name || '',
     job_title: user?.job_title || '',
@@ -52,7 +52,6 @@ export default function UserSettingsTab({ user, onSave }) {
     setIsSaving(true);
     try {
       await auth.updateMe(form);
-      onSave(form);
       toast.success('Profile updated');
     } catch (err) {
       toast.error('Failed to update profile');
