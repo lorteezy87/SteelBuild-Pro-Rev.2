@@ -3,6 +3,7 @@ import { Pin, GripVertical, Eye, EyeOff } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
 import { NAVIGATION_FAVORITE_OPTIONS } from "@/lib/userPreferences/navigationFavorites";
+import { DEFAULT_LANDING_PAGE_IDS } from "@/lib/userPreferences/schema";
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -69,7 +70,12 @@ const LANDING_PAGES = [
   { id: 'Deliveries',          label: 'Deliveries' },
   { id: 'ChangeOrders',        label: 'Change Orders' },
   { id: 'JobStatusReport',     label: 'Job Status Report' },
+  { id: 'PieceRegister',       label: 'Piece Register' },
 ];
+
+if (import.meta.env.DEV && !LANDING_PAGES.every((page) => DEFAULT_LANDING_PAGE_IDS.includes(page.id))) {
+  throw new Error("Dashboard landing-page options must use the canonical preference allowlist");
+}
 
 export default function DashboardTab({ preferences, onSave, isSaving }) {
   // Pull the project list once so the "Default project" dropdown

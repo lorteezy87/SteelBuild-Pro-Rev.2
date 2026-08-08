@@ -52,4 +52,14 @@ describe("preference portability", () => {
       error: "The settings file contains an invalid value for table_density.",
     });
   });
+
+  it("rejects an unsupported default landing route", () => {
+    const malformed = sanitizeUserPreferences({}) as unknown as Record<string, unknown>;
+    malformed.default_landing = "NotARealRoute";
+
+    expect(parseUserPreferencesExport(JSON.stringify({ version: 2, preferences: malformed }))).toEqual({
+      ok: false,
+      error: "The settings file contains an invalid value for default_landing.",
+    });
+  });
 });

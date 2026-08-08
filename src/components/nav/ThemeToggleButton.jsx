@@ -1,12 +1,21 @@
 import React from "react";
 import { useTheme } from "@/components/shared/ThemeContext";
+import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 
 export default function ThemeToggleButton() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, themePreference, setTheme } = useTheme();
+  const { savePatchConfirmed } = useSaveUserPrefs();
   const isDark = theme === "dark";
+  const handleToggle = () => {
+    const next = isDark ? "light" : "dark";
+    setTheme(next);
+    void savePatchConfirmed({ theme: next }).then((saved) => {
+      if (!saved) setTheme(themePreference);
+    });
+  };
   return (
     <button
-      onClick={toggleTheme}
+      onClick={handleToggle}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
       className="sbd-btn-ghost"
       style={{

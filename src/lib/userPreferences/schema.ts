@@ -14,6 +14,21 @@ export const DASHBOARD_KPI_IDS = [
   "rfis_blocking_fab",
 ] as const;
 
+export const DEFAULT_LANDING_PAGE_IDS = [
+  "Dashboard",
+  "DrawingSubmittalHub",
+  "CommandCenter",
+  "Projects",
+  "RFIs",
+  "Drawings",
+  "FieldToday",
+  "DailyLogs",
+  "Deliveries",
+  "ChangeOrders",
+  "JobStatusReport",
+  "PieceRegister",
+] as const;
+
 export type WorkspacePreset = "project_manager" | "field" | "fabrication" | "executive" | "custom";
 export type ThemePreference = "system" | "dark" | "light";
 export type DensityPreference = "compact" | "normal" | "comfortable";
@@ -178,7 +193,7 @@ export function sanitizeUserPreferences(input: unknown): UserPreferences {
     measurement_units: enumValue(source.measurement_units, ["imperial", "metric"], d.measurement_units),
     currency_format: enumValue(source.currency_format, ["USD", "CAD", "EUR"], d.currency_format),
     number_format: enumValue(source.number_format, ["1,234.56", "1 234,56", "1234.56"], d.number_format),
-    default_landing: typeof source.default_landing === "string" && source.default_landing ? source.default_landing : d.default_landing,
+    default_landing: enumValue(source.default_landing, DEFAULT_LANDING_PAGE_IDS, d.default_landing),
     default_project_id: typeof source.default_project_id === "string" && source.default_project_id ? source.default_project_id : null,
     favorite_project_ids: stringArray(source.favorite_project_ids),
     pinned_modules: source.pinned_modules === undefined ? [...d.pinned_modules] : normalizeNavigationFavorites(source.pinned_modules),

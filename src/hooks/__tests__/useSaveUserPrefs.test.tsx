@@ -106,4 +106,21 @@ describe("useSaveUserPrefs", () => {
     await waitFor(() => expect(result.current.syncState).toBe("saved"));
     expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ theme: "dark" });
   });
+
+  it("rolls back to the last server-confirmed value when consecutive writes fail", async () => {
+    let rejectFirst: (reason: Error) => void = () => {};
+    updateMe
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject; }))
+      .mockRejectedValueOnce(new Error("still offline"));
+    const { result, queryClient } = setup({ theme: "system" });
+
+    act(() => { void result.current.savePatch({ theme: "light" }); });
+    await waitFor(() => expect(updateMe).toHaveBeenCalledTimes(1));
+    act(() => { void result.current.savePatch({ theme: "dark" }); });
+
+    rejectFirst(new Error("offline"));
+    await waitFor(() => expect(updateMe).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.syncState).toBe("error"));
+    expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ theme: "system" });
+  });
 });

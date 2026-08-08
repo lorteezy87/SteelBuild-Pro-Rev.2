@@ -27,7 +27,6 @@ import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
-import { auth } from "@/api/supabaseClient";
 import { BrandLogo } from "./BrandLogo";
 import { mergeLegacyFavorites, toggleServerFavorite } from "./sidebarFavorites";
 
@@ -77,7 +76,7 @@ export default function SidebarNav({
   const isLightTheme = theme === "light";
   // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
   const { pinned_modules, sidebar_mode, show_recent_pages } = useUserPrefs();
-  const { savePatch } = useSaveUserPrefs();
+  const { savePatch, savePatchConfirmed } = useSaveUserPrefs();
   const { isPageVisible } = useModuleAccess();
   const [collapsed, setCollapsed] = useState(() => {
     // Light (the command theme) shows EVERY group expanded so all modules are
@@ -108,13 +107,12 @@ export default function SidebarNav({
   useEffect(() => {
     if (legacyFavorites.length === 0 || legacyMigrationStarted.current) return;
     legacyMigrationStarted.current = true;
-    void auth.updateMe({ pinned_modules: favorites }).then(() => {
+    void savePatchConfirmed({ pinned_modules: favorites }).then((saved) => {
+      if (!saved) return;
       clearLegacyFavorites();
       setLegacyFavorites([]);
-    }).catch(() => {
-      // Keep the legacy payload intact. The next app session retries safely.
     });
-  }, [favorites, legacyFavorites.length]);
+  }, [favorites, legacyFavorites.length, savePatchConfirmed]);
 
   // Recent-pages tracking — kept here so reloads remember the last
   // few pages you visited.

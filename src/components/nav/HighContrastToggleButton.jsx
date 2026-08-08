@@ -13,12 +13,20 @@
 
 import React from "react";
 import { useTheme } from "@/components/shared/ThemeContext";
+import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 
 export default function HighContrastToggleButton() {
   const { contrast, setContrast } = useTheme();
+  const { savePatchConfirmed } = useSaveUserPrefs();
   const isHigh = contrast === "high";
 
-  const toggle = () => setContrast(isHigh ? "normal" : "high");
+  const toggle = () => {
+    const next = isHigh ? "normal" : "high";
+    setContrast(next);
+    void savePatchConfirmed({ contrast_mode: next }).then((saved) => {
+      if (!saved) setContrast(contrast);
+    });
+  };
 
   return (
     <button

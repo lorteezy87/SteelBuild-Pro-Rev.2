@@ -51,4 +51,9 @@ describe("sanitizeUserPreferences", () => {
     expect(result.notify_rfi_overdue).toBe(false);
     expect(result.made_up_setting).toBeUndefined();
   });
+
+  it("falls back safely when a landing page is not supported", () => {
+    expect(sanitizeUserPreferences({ default_landing: "NotARealRoute" }).default_landing).toBe("Dashboard");
+    expect(sanitizeUserPreferences({ default_landing: "PieceRegister" }).default_landing).toBe("PieceRegister");
+  });
 });

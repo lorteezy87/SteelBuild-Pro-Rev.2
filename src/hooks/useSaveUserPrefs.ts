@@ -15,13 +15,15 @@ export type PreferenceSyncState = "idle" | "saving" | "saved" | "error";
 type PreferenceMutation = {
   id: number;
   patch: Partial<UserPreferences>;
-  previous: Record<string, unknown> | undefined;
   revisions: Record<string, number>;
+  resolve: Array<(saved: boolean) => void>;
 };
 
 type QueuedPreferenceWrite = Omit<PreferenceMutation, "id"> & {
   timer: ReturnType<typeof setTimeout> | null;
 };
+
+type ConfirmedPreference = { present: boolean; value: unknown };
 
 const SAVE_COALESCE_MS = 80;
 
@@ -36,27 +38,32 @@ export function useSaveUserPrefs() {
   const pendingOperations = useRef(0);
   const failedKeys = useRef(new Set<string>());
   const queuedWrite = useRef<QueuedPreferenceWrite | null>(null);
+  const confirmedByKey = useRef<Record<string, ConfirmedPreference>>({});
 
   const mutation = useMutation({
     mutationFn: ({ patch }: PreferenceMutation) => auth.updateMe(patch),
     scope: { id: `user-preferences-${userId ?? "anonymous"}` },
     onSuccess: (_saved, variables) => {
       for (const key of Object.keys(variables.patch)) {
+        confirmedByKey.current[key] = { present: true, value: variables.patch[key as keyof UserPreferences] };
         if (latestRevisionByKey.current[key] === variables.revisions[key]) failedKeys.current.delete(key);
       }
+      variables.resolve.forEach((resolve) => resolve(true));
     },
     onError: (error, variables) => {
       const currentKeys = Object.keys(variables.patch).filter(
         (key) => latestRevisionByKey.current[key] === variables.revisions[key],
       );
+      variables.resolve.forEach((resolve) => resolve(currentKeys.length === 0));
       if (currentKeys.length === 0) return;
       currentKeys.forEach((key) => failedKeys.current.add(key));
       if (userId) {
         queryClient.setQueryData<Record<string, unknown>>(["user-settings", userId], (current) => {
           const restored = { ...(current ?? {}) };
           for (const key of currentKeys) {
-            if (variables.previous && Object.prototype.hasOwnProperty.call(variables.previous, key)) {
-              restored[key] = variables.previous[key];
+            const confirmed = confirmedByKey.current[key];
+            if (confirmed?.present) {
+              restored[key] = confirmed.value;
             } else {
               delete restored[key];
             }
@@ -83,33 +90,42 @@ export function useSaveUserPrefs() {
     queuedWrite.current = null;
     const id = ++nextOperationId.current;
     pendingOperations.current += 1;
-    mutation.mutate({ id, patch: queued.patch, previous: queued.previous, revisions: queued.revisions });
+    mutation.mutate({ id, patch: queued.patch, revisions: queued.revisions, resolve: queued.resolve });
   }, [mutation]);
 
-  const persist = useCallback((patch: Partial<UserPreferences>, previous: Record<string, unknown> | undefined, immediate = false) => {
-    if (pendingOperations.current === 0 && queuedWrite.current === null) {
-      failedKeys.current.clear();
-      setLastError(null);
-    }
-    const revisions = Object.fromEntries(Object.keys(patch).map((key) => {
-      const next = (latestRevisionByKey.current[key] ?? 0) + 1;
-      latestRevisionByKey.current[key] = next;
-      return [key, next];
-    }));
-    const existing = queuedWrite.current;
-    if (existing?.timer) clearTimeout(existing.timer);
-    queuedWrite.current = existing
-      ? { ...existing, patch: { ...existing.patch, ...patch }, revisions: { ...existing.revisions, ...revisions }, timer: null }
-      : { patch, previous, revisions, timer: null };
-    setSyncState("saving");
-    if (immediate) {
-      dispatchQueuedWrite();
-    } else if (queuedWrite.current) {
-      queuedWrite.current.timer = setTimeout(dispatchQueuedWrite, SAVE_COALESCE_MS);
-    }
-  }, [dispatchQueuedWrite]);
+  const persist = useCallback((patch: Partial<UserPreferences>, previous: Record<string, unknown> | undefined, immediate = false): Promise<boolean> =>
+    new Promise((resolve) => {
+      if (pendingOperations.current === 0 && queuedWrite.current === null) {
+        failedKeys.current.clear();
+        confirmedByKey.current = {};
+        setLastError(null);
+      }
+      for (const key of Object.keys(patch)) {
+        if (Object.prototype.hasOwnProperty.call(confirmedByKey.current, key)) continue;
+        confirmedByKey.current[key] = {
+          present: !!previous && Object.prototype.hasOwnProperty.call(previous, key),
+          value: previous?.[key],
+        };
+      }
+      const revisions = Object.fromEntries(Object.keys(patch).map((key) => {
+        const next = (latestRevisionByKey.current[key] ?? 0) + 1;
+        latestRevisionByKey.current[key] = next;
+        return [key, next];
+      }));
+      const existing = queuedWrite.current;
+      if (existing?.timer) clearTimeout(existing.timer);
+      queuedWrite.current = existing
+        ? { ...existing, patch: { ...existing.patch, ...patch }, revisions: { ...existing.revisions, ...revisions }, resolve: [...existing.resolve, resolve], timer: null }
+        : { patch, revisions, resolve: [resolve], timer: null };
+      setSyncState("saving");
+      if (immediate) {
+        dispatchQueuedWrite();
+      } else if (queuedWrite.current) {
+        queuedWrite.current.timer = setTimeout(dispatchQueuedWrite, SAVE_COALESCE_MS);
+      }
+    }), [dispatchQueuedWrite]);
 
-  const savePatch = useCallback((input: Partial<UserPreferences>) => {
+  const savePatchConfirmed = useCallback((input: Partial<UserPreferences>) => {
     const current = queryClient.getQueryData<Record<string, unknown>>(["user-settings", userId]) ?? authContext?.user ?? {};
     const manualEdit = input.workspace_preset === undefined &&
       Object.keys(input).some((key) => PRESET_OWNED_KEYS.has(key as keyof UserPreferences));
@@ -129,8 +145,12 @@ export function useSaveUserPrefs() {
       void queryClient.cancelQueries({ queryKey: ["user-settings", userId] });
       queryClient.setQueryData(["user-settings", userId], { ...(previous ?? {}), ...patch });
     }
-    persist(patch, previous);
+    return persist(patch, previous);
   }, [authContext?.user, persist, queryClient, userId]);
+
+  const savePatch = useCallback((input: Partial<UserPreferences>) => {
+    void savePatchConfirmed(input);
+  }, [savePatchConfirmed]);
 
   const saveAll = useCallback((input: UserPreferences) => {
     const patch = sanitizeUserPreferences(input);
@@ -138,7 +158,7 @@ export function useSaveUserPrefs() {
       ? queryClient.getQueryData<Record<string, unknown>>(["user-settings", userId])
       : undefined;
     if (userId) queryClient.setQueryData(["user-settings", userId], { ...(previous ?? {}), ...patch });
-    persist(patch, previous, true);
+    void persist(patch, previous, true);
   }, [persist, queryClient, userId]);
 
   const resetKeys = useCallback((keys: Array<keyof UserPreferences>) => {
@@ -148,6 +168,7 @@ export function useSaveUserPrefs() {
 
   return {
     savePatch,
+    savePatchConfirmed,
     saveAll,
     resetKeys,
     isSaving: syncState === "saving",
