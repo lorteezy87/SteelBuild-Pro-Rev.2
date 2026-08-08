@@ -73,7 +73,7 @@ export default function SidebarNav({
   const { theme } = useTheme();
   const isLightTheme = theme === "light";
   // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
-  const { pinned_modules } = useUserPrefs();
+  const { pinned_modules, sidebar_mode, show_recent_pages } = useUserPrefs();
   const { isPageVisible } = useModuleAccess();
   const [collapsed, setCollapsed] = useState(() => {
     // Light (the command theme) shows EVERY group expanded so all modules are
@@ -87,7 +87,12 @@ export default function SidebarNav({
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
   const [favorites, setFavorites] = useState(loadFavorites);
-  const railMode = forceRail ? true : (isLightTheme ? false : railModeState);
+  const preferredRail = sidebar_mode === "rail"
+    ? true
+    : sidebar_mode === "expanded"
+      ? false
+      : railModeState;
+  const railMode = forceRail ? true : preferredRail;
 
   // Recent-pages tracking — kept here so reloads remember the last
   // few pages you visited.
@@ -491,7 +496,7 @@ export default function SidebarNav({
       </nav>
 
       {/* ── Recent section — only in expanded mode, when relevant ─ */}
-      {!railMode && recentItems.length > 0 && showRecents && (
+      {!railMode && recentItems.length > 0 && show_recent_pages && showRecents && (
         <div
           style={{
             padding: "8px 14px 12px",

@@ -1,17 +1,18 @@
 export const THEME_STORAGE_KEY = "sbp-theme";
 export type ThemeMode = "dark" | "light";
+export type ThemePreference = ThemeMode | "system";
 export type ThemeSource = "user" | "system";
 
-const ALLOWED = new Set<ThemeMode>(["dark", "light"]);
+const ALLOWED = new Set<ThemePreference>(["dark", "light", "system"]);
 
 export type ThemeStorage = {
   getItem(key: string): string | null;
 };
 
-export function readStoredTheme(storage: ThemeStorage): ThemeMode | null {
+export function readStoredTheme(storage: ThemeStorage): ThemePreference | null {
   try {
     const v = storage.getItem(THEME_STORAGE_KEY);
-    if (v && ALLOWED.has(v as ThemeMode)) return v as ThemeMode;
+    if (v && ALLOWED.has(v as ThemePreference)) return v as ThemePreference;
   } catch {
     /* ignore */
   }
@@ -37,7 +38,7 @@ export function resolveInitialTheme(opts: {
   fallback?: ThemeMode;
 }): { theme: ThemeMode; source: ThemeSource } {
   const stored = readStoredTheme(opts.storage);
-  if (stored) return { theme: stored, source: "user" };
+  if (stored && stored !== "system") return { theme: stored, source: "user" };
   return {
     theme: readSystemTheme(opts.matchMedia, opts.fallback ?? "dark"),
     source: "system",

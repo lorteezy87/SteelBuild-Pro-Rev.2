@@ -64,6 +64,7 @@ const FONT_SCALE_VALUE = { sm: 0.94, md: 1.0, lg: 1.12 };
 
 const ThemeContext = createContext({
   theme: "dark",
+  themePreference: "system",
   accent: "gold",
   fontScale: "md",
   contrast: "normal",
@@ -123,6 +124,8 @@ export function ThemeProvider({ children }) {
     try {
       if (shouldPersistTheme(themeSource)) {
         localStorage.setItem(KEY.theme, theme);
+      } else {
+        localStorage.removeItem(KEY.theme);
       }
       localStorage.setItem(KEY.accent,    accent);
       localStorage.setItem(KEY.fontScale, fontScale);
@@ -145,6 +148,14 @@ export function ThemeProvider({ children }) {
     setter(next);
   };
   const setTheme     = useCallback((next) => {
+    if (next === "system") {
+      setThemeSource("system");
+      const mq = typeof window !== "undefined" && window.matchMedia
+        ? window.matchMedia("(prefers-color-scheme: dark)")
+        : null;
+      setThemeState(mq?.matches ? "dark" : "light");
+      return;
+    }
     if (!ALLOWED.theme.has(next)) return;
     setThemeSource("user");
     setThemeState(next);
@@ -165,7 +176,13 @@ export function ThemeProvider({ children }) {
    */
   const applyPreferences = useCallback((p) => {
     if (!p || typeof p !== "object") return;
-    if (p.theme && ALLOWED.theme.has(p.theme)) {
+    if (p.theme === "system") {
+      setThemeSource("system");
+      const mq = typeof window !== "undefined" && window.matchMedia
+        ? window.matchMedia("(prefers-color-scheme: dark)")
+        : null;
+      setThemeState(mq?.matches ? "dark" : "light");
+    } else if (p.theme && ALLOWED.theme.has(p.theme)) {
       setThemeSource("user");
       setThemeState(p.theme);
     }
@@ -177,7 +194,8 @@ export function ThemeProvider({ children }) {
 
   return (
     <ThemeContext.Provider value={{
-      theme, accent, fontScale, contrast, motion,
+      theme, themePreference: themeSource === "system" ? "system" : theme,
+      accent, fontScale, contrast, motion,
       toggleTheme, setTheme, setAccent, setFontScale, setContrast, setMotion,
       applyPreferences,
     }}>

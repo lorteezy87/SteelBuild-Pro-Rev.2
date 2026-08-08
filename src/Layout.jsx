@@ -35,6 +35,7 @@ import { useGlobalSearchShortcut } from "./components/nav/useGlobalSearchShortcu
 import { useDensityRestore } from "./components/nav/useDensityRestore";
 import { useFocusMainOnRouteChange } from "./components/nav/useFocusMainOnRouteChange";
 import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRoute";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
 
 // Shared components — use lazyWithRetry so stale-chunk 404s after a deploy
 // trigger a single page reload instead of a hard "LOAD ERROR" crash.
@@ -91,9 +92,25 @@ export default function Layout({ children, currentPageName }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const { band, isPhone, isTablet } = useResponsiveBreakpoint();
   const useDashboardChrome = isDashboardPage && !isPhone;
+  const userPrefs = useUserPrefs();
 
   // Density preference
-  useDensityRestore();
+  useDensityRestore(userPrefs.table_density);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-tooltips", userPrefs.show_tooltips ? "on" : "off");
+    root.setAttribute("data-keyboard-hints", userPrefs.show_keyboard_hints ? "on" : "off");
+    root.setAttribute("data-auto-drawers", userPrefs.auto_open_drawers ? "on" : "off");
+    root.setAttribute("data-default-view", userPrefs.default_view);
+    root.setAttribute("data-project-numbers", userPrefs.show_project_numbers ? "on" : "off");
+  }, [
+    userPrefs.auto_open_drawers,
+    userPrefs.default_view,
+    userPrefs.show_keyboard_hints,
+    userPrefs.show_project_numbers,
+    userPrefs.show_tooltips,
+  ]);
 
   // Active project
   const { activeProject: ctxActiveProject } = useProjectContext();

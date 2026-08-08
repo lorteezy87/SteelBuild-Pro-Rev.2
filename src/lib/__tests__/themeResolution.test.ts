@@ -26,6 +26,15 @@ describe("themeResolution", () => {
     expect(readStoredTheme(memoryStorage({ [THEME_STORAGE_KEY]: "light" }))).toBe("light");
   });
 
+  it("treats an explicit system selection as following the OS", () => {
+    expect(readStoredTheme(memoryStorage({ [THEME_STORAGE_KEY]: "system" }))).toBe("system");
+    const r = resolveInitialTheme({
+      storage: memoryStorage({ [THEME_STORAGE_KEY]: "system" }),
+      matchMedia: (() => ({ matches: false })) as unknown as typeof window.matchMedia,
+    });
+    expect(r).toEqual({ theme: "light", source: "system" });
+  });
+
   it("readStoredTheme ignores invalid values", () => {
     expect(readStoredTheme(memoryStorage({ [THEME_STORAGE_KEY]: "purple" }))).toBeNull();
   });
