@@ -17,6 +17,7 @@ import SettingsControlCenter from "./settings/SettingsControlCenter";
 import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 import { WorkspaceTab } from "@/components/settings/WorkspaceTab";
 import { sanitizeUserPreferences } from "@/lib/userPreferences/schema";
+import { PreferencesDataTab } from "@/components/settings/PreferencesDataTab";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -30,6 +31,7 @@ const TAB_GROUPS = [
       { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules, KPI order, default project' },
       { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts, digests, and quiet hours' },
       { id: 'shortcuts',     label: 'Shortcuts',     icon: '⌨',    desc: 'Keyboard reference card' },
+      { id: 'preferences-data', label: 'Reset & Portability', icon: '\u{1F4E6}', desc: 'Export, import, or reset personal settings' },
     ],
   },
   {
@@ -90,6 +92,12 @@ export default function Settings() {
     setUserPrefs((prev) => ({ ...prev, ...prefs }));
     preferenceSave.savePatch(prefs);
   }, [preferenceSave.savePatch]);
+
+  const handleReplacePrefs = useCallback((prefs) => {
+    const sanitized = sanitizeUserPreferences(prefs);
+    setUserPrefs((prev) => ({ ...prev, ...sanitized }));
+    preferenceSave.saveAll(sanitized);
+  }, [preferenceSave.saveAll]);
 
   useEffect(() => {
     if (preferenceSave.syncState !== 'saved') return undefined;
@@ -240,6 +248,7 @@ export default function Settings() {
         {activeTab === 'workspace' && <WorkspaceTab preferences={sanitizeUserPreferences(userPrefs)} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'shortcuts' && <ShortcutsTab />}
+        {activeTab === 'preferences-data' && <PreferencesDataTab preferences={sanitizeUserPreferences(userPrefs)} onSave={handleReplacePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'costcodes' && <CostCodesTab />}
         {activeTab === 'system' && <SystemTab user={user} />}
