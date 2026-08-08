@@ -27,6 +27,19 @@ function setup(initial: Record<string, unknown>) {
   return { queryClient, ...renderHook(() => useSaveUserPrefs(), { wrapper }) };
 }
 
+function setupPair(initial: Record<string, unknown>) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  queryClient.setQueryData(["user-settings", "user-1"], initial);
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={{ user: { id: "user-1", ...initial } } as never}>
+        {children}
+      </AuthContext.Provider>
+    </QueryClientProvider>
+  );
+  return { queryClient, ...renderHook(() => [useSaveUserPrefs(), useSaveUserPrefs()] as const, { wrapper }) };
+}
+
 describe("useSaveUserPrefs", () => {
   beforeEach(() => updateMe.mockReset());
 
@@ -154,6 +167,25 @@ describe("useSaveUserPrefs", () => {
     act(() => { migration = result.current.savePatchConfirmed({ pinned_modules: ["RFIs"] }); });
     await waitFor(() => expect(updateMe).toHaveBeenCalledTimes(1));
     act(() => { removal = result.current.savePatchConfirmed({ pinned_modules: [] }); });
+    rejectMigration(new Error("migration request failed"));
+
+    await expect(migration).resolves.toEqual({ status: "persisted" });
+    await expect(removal).resolves.toEqual({ status: "persisted" });
+    expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ pinned_modules: [] });
+  });
+
+  it("coordinates migration and removal writes across separate hook instances", async () => {
+    let rejectMigration: (reason: Error) => void = () => {};
+    updateMe
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectMigration = reject; }))
+      .mockResolvedValueOnce({ pinned_modules: [], workspace_preset: "custom" });
+    const { result, queryClient } = setupPair({ workspace_preset: "custom", pinned_modules: [] });
+    let migration!: ReturnType<typeof result.current[0]["savePatchConfirmed"]>;
+    let removal!: ReturnType<typeof result.current[1]["savePatchConfirmed"]>;
+
+    act(() => { migration = result.current[0].savePatchConfirmed({ pinned_modules: ["RFIs"] }); });
+    await waitFor(() => expect(updateMe).toHaveBeenCalledTimes(1));
+    act(() => { removal = result.current[1].savePatchConfirmed({ pinned_modules: [] }); });
     rejectMigration(new Error("migration request failed"));
 
     await expect(migration).resolves.toEqual({ status: "persisted" });
