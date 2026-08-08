@@ -28,7 +28,7 @@ import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 import { BrandLogo } from "./BrandLogo";
-import { mergeLegacyFavorites, toggleServerFavorite } from "./sidebarFavorites";
+import { mergeLegacyFavorites, shouldClearLegacyFavorites, toggleServerFavorite } from "./sidebarFavorites";
 
 // ── Local storage helpers ───────────────────────────────────────────
 const RAIL_LS_KEY    = "sbp-sidebar-rail";
@@ -107,8 +107,8 @@ export default function SidebarNav({
   useEffect(() => {
     if (legacyFavorites.length === 0 || legacyMigrationStarted.current) return;
     legacyMigrationStarted.current = true;
-    void savePatchConfirmed({ pinned_modules: favorites }).then((saved) => {
-      if (!saved) return;
+    void savePatchConfirmed({ pinned_modules: favorites }).then((result) => {
+      if (!shouldClearLegacyFavorites(result)) return;
       clearLegacyFavorites();
       setLegacyFavorites([]);
     });

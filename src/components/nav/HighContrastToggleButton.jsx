@@ -23,8 +23,8 @@ export default function HighContrastToggleButton() {
   const toggle = () => {
     const next = isHigh ? "normal" : "high";
     setContrast(next);
-    void savePatchConfirmed({ contrast_mode: next }).then((saved) => {
-      if (!saved) setContrast(contrast);
+    void savePatchConfirmed({ contrast_mode: next }).then((result) => {
+      if (result.status === "failed") setContrast(result.confirmed.contrast_mode ?? contrast);
     });
   };
 

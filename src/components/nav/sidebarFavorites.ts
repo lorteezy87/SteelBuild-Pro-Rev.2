@@ -9,3 +9,7 @@ export function toggleServerFavorite(favorites: string[], page: string): string[
     ? favorites.filter((favorite) => favorite !== page)
     : [...favorites, page];
 }
+
+export function shouldClearLegacyFavorites(result: { status: string }): boolean {
+  return result.status === "persisted";
+}

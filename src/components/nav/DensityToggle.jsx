@@ -36,11 +36,12 @@ export default function DensityToggle() {
     } catch { /* ignore storage failures */ }
     // Persist the dashboard density pref; the USER_UPDATED auth event refreshes
     // AuthContext → the Dashboard re-renders at the new density.
-    void savePatchConfirmed({ dashboard_density: next }).then((saved) => {
-      if (saved) return;
+    void savePatchConfirmed({ dashboard_density: next }).then((result) => {
+      if (result.status !== "failed") return;
+      const restored = result.confirmed.dashboard_density ?? dashboard_density;
       try {
-        document.documentElement.setAttribute("data-density", dashboard_density);
-        localStorage.setItem("sbp-density", dashboard_density);
+        document.documentElement.setAttribute("data-density", restored);
+        localStorage.setItem("sbp-density", restored);
       } catch { /* ignore storage failures */ }
     });
   };

@@ -11,12 +11,16 @@ import {
 import { PRESET_OWNED_KEYS } from "@/lib/userPreferences/presets";
 
 export type PreferenceSyncState = "idle" | "saving" | "saved" | "error";
+export type PreferenceSaveResult =
+  | { status: "persisted" }
+  | { status: "superseded" }
+  | { status: "failed"; confirmed: Partial<UserPreferences> };
 
 type PreferenceMutation = {
   id: number;
   patch: Partial<UserPreferences>;
   revisions: Record<string, number>;
-  resolve: Array<(saved: boolean) => void>;
+  resolve: Array<(result: PreferenceSaveResult) => void>;
 };
 
 type QueuedPreferenceWrite = Omit<PreferenceMutation, "id"> & {
@@ -48,22 +52,26 @@ export function useSaveUserPrefs() {
         confirmedByKey.current[key] = { present: true, value: variables.patch[key as keyof UserPreferences] };
         if (latestRevisionByKey.current[key] === variables.revisions[key]) failedKeys.current.delete(key);
       }
-      variables.resolve.forEach((resolve) => resolve(true));
+      variables.resolve.forEach((resolve) => resolve({ status: "persisted" }));
     },
     onError: (error, variables) => {
       const currentKeys = Object.keys(variables.patch).filter(
         (key) => latestRevisionByKey.current[key] === variables.revisions[key],
       );
-      variables.resolve.forEach((resolve) => resolve(currentKeys.length === 0));
-      if (currentKeys.length === 0) return;
+      if (currentKeys.length === 0) {
+        variables.resolve.forEach((resolve) => resolve({ status: "superseded" }));
+        return;
+      }
       currentKeys.forEach((key) => failedKeys.current.add(key));
+      const confirmed = {} as Partial<UserPreferences>;
       if (userId) {
         queryClient.setQueryData<Record<string, unknown>>(["user-settings", userId], (current) => {
           const restored = { ...(current ?? {}) };
           for (const key of currentKeys) {
-            const confirmed = confirmedByKey.current[key];
-            if (confirmed?.present) {
-              restored[key] = confirmed.value;
+            const snapshot = confirmedByKey.current[key];
+            if (snapshot?.present) {
+              restored[key] = snapshot.value;
+              confirmed[key as keyof UserPreferences] = snapshot.value as never;
             } else {
               delete restored[key];
             }
@@ -71,6 +79,7 @@ export function useSaveUserPrefs() {
           return restored;
         });
       }
+      variables.resolve.forEach((resolve) => resolve({ status: "failed", confirmed }));
       const message = error instanceof Error ? error.message : "Could not save settings";
       setLastError(message);
       toast.error("Could not save settings. Your previous choices were restored.");
@@ -93,7 +102,7 @@ export function useSaveUserPrefs() {
     mutation.mutate({ id, patch: queued.patch, revisions: queued.revisions, resolve: queued.resolve });
   }, [mutation]);
 
-  const persist = useCallback((patch: Partial<UserPreferences>, previous: Record<string, unknown> | undefined, immediate = false): Promise<boolean> =>
+  const persist = useCallback((patch: Partial<UserPreferences>, previous: Record<string, unknown> | undefined, immediate = false): Promise<PreferenceSaveResult> =>
     new Promise((resolve) => {
       if (pendingOperations.current === 0 && queuedWrite.current === null) {
         failedKeys.current.clear();

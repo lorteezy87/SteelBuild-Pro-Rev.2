@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const savePatchConfirmed = vi.fn().mockResolvedValue(true);
+const savePatchConfirmed = vi.fn().mockResolvedValue({ status: "persisted" });
 const setTheme = vi.fn();
 const setContrast = vi.fn();
 
@@ -23,6 +23,7 @@ import HighContrastToggleButton from "../HighContrastToggleButton";
 describe("top-bar personalization toggles", () => {
   beforeEach(() => {
     savePatchConfirmed.mockClear();
+    savePatchConfirmed.mockResolvedValue({ status: "persisted" });
     setTheme.mockClear();
     setContrast.mockClear();
   });
@@ -41,5 +42,15 @@ describe("top-bar personalization toggles", () => {
 
     expect(setContrast).toHaveBeenCalledWith("high");
     expect(savePatchConfirmed).toHaveBeenCalledWith({ contrast_mode: "high" });
+  });
+
+  it("restores the confirmed theme after rapid failed toggles", async () => {
+    savePatchConfirmed.mockResolvedValue({ status: "failed", confirmed: { theme: "system" } });
+    render(<ThemeToggleButton />);
+
+    fireEvent.click(screen.getByRole("button", { name: /switch to light mode/i }));
+    fireEvent.click(screen.getByRole("button", { name: /switch to light mode/i }));
+
+    await waitFor(() => expect(setTheme).toHaveBeenLastCalledWith("system"));
   });
 });

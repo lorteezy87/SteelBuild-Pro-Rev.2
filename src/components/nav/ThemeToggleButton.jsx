@@ -9,8 +9,8 @@ export default function ThemeToggleButton() {
   const handleToggle = () => {
     const next = isDark ? "light" : "dark";
     setTheme(next);
-    void savePatchConfirmed({ theme: next }).then((saved) => {
-      if (!saved) setTheme(themePreference);
+    void savePatchConfirmed({ theme: next }).then((result) => {
+      if (result.status === "failed") setTheme(result.confirmed.theme ?? themePreference);
     });
   };
   return (

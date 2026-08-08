@@ -123,4 +123,22 @@ describe("useSaveUserPrefs", () => {
     await waitFor(() => expect(result.current.syncState).toBe("error"));
     expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ theme: "system" });
   });
+
+  it("distinguishes a superseded failure from the current failed write", async () => {
+    let rejectFirst: (reason: Error) => void = () => {};
+    updateMe
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject; }))
+      .mockRejectedValueOnce(new Error("still offline"));
+    const { result } = setup({ theme: "system" });
+    let first!: ReturnType<typeof result.current.savePatchConfirmed>;
+    let second!: ReturnType<typeof result.current.savePatchConfirmed>;
+
+    act(() => { first = result.current.savePatchConfirmed({ theme: "light" }); });
+    await waitFor(() => expect(updateMe).toHaveBeenCalledTimes(1));
+    act(() => { second = result.current.savePatchConfirmed({ theme: "dark" }); });
+    rejectFirst(new Error("offline"));
+
+    await expect(first).resolves.toEqual({ status: "superseded" });
+    await expect(second).resolves.toEqual({ status: "failed", confirmed: { theme: "system" } });
+  });
 });

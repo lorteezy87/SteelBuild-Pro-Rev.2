@@ -10,7 +10,7 @@ import "@testing-library/jest-dom";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 let prefs;
-const savePatchConfirmed = vi.fn().mockResolvedValue(true);
+const savePatchConfirmed = vi.fn().mockResolvedValue({ status: "persisted" });
 
 vi.mock("@/hooks/useUserPrefs", () => ({ useUserPrefs: () => prefs }));
 vi.mock("@/hooks/useSaveUserPrefs", () => ({ useSaveUserPrefs: () => ({ savePatchConfirmed }) }));
