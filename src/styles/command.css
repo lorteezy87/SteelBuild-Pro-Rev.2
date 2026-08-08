@@ -145,7 +145,11 @@
 }
 @media (max-width: 680px) {
   [data-skin="command"] .cmd-kpi-strip { grid-template-columns: repeat(2, 1fr); }
-  [data-skin="command"] .cmd-hero { flex-direction: column; align-items: flex-start; }
+  [data-skin="command"] .cmd-hero { flex-direction: column; align-items: flex-start; gap: 16px; padding: 18px; }
+  [data-skin="command"] .cmd-hero--photo { background-image: none; }
+  [data-skin="command"] .cmd-hero__left { width: 100%; min-width: 0; }
+  [data-skin="command"] .cmd-hero__right { width: 100%; flex-wrap: wrap; }
+  [data-skin="command"] .cmd-statcard { flex: 1 1 140px; min-width: 0; }
 }
 
 /* Dual theme — command dark maps onto SteelBuild Dark (Phase 4).

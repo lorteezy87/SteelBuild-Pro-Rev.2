@@ -238,9 +238,6 @@ export default function Settings() {
         {activeTab === 'profile' && (
           <UserSettingsTab
             user={user}
-            onSave={handleSavePrefs}
-            isSaving={preferenceSave.isSaving}
-            lockIcon /* email is read-only; UserSettingsTab can use this to show a lock icon */
           />
         )}
         {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
@@ -262,6 +259,7 @@ export default function Settings() {
       user={user}
       prefs={userPrefs}
       visibleSectionCount={visibleGroups.reduce((count, group) => count + group.tabs.length, 0)}
+      syncState={preferenceSave.syncState}
     >
       {settingsBody}
     </SettingsControlCenter>

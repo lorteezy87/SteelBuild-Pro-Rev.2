@@ -26,7 +26,9 @@ import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 import { BrandLogo } from "./BrandLogo";
+import { mergeLegacyFavorites, toggleServerFavorite } from "./sidebarFavorites";
 
 // ── Local storage helpers ───────────────────────────────────────────
 const RAIL_LS_KEY    = "sbp-sidebar-rail";
@@ -58,8 +60,8 @@ function loadFavorites() {
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
-function saveFavorites(pages) {
-  try { localStorage.setItem(FAVORITES_LS_KEY, JSON.stringify(pages)); } catch { /* noop */ }
+function clearLegacyFavorites() {
+  try { localStorage.removeItem(FAVORITES_LS_KEY); } catch { /* noop */ }
 }
 
 // ── Component ───────────────────────────────────────────────────────
@@ -74,6 +76,7 @@ export default function SidebarNav({
   const isLightTheme = theme === "light";
   // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
   const { pinned_modules, sidebar_mode, show_recent_pages } = useUserPrefs();
+  const { savePatch } = useSaveUserPrefs();
   const { isPageVisible } = useModuleAccess();
   const [collapsed, setCollapsed] = useState(() => {
     // Light (the command theme) shows EVERY group expanded so all modules are
@@ -86,13 +89,26 @@ export default function SidebarNav({
   const [railModeState, setRailMode] = useState(loadRailState);
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
-  const [favorites, setFavorites] = useState(loadFavorites);
+  const [legacyFavorites, setLegacyFavorites] = useState(loadFavorites);
   const preferredRail = sidebar_mode === "rail"
     ? true
     : sidebar_mode === "expanded"
       ? false
       : railModeState;
   const railMode = forceRail ? true : preferredRail;
+  const favorites = useMemo(
+    () => mergeLegacyFavorites(pinned_modules || [], legacyFavorites),
+    [pinned_modules, legacyFavorites],
+  );
+
+  // Older builds stored sidebar stars only on this device. Merge them into the
+  // signed-in user's canonical preference once, then retire the legacy key.
+  useEffect(() => {
+    if (legacyFavorites.length === 0) return;
+    savePatch({ pinned_modules: favorites });
+    clearLegacyFavorites();
+    setLegacyFavorites([]);
+  }, [favorites, legacyFavorites.length, savePatch]);
 
   // Recent-pages tracking — kept here so reloads remember the last
   // few pages you visited.
@@ -172,14 +188,8 @@ export default function SidebarNav({
 
   // ── Favorites logic ──────────────────────────────────────────────
   const toggleFavorite = useCallback((page) => {
-    setFavorites((prev) => {
-      const next = prev.includes(page)
-        ? prev.filter((p) => p !== page)
-        : [...prev, page];
-      saveFavorites(next);
-      return next;
-    });
-  }, []);
+    savePatch({ pinned_modules: toggleServerFavorite(favorites, page) });
+  }, [favorites, savePatch]);
 
   // Groups with gated-off pages removed (and emptied groups dropped).
   const visibleGroups = useMemo(
@@ -193,16 +203,10 @@ export default function SidebarNav({
     const flat = visibleGroups.flatMap((g) =>
       g.items.map((it) => ({ ...it, _group: g.label }))
     );
-    // Union of star-favorites (localStorage) + Settings "Pinned Modules" pref,
-    // deduped, favorites first.
-    const merged = [
-      ...favorites,
-      ...(pinned_modules || []).filter((p) => !favorites.includes(p)),
-    ];
-    return merged
+    return favorites
       .map((p) => flat.find((it) => it.page === p))
       .filter(Boolean);
-  }, [favorites, pinned_modules, visibleGroups]);
+  }, [favorites, visibleGroups]);
 
   // Recents filtered against the flat registry so a deleted/renamed
   // page falls out cleanly instead of rendering a dead entry.

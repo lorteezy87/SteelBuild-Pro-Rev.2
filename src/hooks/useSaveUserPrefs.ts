@@ -25,7 +25,12 @@ export function useSaveUserPrefs() {
       setLastError(null);
     },
     onSuccess: (saved) => {
-      if (userId) queryClient.setQueryData(["user-settings", userId], saved);
+      if (userId) {
+        queryClient.setQueryData<Record<string, unknown>>(
+          ["user-settings", userId],
+          (current) => ({ ...(current ?? {}), ...saved }),
+        );
+      }
       setSyncState("saved");
     },
     onError: (error, variables) => {
@@ -67,7 +72,7 @@ export function useSaveUserPrefs() {
     const previous = userId
       ? queryClient.getQueryData<Record<string, unknown>>(["user-settings", userId])
       : undefined;
-    if (userId) queryClient.setQueryData(["user-settings", userId], patch);
+    if (userId) queryClient.setQueryData(["user-settings", userId], { ...(previous ?? {}), ...patch });
     mutation.mutate({ patch, previous });
   }, [mutation, queryClient, userId]);
 

@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { AuthContext } from "@/lib/AuthContext";
+import { DEFAULT_USER_PREFERENCES } from "@/lib/userPreferences/schema";
 
 const updateMe = vi.fn();
 vi.mock("@/api/supabaseClient", () => ({
@@ -44,5 +45,19 @@ describe("useSaveUserPrefs", () => {
     act(() => result.current.savePatch({ theme: "light" }));
     await waitFor(() => expect(result.current.syncState).toBe("error"));
     expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ theme: "dark" });
+  });
+
+  it("preserves profile fields while replacing the complete preference set", async () => {
+    updateMe.mockResolvedValueOnce({ full_name: "Bea", theme: "system" });
+    const { result, queryClient } = setup({ full_name: "Bea", job_title: "PM", theme: "dark" });
+
+    act(() => result.current.saveAll(DEFAULT_USER_PREFERENCES));
+
+    expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({
+      full_name: "Bea",
+      job_title: "PM",
+      theme: "system",
+    });
+    await waitFor(() => expect(result.current.syncState).toBe("saved"));
   });
 });
