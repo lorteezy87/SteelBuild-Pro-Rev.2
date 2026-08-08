@@ -74,13 +74,13 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
   const handleToggle = (key) => {
     const updated = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
-    onSave(updated);
+    onSave({ [key]: updated[key] });
   };
 
   const handleChange = (key, value) => {
     const updated = { ...prefs, [key]: value };
     setPrefs(updated);
-    onSave(updated);
+    onSave({ [key]: value });
   };
 
   const categories = [...new Set(notifications.filter(n => !['notify_email', 'notify_daily_digest'].includes(n.key)).map(n => n.category))];
@@ -150,7 +150,7 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
             <div key={t.key}>
               <label style={labelStyle}>{t.label}</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input type="number" min="1" max="365" style={{ ...inputStyle, width: 80 }} value={prefs[t.key] || t.default} onChange={e => handleChange(t.key, Number(e.target.value))} />
+                <input type="number" min="1" max={t.key === 'budget_alert_pct' ? 100 : 365} style={{ ...inputStyle, width: 80 }} value={prefs[t.key] || t.default} onChange={e => handleChange(t.key, Number(e.target.value))} />
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>{t.unit}</span>
               </div>
             </div>

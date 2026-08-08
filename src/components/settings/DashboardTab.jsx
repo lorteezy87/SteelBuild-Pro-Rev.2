@@ -109,7 +109,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
   const handleChange = (key, value) => {
     const updated = { ...prefs, [key]: value };
     setPrefs(updated);
-    onSave(updated);
+    onSave({ [key]: value });
   };
 
   const togglePinned = (moduleId) => {
