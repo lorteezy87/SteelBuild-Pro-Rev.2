@@ -29,7 +29,7 @@ describe("sanitizeUserPreferences", () => {
       email: "attacker@example.com",
       org_id: "other-org",
       theme: "light",
-    }) as Record<string, unknown>;
+    }) as unknown as Record<string, unknown>;
 
     expect(result.theme).toBe("light");
     expect(result.role).toBeUndefined();
@@ -44,7 +44,7 @@ describe("sanitizeUserPreferences", () => {
       week_start: "monday",
       notify_rfi_overdue: false,
       made_up_setting: true,
-    }) as Record<string, unknown>;
+    }) as unknown as Record<string, unknown>;
 
     expect(result.date_format).toBe("YYYY-MM-DD");
     expect(result.week_start).toBe("monday");

@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useContext, useCallback } from "react";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { auth } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
-import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import UserSettingsTab from "@/components/settings/UserSettingsTab.jsx";
 import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
@@ -15,6 +14,7 @@ import SystemTab from "@/components/settings/SystemTab.jsx";
 import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
 import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
 import SettingsControlCenter from "./settings/SettingsControlCenter";
+import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -66,8 +66,8 @@ export default function Settings() {
   const [userPrefs, setUserPrefs] = useState({});
   const [showSaved, setShowSaved] = useState(false);
   const [hoveredTab, setHoveredTab] = useState(null);
-  const qc = useQueryClient();
   const isMobile = useIsMobile();
+  const preferenceSave = useSaveUserPrefs();
 
   const { data: userSettings } = useQuery({
     queryKey: ['user-settings', user?.id],
@@ -83,21 +83,17 @@ export default function Settings() {
     if (userSettings) setUserPrefs(userSettings);
   }, [userSettings]);
 
-  const updatePrefsMut = useMutation({
-    mutationFn: async (prefs) => auth.updateMe(prefs),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['user-settings'] });
-      toast.success('Settings saved');
-      setShowSaved(true);
-      setTimeout(() => setShowSaved(false), 2000);
-    },
-    onError: () => toast.error('Failed to save settings'),
-  });
-
   const handleSavePrefs = useCallback((prefs) => {
     setUserPrefs((prev) => ({ ...prev, ...prefs }));
-    updatePrefsMut.mutate(prefs);
-  }, [updatePrefsMut]);
+    preferenceSave.savePatch(prefs);
+  }, [preferenceSave.savePatch]);
+
+  useEffect(() => {
+    if (preferenceSave.syncState !== 'saved') return undefined;
+    setShowSaved(true);
+    const timer = setTimeout(() => setShowSaved(false), 2000);
+    return () => clearTimeout(timer);
+  }, [preferenceSave.syncState]);
 
   if (isLoadingAuth) {
     return <LoadingSkeleton variant="page" />;
@@ -232,13 +228,13 @@ export default function Settings() {
           <UserSettingsTab
             user={user}
             onSave={handleSavePrefs}
-            isSaving={updatePrefsMut.isPending}
+            isSaving={preferenceSave.isSaving}
             lockIcon /* email is read-only; UserSettingsTab can use this to show a lock icon */
           />
         )}
-        {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
-        {activeTab === 'display' && <DisplayTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
-        {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
+        {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
+        {activeTab === 'display' && <DisplayTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
+        {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'shortcuts' && <ShortcutsTab />}
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'costcodes' && <CostCodesTab />}
