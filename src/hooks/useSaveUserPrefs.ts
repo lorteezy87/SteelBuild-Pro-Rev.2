@@ -43,6 +43,7 @@ export function useSaveUserPrefs() {
   const failedKeys = useRef(new Set<string>());
   const queuedWrite = useRef<QueuedPreferenceWrite | null>(null);
   const confirmedByKey = useRef<Record<string, ConfirmedPreference>>({});
+  const supersededResolvers = useRef<Array<(result: PreferenceSaveResult) => void>>([]);
 
   const mutation = useMutation({
     mutationFn: ({ patch }: PreferenceMutation) => auth.updateMe(patch),
@@ -52,14 +53,20 @@ export function useSaveUserPrefs() {
         confirmedByKey.current[key] = { present: true, value: variables.patch[key as keyof UserPreferences] };
         if (latestRevisionByKey.current[key] === variables.revisions[key]) failedKeys.current.delete(key);
       }
-      variables.resolve.forEach((resolve) => resolve({ status: "persisted" }));
+      const resolvers = [...supersededResolvers.current, ...variables.resolve];
+      supersededResolvers.current = [];
+      resolvers.forEach((resolve) => resolve({ status: "persisted" }));
     },
     onError: (error, variables) => {
       const currentKeys = Object.keys(variables.patch).filter(
         (key) => latestRevisionByKey.current[key] === variables.revisions[key],
       );
       if (currentKeys.length === 0) {
-        variables.resolve.forEach((resolve) => resolve({ status: "superseded" }));
+        // The request was replaced by a newer write for the same keys. Its
+        // callers must follow that successor's actual outcome: migration
+        // cleanup, in particular, is safe only if the authoritative successor
+        // reaches the server.
+        supersededResolvers.current.push(...variables.resolve);
         return;
       }
       currentKeys.forEach((key) => failedKeys.current.add(key));
@@ -79,7 +86,9 @@ export function useSaveUserPrefs() {
           return restored;
         });
       }
-      variables.resolve.forEach((resolve) => resolve({ status: "failed", confirmed }));
+      const resolvers = [...supersededResolvers.current, ...variables.resolve];
+      supersededResolvers.current = [];
+      resolvers.forEach((resolve) => resolve({ status: "failed", confirmed }));
       const message = error instanceof Error ? error.message : "Could not save settings";
       setLastError(message);
       toast.error("Could not save settings. Your previous choices were restored.");

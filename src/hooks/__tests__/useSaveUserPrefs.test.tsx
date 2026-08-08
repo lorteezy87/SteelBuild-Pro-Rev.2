@@ -124,7 +124,7 @@ describe("useSaveUserPrefs", () => {
     expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ theme: "system" });
   });
 
-  it("distinguishes a superseded failure from the current failed write", async () => {
+  it("makes a superseded caller follow the current failed write", async () => {
     let rejectFirst: (reason: Error) => void = () => {};
     updateMe
       .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject; }))
@@ -138,7 +138,26 @@ describe("useSaveUserPrefs", () => {
     act(() => { second = result.current.savePatchConfirmed({ theme: "dark" }); });
     rejectFirst(new Error("offline"));
 
-    await expect(first).resolves.toEqual({ status: "superseded" });
+    await expect(first).resolves.toEqual({ status: "failed", confirmed: { theme: "system" } });
     await expect(second).resolves.toEqual({ status: "failed", confirmed: { theme: "system" } });
+  });
+
+  it("acknowledges a failed migration only after its superseding removal persists", async () => {
+    let rejectMigration: (reason: Error) => void = () => {};
+    updateMe
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectMigration = reject; }))
+      .mockResolvedValueOnce({ pinned_modules: [], workspace_preset: "custom" });
+    const { result, queryClient } = setup({ workspace_preset: "custom", pinned_modules: [] });
+    let migration!: ReturnType<typeof result.current.savePatchConfirmed>;
+    let removal!: ReturnType<typeof result.current.savePatchConfirmed>;
+
+    act(() => { migration = result.current.savePatchConfirmed({ pinned_modules: ["RFIs"] }); });
+    await waitFor(() => expect(updateMe).toHaveBeenCalledTimes(1));
+    act(() => { removal = result.current.savePatchConfirmed({ pinned_modules: [] }); });
+    rejectMigration(new Error("migration request failed"));
+
+    await expect(migration).resolves.toEqual({ status: "persisted" });
+    await expect(removal).resolves.toEqual({ status: "persisted" });
+    expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ pinned_modules: [] });
   });
 });
