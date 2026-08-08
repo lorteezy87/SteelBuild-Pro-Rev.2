@@ -13,6 +13,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/components/shared/ThemeContext';
 import { AppearancePreview } from './AppearancePreview';
+import { formatUserCurrency, formatUserDate, formatUserMeasurement } from '@/lib/userPreferences/formatters';
+import { setRuntimeUserPreferences } from '@/lib/userPreferences/runtime';
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -79,6 +81,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
   const handleChange = (key, value) => {
     const updated = { ...prefs, [key]: value };
     setPrefs(updated);
+    setRuntimeUserPreferences(updated);
     // Apply visual changes locally first so the UI is instant; the
     // mutation in Settings.jsx persists them to the user-prefs row.
     if (key === 'theme')           setTheme(value);
@@ -96,9 +99,9 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
       </h2>
 
       <AppearancePreview
-        dateLabel={prefs.date_format === 'YYYY-MM-DD' ? '2026-08-08' : prefs.date_format === 'DD/MM/YYYY' ? '08/08/2026' : '08/08/2026'}
-        currencyLabel={new Intl.NumberFormat('en-US', { style: 'currency', currency: prefs.currency_format }).format(125400)}
-        measurementLabel={prefs.measurement_units === 'metric' ? '5,670 kg' : '12,500 lb'}
+        dateLabel={formatUserDate('2026-08-08')}
+        currencyLabel={formatUserCurrency(125400)}
+        measurementLabel={formatUserMeasurement(12500, 'weight')}
       />
 
       {/* Theme */}

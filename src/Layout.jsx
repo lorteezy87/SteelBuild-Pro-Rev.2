@@ -36,6 +36,7 @@ import { useDensityRestore } from "./components/nav/useDensityRestore";
 import { useFocusMainOnRouteChange } from "./components/nav/useFocusMainOnRouteChange";
 import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRoute";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { setRuntimeUserPreferences } from "@/lib/userPreferences/runtime";
 
 // Shared components — use lazyWithRetry so stale-chunk 404s after a deploy
 // trigger a single page reload instead of a hard "LOAD ERROR" crash.
@@ -93,6 +94,10 @@ export default function Layout({ children, currentPageName }) {
   const { band, isPhone, isTablet } = useResponsiveBreakpoint();
   const useDashboardChrome = isDashboardPage && !isPhone;
   const userPrefs = useUserPrefs();
+  // Shared non-React formatters read this synchronous snapshot. Updating it
+  // during the shell render ensures child pages format with the same prefs on
+  // their very first render after auth metadata changes.
+  setRuntimeUserPreferences(userPrefs);
 
   // Density preference
   useDensityRestore(userPrefs.table_density);
