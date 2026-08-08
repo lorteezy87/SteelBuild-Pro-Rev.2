@@ -163,13 +163,14 @@ Supabase Auth API in `AuthContext`.
 through the user's Supabase profile metadata and apply across the app: system,
 light, or dark theme; accent, font scale, contrast, motion, table density;
 date/time, number, currency, and measurement formats; sidebar mode, recents,
-tooltips, project-number visibility, and in-app alert/quiet-hour rules.
+keyboard hints, project-number visibility, and in-app alert/quiet-hour rules.
 
 The **My Workspace** tab adds Project Manager, Field, Fabrication, and Executive
 presets with a review-before-apply summary, plus server-backed favorite modules
 and projects. **Reset & Portability** can export a versioned, allowlisted JSON
-preference file, validate an import before applying it, or restore defaults with
-a typed confirmation. These settings are presentation-only and never grant
+preference file, validate an import before applying it, or restore individual
+sections or all defaults with a typed confirmation. These settings are
+presentation-only and never grant
 roles, permissions, project access, or other authorization.
 
 ## Billing & plans

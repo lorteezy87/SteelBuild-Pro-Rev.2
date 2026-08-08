@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   formatUserCurrency,
   formatUserDate,
+  formatUserDateShort,
   formatUserMeasurement,
   formatUserNumber,
   formatUserTime,
@@ -16,6 +17,15 @@ describe("personalized formatters", () => {
     expect(formatUserDate("2026-08-09")).toBe("09/08/2026");
     setRuntimeUserPreferences({ date_format: "YYYY-MM-DD" });
     expect(formatUserDate("2026-08-09")).toBe("2026-08-09");
+  });
+
+  it("keeps compact dates short while honoring the selected order", () => {
+    setRuntimeUserPreferences({ date_format: "MM/DD/YYYY" });
+    expect(formatUserDateShort("2026-08-09")).toBe("08/09");
+    setRuntimeUserPreferences({ date_format: "DD/MM/YYYY" });
+    expect(formatUserDateShort("2026-08-09")).toBe("09/08");
+    setRuntimeUserPreferences({ date_format: "YYYY-MM-DD" });
+    expect(formatUserDateShort("2026-08-09")).toBe("08-09");
   });
 
   it("uses the selected 12 or 24 hour clock", () => {

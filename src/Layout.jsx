@@ -77,7 +77,7 @@ function SidebarNavFallback() {
 
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const { theme, applyPreferences } = useTheme();
   const isDarkTheme = theme === "dark";
   const isDashboardPage = REFERENCE_CHROME_PAGES.has(currentPageName);
   const appShellClassName = `app-shell ${isDashboardPage ? "dashboard-reference-shell " : ""}sbd-mesh-bg`;
@@ -99,22 +99,31 @@ export default function Layout({ children, currentPageName }) {
   // their very first render after auth metadata changes.
   setRuntimeUserPreferences(userPrefs);
 
+  // Hydrate account-backed appearance choices as soon as the authenticated
+  // shell mounts. DisplayTab also applies edits immediately, but it must not be
+  // the only entry point or a fresh device would ignore saved appearance prefs
+  // until the user opened Settings.
+  useEffect(() => {
+    applyPreferences(userPrefs);
+  }, [
+    applyPreferences,
+    userPrefs.accent_color,
+    userPrefs.contrast_mode,
+    userPrefs.font_scale,
+    userPrefs.motion_mode,
+    userPrefs.theme,
+  ]);
+
   // Density preference
   useDensityRestore(userPrefs.table_density);
 
   useEffect(() => {
     const root = document.documentElement;
-    root.setAttribute("data-tooltips", userPrefs.show_tooltips ? "on" : "off");
     root.setAttribute("data-keyboard-hints", userPrefs.show_keyboard_hints ? "on" : "off");
-    root.setAttribute("data-auto-drawers", userPrefs.auto_open_drawers ? "on" : "off");
-    root.setAttribute("data-default-view", userPrefs.default_view);
     root.setAttribute("data-project-numbers", userPrefs.show_project_numbers ? "on" : "off");
   }, [
-    userPrefs.auto_open_drawers,
-    userPrefs.default_view,
     userPrefs.show_keyboard_hints,
     userPrefs.show_project_numbers,
-    userPrefs.show_tooltips,
   ]);
 
   // Active project

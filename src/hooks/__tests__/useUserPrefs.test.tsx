@@ -3,19 +3,20 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AuthContext } from "@/lib/AuthContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
+import type { UserPreferences } from "@/lib/userPreferences/schema";
 
 function Probe() {
   const prefs = useUserPrefs();
   return <output>{JSON.stringify(prefs)}</output>;
 }
 
-function renderWithUser(user) {
+function renderWithUser(user: Record<string, unknown>): UserPreferences {
   render(
-    <AuthContext.Provider value={{ user }}>
+    <AuthContext.Provider value={{ user } as never}>
       <Probe />
     </AuthContext.Provider>,
   );
-  return JSON.parse(screen.getByRole("status").textContent || "{}");
+  return JSON.parse(screen.getByRole("status").textContent || "{}") as UserPreferences;
 }
 
 describe("useUserPrefs", () => {

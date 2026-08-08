@@ -26,18 +26,30 @@ describe("preference portability", () => {
     });
   });
 
-  it("strips identity and privilege keys from imported preferences", () => {
+  it("rejects identity, privilege, and unknown keys instead of silently dropping them", () => {
+    const valid = sanitizeUserPreferences({ theme: "dark" });
     const parsed = parseUserPreferencesExport(JSON.stringify({
       version: 2,
-      preferences: { theme: "dark", role: "admin", email: "x@example.com", permissions: ["*"] },
+      preferences: { ...valid, role: "admin", email: "x@example.com", permissions: ["*"] },
     }));
 
-    expect(parsed.ok).toBe(true);
-    if (parsed.ok) {
-      const record = parsed.preferences as unknown as Record<string, unknown>;
-      expect(record.role).toBeUndefined();
-      expect(record.email).toBeUndefined();
-      expect(record.permissions).toBeUndefined();
-    }
+    expect(parsed).toEqual({
+      ok: false,
+      error: "The settings file contains unsupported fields: email, permissions, role.",
+    });
+  });
+
+  it("rejects partial or malformed preference payloads instead of applying defaults", () => {
+    expect(parseUserPreferencesExport(JSON.stringify({
+      version: 2,
+      preferences: { theme: "dark" },
+    }))).toMatchObject({ ok: false });
+
+    const malformed = sanitizeUserPreferences({ theme: "dark" }) as unknown as Record<string, unknown>;
+    malformed.table_density = "ultra-tight";
+    expect(parseUserPreferencesExport(JSON.stringify({ version: 2, preferences: malformed }))).toEqual({
+      ok: false,
+      error: "The settings file contains an invalid value for table_density.",
+    });
   });
 });

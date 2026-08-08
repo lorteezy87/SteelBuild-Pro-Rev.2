@@ -27,6 +27,7 @@ import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
+import { auth } from "@/api/supabaseClient";
 import { BrandLogo } from "./BrandLogo";
 import { mergeLegacyFavorites, toggleServerFavorite } from "./sidebarFavorites";
 
@@ -90,6 +91,7 @@ export default function SidebarNav({
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
   const [legacyFavorites, setLegacyFavorites] = useState(loadFavorites);
+  const legacyMigrationStarted = React.useRef(false);
   const preferredRail = sidebar_mode === "rail"
     ? true
     : sidebar_mode === "expanded"
@@ -104,11 +106,15 @@ export default function SidebarNav({
   // Older builds stored sidebar stars only on this device. Merge them into the
   // signed-in user's canonical preference once, then retire the legacy key.
   useEffect(() => {
-    if (legacyFavorites.length === 0) return;
-    savePatch({ pinned_modules: favorites });
-    clearLegacyFavorites();
-    setLegacyFavorites([]);
-  }, [favorites, legacyFavorites.length, savePatch]);
+    if (legacyFavorites.length === 0 || legacyMigrationStarted.current) return;
+    legacyMigrationStarted.current = true;
+    void auth.updateMe({ pinned_modules: favorites }).then(() => {
+      clearLegacyFavorites();
+      setLegacyFavorites([]);
+    }).catch(() => {
+      // Keep the legacy payload intact. The next app session retries safely.
+    });
+  }, [favorites, legacyFavorites.length]);
 
   // Recent-pages tracking — kept here so reloads remember the last
   // few pages you visited.

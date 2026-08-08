@@ -1,5 +1,5 @@
 import { createLocalDateFromDateOnly, todayLocalISO } from "@/lib/dateOnly";
-import { formatUserCurrency, formatUserDate } from "@/lib/userPreferences/formatters";
+import { formatUserCurrency, formatUserDate, formatUserDateShort } from "@/lib/userPreferences/formatters";
 import { getRuntimeUserPreferences } from "@/lib/userPreferences/runtime";
 
 /** Round to 2 decimal places for currency — avoids IEEE 754 float drift */
@@ -46,7 +46,7 @@ export const formatDate = (dateStr) => {
 export const formatDateShort = (dateStr) => {
   const d = parseUTCDate(dateStr);
   if (!d) return "-";
-  return formatUserDate(d);
+  return formatUserDateShort(d);
 };
 
 export const formatPercent = (value, decimals = 0) => {

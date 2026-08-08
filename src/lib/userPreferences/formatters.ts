@@ -16,6 +16,18 @@ export function formatUserDate(input: DateInput): string {
   }
 }
 
+export function formatUserDateShort(input: DateInput): string {
+  const date = toLocalDay(input);
+  if (!date) return "—";
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  switch (getRuntimeUserPreferences().date_format) {
+    case "DD/MM/YYYY": return `${d}/${m}`;
+    case "YYYY-MM-DD": return `${m}-${d}`;
+    default: return `${m}/${d}`;
+  }
+}
+
 export function formatUserTime(input: DateInput): string {
   const date = input instanceof Date ? input : new Date(input ?? Number.NaN);
   if (!Number.isFinite(date.getTime())) return "—";

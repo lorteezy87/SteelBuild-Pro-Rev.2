@@ -7,18 +7,11 @@ import {
   applyPersonalizationPreset,
 } from "@/lib/userPreferences/presets";
 import type { UserPreferences, WorkspacePreset } from "@/lib/userPreferences/schema";
+import { NAVIGATION_FAVORITE_OPTIONS } from "@/lib/userPreferences/navigationFavorites";
 import { PresetChangeSummary } from "./PresetChangeSummary";
 
 type PresetId = Exclude<WorkspacePreset, "custom">;
 type ProjectChoice = { id: string; name?: string | null; project_number?: string | null };
-
-const MODULES = [
-  ["Projects", "Projects"], ["Drawings", "Drawings"], ["Submittals", "Submittals"],
-  ["RFIs", "RFIs"], ["Schedule", "Schedule"], ["PieceRegister", "Piece Register"],
-  ["ProductionStatus", "Production Status"], ["Deliveries", "Deliveries"],
-  ["FieldToday", "Field Today"], ["DailyLogs", "Daily Logs"], ["Reports", "Reports"],
-  ["Financials", "Financials"],
-] as const;
 
 const labelStyle = { fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" as const, marginBottom: 10 };
 
@@ -77,14 +70,14 @@ export function WorkspaceTab({
           })}
         </div>
         {pendingPreset && pendingPreferences ? (
-          <PresetChangeSummary presetId={pendingPreset} next={pendingPreferences} isSaving={isSaving} onCancel={() => setPendingPreset(null)} onApply={() => { onSave(pendingPreferences); setPendingPreset(null); }} />
+          <PresetChangeSummary presetId={pendingPreset} current={preferences} next={pendingPreferences} isSaving={isSaving} onCancel={() => setPendingPreset(null)} onApply={() => { onSave(pendingPreferences); setPendingPreset(null); }} />
         ) : null}
       </section>
 
       <section style={{ marginBottom: 28 }}>
         <div style={labelStyle}>Navigation Favorites</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 8 }}>
-          {MODULES.map(([id, label]) => {
+          {NAVIGATION_FAVORITE_OPTIONS.map(({ id, label }) => {
             const selected = preferences.pinned_modules.includes(id);
             return <button key={id} type="button" onClick={() => toggleModule(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 10px", borderRadius: 6, border: `1px solid ${selected ? "var(--accent-border)" : "var(--border-default)"}`, background: selected ? "var(--accent-muted)" : "var(--bg-surface-low)", color: selected ? "var(--accent)" : "var(--text-primary)", cursor: "pointer" }}><Pin size={12} fill={selected ? "currentColor" : "none"} />{label}</button>;
           })}

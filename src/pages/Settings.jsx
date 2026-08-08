@@ -245,7 +245,7 @@ export default function Settings() {
         {activeTab === 'workspace' && <WorkspaceTab preferences={sanitizeUserPreferences(userPrefs)} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'shortcuts' && <ShortcutsTab />}
-        {activeTab === 'preferences-data' && <PreferencesDataTab preferences={sanitizeUserPreferences(userPrefs)} onSave={handleReplacePrefs} isSaving={preferenceSave.isSaving} />}
+        {activeTab === 'preferences-data' && <PreferencesDataTab preferences={sanitizeUserPreferences(userPrefs)} onSave={handleReplacePrefs} onPatch={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'costcodes' && <CostCodesTab />}
         {activeTab === 'system' && <SystemTab user={user} />}

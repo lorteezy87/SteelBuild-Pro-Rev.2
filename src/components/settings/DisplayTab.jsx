@@ -287,19 +287,6 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
         </div>
       </div>
 
-      {/* Default View */}
-      <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Default View</label>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-          {[{ id: 'remember', icon: '↺', label: 'Remember Last' }, { id: 'list', icon: '📝', label: 'List' }, { id: 'board', icon: '▦', label: 'Board' }].map(v => (
-            <div key={v.id} onClick={() => handleChange('default_view', v.id)} style={optionCard(prefs.default_view === v.id)}>
-              <div style={{ fontSize: 20, marginBottom: 6 }}>{v.icon}</div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: prefs.default_view === v.id ? 'var(--accent)' : 'var(--text-primary)' }}>{v.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Toggles */}
       <div>
         <label style={labelStyle}>Sidebar Start Mode</label>
@@ -310,10 +297,8 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
         </select>
         <label style={labelStyle}>Additional Options</label>
         {[
-          { key: 'show_tooltips', label: 'Show Tooltips', desc: 'Display helpful hints on hover' },
           { key: 'show_project_numbers', label: 'Show Project Numbers', desc: 'Display project numbers in lists' },
-          { key: 'show_keyboard_hints', label: 'Show Keyboard Hints', desc: 'Reveal shortcut overlays in dialogs' },
-          { key: 'auto_open_drawers', label: 'Auto-Open Detail Drawers', desc: 'Open the detail panel on row click instead of single-line preview' },
+          { key: 'show_keyboard_hints', label: 'Show Keyboard Hints', desc: 'Show shortcut keys throughout the app' },
         ].map(item => (
           <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--divider)' }}>
             <div>
@@ -338,8 +323,6 @@ function buildPrefs(p, theme) {
     font_scale:            safe.font_scale    || theme.fontScale     || 'md',
     contrast_mode:         safe.contrast_mode || theme.contrast      || 'normal',
     motion_mode:           safe.motion_mode   || theme.motion        || 'auto',
-    default_view:          safe.default_view          || 'remember',
-    show_tooltips:         safe.show_tooltips !== false,
     date_format:           safe.date_format          || 'MM/DD/YYYY',
     time_format:           safe.time_format          || '12h',
     week_start:            safe.week_start           || 'sunday',
@@ -351,6 +334,5 @@ function buildPrefs(p, theme) {
     show_project_numbers:  safe.show_project_numbers !== false,
     sidebar_mode:          safe.sidebar_mode          || 'remember',
     show_keyboard_hints:   safe.show_keyboard_hints !== false,
-    auto_open_drawers:     safe.auto_open_drawers === true,
   };
 }

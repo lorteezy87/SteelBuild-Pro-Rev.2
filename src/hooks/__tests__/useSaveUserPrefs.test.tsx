@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -28,6 +28,8 @@ function setup(initial: Record<string, unknown>) {
 }
 
 describe("useSaveUserPrefs", () => {
+  beforeEach(() => updateMe.mockReset());
+
   it("optimistically updates cached settings and keeps them after success", async () => {
     updateMe.mockResolvedValueOnce({ theme: "light" });
     const { result, queryClient } = setup({ theme: "dark" });
@@ -35,7 +37,17 @@ describe("useSaveUserPrefs", () => {
     act(() => result.current.savePatch({ theme: "light" }));
     expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ theme: "light" });
     await waitFor(() => expect(result.current.syncState).toBe("saved"));
-    expect(updateMe).toHaveBeenCalledWith({ theme: "light", workspace_preset: "custom" });
+    expect(updateMe).toHaveBeenCalledWith({ theme: "light" });
+  });
+
+  it("marks the active preset custom only when a preset-owned preference changes", async () => {
+    updateMe.mockResolvedValueOnce({ pinned_modules: ["RFIs"], workspace_preset: "custom" });
+    const { result } = setup({ workspace_preset: "project_manager", pinned_modules: ["ProjectsHub"] });
+
+    act(() => result.current.savePatch({ pinned_modules: ["RFIs"] }));
+
+    await waitFor(() => expect(result.current.syncState).toBe("saved"));
+    expect(updateMe).toHaveBeenCalledWith({ pinned_modules: ["RFIs"], workspace_preset: "custom" });
   });
 
   it("rolls cached settings back when persistence fails", async () => {
@@ -59,5 +71,39 @@ describe("useSaveUserPrefs", () => {
       theme: "system",
     });
     await waitFor(() => expect(result.current.syncState).toBe("saved"));
+  });
+
+  it("coalesces rapid saves so only the newest value is persisted", async () => {
+    updateMe.mockResolvedValueOnce({ theme: "dark" });
+    const { result, queryClient } = setup({ full_name: "Bea", theme: "system" });
+
+    act(() => {
+      result.current.savePatch({ theme: "light" });
+      result.current.savePatch({ theme: "dark" });
+    });
+
+    await waitFor(() => expect(updateMe).toHaveBeenCalledTimes(1));
+    expect(updateMe).toHaveBeenCalledWith({ theme: "dark" });
+    expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ theme: "dark" });
+    await waitFor(() => expect(result.current.syncState).toBe("saved"));
+    expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ full_name: "Bea", theme: "dark" });
+  });
+
+  it("does not roll back a newer edit when an older queued save fails", async () => {
+    let rejectFirst: (reason: Error) => void = () => {};
+    updateMe
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject; }))
+      .mockResolvedValueOnce({ theme: "dark" });
+    const { result, queryClient } = setup({ theme: "system" });
+
+    act(() => result.current.savePatch({ theme: "light" }));
+    await waitFor(() => expect(updateMe).toHaveBeenCalledTimes(1));
+
+    act(() => result.current.savePatch({ theme: "dark" }));
+
+    rejectFirst(new Error("offline"));
+    await waitFor(() => expect(updateMe).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.syncState).toBe("saved"));
+    expect(queryClient.getQueryData(["user-settings", "user-1"])).toMatchObject({ theme: "dark" });
   });
 });

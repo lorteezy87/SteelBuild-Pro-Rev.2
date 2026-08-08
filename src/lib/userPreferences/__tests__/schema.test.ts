@@ -16,7 +16,7 @@ describe("sanitizeUserPreferences", () => {
 
     expect(result.theme).toBe(DEFAULT_USER_PREFERENCES.theme);
     expect(result.table_density).toBe("compact");
-    expect(result.pinned_modules).toEqual(["RFIs", "Drawings"]);
+    expect(result.pinned_modules).toEqual(["RFIs", "DrawingSubmittalHub"]);
     expect(result.favorite_project_ids).toEqual([]);
     expect(result.auto_refresh_secs).toBe(0);
     expect(result.preferences_version).toBe(2);

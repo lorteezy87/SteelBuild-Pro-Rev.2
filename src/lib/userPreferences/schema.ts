@@ -1,3 +1,5 @@
+import { normalizeNavigationFavorites } from "./navigationFavorites";
+
 export const PREFERENCES_VERSION = 2 as const;
 
 export const DASHBOARD_KPI_IDS = [
@@ -89,7 +91,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   default_landing: "Dashboard",
   default_project_id: null,
   favorite_project_ids: [],
-  pinned_modules: ["Projects", "RFIs", "Drawings"],
+  pinned_modules: ["ProjectsHub", "RFIs", "DrawingSubmittalHub"],
   sidebar_mode: "remember",
   show_recent_pages: true,
   default_view: "remember",
@@ -179,7 +181,7 @@ export function sanitizeUserPreferences(input: unknown): UserPreferences {
     default_landing: typeof source.default_landing === "string" && source.default_landing ? source.default_landing : d.default_landing,
     default_project_id: typeof source.default_project_id === "string" && source.default_project_id ? source.default_project_id : null,
     favorite_project_ids: stringArray(source.favorite_project_ids),
-    pinned_modules: source.pinned_modules === undefined ? [...d.pinned_modules] : stringArray(source.pinned_modules),
+    pinned_modules: source.pinned_modules === undefined ? [...d.pinned_modules] : normalizeNavigationFavorites(source.pinned_modules),
     sidebar_mode: enumValue(source.sidebar_mode, ["remember", "expanded", "rail"], d.sidebar_mode),
     show_recent_pages: bool(source.show_recent_pages, d.show_recent_pages),
     default_view: enumValue(source.default_view, ["list", "board", "remember"], d.default_view),

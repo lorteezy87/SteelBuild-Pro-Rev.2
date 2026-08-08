@@ -14,7 +14,7 @@ function readFile(file: File): Promise<string> {
   });
 }
 
-export function PreferencesDataTab({ preferences, onSave, isSaving }: { preferences: UserPreferences; onSave: (preferences: UserPreferences) => void; isSaving: boolean }) {
+export function PreferencesDataTab({ preferences, onSave, onPatch, isSaving }: { preferences: UserPreferences; onSave: (preferences: UserPreferences) => void; onPatch: (patch: Partial<UserPreferences>) => void; isSaving: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [candidate, setCandidate] = useState<UserPreferences | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -71,7 +71,7 @@ export function PreferencesDataTab({ preferences, onSave, isSaving }: { preferen
         </section>
       </div>
 
-      <PreferenceResetPanel onReset={onSave} isSaving={isSaving} />
+      <PreferenceResetPanel onResetAll={onSave} onResetSection={onPatch} isSaving={isSaving} />
     </div>
   );
 }

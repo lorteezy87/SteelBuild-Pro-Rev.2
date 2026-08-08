@@ -12,7 +12,7 @@ describe("personalization presets", () => {
     ]);
     expect(PERSONALIZATION_PRESETS.field.default_landing).toBe("FieldToday");
     expect(PERSONALIZATION_PRESETS.fabrication.pinned_modules).toContain("PieceRegister");
-    expect(PERSONALIZATION_PRESETS.executive.pinned_modules).toContain("Reports");
+    expect(PERSONALIZATION_PRESETS.executive.pinned_modules).toContain("ReportsHub");
   });
 
   it("applies a preset without overwriting unrelated notification preferences", () => {
