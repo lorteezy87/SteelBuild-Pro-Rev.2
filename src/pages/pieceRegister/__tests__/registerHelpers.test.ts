@@ -252,7 +252,9 @@ describe("piece register view + empty filters", () => {
     expect(resolvePieceRegisterView("board")).toBe("board");
     expect(resolvePieceRegisterView("nope")).toBe("overview");
     expect(EMPTY_PIECE_REGISTER_FILTERS.hold).toBe("all");
+    expect(PIECE_REGISTER_VIEW_IDS).toContain("impact");
     expect(PIECE_REGISTER_VIEW_IDS).toContain("register");
+    expect(PIECE_REGISTER_VIEW_LABELS.impact).toBe("Revision Impact");
     expect(PIECE_REGISTER_VIEW_LABELS.register).toBe("Register");
   });
 });

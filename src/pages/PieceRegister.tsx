@@ -104,6 +104,7 @@ const EMPTY_FILTERS = EMPTY_PIECE_REGISTER_FILTERS;
 
 const REGISTER_VIEW_ICONS = {
   overview: Boxes,
+  impact: AlertTriangle,
   register: PackageOpen,
   board: LayoutGrid,
   import: FileUp,
