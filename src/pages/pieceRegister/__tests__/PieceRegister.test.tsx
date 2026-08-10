@@ -196,6 +196,45 @@ function intelligenceSnapshotWithRelationshipRepair() {
   return snapshot;
 }
 
+function lifecycleRiskIntelligenceSnapshot() {
+  const lifecycleRows = [
+    ["low", "not_started", "A100"],
+    ["fabricated", "fabricated", "A200"],
+    ["shipped", "shipped", "Z300"],
+    ["delivered", "delivered", "Z400"],
+    ["erected", "erected", "Z500"],
+  ] as const;
+  const snapshot = intelligenceSnapshot();
+  snapshot.pieces = lifecycleRows.map(([id, lifecycle]) => ({
+    ...pieceRegisterRow(id),
+    lifecycle_status: lifecycle,
+  }));
+  snapshot.pieceDrawingSets = lifecycleRows.map(([id]) => ({
+    project_id: "project-1",
+    piece_id: id,
+    drawing_set_id: `set-${id}`,
+  }));
+  snapshot.drawings = lifecycleRows.map(([id, , sheetNumber]) => ({
+    id: `drawing-${id}`,
+    project_id: "project-1",
+    drawing_set_id: `set-${id}`,
+    sheet_number: sheetNumber,
+    title: id,
+  }));
+  snapshot.drawingSets = lifecycleRows.map(([id]) => ({
+    id: `set-${id}`,
+    set_name: id,
+  }));
+  snapshot.drawingRevisions = lifecycleRows.map(([id]) => ({
+    id: `revision-${id}`,
+    drawing_id: `drawing-${id}`,
+    is_current: true,
+    archived_at: null,
+    revision_code: "1",
+  }));
+  return snapshot;
+}
+
 function SearchStateProbe() {
   return <output data-testid="piece-register-search">{useLocation().search}</output>;
 }
@@ -768,6 +807,108 @@ describe("Piece Register command shell", () => {
     expect(
       screen.getByRole("heading", { name: "Work-package readiness" }),
     ).toBeInTheDocument();
+    const retry = screen.getAllByRole("button", {
+      name: "Retry changes and risks",
+    });
+    expect(retry).toHaveLength(1);
+
+    fireEvent.click(retry[0]);
+
+    expect(
+      await screen.findByRole("group", { name: "Piece intelligence metrics" }),
+    ).toBeInTheDocument();
+    expect(fetchPieceIntelligenceSnapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { source: "impacts" as const, label: "Drawing-impact evidence is unavailable." },
+    { source: "rfis" as const, label: "RFI evidence is unavailable." },
+  ])("marks blocked totals and attention completeness unknown when $source are unavailable", async ({ source, label }) => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+    const partial = intelligenceSnapshot();
+    partial.availability[source] = "unavailable";
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockResolvedValueOnce(
+      partial as Awaited<ReturnType<typeof fetchPieceIntelligenceSnapshot>>,
+    );
+
+    renderPieceRegister();
+
+    expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(screen.getByText("Blocked or held").parentElement)
+      .toHaveTextContent("UnavailableBlocked or held");
+    expect(screen.getByText(/Pieces needing attention is incomplete/i))
+      .toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Review E502 revision 4/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("marks next-release readiness unknown when approval evidence is unavailable", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+    const partial = intelligenceSnapshot();
+    partial.availability.approvals = "unavailable";
+    partial.sourceAvailability.approvals = "unavailable";
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockResolvedValueOnce(
+      partial as Awaited<ReturnType<typeof fetchPieceIntelligenceSnapshot>>,
+    );
+
+    renderPieceRegister();
+
+    expect(await screen.findByText("Approval evidence is unavailable."))
+      .toBeInTheDocument();
+    expect(screen.getByText("Next release").parentElement)
+      .toHaveTextContent("UnavailableNext release");
+    expect(screen.getByText("Revision affected").parentElement)
+      .toHaveTextContent("1Revision affected");
+  });
+
+  it.each([
+    {
+      label: "container-only",
+      rows: [{ ...pieceRegisterRow("container"), is_container: true }],
+    },
+    {
+      label: "split-parent-only",
+      rows: [
+        pieceRegisterRow("split-parent"),
+        {
+          ...pieceRegisterRow("split-child"),
+          parent_piece_id: "split-parent",
+          is_container: true,
+        },
+      ],
+    },
+  ])("preserves controlled empty Overview onboarding for a $label register", async ({ rows }) => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue(rows);
+
+    renderPieceRegister();
+
+    expect(await screen.findByText("Import the first pieces")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Changes & Risks" }))
+      .not.toBeInTheDocument();
+    expect(fetchPieceIntelligenceSnapshot).not.toHaveBeenCalled();
+    expect(fetchCanonicalDashboardSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("shows only the three highest downstream-risk revision decisions", async () => {
+    const snapshot = lifecycleRiskIntelligenceSnapshot();
+    vi.mocked(fetchPieceRegister).mockResolvedValue(snapshot.pieces);
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockResolvedValueOnce(
+      snapshot as Awaited<ReturnType<typeof fetchPieceIntelligenceSnapshot>>,
+    );
+
+    renderPieceRegister();
+
+    expect(await screen.findByRole("button", { name: /Review Z500 revision 1/i }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Review Z400 revision 1/i }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Review Z300 revision 1/i }))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Review A200 revision 1/i }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Review A100 revision 1/i }))
+      .not.toBeInTheDocument();
   });
 
   it("preserves revision and piece intent from decision-rich Overview actions", async () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchPieceIntelligenceSnapshot } from "../pieceIntelligenceRepository";
+import { derivePieceIntelligence } from "../pieceIntelligenceDerive";
 import { fetchPieceRelationshipSnapshot } from "../relationshipsRepository";
 
 vi.mock("../relationshipsRepository", () => ({ fetchPieceRelationshipSnapshot: vi.fn() }));
@@ -10,12 +11,16 @@ const databaseSources = vi.hoisted(() => ({
   orders: [] as Array<{ table: string; column: string; ascending: boolean }>,
   filters: [] as Array<{ table: string; method: "eq" | "is"; column: string; value: unknown }>,
   ranges: [] as Array<{ table: string; from: number; to: number }>,
+  selects: [] as Array<{ table: string; columns: string }>,
 }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     from: vi.fn((table: string) => {
       const chain: Record<string, unknown> = {};
-      chain.select = vi.fn(() => chain);
+      chain.select = vi.fn((columns: string) => {
+        databaseSources.selects.push({ table, columns });
+        return chain;
+      });
       chain.eq = vi.fn((column: string, value: unknown) => {
         databaseSources.filters.push({ table, method: "eq", column, value });
         return chain;
@@ -104,6 +109,7 @@ describe("fetchPieceIntelligenceSnapshot", () => {
     databaseSources.orders = [];
     databaseSources.filters = [];
     databaseSources.ranges = [];
+    databaseSources.selects = [];
   });
 
   it("fails closed when the relationship snapshot fails", async () => {
@@ -138,6 +144,83 @@ describe("fetchPieceIntelligenceSnapshot", () => {
 
     expect(result.rfis).toEqual([]);
     expect(result.availability.rfis).toBe("unavailable");
+  });
+
+  it("normalizes canonical RFI metadata fab hold into blocked piece intelligence", async () => {
+    vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
+      ...baseRelationshipSnapshot,
+      pieces: [
+        {
+          id: "piece-1",
+          project_id: "prj",
+          piece_mark: "B1",
+          normalized_piece_mark: "B1",
+          lot_code: "A",
+          parent_piece_id: null,
+          quantity: 2,
+          profile: "W12x26",
+          material_grade: "A992",
+          weight_each_lbs: 500,
+          weight_total_lbs: 1000,
+          work_package_id: null,
+          lifecycle_status: "released",
+          current_station: null,
+          on_hold: false,
+          on_hold_reason: null,
+          is_container: false,
+          is_deleted: false,
+          source_system: "manual",
+          external_ref: null,
+          metadata: null,
+          updated_at: "2026-08-09T12:00:00Z",
+          deleted_at: null,
+        },
+      ],
+      pieceDrawingSets: [
+        { project_id: "prj", piece_id: "piece-1", drawing_set_id: "set-1" },
+      ],
+      drawings: [
+        {
+          id: "drawing-1",
+          project_id: "prj",
+          drawing_set_id: "set-1",
+          sheet_number: "E502",
+          linked_rfi_ids: "RFI-22",
+        },
+      ],
+      drawingSets: [{ id: "set-1", set_name: "Main framing" }],
+    });
+    databaseSources.rows.rfis = [
+      {
+        id: "rfi-22",
+        project_id: "prj",
+        rfi_number: "RFI-22",
+        status: "Open",
+        work_package_id: null,
+        metadata: { fab_hold: true },
+      },
+    ];
+
+    const snapshot = await fetchPieceIntelligenceSnapshot("prj");
+    const model = derivePieceIntelligence(
+      snapshot,
+      new Date("2026-08-09T12:00:00Z"),
+    );
+
+    expect(databaseSources.selects).toContainEqual({
+      table: "rfis",
+      columns: "id, project_id, rfi_number, status, work_package_id, metadata",
+    });
+    expect(snapshot.rfis[0]).toEqual(expect.objectContaining({
+      metadata: { fab_hold: true },
+      fab_hold: true,
+    }));
+    expect(model.metrics.blockedPieces).toBe(2);
+    expect(model.attention).toContainEqual(expect.objectContaining({
+      pieceId: "piece-1",
+      fabBlocked: true,
+      reason: "Linked RFI fabrication hold is active",
+    }));
   });
 
   it("loads complete deterministically ordered Drawing Impact and RFI sources beyond one page", async () => {

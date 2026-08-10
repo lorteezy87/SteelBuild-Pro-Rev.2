@@ -199,7 +199,7 @@ function buildAttentionRows(
     const fieldNeededDate = isIsoDate(workPackage?.scheduled_start_date)
       ? workPackage.scheduled_start_date
       : null;
-    const fieldRisk = isFieldRisk(fieldNeededDate, today);
+    const fieldRisk = exposures.length > 0 && isFieldRisk(fieldNeededDate, today);
     const severeImpact = impacts.some((impact) =>
       impact.status === "blocked" ||
       impact.priority === "critical" ||
@@ -352,14 +352,75 @@ function quantityForIds(
   );
 }
 
+function revisionFieldDate(
+  revision: RevisionExposureRow,
+  snapshot: PieceIntelligenceSnapshot,
+): string | null {
+  const pieceById = new Map(snapshot.pieces.map((piece) => [piece.id, piece]));
+  const workPackageById = new Map(
+    snapshot.workPackages.map((workPackage) => [workPackage.id, workPackage]),
+  );
+  return revision.affectedPieceIds
+    .flatMap((pieceId) => {
+      const workPackageId = pieceById.get(pieceId)?.work_package_id;
+      const fieldDate = workPackageId
+        ? workPackageById.get(workPackageId)?.scheduled_start_date
+        : null;
+      return isIsoDate(fieldDate) ? [fieldDate] : [];
+    })
+    .sort()[0] ?? null;
+}
+
+function revisionDecisionTier(
+  revision: RevisionExposureRow,
+  fieldDate: string | null,
+  today: string | null,
+): number {
+  if (revision.exposure.erected > 0) return 1;
+  if (revision.exposure.delivered > 0) return 2;
+  if (revision.exposure.shipped > 0) return 3;
+  if (revision.exposure.fabricated + revision.exposure.in_fabrication > 0) return 4;
+  if (isFieldRisk(fieldDate, today)) return 5;
+  if (revision.exposure.released > 0) return 6;
+  if (revision.exposure.not_started > 0) return 7;
+  return 8;
+}
+
+function sortRevisionDecisions(
+  revisions: RevisionExposureRow[],
+  snapshot: PieceIntelligenceSnapshot,
+  now: Date,
+): RevisionExposureRow[] {
+  const today = dateFromNow(now);
+  const fieldDateByRevision = new Map(
+    revisions.map((revision) => [
+      revision.revisionId,
+      revisionFieldDate(revision, snapshot),
+    ]),
+  );
+  return [...revisions].sort((left, right) => {
+    const leftFieldDate = fieldDateByRevision.get(left.revisionId) ?? null;
+    const rightFieldDate = fieldDateByRevision.get(right.revisionId) ?? null;
+    return revisionDecisionTier(left, leftFieldDate, today) -
+      revisionDecisionTier(right, rightFieldDate, today) ||
+      compareNullableDates(leftFieldDate, rightFieldDate) ||
+      right.heldCount - left.heldCount ||
+      right.affectedPieceIds.length - left.affectedPieceIds.length ||
+      naturalCollator.compare(left.sheetNumber, right.sheetNumber) ||
+      naturalCollator.compare(left.revisionCode, right.revisionCode) ||
+      naturalCollator.compare(left.revisionId, right.revisionId);
+  });
+}
+
 export function derivePieceIntelligence(
   snapshot: PieceIntelligenceSnapshot,
   now: Date,
 ): PieceIntelligenceModel {
   const derivedRevisions = deriveRevisionExposure(snapshot);
-  const revisions = snapshot.availability.relationships === "unavailable"
+  const revisionsWithAvailability = snapshot.availability.relationships === "unavailable"
     ? derivedRevisions.map((revision) => ({ ...revision, verification: "partial" as const }))
     : derivedRevisions;
+  const revisions = sortRevisionDecisions(revisionsWithAvailability, snapshot, now);
   const attention = buildAttentionRows(revisions, snapshot, now);
   const warnings = unavailableSourceWarnings(snapshot);
   const pieceById = new Map(

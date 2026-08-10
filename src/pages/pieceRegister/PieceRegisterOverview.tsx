@@ -3,6 +3,7 @@ import type {
   PieceAttentionRow,
   PieceIntelligenceModel,
   RevisionExposureRow,
+  SourceUnavailableWarning,
 } from "@/lib/pieceControl/pieceIntelligenceTypes";
 import {
   formatPlannedShipDate,
@@ -70,17 +71,32 @@ function overviewSentence(model: PieceIntelligenceModel): string {
   return `${affected} have exact current-revision exposure. Review downstream work before the next release decision.`;
 }
 
+const sourceStateLabels: Record<SourceUnavailableWarning["source"], string> = {
+  relationships: "Relationship evidence",
+  approvals: "Approval evidence",
+  impacts: "Drawing-impact evidence",
+  rfis: "RFI evidence",
+  events: "Piece history",
+};
+
 function PieceIntelligenceMetrics({
   metrics,
+  warnings,
 }: {
   metrics: PieceIntelligenceModel["metrics"];
+  warnings: SourceUnavailableWarning[];
 }) {
-  const cells = [
+  const unavailable = new Set(warnings.map(({ source }) => source));
+  const blockedUnknown = unavailable.has("impacts") || unavailable.has("rfis");
+  const releaseUnknown = unavailable.has("approvals");
+  const cells: Array<[string, string]> = [
     ["Revision affected", String(metrics.affectedPieces)],
-    ["Blocked or held", String(metrics.blockedPieces)],
+    ["Blocked or held", blockedUnknown ? "Unavailable" : String(metrics.blockedPieces)],
     [
       "Next release",
-      metrics.nextRelease
+      releaseUnknown
+        ? "Unavailable"
+        : metrics.nextRelease
         ? metrics.nextRelease.isReady
           ? "Ready"
           : `${metrics.nextRelease.blockerCount} blockers`
@@ -100,6 +116,26 @@ function PieceIntelligenceMetrics({
           <span>{label}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function OptionalEvidenceState({
+  warnings,
+}: {
+  warnings: SourceUnavailableWarning[];
+}) {
+  const optionalWarnings = warnings.filter(
+    ({ source }) => source !== "relationships",
+  );
+  if (optionalWarnings.length === 0) return null;
+  return (
+    <div className="piece-operation-state is-error" role="status">
+      <strong>Decision evidence is partial.</strong>
+      {optionalWarnings.map(({ source }) => (
+        <p key={source}>{sourceStateLabels[source]} is unavailable.</p>
+      ))}
+      <p>Known exact relationships remain visible; unavailable metrics are marked explicitly.</p>
     </div>
   );
 }
@@ -174,6 +210,11 @@ export default function PieceRegisterOverview({
     ),
   );
   const intelligenceAvailable = Boolean(intelligence && !relationshipsUnavailable);
+  const attentionIncomplete = Boolean(
+    intelligence?.unavailableSourceWarnings.some(
+      ({ source }) => source === "impacts" || source === "rfis",
+    ),
+  );
   const reviewLabel = intelligenceAvailable && intelligence
     ? `Review revision impact, ${countLabel(
         intelligence.metrics.affectedPieces,
@@ -224,10 +265,22 @@ export default function PieceRegisterOverview({
         <div className="piece-operation-state is-error" role="status">
           <strong>Relationship evidence is unavailable.</strong>
           <p>Affected-piece totals are hidden until exact drawing relationships can be verified.</p>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--secondary"
+            aria-label="Retry changes and risks"
+            onClick={() => void intelligenceState.refetch()}
+          >
+            Try again
+          </button>
         </div>
       ) : intelligence ? (
         <>
-          <PieceIntelligenceMetrics metrics={intelligence.metrics} />
+          <PieceIntelligenceMetrics
+            metrics={intelligence.metrics}
+            warnings={intelligence.unavailableSourceWarnings}
+          />
+          <OptionalEvidenceState warnings={intelligence.unavailableSourceWarnings} />
           <div className="piece-intelligence-overview__decisions">
             <DecisionPanel title="Revision impact requiring action">
               {intelligence.revisions.length === 0 ? (
@@ -258,8 +311,17 @@ export default function PieceRegisterOverview({
             </DecisionPanel>
 
             <DecisionPanel title="Pieces needing attention">
+              {attentionIncomplete ? (
+                <p className="cmd-row__meta">
+                  Pieces needing attention is incomplete while impact or RFI evidence is unavailable.
+                </p>
+              ) : null}
               {intelligence.attention.length === 0 ? (
-                <p className="piece-command-empty">No pieces need an immediate decision.</p>
+                <p className="piece-command-empty">
+                  {attentionIncomplete
+                    ? "No additional rows are confirmed by the available evidence."
+                    : "No pieces need an immediate decision."}
+                </p>
               ) : (
                 intelligence.attention.slice(0, 4).map((attention) => {
                   const relationshipRepair =

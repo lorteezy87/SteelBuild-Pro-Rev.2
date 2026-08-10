@@ -390,7 +390,7 @@ export default function PieceRegister() {
       enabled &&
       activeView === "overview" &&
       piecesQuery.isSuccess &&
-      displayRows.length > 0,
+      hasActionablePieces,
     staleTime: 30_000,
   });
   const overviewWorkPackages = useMemo(
@@ -945,7 +945,7 @@ export default function PieceRegister() {
 
         {activeView === "overview" && !piecesQuery.isLoading && !piecesQuery.error && (
           <PieceRegisterOverview
-            displayRowCount={displayRows.length}
+            displayRowCount={actionablePieceIds.size}
             overviewQueryState={{
               isLoading: overviewSnapshotQuery.isLoading,
               error: overviewSnapshotQuery.error,

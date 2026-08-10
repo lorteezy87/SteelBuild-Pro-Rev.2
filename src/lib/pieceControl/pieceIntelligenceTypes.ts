@@ -29,6 +29,7 @@ export interface PieceIntelligenceRfi {
   status?: string | null;
   fab_hold?: boolean | null;
   work_package_id?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface PieceIntelligenceEvent {

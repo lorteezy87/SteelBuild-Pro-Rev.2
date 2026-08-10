@@ -139,8 +139,8 @@ describe("derivePieceIntelligence", () => {
     const fieldDue = piece("field-due", { work_package_id: "wp-field" });
     const highImpact = piece("high-impact", { lifecycle_status: "released" });
     const planned = piece("planned");
-    const exposed = [erected, delivered, shipped, fabricated, highImpact, planned];
-    const source = exposePieces([...exposed, fieldDue], {
+    const exposed = [erected, delivered, shipped, fabricated, fieldDue, highImpact, planned];
+    const source = exposePieces(exposed, {
       pieceDrawingSets: exposed.map((row) => ({
         project_id: "prj",
         piece_id: row.id,
@@ -258,6 +258,34 @@ describe("derivePieceIntelligence", () => {
     expect(row.reason).toMatch(/field need/i);
   });
 
+  it("counts field risk only for unresolved exact revision exposure", () => {
+    const exposed = piece("exposed", { work_package_id: "wp-exposed" });
+    const unrelated = piece("unrelated", { work_package_id: "wp-unrelated" });
+    const source = exposePieces([exposed, unrelated], {
+      pieceDrawingSets: [
+        {
+          project_id: "prj",
+          piece_id: exposed.id,
+          drawing_set_id: "set-1",
+        },
+      ],
+      workPackages: [
+        workPackage("wp-exposed", "2026-08-12", "WP-EXPOSED"),
+        workPackage("wp-unrelated", "2026-08-11", "WP-UNRELATED"),
+      ],
+    });
+
+    const model = derivePieceIntelligence(source, now);
+
+    expect(model.attention).toContainEqual(expect.objectContaining({
+      pieceId: "exposed",
+      priorityTier: 5,
+      fieldRisk: true,
+    }));
+    expect(model.attention.some(({ pieceId }) => pieceId === "unrelated")).toBe(false);
+    expect(model.metrics.fieldRiskPieces).toBe(1);
+  });
+
   it.each([null, "not-a-date", "2026-02-30"])(
     "does not infer field urgency from %s",
     (scheduledStartDate) => {
@@ -303,6 +331,52 @@ describe("derivePieceIntelligence", () => {
     expect(model.metrics.affectedPieces).toBe(6);
     expect(model.metrics.blockedPieces).toBe(2);
     expect(model.metrics.fieldRiskPieces).toBe(6);
+  });
+
+  it("orders revision decisions by downstream lifecycle risk before deterministic sheet order", () => {
+    const rows = [
+      piece("low", { lifecycle_status: "not_started" }),
+      piece("fabricated", { lifecycle_status: "fabricated" }),
+      piece("shipped", { lifecycle_status: "shipped" }),
+      piece("delivered", { lifecycle_status: "delivered" }),
+      piece("erected", { lifecycle_status: "erected" }),
+    ];
+    const sheetByPiece = new Map([
+      ["low", "A100"],
+      ["fabricated", "A200"],
+      ["shipped", "Z300"],
+      ["delivered", "Z400"],
+      ["erected", "Z500"],
+    ]);
+    const source = exposePieces(rows, {
+      pieceDrawingSets: rows.map((row) => ({
+        project_id: "prj",
+        piece_id: row.id,
+        drawing_set_id: `set-${row.id}`,
+      })),
+      drawings: rows.map((row) => ({
+        id: `drawing-${row.id}`,
+        project_id: "prj",
+        drawing_set_id: `set-${row.id}`,
+        sheet_number: sheetByPiece.get(row.id),
+      })),
+      drawingRevisions: rows.map((row) => ({
+        id: `revision-${row.id}`,
+        drawing_id: `drawing-${row.id}`,
+        is_current: true,
+        archived_at: null,
+        revision_code: "1",
+      })),
+    });
+
+    expect(derivePieceIntelligence(source, now).revisions.map(({ revisionId }) => revisionId))
+      .toEqual([
+        "revision-erected",
+        "revision-delivered",
+        "revision-shipped",
+        "revision-fabricated",
+        "revision-low",
+      ]);
   });
 
   it("uses the canonical release evaluator for the earliest assigned work package", () => {
