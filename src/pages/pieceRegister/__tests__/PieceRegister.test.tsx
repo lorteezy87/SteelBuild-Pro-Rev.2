@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import {
@@ -77,7 +78,7 @@ vi.mock("@/lib/pieceControl/canonicalDashboardRepository", () => ({
   fetchCanonicalDashboardSnapshot: vi.fn(),
 }));
 
-function renderPieceRegister() {
+function renderPieceRegister(initialEntry = "/PieceRegister") {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -86,9 +87,11 @@ function renderPieceRegister() {
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <PieceRegister />
-    </QueryClientProvider>,
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <QueryClientProvider client={queryClient}>
+        <PieceRegister />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -107,18 +110,7 @@ describe("Piece Register command shell", () => {
   });
 
   it("shows operational authority and primary navigation", () => {
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PieceRegister />
-      </QueryClientProvider>,
-    );
+    renderPieceRegister();
 
     expect(
       screen.getByRole("heading", { name: "Piece Register" }),
@@ -135,18 +127,7 @@ describe("Piece Register command shell", () => {
   });
 
   it("keeps imports staged behind an explicit review boundary", () => {
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PieceRegister />
-      </QueryClientProvider>,
-    );
+    renderPieceRegister();
 
     fireEvent.click(screen.getByRole("button", { name: "Imports" }));
 
@@ -181,18 +162,7 @@ describe("Piece Register command shell", () => {
         apply_summary: null,
       },
     ]);
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PieceRegister />
-      </QueryClientProvider>,
-    );
+    renderPieceRegister();
 
     fireEvent.click(screen.getByRole("button", { name: "Imports" }));
 
@@ -203,18 +173,7 @@ describe("Piece Register command shell", () => {
 
   it("uses friendly Piece Control labels in the setup state", () => {
     projectContext.mode = "off";
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PieceRegister />
-      </QueryClientProvider>,
-    );
+    renderPieceRegister();
 
     expect(screen.getByText("Not set up")).toBeInTheDocument();
     expect(screen.getAllByText(/start in shadow review/i)).toHaveLength(1);
@@ -225,6 +184,23 @@ describe("Piece Register command shell", () => {
     expect(screen.queryByText(/controlled mode/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Controlled setup")).not.toBeInTheDocument();
     expect(screen.queryByText(/\bshadow mode\b/i)).not.toBeInTheDocument();
+  });
+
+  it("opens the Revision Impact workspace from a direct URL", () => {
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4");
+
+    expect(
+      screen.getByRole("button", { name: "Revision Impact" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getByRole("region", { name: "Revision Impact workspace" }),
+    ).toBeInTheDocument();
+  });
+
+  it("preserves direct piece selection intent in the Impact workspace", async () => {
+    renderPieceRegister("/PieceRegister?view=impact&piece=p1");
+
+    expect(await screen.findByText("Requested piece: p1")).toBeInTheDocument();
   });
 
   it("shows honest loading and error states on Overview with retry", async () => {

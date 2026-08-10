@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   Boxes,
   Database,
   Factory,
   FileUp,
+  GitCompareArrows,
   GitBranch,
   PackageOpen,
   LayoutGrid,
@@ -99,11 +101,16 @@ import {
   selectUpcomingShipments,
 } from "./pieceRegister/overviewDerive";
 import PieceRegisterOverview from "./pieceRegister/PieceRegisterOverview";
+import {
+  parsePieceRegisterLocation,
+  writePieceRegisterLocation,
+} from "./pieceRegister/pieceRegisterLocation";
 
 const EMPTY_FILTERS = EMPTY_PIECE_REGISTER_FILTERS;
 
 const REGISTER_VIEW_ICONS = {
   overview: Boxes,
+  impact: GitCompareArrows,
   register: PackageOpen,
   board: LayoutGrid,
   import: FileUp,
@@ -129,7 +136,25 @@ export default function PieceRegister() {
   const enabled = Boolean(projectId && mode !== "off");
   const queryClient = useQueryClient();
   const { role, isLoading: roleLoading } = useProjectRole(projectId);
-  const [activeView, setActiveView] = useState<PieceRegisterView>("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useMemo(
+    () => parsePieceRegisterLocation(searchParams),
+    [searchParams],
+  );
+  const activeView = location.view;
+  const setPieceRegisterLocation = useCallback(
+    (patch: Parameters<typeof writePieceRegisterLocation>[1]) => {
+      setSearchParams(
+        (current) => writePieceRegisterLocation(current, patch),
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const setActiveView = useCallback(
+    (view: PieceRegisterView) => setPieceRegisterLocation({ view }),
+    [setPieceRegisterLocation],
+  );
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [sourceType, setSourceType] = useState<PieceImportSourceType>("csv");
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -137,7 +162,25 @@ export default function PieceRegister() {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [applyConfirmed, setApplyConfirmed] = useState(false);
   const [importTargetWorkPackageId, setImportTargetWorkPackageId] = useState("");
-  const [selectedPieceIds, setSelectedPieceIds] = useState<Set<string>>(new Set());
+  const [selectedPieceIds, setSelectedPieceIdsState] = useState<Set<string>>(
+    () => new Set(location.pieceId ? [location.pieceId] : []),
+  );
+  const selectedPieceIdsRef = useRef(selectedPieceIds);
+  const pendingSelectionUrlValue = useRef<string | null>(null);
+  const setSelectedPieceIds: typeof setSelectedPieceIdsState = useCallback(
+    (nextSelection) => {
+      const next =
+        typeof nextSelection === "function"
+          ? nextSelection(selectedPieceIdsRef.current)
+          : nextSelection;
+      const pieceId = next.size === 1 ? [...next][0] : null;
+      selectedPieceIdsRef.current = next;
+      pendingSelectionUrlValue.current = pieceId ?? "";
+      setSelectedPieceIdsState(next);
+      setPieceRegisterLocation({ pieceId });
+    },
+    [setPieceRegisterLocation],
+  );
   const [registerSort, setRegisterSort] = useState<PieceRegisterSort>({
     key: "work_package",
     direction: "asc",
@@ -148,6 +191,19 @@ export default function PieceRegister() {
   const [attentionFocus, setAttentionFocus] = useState<PieceAttentionItem["key"] | null>(null);
 
   useEffect(() => {
+    const urlValue = location.pieceId ?? "";
+    const isInternalUpdate = pendingSelectionUrlValue.current === urlValue;
+    pendingSelectionUrlValue.current = null;
+    if (isInternalUpdate) return;
+    const next = new Set(location.pieceId ? [location.pieceId] : []);
+    selectedPieceIdsRef.current = next;
+    setSelectedPieceIdsState(next);
+  }, [location.pieceId]);
+
+  const previousProjectId = useRef(projectId);
+  useEffect(() => {
+    if (previousProjectId.current === projectId) return;
+    previousProjectId.current = projectId;
     setSelectedPieceIds(new Set());
     setArchiveOpen(false);
     setArchiveReason("");
@@ -155,7 +211,7 @@ export default function PieceRegister() {
     setAttentionFocus(null);
     setImportTargetWorkPackageId("");
     setApplyConfirmed(false);
-  }, [projectId]);
+  }, [projectId, setSelectedPieceIds]);
 
   const piecesQuery = useQuery({
     queryKey: ["piece-register", projectId],
@@ -777,6 +833,32 @@ export default function PieceRegister() {
             onOpenRegister={() => setActiveView("register")}
             onOpenLogistics={() => setActiveView("logistics")}
           />
+        )}
+
+        {activeView === "impact" && (
+          <section
+            className="piece-register-embedded-workspace"
+            aria-label="Revision Impact workspace"
+          >
+            <DecisionPanel title="Revision Impact">
+              <div className="piece-operation-state">
+                <strong>Review exact revision-to-piece exposure</strong>
+                <span>
+                  Select a drawing revision to review linked pieces before shop
+                  or field work is exposed.
+                </span>
+                {location.revisionId ? (
+                  <span>Requested revision: {location.revisionId}</span>
+                ) : null}
+                {location.pieceId ? (
+                  <span>Requested piece: {location.pieceId}</span>
+                ) : null}
+                {location.focus ? (
+                  <span>Current focus: {location.focus}</span>
+                ) : null}
+              </div>
+            </DecisionPanel>
+          </section>
         )}
 
         {activeView === "register" && (

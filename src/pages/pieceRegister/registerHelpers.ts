@@ -198,6 +198,7 @@ export const EMPTY_PIECE_REGISTER_FILTERS: PieceRegisterFilters = {
 
 export const PIECE_REGISTER_VIEW_IDS = [
   "overview",
+  "impact",
   "register",
   "board",
   "import",
@@ -220,6 +221,7 @@ export function resolvePieceRegisterView(
 
 export const PIECE_REGISTER_VIEW_LABELS: Record<PieceRegisterViewId, string> = {
   overview: "Overview",
+  impact: "Revision Impact",
   register: "Register",
   board: "Board",
   import: "Imports",
