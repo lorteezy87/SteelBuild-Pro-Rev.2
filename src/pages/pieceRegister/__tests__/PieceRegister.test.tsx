@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
@@ -174,6 +174,26 @@ function intelligenceSnapshot(pieceId = "p1", projectId = "project-1") {
       events: "available",
     },
   };
+}
+
+function intelligenceSnapshotWithRelationshipRepair() {
+  const snapshot = intelligenceSnapshot();
+  snapshot.drawings.push({
+    id: "drawing-2",
+    project_id: "project-1",
+    drawing_set_id: "set-2",
+    sheet_number: "E503",
+    title: "Canopy framing",
+  });
+  snapshot.drawingSets.push({ id: "set-2", set_name: "Canopy" });
+  snapshot.drawingRevisions.push({
+    id: "r5",
+    drawing_id: "drawing-2",
+    is_current: true,
+    archived_at: null,
+    revision_code: "5",
+  });
+  return snapshot;
 }
 
 function SearchStateProbe() {
@@ -626,6 +646,190 @@ describe("Piece Register command shell", () => {
     ).toBeInTheDocument();
     expect((await screen.findAllByText("WP-001")).length).toBeGreaterThan(0);
     expect(screen.getByText("Aug 1, 2026")).toBeInTheDocument();
+  });
+
+  it("leads a populated Overview with Changes & Risks and preserved operations summaries", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+
+    renderPieceRegister();
+
+    expect(
+      await screen.findByRole("heading", { name: "Changes & Risks" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", {
+        name: /Review revision impact.*1 affected piece/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Revision impact requiring action" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Pieces needing attention" }),
+    ).toBeInTheDocument();
+    const metrics = screen.getByRole("group", {
+      name: "Piece intelligence metrics",
+    });
+    expect(within(metrics).getByText("Revision affected").parentElement)
+      .toHaveTextContent("1Revision affected");
+    expect(within(metrics).getByText("Blocked or held")).toBeInTheDocument();
+    expect(within(metrics).getByText("Next release")).toBeInTheDocument();
+    expect(within(metrics).getByText("Field risk")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Work-package readiness" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Upcoming shipments" }),
+    ).toBeInTheDocument();
+  });
+
+  it("preserves the controlled empty-register onboarding without loading intelligence", async () => {
+    renderPieceRegister();
+
+    expect(await screen.findByText("Import the first pieces")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Changes & Risks" }),
+    ).not.toBeInTheDocument();
+    expect(fetchPieceIntelligenceSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("keeps core Overview operations visible while intelligence is loading", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockImplementationOnce(
+      () => new Promise(() => undefined),
+    );
+
+    renderPieceRegister();
+
+    expect(
+      await screen.findByRole("heading", { name: "Changes & Risks" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Loading change and risk evidence…")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Work-package readiness" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Revision affected")).not.toBeInTheDocument();
+    expect(screen.queryByText(/affected pieces?$/i)).not.toBeInTheDocument();
+  });
+
+  it("shows one intelligence retry on Overview error without affected totals", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+    vi.mocked(fetchPieceIntelligenceSnapshot)
+      .mockRejectedValueOnce(new Error("relationship query denied"))
+      .mockResolvedValueOnce(
+        intelligenceSnapshot() as Awaited<
+          ReturnType<typeof fetchPieceIntelligenceSnapshot>
+        >,
+      );
+
+    renderPieceRegister();
+
+    expect(
+      await screen.findByText("Changes and risks could not be loaded."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Revision affected")).not.toBeInTheDocument();
+    expect(screen.queryByText(/affected pieces?$/i)).not.toBeInTheDocument();
+    const retry = screen.getAllByRole("button", {
+      name: "Retry changes and risks",
+    });
+    expect(retry).toHaveLength(1);
+
+    fireEvent.click(retry[0]);
+
+    expect(
+      await screen.findByRole("group", { name: "Piece intelligence metrics" }),
+    ).toBeInTheDocument();
+    expect(fetchPieceIntelligenceSnapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails closed when Overview relationship evidence is unavailable", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+    const unavailable = intelligenceSnapshot();
+    unavailable.availability.relationships = "unavailable";
+    unavailable.sourceAvailability.pieceDrawings = "unavailable";
+    unavailable.sourceAvailability.pieceDrawingSets = "unavailable";
+    unavailable.sourceAvailability.drawings = "unavailable";
+    unavailable.sourceAvailability.drawingSets = "unavailable";
+    unavailable.sourceAvailability.revisions = "unavailable";
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockResolvedValueOnce(
+      unavailable as Awaited<ReturnType<typeof fetchPieceIntelligenceSnapshot>>,
+    );
+
+    renderPieceRegister();
+
+    expect(
+      await screen.findByText("Relationship evidence is unavailable."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Revision affected")).not.toBeInTheDocument();
+    expect(screen.queryByText(/affected pieces?$/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /affected pieces?/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Work-package readiness" }),
+    ).toBeInTheDocument();
+  });
+
+  it("preserves revision and piece intent from decision-rich Overview actions", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+
+    const firstRender = renderPieceRegister("/PieceRegister?embed=1");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /Review revision impact.*1 affected piece/i,
+      }),
+    );
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+      "?embed=1&view=impact&focus=revision",
+    );
+    firstRender.unmount();
+
+    const secondRender = renderPieceRegister("/PieceRegister?embed=1");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /Review E502 revision 4.*1 affected piece.*fabrication/i,
+      }),
+    );
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+      "?embed=1&view=impact&revision=r4",
+    );
+    secondRender.unmount();
+
+    renderPieceRegister("/PieceRegister?embed=1");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /Open P1 · A digital thread.*revision exposure during fabrication/i,
+      }),
+    );
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+      "?embed=1&view=register&piece=p1",
+    );
+  });
+
+  it("routes relationship-repair attention to the revision relationships workflow", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockResolvedValueOnce(
+      intelligenceSnapshotWithRelationshipRepair() as Awaited<
+        ReturnType<typeof fetchPieceIntelligenceSnapshot>
+      >,
+    );
+
+    renderPieceRegister("/PieceRegister?embed=1");
+
+    expect(await screen.findByText("Links required")).toBeInTheDocument();
+    expect(screen.queryByText("0 pieces")).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Repair relationships for E503 revision 5.*explicit drawing relationship required/i,
+      }),
+    );
+
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+      "?embed=1&view=relationships&focus=revision&revision=r5",
+    );
+    expect(screen.getByTestId("piece-register-search")).not.toHaveTextContent(
+      "piece=r5",
+    );
   });
 
   it("opens Logistics from the no-upcoming-shipments state", async () => {

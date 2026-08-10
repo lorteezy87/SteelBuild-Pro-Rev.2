@@ -264,7 +264,9 @@ export default function PieceRegister() {
       enabled &&
       piecesQuery.isSuccess &&
       hasActionablePieces &&
-      (activeView === "impact" || Boolean(selectedPieceId)),
+      (activeView === "overview" ||
+        activeView === "impact" ||
+        Boolean(selectedPieceId)),
     staleTime: 15_000,
   });
   const intelligenceModel = useMemo(
@@ -951,9 +953,31 @@ export default function PieceRegister() {
             }}
             overviewWorkPackages={overviewWorkPackages}
             upcomingShipments={upcomingShipments}
+            intelligence={intelligenceModel}
+            intelligenceState={{
+              isLoading: intelligenceQuery.isLoading,
+              error: intelligenceQuery.error,
+              refetch: () => intelligenceQuery.refetch(),
+            }}
             onOpenImport={() => setActiveView("import")}
-            onOpenRegister={() => setActiveView("register")}
             onOpenLogistics={() => setActiveView("logistics")}
+            onReviewRevision={() =>
+              setPieceRegisterLocation({ view: "impact", focus: "revision" })
+            }
+            onSelectRevision={(revisionId) =>
+              setPieceRegisterLocation({ view: "impact", revisionId })
+            }
+            onSelectPiece={(pieceId) =>
+              setPieceRegisterLocation({ view: "register", pieceId })
+            }
+            onOpenRelationships={(revisionId) =>
+              setPieceRegisterLocation({
+                view: "relationships",
+                focus: "revision",
+                revisionId,
+                pieceId: null,
+              })
+            }
           />
         )}
 

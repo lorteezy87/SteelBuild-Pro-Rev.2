@@ -86,4 +86,27 @@ describe("overviewDerive", () => {
     expect(upcoming[0].plannedShipDate).toBe("2026-08-01");
     expect(upcoming[7].plannedShipDate).toBe("2026-08-08");
   });
+
+  it("keeps readiness rows when no work package has a planned shipment", () => {
+    const packages = [
+      {
+        workPackageId: "wp-1",
+        plannedShipDate: null,
+        source: undefined,
+        derivedStatus: "Ready for Release" as const,
+        earnedFabricationPercent: 0,
+        lotCount: 1,
+        pieceCount: 3,
+        knownTons: 1.5,
+        unknownWeightLotCount: 0,
+        unknownWeightPieceCount: 0,
+        tonsByLifecycle: {},
+        unknownWeightLotsByLifecycle: {},
+      },
+    ];
+
+    expect(selectUpcomingShipments(packages)).toEqual([]);
+    expect(packages).toHaveLength(1);
+    expect(packages[0].pieceCount).toBe(3);
+  });
 });
