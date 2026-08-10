@@ -5,7 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { projectState } = vi.hoisted(() => ({
+interface ProjectState {
+  id: string | null;
+}
+
+const { projectState } = vi.hoisted((): { projectState: ProjectState } => ({
   projectState: { id: null },
 }));
 
