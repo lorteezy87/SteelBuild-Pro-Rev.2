@@ -560,6 +560,52 @@ describe("buildPieceDigitalThread", () => {
     expect(thread?.history.availability).toBe("unavailable");
   });
 
+  it("fails closed on stale relationship evidence when relationships are unavailable", () => {
+    const p1 = piece("p1", {
+      piece_mark: "B12",
+      lifecycle_status: "released",
+    });
+    const source = exposePieces([p1], {
+      drawings: [
+        {
+          id: "drawing-1",
+          project_id: "prj",
+          drawing_set_id: "set-1",
+          sheet_number: "E502",
+          linked_rfi_ids: "RFI-22",
+        },
+      ],
+      rfis: [
+        {
+          id: "rfi-22",
+          project_id: "prj",
+          rfi_number: "RFI-22",
+          status: "Open",
+          fab_hold: true,
+        },
+      ],
+      availability: {
+        relationships: "unavailable",
+        approvals: "available",
+        impacts: "available",
+        rfis: "available",
+        events: "available",
+      },
+    });
+
+    const model = derivePieceIntelligence(source, now);
+    const thread = buildPieceDigitalThread("p1", source);
+
+    expect(model.attention.some(({ reason }) =>
+      reason === "Linked RFI fabrication hold is active"
+    )).toBe(false);
+    expect(thread?.identity.facts).toContainEqual({ label: "Piece mark", value: "B12" });
+    expect(thread?.modelAndDrawing.availability).toBe("unavailable");
+    expect(thread?.modelAndDrawing.facts).toEqual([]);
+    expect(thread?.commercial.availability).toBe("unavailable");
+    expect(thread?.commercial.facts.some(({ label }) => label === "Open RFIs")).toBe(false);
+  });
+
   it("includes only RFIs explicitly linked by exact drawings, never work-package co-membership", () => {
     const source = exposePieces([
       piece("p1", { work_package_id: "wp-1" }),
@@ -658,7 +704,7 @@ describe("buildPieceDigitalThread", () => {
       piece("p1", { lifecycle_status: "delivered", current_station: "paint" }),
     ], {
       pieceEvents: [
-        { id: "released", project_id: "prj", piece_id: "p1", event_type: "released", created_at: "2026-08-01T12:00:00Z" },
+        { id: "released", project_id: "prj", piece_id: "p1", event_type: "released_for_fabrication", created_at: "2026-08-01T12:00:00Z" },
         { id: "loaded", project_id: "prj", piece_id: "p1", event_type: "loaded", created_at: "2026-08-05T12:00:00Z" },
         { id: "delivered", project_id: "prj", piece_id: "p1", event_type: "delivered", created_at: "2026-08-07T12:00:00Z" },
       ],

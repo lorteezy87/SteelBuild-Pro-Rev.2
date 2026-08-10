@@ -99,7 +99,12 @@ function exactOpenRfis(
   drawings: ReadinessDrawing[],
   snapshot: PieceIntelligenceSnapshot,
 ) {
-  if (snapshot.availability.rfis === "unavailable") return [];
+  if (
+    snapshot.availability.relationships === "unavailable" ||
+    snapshot.availability.rfis === "unavailable"
+  ) {
+    return [];
+  }
   const linked = findBlockingRfis({ drawings, rfis: snapshot.rfis });
   const linkedIds = new Set(linked.map((rfi) => rfi.id).filter(Boolean));
   return snapshot.rfis.filter((rfi) => linkedIds.has(rfi.id));
@@ -409,6 +414,7 @@ function exactDrawingsForPiece(
   pieceId: string,
   snapshot: PieceIntelligenceSnapshot,
 ): ReadinessDrawing[] {
+  if (snapshot.availability.relationships === "unavailable") return [];
   const drawingSetIds = new Set(
     snapshot.pieceDrawingSets
       .filter((link) => link.piece_id === pieceId)
@@ -566,6 +572,7 @@ export function buildPieceDigitalThread(
     snapshot.availability.approvals,
   );
   const commercialAvailability = availabilityFor(
+    snapshot.availability.relationships,
     snapshot.availability.impacts,
     snapshot.availability.rfis,
   );
@@ -577,7 +584,10 @@ export function buildPieceDigitalThread(
   const commercialFacts: PieceThreadFact[] = [
     { label: "Fabrication hold", value: piece.on_hold ? displayValue(piece.on_hold_reason ?? "On hold") : "No hold recorded" },
   ];
-  if (snapshot.availability.rfis === "available") {
+  if (
+    snapshot.availability.relationships === "available" &&
+    snapshot.availability.rfis === "available"
+  ) {
     commercialFacts.push({
       label: "Open RFIs",
       value: joinedOrFallback(
@@ -611,7 +621,7 @@ export function buildPieceDigitalThread(
     },
     modelAndDrawing: {
       availability: modelAndDrawingAvailability,
-      facts: [
+      facts: snapshot.availability.relationships === "available" ? [
         { label: "Drawing sets", value: joinedOrFallback(linkedSetNames, "Not linked") },
         {
           label: "Sheets",
@@ -652,7 +662,7 @@ export function buildPieceDigitalThread(
           { label: "Unresolved dispositions", value: String(unresolvedDispositions.length) },
         ] : []),
         { label: "Link quality", value: drawings.length > 0 ? "Exact relationship" : "Not linked" },
-      ],
+      ] : [],
     },
     commercial: {
       availability: commercialAvailability,
@@ -667,7 +677,12 @@ export function buildPieceDigitalThread(
           value: milestoneValue(
             piece,
             "released",
-            new Set(["released", "fab_released", "fabrication_released"]),
+            new Set([
+              "released_for_fabrication",
+              "released",
+              "fab_released",
+              "fabrication_released",
+            ]),
             snapshot.availability.events === "available" ? snapshot.pieceEvents : [],
           ),
         },
