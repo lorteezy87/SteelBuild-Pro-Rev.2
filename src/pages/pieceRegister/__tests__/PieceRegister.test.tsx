@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
+import { supabase } from "@/lib/supabase";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceRepository";
 import type { PieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceTypes";
@@ -88,6 +89,12 @@ vi.mock("@/api/supabaseClient", () => ({
     User: {
       filter: vi.fn(),
     },
+  },
+}));
+
+vi.mock("@/lib/supabase", () => ({
+  supabase: {
+    rpc: vi.fn(),
   },
 }));
 
@@ -381,6 +388,24 @@ describe("Piece Register command shell", () => {
     vi.mocked(setPieceHold).mockResolvedValue(undefined);
     vi.mocked(entities.DrawingImpact.create).mockResolvedValue({} as never);
     vi.mocked(entities.DrawingImpact.update).mockResolvedValue({} as never);
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: [
+        {
+          user_id: MEMBER_ONE_ID,
+          display_name: "Alex Rivera",
+          project_role: "pm",
+        },
+        {
+          user_id: MEMBER_TWO_ID,
+          display_name: "sam@example.com",
+          project_role: "field",
+        },
+      ],
+      error: null,
+      count: null,
+      status: 200,
+      statusText: "OK",
+    } as never);
     vi.mocked(entities.UserProject.filter).mockResolvedValue([
       {
         id: "membership-1",
@@ -616,8 +641,14 @@ describe("Piece Register command shell", () => {
       expect(screen.queryByRole("button", { name: "Open fabrication release" }) !== null)
         .toBe(releaseVisible);
       if (impactVisible) {
-        await waitFor(() => expect(entities.UserProject.filter).toHaveBeenCalled());
+        await waitFor(() =>
+          expect(supabase.rpc).toHaveBeenCalledWith(
+            "list_drawing_impact_assignees",
+            { p_project_id: "project-1" },
+          ),
+        );
       } else {
+        expect(supabase.rpc).not.toHaveBeenCalled();
         expect(entities.UserProject.filter).not.toHaveBeenCalled();
         expect(entities.User.filter).not.toHaveBeenCalled();
       }
@@ -682,6 +713,7 @@ describe("Piece Register command shell", () => {
 
   it("creates a scoped drawing impact for the selected current revision", async () => {
     const user = userEvent.setup();
+    projectRole.current = "pm";
     seedRevisionWithPiece();
     renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
 
@@ -708,21 +740,26 @@ describe("Piece Register command shell", () => {
         notes: "Hold shop welding pending review",
       }),
     );
-    expect(entities.UserProject.filter).toHaveBeenCalledWith(
-      { project_id: "project-1" },
-      "created_at",
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "list_drawing_impact_assignees",
+      { p_project_id: "project-1" },
     );
-    expect(entities.User.filter).toHaveBeenCalledWith({
-      id: [MEMBER_ONE_ID, MEMBER_TWO_ID],
-    });
+    expect(entities.UserProject.filter).not.toHaveBeenCalled();
+    expect(entities.User.filter).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith("Drawing impact created");
   });
 
   it("shows project-member loading and empty states without accepting free text", async () => {
     const user = userEvent.setup();
-    let releaseMemberships!: (value: []) => void;
-    vi.mocked(entities.UserProject.filter).mockImplementationOnce(
-      () => new Promise((resolve) => { releaseMemberships = resolve; }) as never,
+    let releaseAssignees!: (value: {
+      data: [];
+      error: null;
+      count: null;
+      status: 200;
+      statusText: "OK";
+    }) => void;
+    vi.mocked(supabase.rpc).mockImplementationOnce(
+      () => new Promise((resolve) => { releaseAssignees = resolve; }) as never,
     );
     seedRevisionWithPiece();
     renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
@@ -734,7 +771,13 @@ describe("Piece Register command shell", () => {
     expect(within(assignee).getByRole("option", { name: "Loading project members…" }))
       .toBeInTheDocument();
 
-    releaseMemberships([]);
+    releaseAssignees({
+      data: [],
+      error: null,
+      count: null,
+      status: 200,
+      statusText: "OK",
+    });
     await waitFor(() => expect(assignee).toBeEnabled());
     expect(within(assignee).getByRole("option", { name: "Unassigned" }))
       .toBeInTheDocument();
@@ -746,6 +789,95 @@ describe("Piece Register command shell", () => {
       expect(entities.DrawingImpact.create).toHaveBeenCalledWith(
         expect.objectContaining({ assigned_to: null }),
       ),
+    );
+  });
+
+  it("fails closed when the PM-authorized assignee roster cannot be loaded", async () => {
+    const user = userEvent.setup();
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({
+      data: null,
+      error: { message: "permission denied" },
+      count: null,
+      status: 403,
+      statusText: "Forbidden",
+    } as never);
+    seedRevisionWithPiece();
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Add drawing impact" }));
+    const assignee = screen.getByLabelText("Assigned to");
+    await waitFor(() => expect(assignee).toBeDisabled());
+    expect(within(assignee).getByRole("option", { name: "Project members unavailable" }))
+      .toBeDisabled();
+    await user.type(screen.getByLabelText("Impact title"), "Blocked roster write");
+    expect(screen.getByRole("button", { name: "Save impact" })).toBeDisabled();
+    expect(entities.DrawingImpact.create).not.toHaveBeenCalled();
+  });
+
+  it("sets resolved_at only when an edited impact crosses into a terminal status", async () => {
+    const user = userEvent.setup();
+    seedRevisionWithPiece({ impacts: [drawingImpactRow()] });
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Edit drawing impact" }));
+    await user.selectOptions(screen.getByLabelText("Impact status"), "resolved");
+    await user.click(screen.getByRole("button", { name: "Save impact" }));
+
+    await waitFor(() => expect(entities.DrawingImpact.update).toHaveBeenCalled());
+    expect(entities.DrawingImpact.update).toHaveBeenLastCalledWith(
+      "impact-1",
+      expect.objectContaining({
+        status: "resolved",
+        resolved_at: expect.any(String),
+      }),
+    );
+  });
+
+  it("preserves resolved_at when an edited impact remains terminal", async () => {
+    const user = userEvent.setup();
+    const originalResolvedAt = "2026-08-01T14:30:00.000Z";
+    seedRevisionWithPiece({
+      impacts: [drawingImpactRow({ status: "resolved", resolved_at: originalResolvedAt })],
+    });
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Edit drawing impact" }));
+    await user.selectOptions(screen.getByLabelText("Impact status"), "closed");
+    await user.click(screen.getByRole("button", { name: "Save impact" }));
+
+    await waitFor(() => expect(entities.DrawingImpact.update).toHaveBeenCalled());
+    expect(entities.DrawingImpact.update).toHaveBeenLastCalledWith(
+      "impact-1",
+      expect.objectContaining({
+        status: "closed",
+        resolved_at: originalResolvedAt,
+      }),
+    );
+  });
+
+  it("clears resolved_at when an edited impact is reopened", async () => {
+    const user = userEvent.setup();
+    seedRevisionWithPiece({
+      impacts: [
+        drawingImpactRow({
+          status: "closed",
+          resolved_at: "2026-08-01T14:30:00.000Z",
+        }),
+      ],
+    });
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Edit drawing impact" }));
+    await user.selectOptions(screen.getByLabelText("Impact status"), "in_review");
+    await user.click(screen.getByRole("button", { name: "Save impact" }));
+
+    await waitFor(() => expect(entities.DrawingImpact.update).toHaveBeenCalled());
+    expect(entities.DrawingImpact.update).toHaveBeenLastCalledWith(
+      "impact-1",
+      expect.objectContaining({
+        status: "in_review",
+        resolved_at: null,
+      }),
     );
   });
 

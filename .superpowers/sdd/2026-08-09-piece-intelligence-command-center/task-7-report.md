@@ -147,11 +147,67 @@ Tests       122 passed (122)
 - `npm run typecheck:noimplicitany`: same 27 inherited diagnostics in unchanged
   files; no diagnostic in a Task 7 or fix-round file.
 
-### Database and membership verification boundary
+## Fix Round 2 — assignment authority and terminal timestamps
 
-The PM-floor migration is covered by a static contract test only; no disposable
-database was available, so this report makes no live RLS claim. The established
-`user_projects` SELECT policy may return only the current user's membership to a
-non-admin PM. The selector deliberately shows only real rows that RLS returns;
-expanding membership-read authority or adding a roster RPC was outside this
-fix's authorized migration scope.
+- Added a follow-up migration without modifying the already-pushed PM-floor
+  migration. `list_drawing_impact_assignees(p_project_id)` is a project-scoped,
+  PM-authorized security-definer RPC that returns only `user_id`, a computed
+  `display_name`, and `project_role`. Its default/API grants are revoked before
+  authenticated execution is granted explicitly. Existing `user_projects` RLS
+  policies remain unchanged.
+- Added a locked-down security-definer trigger on `drawing_impacts` so every
+  direct insert/update rejects a non-null `assigned_to` unless that UUID is a
+  member of the row's project. This enforces the invariant when the browser and
+  client-side roster validation are bypassed.
+- Replaced the admin-shaped `UserProject`/`User` reads in Piece Register with
+  the narrow roster RPC. The response is runtime-validated, and loading, RPC
+  errors, and malformed responses keep assignment and Save fail-closed.
+- Changed edit timestamp derivation so active-to-terminal sets `resolved_at`,
+  terminal-to-terminal preserves the persisted value, and reopening clears it.
+
+### Fix-round 2 RED/GREEN evidence
+
+Initial focused RED, before the migration or production changes:
+
+```text
+npx vitest run \
+  src/pages/pieceRegister/__tests__/PieceRegister.test.tsx \
+  supabase/migrations/__tests__/pieceIntelligenceDrawingImpactAssignmentAuthority.test.ts
+
+Test Files  2 failed (2)
+Tests       9 failed | 52 passed (61)
+```
+
+The four migration tests failed because the follow-up authority did not exist.
+The page failures proved the old admin-only membership reads, missing roster
+loading/error closure, and terminal-to-terminal timestamp overwrite.
+
+Final Task 7, migration, and canonical-release regression:
+
+```text
+npx vitest run \
+  src/pages/pieceRegister/__tests__/PieceRegister.test.tsx \
+  src/components/pieceControl/__tests__/CanonicalFabReleasePanel.test.tsx \
+  supabase/migrations/__tests__/pieceIntelligenceDrawingImpactRoleFloor.test.ts \
+  supabase/migrations/__tests__/pieceIntelligenceDrawingImpactAssignmentAuthority.test.ts
+
+Test Files  4 passed (4)
+Tests       70 passed (70)
+```
+
+### Fix-round 2 final verification
+
+- `npm test`: 433 files passed, 3,968 tests passed.
+- `npm run typecheck`: passed.
+- `npm run typecheck:strict`: passed with 0 enforced errors.
+- `npm run typecheck:noimplicitany`: passed with 0 enforced errors.
+- Scoped ESLint over the modified TypeScript source/tests: passed.
+- `npm run check:no-new-js`: passed.
+- `git diff --check`: passed.
+- `npm run build`: passed (existing Vite chunk-size advisory only).
+
+### Database verification boundary
+
+Both Task 7 migrations have static SQL contract coverage. No authorized
+disposable database was available, so this report makes no live migration, RPC,
+trigger, or RLS execution claim.

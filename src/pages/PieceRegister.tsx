@@ -20,6 +20,8 @@ import { toast } from "sonner";
 import "@/styles/command.css";
 import "@/styles/piece-control-command.css";
 import { entities } from "@/api/supabaseClient";
+import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
+import { supabase } from "@/lib/supabase";
 import {
   DecisionPanel,
   KpiStrip,
@@ -155,6 +157,8 @@ type DrawingImpactWriteRequest = {
   impactId: string | null;
   revisionId: string;
   draft: DrawingImpactDraft;
+  previousStatus: DrawingImpactRow["status"] | null;
+  previousResolvedAt: string | null;
 };
 
 const DRAWING_IMPACT_TYPES = new Set([
@@ -185,27 +189,44 @@ const DRAWING_IMPACT_PRIORITIES = new Set([
 ]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type ProjectMembershipRow = {
-  user_id?: string | null;
-  role?: string | null;
+type DrawingImpactAssigneeRpcRow = {
+  user_id: string;
+  display_name: string;
+  project_role: string;
 };
 
-type ProjectMemberProfileRow = {
-  id?: string | null;
-  full_name?: string | null;
-  email?: string | null;
+type DrawingImpactAssigneeRpcError = {
+  message: string;
 };
 
-function projectMemberLabel(
-  membership: ProjectMembershipRow,
-  profile: ProjectMemberProfileRow | undefined,
-): string {
-  const identity = profile?.full_name?.trim() || profile?.email?.trim() || membership.user_id!;
-  const details = [
-    profile?.full_name?.trim() ? profile.email?.trim() : null,
-    membership.role?.replace(/_/g, " "),
-  ].filter(Boolean);
-  return details.length > 0 ? `${identity} · ${details.join(" · ")}` : identity;
+type DrawingImpactAssigneeRpcResponse = {
+  data: unknown;
+  error: DrawingImpactAssigneeRpcError | null;
+};
+
+function isDrawingImpactAssigneeRpcRow(
+  value: unknown,
+): value is DrawingImpactAssigneeRpcRow {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<DrawingImpactAssigneeRpcRow>;
+  return (
+    typeof row.user_id === "string" &&
+    UUID_PATTERN.test(row.user_id) &&
+    typeof row.display_name === "string" &&
+    Boolean(row.display_name.trim()) &&
+    typeof row.project_role === "string" &&
+    Boolean(row.project_role.trim())
+  );
+}
+
+function drawingImpactAssigneeLabel(row: DrawingImpactAssigneeRpcRow): string {
+  return `${row.display_name.trim()} · ${row.project_role.replace(/_/g, " ")}`;
+}
+
+function isTerminalDrawingImpactStatus(
+  status: DrawingImpactRow["status"],
+): boolean {
+  return status === "resolved" || status === "closed";
 }
 
 export default function PieceRegister() {
@@ -507,51 +528,32 @@ export default function PieceRegister() {
     activeView === "impact" &&
     Boolean(location.revisionId) &&
     intelligenceQuery.data?.availability.impacts === "available";
-  const impactMemberRowsQuery = useQuery({
-    queryKey: ["project-members", projectId],
-    queryFn: () =>
-      entities.UserProject.filter({ project_id: projectId! }, "created_at"),
+  const impactAssigneesQuery = useQuery({
+    queryKey: ["drawing-impact-assignees", projectId],
+    queryFn: async () => {
+      const callRpc = supabase.rpc.bind(supabase) as unknown as (
+        functionName: "list_drawing_impact_assignees",
+        args: { p_project_id: string },
+      ) => Promise<DrawingImpactAssigneeRpcResponse>;
+      const { data, error } = await callRpc(
+        "list_drawing_impact_assignees",
+        { p_project_id: projectId! },
+      );
+      if (error) throw new Error(error.message);
+      if (!Array.isArray(data) || !data.every(isDrawingImpactAssigneeRpcRow)) {
+        throw new Error("Project assignee roster returned an invalid response.");
+      }
+      return data.map<DrawingImpactAssigneeOption>((row) => ({
+        userId: row.user_id,
+        label: drawingImpactAssigneeLabel(row),
+      }));
+    },
     enabled: canLoadImpactAssignees,
     staleTime: 30_000,
   });
-  const impactMemberRows = useMemo(
-    () => ((impactMemberRowsQuery.data ?? []) as ProjectMembershipRow[])
-      .filter((membership) =>
-        Boolean(membership.user_id && UUID_PATTERN.test(membership.user_id)),
-      ),
-    [impactMemberRowsQuery.data],
-  );
-  const impactMemberUserIds = useMemo(
-    () => Array.from(new Set(impactMemberRows.map((membership) => membership.user_id!))),
-    [impactMemberRows],
-  );
-  const impactMemberProfilesQuery = useQuery({
-    queryKey: ["user-profiles-by-ids", impactMemberUserIds],
-    queryFn: async () => {
-      const profiles = await entities.User.filter({ id: impactMemberUserIds });
-      const profilesById: Record<string, ProjectMemberProfileRow> = {};
-      for (const profile of profiles as ProjectMemberProfileRow[]) {
-        if (profile.id) profilesById[profile.id] = profile;
-      }
-      return profilesById;
-    },
-    enabled: canLoadImpactAssignees && impactMemberUserIds.length > 0,
-    staleTime: 5 * 60_000,
-  });
-  const impactAssignees = useMemo<DrawingImpactAssigneeOption[]>(
-    () => impactMemberRows.map((membership) => ({
-      userId: membership.user_id!,
-      label: projectMemberLabel(
-        membership,
-        impactMemberProfilesQuery.data?.[membership.user_id!],
-      ),
-    })),
-    [impactMemberProfilesQuery.data, impactMemberRows],
-  );
+  const impactAssignees = impactAssigneesQuery.data ?? [];
   const impactAssigneesLoading =
-    canLoadImpactAssignees &&
-    (impactMemberRowsQuery.isLoading ||
-      (impactMemberUserIds.length > 0 && impactMemberProfilesQuery.isLoading));
+    canLoadImpactAssignees && impactAssigneesQuery.isLoading;
   const allFilteredSelected = allRowsSelected(filteredRows, selectedPieceIds);
   const archiveConfirmationText = buildArchiveConfirmationText(selectedPieceIds.size);
 
@@ -644,7 +646,12 @@ export default function PieceRegister() {
       impactId,
       revisionId,
       draft,
+      previousStatus,
+      previousResolvedAt,
     }: DrawingImpactWriteRequest) => {
+      if (impactAssigneesLoading || impactAssigneesQuery.error) {
+        throw new Error("Project assignee roster is unavailable.");
+      }
       if (!DRAWING_IMPACT_TYPES.has(draft.impact_type)) {
         throw new Error("Select a valid impact type.");
       }
@@ -664,7 +671,21 @@ export default function PieceRegister() {
       ) {
         throw new Error("Select an assigned project member.");
       }
-      const resolved = draft.status === "resolved" || draft.status === "closed";
+      if (
+        impactId &&
+        (!previousStatus || !DRAWING_IMPACT_STATUSES.has(previousStatus))
+      ) {
+        throw new Error("The current drawing impact status is unavailable.");
+      }
+      const nextStatusIsTerminal = isTerminalDrawingImpactStatus(draft.status);
+      const previousStatusIsTerminal = previousStatus
+        ? isTerminalDrawingImpactStatus(previousStatus)
+        : false;
+      const resolvedAt = nextStatusIsTerminal
+        ? previousStatusIsTerminal
+          ? previousResolvedAt
+          : new Date().toISOString()
+        : null;
       const payload = withProjectId({
         drawing_revision_id: revisionId,
         impact_type: draft.impact_type,
@@ -675,7 +696,7 @@ export default function PieceRegister() {
         title,
         notes: draft.notes.trim() || null,
         ...(impactId
-          ? { resolved_at: resolved ? new Date().toISOString() : null }
+          ? { resolved_at: resolvedAt }
           : {}),
       }, projectId);
 
@@ -1298,7 +1319,7 @@ export default function PieceRegister() {
                   assignees={impactAssignees}
                   assigneesLoading={impactAssigneesLoading}
                   assigneesUnavailable={Boolean(
-                    impactMemberRowsQuery.error || impactMemberProfilesQuery.error,
+                    impactAssigneesQuery.error,
                   )}
                   impactPending={
                     drawingImpactMutation.isPending ||
@@ -1311,6 +1332,9 @@ export default function PieceRegister() {
                             impactId,
                             revisionId: location.revisionId!,
                             draft,
+                            previousStatus: selectedRevisionImpact?.status ?? null,
+                            previousResolvedAt:
+                              selectedRevisionImpact?.resolved_at ?? null,
                           })
                       : undefined
                   }
