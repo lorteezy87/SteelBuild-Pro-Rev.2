@@ -313,7 +313,7 @@ function deriveNextReleaseReadiness(
 function unavailableSourceWarnings(
   snapshot: PieceIntelligenceSnapshot,
 ): SourceUnavailableWarning[] {
-  return unavailableSourceOrder.flatMap((source) =>
+  return unavailableSourceOrder.flatMap((source): SourceUnavailableWarning[] =>
     snapshot.availability[source] === "unavailable"
       ? [{ source, reason: null }]
       : [],

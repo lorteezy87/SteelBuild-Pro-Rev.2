@@ -41,7 +41,7 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@/components/dms/DocumentStorageSettings", () => ({
-  default: () => null,
+  default: (): null => null,
 }));
 
 import Integrations from "@/pages/Integrations";

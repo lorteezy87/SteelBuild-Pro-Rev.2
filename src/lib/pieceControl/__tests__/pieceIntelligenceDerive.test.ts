@@ -4,6 +4,7 @@ import {
   derivePieceIntelligence,
 } from "../pieceIntelligenceDerive";
 import type {
+  PieceIntelligenceRevision,
   PieceIntelligenceSnapshot,
   PieceIntelligenceWorkPackage,
 } from "../pieceIntelligenceTypes";
@@ -163,7 +164,7 @@ describe("derivePieceIntelligence", () => {
         },
       ],
       drawingRevisions: [
-        ...exposed.map((row) => ({
+        ...exposed.map((row): PieceIntelligenceRevision => ({
           id: `revision-${row.id}`,
           drawing_id: `drawing-${row.id}`,
           is_current: true,
@@ -360,7 +361,7 @@ describe("derivePieceIntelligence", () => {
         drawing_set_id: `set-${row.id}`,
         sheet_number: sheetByPiece.get(row.id),
       })),
-      drawingRevisions: rows.map((row) => ({
+      drawingRevisions: rows.map((row): PieceIntelligenceRevision => ({
         id: `revision-${row.id}`,
         drawing_id: `drawing-${row.id}`,
         is_current: true,
@@ -493,7 +494,7 @@ describe("derivePieceIntelligence", () => {
       })),
       drawingRevisions: rows
         .filter((row) => row.id !== "rfi-held")
-        .map((row) => ({
+        .map((row): PieceIntelligenceRevision => ({
           id: `revision-${row.id}`,
           drawing_id: `drawing-${row.id}`,
           is_current: true,

@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import { fetchPieceIntelligenceSnapshot } from "../pieceIntelligenceRepository";
 import { derivePieceIntelligence } from "../pieceIntelligenceDerive";
-import { fetchPieceRelationshipSnapshot } from "../relationshipsRepository";
+import type {
+  PieceIntelligenceEvent,
+  PieceIntelligenceRfi,
+} from "../pieceIntelligenceTypes";
+import {
+  fetchPieceRelationshipSnapshot,
+  type PieceRelationshipSnapshot,
+  type RelationshipSourceAvailability,
+} from "../relationshipsRepository";
 
 vi.mock("../relationshipsRepository", () => ({ fetchPieceRelationshipSnapshot: vi.fn() }));
 
@@ -46,23 +55,28 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
-const available = {
+const available: RelationshipSourceAvailability = {
   pieceDrawings: "available",
   pieceDrawingSets: "available",
   drawings: "available",
   drawingSets: "available",
   revisions: "available",
   approvals: "available",
-} as const;
+};
 
-const baseRelationshipSnapshot = {
+const baseRelationshipSnapshot: PieceRelationshipSnapshot = {
   pieces: [], pieceDrawings: [], pieceDrawingSets: [], drawings: [],
   workPackages: [], drawingSets: [], submittals: [], sheetResponses: [],
   drawingRevisions: [], drawingReviews: [], drawingSignoffs: [],
   commentDispositions: [], sourceAvailability: available,
 };
 
-function impactRow(index: number) {
+type PersistedDrawingImpact = Omit<
+  DrawingImpactRow,
+  "sheet_number" | "sheet_title" | "revision_code"
+>;
+
+function impactRow(index: number): PersistedDrawingImpact {
   return {
     id: `impact-${String(index).padStart(4, "0")}`,
     project_id: "prj",
@@ -79,7 +93,7 @@ function impactRow(index: number) {
   };
 }
 
-function rfiRow(index: number) {
+function rfiRow(index: number): PieceIntelligenceRfi {
   return {
     id: `rfi-${String(index).padStart(4, "0")}`,
     project_id: "prj",
@@ -89,7 +103,7 @@ function rfiRow(index: number) {
   };
 }
 
-function pieceEventRow(index: number) {
+function pieceEventRow(index: number): PieceIntelligenceEvent {
   return {
     id: `event-${String(index).padStart(4, "0")}`,
     project_id: "prj",

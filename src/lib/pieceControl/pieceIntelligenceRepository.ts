@@ -50,7 +50,7 @@ async function fetchDrawingImpacts(projectId: string): Promise<DrawingImpactRow[
     rows.push(...((data ?? []) as PersistedDrawingImpact[]));
     if (!data || data.length < sourcePageSize) break;
   }
-  return rows.map((impact) => ({
+  return rows.map((impact): DrawingImpactRow => ({
     ...impact,
     sheet_number: null,
     sheet_title: null,

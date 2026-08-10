@@ -3,6 +3,7 @@ import {
   deriveOverviewWorkPackages,
   formatPlannedShipDate,
   selectUpcomingShipments,
+  type OverviewWorkPackage,
   workPackageStatusLabel,
 } from "../overviewDerive";
 import type { CanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
@@ -66,34 +67,37 @@ describe("overviewDerive", () => {
   });
 
   it("caps upcoming shipments at eight, sorted by planned date", () => {
-    const packages = Array.from({ length: 10 }, (_, index) => ({
-      workPackageId: `wp-${index}`,
-      plannedShipDate: `2026-08-${String(10 - index).padStart(2, "0")}`,
-      source: undefined as string | undefined,
-      derivedStatus: "Ready for Release" as const,
-      earnedFabricationPercent: null as number | null,
-      lotCount: 0,
-      pieceCount: 0,
-      knownTons: 0,
-      unknownWeightLotCount: 0,
-      unknownWeightPieceCount: 0,
-      tonsByLifecycle: {},
-      unknownWeightLotsByLifecycle: {},
-    }));
+    const packages = Array.from(
+      { length: 10 },
+      (_, index): OverviewWorkPackage => ({
+        workPackageId: `wp-${index}`,
+        plannedShipDate: `2026-08-${String(10 - index).padStart(2, "0")}`,
+        source: undefined,
+        derivedStatus: "Ready for Release",
+        earnedFabricationPercent: null,
+        lotCount: 0,
+        pieceCount: 0,
+        knownTons: 0,
+        unknownWeightLotCount: 0,
+        unknownWeightPieceCount: 0,
+        tonsByLifecycle: {},
+        unknownWeightLotsByLifecycle: {},
+      }),
+    );
 
-    const upcoming = selectUpcomingShipments(packages as any);
+    const upcoming = selectUpcomingShipments(packages);
     expect(upcoming).toHaveLength(8);
     expect(upcoming[0].plannedShipDate).toBe("2026-08-01");
     expect(upcoming[7].plannedShipDate).toBe("2026-08-08");
   });
 
   it("keeps readiness rows when no work package has a planned shipment", () => {
-    const packages = [
+    const packages: OverviewWorkPackage[] = [
       {
         workPackageId: "wp-1",
         plannedShipDate: null,
         source: undefined,
-        derivedStatus: "Ready for Release" as const,
+        derivedStatus: "Ready for Release",
         earnedFabricationPercent: 0,
         lotCount: 1,
         pieceCount: 3,
