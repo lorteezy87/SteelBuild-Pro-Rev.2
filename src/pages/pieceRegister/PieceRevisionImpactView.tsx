@@ -36,6 +36,17 @@ function affectedPieceLabel(
   return `${count} affected ${count === 1 ? "piece" : "pieces"}`;
 }
 
+function revisionButtonLabel(
+  revision: RevisionExposureRow,
+  relationshipsUnavailable: boolean,
+): string {
+  const affectedEvidence =
+    revision.verification === "link_required" && !relationshipsUnavailable
+      ? "Piece links required"
+      : affectedPieceLabel(revision, relationshipsUnavailable);
+  return `${revision.sheetNumber || "Drawing"} revision ${revision.revisionCode || "unspecified"}, ${affectedEvidence}, ${verificationLabel(revision)}`;
+}
+
 function downstreamLabel(revision: RevisionExposureRow): string {
   const labels: Array<[keyof RevisionExposureRow["exposure"], string]> = [
     ["erected", "erected"],
@@ -88,6 +99,12 @@ export function PieceRevisionImpactView({
   const relationshipsUnavailable = model.unavailableSourceWarnings.some(
     (warning) => warning.source === "relationships",
   );
+  const impactsUnavailable = model.unavailableSourceWarnings.some(
+    (warning) => warning.source === "impacts",
+  );
+  const rfisUnavailable = model.unavailableSourceWarnings.some(
+    (warning) => warning.source === "rfis",
+  );
   const selectedRevision = model.revisions.find(
     (revision) => revision.revisionId === selectedRevisionId,
   ) ?? null;
@@ -108,9 +125,19 @@ export function PieceRevisionImpactView({
           </header>
 
           {model.revisions.length === 0 ? (
-            <div className="piece-operation-state">
-              No current drawing revisions are available for review.
-            </div>
+            relationshipsUnavailable ? (
+              <div className="piece-operation-state is-error">
+                <strong>Revision evidence unavailable</strong>
+                <p>
+                  Current revisions cannot be confirmed until relationship and
+                  revision evidence recovers.
+                </p>
+              </div>
+            ) : (
+              <div className="piece-operation-state">
+                No current drawing revisions are available for review.
+              </div>
+            )
           ) : (
             <div aria-label="Current drawing revisions">
               {model.revisions.map((revision) => (
@@ -118,7 +145,7 @@ export function PieceRevisionImpactView({
                   key={revision.revisionId}
                   type="button"
                   aria-pressed={selectedRevision?.revisionId === revision.revisionId}
-                  aria-label={`${revision.sheetNumber || "Drawing"} revision ${revision.revisionCode || "unspecified"}`}
+                  aria-label={revisionButtonLabel(revision, relationshipsUnavailable)}
                   className={`cmd-btn cmd-btn--ghost${
                     selectedRevision?.revisionId === revision.revisionId
                       ? " is-active"
@@ -172,7 +199,19 @@ export function PieceRevisionImpactView({
                 <strong>{affectedPieceLabel(selectedRevision)}</strong>
                 <p>{downstreamLabel(selectedRevision)}</p>
                 <p>
-                  {selectedRevision.heldCount} held · {selectedRevision.openImpactCount} open impacts · {selectedRevision.openRfiCount} open RFIs
+                  <span>{selectedRevision.heldCount} held</span>
+                  {" · "}
+                  <span>
+                    {impactsUnavailable
+                      ? "Impact count unavailable"
+                      : `${selectedRevision.openImpactCount} open impacts`}
+                  </span>
+                  {" · "}
+                  <span>
+                    {rfisUnavailable
+                      ? "RFI count unavailable"
+                      : `${selectedRevision.openRfiCount} open RFIs`}
+                  </span>
                 </p>
               </div>
               <div className="cmd-table-wrap">

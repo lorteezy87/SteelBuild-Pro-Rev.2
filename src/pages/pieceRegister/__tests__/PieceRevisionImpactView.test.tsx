@@ -80,6 +80,9 @@ describe("PieceRevisionImpactView", () => {
     const revisionButton = screen.getByRole("button", {
       name: /E502 revision 4/i,
     });
+    expect(revisionButton).toHaveAccessibleName(
+      "E502 revision 4, 1 affected piece, Verified exact links",
+    );
     expect(revisionButton).toHaveAttribute("aria-pressed", "false");
     await user.click(revisionButton);
     expect(onSelectRevision).toHaveBeenCalledWith("r4");
@@ -142,7 +145,84 @@ describe("PieceRevisionImpactView", () => {
     );
 
     expect(screen.getByText("Piece links required")).toBeInTheDocument();
+    expect(screen.getByRole("button", {
+      name: "E502 revision 4, Piece links required, Relationship repair required",
+    })).toBeInTheDocument();
     expect(screen.queryByText(/0 affected pieces/i)).not.toBeInTheDocument();
+  });
+
+  it("labels empty revision evidence unavailable when its source is unavailable", () => {
+    render(
+      <PieceRevisionImpactView
+        model={model({
+          verification: "partial",
+          unavailableSourceWarnings: [
+            { source: "relationships", reason: null },
+          ],
+          revisions: [],
+          attention: [],
+        })}
+        selectedRevisionId="r4"
+        onSelectRevision={vi.fn()}
+        onSelectPiece={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Revision evidence unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("No current drawing revisions are available for review."))
+      .not.toBeInTheDocument();
+  });
+
+  it("renders impact count unavailable instead of zero when impacts are unavailable", () => {
+    render(
+      <PieceRevisionImpactView
+        model={model({
+          verification: "partial",
+          unavailableSourceWarnings: [
+            { source: "impacts", reason: null },
+          ],
+          revisions: [
+            {
+              ...model().revisions[0],
+              verification: "partial",
+              openImpactCount: 0,
+            },
+          ],
+        })}
+        selectedRevisionId="r4"
+        onSelectRevision={vi.fn()}
+        onSelectPiece={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Impact count unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/0 open impacts/i)).not.toBeInTheDocument();
+  });
+
+  it("renders RFI count unavailable instead of zero when RFIs are unavailable", () => {
+    render(
+      <PieceRevisionImpactView
+        model={model({
+          verification: "partial",
+          unavailableSourceWarnings: [
+            { source: "rfis", reason: null },
+          ],
+          revisions: [
+            {
+              ...model().revisions[0],
+              verification: "partial",
+              openRfiCount: 0,
+            },
+          ],
+        })}
+        selectedRevisionId="r4"
+        onSelectRevision={vi.fn()}
+        onSelectPiece={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("RFI count unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/0 open RFIs/i)).not.toBeInTheDocument();
   });
 
   it("announces unavailable evidence without converting it into a safe result", () => {

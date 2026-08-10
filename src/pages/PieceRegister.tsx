@@ -253,13 +253,17 @@ export default function PieceRegister() {
   });
   const selectedPieceId =
     selectedPieceIds.size === 1 ? [...selectedPieceIds][0] : null;
+  const hasActionablePieces = useMemo(
+    () => selectActionableLeafPieces(piecesQuery.data ?? []).length > 0,
+    [piecesQuery.data],
+  );
   const intelligenceQuery = useQuery({
     queryKey: pieceControlKeys.intelligence(projectId!),
     queryFn: () => fetchPieceIntelligenceSnapshot(projectId!),
     enabled:
       enabled &&
       piecesQuery.isSuccess &&
-      selectActionableLeafPieces(piecesQuery.data ?? []).length > 0 &&
+      hasActionablePieces &&
       (activeView === "impact" || Boolean(selectedPieceId)),
     staleTime: 15_000,
   });
@@ -361,11 +365,8 @@ export default function PieceRegister() {
   ]);
   useEffect(() => {
     if (activeView !== "impact" || !location.revisionId) return;
-    if (piecesQuery.isSuccess && actionablePieceIds.size === 0) {
-      setPieceRegisterLocation({ revisionId: null });
-      return;
-    }
     if (!intelligenceQuery.isSuccess || !intelligenceModel) return;
+    if (intelligenceQuery.data.availability.relationships !== "available") return;
     const revisionIsAccessible = intelligenceModel.revisions.some(
       (revision) => revision.revisionId === location.revisionId,
     );
@@ -374,11 +375,10 @@ export default function PieceRegister() {
     }
   }, [
     activeView,
-    actionablePieceIds.size,
     intelligenceModel,
+    intelligenceQuery.data,
     intelligenceQuery.isSuccess,
     location.revisionId,
-    piecesQuery.isSuccess,
     setPieceRegisterLocation,
   ]);
   const overviewSnapshotQuery = useQuery({
@@ -971,7 +971,7 @@ export default function PieceRegister() {
                 <strong>Revision evidence could not be loaded.</strong>
                 <p>The active project piece register is unavailable.</p>
               </div>
-            ) : displayRows.length === 0 ? (
+            ) : !hasActionablePieces ? (
               <div className="piece-operation-state">
                 <strong>No active pieces are available for revision review.</strong>
                 <p>Use the controlled import workflow to establish the register first.</p>

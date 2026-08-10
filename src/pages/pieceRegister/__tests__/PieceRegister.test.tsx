@@ -385,6 +385,56 @@ describe("Piece Register command shell", () => {
     );
   });
 
+  it("preserves revision intent when a successful snapshot reports evidence unavailable", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+    const unavailable = intelligenceSnapshot();
+    unavailable.drawingRevisions = [];
+    unavailable.availability.relationships = "unavailable";
+    unavailable.sourceAvailability.revisions = "unavailable";
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockResolvedValueOnce(
+      unavailable as Awaited<ReturnType<typeof fetchPieceIntelligenceSnapshot>>,
+    );
+
+    renderPieceRegister(
+      "/PieceRegister?view=impact&revision=retain-r4&embed=1",
+    );
+
+    expect(await screen.findByText("Revision evidence unavailable"))
+      .toBeInTheDocument();
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+      "?view=impact&revision=retain-r4&embed=1",
+    );
+  });
+
+  it.each([
+    {
+      label: "container-only",
+      rows: [{ ...pieceRegisterRow("container"), is_container: true }],
+    },
+    {
+      label: "split-parent-only",
+      rows: [
+        pieceRegisterRow("split-parent"),
+        {
+          ...pieceRegisterRow("container-child"),
+          parent_piece_id: "split-parent",
+          is_container: true,
+        },
+      ],
+    },
+  ])("shows controlled empty Impact state for a $label register", async ({ rows }) => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue(rows);
+
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4");
+
+    expect(await screen.findByText(
+      "No active pieces are available for revision review.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText("Revision evidence is unavailable."))
+      .not.toBeInTheDocument();
+    expect(fetchPieceIntelligenceSnapshot).not.toHaveBeenCalled();
+  });
+
   it.each([
     { label: "null", initialProjectId: null },
     { label: "undefined", initialProjectId: undefined },
