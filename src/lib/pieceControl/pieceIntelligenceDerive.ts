@@ -1,4 +1,5 @@
 import { isRfiOpen } from "@/lib/entityPredicates";
+import { findBlockingRfis } from "@/lib/fabReleaseGate";
 import { selectActionableLeafPieces } from "./canonicalRollups";
 import {
   evaluateWorkPackageReadiness,
@@ -86,6 +87,7 @@ function openImpactsFor(
   revisionIds: ReadonlySet<string>,
   snapshot: PieceIntelligenceSnapshot,
 ) {
+  if (snapshot.availability.impacts === "unavailable") return [];
   return snapshot.drawingImpacts.filter((impact) =>
     revisionIds.has(impact.drawing_revision_id) &&
     impact.status !== "resolved" &&
@@ -93,11 +95,22 @@ function openImpactsFor(
   );
 }
 
+function exactOpenRfis(
+  drawings: ReadinessDrawing[],
+  snapshot: PieceIntelligenceSnapshot,
+) {
+  if (snapshot.availability.rfis === "unavailable") return [];
+  const linked = findBlockingRfis({ drawings, rfis: snapshot.rfis });
+  const linkedIds = new Set(linked.map((rfi) => rfi.id).filter(Boolean));
+  return snapshot.rfis.filter((rfi) => linkedIds.has(rfi.id));
+}
+
 function attentionReason(
   piece: PieceRegisterRow,
   exposures: RevisionExposureRow[],
   fieldRisk: boolean,
-  fabBlocked: boolean,
+  severeImpact: boolean,
+  rfiFabHold: boolean,
 ): { priorityTier: number; reason: string } | null {
   if (exposures.length > 0 && piece.lifecycle_status === "erected") {
     return { priorityTier: 1, reason: "Revision exposure after erection" };
@@ -117,8 +130,14 @@ function attentionReason(
   if (fieldRisk) {
     return { priorityTier: 5, reason: "Field need is due within 10 days" };
   }
-  if (piece.on_hold || fabBlocked) {
+  if (piece.on_hold) {
+    return { priorityTier: 6, reason: "Canonical piece hold is active" };
+  }
+  if (severeImpact) {
     return { priorityTier: 6, reason: "Critical or high impact remains open" };
+  }
+  if (rfiFabHold) {
+    return { priorityTier: 6, reason: "Linked RFI fabrication hold is active" };
   }
   if (
     exposures.length > 0 &&
@@ -181,13 +200,18 @@ function buildAttentionRows(
       impact.priority === "critical" ||
       impact.priority === "high",
     );
-    const rfiFabHold = snapshot.rfis.some((rfi) =>
-      rfi.work_package_id === piece.work_package_id &&
-      rfi.fab_hold === true &&
-      isRfiOpen(rfi),
-    );
+    const rfiFabHold = exactOpenRfis(
+      exactDrawingsForPiece(piece.id, snapshot),
+      snapshot,
+    ).some((rfi) => rfi.fab_hold === true && isRfiOpen(rfi));
     const fabBlocked = severeImpact || rfiFabHold;
-    const leading = attentionReason(piece, exposures, fieldRisk, fabBlocked);
+    const leading = attentionReason(
+      piece,
+      exposures,
+      fieldRisk,
+      severeImpact,
+      rfiFabHold,
+    );
     if (!leading) continue;
     const lifecycle = lifecycleFor(piece);
     rows.push({
@@ -411,7 +435,7 @@ function eventFacts(
   snapshot: PieceIntelligenceSnapshot,
 ): PieceThreadFact[] {
   const facts = [
-    ...snapshot.pieceEvents
+    ...(snapshot.availability.events === "available" ? snapshot.pieceEvents : [])
       .filter((event) => event.piece_id === pieceId)
       .map((event) => ({
         createdAt: event.created_at,
@@ -421,7 +445,7 @@ function eventFacts(
           ? `${humanize(event.event_type)} · ${event.reason}`
           : humanize(event.event_type),
       })),
-    ...snapshot.drawingImpacts
+    ...(snapshot.availability.impacts === "available" ? snapshot.drawingImpacts : [])
       .filter((impact) => revisionIds.has(impact.drawing_revision_id))
       .map((impact) => ({
         createdAt: impact.created_at,
@@ -435,6 +459,38 @@ function eventFacts(
       right.createdAt.localeCompare(left.createdAt) || naturalCollator.compare(left.id, right.id),
     )
     .map(({ label, value }) => ({ label, value }));
+}
+
+const lifecycleOrder: ExposureLifecycle[] = [
+  "not_started",
+  "released",
+  "in_fabrication",
+  "fabricated",
+  "shipped",
+  "delivered",
+  "erected",
+];
+
+function milestoneValue(
+  piece: PieceRegisterRow,
+  threshold: ExposureLifecycle,
+  eventTypes: ReadonlySet<string>,
+  events: PieceIntelligenceSnapshot["pieceEvents"],
+): string {
+  const recorded = events
+    .filter((event) => event.piece_id === piece.id)
+    .filter((event) => eventTypes.has(event.event_type.trim().toLowerCase()))
+    .sort((left, right) =>
+      right.created_at.localeCompare(left.created_at) ||
+      naturalCollator.compare(right.id, left.id),
+    )[0];
+  if (recorded) {
+    const date = recorded.created_at.slice(0, 10);
+    return isIsoDate(date) ? `Recorded ${date}` : "Recorded";
+  }
+  return lifecycleOrder.indexOf(lifecycleFor(piece)) >= lifecycleOrder.indexOf(threshold)
+    ? "Confirmed by lifecycle"
+    : "Not recorded";
 }
 
 export function buildPieceDigitalThread(
@@ -459,9 +515,7 @@ export function buildPieceDigitalThread(
   const impacts = snapshot.drawingImpacts.filter((impact) =>
     revisionIds.has(impact.drawing_revision_id),
   );
-  const openRfis = snapshot.rfis.filter((rfi) =>
-    rfi.work_package_id === piece.work_package_id && isRfiOpen(rfi),
-  );
+  const openRfis = exactOpenRfis(drawings, snapshot);
   const drawingSetIds = new Set(
     snapshot.pieceDrawingSets
       .filter((link) => link.piece_id === pieceId)
@@ -470,18 +524,38 @@ export function buildPieceDigitalThread(
   const linkedSetNames = snapshot.drawingSets
     .filter((drawingSet) => drawingSetIds.has(drawingSet.id))
     .map((drawingSet) => drawingSet.set_name ?? drawingSet.id);
-  const approvalRecorded = revisions.some((revision) =>
+  const reviewOrSignoffRecorded = revisions.some((revision) =>
     snapshot.drawingReviews.some((review) => review.drawing_revision_id === revision.id) ||
     snapshot.drawingSignoffs.some((signoff) =>
       signoff.drawing_id === revision.drawing_id && signoff.is_voided !== true
     ),
   );
+  const activeSubmittals = snapshot.submittals.filter((submittal) =>
+    submittal.is_deleted !== true &&
+    !submittal.deleted_at &&
+    (submittal.drawing_set_ids ?? []).some((drawingSetId) => drawingSetIds.has(drawingSetId)),
+  );
+  const activeSubmittalRoundIds = new Set(
+    activeSubmittals
+      .map((submittal) => submittal.current_round_id)
+      .filter((roundId): roundId is string => Boolean(roundId)),
+  );
+  const activeSheetResponses = snapshot.sheetResponses.filter((response) =>
+    response.is_deleted !== true &&
+    !response.deleted_at &&
+    Boolean(response.drawing_id && drawingIds.has(response.drawing_id)) &&
+    activeSubmittalRoundIds.has(response.submittal_round_id),
+  );
+  const approvalRecorded = reviewOrSignoffRecorded ||
+    activeSubmittals.length > 0 ||
+    activeSheetResponses.length > 0;
   const unresolvedDispositions = snapshot.commentDispositions.filter((disposition) =>
     disposition.is_deleted !== true &&
     disposition.status !== "resolved" &&
     disposition.related_piece_ids?.includes(pieceId),
   );
-  const changeOrderSignal = impacts.some((impact) =>
+  const trustedImpacts = snapshot.availability.impacts === "available" ? impacts : [];
+  const changeOrderSignal = trustedImpacts.some((impact) =>
     impact.impact_type.toLowerCase() === "change_order"
   );
   const fieldNeededDate = isIsoDate(workPackage?.scheduled_start_date)
@@ -502,14 +576,16 @@ export function buildPieceDigitalThread(
 
   const commercialFacts: PieceThreadFact[] = [
     { label: "Fabrication hold", value: piece.on_hold ? displayValue(piece.on_hold_reason ?? "On hold") : "No hold recorded" },
-    {
+  ];
+  if (snapshot.availability.rfis === "available") {
+    commercialFacts.push({
       label: "Open RFIs",
       value: joinedOrFallback(
         openRfis.map((rfi) => rfi.rfi_number ?? rfi.id),
         "No linked open RFI",
       ),
-    },
-  ];
+    });
+  }
   if (changeOrderSignal) {
     commercialFacts.push(
       { label: "Change exposure", value: "Change impact recorded" },
@@ -554,8 +630,27 @@ export function buildPieceDigitalThread(
             "Not recorded",
           ),
         },
-        { label: "Approval evidence", value: approvalRecorded ? "Recorded" : "Not recorded" },
-        { label: "Unresolved dispositions", value: String(unresolvedDispositions.length) },
+        ...(snapshot.availability.approvals === "available" ? [
+          {
+            label: "Submittal status",
+            value: joinedOrFallback(
+              activeSubmittals.map((submittal) => submittal.status),
+              "Not recorded",
+            ),
+          },
+          {
+            label: "Sheet response",
+            value: joinedOrFallback(
+              activeSheetResponses.map((response) => {
+                const drawing = drawings.find((candidate) => candidate.id === response.drawing_id);
+                return `${drawing?.sheet_number ?? response.drawing_id}: ${response.response_status}`;
+              }),
+              "Not recorded",
+            ),
+          },
+          { label: "Approval evidence", value: approvalRecorded ? "Recorded" : "Not recorded" },
+          { label: "Unresolved dispositions", value: String(unresolvedDispositions.length) },
+        ] : []),
         { label: "Link quality", value: drawings.length > 0 ? "Exact relationship" : "Not linked" },
       ],
     },
@@ -567,7 +662,52 @@ export function buildPieceDigitalThread(
       availability: "available",
       facts: [
         { label: "Lifecycle", value: lifecycleLabels[lifecycleFor(piece)] },
+        {
+          label: "Release",
+          value: milestoneValue(
+            piece,
+            "released",
+            new Set(["released", "fab_released", "fabrication_released"]),
+            snapshot.availability.events === "available" ? snapshot.pieceEvents : [],
+          ),
+        },
         { label: "Shop station", value: displayValue(piece.current_station) },
+        {
+          label: "Fabrication completion",
+          value: milestoneValue(
+            piece,
+            "fabricated",
+            new Set(["fabricated", "fabrication_completed", "fabrication_complete"]),
+            snapshot.availability.events === "available" ? snapshot.pieceEvents : [],
+          ),
+        },
+        {
+          label: "Shipment / load",
+          value: milestoneValue(
+            piece,
+            "shipped",
+            new Set(["loaded", "load", "shipped", "shipment"]),
+            snapshot.availability.events === "available" ? snapshot.pieceEvents : [],
+          ),
+        },
+        {
+          label: "Delivery",
+          value: milestoneValue(
+            piece,
+            "delivered",
+            new Set(["delivered", "delivery"]),
+            snapshot.availability.events === "available" ? snapshot.pieceEvents : [],
+          ),
+        },
+        {
+          label: "Erection",
+          value: milestoneValue(
+            piece,
+            "erected",
+            new Set(["erected", "erection"]),
+            snapshot.availability.events === "available" ? snapshot.pieceEvents : [],
+          ),
+        },
         { label: "Field need", value: fieldNeededDate ?? "Not recorded" },
       ],
     },

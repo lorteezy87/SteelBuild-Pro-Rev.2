@@ -398,6 +398,72 @@ describe("derivePieceIntelligence", () => {
       "events",
     ]);
   });
+
+  it("distinguishes canonical holds, severe impacts, and exact linked-RFI fab holds", () => {
+    const held = piece("held", { lifecycle_status: "released", on_hold: true });
+    const impacted = piece("impacted", { lifecycle_status: "released" });
+    const rfiHeld = piece("rfi-held", { lifecycle_status: "released" });
+    const rows = [held, impacted, rfiHeld];
+    const source = exposePieces(rows, {
+      pieceDrawingSets: rows.map((row) => ({
+        project_id: "prj",
+        piece_id: row.id,
+        drawing_set_id: `set-${row.id}`,
+      })),
+      drawings: rows.map((row) => ({
+        id: `drawing-${row.id}`,
+        project_id: "prj",
+        drawing_set_id: `set-${row.id}`,
+        sheet_number: `S-${row.id}`,
+        linked_rfi_ids: row.id === "rfi-held" ? "RFI #22" : null,
+      })),
+      drawingRevisions: rows
+        .filter((row) => row.id !== "rfi-held")
+        .map((row) => ({
+          id: `revision-${row.id}`,
+          drawing_id: `drawing-${row.id}`,
+          is_current: true,
+          archived_at: null,
+        })),
+      drawingImpacts: [
+        {
+          id: "impact-high",
+          project_id: "prj",
+          drawing_revision_id: "revision-impacted",
+          impact_type: "fabrication",
+          status: "open",
+          priority: "high",
+          title: "Connection review",
+          notes: null,
+          assigned_to: null,
+          due_date: null,
+          resolved_at: null,
+          created_at: "2026-08-09T12:00:00Z",
+          sheet_number: null,
+          sheet_title: null,
+          revision_code: null,
+        },
+      ],
+      rfis: [
+        {
+          id: "rfi-22",
+          project_id: "prj",
+          rfi_number: "RFI-22",
+          status: "Open",
+          fab_hold: true,
+          work_package_id: null,
+        },
+      ],
+    });
+
+    const reasons = new Map(
+      derivePieceIntelligence(source, now).attention.map((row) => [row.pieceId, row.reason]),
+    );
+
+    expect(reasons.get("held")).toBe("Canonical piece hold is active");
+    expect(reasons.get("impacted")).toBe("Critical or high impact remains open");
+    expect(reasons.get("rfi-held")).toBe("Linked RFI fabrication hold is active");
+  });
 });
 
 describe("buildPieceDigitalThread", () => {
@@ -492,6 +558,146 @@ describe("buildPieceDigitalThread", () => {
     expect(thread?.commercial.availability).toBe("unavailable");
     expect(thread?.productionAndLogistics.availability).toBe("available");
     expect(thread?.history.availability).toBe("unavailable");
+  });
+
+  it("includes only RFIs explicitly linked by exact drawings, never work-package co-membership", () => {
+    const source = exposePieces([
+      piece("p1", { work_package_id: "wp-1" }),
+    ], {
+      drawings: [
+        {
+          id: "drawing-1",
+          project_id: "prj",
+          drawing_set_id: "set-1",
+          sheet_number: "E502",
+          linked_rfi_ids: "RFI #22",
+        },
+      ],
+      rfis: [
+        { id: "linked", project_id: "prj", rfi_number: "RFI-22", status: "Open", work_package_id: "wp-other" },
+        { id: "same-wp", project_id: "prj", rfi_number: "RFI-99", status: "Open", work_package_id: "wp-1" },
+      ],
+    });
+
+    const openRfis = buildPieceDigitalThread("p1", source)?.commercial.facts
+      .find(({ label }) => label === "Open RFIs");
+
+    expect(openRfis).toEqual({ label: "Open RFIs", value: "RFI-22" });
+  });
+
+  it("does not infer an RFI relationship from matching null work-package IDs", () => {
+    const source = exposePieces([piece("p1")], {
+      drawings: [
+        {
+          id: "drawing-1",
+          project_id: "prj",
+          drawing_set_id: "set-1",
+          sheet_number: "E502",
+          linked_rfi_ids: null,
+        },
+      ],
+      rfis: [
+        { id: "unassigned", project_id: "prj", rfi_number: "RFI-77", status: "Open", work_package_id: null },
+      ],
+    });
+
+    expect(buildPieceDigitalThread("p1", source)?.commercial.facts).toContainEqual({
+      label: "Open RFIs",
+      value: "No linked open RFI",
+    });
+  });
+
+  it("omits dependent negative facts when approval, impact, RFI, or event sources are unavailable", () => {
+    const source = exposePieces([piece("p1")], {
+      drawingImpacts: [
+        {
+          id: "stale-impact",
+          project_id: "prj",
+          drawing_revision_id: "revision-1",
+          impact_type: "change_order",
+          status: "open",
+          priority: "high",
+          title: "Untrusted stale row",
+          notes: null,
+          assigned_to: null,
+          due_date: null,
+          resolved_at: null,
+          created_at: "2026-08-09T12:00:00Z",
+          sheet_number: null,
+          sheet_title: null,
+          revision_code: null,
+        },
+      ],
+      rfis: [
+        { id: "stale-rfi", project_id: "prj", rfi_number: "RFI-22", status: "Open" },
+      ],
+      pieceEvents: [
+        { id: "stale-event", project_id: "prj", piece_id: "p1", event_type: "erected", created_at: "2026-08-09T12:00:00Z" },
+      ],
+      availability: {
+        relationships: "available",
+        approvals: "unavailable",
+        impacts: "unavailable",
+        rfis: "unavailable",
+        events: "unavailable",
+      },
+    });
+
+    const thread = buildPieceDigitalThread("p1", source);
+
+    expect(thread?.modelAndDrawing.facts.some(({ label }) => label === "Approval evidence")).toBe(false);
+    expect(thread?.modelAndDrawing.facts.some(({ label }) => label === "Submittal status")).toBe(false);
+    expect(thread?.commercial.facts.some(({ label }) => label === "Open RFIs")).toBe(false);
+    expect(thread?.commercial.facts.some(({ label }) => label === "Change exposure")).toBe(false);
+    expect(thread?.commercial.facts.some(({ label }) => label === "Change order")).toBe(false);
+    expect(thread?.history.facts).toEqual([]);
+  });
+
+  it("exposes release, fabrication, shipment/load, delivery, and erection milestones honestly", () => {
+    const source = exposePieces([
+      piece("p1", { lifecycle_status: "delivered", current_station: "paint" }),
+    ], {
+      pieceEvents: [
+        { id: "released", project_id: "prj", piece_id: "p1", event_type: "released", created_at: "2026-08-01T12:00:00Z" },
+        { id: "loaded", project_id: "prj", piece_id: "p1", event_type: "loaded", created_at: "2026-08-05T12:00:00Z" },
+        { id: "delivered", project_id: "prj", piece_id: "p1", event_type: "delivered", created_at: "2026-08-07T12:00:00Z" },
+      ],
+    });
+
+    const facts = buildPieceDigitalThread("p1", source)?.productionAndLogistics.facts;
+
+    expect(facts).toContainEqual({ label: "Release", value: "Recorded 2026-08-01" });
+    expect(facts).toContainEqual({ label: "Fabrication completion", value: "Confirmed by lifecycle" });
+    expect(facts).toContainEqual({ label: "Shipment / load", value: "Recorded 2026-08-05" });
+    expect(facts).toContainEqual({ label: "Delivery", value: "Recorded 2026-08-07" });
+    expect(facts).toContainEqual({ label: "Erection", value: "Not recorded" });
+  });
+
+  it("includes linked submittal and sheet-response approval authority", () => {
+    const source = exposePieces([piece("p1")], {
+      submittals: [
+        {
+          id: "submittal-1",
+          status: "Under Review",
+          ball_in_court: "EOR",
+          drawing_set_ids: ["set-1"],
+          current_round_id: "round-1",
+        },
+      ],
+      sheetResponses: [
+        {
+          drawing_id: "drawing-1",
+          submittal_round_id: "round-1",
+          response_status: "No Exception",
+        },
+      ],
+    });
+
+    const facts = buildPieceDigitalThread("p1", source)?.modelAndDrawing.facts;
+
+    expect(facts).toContainEqual({ label: "Submittal status", value: "Under Review" });
+    expect(facts).toContainEqual({ label: "Sheet response", value: "E502: No Exception" });
+    expect(facts).toContainEqual({ label: "Approval evidence", value: "Recorded" });
   });
 
   it("returns null for a missing or non-actionable piece", () => {
