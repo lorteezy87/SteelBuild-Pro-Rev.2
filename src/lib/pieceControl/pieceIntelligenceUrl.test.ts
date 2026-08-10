@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parsePieceRegisterUrl,
   updatePieceRegisterUrl,
-} from "./pieceIntelligenceUrl";
+} from "@/lib/pieceControl/pieceIntelligenceUrl";
 
 describe("Piece Register URL intent", () => {
   it("parses a valid view and revision while defaulting omitted values", () => {
