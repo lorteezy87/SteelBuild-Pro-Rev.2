@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import type {
   PieceAttentionRow,
   PieceIntelligenceModel,
@@ -10,6 +12,78 @@ export interface PieceRevisionImpactViewProps {
   selectedRevisionId: string | null;
   onSelectRevision: (revisionId: string) => void;
   onSelectPiece: (pieceId: string) => void;
+  canManageImpacts?: boolean;
+  selectedImpact?: DrawingImpactRow | null;
+  impactPending?: boolean;
+  onSaveImpact?: (
+    impactId: string | null,
+    draft: DrawingImpactDraft,
+  ) => Promise<unknown>;
+  onResolveImpact?: (impactId: string) => Promise<unknown>;
+}
+
+export interface DrawingImpactDraft {
+  impact_type: string;
+  status: DrawingImpactRow["status"];
+  priority: DrawingImpactRow["priority"];
+  assigned_to: string;
+  due_date: string;
+  title: string;
+  notes: string;
+}
+
+const IMPACT_TYPES = [
+  "fabrication",
+  "erection",
+  "embed",
+  "anchor_bolts",
+  "connections",
+  "material_takeoff",
+  "shop_drawing_required",
+  "rfi_followup",
+  "change_order",
+  "field_rework",
+] as const;
+const IMPACT_STATUSES: DrawingImpactRow["status"][] = [
+  "open",
+  "in_review",
+  "ready",
+  "blocked",
+  "resolved",
+  "closed",
+];
+const IMPACT_PRIORITIES: DrawingImpactRow["priority"][] = [
+  "low",
+  "medium",
+  "high",
+  "critical",
+];
+const EMPTY_IMPACT: DrawingImpactDraft = {
+  impact_type: "fabrication",
+  status: "open",
+  priority: "medium",
+  assigned_to: "",
+  due_date: "",
+  title: "",
+  notes: "",
+};
+
+function impactDraft(impact: DrawingImpactRow | null | undefined): DrawingImpactDraft {
+  return impact
+    ? {
+        impact_type: impact.impact_type,
+        status: impact.status,
+        priority: impact.priority,
+        assigned_to: impact.assigned_to ?? "",
+        due_date: impact.due_date ?? "",
+        title: impact.title,
+        notes: impact.notes ?? "",
+      }
+    : { ...EMPTY_IMPACT };
+}
+
+function optionLabel(value: string): string {
+  return value.replace(/_/g, " ");
 }
 
 const sourceLabels: Record<SourceUnavailableWarning["source"], string> = {
@@ -95,7 +169,14 @@ export function PieceRevisionImpactView({
   selectedRevisionId,
   onSelectRevision,
   onSelectPiece,
+  canManageImpacts = false,
+  selectedImpact = null,
+  impactPending = false,
+  onSaveImpact,
+  onResolveImpact,
 }: PieceRevisionImpactViewProps) {
+  const [impactEditorOpen, setImpactEditorOpen] = useState(false);
+  const [draft, setDraft] = useState<DrawingImpactDraft>(EMPTY_IMPACT);
   const relationshipsUnavailable = model.unavailableSourceWarnings.some(
     (warning) => warning.source === "relationships",
   );
@@ -108,6 +189,40 @@ export function PieceRevisionImpactView({
   const selectedRevision = model.revisions.find(
     (revision) => revision.revisionId === selectedRevisionId,
   ) ?? null;
+
+  useEffect(() => {
+    setImpactEditorOpen(false);
+    setDraft(EMPTY_IMPACT);
+  }, [selectedRevisionId]);
+
+  const openImpactEditor = () => {
+    setDraft(impactDraft(selectedImpact));
+    setImpactEditorOpen(true);
+  };
+  const closeImpactEditor = () => {
+    setImpactEditorOpen(false);
+    setDraft(EMPTY_IMPACT);
+  };
+  const saveImpact = async () => {
+    if (!onSaveImpact || !draft.title.trim() || impactPending) return;
+    try {
+      await onSaveImpact(selectedImpact?.id ?? null, draft);
+      closeImpactEditor();
+    } catch {
+      // Mutation errors are presented by the page; keep the editor and its
+      // values available for correction or retry.
+    }
+  };
+  const resolveImpact = async (impactId: string) => {
+    if (!onResolveImpact || impactPending) return;
+    try {
+      await onResolveImpact(impactId);
+    } catch {
+      // The page mutation owns error presentation. Swallow the rejected
+      // mutateAsync promise so the action stays available without an
+      // unhandled browser rejection.
+    }
+  };
 
   return (
     <div
@@ -214,6 +329,170 @@ export function PieceRevisionImpactView({
                   </span>
                 </p>
               </div>
+              {canManageImpacts && onSaveImpact && !impactsUnavailable ? (
+                <section aria-label="Drawing impact action">
+                  {!impactEditorOpen ? (
+                    <div className="piece-command-actions">
+                      <button
+                        type="button"
+                        className="cmd-btn cmd-btn--secondary"
+                        disabled={impactPending}
+                        onClick={openImpactEditor}
+                      >
+                        {selectedImpact ? "Edit drawing impact" : "Add drawing impact"}
+                      </button>
+                      {selectedImpact &&
+                      selectedImpact.status !== "resolved" &&
+                      selectedImpact.status !== "closed" &&
+                      onResolveImpact ? (
+                        <button
+                          type="button"
+                          className="cmd-btn cmd-btn--secondary"
+                          disabled={impactPending}
+                          onClick={() => void resolveImpact(selectedImpact.id)}
+                        >
+                          {impactPending ? "Resolving impact…" : "Resolve drawing impact"}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="piece-register-embedded-workspace">
+                      <label htmlFor={`drawing-impact-type-${selectedRevision.revisionId}`}>
+                        Impact type
+                        <select
+                          id={`drawing-impact-type-${selectedRevision.revisionId}`}
+                          value={draft.impact_type}
+                          disabled={impactPending}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              impact_type: event.target.value,
+                            }))
+                          }
+                        >
+                          {IMPACT_TYPES.map((value) => (
+                            <option key={value} value={value}>{optionLabel(value)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label htmlFor={`drawing-impact-status-${selectedRevision.revisionId}`}>
+                        Impact status
+                        <select
+                          id={`drawing-impact-status-${selectedRevision.revisionId}`}
+                          value={draft.status}
+                          disabled={impactPending}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              status: event.target.value as DrawingImpactRow["status"],
+                            }))
+                          }
+                        >
+                          {IMPACT_STATUSES.map((value) => (
+                            <option key={value} value={value}>{optionLabel(value)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label htmlFor={`drawing-impact-priority-${selectedRevision.revisionId}`}>
+                        Priority
+                        <select
+                          id={`drawing-impact-priority-${selectedRevision.revisionId}`}
+                          value={draft.priority}
+                          disabled={impactPending}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              priority: event.target.value as DrawingImpactRow["priority"],
+                            }))
+                          }
+                        >
+                          {IMPACT_PRIORITIES.map((value) => (
+                            <option key={value} value={value}>{optionLabel(value)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label htmlFor={`drawing-impact-assignee-${selectedRevision.revisionId}`}>
+                        Assigned to
+                        <input
+                          id={`drawing-impact-assignee-${selectedRevision.revisionId}`}
+                          type="text"
+                          value={draft.assigned_to}
+                          disabled={impactPending}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              assigned_to: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label htmlFor={`drawing-impact-due-${selectedRevision.revisionId}`}>
+                        Due date
+                        <input
+                          id={`drawing-impact-due-${selectedRevision.revisionId}`}
+                          type="date"
+                          value={draft.due_date}
+                          disabled={impactPending}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              due_date: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label htmlFor={`drawing-impact-title-${selectedRevision.revisionId}`}>
+                        Impact title
+                        <input
+                          id={`drawing-impact-title-${selectedRevision.revisionId}`}
+                          type="text"
+                          value={draft.title}
+                          disabled={impactPending}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              title: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label htmlFor={`drawing-impact-notes-${selectedRevision.revisionId}`}>
+                        Impact notes
+                        <textarea
+                          id={`drawing-impact-notes-${selectedRevision.revisionId}`}
+                          value={draft.notes}
+                          disabled={impactPending}
+                          rows={3}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              notes: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <div className="piece-command-actions">
+                        <button
+                          type="button"
+                          className="cmd-btn cmd-btn--primary"
+                          disabled={!draft.title.trim() || impactPending}
+                          onClick={() => void saveImpact()}
+                        >
+                          {impactPending ? "Saving impact…" : "Save impact"}
+                        </button>
+                        <button
+                          type="button"
+                          className="cmd-btn cmd-btn--ghost"
+                          disabled={impactPending}
+                          onClick={closeImpactEditor}
+                        >
+                          Cancel impact
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              ) : null}
               <div className="cmd-table-wrap">
                 <table className="cmd-table" aria-label="Affected pieces">
                   <thead>

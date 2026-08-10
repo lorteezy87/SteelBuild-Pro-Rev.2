@@ -29,6 +29,7 @@ import {
 } from "@/components/command";
 import { PieceAttentionPanel } from "@/components/pieceControl/PieceAttentionPanel";
 import { PieceControlModeBadge } from "@/components/pieceControl/PieceControlModeBadge";
+import CanonicalFabReleasePanel from "@/components/pieceControl/CanonicalFabReleasePanel";
 import { PieceLifecycleStrip } from "@/components/pieceControl/PieceLifecycleStrip";
 import PieceRelationshipManager from "@/components/pieceControl/PieceRelationshipManager";
 import PackageBoard from "@/components/pieceControl/PackageBoard";
@@ -57,7 +58,10 @@ import {
   planImportDrawingLinks,
 } from "@/lib/pieceControl/importDrawingLink";
 import type { PieceRegisterSort } from "@/lib/pieceControl/pieceRegisterSort";
-import { pieceControlKeys } from "@/lib/pieceControl/queryKeys";
+import {
+  invalidatePieceControlQueries,
+  pieceControlKeys,
+} from "@/lib/pieceControl/queryKeys";
 import {
   buildPieceControlSummary,
   modePresentation,
@@ -85,6 +89,7 @@ import {
 import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import type { PieceRegisterFilters } from "./pieceRegister/filter";
 import {
   uniqueValues,
@@ -101,7 +106,10 @@ import {
 import { PieceRegisterArchiveDialog } from "./pieceRegister/PieceRegisterArchiveDialog";
 import { PieceRegisterRegisterView } from "./pieceRegister/PieceRegisterRegisterView";
 import { PieceDigitalThread } from "./pieceRegister/PieceDigitalThread";
-import { PieceRevisionImpactView } from "./pieceRegister/PieceRevisionImpactView";
+import {
+  PieceRevisionImpactView,
+  type DrawingImpactDraft,
+} from "./pieceRegister/PieceRevisionImpactView";
 import { PieceRegisterImportView } from "./pieceRegister/PieceRegisterImportView";
 import {
   deriveOverviewWorkPackages,
@@ -135,6 +143,45 @@ const REGISTER_VIEWS = PIECE_REGISTER_VIEW_IDS.map((id) => ({
 }));
 
 type PieceRegisterView = (typeof PIECE_REGISTER_VIEW_IDS)[number];
+
+type PieceHoldRequest = {
+  pieceId: string;
+  onHold: boolean;
+  reason: string;
+};
+
+type DrawingImpactWriteRequest = {
+  impactId: string | null;
+  revisionId: string;
+  draft: DrawingImpactDraft;
+};
+
+const DRAWING_IMPACT_TYPES = new Set([
+  "fabrication",
+  "erection",
+  "embed",
+  "anchor_bolts",
+  "connections",
+  "material_takeoff",
+  "shop_drawing_required",
+  "rfi_followup",
+  "change_order",
+  "field_rework",
+]);
+const DRAWING_IMPACT_STATUSES = new Set([
+  "open",
+  "in_review",
+  "ready",
+  "blocked",
+  "resolved",
+  "closed",
+]);
+const DRAWING_IMPACT_PRIORITIES = new Set([
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
 
 export default function PieceRegister() {
   useCommandSkin();
@@ -281,6 +328,23 @@ export default function PieceRegister() {
       : null,
     [intelligenceQuery.data, selectedPieceId],
   );
+  const selectedRevisionImpact = useMemo(() => {
+    if (
+      !location.revisionId ||
+      !intelligenceQuery.data ||
+      !intelligenceModel?.revisions.some(
+        (revision) => revision.revisionId === location.revisionId,
+      )
+    ) {
+      return null;
+    }
+    const matching = intelligenceQuery.data.drawingImpacts.filter(
+      (impact) => impact.drawing_revision_id === location.revisionId,
+    );
+    return matching.find(
+      (impact) => impact.status !== "resolved" && impact.status !== "closed",
+    ) ?? matching[0] ?? null;
+  }, [intelligenceModel, intelligenceQuery.data, location.revisionId]);
 
   const batches = batchesQuery.data ?? [];
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) ?? batches[0] ?? null;
@@ -297,6 +361,10 @@ export default function PieceRegister() {
   const displayRows = useMemo(
     () => buildPieceDisplayRows(piecesQuery.data, workPackageMap),
     [piecesQuery.data, workPackageMap],
+  );
+  const selectedPieceRecord = useMemo(
+    () => (piecesQuery.data ?? []).find((piece) => piece.id === selectedPieceId) ?? null,
+    [piecesQuery.data, selectedPieceId],
   );
   const actionablePieceIds = useMemo(
     () =>
@@ -407,6 +475,8 @@ export default function PieceRegister() {
   );
   const canBulkUpdate = enabled && !roleLoading && roleAtLeast(role, "field");
   const canArchive = enabled && !roleLoading && roleAtLeast(role, "admin");
+  const canManagePieceHold = enabled && !roleLoading && roleAtLeast(role, "field");
+  const canManageDrawingImpacts = enabled && !roleLoading && roleAtLeast(role, "pm");
   const allFilteredSelected = allRowsSelected(filteredRows, selectedPieceIds);
   const archiveConfirmationText = buildArchiveConfirmationText(selectedPieceIds.size);
 
@@ -458,7 +528,7 @@ export default function PieceRegister() {
       queryClient.invalidateQueries({ queryKey: ["piece-import-batches", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["piece-import-rows", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["piece-relationships", projectId] }),
-      queryClient.invalidateQueries({ queryKey: pieceControlKeys.intelligence(projectId) }),
+      queryClient.invalidateQueries({ queryKey: pieceControlKeys.intelligence(projectId!) }),
       queryClient.invalidateQueries({ queryKey: ["piece-register-work-packages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["work-packages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
@@ -468,6 +538,102 @@ export default function PieceRegister() {
       queryClient.invalidateQueries({ queryKey: ["canonical-reporting", projectId] }),
     ]);
   };
+
+  const invalidateProtectedActionQueries = async () => {
+    await Promise.all([
+      invalidatePieceControlQueries(queryClient, projectId, "all"),
+      queryClient.invalidateQueries({
+        queryKey: ["drawing-impacts", projectId],
+      }),
+    ]);
+  };
+
+  const holdMutation = useMutation({
+    mutationFn: ({ pieceId, onHold, reason }: PieceHoldRequest) => {
+      const cleanedReason = reason.trim();
+      if (!cleanedReason) throw new Error("A hold reason is required.");
+      return setPieceHold(projectId!, [pieceId], onHold, cleanedReason);
+    },
+    onSuccess: async (_result, request) => {
+      await invalidateProtectedActionQueries();
+      toast.success(request.onHold ? "Piece hold applied" : "Piece hold cleared");
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The piece hold could not be updated."),
+      ),
+  });
+
+  const drawingImpactMutation = useMutation({
+    mutationFn: async ({
+      impactId,
+      revisionId,
+      draft,
+    }: DrawingImpactWriteRequest) => {
+      if (!DRAWING_IMPACT_TYPES.has(draft.impact_type)) {
+        throw new Error("Select a valid impact type.");
+      }
+      if (!DRAWING_IMPACT_STATUSES.has(draft.status)) {
+        throw new Error("Select a valid impact status.");
+      }
+      if (!DRAWING_IMPACT_PRIORITIES.has(draft.priority)) {
+        throw new Error("Select a valid impact priority.");
+      }
+      const title = draft.title.trim();
+      if (!title) throw new Error("Impact title is required.");
+      const resolved = draft.status === "resolved" || draft.status === "closed";
+      const payload = withProjectId({
+        drawing_revision_id: revisionId,
+        impact_type: draft.impact_type,
+        status: impactId ? draft.status : "open",
+        priority: draft.priority,
+        assigned_to: draft.assigned_to.trim() || null,
+        due_date: draft.due_date || null,
+        title,
+        notes: draft.notes.trim() || null,
+        ...(impactId
+          ? { resolved_at: resolved ? new Date().toISOString() : null }
+          : {}),
+      }, projectId);
+
+      if (impactId) {
+        await entities.DrawingImpact.update(impactId, payload as never);
+        return "updated" as const;
+      }
+      await entities.DrawingImpact.create(payload as never);
+      return "created" as const;
+    },
+    onSuccess: async (result) => {
+      await invalidateProtectedActionQueries();
+      toast.success(
+        result === "created" ? "Drawing impact created" : "Drawing impact updated",
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The drawing impact could not be saved."),
+      ),
+  });
+
+  const resolveDrawingImpactMutation = useMutation({
+    mutationFn: async (impactId: string) => {
+      await entities.DrawingImpact.update(
+        impactId,
+        withProjectId({
+          status: "resolved",
+          resolved_at: new Date().toISOString(),
+        }, projectId) as never,
+      );
+    },
+    onSuccess: async () => {
+      await invalidateProtectedActionQueries();
+      toast.success("Drawing impact resolved");
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The drawing impact could not be resolved."),
+      ),
+  });
 
   /** Best-effort re-link after register writes that can change piece_mark. */
   const relinkModelElements = async () => {
@@ -1041,14 +1207,59 @@ export default function PieceRegister() {
                   onSelectPiece={(pieceId) =>
                     setSelectedPieceIds(new Set([pieceId]))
                   }
+                  canManageImpacts={
+                    canManageDrawingImpacts &&
+                    intelligenceQuery.data?.availability.impacts === "available"
+                  }
+                  selectedImpact={selectedRevisionImpact}
+                  impactPending={
+                    drawingImpactMutation.isPending ||
+                    resolveDrawingImpactMutation.isPending
+                  }
+                  onSaveImpact={
+                    location.revisionId
+                      ? (impactId, draft) =>
+                          drawingImpactMutation.mutateAsync({
+                            impactId,
+                            revisionId: location.revisionId!,
+                            draft,
+                          })
+                      : undefined
+                  }
+                  onResolveImpact={(impactId) =>
+                    resolveDrawingImpactMutation.mutateAsync(impactId)
+                  }
                 />
                 {selectedPieceId ? (
                   selectedPieceThread ? (
                     <PieceDigitalThread
                       thread={selectedPieceThread}
                       onClose={() => setSelectedPieceIds(new Set())}
-                      onOpenRelationships={() => setActiveView("relationships")}
-                      onOpenRelease={() => setActiveView("board")}
+                      canManageHold={canManagePieceHold}
+                      pieceOnHold={Boolean(selectedPieceRecord?.on_hold)}
+                      holdPending={holdMutation.isPending}
+                      onSetHold={(request) =>
+                        holdMutation.mutateAsync({
+                          pieceId: selectedPieceId,
+                          ...request,
+                        })
+                      }
+                      onOpenRelationships={() =>
+                        setPieceRegisterLocation({
+                          view: "relationships",
+                          focus: "revision",
+                          pieceId: selectedPieceId,
+                          revisionId: location.revisionId,
+                        })
+                      }
+                      onOpenRelease={selectedPieceRecord?.work_package_id
+                        ? () =>
+                            setPieceRegisterLocation({
+                              view: "board",
+                              focus: "release",
+                              pieceId: selectedPieceId,
+                            })
+                        : undefined}
                     />
                   ) : (
                     <div className="piece-operation-state is-error">
@@ -1100,8 +1311,20 @@ export default function PieceRegister() {
             intelligenceError={intelligenceQuery.error}
             onRetryIntelligence={() => void intelligenceQuery.refetch()}
             onClosePiece={() => setSelectedPieceIds(new Set())}
-            onOpenRelationships={() => setActiveView("relationships")}
-            onOpenRelease={() => setActiveView("board")}
+            onOpenRelationships={() =>
+              setPieceRegisterLocation({
+                view: "relationships",
+                focus: location.revisionId ? "revision" : null,
+                pieceId: selectedPieceId,
+              })
+            }
+            onOpenRelease={() =>
+              setPieceRegisterLocation({
+                view: "board",
+                focus: "release",
+                pieceId: selectedPieceId,
+              })
+            }
             allFilteredSelected={allFilteredSelected}
             toggleAllFiltered={toggleAllFiltered}
             piecesLoading={piecesQuery.isLoading}
@@ -1123,6 +1346,20 @@ export default function PieceRegister() {
 
         {activeView === "board" && (
           <section className="piece-register-embedded-workspace">
+            {location.focus === "release" ? (
+              selectedPieceRecord?.work_package_id ? (
+                <CanonicalFabReleasePanel
+                  projectId={projectId}
+                  workPackageId={selectedPieceRecord.work_package_id}
+                  pieceControlMode={mode}
+                />
+              ) : (
+                <div className="piece-operation-state is-error">
+                  <strong>Fabrication release work package is unavailable.</strong>
+                  <p>Assign this piece to a work package before opening release checks.</p>
+                </div>
+              )
+            ) : null}
             <PackageBoard projectId={projectId} pieceControlMode={mode} />
           </section>
         )}

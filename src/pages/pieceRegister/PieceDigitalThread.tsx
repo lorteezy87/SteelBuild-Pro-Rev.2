@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type {
   PieceDigitalThreadModel,
   PieceThreadSection,
@@ -8,6 +9,10 @@ export interface PieceDigitalThreadProps {
   onClose: () => void;
   onOpenRelationships?: () => void;
   onOpenRelease?: () => void;
+  canManageHold?: boolean;
+  pieceOnHold?: boolean;
+  holdPending?: boolean;
+  onSetHold?: (request: { onHold: boolean; reason: string }) => Promise<unknown>;
 }
 
 function ThreadSection({
@@ -51,8 +56,31 @@ export function PieceDigitalThread({
   onClose,
   onOpenRelationships,
   onOpenRelease,
+  canManageHold = false,
+  pieceOnHold = false,
+  holdPending = false,
+  onSetHold,
 }: PieceDigitalThreadProps) {
+  const [holdEditorOpen, setHoldEditorOpen] = useState(false);
+  const [holdReason, setHoldReason] = useState("");
   if (!thread) return null;
+
+  const nextHoldState = !pieceOnHold;
+  const closeHoldEditor = () => {
+    setHoldEditorOpen(false);
+    setHoldReason("");
+  };
+  const submitHold = async () => {
+    const reason = holdReason.trim();
+    if (!onSetHold || !reason || holdPending) return;
+    try {
+      await onSetHold({ onHold: nextHoldState, reason });
+      closeHoldEditor();
+    } catch {
+      // The page mutation owns the operator-facing error toast. Keep the
+      // editor open so the reason can be retried without retyping it.
+    }
+  };
 
   return (
     <aside className="piece-digital-thread" aria-label="Piece digital thread">
@@ -74,6 +102,55 @@ export function PieceDigitalThread({
         section={thread.productionAndLogistics}
       />
       <ThreadSection title="History" section={thread.history} />
+
+      {canManageHold && onSetHold ? (
+        <section className="piece-digital-thread__section" aria-label="Piece hold action">
+          <h3>Protected actions</h3>
+          {!holdEditorOpen ? (
+            <button
+              type="button"
+              className="cmd-btn cmd-btn--secondary"
+              disabled={holdPending}
+              onClick={() => setHoldEditorOpen(true)}
+            >
+              {pieceOnHold ? "Clear hold" : "Place hold"}
+            </button>
+          ) : (
+            <div className="piece-command-actions">
+              <label htmlFor={`piece-hold-reason-${thread.pieceId}`}>
+                Hold reason
+                <textarea
+                  id={`piece-hold-reason-${thread.pieceId}`}
+                  value={holdReason}
+                  onChange={(event) => setHoldReason(event.target.value)}
+                  disabled={holdPending}
+                  rows={3}
+                />
+              </label>
+              <button
+                type="button"
+                className="cmd-btn cmd-btn--primary"
+                disabled={!holdReason.trim() || holdPending}
+                onClick={() => void submitHold()}
+              >
+                {holdPending
+                  ? "Updating hold…"
+                  : pieceOnHold
+                    ? "Confirm clear hold"
+                    : "Confirm hold"}
+              </button>
+              <button
+                type="button"
+                className="cmd-btn cmd-btn--ghost"
+                disabled={holdPending}
+                onClick={closeHoldEditor}
+              >
+                Cancel hold
+              </button>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {onOpenRelationships || onOpenRelease ? (
         <footer className="piece-command-actions">

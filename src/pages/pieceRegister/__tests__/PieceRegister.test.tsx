@@ -2,20 +2,37 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+import { entities } from "@/api/supabaseClient";
+import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceRepository";
+import type { PieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceTypes";
+import { setPieceHold } from "@/lib/pieceControl/productionRepository";
 import {
   fetchPieceImportBatches,
   fetchPieceImportRows,
   fetchPieceRegister,
+  type PieceRegisterRow,
 } from "@/lib/pieceControl/repository";
 import PieceRegister from "../../PieceRegister";
 
 const projectContext = vi.hoisted(() => ({
   mode: "shadow",
   projectId: "project-1" as string | null | undefined,
+}));
+
+const projectRole = vi.hoisted(() => ({ current: "admin" }));
+
+const canonicalReleasePanelProps = vi.hoisted(() => ({
+  current: null as null | {
+    projectId: string;
+    workPackageId: string;
+    pieceControlMode: string;
+  },
 }));
 
 vi.mock("@/components/shared/ProjectContext", () => ({
@@ -33,8 +50,17 @@ vi.mock("@/components/shared/ProjectContext", () => ({
 }));
 
 vi.mock("@/hooks/useProjectRole", () => ({
-  roleAtLeast: () => true,
-  useProjectRole: () => ({ role: "admin", isLoading: false }),
+  roleAtLeast: (role: string | null | undefined, minimum: string) => {
+    const ranks: Record<string, number> = {
+      viewer: 0,
+      field: 1,
+      pm: 2,
+      admin: 3,
+      owner: 3,
+    };
+    return (ranks[role ?? ""] ?? -1) >= (ranks[minimum] ?? Number.POSITIVE_INFINITY);
+  },
+  useProjectRole: () => ({ role: projectRole.current, isLoading: false }),
 }));
 
 vi.mock("@/api/supabaseClient", () => ({
@@ -49,6 +75,34 @@ vi.mock("@/api/supabaseClient", () => ({
         },
       ]),
     },
+    DrawingImpact: {
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+  },
+}));
+
+vi.mock("@/lib/pieceControl/productionRepository", () => ({
+  setPieceHold: vi.fn(),
+}));
+
+vi.mock("@/components/pieceControl/CanonicalFabReleasePanel", () => ({
+  default: (props: {
+    projectId: string;
+    workPackageId: string;
+    pieceControlMode: string;
+  }) => {
+    canonicalReleasePanelProps.current = props;
+    return <div data-testid="canonical-release-panel">Canonical release owner</div>;
+  },
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
+    message: vi.fn(),
   },
 }));
 
@@ -87,7 +141,7 @@ vi.mock("@/lib/pieceControl/pieceIntelligenceRepository", () => ({
   fetchPieceIntelligenceSnapshot: vi.fn(),
 }));
 
-function pieceRegisterRow(id: string, projectId = "project-1") {
+function pieceRegisterRow(id: string, projectId = "project-1"): PieceRegisterRow {
   return {
     id,
     project_id: projectId,
@@ -114,7 +168,10 @@ function pieceRegisterRow(id: string, projectId = "project-1") {
   };
 }
 
-function intelligenceSnapshot(pieceId = "p1", projectId = "project-1") {
+function intelligenceSnapshot(
+  pieceId = "p1",
+  projectId = "project-1",
+): PieceIntelligenceSnapshot {
   const piece = pieceRegisterRow(pieceId, projectId);
   return {
     pieces: [piece],
@@ -176,6 +233,47 @@ function intelligenceSnapshot(pieceId = "p1", projectId = "project-1") {
   };
 }
 
+function drawingImpactRow(
+  patch: Partial<DrawingImpactRow> = {},
+): DrawingImpactRow {
+  return {
+    id: "impact-1",
+    project_id: "project-1",
+    drawing_revision_id: "r4",
+    impact_type: "fabrication",
+    status: "in_review",
+    priority: "medium",
+    title: "Review revised connection",
+    notes: "Coordinate with the shop",
+    assigned_to: "user-1",
+    due_date: "2026-08-18",
+    resolved_at: null,
+    created_at: "2026-08-09T12:00:00.000Z",
+    sheet_number: "E502",
+    sheet_title: "Framing",
+    revision_code: "4",
+    ...patch,
+  };
+}
+
+function seedRevisionWithPiece(options: {
+  onHold?: boolean;
+  impacts?: ReturnType<typeof drawingImpactRow>[];
+} = {}) {
+  const piece = {
+    ...pieceRegisterRow("p1"),
+    on_hold: options.onHold ?? false,
+    on_hold_reason: options.onHold ? "Existing coordination hold" : null,
+  };
+  const snapshot = intelligenceSnapshot();
+  snapshot.pieces = [piece];
+  snapshot.drawingImpacts = options.impacts ?? [];
+  vi.mocked(fetchPieceRegister).mockResolvedValue([piece]);
+  vi.mocked(fetchPieceIntelligenceSnapshot).mockResolvedValue(
+    snapshot as Awaited<ReturnType<typeof fetchPieceIntelligenceSnapshot>>,
+  );
+}
+
 function intelligenceSnapshotWithRelationshipRepair() {
   const snapshot = intelligenceSnapshot();
   snapshot.drawings.push({
@@ -190,7 +288,7 @@ function intelligenceSnapshotWithRelationshipRepair() {
     id: "r5",
     drawing_id: "drawing-2",
     is_current: true,
-    archived_at: null,
+    archived_at: null as string | null,
     revision_code: "5",
   });
   return snapshot;
@@ -229,7 +327,7 @@ function lifecycleRiskIntelligenceSnapshot() {
     id: `revision-${id}`,
     drawing_id: `drawing-${id}`,
     is_current: true,
-    archived_at: null,
+    archived_at: null as string | null,
     revision_code: "1",
   }));
   return snapshot;
@@ -259,6 +357,7 @@ function renderPieceRegister(initialEntry = "/PieceRegister") {
 
   return {
     ...rendered,
+    queryClient,
     rerenderPieceRegister: () => rendered.rerender(createTree()),
   };
 }
@@ -268,6 +367,11 @@ describe("Piece Register command shell", () => {
     vi.clearAllMocks();
     projectContext.mode = "shadow";
     projectContext.projectId = "project-1";
+    projectRole.current = "admin";
+    canonicalReleasePanelProps.current = null;
+    vi.mocked(setPieceHold).mockResolvedValue(undefined);
+    vi.mocked(entities.DrawingImpact.create).mockResolvedValue({} as never);
+    vi.mocked(entities.DrawingImpact.update).mockResolvedValue({} as never);
     vi.mocked(fetchPieceRegister).mockResolvedValue([]);
     vi.mocked(fetchCanonicalDashboardSnapshot).mockResolvedValue({
       pieces: [],
@@ -377,6 +481,259 @@ describe("Piece Register command shell", () => {
     renderPieceRegister("/PieceRegister?view=impact&piece=p1");
 
     expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+  });
+
+  it("places a selected affected piece on hold through the canonical RPC wrapper", async () => {
+    const user = userEvent.setup();
+    seedRevisionWithPiece();
+    const { queryClient } = renderPieceRegister(
+      "/PieceRegister?view=impact&revision=r4&piece=p1&embed=1",
+    );
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+
+    await user.click(await screen.findByRole("button", { name: "Place hold" }));
+    await user.type(
+      screen.getByLabelText("Hold reason"),
+      "Revision 4 connection change",
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm hold" }));
+
+    await waitFor(() =>
+      expect(setPieceHold).toHaveBeenCalledWith(
+        "project-1",
+        ["p1"],
+        true,
+        "Revision 4 connection change",
+      ),
+    );
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["piece-intelligence", "project-1"],
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["drawing-impacts", "project-1"],
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["canonical-release-gate"],
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["canonical-reporting", "project-1"],
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["canonical-pieces-3d", "project-1"],
+    });
+    expect(toast.success).toHaveBeenCalledWith("Piece hold applied");
+  });
+
+  it("requires a nonblank reason and Cancel never writes a piece hold", async () => {
+    const user = userEvent.setup();
+    seedRevisionWithPiece();
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Place hold" }));
+    const confirm = screen.getByRole("button", { name: "Confirm hold" });
+    expect(confirm).toBeDisabled();
+    await user.type(screen.getByLabelText("Hold reason"), "   ");
+    expect(confirm).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Cancel hold" }));
+
+    expect(setPieceHold).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Hold reason")).not.toBeInTheDocument();
+  });
+
+  it("clears a selected piece hold with a nonblank reason", async () => {
+    const user = userEvent.setup();
+    seedRevisionWithPiece({ onHold: true });
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Clear hold" }));
+    await user.type(screen.getByLabelText("Hold reason"), "Revision reviewed");
+    await user.click(screen.getByRole("button", { name: "Confirm clear hold" }));
+
+    await waitFor(() =>
+      expect(setPieceHold).toHaveBeenCalledWith(
+        "project-1",
+        ["p1"],
+        false,
+        "Revision reviewed",
+      ),
+    );
+    expect(toast.success).toHaveBeenCalledWith("Piece hold cleared");
+  });
+
+  it.each([
+    { role: "viewer", holdVisible: false, impactVisible: false },
+    { role: "field", holdVisible: true, impactVisible: false },
+    { role: "pm", holdVisible: true, impactVisible: true },
+  ])(
+    "enforces the viewer, field, and PM protected-action boundary for $role",
+    async ({ role, holdVisible, impactVisible }) => {
+      projectRole.current = role;
+      seedRevisionWithPiece();
+      renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+      expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Place hold" }) !== null)
+        .toBe(holdVisible);
+      expect(screen.queryByRole("button", { name: "Add drawing impact" }) !== null)
+        .toBe(impactVisible);
+    },
+  );
+
+  it("creates a scoped drawing impact for the selected current revision", async () => {
+    const user = userEvent.setup();
+    seedRevisionWithPiece();
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Add drawing impact" }));
+    await user.selectOptions(screen.getByLabelText("Impact type"), "connections");
+    await user.selectOptions(screen.getByLabelText("Priority"), "high");
+    await user.type(screen.getByLabelText("Assigned to"), "user-7");
+    await user.type(screen.getByLabelText("Due date"), "2026-08-22");
+    await user.type(screen.getByLabelText("Impact title"), "Verify revised shear tab");
+    await user.type(screen.getByLabelText("Impact notes"), "Hold shop welding pending review");
+    await user.click(screen.getByRole("button", { name: "Save impact" }));
+
+    await waitFor(() =>
+      expect(entities.DrawingImpact.create).toHaveBeenCalledWith({
+        project_id: "project-1",
+        drawing_revision_id: "r4",
+        impact_type: "connections",
+        status: "open",
+        priority: "high",
+        assigned_to: "user-7",
+        due_date: "2026-08-22",
+        title: "Verify revised shear tab",
+        notes: "Hold shop welding pending review",
+      }),
+    );
+    expect(toast.success).toHaveBeenCalledWith("Drawing impact created");
+  });
+
+  it("updates and resolves an existing drawing impact without inventing commercial data", async () => {
+    const user = userEvent.setup();
+    seedRevisionWithPiece({ impacts: [drawingImpactRow()] });
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Edit drawing impact" }));
+    const title = screen.getByLabelText("Impact title");
+    await user.clear(title);
+    await user.type(title, "Coordinate revised connection");
+    await user.selectOptions(screen.getByLabelText("Impact status"), "blocked");
+    await user.click(screen.getByRole("button", { name: "Save impact" }));
+
+    await waitFor(() =>
+      expect(entities.DrawingImpact.update).toHaveBeenCalledWith(
+        "impact-1",
+        expect.objectContaining({
+          project_id: "project-1",
+          drawing_revision_id: "r4",
+          status: "blocked",
+          title: "Coordinate revised connection",
+        }),
+      ),
+    );
+    const updatePayload = vi.mocked(entities.DrawingImpact.update).mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(updatePayload).not.toHaveProperty("change_order_id");
+    expect(updatePayload).not.toHaveProperty("cost");
+
+    await user.click(screen.getByRole("button", { name: "Resolve drawing impact" }));
+    await waitFor(() => expect(entities.DrawingImpact.update).toHaveBeenCalledTimes(2));
+    expect(entities.DrawingImpact.update).toHaveBeenLastCalledWith(
+      "impact-1",
+      expect.objectContaining({
+        project_id: "project-1",
+        status: "resolved",
+        resolved_at: expect.any(String),
+      }),
+    );
+    expect(toast.success).toHaveBeenCalledWith("Drawing impact resolved");
+  });
+
+  it("cancels the impact editor without writing", async () => {
+    const user = userEvent.setup();
+    seedRevisionWithPiece();
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Add drawing impact" }));
+    await user.type(screen.getByLabelText("Impact title"), "Do not save");
+    await user.click(screen.getByRole("button", { name: "Cancel impact" }));
+
+    expect(entities.DrawingImpact.create).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Impact title")).not.toBeInTheDocument();
+  });
+
+  it("surfaces protected-mutation errors without success language", async () => {
+    const user = userEvent.setup();
+    vi.mocked(setPieceHold).mockRejectedValueOnce(new Error("permission denied"));
+    seedRevisionWithPiece();
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(await screen.findByRole("button", { name: "Place hold" }));
+    await user.type(screen.getByLabelText("Hold reason"), "Revision conflict");
+    await user.click(screen.getByRole("button", { name: "Confirm hold" }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "You do not have permission to complete this Piece Register action.",
+      ),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed resolve action fail-closed and available for retry", async () => {
+    const user = userEvent.setup();
+    vi.mocked(entities.DrawingImpact.update).mockRejectedValueOnce(
+      new Error("permission denied"),
+    );
+    seedRevisionWithPiece({ impacts: [drawingImpactRow()] });
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
+
+    await user.click(
+      await screen.findByRole("button", { name: "Resolve drawing impact" }),
+    );
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "You do not have permission to complete this Piece Register action.",
+      ),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Resolve drawing impact" }),
+    ).toBeEnabled();
+  });
+
+  it("opens owning relationship and canonical release surfaces with selected work-package intent", async () => {
+    const user = userEvent.setup();
+    seedRevisionWithPiece();
+    const first = renderPieceRegister(
+      "/PieceRegister?view=impact&revision=r4&piece=p1&embed=1",
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Open Lots & links" }));
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent("view=relationships");
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent("focus=revision");
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent("piece=p1");
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent("revision=r4");
+    first.unmount();
+
+    renderPieceRegister(
+      "/PieceRegister?view=impact&revision=r4&piece=p1&embed=1",
+    );
+    await user.click(await screen.findByRole("button", { name: "Open fabrication release" }));
+
+    expect(await screen.findByTestId("canonical-release-panel")).toBeInTheDocument();
+    expect(canonicalReleasePanelProps.current).toEqual({
+      projectId: "project-1",
+      workPackageId: "wp-1",
+      pieceControlMode: "shadow",
+    });
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent("view=board");
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent("focus=release");
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent("piece=p1");
+    expect(setPieceHold).not.toHaveBeenCalled();
+    expect(entities.DrawingImpact.create).not.toHaveBeenCalled();
+    expect(entities.DrawingImpact.update).not.toHaveBeenCalled();
   });
 
   it("loads the canonical intelligence snapshot and writes revision and piece intent", async () => {
