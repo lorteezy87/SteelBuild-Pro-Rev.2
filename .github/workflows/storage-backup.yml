@@ -22,7 +22,6 @@ jobs:
     env:
       RCLONE_VERSION: "1.74.4"
       RCLONE_SHA256: fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d
-      STORAGE_BACKUP_MANIFEST_PATH: ${{ runner.temp }}/storage-backup-manifest.json
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -50,6 +49,7 @@ jobs:
         env:
           OFFSITE_RCLONE_CONFIG_B64: ${{ secrets.OFFSITE_RCLONE_CONFIG_B64 }}
           OFFSITE_ROOT: ${{ secrets.OFFSITE_ROOT }}
+          STORAGE_BACKUP_MANIFEST_PATH: ${{ runner.temp }}/storage-backup-manifest.json
           SUPABASE_EXPECTED_PROJECT_REF: ${{ vars.SUPABASE_EXPECTED_PROJECT_REF }}
           SUPABASE_S3_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
           SUPABASE_S3_ENDPOINT: ${{ secrets.SUPABASE_S3_ENDPOINT }}
