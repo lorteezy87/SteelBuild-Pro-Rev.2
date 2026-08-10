@@ -22,6 +22,7 @@ export const pieceControlKeys = {
       ? (["piece-import-rows", projectId, batchId] as const)
       : (["piece-import-rows", projectId] as const),
   relationships: (projectId: string) => ["piece-relationships", projectId] as const,
+  intelligence: (projectId: string) => ["piece-intelligence", projectId] as const,
   workPackages: (projectId: string) =>
     ["piece-register-work-packages", projectId] as const,
   /** Canonical station board (pieces + completions). Not the legacy EPM table. */
@@ -65,6 +66,8 @@ export async function invalidatePieceControlQueries(
   const push = (key: readonly unknown[]) => {
     (keys as Array<readonly unknown[]>).push(key);
   };
+
+  push(pieceControlKeys.intelligence(projectId));
 
   if (scope === "all" || scope === "register" || scope === "import") {
     push(pieceControlKeys.register(projectId));

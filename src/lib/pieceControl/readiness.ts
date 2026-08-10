@@ -11,6 +11,7 @@ export interface ReadinessWorkPackage {
   name?: string | null;
   sequence_number?: string | null;
   area?: string | null;
+  scheduled_start_date?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
 }
@@ -48,6 +49,7 @@ export interface ReadinessDrawing {
   /** Legacy sheet-stage enum (7 values). Prefer submittal-derived stage. */
   stage?: string | null;
   set_approval_status?: string | null;
+  linked_rfi_ids?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
   is_superseded?: boolean | null;
@@ -90,6 +92,8 @@ export interface DrawingRevisionEvidence {
   is_current: boolean;
   archived_at?: string | null;
   revision_code?: string | null;
+  issued_at?: string | null;
+  received_at?: string | null;
 }
 
 export interface DrawingReviewEvidence {
