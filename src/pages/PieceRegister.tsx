@@ -108,6 +108,7 @@ import { PieceRegisterRegisterView } from "./pieceRegister/PieceRegisterRegister
 import { PieceDigitalThread } from "./pieceRegister/PieceDigitalThread";
 import {
   PieceRevisionImpactView,
+  type DrawingImpactAssigneeOption,
   type DrawingImpactDraft,
 } from "./pieceRegister/PieceRevisionImpactView";
 import { PieceRegisterImportView } from "./pieceRegister/PieceRegisterImportView";
@@ -182,6 +183,30 @@ const DRAWING_IMPACT_PRIORITIES = new Set([
   "high",
   "critical",
 ]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type ProjectMembershipRow = {
+  user_id?: string | null;
+  role?: string | null;
+};
+
+type ProjectMemberProfileRow = {
+  id?: string | null;
+  full_name?: string | null;
+  email?: string | null;
+};
+
+function projectMemberLabel(
+  membership: ProjectMembershipRow,
+  profile: ProjectMemberProfileRow | undefined,
+): string {
+  const identity = profile?.full_name?.trim() || profile?.email?.trim() || membership.user_id!;
+  const details = [
+    profile?.full_name?.trim() ? profile.email?.trim() : null,
+    membership.role?.replace(/_/g, " "),
+  ].filter(Boolean);
+  return details.length > 0 ? `${identity} · ${details.join(" · ")}` : identity;
+}
 
 export default function PieceRegister() {
   useCommandSkin();
@@ -477,6 +502,56 @@ export default function PieceRegister() {
   const canArchive = enabled && !roleLoading && roleAtLeast(role, "admin");
   const canManagePieceHold = enabled && !roleLoading && roleAtLeast(role, "field");
   const canManageDrawingImpacts = enabled && !roleLoading && roleAtLeast(role, "pm");
+  const canLoadImpactAssignees =
+    canManageDrawingImpacts &&
+    activeView === "impact" &&
+    Boolean(location.revisionId) &&
+    intelligenceQuery.data?.availability.impacts === "available";
+  const impactMemberRowsQuery = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn: () =>
+      entities.UserProject.filter({ project_id: projectId! }, "created_at"),
+    enabled: canLoadImpactAssignees,
+    staleTime: 30_000,
+  });
+  const impactMemberRows = useMemo(
+    () => ((impactMemberRowsQuery.data ?? []) as ProjectMembershipRow[])
+      .filter((membership) =>
+        Boolean(membership.user_id && UUID_PATTERN.test(membership.user_id)),
+      ),
+    [impactMemberRowsQuery.data],
+  );
+  const impactMemberUserIds = useMemo(
+    () => Array.from(new Set(impactMemberRows.map((membership) => membership.user_id!))),
+    [impactMemberRows],
+  );
+  const impactMemberProfilesQuery = useQuery({
+    queryKey: ["user-profiles-by-ids", impactMemberUserIds],
+    queryFn: async () => {
+      const profiles = await entities.User.filter({ id: impactMemberUserIds });
+      const profilesById: Record<string, ProjectMemberProfileRow> = {};
+      for (const profile of profiles as ProjectMemberProfileRow[]) {
+        if (profile.id) profilesById[profile.id] = profile;
+      }
+      return profilesById;
+    },
+    enabled: canLoadImpactAssignees && impactMemberUserIds.length > 0,
+    staleTime: 5 * 60_000,
+  });
+  const impactAssignees = useMemo<DrawingImpactAssigneeOption[]>(
+    () => impactMemberRows.map((membership) => ({
+      userId: membership.user_id!,
+      label: projectMemberLabel(
+        membership,
+        impactMemberProfilesQuery.data?.[membership.user_id!],
+      ),
+    })),
+    [impactMemberProfilesQuery.data, impactMemberRows],
+  );
+  const impactAssigneesLoading =
+    canLoadImpactAssignees &&
+    (impactMemberRowsQuery.isLoading ||
+      (impactMemberUserIds.length > 0 && impactMemberProfilesQuery.isLoading));
   const allFilteredSelected = allRowsSelected(filteredRows, selectedPieceIds);
   const archiveConfirmationText = buildArchiveConfirmationText(selectedPieceIds.size);
 
@@ -581,13 +656,21 @@ export default function PieceRegister() {
       }
       const title = draft.title.trim();
       if (!title) throw new Error("Impact title is required.");
+      const assignedTo = draft.assigned_to.trim();
+      if (
+        assignedTo &&
+        (!UUID_PATTERN.test(assignedTo) ||
+          !impactAssignees.some((member) => member.userId === assignedTo))
+      ) {
+        throw new Error("Select an assigned project member.");
+      }
       const resolved = draft.status === "resolved" || draft.status === "closed";
       const payload = withProjectId({
         drawing_revision_id: revisionId,
         impact_type: draft.impact_type,
         status: impactId ? draft.status : "open",
         priority: draft.priority,
-        assigned_to: draft.assigned_to.trim() || null,
+        assigned_to: assignedTo || null,
         due_date: draft.due_date || null,
         title,
         notes: draft.notes.trim() || null,
@@ -1212,6 +1295,11 @@ export default function PieceRegister() {
                     intelligenceQuery.data?.availability.impacts === "available"
                   }
                   selectedImpact={selectedRevisionImpact}
+                  assignees={impactAssignees}
+                  assigneesLoading={impactAssigneesLoading}
+                  assigneesUnavailable={Boolean(
+                    impactMemberRowsQuery.error || impactMemberProfilesQuery.error,
+                  )}
                   impactPending={
                     drawingImpactMutation.isPending ||
                     resolveDrawingImpactMutation.isPending
@@ -1252,7 +1340,7 @@ export default function PieceRegister() {
                           revisionId: location.revisionId,
                         })
                       }
-                      onOpenRelease={selectedPieceRecord?.work_package_id
+                      onOpenRelease={canManageDrawingImpacts && selectedPieceRecord?.work_package_id
                         ? () =>
                             setPieceRegisterLocation({
                               view: "board",
@@ -1318,13 +1406,14 @@ export default function PieceRegister() {
                 pieceId: selectedPieceId,
               })
             }
-            onOpenRelease={() =>
-              setPieceRegisterLocation({
-                view: "board",
-                focus: "release",
-                pieceId: selectedPieceId,
-              })
-            }
+            onOpenRelease={(canManageDrawingImpacts
+              ? () =>
+                  setPieceRegisterLocation({
+                    view: "board",
+                    focus: "release",
+                    pieceId: selectedPieceId,
+                  })
+              : undefined) as unknown as () => void}
             allFilteredSelected={allFilteredSelected}
             toggleAllFiltered={toggleAllFiltered}
             piecesLoading={piecesQuery.isLoading}
@@ -1346,7 +1435,7 @@ export default function PieceRegister() {
 
         {activeView === "board" && (
           <section className="piece-register-embedded-workspace">
-            {location.focus === "release" ? (
+            {canManageDrawingImpacts && location.focus === "release" ? (
               selectedPieceRecord?.work_package_id ? (
                 <CanonicalFabReleasePanel
                   projectId={projectId}

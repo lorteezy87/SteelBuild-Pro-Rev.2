@@ -14,12 +14,20 @@ export interface PieceRevisionImpactViewProps {
   onSelectPiece: (pieceId: string) => void;
   canManageImpacts?: boolean;
   selectedImpact?: DrawingImpactRow | null;
+  assignees?: DrawingImpactAssigneeOption[];
+  assigneesLoading?: boolean;
+  assigneesUnavailable?: boolean;
   impactPending?: boolean;
   onSaveImpact?: (
     impactId: string | null,
     draft: DrawingImpactDraft,
   ) => Promise<unknown>;
   onResolveImpact?: (impactId: string) => Promise<unknown>;
+}
+
+export interface DrawingImpactAssigneeOption {
+  userId: string;
+  label: string;
 }
 
 export interface DrawingImpactDraft {
@@ -171,6 +179,9 @@ export function PieceRevisionImpactView({
   onSelectPiece,
   canManageImpacts = false,
   selectedImpact = null,
+  assignees = [],
+  assigneesLoading = false,
+  assigneesUnavailable = false,
   impactPending = false,
   onSaveImpact,
   onResolveImpact,
@@ -375,24 +386,26 @@ export function PieceRevisionImpactView({
                           ))}
                         </select>
                       </label>
-                      <label htmlFor={`drawing-impact-status-${selectedRevision.revisionId}`}>
-                        Impact status
-                        <select
-                          id={`drawing-impact-status-${selectedRevision.revisionId}`}
-                          value={draft.status}
-                          disabled={impactPending}
-                          onChange={(event) =>
-                            setDraft((current) => ({
-                              ...current,
-                              status: event.target.value as DrawingImpactRow["status"],
-                            }))
-                          }
-                        >
-                          {IMPACT_STATUSES.map((value) => (
-                            <option key={value} value={value}>{optionLabel(value)}</option>
-                          ))}
-                        </select>
-                      </label>
+                      {selectedImpact ? (
+                        <label htmlFor={`drawing-impact-status-${selectedRevision.revisionId}`}>
+                          Impact status
+                          <select
+                            id={`drawing-impact-status-${selectedRevision.revisionId}`}
+                            value={draft.status}
+                            disabled={impactPending}
+                            onChange={(event) =>
+                              setDraft((current) => ({
+                                ...current,
+                                status: event.target.value as DrawingImpactRow["status"],
+                              }))
+                            }
+                          >
+                            {IMPACT_STATUSES.map((value) => (
+                              <option key={value} value={value}>{optionLabel(value)}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
                       <label htmlFor={`drawing-impact-priority-${selectedRevision.revisionId}`}>
                         Priority
                         <select
@@ -413,18 +426,34 @@ export function PieceRevisionImpactView({
                       </label>
                       <label htmlFor={`drawing-impact-assignee-${selectedRevision.revisionId}`}>
                         Assigned to
-                        <input
+                        <select
                           id={`drawing-impact-assignee-${selectedRevision.revisionId}`}
-                          type="text"
                           value={draft.assigned_to}
-                          disabled={impactPending}
+                          disabled={impactPending || assigneesLoading || assigneesUnavailable}
                           onChange={(event) =>
                             setDraft((current) => ({
                               ...current,
                               assigned_to: event.target.value,
                             }))
                           }
-                        />
+                        >
+                          <option value="">Unassigned</option>
+                          {assigneesLoading ? (
+                            <option value="__loading" disabled>Loading project members…</option>
+                          ) : assigneesUnavailable ? (
+                            <option value="__unavailable" disabled>
+                              Project members unavailable
+                            </option>
+                          ) : assignees.length === 0 ? (
+                            <option value="__empty" disabled>No project members available</option>
+                          ) : (
+                            assignees.map((assignee) => (
+                              <option key={assignee.userId} value={assignee.userId}>
+                                {assignee.label}
+                              </option>
+                            ))
+                          )}
+                        </select>
                       </label>
                       <label htmlFor={`drawing-impact-due-${selectedRevision.revisionId}`}>
                         Due date
@@ -475,7 +504,12 @@ export function PieceRevisionImpactView({
                         <button
                           type="button"
                           className="cmd-btn cmd-btn--primary"
-                          disabled={!draft.title.trim() || impactPending}
+                          disabled={
+                            !draft.title.trim() ||
+                            impactPending ||
+                            assigneesLoading ||
+                            assigneesUnavailable
+                          }
                           onClick={() => void saveImpact()}
                         >
                           {impactPending ? "Saving impact…" : "Save impact"}

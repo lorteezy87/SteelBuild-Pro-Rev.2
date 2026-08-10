@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   PieceDigitalThreadModel,
   PieceThreadSection,
@@ -63,6 +63,12 @@ export function PieceDigitalThread({
 }: PieceDigitalThreadProps) {
   const [holdEditorOpen, setHoldEditorOpen] = useState(false);
   const [holdReason, setHoldReason] = useState("");
+
+  useEffect(() => {
+    setHoldEditorOpen(false);
+    setHoldReason("");
+  }, [thread?.pieceId]);
+
   if (!thread) return null;
 
   const nextHoldState = !pieceOnHold;

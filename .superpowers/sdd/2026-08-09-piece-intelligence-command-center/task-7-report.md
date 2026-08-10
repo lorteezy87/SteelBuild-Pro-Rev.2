@@ -83,3 +83,75 @@ unchanged pre-Task7 files from earlier Piece Intelligence tasks and the existing
 Integrations test. No diagnostic remains in a Task 7 modified file. Fixing those
 files would exceed the controller's exact Task 7 file scope; the failure is
 reported rather than hidden or added to a grandfather list.
+
+## Fix Round 1 — review findings
+
+- Added an idempotent `piece_intelligence` migration that replaces the three
+  existing restrictive `drawing_impacts` write-floor policies with PM floors
+  for `INSERT`, `UPDATE`, and `DELETE`. Existing permissive project-access and
+  read policies are untouched.
+- Hid the fabrication-release navigation for viewer/field users and prevented
+  direct Board URLs from mounting `CanonicalFabReleasePanel` below PM. The
+  existing release RPC/panel remains the sole release authority.
+- Reset unfinished hold editor state and its reason whenever the digital thread
+  changes pieces.
+- Kept create status canonically `open` without rendering a create-status
+  selector; edit status and resolve remain available.
+- Replaced free-text assignee input with a native select hydrated through the
+  established `project-members` / `user-profiles-by-ids` query authorities.
+  Options use real membership `user_id` UUIDs, show profile/role labels where
+  available, allow unassigned, and fail closed while loading or unavailable.
+
+### Fix-round RED/GREEN evidence
+
+Initial focused RED (before production or migration changes):
+
+```text
+npx vitest run \
+  src/pages/pieceRegister/__tests__/PieceRegister.test.tsx \
+  supabase/migrations/__tests__/pieceIntelligenceDrawingImpactRoleFloor.test.js
+
+Test Files  2 failed (2)
+Tests       4 failed | 49 passed (53)
+```
+
+The migration contract failed with `ENOENT`; UI failures proved the missing PM
+member query, cross-piece hold reset, create-status removal, and native member
+select/loading behavior. After adding an async Board-readiness barrier, the
+direct viewer/field URL regression separately failed `2/2` because the canonical
+release panel mounted for both roles.
+
+Final focused GREEN:
+
+```text
+Test Files  2 passed (2)
+Tests       57 passed (57)
+```
+
+Task 1–7 plus migration contract regression:
+
+```text
+Test Files  10 passed (10)
+Tests       122 passed (122)
+```
+
+### Fix-round final verification
+
+- `npm test`: 432 files passed, 3,960 tests passed.
+- `npm run typecheck`: passed.
+- `npm run typecheck:strict`: passed with 0 enforced errors.
+- Scoped ESLint over all modified source/test files: passed.
+- `npm run check:no-new-js`: passed.
+- `git diff --check`: passed.
+- `npm run build`: passed (existing Vite chunk-size advisory only).
+- `npm run typecheck:noimplicitany`: same 27 inherited diagnostics in unchanged
+  files; no diagnostic in a Task 7 or fix-round file.
+
+### Database and membership verification boundary
+
+The PM-floor migration is covered by a static contract test only; no disposable
+database was available, so this report makes no live RLS claim. The established
+`user_projects` SELECT policy may return only the current user's membership to a
+non-admin PM. The selector deliberately shows only real rows that RLS returns;
+expanding membership-read authority or adding a roster RPC was outside this
+fix's authorized migration scope.
