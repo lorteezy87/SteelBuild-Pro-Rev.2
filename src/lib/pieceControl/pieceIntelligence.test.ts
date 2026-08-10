@@ -14,7 +14,7 @@ import {
   type PieceIntelligenceSnapshot,
   type PieceIntelligenceWorkPackage,
   type SourceAvailability,
-} from "./pieceIntelligence";
+} from "@/lib/pieceControl/pieceIntelligence";
 
 function available<T>(rows: readonly T[] = []): SourceAvailability<T> {
   return { status: "available", rows };
@@ -453,6 +453,17 @@ describe("derivePieceAttention", () => {
 
     expect(derivePieceAttention(snapshot, [], "2026-08-09")).toEqual([]);
   });
+
+  it("does not add field urgency when scheduled_start_date is malformed", () => {
+    // Catches malformed source dates sorting as real dates or becoming urgent.
+    const row = piece("piece-1", { work_package_id: "wp-1" });
+    const snapshot = fixture({
+      pieces: available([row]),
+      workPackages: available([workPackage("wp-1", "not-a-date")]),
+    });
+
+    expect(derivePieceAttention(snapshot, [], "2026-08-09")).toEqual([]);
+  });
 });
 
 describe("derivePieceIntelligenceSummary", () => {
@@ -482,5 +493,95 @@ describe("derivePieceIntelligenceSummary", () => {
     expect(summary.metrics.blockedOrHeldPieces).toBe(2);
     expect(summary.metrics.fieldNeededWithExposure).toBe(1);
     expect(summary.exposures[0].affectedPieces).toHaveLength(3);
+  });
+
+  it("marks the summary partial when impacts are unavailable for linked exposure", () => {
+    // Catches unavailable impact evidence being rendered as a verified zero blocker count.
+    const held = piece("held", { quantity: 2, on_hold: true });
+    const summary = derivePieceIntelligenceSummary(
+      fixture({
+        pieces: available([held]),
+        pieceDrawingSets: available([setLink(held, "set-1")]),
+        drawings: available([drawing("dwg-1", "set-1")]),
+        revisions: available([currentChangeRevision("rev-1", "dwg-1")]),
+        impacts: {
+          status: "unavailable",
+          rows: [],
+          reason: "permission denied",
+        },
+      }),
+      "2026-08-09",
+    );
+
+    expect(summary.metrics.blockedOrHeldPieces).toBe(2);
+    expect(summary.verification).toBe("partial");
+    expect(summary.unavailableSources).toEqual(["impacts"]);
+    expect(summary.unavailableSourceWarnings).toEqual([
+      { source: "impacts", reason: "permission denied" },
+    ]);
+  });
+
+  it("marks the summary partial when impacts are unavailable without current revisions", () => {
+    // Catches an empty revision list disguising unavailable blocker evidence as safe.
+    const held = piece("held", { quantity: 2, on_hold: true });
+    const summary = derivePieceIntelligenceSummary(
+      fixture({
+        pieces: available([held]),
+        impacts: {
+          status: "unavailable",
+          rows: [],
+          reason: "network down",
+        },
+      }),
+      "2026-08-09",
+    );
+
+    expect(summary.exposures).toEqual([]);
+    expect(summary.metrics.blockedOrHeldPieces).toBe(2);
+    expect(summary.verification).toBe("partial");
+    expect(summary.unavailableSources).toEqual(["impacts"]);
+    expect(summary.unavailableSourceWarnings).toEqual([
+      { source: "impacts", reason: "network down" },
+    ]);
+  });
+
+  it("deduplicates quantity metrics across two revisions exposing the same lots", () => {
+    // Catches cross-revision summing that counts the same canonical lots twice.
+    const held = piece("held", {
+      quantity: 2,
+      on_hold: true,
+      work_package_id: "wp-1",
+    });
+    const remaining = piece("remaining", {
+      quantity: 4,
+      work_package_id: "wp-1",
+    });
+    const lots = [held, remaining];
+    const summary = derivePieceIntelligenceSummary(
+      fixture({
+        pieces: available(lots),
+        pieceDrawingSets: available(lots.map((row) => setLink(row, "set-1"))),
+        drawings: available([
+          drawing("dwg-1", "set-1"),
+          drawing("dwg-2", "set-1"),
+        ]),
+        revisions: available([
+          currentChangeRevision("rev-1", "dwg-1"),
+          currentChangeRevision("rev-2", "dwg-2"),
+        ]),
+        workPackages: available([
+          workPackage("wp-1", "2026-08-12", "WP1"),
+        ]),
+      }),
+      "2026-08-09",
+    );
+
+    expect(summary.exposures).toHaveLength(2);
+    expect(summary.metrics.affectedPieces).toBe(6);
+    expect(summary.metrics.blockedOrHeldPieces).toBe(2);
+    expect(summary.metrics.fieldNeededWithExposure).toBe(6);
+    expect(
+      summary.metrics.nextWorkPackageReleaseReadiness?.exposedPieceQuantity,
+    ).toBe(6);
   });
 });

@@ -1,5 +1,5 @@
-import { selectActionableLeafPieces } from "./canonicalRollups";
-import type { PieceRegisterRow } from "./repository";
+import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
+import type { PieceRegisterRow } from "@/lib/pieceControl/repository";
 
 export type VerificationState = "verified" | "partial" | "link_required";
 
@@ -285,9 +285,17 @@ export interface PieceIntelligenceMetrics {
 }
 
 export interface PieceIntelligenceSummary {
+  verification: Exclude<VerificationState, "link_required">;
+  unavailableSources: readonly string[];
+  unavailableSourceWarnings: readonly SourceUnavailableWarning[];
   metrics: PieceIntelligenceMetrics;
   exposures: readonly RevisionExposure[];
   attention: readonly PieceAttentionRisk[];
+}
+
+export interface SourceUnavailableWarning {
+  source: string;
+  reason: string;
 }
 
 export class PieceIntelligenceCoreUnavailableError extends Error {
@@ -371,9 +379,20 @@ function uniqueById<T extends { id: string }>(values: readonly T[]): T[] {
 function optionalUnavailableSources(
   snapshot: PieceIntelligenceSnapshot,
 ): string[] {
-  return OPTIONAL_SOURCE_KEYS.filter(
-    (source) => snapshot[source].status === "unavailable",
+  return optionalUnavailableSourceWarnings(snapshot).map(
+    (warning) => warning.source,
   );
+}
+
+function optionalUnavailableSourceWarnings(
+  snapshot: PieceIntelligenceSnapshot,
+): SourceUnavailableWarning[] {
+  return OPTIONAL_SOURCE_KEYS.flatMap((source) => {
+    const availability = snapshot[source];
+    return availability.status === "unavailable"
+      ? [{ source, reason: availability.reason }]
+      : [];
+  });
 }
 
 function lifecycleExposureFor(
@@ -870,8 +889,16 @@ export function derivePieceIntelligenceSummary(
       })
       .map((piece) => piece.id),
   );
+  const unavailableSourceWarnings =
+    optionalUnavailableSourceWarnings(snapshot);
 
   return {
+    verification:
+      unavailableSourceWarnings.length > 0 ? "partial" : "verified",
+    unavailableSources: unavailableSourceWarnings.map(
+      (warning) => warning.source,
+    ),
+    unavailableSourceWarnings,
     metrics: {
       affectedPieces: quantityForIds(actionablePieces, exposedIds),
       blockedOrHeldPieces: quantityForIds(
