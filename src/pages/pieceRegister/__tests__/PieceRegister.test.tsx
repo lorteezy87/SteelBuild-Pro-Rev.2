@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
+import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceRepository";
 import {
   fetchPieceImportBatches,
   fetchPieceImportRows,
@@ -82,6 +83,10 @@ vi.mock("@/lib/pieceControl/canonicalDashboardRepository", () => ({
   fetchCanonicalDashboardSnapshot: vi.fn(),
 }));
 
+vi.mock("@/lib/pieceControl/pieceIntelligenceRepository", () => ({
+  fetchPieceIntelligenceSnapshot: vi.fn(),
+}));
+
 function pieceRegisterRow(id: string, projectId = "project-1") {
   return {
     id,
@@ -106,6 +111,68 @@ function pieceRegisterRow(id: string, projectId = "project-1") {
     metadata: null,
     updated_at: "2026-08-09T12:00:00.000Z",
     deleted_at: null,
+  };
+}
+
+function intelligenceSnapshot(pieceId = "p1", projectId = "project-1") {
+  const piece = pieceRegisterRow(pieceId, projectId);
+  return {
+    pieces: [piece],
+    pieceDrawings: [],
+    pieceDrawingSets: [
+      { project_id: projectId, piece_id: pieceId, drawing_set_id: "set-1" },
+    ],
+    drawings: [
+      {
+        id: "drawing-1",
+        project_id: projectId,
+        drawing_set_id: "set-1",
+        sheet_number: "E502",
+        title: "Framing",
+      },
+    ],
+    workPackages: [
+      {
+        id: "wp-1",
+        project_id: projectId,
+        wp_number: "WP-001",
+        sequence_number: "1",
+        scheduled_start_date: "2026-08-20",
+      },
+    ],
+    drawingSets: [{ id: "set-1", set_name: "Building 2" }],
+    submittals: [],
+    sheetResponses: [],
+    drawingRevisions: [
+      {
+        id: "r4",
+        drawing_id: "drawing-1",
+        is_current: true,
+        archived_at: null,
+        revision_code: "4",
+      },
+    ],
+    drawingReviews: [],
+    drawingSignoffs: [],
+    commentDispositions: [],
+    sourceAvailability: {
+      pieceDrawings: "available",
+      pieceDrawingSets: "available",
+      drawings: "available",
+      drawingSets: "available",
+      revisions: "available",
+      approvals: "available",
+    },
+    drawingImpacts: [],
+    rfis: [],
+    pieceEvents: [],
+    availability: {
+      relationships: "available",
+      approvals: "available",
+      impacts: "available",
+      rfis: "available",
+      events: "available",
+    },
   };
 }
 
@@ -150,6 +217,9 @@ describe("Piece Register command shell", () => {
       completions: [],
       legacyProduction: [],
     });
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockResolvedValue(
+      intelligenceSnapshot() as Awaited<ReturnType<typeof fetchPieceIntelligenceSnapshot>>,
+    );
   });
 
   it("shows operational authority and primary navigation", () => {
@@ -247,7 +317,72 @@ describe("Piece Register command shell", () => {
 
     renderPieceRegister("/PieceRegister?view=impact&piece=p1");
 
-    expect(await screen.findByText("Requested piece: p1")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+  });
+
+  it("loads the canonical intelligence snapshot and writes revision and piece intent", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+
+    renderPieceRegister("/PieceRegister?view=impact&embed=1");
+
+    const revision = await screen.findByRole("button", {
+      name: /E502 revision 4/i,
+    });
+    expect(fetchPieceIntelligenceSnapshot).toHaveBeenCalledWith("project-1");
+
+    fireEvent.click(revision);
+    await waitFor(() =>
+      expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+        "?view=impact&embed=1&revision=r4",
+      ),
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /open P1 · A/i }));
+    expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+      "?view=impact&embed=1&revision=r4&piece=p1",
+    );
+  });
+
+  it("replaces the Register impact panel with the five-section digital thread", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+
+    renderPieceRegister("/PieceRegister?view=register&piece=p1");
+
+    expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Piece impact" }))
+      .not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Model & drawing" }))
+      .toBeInTheDocument();
+  });
+
+  it("fails closed when revision evidence cannot be loaded", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockRejectedValueOnce(
+      new Error("relationship query denied"),
+    );
+
+    renderPieceRegister("/PieceRegister?view=impact&revision=r4");
+
+    expect(
+      await screen.findByText("Revision evidence could not be loaded."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Piece links required")).not.toBeInTheDocument();
+  });
+
+  it("clears an inaccessible revision only after intelligence resolves", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([pieceRegisterRow("p1")]);
+
+    renderPieceRegister(
+      "/PieceRegister?view=impact&revision=other-project&piece=p1&embed=1",
+    );
+
+    expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+        "?view=impact&piece=p1&embed=1",
+      ),
+    );
   });
 
   it.each([
@@ -271,7 +406,7 @@ describe("Piece Register command shell", () => {
       projectContext.projectId = "project-1";
       rerenderPieceRegister();
 
-      expect(await screen.findByText("Requested piece: p1"))
+      expect(await screen.findByLabelText("Piece digital thread"))
         .toBeInTheDocument();
       expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
         "?view=impact&piece=p1&revision=r4&embed=1",
@@ -314,18 +449,23 @@ describe("Piece Register command shell", () => {
     vi.mocked(fetchPieceRegister).mockImplementation(async (projectId) => [
       pieceRegisterRow(projectId === "project-a" ? "piece-a" : "piece-b", projectId),
     ]);
+    vi.mocked(fetchPieceIntelligenceSnapshot).mockImplementation(async (projectId) =>
+      intelligenceSnapshot(
+        projectId === "project-a" ? "piece-a" : "piece-b",
+        projectId,
+      ) as Awaited<ReturnType<typeof fetchPieceIntelligenceSnapshot>>,
+    );
     const { rerenderPieceRegister } = renderPieceRegister(
       "/PieceRegister?view=impact&focus=revision&piece=piece-a&revision=r4&embed=1",
     );
 
-    expect(
-      await screen.findByText("Requested piece: piece-a"),
-    ).toBeInTheDocument();
+    expect(await screen.findByLabelText("Piece digital thread"))
+      .toBeInTheDocument();
 
     projectContext.projectId = "project-b";
     rerenderPieceRegister();
 
-    expect(screen.queryByText("Requested piece: piece-a"))
+    expect(screen.queryByRole("heading", { name: "PIECE-A · A" }))
       .not.toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByTestId("piece-register-search")).toHaveTextContent(

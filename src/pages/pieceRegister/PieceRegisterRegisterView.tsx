@@ -4,13 +4,11 @@ import type { Dispatch, SetStateAction } from "react";
  * Presentational extract from PieceRegister.tsx (behavior-preserving).
  */
 import { PackageOpen, Search } from "lucide-react";
-import { DecisionPanel } from "@/components/command";
-import { PieceImpactPanel } from "@/components/pieceControl/PieceImpactPanel";
 import PieceRegisterBulkBar, {
   type BulkAttributeFormValues,
 } from "@/components/pieceControl/PieceRegisterBulkBar";
-import type { PieceImpactModel } from "@/lib/pieceControl/drawingReleaseReady";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import type { PieceDigitalThreadModel } from "@/lib/pieceControl/pieceIntelligenceTypes";
 import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
 import {
   nextPieceRegisterSort,
@@ -23,6 +21,7 @@ import type {
   PieceRegisterDisplayRow,
   PieceRegisterFilters,
 } from "./filter";
+import { PieceDigitalThread } from "./PieceDigitalThread";
 import { SelectFilter } from "./SelectFilter";
 
 export type PieceRegisterWorkPackageOption = {
@@ -59,8 +58,13 @@ export type PieceRegisterRegisterViewProps = {
   onBulkHold: (payload: { onHold: boolean; reason?: string }) => void;
   onArchive: () => void;
   selectedPieceId: string | null;
-  selectedPieceImpact: PieceImpactModel | null;
-  impactLoading: boolean;
+  selectedPieceThread: PieceDigitalThreadModel | null;
+  intelligenceLoading: boolean;
+  intelligenceError: unknown;
+  onRetryIntelligence: () => void;
+  onClosePiece: () => void;
+  onOpenRelationships: () => void;
+  onOpenRelease: () => void;
   allFilteredSelected: boolean;
   toggleAllFiltered: () => void;
   piecesLoading: boolean;
@@ -95,8 +99,13 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
     onBulkHold,
     onArchive,
     selectedPieceId,
-    selectedPieceImpact,
-    impactLoading,
+    selectedPieceThread,
+    intelligenceLoading,
+    intelligenceError,
+    onRetryIntelligence,
+    onClosePiece,
+    onOpenRelationships,
+    onOpenRelease,
     allFilteredSelected,
     toggleAllFiltered,
     piecesLoading,
@@ -249,13 +258,42 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
           />
         ) : null}
 
-        {selectedPieceId ? (
-          <DecisionPanel title="Piece impact">
-            <PieceImpactPanel
-              impact={selectedPieceImpact}
-              loading={impactLoading}
+        {selectedPieceId && intelligenceLoading ? (
+          <div className="piece-operation-state is-loading" aria-label="Loading piece digital thread">
+            Loading the piece digital thread…
+          </div>
+        ) : null}
+        {selectedPieceId && intelligenceError ? (
+          <div className="piece-operation-state is-error">
+            <strong>Piece evidence could not be loaded.</strong>
+            <p>
+              {presentPieceControlError(
+                intelligenceError,
+                "Piece evidence is unavailable.",
+              )}
+            </p>
+            <button
+              type="button"
+              className="cmd-btn cmd-btn--secondary"
+              onClick={onRetryIntelligence}
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
+        {selectedPieceId && !intelligenceLoading && !intelligenceError ? (
+          selectedPieceThread ? (
+            <PieceDigitalThread
+              thread={selectedPieceThread}
+              onClose={onClosePiece}
+              onOpenRelationships={onOpenRelationships}
+              onOpenRelease={onOpenRelease}
             />
-          </DecisionPanel>
+          ) : (
+            <div className="piece-operation-state is-error">
+              Piece evidence is unavailable for this selection.
+            </div>
+          )
         ) : null}
 
         <div className="cmd-table-wrap piece-register-table__wrap">

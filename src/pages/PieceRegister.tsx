@@ -41,6 +41,11 @@ import { planBulkPieceAttributeUpdate } from "@/lib/pieceControl/bulkUpdatePiece
 import { bulkUpdatePieceAttributes } from "@/lib/pieceControl/bulkUpdateRepository";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
+import {
+  buildPieceDigitalThread,
+  derivePieceIntelligence,
+} from "@/lib/pieceControl/pieceIntelligenceDerive";
+import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceRepository";
 import { readPieceImportFile } from "@/lib/pieceControl/importAdapters";
 import {
   collectAppliedPieceIds,
@@ -52,6 +57,7 @@ import {
   planImportDrawingLinks,
 } from "@/lib/pieceControl/importDrawingLink";
 import type { PieceRegisterSort } from "@/lib/pieceControl/pieceRegisterSort";
+import { pieceControlKeys } from "@/lib/pieceControl/queryKeys";
 import {
   buildPieceControlSummary,
   modePresentation,
@@ -87,7 +93,6 @@ import {
   buildFilteredRegisterRows,
   archiveConfirmationText as buildArchiveConfirmationText,
   allRowsSelected,
-  buildSelectedPieceImpact,
   IMPORT_DECISION_TONE,
   EMPTY_PIECE_REGISTER_FILTERS,
   PIECE_REGISTER_VIEW_LABELS,
@@ -95,6 +100,8 @@ import {
 } from "./pieceRegister/registerHelpers";
 import { PieceRegisterArchiveDialog } from "./pieceRegister/PieceRegisterArchiveDialog";
 import { PieceRegisterRegisterView } from "./pieceRegister/PieceRegisterRegisterView";
+import { PieceDigitalThread } from "./pieceRegister/PieceDigitalThread";
+import { PieceRevisionImpactView } from "./pieceRegister/PieceRevisionImpactView";
 import { PieceRegisterImportView } from "./pieceRegister/PieceRegisterImportView";
 import {
   deriveOverviewWorkPackages,
@@ -246,15 +253,27 @@ export default function PieceRegister() {
   });
   const selectedPieceId =
     selectedPieceIds.size === 1 ? [...selectedPieceIds][0] : null;
-  const impactSnapshotQuery = useQuery({
-    queryKey: ["piece-relationships", projectId],
-    queryFn: () => fetchPieceRelationshipSnapshot(projectId!),
-    enabled: enabled && Boolean(selectedPieceId),
+  const intelligenceQuery = useQuery({
+    queryKey: pieceControlKeys.intelligence(projectId!),
+    queryFn: () => fetchPieceIntelligenceSnapshot(projectId!),
+    enabled:
+      enabled &&
+      piecesQuery.isSuccess &&
+      selectActionableLeafPieces(piecesQuery.data ?? []).length > 0 &&
+      (activeView === "impact" || Boolean(selectedPieceId)),
     staleTime: 15_000,
   });
-  const selectedPieceImpact = useMemo(
-    () => buildSelectedPieceImpact(selectedPieceId, impactSnapshotQuery.data),
-    [impactSnapshotQuery.data, selectedPieceId],
+  const intelligenceModel = useMemo(
+    () => intelligenceQuery.data
+      ? derivePieceIntelligence(intelligenceQuery.data, new Date())
+      : null,
+    [intelligenceQuery.data],
+  );
+  const selectedPieceThread = useMemo(
+    () => selectedPieceId && intelligenceQuery.data
+      ? buildPieceDigitalThread(selectedPieceId, intelligenceQuery.data)
+      : null,
+    [intelligenceQuery.data, selectedPieceId],
   );
 
   const batches = batchesQuery.data ?? [];
@@ -340,6 +359,28 @@ export default function PieceRegister() {
     projectId,
     setPieceRegisterLocation,
   ]);
+  useEffect(() => {
+    if (activeView !== "impact" || !location.revisionId) return;
+    if (piecesQuery.isSuccess && actionablePieceIds.size === 0) {
+      setPieceRegisterLocation({ revisionId: null });
+      return;
+    }
+    if (!intelligenceQuery.isSuccess || !intelligenceModel) return;
+    const revisionIsAccessible = intelligenceModel.revisions.some(
+      (revision) => revision.revisionId === location.revisionId,
+    );
+    if (!revisionIsAccessible) {
+      setPieceRegisterLocation({ revisionId: null });
+    }
+  }, [
+    activeView,
+    actionablePieceIds.size,
+    intelligenceModel,
+    intelligenceQuery.isSuccess,
+    location.revisionId,
+    piecesQuery.isSuccess,
+    setPieceRegisterLocation,
+  ]);
   const overviewSnapshotQuery = useQuery({
     queryKey: ["canonical-reporting", projectId],
     queryFn: () => fetchCanonicalDashboardSnapshot(projectId!),
@@ -415,6 +456,7 @@ export default function PieceRegister() {
       queryClient.invalidateQueries({ queryKey: ["piece-import-batches", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["piece-import-rows", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["piece-relationships", projectId] }),
+      queryClient.invalidateQueries({ queryKey: pieceControlKeys.intelligence(projectId) }),
       queryClient.invalidateQueries({ queryKey: ["piece-register-work-packages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["work-packages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
@@ -920,24 +962,82 @@ export default function PieceRegister() {
             className="piece-register-embedded-workspace"
             aria-label="Revision Impact workspace"
           >
-            <DecisionPanel title="Revision Impact">
-              <div className="piece-operation-state">
-                <strong>Review exact revision-to-piece exposure</strong>
-                <span>
-                  Select a drawing revision to review linked pieces before shop
-                  or field work is exposed.
-                </span>
-                {!isRealProjectSwitch && location.revisionId ? (
-                  <span>Requested revision: {location.revisionId}</span>
-                ) : null}
-                {selectedPieceId ? (
-                  <span>Requested piece: {selectedPieceId}</span>
-                ) : null}
-                {location.focus ? (
-                  <span>Current focus: {location.focus}</span>
-                ) : null}
+            {piecesQuery.isLoading ? (
+              <div className="piece-operation-state is-loading">
+                Loading the project piece register…
               </div>
-            </DecisionPanel>
+            ) : piecesQuery.error ? (
+              <div className="piece-operation-state is-error">
+                <strong>Revision evidence could not be loaded.</strong>
+                <p>The active project piece register is unavailable.</p>
+              </div>
+            ) : displayRows.length === 0 ? (
+              <div className="piece-operation-state">
+                <strong>No active pieces are available for revision review.</strong>
+                <p>Use the controlled import workflow to establish the register first.</p>
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--primary"
+                  onClick={() => setActiveView("import")}
+                >
+                  Import pieces
+                </button>
+              </div>
+            ) : intelligenceQuery.isLoading ? (
+              <div className="piece-operation-state is-loading">
+                Loading exact revision evidence…
+              </div>
+            ) : intelligenceQuery.error ? (
+              <div className="piece-operation-state is-error">
+                <strong>Revision evidence could not be loaded.</strong>
+                <p>
+                  {presentPieceControlError(
+                    intelligenceQuery.error,
+                    "Revision evidence is unavailable.",
+                  )}
+                </p>
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--secondary"
+                  onClick={() => void intelligenceQuery.refetch()}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : intelligenceModel ? (
+              <>
+                <PieceRevisionImpactView
+                  model={intelligenceModel}
+                  selectedRevisionId={
+                    isRealProjectSwitch ? null : location.revisionId
+                  }
+                  onSelectRevision={(revisionId) =>
+                    setPieceRegisterLocation({ revisionId })
+                  }
+                  onSelectPiece={(pieceId) =>
+                    setSelectedPieceIds(new Set([pieceId]))
+                  }
+                />
+                {selectedPieceId ? (
+                  selectedPieceThread ? (
+                    <PieceDigitalThread
+                      thread={selectedPieceThread}
+                      onClose={() => setSelectedPieceIds(new Set())}
+                      onOpenRelationships={() => setActiveView("relationships")}
+                      onOpenRelease={() => setActiveView("board")}
+                    />
+                  ) : (
+                    <div className="piece-operation-state is-error">
+                      Piece evidence is unavailable for this selection.
+                    </div>
+                  )
+                ) : null}
+              </>
+            ) : (
+              <div className="piece-operation-state is-error">
+                Revision evidence is unavailable.
+              </div>
+            )}
           </section>
         )}
 
@@ -971,8 +1071,13 @@ export default function PieceRegister() {
             onBulkHold={(payload) => bulkHoldMutation.mutate(payload)}
             onArchive={openArchiveDialog}
             selectedPieceId={selectedPieceId}
-            selectedPieceImpact={selectedPieceImpact}
-            impactLoading={impactSnapshotQuery.isLoading}
+            selectedPieceThread={selectedPieceThread}
+            intelligenceLoading={intelligenceQuery.isLoading}
+            intelligenceError={intelligenceQuery.error}
+            onRetryIntelligence={() => void intelligenceQuery.refetch()}
+            onClosePiece={() => setSelectedPieceIds(new Set())}
+            onOpenRelationships={() => setActiveView("relationships")}
+            onOpenRelease={() => setActiveView("board")}
             allFilteredSelected={allFilteredSelected}
             toggleAllFiltered={toggleAllFiltered}
             piecesLoading={piecesQuery.isLoading}
