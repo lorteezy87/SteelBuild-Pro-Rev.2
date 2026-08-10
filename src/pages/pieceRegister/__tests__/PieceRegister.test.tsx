@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import {
@@ -14,15 +14,19 @@ import PieceRegister from "../../PieceRegister";
 
 const projectContext = vi.hoisted(() => ({
   mode: "shadow",
+  projectId: "project-1" as string | null | undefined,
 }));
 
 vi.mock("@/components/shared/ProjectContext", () => ({
   useProjectContext: () => ({
-    activeProject: {
-      id: "project-1",
-      name: "Mesa Distribution Center",
-      piece_control_mode: projectContext.mode,
-    },
+    activeProject:
+      projectContext.projectId == null
+        ? projectContext.projectId
+        : {
+            id: projectContext.projectId,
+            name: "Mesa Distribution Center",
+            piece_control_mode: projectContext.mode,
+          },
     updateActiveProject: vi.fn(),
   }),
 }));
@@ -78,6 +82,37 @@ vi.mock("@/lib/pieceControl/canonicalDashboardRepository", () => ({
   fetchCanonicalDashboardSnapshot: vi.fn(),
 }));
 
+function pieceRegisterRow(id: string, projectId = "project-1") {
+  return {
+    id,
+    project_id: projectId,
+    piece_mark: id.toUpperCase(),
+    normalized_piece_mark: id.toUpperCase(),
+    lot_code: "A",
+    parent_piece_id: null,
+    quantity: 1,
+    profile: "W12x26",
+    material_grade: "A992",
+    weight_each_lbs: 500,
+    weight_total_lbs: 500,
+    work_package_id: "wp-1",
+    lifecycle_status: "fabricated",
+    current_station: null,
+    on_hold: false,
+    is_container: false,
+    is_deleted: false,
+    source_system: "manual",
+    external_ref: null,
+    metadata: null,
+    updated_at: "2026-08-09T12:00:00.000Z",
+    deleted_at: null,
+  };
+}
+
+function SearchStateProbe() {
+  return <output data-testid="piece-register-search">{useLocation().search}</output>;
+}
+
 function renderPieceRegister(initialEntry = "/PieceRegister") {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -86,19 +121,27 @@ function renderPieceRegister(initialEntry = "/PieceRegister") {
     },
   });
 
-  return render(
+  const createTree = () => (
     <MemoryRouter initialEntries={[initialEntry]}>
       <QueryClientProvider client={queryClient}>
         <PieceRegister />
+        <SearchStateProbe />
       </QueryClientProvider>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+  const rendered = render(createTree());
+
+  return {
+    ...rendered,
+    rerenderPieceRegister: () => rendered.rerender(createTree()),
+  };
 }
 
 describe("Piece Register command shell", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     projectContext.mode = "shadow";
+    projectContext.projectId = "project-1";
     vi.mocked(fetchPieceRegister).mockResolvedValue([]);
     vi.mocked(fetchCanonicalDashboardSnapshot).mockResolvedValue({
       pieces: [],
@@ -198,9 +241,100 @@ describe("Piece Register command shell", () => {
   });
 
   it("preserves direct piece selection intent in the Impact workspace", async () => {
+    vi.mocked(fetchPieceRegister).mockResolvedValue([
+      pieceRegisterRow("p1"),
+    ]);
+
     renderPieceRegister("/PieceRegister?view=impact&piece=p1");
 
     expect(await screen.findByText("Requested piece: p1")).toBeInTheDocument();
+  });
+
+  it.each([
+    { label: "null", initialProjectId: null },
+    { label: "undefined", initialProjectId: undefined },
+  ])(
+    "preserves a valid direct piece through $label project hydration",
+    async ({ initialProjectId }) => {
+      projectContext.projectId = initialProjectId;
+      vi.mocked(fetchPieceRegister).mockResolvedValue([
+        pieceRegisterRow("p1"),
+      ]);
+      const { rerenderPieceRegister } = renderPieceRegister(
+        "/PieceRegister?view=impact&piece=p1&revision=r4&embed=1",
+      );
+
+      expect(
+        screen.getByRole("heading", { name: "Select a project" }),
+      ).toBeInTheDocument();
+
+      projectContext.projectId = "project-1";
+      rerenderPieceRegister();
+
+      expect(await screen.findByText("Requested piece: p1"))
+        .toBeInTheDocument();
+      expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+        "?view=impact&piece=p1&revision=r4&embed=1",
+      );
+    },
+  );
+
+  it("clears an invalid piece only after the active project rows resolve", async () => {
+    let resolvePieces!: (rows: ReturnType<typeof pieceRegisterRow>[]) => void;
+    vi.mocked(fetchPieceRegister).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePieces = resolve;
+        }),
+    );
+
+    renderPieceRegister(
+      "/PieceRegister?view=register&piece=other-project&revision=r4&project=mesa",
+    );
+
+    expect(screen.queryByRole("heading", { name: "Piece impact" }))
+      .not.toBeInTheDocument();
+    expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+      "?view=register&piece=other-project&revision=r4&project=mesa",
+    );
+
+    resolvePieces([pieceRegisterRow("p1")]);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+        "?view=register&revision=r4&project=mesa",
+      ),
+    );
+    expect(screen.queryByRole("heading", { name: "Piece impact" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("clears project-scoped piece and revision intent on a real project switch", async () => {
+    projectContext.projectId = "project-a";
+    vi.mocked(fetchPieceRegister).mockImplementation(async (projectId) => [
+      pieceRegisterRow(projectId === "project-a" ? "piece-a" : "piece-b", projectId),
+    ]);
+    const { rerenderPieceRegister } = renderPieceRegister(
+      "/PieceRegister?view=impact&focus=revision&piece=piece-a&revision=r4&embed=1",
+    );
+
+    expect(
+      await screen.findByText("Requested piece: piece-a"),
+    ).toBeInTheDocument();
+
+    projectContext.projectId = "project-b";
+    rerenderPieceRegister();
+
+    expect(screen.queryByText("Requested piece: piece-a"))
+      .not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
+        "?view=impact&focus=revision&embed=1",
+      ),
+    );
+    expect(
+      screen.getByRole("button", { name: "Revision Impact" }),
+    ).toHaveAttribute("aria-current", "page");
   });
 
   it("shows honest loading and error states on Overview with retry", async () => {

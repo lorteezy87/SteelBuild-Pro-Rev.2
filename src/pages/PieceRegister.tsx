@@ -107,6 +107,7 @@ import {
 } from "./pieceRegister/pieceRegisterLocation";
 
 const EMPTY_FILTERS = EMPTY_PIECE_REGISTER_FILTERS;
+const EMPTY_SELECTED_PIECE_IDS = new Set<string>();
 
 const REGISTER_VIEW_ICONS = {
   overview: Boxes,
@@ -162,25 +163,35 @@ export default function PieceRegister() {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [applyConfirmed, setApplyConfirmed] = useState(false);
   const [importTargetWorkPackageId, setImportTargetWorkPackageId] = useState("");
-  const [selectedPieceIds, setSelectedPieceIdsState] = useState<Set<string>>(
-    () => new Set(location.pieceId ? [location.pieceId] : []),
+  const [selectedPieceIdsState, setSelectedPieceIdsState] = useState<Set<string>>(
+    EMPTY_SELECTED_PIECE_IDS,
   );
-  const selectedPieceIdsRef = useRef(selectedPieceIds);
+  const selectedPieceIdsRef = useRef(EMPTY_SELECTED_PIECE_IDS);
+  const selectedPieceProjectIdRef = useRef<string | undefined>(undefined);
   const pendingSelectionUrlValue = useRef<string | null>(null);
   const setSelectedPieceIds: typeof setSelectedPieceIdsState = useCallback(
     (nextSelection) => {
+      const current =
+        selectedPieceProjectIdRef.current === projectId
+          ? selectedPieceIdsRef.current
+          : EMPTY_SELECTED_PIECE_IDS;
       const next =
         typeof nextSelection === "function"
-          ? nextSelection(selectedPieceIdsRef.current)
+          ? nextSelection(current)
           : nextSelection;
       const pieceId = next.size === 1 ? [...next][0] : null;
       selectedPieceIdsRef.current = next;
+      selectedPieceProjectIdRef.current = projectId;
       pendingSelectionUrlValue.current = pieceId ?? "";
       setSelectedPieceIdsState(next);
       setPieceRegisterLocation({ pieceId });
     },
-    [setPieceRegisterLocation],
+    [projectId, setPieceRegisterLocation],
   );
+  const selectedPieceIds =
+    selectedPieceProjectIdRef.current === projectId
+      ? selectedPieceIdsState
+      : EMPTY_SELECTED_PIECE_IDS;
   const [registerSort, setRegisterSort] = useState<PieceRegisterSort>({
     key: "work_package",
     direction: "asc",
@@ -190,28 +201,30 @@ export default function PieceRegister() {
   const [archiveConfirmation, setArchiveConfirmation] = useState("");
   const [attentionFocus, setAttentionFocus] = useState<PieceAttentionItem["key"] | null>(null);
 
+  const lastProjectId = useRef(projectId);
+  const projectSwitchReconciliationBlock = useRef<string | null>(null);
+  const isRealProjectSwitch = Boolean(
+    projectId && lastProjectId.current && lastProjectId.current !== projectId,
+  );
   useEffect(() => {
-    const urlValue = location.pieceId ?? "";
-    const isInternalUpdate = pendingSelectionUrlValue.current === urlValue;
-    pendingSelectionUrlValue.current = null;
-    if (isInternalUpdate) return;
-    const next = new Set(location.pieceId ? [location.pieceId] : []);
-    selectedPieceIdsRef.current = next;
-    setSelectedPieceIdsState(next);
-  }, [location.pieceId]);
+    if (!projectId) return;
+    const previousProjectId = lastProjectId.current;
+    lastProjectId.current = projectId;
+    if (!previousProjectId || previousProjectId === projectId) return;
 
-  const previousProjectId = useRef(projectId);
-  useEffect(() => {
-    if (previousProjectId.current === projectId) return;
-    previousProjectId.current = projectId;
-    setSelectedPieceIds(new Set());
+    projectSwitchReconciliationBlock.current = projectId;
+    selectedPieceIdsRef.current = EMPTY_SELECTED_PIECE_IDS;
+    selectedPieceProjectIdRef.current = projectId;
+    pendingSelectionUrlValue.current = "";
+    setSelectedPieceIdsState(EMPTY_SELECTED_PIECE_IDS);
+    setPieceRegisterLocation({ pieceId: null, revisionId: null });
     setArchiveOpen(false);
     setArchiveReason("");
     setArchiveConfirmation("");
     setAttentionFocus(null);
     setImportTargetWorkPackageId("");
     setApplyConfirmed(false);
-  }, [projectId, setSelectedPieceIds]);
+  }, [projectId, setPieceRegisterLocation]);
 
   const piecesQuery = useQuery({
     queryKey: ["piece-register", projectId],
@@ -260,6 +273,73 @@ export default function PieceRegister() {
     () => buildPieceDisplayRows(piecesQuery.data, workPackageMap),
     [piecesQuery.data, workPackageMap],
   );
+  const actionablePieceIds = useMemo(
+    () =>
+      new Set(
+        selectActionableLeafPieces(displayRows).map((piece) => piece.id),
+      ),
+    [displayRows],
+  );
+  const lastObservedPieceUrlValue = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!projectId || !piecesQuery.isSuccess) return;
+
+    if (projectSwitchReconciliationBlock.current === projectId) {
+      if (!location.pieceId) {
+        projectSwitchReconciliationBlock.current = null;
+        pendingSelectionUrlValue.current = null;
+        lastObservedPieceUrlValue.current = null;
+      }
+      return;
+    }
+
+    const requestedPieceId = location.pieceId;
+    if (requestedPieceId) {
+      pendingSelectionUrlValue.current = null;
+      lastObservedPieceUrlValue.current = requestedPieceId;
+      if (!actionablePieceIds.has(requestedPieceId)) {
+        selectedPieceIdsRef.current = EMPTY_SELECTED_PIECE_IDS;
+        selectedPieceProjectIdRef.current = projectId;
+        pendingSelectionUrlValue.current = "";
+        setSelectedPieceIdsState(EMPTY_SELECTED_PIECE_IDS);
+        setPieceRegisterLocation({ pieceId: null });
+        return;
+      }
+
+      if (
+        selectedPieceProjectIdRef.current !== projectId ||
+        selectedPieceIdsRef.current.size !== 1 ||
+        !selectedPieceIdsRef.current.has(requestedPieceId)
+      ) {
+        const next = new Set([requestedPieceId]);
+        selectedPieceIdsRef.current = next;
+        selectedPieceProjectIdRef.current = projectId;
+        setSelectedPieceIdsState(next);
+      }
+      return;
+    }
+
+    if (pendingSelectionUrlValue.current === "") {
+      pendingSelectionUrlValue.current = null;
+      lastObservedPieceUrlValue.current = null;
+      return;
+    }
+
+    pendingSelectionUrlValue.current = null;
+    const previousUrlValue = lastObservedPieceUrlValue.current;
+    lastObservedPieceUrlValue.current = null;
+    if (previousUrlValue) {
+      selectedPieceIdsRef.current = EMPTY_SELECTED_PIECE_IDS;
+      selectedPieceProjectIdRef.current = projectId;
+      setSelectedPieceIdsState(EMPTY_SELECTED_PIECE_IDS);
+    }
+  }, [
+    actionablePieceIds,
+    location.pieceId,
+    piecesQuery.isSuccess,
+    projectId,
+    setPieceRegisterLocation,
+  ]);
   const overviewSnapshotQuery = useQuery({
     queryKey: ["canonical-reporting", projectId],
     queryFn: () => fetchCanonicalDashboardSnapshot(projectId!),
@@ -847,11 +927,11 @@ export default function PieceRegister() {
                   Select a drawing revision to review linked pieces before shop
                   or field work is exposed.
                 </span>
-                {location.revisionId ? (
+                {!isRealProjectSwitch && location.revisionId ? (
                   <span>Requested revision: {location.revisionId}</span>
                 ) : null}
-                {location.pieceId ? (
-                  <span>Requested piece: {location.pieceId}</span>
+                {selectedPieceId ? (
+                  <span>Requested piece: {selectedPieceId}</span>
                 ) : null}
                 {location.focus ? (
                   <span>Current focus: {location.focus}</span>
