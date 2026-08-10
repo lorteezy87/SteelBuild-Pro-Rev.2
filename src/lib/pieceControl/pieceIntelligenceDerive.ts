@@ -577,6 +577,7 @@ export function buildPieceDigitalThread(
     snapshot.availability.rfis,
   );
   const historyAvailability = availabilityFor(
+    snapshot.availability.relationships,
     snapshot.availability.events,
     snapshot.availability.impacts,
   );

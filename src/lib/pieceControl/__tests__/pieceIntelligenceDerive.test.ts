@@ -584,6 +584,35 @@ describe("buildPieceDigitalThread", () => {
           fab_hold: true,
         },
       ],
+      drawingImpacts: [
+        {
+          id: "stale-impact",
+          project_id: "prj",
+          drawing_revision_id: "revision-1",
+          impact_type: "fabrication",
+          status: "open",
+          priority: "high",
+          title: "Stale relationship impact",
+          notes: null,
+          assigned_to: null,
+          due_date: null,
+          resolved_at: null,
+          created_at: "2026-08-08T12:00:00Z",
+          sheet_number: null,
+          sheet_title: null,
+          revision_code: null,
+        },
+      ],
+      pieceEvents: [
+        {
+          id: "piece-event",
+          project_id: "prj",
+          piece_id: "p1",
+          event_type: "station_advanced",
+          reason: "Fit verified",
+          created_at: "2026-08-09T12:00:00Z",
+        },
+      ],
       availability: {
         relationships: "unavailable",
         approvals: "available",
@@ -604,6 +633,13 @@ describe("buildPieceDigitalThread", () => {
     expect(thread?.modelAndDrawing.facts).toEqual([]);
     expect(thread?.commercial.availability).toBe("unavailable");
     expect(thread?.commercial.facts.some(({ label }) => label === "Open RFIs")).toBe(false);
+    expect(thread?.history.availability).toBe("unavailable");
+    expect(thread?.history.facts.map(({ value }) => value)).toEqual([
+      "Station advanced · Fit verified",
+    ]);
+    expect(thread?.history.facts.some(({ value }) =>
+      value.includes("Stale relationship impact")
+    )).toBe(false);
   });
 
   it("includes only RFIs explicitly linked by exact drawings, never work-package co-membership", () => {
