@@ -26,6 +26,17 @@ export interface PieceCommentDispositionEvidence extends CommentDispositionLike 
   submittal_id?: string | null;
 }
 
+export type RelationshipSourceAvailabilityValue = "available" | "unavailable";
+
+export interface RelationshipSourceAvailability {
+  pieceDrawings: RelationshipSourceAvailabilityValue;
+  pieceDrawingSets: RelationshipSourceAvailabilityValue;
+  drawings: RelationshipSourceAvailabilityValue;
+  drawingSets: RelationshipSourceAvailabilityValue;
+  revisions: RelationshipSourceAvailabilityValue;
+  approvals: RelationshipSourceAvailabilityValue;
+}
+
 export interface PieceRelationshipSnapshot {
   pieces: PieceRegisterRow[];
   pieceDrawings: ReadinessPieceDrawing[];
@@ -39,6 +50,7 @@ export interface PieceRelationshipSnapshot {
   drawingReviews: DrawingReviewEvidence[];
   drawingSignoffs: DrawingSignoffEvidence[];
   commentDispositions: PieceCommentDispositionEvidence[];
+  sourceAvailability: RelationshipSourceAvailability;
 }
 
 const db = supabase as any;
@@ -75,7 +87,7 @@ async function fetchActiveWorkPackages(
   const pageSize = 1000;
   // work_packages has name/notes — not description (PGRST/42703 if selected).
   const select =
-    "id, project_id, wp_number, name, sequence_number, area, is_deleted, deleted_at";
+    "id, project_id, wp_number, name, sequence_number, area, scheduled_start_date, is_deleted, deleted_at";
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await db
       .from("work_packages")
@@ -102,9 +114,12 @@ async function fetchOptionalProjectRows<T>(
   table: string,
   projectId: string,
   select = "*",
-): Promise<T[]> {
+): Promise<{ rows: T[]; availability: RelationshipSourceAvailabilityValue }> {
   try {
-    return await fetchProjectRows<T>(table, projectId, select);
+    return {
+      rows: await fetchProjectRows<T>(table, projectId, select),
+      availability: "available",
+    };
   } catch (error) {
     // Migration lag (PGRST205) and transient RLS/network noise on enrichment
     // tables must not blank Lots & links — WP assign still needs pieces + WPs.
@@ -113,8 +128,16 @@ async function fetchOptionalProjectRows<T>(
     } else {
       console.warn(`[piece-relationships] optional table unavailable:`, error);
     }
-    return [];
+    return { rows: [], availability: "unavailable" };
   }
+}
+
+function allSourcesAvailable(
+  sources: Array<{ availability: RelationshipSourceAvailabilityValue }>,
+): RelationshipSourceAvailabilityValue {
+  return sources.every((source) => source.availability === "available")
+    ? "available"
+    : "unavailable";
 }
 
 export async function fetchPieceRelationshipSnapshot(
@@ -131,16 +154,16 @@ export async function fetchPieceRelationshipSnapshot(
   // Everything else is best-effort so a single missing/denied table does not
   // strand WP assignment. Readiness panels degrade gracefully with empty sets.
   const [
-    pieceDrawings,
-    pieceDrawingSets,
-    drawings,
-    drawingSets,
-    submittals,
-    sheetResponses,
-    drawingRevisions,
-    drawingReviews,
-    drawingSignoffs,
-    commentDispositions,
+    pieceDrawingsSource,
+    pieceDrawingSetsSource,
+    drawingsSource,
+    drawingSetsSource,
+    submittalsSource,
+    sheetResponsesSource,
+    drawingRevisionsSource,
+    drawingReviewsSource,
+    drawingSignoffsSource,
+    commentDispositionsSource,
   ] = await Promise.all([
     fetchOptionalProjectRows<ReadinessPieceDrawing>("piece_drawings", projectId),
     fetchOptionalProjectRows<ReadinessPieceDrawingSet>(
@@ -151,7 +174,7 @@ export async function fetchPieceRelationshipSnapshot(
     fetchOptionalProjectRows<ReadinessDrawing>(
       "drawings",
       projectId,
-      "id, project_id, drawing_set_id, sheet_number, title, stage, set_approval_status, is_deleted, deleted_at, is_superseded",
+      "id, project_id, drawing_set_id, sheet_number, title, stage, set_approval_status, linked_rfi_ids, is_deleted, deleted_at, is_superseded",
     ),
     fetchOptionalProjectRows<DrawingSetEvidence>(
       "drawing_sets",
@@ -171,7 +194,7 @@ export async function fetchPieceRelationshipSnapshot(
     fetchOptionalProjectRows<DrawingRevisionEvidence>(
       "drawing_revisions",
       projectId,
-      "id, drawing_id, is_current, archived_at, revision_code",
+      "id, drawing_id, is_current, archived_at, revision_code, issued_at, received_at",
     ),
     fetchOptionalProjectRows<DrawingReviewEvidence>(
       "drawing_reviews",
@@ -190,19 +213,35 @@ export async function fetchPieceRelationshipSnapshot(
     ),
   ]);
 
+  const approvalSources = [
+    submittalsSource,
+    sheetResponsesSource,
+    drawingReviewsSource,
+    drawingSignoffsSource,
+    commentDispositionsSource,
+  ];
+
   return {
     pieces,
-    pieceDrawings,
-    pieceDrawingSets,
-    drawings,
+    pieceDrawings: pieceDrawingsSource.rows,
+    pieceDrawingSets: pieceDrawingSetsSource.rows,
+    drawings: drawingsSource.rows,
     workPackages,
-    drawingSets,
-    submittals,
-    sheetResponses,
-    drawingRevisions,
-    drawingReviews,
-    drawingSignoffs,
-    commentDispositions,
+    drawingSets: drawingSetsSource.rows,
+    submittals: submittalsSource.rows,
+    sheetResponses: sheetResponsesSource.rows,
+    drawingRevisions: drawingRevisionsSource.rows,
+    drawingReviews: drawingReviewsSource.rows,
+    drawingSignoffs: drawingSignoffsSource.rows,
+    commentDispositions: commentDispositionsSource.rows,
+    sourceAvailability: {
+      pieceDrawings: pieceDrawingsSource.availability,
+      pieceDrawingSets: pieceDrawingSetsSource.availability,
+      drawings: drawingsSource.availability,
+      drawingSets: drawingSetsSource.availability,
+      revisions: drawingRevisionsSource.availability,
+      approvals: allSourcesAvailable(approvalSources),
+    },
   };
 }
 

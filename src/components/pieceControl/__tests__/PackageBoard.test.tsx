@@ -197,6 +197,14 @@ const snapshot: PieceRelationshipSnapshot = {
   drawingReviews: [],
   drawingSignoffs: [],
   commentDispositions: [],
+  sourceAvailability: {
+    pieceDrawings: "available",
+    pieceDrawingSets: "available",
+    drawings: "available",
+    drawingSets: "available",
+    revisions: "available",
+    approvals: "available",
+  },
 };
 
 describe("PackageBoard", () => {

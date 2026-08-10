@@ -26,6 +26,15 @@ vi.mock("@/lib/pieceControl/relationshipsRepository", () => ({
   unlinkPieceDrawingSet: vi.fn(),
 }));
 
+const availableSourceAvailability = {
+  pieceDrawings: "available",
+  pieceDrawingSets: "available",
+  drawings: "available",
+  drawingSets: "available",
+  revisions: "available",
+  approvals: "available",
+} as const;
+
 describe("PieceRelationshipManager", () => {
   it("uses operational language and keeps readiness read-only", async () => {
     vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
@@ -50,6 +59,7 @@ describe("PieceRelationshipManager", () => {
       drawingReviews: [],
       drawingSignoffs: [],
       commentDispositions: [],
+      sourceAvailability: availableSourceAvailability,
     });
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -138,6 +148,7 @@ describe("PieceRelationshipManager", () => {
       drawingReviews: [],
       drawingSignoffs: [],
       commentDispositions: [],
+      sourceAvailability: availableSourceAvailability,
     });
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -223,6 +234,7 @@ describe("PieceRelationshipManager", () => {
       drawingReviews: [],
       drawingSignoffs: [],
       commentDispositions: [],
+      sourceAvailability: availableSourceAvailability,
     });
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -299,6 +311,7 @@ describe("PieceRelationshipManager", () => {
       drawingReviews: [],
       drawingSignoffs: [],
       commentDispositions: [],
+      sourceAvailability: availableSourceAvailability,
     });
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -382,6 +395,7 @@ describe("PieceRelationshipManager", () => {
       drawingReviews: [],
       drawingSignoffs: [],
       commentDispositions: [],
+      sourceAvailability: availableSourceAvailability,
     });
     vi.mocked(linkPieceDrawingSet).mockResolvedValue({ linked: true } as never);
 
@@ -473,6 +487,7 @@ describe("PieceRelationshipManager", () => {
       drawingReviews: [],
       drawingSignoffs: [],
       commentDispositions: [],
+      sourceAvailability: availableSourceAvailability,
     });
     const queryClient = new QueryClient({
       defaultOptions: {

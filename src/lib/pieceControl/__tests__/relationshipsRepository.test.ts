@@ -55,6 +55,7 @@ describe("fetchPieceRelationshipSnapshot", () => {
   it("soft-fails optional tables so a missing dispositions table still loads core rows", async () => {
     let workPackagesSelect = "";
     let sawDeletedFilter = false;
+    const optionalSelects = new Map<string, string>();
     fromMock.mockImplementation((table: string) => {
       if (table === "work_packages") {
         const chain = chainFor({
@@ -102,7 +103,12 @@ describe("fetchPieceRelationshipSnapshot", () => {
           },
         });
       }
-      return chainFor({ data: [], error: null });
+      const chain = chainFor({ data: [], error: null });
+      chain.select = vi.fn((cols: string) => {
+        optionalSelects.set(table, cols);
+        return chain;
+      });
+      return chain;
     });
 
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -116,8 +122,20 @@ describe("fetchPieceRelationshipSnapshot", () => {
     expect(snapshot.commentDispositions).toEqual([]);
     expect(workPackagesSelect).toContain("sequence_number");
     expect(workPackagesSelect).toContain("area");
+    expect(workPackagesSelect).toContain("scheduled_start_date");
     expect(workPackagesSelect).not.toMatch(/\bdescription\b/);
     expect(sawDeletedFilter).toBe(true);
+    expect(optionalSelects.get("drawings")).toContain("linked_rfi_ids");
+    expect(optionalSelects.get("drawing_revisions")).toContain("issued_at");
+    expect(optionalSelects.get("drawing_revisions")).toContain("received_at");
+    expect(snapshot.sourceAvailability).toEqual({
+      pieceDrawings: "available",
+      pieceDrawingSets: "available",
+      drawings: "available",
+      drawingSets: "available",
+      revisions: "available",
+      approvals: "unavailable",
+    });
   });
 
   it("fails closed when work_packages cannot load", async () => {

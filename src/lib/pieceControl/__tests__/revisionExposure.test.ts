@@ -19,6 +19,14 @@ function snapshot(
     drawingImpacts: [], rfis: [], pieceEvents: [],
     availability: { relationships: "available", approvals: "available", impacts: "available", rfis: "available", events: "available" },
     ...patch,
+    sourceAvailability: patch.sourceAvailability ?? {
+      pieceDrawings: "available",
+      pieceDrawingSets: "available",
+      drawings: "available",
+      drawingSets: "available",
+      revisions: "available",
+      approvals: "available",
+    },
   };
 }
 
