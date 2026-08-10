@@ -50,7 +50,7 @@ async function fetchDrawingImpacts(projectId: string): Promise<DrawingImpactRow[
     rows.push(...((data ?? []) as PersistedDrawingImpact[]));
     if (!data || data.length < sourcePageSize) break;
   }
-  return rows.map((impact) => ({
+  return rows.map((impact): DrawingImpactRow => ({
     ...impact,
     sheet_number: null,
     sheet_title: null,
@@ -59,11 +59,12 @@ async function fetchDrawingImpacts(projectId: string): Promise<DrawingImpactRow[
 }
 
 async function fetchRfis(projectId: string): Promise<PieceIntelligenceRfi[]> {
-  const rows: PieceIntelligenceRfi[] = [];
+  type PersistedRfi = Omit<PieceIntelligenceRfi, "fab_hold">;
+  const rows: PersistedRfi[] = [];
   for (let from = 0; ; from += sourcePageSize) {
     const { data, error } = await db
       .from("rfis")
-      .select("id, project_id, rfi_number, status, work_package_id")
+      .select("id, project_id, rfi_number, status, work_package_id, metadata")
       .eq("project_id", projectId)
       .eq("is_deleted", false)
       .is("deleted_at", null)
@@ -71,8 +72,15 @@ async function fetchRfis(projectId: string): Promise<PieceIntelligenceRfi[]> {
       .order("id", { ascending: false })
       .range(from, from + sourcePageSize - 1);
     if (error) throw error;
-    rows.push(...((data ?? []) as PieceIntelligenceRfi[]));
-    if (!data || data.length < sourcePageSize) return rows;
+    rows.push(...((data ?? []) as PersistedRfi[]));
+    if (!data || data.length < sourcePageSize) {
+      return rows.map((rfi) => {
+        const metadataFabHold = rfi.metadata?.fab_hold;
+        return typeof metadataFabHold === "boolean"
+          ? { ...rfi, fab_hold: metadataFabHold }
+          : rfi;
+      });
+    }
   }
 }
 

@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   Boxes,
   Database,
   Factory,
   FileUp,
+  GitCompareArrows,
   GitBranch,
   PackageOpen,
   LayoutGrid,
@@ -18,6 +20,8 @@ import { toast } from "sonner";
 import "@/styles/command.css";
 import "@/styles/piece-control-command.css";
 import { entities } from "@/api/supabaseClient";
+import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
+import { supabase } from "@/lib/supabase";
 import {
   DecisionPanel,
   KpiStrip,
@@ -27,6 +31,7 @@ import {
 } from "@/components/command";
 import { PieceAttentionPanel } from "@/components/pieceControl/PieceAttentionPanel";
 import { PieceControlModeBadge } from "@/components/pieceControl/PieceControlModeBadge";
+import CanonicalFabReleasePanel from "@/components/pieceControl/CanonicalFabReleasePanel";
 import { PieceLifecycleStrip } from "@/components/pieceControl/PieceLifecycleStrip";
 import PieceRelationshipManager from "@/components/pieceControl/PieceRelationshipManager";
 import PackageBoard from "@/components/pieceControl/PackageBoard";
@@ -39,6 +44,11 @@ import { planBulkPieceAttributeUpdate } from "@/lib/pieceControl/bulkUpdatePiece
 import { bulkUpdatePieceAttributes } from "@/lib/pieceControl/bulkUpdateRepository";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
+import {
+  buildPieceDigitalThread,
+  derivePieceIntelligence,
+} from "@/lib/pieceControl/pieceIntelligenceDerive";
+import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceRepository";
 import { readPieceImportFile } from "@/lib/pieceControl/importAdapters";
 import {
   collectAppliedPieceIds,
@@ -50,6 +60,10 @@ import {
   planImportDrawingLinks,
 } from "@/lib/pieceControl/importDrawingLink";
 import type { PieceRegisterSort } from "@/lib/pieceControl/pieceRegisterSort";
+import {
+  invalidatePieceControlQueries,
+  pieceControlKeys,
+} from "@/lib/pieceControl/queryKeys";
 import {
   buildPieceControlSummary,
   modePresentation,
@@ -77,6 +91,7 @@ import {
 import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import type { PieceRegisterFilters } from "./pieceRegister/filter";
 import {
   uniqueValues,
@@ -85,7 +100,6 @@ import {
   buildFilteredRegisterRows,
   archiveConfirmationText as buildArchiveConfirmationText,
   allRowsSelected,
-  buildSelectedPieceImpact,
   IMPORT_DECISION_TONE,
   EMPTY_PIECE_REGISTER_FILTERS,
   PIECE_REGISTER_VIEW_LABELS,
@@ -93,17 +107,29 @@ import {
 } from "./pieceRegister/registerHelpers";
 import { PieceRegisterArchiveDialog } from "./pieceRegister/PieceRegisterArchiveDialog";
 import { PieceRegisterRegisterView } from "./pieceRegister/PieceRegisterRegisterView";
+import { PieceDigitalThread } from "./pieceRegister/PieceDigitalThread";
+import {
+  PieceRevisionImpactView,
+  type DrawingImpactAssigneeOption,
+  type DrawingImpactDraft,
+} from "./pieceRegister/PieceRevisionImpactView";
 import { PieceRegisterImportView } from "./pieceRegister/PieceRegisterImportView";
 import {
   deriveOverviewWorkPackages,
   selectUpcomingShipments,
 } from "./pieceRegister/overviewDerive";
 import PieceRegisterOverview from "./pieceRegister/PieceRegisterOverview";
+import {
+  parsePieceRegisterLocation,
+  writePieceRegisterLocation,
+} from "./pieceRegister/pieceRegisterLocation";
 
 const EMPTY_FILTERS = EMPTY_PIECE_REGISTER_FILTERS;
+const EMPTY_SELECTED_PIECE_IDS = new Set<string>();
 
 const REGISTER_VIEW_ICONS = {
   overview: Boxes,
+  impact: GitCompareArrows,
   register: PackageOpen,
   board: LayoutGrid,
   import: FileUp,
@@ -121,6 +147,88 @@ const REGISTER_VIEWS = PIECE_REGISTER_VIEW_IDS.map((id) => ({
 
 type PieceRegisterView = (typeof PIECE_REGISTER_VIEW_IDS)[number];
 
+type PieceHoldRequest = {
+  pieceId: string;
+  onHold: boolean;
+  reason: string;
+};
+
+type DrawingImpactWriteRequest = {
+  impactId: string | null;
+  revisionId: string;
+  draft: DrawingImpactDraft;
+  previousStatus: DrawingImpactRow["status"] | null;
+  previousResolvedAt: string | null;
+};
+
+const DRAWING_IMPACT_TYPES = new Set([
+  "fabrication",
+  "erection",
+  "embed",
+  "anchor_bolts",
+  "connections",
+  "material_takeoff",
+  "shop_drawing_required",
+  "rfi_followup",
+  "change_order",
+  "field_rework",
+]);
+const DRAWING_IMPACT_STATUSES = new Set([
+  "open",
+  "in_review",
+  "ready",
+  "blocked",
+  "resolved",
+  "closed",
+]);
+const DRAWING_IMPACT_PRIORITIES = new Set([
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type DrawingImpactAssigneeRpcRow = {
+  user_id: string;
+  display_name: string;
+  project_role: string;
+};
+
+type DrawingImpactAssigneeRpcError = {
+  message: string;
+};
+
+type DrawingImpactAssigneeRpcResponse = {
+  data: unknown;
+  error: DrawingImpactAssigneeRpcError | null;
+};
+
+function isDrawingImpactAssigneeRpcRow(
+  value: unknown,
+): value is DrawingImpactAssigneeRpcRow {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<DrawingImpactAssigneeRpcRow>;
+  return (
+    typeof row.user_id === "string" &&
+    UUID_PATTERN.test(row.user_id) &&
+    typeof row.display_name === "string" &&
+    Boolean(row.display_name.trim()) &&
+    typeof row.project_role === "string" &&
+    Boolean(row.project_role.trim())
+  );
+}
+
+function drawingImpactAssigneeLabel(row: DrawingImpactAssigneeRpcRow): string {
+  return `${row.display_name.trim()} · ${row.project_role.replace(/_/g, " ")}`;
+}
+
+function isTerminalDrawingImpactStatus(
+  status: DrawingImpactRow["status"],
+): boolean {
+  return status === "resolved" || status === "closed";
+}
+
 export default function PieceRegister() {
   useCommandSkin();
   const { activeProject, updateActiveProject } = useProjectContext() as any;
@@ -129,7 +237,25 @@ export default function PieceRegister() {
   const enabled = Boolean(projectId && mode !== "off");
   const queryClient = useQueryClient();
   const { role, isLoading: roleLoading } = useProjectRole(projectId);
-  const [activeView, setActiveView] = useState<PieceRegisterView>("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useMemo(
+    () => parsePieceRegisterLocation(searchParams),
+    [searchParams],
+  );
+  const activeView = location.view;
+  const setPieceRegisterLocation = useCallback(
+    (patch: Parameters<typeof writePieceRegisterLocation>[1]) => {
+      setSearchParams(
+        (current) => writePieceRegisterLocation(current, patch),
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const setActiveView = useCallback(
+    (view: PieceRegisterView) => setPieceRegisterLocation({ view }),
+    [setPieceRegisterLocation],
+  );
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [sourceType, setSourceType] = useState<PieceImportSourceType>("csv");
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -137,7 +263,35 @@ export default function PieceRegister() {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [applyConfirmed, setApplyConfirmed] = useState(false);
   const [importTargetWorkPackageId, setImportTargetWorkPackageId] = useState("");
-  const [selectedPieceIds, setSelectedPieceIds] = useState<Set<string>>(new Set());
+  const [selectedPieceIdsState, setSelectedPieceIdsState] = useState<Set<string>>(
+    EMPTY_SELECTED_PIECE_IDS,
+  );
+  const selectedPieceIdsRef = useRef(EMPTY_SELECTED_PIECE_IDS);
+  const selectedPieceProjectIdRef = useRef<string | undefined>(undefined);
+  const pendingSelectionUrlValue = useRef<string | null>(null);
+  const setSelectedPieceIds: typeof setSelectedPieceIdsState = useCallback(
+    (nextSelection) => {
+      const current =
+        selectedPieceProjectIdRef.current === projectId
+          ? selectedPieceIdsRef.current
+          : EMPTY_SELECTED_PIECE_IDS;
+      const next =
+        typeof nextSelection === "function"
+          ? nextSelection(current)
+          : nextSelection;
+      const pieceId = next.size === 1 ? [...next][0] : null;
+      selectedPieceIdsRef.current = next;
+      selectedPieceProjectIdRef.current = projectId;
+      pendingSelectionUrlValue.current = pieceId ?? "";
+      setSelectedPieceIdsState(next);
+      setPieceRegisterLocation({ pieceId });
+    },
+    [projectId, setPieceRegisterLocation],
+  );
+  const selectedPieceIds =
+    selectedPieceProjectIdRef.current === projectId
+      ? selectedPieceIdsState
+      : EMPTY_SELECTED_PIECE_IDS;
   const [registerSort, setRegisterSort] = useState<PieceRegisterSort>({
     key: "work_package",
     direction: "asc",
@@ -147,15 +301,30 @@ export default function PieceRegister() {
   const [archiveConfirmation, setArchiveConfirmation] = useState("");
   const [attentionFocus, setAttentionFocus] = useState<PieceAttentionItem["key"] | null>(null);
 
+  const lastProjectId = useRef(projectId);
+  const projectSwitchReconciliationBlock = useRef<string | null>(null);
+  const isRealProjectSwitch = Boolean(
+    projectId && lastProjectId.current && lastProjectId.current !== projectId,
+  );
   useEffect(() => {
-    setSelectedPieceIds(new Set());
+    if (!projectId) return;
+    const previousProjectId = lastProjectId.current;
+    lastProjectId.current = projectId;
+    if (!previousProjectId || previousProjectId === projectId) return;
+
+    projectSwitchReconciliationBlock.current = projectId;
+    selectedPieceIdsRef.current = EMPTY_SELECTED_PIECE_IDS;
+    selectedPieceProjectIdRef.current = projectId;
+    pendingSelectionUrlValue.current = "";
+    setSelectedPieceIdsState(EMPTY_SELECTED_PIECE_IDS);
+    setPieceRegisterLocation({ pieceId: null, revisionId: null });
     setArchiveOpen(false);
     setArchiveReason("");
     setArchiveConfirmation("");
     setAttentionFocus(null);
     setImportTargetWorkPackageId("");
     setApplyConfirmed(false);
-  }, [projectId]);
+  }, [projectId, setPieceRegisterLocation]);
 
   const piecesQuery = useQuery({
     queryKey: ["piece-register", projectId],
@@ -177,16 +346,51 @@ export default function PieceRegister() {
   });
   const selectedPieceId =
     selectedPieceIds.size === 1 ? [...selectedPieceIds][0] : null;
-  const impactSnapshotQuery = useQuery({
-    queryKey: ["piece-relationships", projectId],
-    queryFn: () => fetchPieceRelationshipSnapshot(projectId!),
-    enabled: enabled && Boolean(selectedPieceId),
+  const hasActionablePieces = useMemo(
+    () => selectActionableLeafPieces(piecesQuery.data ?? []).length > 0,
+    [piecesQuery.data],
+  );
+  const intelligenceQuery = useQuery({
+    queryKey: pieceControlKeys.intelligence(projectId!),
+    queryFn: () => fetchPieceIntelligenceSnapshot(projectId!),
+    enabled:
+      enabled &&
+      piecesQuery.isSuccess &&
+      hasActionablePieces &&
+      (activeView === "overview" ||
+        activeView === "impact" ||
+        Boolean(selectedPieceId)),
     staleTime: 15_000,
   });
-  const selectedPieceImpact = useMemo(
-    () => buildSelectedPieceImpact(selectedPieceId, impactSnapshotQuery.data),
-    [impactSnapshotQuery.data, selectedPieceId],
+  const intelligenceModel = useMemo(
+    () => intelligenceQuery.data
+      ? derivePieceIntelligence(intelligenceQuery.data, new Date())
+      : null,
+    [intelligenceQuery.data],
   );
+  const selectedPieceThread = useMemo(
+    () => selectedPieceId && intelligenceQuery.data
+      ? buildPieceDigitalThread(selectedPieceId, intelligenceQuery.data)
+      : null,
+    [intelligenceQuery.data, selectedPieceId],
+  );
+  const selectedRevisionImpact = useMemo(() => {
+    if (
+      !location.revisionId ||
+      !intelligenceQuery.data ||
+      !intelligenceModel?.revisions.some(
+        (revision) => revision.revisionId === location.revisionId,
+      )
+    ) {
+      return null;
+    }
+    const matching = intelligenceQuery.data.drawingImpacts.filter(
+      (impact) => impact.drawing_revision_id === location.revisionId,
+    );
+    return matching.find(
+      (impact) => impact.status !== "resolved" && impact.status !== "closed",
+    ) ?? matching[0] ?? null;
+  }, [intelligenceModel, intelligenceQuery.data, location.revisionId]);
 
   const batches = batchesQuery.data ?? [];
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) ?? batches[0] ?? null;
@@ -204,6 +408,95 @@ export default function PieceRegister() {
     () => buildPieceDisplayRows(piecesQuery.data, workPackageMap),
     [piecesQuery.data, workPackageMap],
   );
+  const selectedPieceRecord = useMemo(
+    () => (piecesQuery.data ?? []).find((piece) => piece.id === selectedPieceId) ?? null,
+    [piecesQuery.data, selectedPieceId],
+  );
+  const actionablePieceIds = useMemo(
+    () =>
+      new Set(
+        selectActionableLeafPieces(displayRows).map((piece) => piece.id),
+      ),
+    [displayRows],
+  );
+  const lastObservedPieceUrlValue = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!projectId || !piecesQuery.isSuccess) return;
+
+    if (projectSwitchReconciliationBlock.current === projectId) {
+      if (!location.pieceId) {
+        projectSwitchReconciliationBlock.current = null;
+        pendingSelectionUrlValue.current = null;
+        lastObservedPieceUrlValue.current = null;
+      }
+      return;
+    }
+
+    const requestedPieceId = location.pieceId;
+    if (requestedPieceId) {
+      pendingSelectionUrlValue.current = null;
+      lastObservedPieceUrlValue.current = requestedPieceId;
+      if (!actionablePieceIds.has(requestedPieceId)) {
+        selectedPieceIdsRef.current = EMPTY_SELECTED_PIECE_IDS;
+        selectedPieceProjectIdRef.current = projectId;
+        pendingSelectionUrlValue.current = "";
+        setSelectedPieceIdsState(EMPTY_SELECTED_PIECE_IDS);
+        setPieceRegisterLocation({ pieceId: null });
+        return;
+      }
+
+      if (
+        selectedPieceProjectIdRef.current !== projectId ||
+        selectedPieceIdsRef.current.size !== 1 ||
+        !selectedPieceIdsRef.current.has(requestedPieceId)
+      ) {
+        const next = new Set([requestedPieceId]);
+        selectedPieceIdsRef.current = next;
+        selectedPieceProjectIdRef.current = projectId;
+        setSelectedPieceIdsState(next);
+      }
+      return;
+    }
+
+    if (pendingSelectionUrlValue.current === "") {
+      pendingSelectionUrlValue.current = null;
+      lastObservedPieceUrlValue.current = null;
+      return;
+    }
+
+    pendingSelectionUrlValue.current = null;
+    const previousUrlValue = lastObservedPieceUrlValue.current;
+    lastObservedPieceUrlValue.current = null;
+    if (previousUrlValue) {
+      selectedPieceIdsRef.current = EMPTY_SELECTED_PIECE_IDS;
+      selectedPieceProjectIdRef.current = projectId;
+      setSelectedPieceIdsState(EMPTY_SELECTED_PIECE_IDS);
+    }
+  }, [
+    actionablePieceIds,
+    location.pieceId,
+    piecesQuery.isSuccess,
+    projectId,
+    setPieceRegisterLocation,
+  ]);
+  useEffect(() => {
+    if (activeView !== "impact" || !location.revisionId) return;
+    if (!intelligenceQuery.isSuccess || !intelligenceModel) return;
+    if (intelligenceQuery.data.availability.relationships !== "available") return;
+    const revisionIsAccessible = intelligenceModel.revisions.some(
+      (revision) => revision.revisionId === location.revisionId,
+    );
+    if (!revisionIsAccessible) {
+      setPieceRegisterLocation({ revisionId: null });
+    }
+  }, [
+    activeView,
+    intelligenceModel,
+    intelligenceQuery.data,
+    intelligenceQuery.isSuccess,
+    location.revisionId,
+    setPieceRegisterLocation,
+  ]);
   const overviewSnapshotQuery = useQuery({
     queryKey: ["canonical-reporting", projectId],
     queryFn: () => fetchCanonicalDashboardSnapshot(projectId!),
@@ -211,7 +504,7 @@ export default function PieceRegister() {
       enabled &&
       activeView === "overview" &&
       piecesQuery.isSuccess &&
-      displayRows.length > 0,
+      hasActionablePieces,
     staleTime: 30_000,
   });
   const overviewWorkPackages = useMemo(
@@ -228,6 +521,39 @@ export default function PieceRegister() {
   );
   const canBulkUpdate = enabled && !roleLoading && roleAtLeast(role, "field");
   const canArchive = enabled && !roleLoading && roleAtLeast(role, "admin");
+  const canManagePieceHold = enabled && !roleLoading && roleAtLeast(role, "field");
+  const canManageDrawingImpacts = enabled && !roleLoading && roleAtLeast(role, "pm");
+  const canLoadImpactAssignees =
+    canManageDrawingImpacts &&
+    activeView === "impact" &&
+    Boolean(location.revisionId) &&
+    intelligenceQuery.data?.availability.impacts === "available";
+  const impactAssigneesQuery = useQuery({
+    queryKey: ["drawing-impact-assignees", projectId],
+    queryFn: async () => {
+      const callRpc = supabase.rpc.bind(supabase) as unknown as (
+        functionName: "list_drawing_impact_assignees",
+        args: { p_project_id: string },
+      ) => Promise<DrawingImpactAssigneeRpcResponse>;
+      const { data, error } = await callRpc(
+        "list_drawing_impact_assignees",
+        { p_project_id: projectId! },
+      );
+      if (error) throw new Error(error.message);
+      if (!Array.isArray(data) || !data.every(isDrawingImpactAssigneeRpcRow)) {
+        throw new Error("Project assignee roster returned an invalid response.");
+      }
+      return data.map<DrawingImpactAssigneeOption>((row) => ({
+        userId: row.user_id,
+        label: drawingImpactAssigneeLabel(row),
+      }));
+    },
+    enabled: canLoadImpactAssignees,
+    staleTime: 30_000,
+  });
+  const impactAssignees = impactAssigneesQuery.data ?? [];
+  const impactAssigneesLoading =
+    canLoadImpactAssignees && impactAssigneesQuery.isLoading;
   const allFilteredSelected = allRowsSelected(filteredRows, selectedPieceIds);
   const archiveConfirmationText = buildArchiveConfirmationText(selectedPieceIds.size);
 
@@ -279,6 +605,7 @@ export default function PieceRegister() {
       queryClient.invalidateQueries({ queryKey: ["piece-import-batches", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["piece-import-rows", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["piece-relationships", projectId] }),
+      queryClient.invalidateQueries({ queryKey: pieceControlKeys.intelligence(projectId!) }),
       queryClient.invalidateQueries({ queryKey: ["piece-register-work-packages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["work-packages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
@@ -288,6 +615,129 @@ export default function PieceRegister() {
       queryClient.invalidateQueries({ queryKey: ["canonical-reporting", projectId] }),
     ]);
   };
+
+  const invalidateProtectedActionQueries = async () => {
+    await Promise.all([
+      invalidatePieceControlQueries(queryClient, projectId, "all"),
+      queryClient.invalidateQueries({
+        queryKey: ["drawing-impacts", projectId],
+      }),
+    ]);
+  };
+
+  const holdMutation = useMutation({
+    mutationFn: ({ pieceId, onHold, reason }: PieceHoldRequest) => {
+      const cleanedReason = reason.trim();
+      if (!cleanedReason) throw new Error("A hold reason is required.");
+      return setPieceHold(projectId!, [pieceId], onHold, cleanedReason);
+    },
+    onSuccess: async (_result, request) => {
+      await invalidateProtectedActionQueries();
+      toast.success(request.onHold ? "Piece hold applied" : "Piece hold cleared");
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The piece hold could not be updated."),
+      ),
+  });
+
+  const drawingImpactMutation = useMutation({
+    mutationFn: async ({
+      impactId,
+      revisionId,
+      draft,
+      previousStatus,
+      previousResolvedAt,
+    }: DrawingImpactWriteRequest) => {
+      if (impactAssigneesLoading || impactAssigneesQuery.error) {
+        throw new Error("Project assignee roster is unavailable.");
+      }
+      if (!DRAWING_IMPACT_TYPES.has(draft.impact_type)) {
+        throw new Error("Select a valid impact type.");
+      }
+      if (!DRAWING_IMPACT_STATUSES.has(draft.status)) {
+        throw new Error("Select a valid impact status.");
+      }
+      if (!DRAWING_IMPACT_PRIORITIES.has(draft.priority)) {
+        throw new Error("Select a valid impact priority.");
+      }
+      const title = draft.title.trim();
+      if (!title) throw new Error("Impact title is required.");
+      const assignedTo = draft.assigned_to.trim();
+      if (
+        assignedTo &&
+        (!UUID_PATTERN.test(assignedTo) ||
+          !impactAssignees.some((member) => member.userId === assignedTo))
+      ) {
+        throw new Error("Select an assigned project member.");
+      }
+      if (
+        impactId &&
+        (!previousStatus || !DRAWING_IMPACT_STATUSES.has(previousStatus))
+      ) {
+        throw new Error("The current drawing impact status is unavailable.");
+      }
+      const nextStatusIsTerminal = isTerminalDrawingImpactStatus(draft.status);
+      const previousStatusIsTerminal = previousStatus
+        ? isTerminalDrawingImpactStatus(previousStatus)
+        : false;
+      const resolvedAt = nextStatusIsTerminal
+        ? previousStatusIsTerminal
+          ? previousResolvedAt
+          : new Date().toISOString()
+        : null;
+      const payload = withProjectId({
+        drawing_revision_id: revisionId,
+        impact_type: draft.impact_type,
+        status: impactId ? draft.status : "open",
+        priority: draft.priority,
+        assigned_to: assignedTo || null,
+        due_date: draft.due_date || null,
+        title,
+        notes: draft.notes.trim() || null,
+        ...(impactId
+          ? { resolved_at: resolvedAt }
+          : {}),
+      }, projectId);
+
+      if (impactId) {
+        await entities.DrawingImpact.update(impactId, payload as never);
+        return "updated" as const;
+      }
+      await entities.DrawingImpact.create(payload as never);
+      return "created" as const;
+    },
+    onSuccess: async (result) => {
+      await invalidateProtectedActionQueries();
+      toast.success(
+        result === "created" ? "Drawing impact created" : "Drawing impact updated",
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The drawing impact could not be saved."),
+      ),
+  });
+
+  const resolveDrawingImpactMutation = useMutation({
+    mutationFn: async (impactId: string) => {
+      await entities.DrawingImpact.update(
+        impactId,
+        withProjectId({
+          status: "resolved",
+          resolved_at: new Date().toISOString(),
+        }, projectId) as never,
+      );
+    },
+    onSuccess: async () => {
+      await invalidateProtectedActionQueries();
+      toast.success("Drawing impact resolved");
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The drawing impact could not be resolved."),
+      ),
+  });
 
   /** Best-effort re-link after register writes that can change piece_mark. */
   const relinkModelElements = async () => {
@@ -765,7 +1215,7 @@ export default function PieceRegister() {
 
         {activeView === "overview" && !piecesQuery.isLoading && !piecesQuery.error && (
           <PieceRegisterOverview
-            displayRowCount={displayRows.length}
+            displayRowCount={actionablePieceIds.size}
             overviewQueryState={{
               isLoading: overviewSnapshotQuery.isLoading,
               error: overviewSnapshotQuery.error,
@@ -773,10 +1223,169 @@ export default function PieceRegister() {
             }}
             overviewWorkPackages={overviewWorkPackages}
             upcomingShipments={upcomingShipments}
+            intelligence={intelligenceModel}
+            intelligenceState={{
+              isLoading: intelligenceQuery.isLoading,
+              error: intelligenceQuery.error,
+              refetch: () => intelligenceQuery.refetch(),
+            }}
             onOpenImport={() => setActiveView("import")}
-            onOpenRegister={() => setActiveView("register")}
             onOpenLogistics={() => setActiveView("logistics")}
+            onReviewRevision={() =>
+              setPieceRegisterLocation({ view: "impact", focus: "revision" })
+            }
+            onSelectRevision={(revisionId) =>
+              setPieceRegisterLocation({ view: "impact", revisionId })
+            }
+            onSelectPiece={(pieceId) =>
+              setPieceRegisterLocation({ view: "register", pieceId })
+            }
+            onOpenRelationships={(revisionId) =>
+              setPieceRegisterLocation({
+                view: "relationships",
+                focus: "revision",
+                revisionId,
+                pieceId: null,
+              })
+            }
           />
+        )}
+
+        {activeView === "impact" && (
+          <section
+            className="piece-register-embedded-workspace"
+            aria-label="Revision Impact workspace"
+          >
+            {piecesQuery.isLoading ? (
+              <div className="piece-operation-state is-loading">
+                Loading the project piece register…
+              </div>
+            ) : piecesQuery.error ? (
+              <div className="piece-operation-state is-error">
+                <strong>Revision evidence could not be loaded.</strong>
+                <p>The active project piece register is unavailable.</p>
+              </div>
+            ) : !hasActionablePieces ? (
+              <div className="piece-operation-state">
+                <strong>No active pieces are available for revision review.</strong>
+                <p>Use the controlled import workflow to establish the register first.</p>
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--primary"
+                  onClick={() => setActiveView("import")}
+                >
+                  Import pieces
+                </button>
+              </div>
+            ) : intelligenceQuery.isLoading ? (
+              <div className="piece-operation-state is-loading">
+                Loading exact revision evidence…
+              </div>
+            ) : intelligenceQuery.error ? (
+              <div className="piece-operation-state is-error">
+                <strong>Revision evidence could not be loaded.</strong>
+                <p>
+                  {presentPieceControlError(
+                    intelligenceQuery.error,
+                    "Revision evidence is unavailable.",
+                  )}
+                </p>
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--secondary"
+                  onClick={() => void intelligenceQuery.refetch()}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : intelligenceModel ? (
+              <>
+                <PieceRevisionImpactView
+                  model={intelligenceModel}
+                  selectedRevisionId={
+                    isRealProjectSwitch ? null : location.revisionId
+                  }
+                  onSelectRevision={(revisionId) =>
+                    setPieceRegisterLocation({ revisionId })
+                  }
+                  onSelectPiece={(pieceId) =>
+                    setSelectedPieceIds(new Set([pieceId]))
+                  }
+                  canManageImpacts={
+                    canManageDrawingImpacts &&
+                    intelligenceQuery.data?.availability.impacts === "available"
+                  }
+                  selectedImpact={selectedRevisionImpact}
+                  assignees={impactAssignees}
+                  assigneesLoading={impactAssigneesLoading}
+                  assigneesUnavailable={Boolean(
+                    impactAssigneesQuery.error,
+                  )}
+                  impactPending={
+                    drawingImpactMutation.isPending ||
+                    resolveDrawingImpactMutation.isPending
+                  }
+                  onSaveImpact={
+                    location.revisionId
+                      ? (impactId, draft) =>
+                          drawingImpactMutation.mutateAsync({
+                            impactId,
+                            revisionId: location.revisionId!,
+                            draft,
+                            previousStatus: selectedRevisionImpact?.status ?? null,
+                            previousResolvedAt:
+                              selectedRevisionImpact?.resolved_at ?? null,
+                          })
+                      : undefined
+                  }
+                  onResolveImpact={(impactId) =>
+                    resolveDrawingImpactMutation.mutateAsync(impactId)
+                  }
+                />
+                {selectedPieceId ? (
+                  selectedPieceThread ? (
+                    <PieceDigitalThread
+                      thread={selectedPieceThread}
+                      onClose={() => setSelectedPieceIds(new Set())}
+                      canManageHold={canManagePieceHold}
+                      pieceOnHold={Boolean(selectedPieceRecord?.on_hold)}
+                      holdPending={holdMutation.isPending}
+                      onSetHold={(request) =>
+                        holdMutation.mutateAsync({
+                          pieceId: selectedPieceId,
+                          ...request,
+                        })
+                      }
+                      onOpenRelationships={() =>
+                        setPieceRegisterLocation({
+                          view: "relationships",
+                          focus: "revision",
+                          pieceId: selectedPieceId,
+                          revisionId: location.revisionId,
+                        })
+                      }
+                      onOpenRelease={canManageDrawingImpacts && selectedPieceRecord?.work_package_id
+                        ? () =>
+                            setPieceRegisterLocation({
+                              view: "board",
+                              focus: "release",
+                              pieceId: selectedPieceId,
+                            })
+                        : undefined}
+                    />
+                  ) : (
+                    <div className="piece-operation-state is-error">
+                      Piece evidence is unavailable for this selection.
+                    </div>
+                  )
+                ) : null}
+              </>
+            ) : (
+              <div className="piece-operation-state is-error">
+                Revision evidence is unavailable.
+              </div>
+            )}
+          </section>
         )}
 
         {activeView === "register" && (
@@ -809,8 +1418,26 @@ export default function PieceRegister() {
             onBulkHold={(payload) => bulkHoldMutation.mutate(payload)}
             onArchive={openArchiveDialog}
             selectedPieceId={selectedPieceId}
-            selectedPieceImpact={selectedPieceImpact}
-            impactLoading={impactSnapshotQuery.isLoading}
+            selectedPieceThread={selectedPieceThread}
+            intelligenceLoading={intelligenceQuery.isLoading}
+            intelligenceError={intelligenceQuery.error}
+            onRetryIntelligence={() => void intelligenceQuery.refetch()}
+            onClosePiece={() => setSelectedPieceIds(new Set())}
+            onOpenRelationships={() =>
+              setPieceRegisterLocation({
+                view: "relationships",
+                focus: location.revisionId ? "revision" : null,
+                pieceId: selectedPieceId,
+              })
+            }
+            onOpenRelease={(canManageDrawingImpacts
+              ? () =>
+                  setPieceRegisterLocation({
+                    view: "board",
+                    focus: "release",
+                    pieceId: selectedPieceId,
+                  })
+              : undefined) as unknown as () => void}
             allFilteredSelected={allFilteredSelected}
             toggleAllFiltered={toggleAllFiltered}
             piecesLoading={piecesQuery.isLoading}
@@ -832,6 +1459,20 @@ export default function PieceRegister() {
 
         {activeView === "board" && (
           <section className="piece-register-embedded-workspace">
+            {canManageDrawingImpacts && location.focus === "release" ? (
+              selectedPieceRecord?.work_package_id ? (
+                <CanonicalFabReleasePanel
+                  projectId={projectId}
+                  workPackageId={selectedPieceRecord.work_package_id}
+                  pieceControlMode={mode}
+                />
+              ) : (
+                <div className="piece-operation-state is-error">
+                  <strong>Fabrication release work package is unavailable.</strong>
+                  <p>Assign this piece to a work package before opening release checks.</p>
+                </div>
+              )
+            ) : null}
             <PackageBoard projectId={projectId} pieceControlMode={mode} />
           </section>
         )}

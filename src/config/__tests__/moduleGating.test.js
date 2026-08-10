@@ -4,6 +4,7 @@ import {
   isGatedPage,
   PAGE_TO_GATE,
   MODULE_GATES,
+  MODULE_GATE_LABELS,
 } from "../moduleGating";
 
 describe("moduleGating", () => {
@@ -27,6 +28,21 @@ describe("moduleGating", () => {
     expect(gateFlagForPage("CostHub")).toBe("module_cost");
     expect(gateFlagForPage("ChangeOrders")).toBe("module_cost");
     expect(isGatedPage("SOV")).toBe(true);
+  });
+
+  it("keeps Integrations and Email Inbox available while staging Data Exchange", () => {
+    expect(gateFlagForPage("Integrations")).toBeNull();
+    expect(isGatedPage("Integrations")).toBe(false);
+    expect(gateFlagForPage("EmailInbox")).toBeNull();
+    expect(isGatedPage("EmailInbox")).toBe(false);
+
+    expect(gateFlagForPage("DataExchange")).toBe("module_integrations");
+    expect(isGatedPage("DataExchange")).toBe(true);
+  });
+
+  it("does not retain the dead Email Inbox module flag in route authority", () => {
+    expect(MODULE_GATES.module_email_inbox).toBeUndefined();
+    expect(MODULE_GATE_LABELS.module_email_inbox).toBeUndefined();
   });
 
   it("builds a reverse PAGE_TO_GATE without collisions", () => {

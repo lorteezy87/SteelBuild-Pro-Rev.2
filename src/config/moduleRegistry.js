@@ -130,6 +130,7 @@ export const NAV_GROUPS = hideNativePages([
       { label: "Schedule",     icon: "▥", page: "ScheduleHub" },
       { label: "RFIs",         icon: "⚑", page: "RFIs", badgeKey: "rfi" },
       { label: "Action Items", icon: "☑", page: "ActionItems" },
+      { label: "Email Inbox",  icon: "✉", page: "EmailInbox" },
       { label: "Production Notes", icon: "📝", page: "ProductionNotes" },
     ],
   },
@@ -231,6 +232,7 @@ export const SIDEBAR_GROUPS = hideNativePages([
       { label: "Schedule",       icon: "▥", page: "ScheduleHub" },
       { label: "RFIs",           icon: "⚑", page: "RFIs", badgeKey: "rfi" },
       { label: "Action Items",   icon: "☑", page: "ActionItems" },
+      { label: "Email Inbox",    icon: "✉", page: "EmailInbox" },
     ],
   },
   {

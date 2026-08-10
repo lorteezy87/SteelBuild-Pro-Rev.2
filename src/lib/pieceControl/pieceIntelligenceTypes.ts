@@ -29,6 +29,7 @@ export interface PieceIntelligenceRfi {
   status?: string | null;
   fab_hold?: boolean | null;
   work_package_id?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface PieceIntelligenceEvent {
@@ -57,6 +58,66 @@ export interface RevisionExposureRow {
   openRfiCount: number;
 }
 
+export interface SourceUnavailableWarning {
+  source: keyof PieceIntelligenceSnapshot["availability"];
+  reason: string | null;
+}
+
+export interface PieceAttentionRow {
+  pieceId: string;
+  revisionId: string | null;
+  priorityTier: number;
+  markAndLot: string;
+  workPackageLabel: string;
+  lifecycle: ExposureLifecycle;
+  lifecycleLabel: string;
+  fieldNeededDate: string | null;
+  fieldRisk: boolean;
+  onHold: boolean;
+  fabBlocked: boolean;
+  reason: string;
+}
+
+export interface NextReleaseReadiness {
+  workPackageId: string;
+  label: string;
+  isReady: boolean;
+  blockerCount: number;
+  pieceCount: number;
+}
+
+export interface PieceIntelligenceModel {
+  verification: ImpactVerification;
+  unavailableSourceWarnings: SourceUnavailableWarning[];
+  revisions: RevisionExposureRow[];
+  attention: PieceAttentionRow[];
+  metrics: {
+    affectedPieces: number;
+    blockedPieces: number;
+    fieldRiskPieces: number;
+    linkRequiredRevisions: number;
+    nextRelease: NextReleaseReadiness | null;
+  };
+}
+
+export interface PieceThreadFact {
+  label: string;
+  value: string;
+}
+
+export interface PieceThreadSection {
+  availability: SourceAvailability;
+  facts: PieceThreadFact[];
+}
+
+export interface PieceDigitalThreadModel {
+  pieceId: string;
+  identity: PieceThreadSection & { markAndLot: string };
+  modelAndDrawing: PieceThreadSection;
+  commercial: PieceThreadSection;
+  productionAndLogistics: PieceThreadSection;
+  history: PieceThreadSection;
+}
 export interface PieceIntelligenceSnapshot extends Omit<PieceRelationshipSnapshot, "workPackages" | "drawingRevisions"> {
   pieces: PieceRegisterRow[];
   pieceDrawings: ReadinessPieceDrawing[];
