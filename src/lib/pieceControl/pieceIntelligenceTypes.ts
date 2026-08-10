@@ -117,7 +117,6 @@ export interface PieceDigitalThreadModel {
   productionAndLogistics: PieceThreadSection;
   history: PieceThreadSection;
 }
-
 export interface PieceIntelligenceSnapshot extends Omit<PieceRelationshipSnapshot, "workPackages" | "drawingRevisions"> {
   pieces: PieceRegisterRow[];
   pieceDrawings: ReadinessPieceDrawing[];
