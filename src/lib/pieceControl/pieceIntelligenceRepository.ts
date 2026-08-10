@@ -1,4 +1,3 @@
-import { entities } from "@/api/supabaseClient";
 import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import { supabase } from "@/lib/supabase";
 import type {
@@ -18,6 +17,7 @@ interface OptionalSourceResult<T> {
 }
 
 const db = supabase as any;
+const sourcePageSize = 1000;
 
 async function optionalSource<T>(
   source: string,
@@ -31,20 +31,65 @@ async function optionalSource<T>(
   }
 }
 
+type PersistedDrawingImpact = Omit<
+  DrawingImpactRow,
+  "sheet_number" | "sheet_title" | "revision_code"
+>;
+
+async function fetchDrawingImpacts(projectId: string): Promise<DrawingImpactRow[]> {
+  const rows: PersistedDrawingImpact[] = [];
+  for (let from = 0; ; from += sourcePageSize) {
+    const { data, error } = await db
+      .from("drawing_impacts")
+      .select("id, project_id, drawing_revision_id, impact_type, status, priority, title, notes, assigned_to, due_date, resolved_at, created_at")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + sourcePageSize - 1);
+    if (error) throw error;
+    rows.push(...((data ?? []) as PersistedDrawingImpact[]));
+    if (!data || data.length < sourcePageSize) break;
+  }
+  return rows.map((impact) => ({
+    ...impact,
+    sheet_number: null,
+    sheet_title: null,
+    revision_code: null,
+  }));
+}
+
+async function fetchRfis(projectId: string): Promise<PieceIntelligenceRfi[]> {
+  const rows: PieceIntelligenceRfi[] = [];
+  for (let from = 0; ; from += sourcePageSize) {
+    const { data, error } = await db
+      .from("rfis")
+      .select("id, project_id, rfi_number, status, work_package_id")
+      .eq("project_id", projectId)
+      .eq("is_deleted", false)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + sourcePageSize - 1);
+    if (error) throw error;
+    rows.push(...((data ?? []) as PieceIntelligenceRfi[]));
+    if (!data || data.length < sourcePageSize) return rows;
+  }
+}
+
 async function fetchPieceEvents(projectId: string): Promise<PieceIntelligenceEvent[]> {
   const rows: PieceIntelligenceEvent[] = [];
-  const pageSize = 1000;
 
-  for (let from = 0; ; from += pageSize) {
+  for (let from = 0; ; from += sourcePageSize) {
     const { data, error } = await db
       .from("piece_events")
       .select("id, project_id, piece_id, event_type, previous_state, next_state, reason, created_at")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false })
-      .range(from, from + pageSize - 1);
+      .order("id", { ascending: false })
+      .range(from, from + sourcePageSize - 1);
     if (error) throw error;
     rows.push(...((data ?? []) as PieceIntelligenceEvent[]));
-    if (!data || data.length < pageSize) return rows;
+    if (!data || data.length < sourcePageSize) return rows;
   }
 }
 
@@ -65,12 +110,8 @@ export async function fetchPieceIntelligenceSnapshot(
 ): Promise<PieceIntelligenceSnapshot> {
   const relationships = await fetchPieceRelationshipSnapshot(projectId);
   const [impacts, rfis, events] = await Promise.all([
-    optionalSource("drawing impacts", () =>
-      entities.DrawingImpact.filter({ project_id: projectId }) as unknown as Promise<DrawingImpactRow[]>
-    ),
-    optionalSource("RFIs", () =>
-      entities.RFI.filter({ project_id: projectId }) as Promise<PieceIntelligenceRfi[]>
-    ),
+    optionalSource("drawing impacts", () => fetchDrawingImpacts(projectId)),
+    optionalSource("RFIs", () => fetchRfis(projectId)),
     optionalSource("piece events", () => fetchPieceEvents(projectId)),
   ]);
 
