@@ -104,6 +104,8 @@ const PROJECT_EXPORT_TABLES: readonly string[] = [
   "model_element_links",
   "model_elements",
   "model_registry",
+  "note_folder_job_links",
+  "note_folders",
   "pay_application_lines",
   "pay_applications",
   "photos",

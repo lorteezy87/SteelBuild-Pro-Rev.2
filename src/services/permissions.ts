@@ -75,6 +75,13 @@ const ENTITY_OVERRIDES: Record<string, AppRole> = {
   "budget_hour_item:create": "pm",
   "budget_hour_item:edit":   "pm",
   "budget_hour_item:delete": "pm",
+  "production_note:create":  "field",
+  "production_note:edit":    "field",
+  "production_note:delete":  "field",
+  "note_folder:create":      "field",
+  "note_folder:edit":        "field",
+  "note_folder:delete":      "pm",
+  "note_folder_link:edit":   "pm",
 };
 
 // ─── Pure permission check ──────────────────────────────────────────────

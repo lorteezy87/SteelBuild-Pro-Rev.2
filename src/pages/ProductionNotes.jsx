@@ -11,18 +11,37 @@
  * selected meeting date. `is_high_priority` powers the yellow highlight
  * (semantically identical: "this needs attention").
  *
+ * Folders are org-scoped. Every bullet belongs to one folder. A folder may
+ * be unlinked (General Notes), linked to one job, or linked to many. Access
+ * is enforced server-side: a linked folder is visible only when the user has
+ * every linked job.
+ *
  * Deferred: print/PDF export, AI-generated bullets, drag-to-reorder.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Trash2, X, Highlighter, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, X, Highlighter, CalendarDays, FolderTree as FolderTreeIcon } from "lucide-react";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { CommandBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { useOrg } from "@/components/shared/OrgContext";
+import { usePermissions } from "@/services/permissions";
+import { invalidateEntity } from "@/services/cacheRegistry";
+import { FolderTree } from "@/components/productionnotes/FolderTree";
+import { FolderLinkDialog } from "@/components/productionnotes/FolderLinkDialog";
+import {
+  archiveNoteFolder,
+  createNoteFolder,
+  listVisibleNoteFolders,
+  renameNoteFolder,
+  setNoteFolderLinks,
+} from "@/lib/noteFolders/repository";
+import { noteFolderQueryKeys } from "@/lib/noteFolders/queryKeys";
+import { canManageFolderLinks, canOrganizeFolders } from "@/lib/noteFolders/domain";
 
 // ─── Date helpers ──────────────────────────────────────────────────────────
 const toISODate = (d) => {
@@ -64,12 +83,20 @@ const shiftDate = (iso, days) => {
 
 export default function ProductionNotes() {
   const qc = useQueryClient();
+  const { currentOrg } = useOrg();
+  const { role } = usePermissions();
+  const orgId = currentOrg?.id ?? null;
+  const canOrganize = canOrganizeFolders(role);
+  const canManageLinks = canManageFolderLinks(role);
 
   const [meetingDate, setMeetingDate] = useState(mostRecentTuesday());
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectPickerQuery, setProjectPickerQuery] = useState("");
   const [draftBullet, setDraftBullet] = useState({}); // { [projectId]: string }
   const draftInputRefs = useRef({});
+  const [selectedFolderId, setSelectedFolderId] = useState(null);
+  const [folderNavOpen, setFolderNavOpen] = useState(false);
+  const [linkingFolder, setLinkingFolder] = useState(null);
 
   // ─── Data ───────────────────────────────────────────────────────────────
   const { data: projects = [] } = useQuery({
@@ -78,7 +105,29 @@ export default function ProductionNotes() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // All notes for the selected meeting date.
+  const foldersQuery = useQuery({
+    queryKey: noteFolderQueryKeys.workspace(orgId, false),
+    queryFn: () => listVisibleNoteFolders({ orgId }),
+    enabled: Boolean(orgId),
+    staleTime: 30 * 1000,
+  });
+  const folderWorkspace = foldersQuery.data;
+  const folders = folderWorkspace?.folders ?? [];
+  const selectedFolder =
+    folders.find((folder) => folder.id === selectedFolderId) ||
+    folders.find((folder) => folder.id === folderWorkspace?.general_notes_id) ||
+    folders[0] ||
+    null;
+  const activeFolderId = selectedFolder?.id ?? null;
+
+  useEffect(() => {
+    if (!selectedFolderId && folderWorkspace?.general_notes_id) {
+      setSelectedFolderId(folderWorkspace.general_notes_id);
+    }
+  }, [selectedFolderId, folderWorkspace?.general_notes_id]);
+
+  // All notes for the selected meeting date + folder (RLS also hides folders
+  // the caller cannot access via the every-job rule).
   const {
     data: notes = [],
     isLoading: notesLoading,
@@ -86,28 +135,41 @@ export default function ProductionNotes() {
     error: notesErrorValue,
     refetch: refetchNotes,
   } = useQuery({
-    queryKey: ["production-notes", meetingDate],
-    queryFn: () => entities.ProductionNote.filter({ note_date: meetingDate }, "created_at"),
+    queryKey: ["production-notes", meetingDate, activeFolderId],
+    queryFn: () =>
+      entities.ProductionNote.filter(
+        activeFolderId ? { note_date: meetingDate, folder_id: activeFolderId } : { note_date: meetingDate },
+        "created_at",
+      ),
+    enabled: Boolean(activeFolderId),
     staleTime: 30 * 1000,
   });
+
+  const notesKey = ["production-notes", meetingDate, activeFolderId];
+
+  const refreshFolders = () => {
+    qc.invalidateQueries({ queryKey: ["note-folders"] });
+    invalidateEntity(qc, "note_folder");
+    invalidateEntity(qc, "production_note");
+  };
 
   // ─── Mutations ──────────────────────────────────────────────────────────
   const createMut = useMutation({
     // Multi-project workspace: stamp the row's selected project, not nav project.
     mutationFn: (data) => entities.ProductionNote.create(withProjectId(data, data.project_id)),
     onMutate: async (data) => {
-      await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
-      const previous = qc.getQueryData(["production-notes", meetingDate]);
+      await qc.cancelQueries({ queryKey: notesKey });
+      const previous = qc.getQueryData(notesKey);
       const optimistic = { ...data, id: `tmp-${Date.now()}-${Math.random()}`, _optimistic: true };
-      qc.setQueryData(["production-notes", meetingDate], (old = []) => [...old, optimistic]);
+      qc.setQueryData(notesKey, (old = []) => [...old, optimistic]);
       return { previous, optimisticId: optimistic.id };
     },
     onError: (err, _data, ctx) => {
-      if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
+      if (ctx?.previous) qc.setQueryData(notesKey, ctx.previous);
       toast.error(toUserErrorMessage(err, "Failed to add bullet"));
     },
     onSuccess: (record, vars) => {
-      qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] });
+      qc.invalidateQueries({ queryKey: ["production-notes"] });
       logActivity("production_note", "created", record, {
         projectId: vars.project_id,
         projectName: vars.project_name,
@@ -119,33 +181,81 @@ export default function ProductionNotes() {
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.ProductionNote.update(id, data),
     onMutate: async ({ id, data }) => {
-      await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
-      const previous = qc.getQueryData(["production-notes", meetingDate]);
-      qc.setQueryData(["production-notes", meetingDate], (old = []) =>
+      await qc.cancelQueries({ queryKey: notesKey });
+      const previous = qc.getQueryData(notesKey);
+      qc.setQueryData(notesKey, (old = []) =>
         old.map((n) => (n.id === id ? { ...n, ...data } : n))
       );
       return { previous };
     },
     onError: (err, _data, ctx) => {
-      if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
+      if (ctx?.previous) qc.setQueryData(notesKey, ctx.previous);
       toast.error(toUserErrorMessage(err, "Update failed"));
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes"] }),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.ProductionNote.delete(id),
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
-      const previous = qc.getQueryData(["production-notes", meetingDate]);
-      qc.setQueryData(["production-notes", meetingDate], (old = []) => old.filter((n) => n.id !== id));
+      await qc.cancelQueries({ queryKey: notesKey });
+      const previous = qc.getQueryData(notesKey);
+      qc.setQueryData(notesKey, (old = []) => old.filter((n) => n.id !== id));
       return { previous };
     },
     onError: (err, _id, ctx) => {
-      if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
+      if (ctx?.previous) qc.setQueryData(notesKey, ctx.previous);
       toast.error(toUserErrorMessage(err, "Delete failed"));
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes"] }),
+  });
+
+  const createFolderMut = useMutation({
+    mutationFn: ({ parentFolderId, name }) =>
+      createNoteFolder({ orgId, name, parentFolderId }),
+    onSuccess: () => {
+      refreshFolders();
+      toast.success("Folder created");
+    },
+    onError: (err) => toast.error(toUserErrorMessage(err, "Could not create folder")),
+  });
+
+  const renameFolderMut = useMutation({
+    mutationFn: ({ folder, name }) =>
+      renameNoteFolder({ folderId: folder.id, name, expectedVersion: folder.version }),
+    onSuccess: () => {
+      refreshFolders();
+      toast.success("Folder renamed");
+    },
+    onError: (err) => toast.error(toUserErrorMessage(err, "Could not rename folder")),
+  });
+
+  const archiveFolderMut = useMutation({
+    mutationFn: (folder) =>
+      archiveNoteFolder({ folderId: folder.id, expectedVersion: folder.version }),
+    onSuccess: (_data, folder) => {
+      if (selectedFolderId === folder.id) setSelectedFolderId(folderWorkspace?.general_notes_id ?? null);
+      refreshFolders();
+      toast.success("Folder archived");
+    },
+    onError: (err) => toast.error(toUserErrorMessage(err, "Could not archive folder")),
+  });
+
+  const linkFolderMut = useMutation({
+    mutationFn: ({ folder, projectIds, makeIndependent }) =>
+      setNoteFolderLinks({
+        folderId: folder.id,
+        projectIds,
+        expectedVersion: folder.version,
+        makeIndependent,
+      }),
+    onSuccess: () => {
+      setLinkingFolder(null);
+      refreshFolders();
+      qc.invalidateQueries({ queryKey: ["production-notes"] });
+      toast.success("Job links updated");
+    },
+    onError: (err) => toast.error(toUserErrorMessage(err, "Could not update job links")),
   });
 
   // ─── Derived: group notes by project ────────────────────────────────────
@@ -190,11 +300,16 @@ export default function ProductionNotes() {
 
   // ─── Actions ────────────────────────────────────────────────────────────
   const addProjectRow = (project) => {
+    if (!activeFolderId) {
+      toast.error("Select a folder first");
+      return;
+    }
     // Seed a single empty bullet so the row appears and is ready to type into.
     createMut.mutate({
       project_id: project.id,
       project_name: project.name,
       note_date: meetingDate,
+      folder_id: activeFolderId,
       content: "",
       category: "General",
       is_high_priority: false,
@@ -211,11 +326,12 @@ export default function ProductionNotes() {
 
   const addBullet = (projectId, content = "") => {
     const project = projectsById.get(projectId);
-    if (!project) return;
+    if (!project || !activeFolderId) return;
     createMut.mutate({
       project_id: projectId,
       project_name: project.name,
       note_date: meetingDate,
+      folder_id: activeFolderId,
       content,
       category: "General",
       is_high_priority: false,
@@ -268,11 +384,21 @@ export default function ProductionNotes() {
           count={totalBullets}
           unit=" · BULLETS"
           subtitle={
-            highlightedCount > 0
-              ? `${projectRows.length} project${projectRows.length === 1 ? "" : "s"} · ${highlightedCount} highlighted`
-              : `${projectRows.length} project${projectRows.length === 1 ? "" : "s"}`
+            [
+              selectedFolder?.name || "Folders",
+              highlightedCount > 0
+                ? `${projectRows.length} project${projectRows.length === 1 ? "" : "s"} · ${highlightedCount} highlighted`
+                : `${projectRows.length} project${projectRows.length === 1 ? "" : "s"}`,
+            ].join(" · ")
           }
         >
+          <button
+            onClick={() => setFolderNavOpen((open) => !open)}
+            title="Folders"
+            style={navBtn()}
+          >
+            <FolderTreeIcon size={14} />
+          </button>
           <button
             onClick={() => setMeetingDate(shiftDate(meetingDate, -7))}
             title="Previous week"
@@ -317,6 +443,43 @@ export default function ProductionNotes() {
       </div>
 
       {/* Body */}
+      <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
+        <div
+          className="notes-folder-pane"
+          style={{
+            display: folderNavOpen ? "flex" : undefined,
+          }}
+        >
+          <FolderTree
+            folders={folders}
+            selectedId={activeFolderId}
+            onSelect={(id) => {
+              setSelectedFolderId(id);
+              setFolderNavOpen(false);
+            }}
+            onCreate={(parentFolderId, name) => createFolderMut.mutate({ parentFolderId, name })}
+            onRename={(folder, name) => renameFolderMut.mutate({ folder, name })}
+            onArchive={(folder) => archiveFolderMut.mutate(folder)}
+            onLinkJobs={setLinkingFolder}
+            projects={projects}
+            canOrganize={canOrganize}
+            canManageLinks={canManageLinks}
+          />
+        </div>
+        <style>{`
+          .notes-folder-pane { display: none; }
+          @media (min-width: 840px) {
+            .notes-folder-pane { display: flex; }
+          }
+          @media (max-width: 839px) {
+            .notes-folder-pane[style*="flex"] {
+              position: absolute;
+              inset: 0 auto 0 0;
+              z-index: 30;
+              box-shadow: 12px 0 32px rgba(0,0,0,0.35);
+            }
+          }
+        `}</style>
       <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px 96px" }}>
         <div
           style={{
@@ -420,6 +583,19 @@ export default function ProductionNotes() {
           )}
         </div>
       </div>
+      </div>
+
+      {linkingFolder && (
+        <FolderLinkDialog
+          folder={linkingFolder}
+          projects={projects}
+          pending={linkFolderMut.isPending}
+          onClose={() => setLinkingFolder(null)}
+          onSave={(projectIds, makeIndependent) =>
+            linkFolderMut.mutate({ folder: linkingFolder, projectIds, makeIndependent })
+          }
+        />
+      )}
 
       {/* Project picker modal */}
       {projectPickerOpen && (

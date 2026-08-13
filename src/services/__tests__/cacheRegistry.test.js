@@ -197,6 +197,7 @@ describe("getRegisteredEntities", () => {
     expect(entities).toContain("closeout");
     expect(entities).toContain("scope_item");
     expect(entities).toContain("production_note");
+    expect(entities).toContain("note_folder");
     expect(entities).toContain("warranty");
     expect(entities).toContain("constraint");
     expect(entities).toContain("procurement");

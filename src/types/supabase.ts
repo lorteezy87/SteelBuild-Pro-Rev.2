@@ -5342,6 +5342,7 @@ export type Database = {
           content: string | null
           created_at: string | null
           date: string | null
+          folder_id: string | null
           id: string
           is_high_priority: boolean | null
           is_resolved: boolean | null
@@ -5362,6 +5363,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           date?: string | null
+          folder_id?: string | null
           id?: string
           is_high_priority?: boolean | null
           is_resolved?: boolean | null
@@ -5382,6 +5384,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           date?: string | null
+          folder_id?: string | null
           id?: string
           is_high_priority?: boolean | null
           is_resolved?: boolean | null
@@ -5397,6 +5400,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "production_notes_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "note_folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "production_notes_project_id_fkey"
             columns: ["project_id"]
