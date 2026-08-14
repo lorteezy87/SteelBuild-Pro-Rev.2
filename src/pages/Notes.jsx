@@ -1,10 +1,31 @@
 /**
- * Notes — Tools category notepad with text + freehand ink (Apple Pencil / stylus).
+ * Notes — Tools notepad: typed text + Apple Pencil / stylus ink.
  *
- * Persistence: localStorage (device-local). Pointer Events support pen/touch/mouse.
+ * Ink is stored as vector strokes (pressure, undo, paper) in localStorage.
+ * Pointer Events: coalesced + predicted samples, palm rejection, Pencil double-tap.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Trash2, PenLine, Type, Eraser, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Download,
+  Eraser,
+  Highlighter,
+  PenLine,
+  Plus,
+  Redo2,
+  Trash2,
+  Type,
+  Undo2,
+} from "lucide-react";
+import { InkCanvas, setInkPaper } from "@/components/notes/InkCanvas";
+import {
+  acceptPointer,
+  deserializeInk,
+  emptyInk,
+  isPencilDoubleTap,
+  serializeInk,
+  undoStroke,
+} from "@/lib/notesInk/engine";
+import { INK_COLORS, INK_SIZES } from "@/lib/notesInk/types";
 
 const LS_KEY = "sbp-tools-notes";
 
@@ -13,76 +34,67 @@ function loadNotes() {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((n) => ({
+      ...n,
+      ink: n.ink ? deserializeInk(typeof n.ink === "string" ? n.ink : JSON.stringify(n.ink)) : emptyInk(),
+    }));
   } catch {
     return [];
   }
 }
 
-function saveNotes(notes) {
+function persistNotes(notes) {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(notes));
+    const payload = notes.map((n) => ({
+      ...n,
+      ink: n.ink ? serializeInk(n.ink) : serializeInk(emptyInk()),
+    }));
+    localStorage.setItem(LS_KEY, JSON.stringify(payload));
   } catch {
     /* quota / private mode */
   }
 }
 
 function newNote() {
-  const id = `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
   return {
-    id,
+    id: `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
     title: "Untitled",
     text: "",
-    inkDataUrl: null,
+    ink: emptyInk("ruled"),
     updatedAt: new Date().toISOString(),
   };
 }
 
 export default function Notes() {
   const [notes, setNotes] = useState(loadNotes);
-  const [activeId, setActiveId] = useState(() => {
-    const list = loadNotes();
-    return list[0]?.id ?? null;
-  });
-  const [mode, setMode] = useState("text"); // text | pen | eraser
-  const canvasRef = useRef(null);
-  const drawing = useRef(false);
-  const lastPt = useRef(null);
+  const [activeId, setActiveId] = useState(() => loadNotes()[0]?.id ?? null);
+  const [mode, setMode] = useState("text"); // text | ink
+  const [tool, setTool] = useState("pen");
+  const [color, setColor] = useState(INK_COLORS[0].value);
+  const [size, setSize] = useState(INK_SIZES[1].value);
+  const [palmReject, setPalmReject] = useState(true);
+  const [penLive, setPenLive] = useState(false);
+  const redo = useRef([]);
+  const penSeenAt = useRef(null);
+  const lastPenTap = useRef(null);
+  const themeInk = useMemo(() => {
+    if (typeof window === "undefined") return "#1A1C1E";
+    const dark = document.documentElement.classList.contains("steelbuild-dark")
+      || document.documentElement.getAttribute("data-theme") === "dark";
+    return dark ? "#F4F1EA" : "#1A1C1E";
+  }, []);
 
   const active = notes.find((n) => n.id === activeId) || null;
 
   useEffect(() => {
-    saveNotes(notes);
+    persistNotes(notes);
   }, [notes]);
-
-  // Load ink onto canvas when switching notes
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, rect.width, rect.height);
-    if (active?.inkDataUrl) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, rect.width, rect.height);
-      };
-      img.src = active.inkDataUrl;
-    }
-  }, [activeId, active?.inkDataUrl]);
 
   const updateActive = useCallback((patch) => {
     if (!activeId) return;
     setNotes((prev) =>
-      prev.map((n) =>
-        n.id === activeId
-          ? { ...n, ...patch, updatedAt: new Date().toISOString() }
-          : n,
-      ),
+      prev.map((n) => (n.id === activeId ? { ...n, ...patch, updatedAt: new Date().toISOString() } : n)),
     );
   }, [activeId]);
 
@@ -91,6 +103,7 @@ export default function Notes() {
     setNotes((prev) => [n, ...prev]);
     setActiveId(n.id);
     setMode("text");
+    redo.current = [];
   };
 
   const deleteNote = (id) => {
@@ -99,80 +112,59 @@ export default function Notes() {
       if (activeId === id) setActiveId(next[0]?.id ?? null);
       return next;
     });
+    redo.current = [];
   };
 
-  const persistInk = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !activeId) return;
-    try {
-      const url = canvas.toDataURL("image/png");
-      updateActive({ inkDataUrl: url });
-    } catch {
-      /* tainted canvas unlikely */
+  const setInk = (ink) => {
+    updateActive({ ink });
+  };
+
+  const undoInk = () => {
+    if (!active?.ink) return;
+    const { next, popped } = undoStroke(active.ink);
+    if (!popped) return;
+    redo.current.push(popped);
+    setInk(next);
+  };
+
+  const redoInk = () => {
+    const stroke = redo.current.pop();
+    if (!stroke || !active?.ink) return;
+    setInk({ ...active.ink, strokes: [...active.ink.strokes, stroke] });
+  };
+
+  const markPen = () => {
+    penSeenAt.current = Date.now();
+    if (!penLive) setPenLive(true);
+  };
+
+  const acceptEvent = (e) => {
+    if (e.pointerType === "pen") {
+      const tap = { t: e.timeStamp || Date.now(), x: e.clientX, y: e.clientY };
+      if (e.type === "pointerdown" && isPencilDoubleTap(lastPenTap.current, tap)) {
+        lastPenTap.current = null;
+        setTool((t) => (t === "eraser" ? "pen" : "eraser"));
+        setMode("ink");
+        return false;
+      }
+      if (e.type === "pointerdown") lastPenTap.current = tap;
+      markPen();
     }
+    return acceptPointer({
+      pointerType: e.pointerType,
+      penSeenAt: penSeenAt.current,
+      now: Date.now(),
+      palmReject,
+    });
   };
 
-  const clearInk = () => {
-    const canvas = canvasRef.current;
+  const exportPng = () => {
+    const canvas = document.querySelector("canvas[aria-label='Ink canvas']");
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const rect = canvas.getBoundingClientRect();
-    ctx.clearRect(0, 0, rect.width, rect.height);
-    updateActive({ inkDataUrl: null });
-  };
-
-  const pointerPos = (e) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  };
-
-  const onPointerDown = (e) => {
-    if (mode === "text") return;
-    // Prefer pen; still allow touch/mouse for desktop testing
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drawing.current = true;
-    lastPt.current = pointerPos(e);
-  };
-
-  const onPointerMove = (e) => {
-    if (!drawing.current || mode === "text") return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const pt = pointerPos(e);
-    const prev = lastPt.current || pt;
-
-    // Pressure-aware stroke when Apple Pencil reports pressure
-    const pressure = typeof e.pressure === "number" && e.pressure > 0 ? e.pressure : 0.5;
-    const width = mode === "eraser" ? 18 : 1.5 + pressure * 4;
-
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = width;
-    if (mode === "eraser") {
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.strokeStyle = "rgba(0,0,0,1)";
-    } else {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = "var(--text-primary, #111)";
-    }
-    ctx.beginPath();
-    ctx.moveTo(prev.x, prev.y);
-    ctx.lineTo(pt.x, pt.y);
-    ctx.stroke();
-    lastPt.current = pt;
-  };
-
-  const onPointerUp = (e) => {
-    if (!drawing.current) return;
-    drawing.current = false;
-    lastPt.current = null;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      /* already released */
-    }
-    persistInk();
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = `${(active?.title || "note").replace(/[^\w.-]+/g, "_")}-ink.png`;
+    a.click();
   };
 
   return (
@@ -182,11 +174,9 @@ export default function Notes() {
         display: "flex",
         height: "calc(100vh - 64px)",
         minHeight: 420,
-        gap: 0,
         background: "var(--bg-page, var(--bg-surface-low))",
       }}
     >
-      {/* Sidebar list */}
       <aside
         style={{
           width: 260,
@@ -217,48 +207,28 @@ export default function Notes() {
           >
             NOTES
           </span>
-          <button
-            type="button"
-            onClick={createNote}
-            aria-label="New note"
-            title="New note"
-            style={{
-              width: 28,
-              height: 28,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 6,
-              border: "1px solid var(--border-default)",
-              background: "var(--bg-surface-low)",
-              cursor: "pointer",
-              color: "var(--text-primary)",
-            }}
-          >
+          <button type="button" onClick={createNote} aria-label="New note" title="New note" style={iconBtn()}>
             <Plus size={14} strokeWidth={2} />
           </button>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "6px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: 6 }}>
           {notes.length === 0 && (
-            <div
-              style={{
-                padding: 16,
-                color: "var(--text-muted)",
-                fontSize: 12,
-                textAlign: "center",
-              }}
-            >
+            <div style={{ padding: 16, color: "var(--text-muted)", fontSize: 12, textAlign: "center" }}>
               No notes yet. Tap + to create one.
             </div>
           )}
           {notes.map((n) => {
             const selected = n.id === activeId;
+            const inkCount = n.ink?.strokes?.length || 0;
             return (
               <div
                 key={n.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => setActiveId(n.id)}
+                onClick={() => {
+                  setActiveId(n.id);
+                  redo.current = [];
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") setActiveId(n.id);
                 }}
@@ -275,14 +245,7 @@ export default function Notes() {
                     : "1px solid transparent",
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
-                  }}
-                >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                   <span
                     style={{
                       fontSize: 13,
@@ -299,30 +262,16 @@ export default function Notes() {
                   <button
                     type="button"
                     aria-label="Delete note"
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={(ev) => {
+                      ev.stopPropagation();
                       deleteNote(n.id);
                     }}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      color: "var(--text-muted)",
-                      padding: 2,
-                      display: "flex",
-                    }}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2, display: "flex" }}
                   >
                     <Trash2 size={12} />
                   </button>
                 </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "var(--text-muted)",
-                    marginTop: 4,
-                    fontFamily: "var(--font-mono)",
-                  }}
-                >
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4, fontFamily: "var(--font-mono)" }}>
                   {n.updatedAt
                     ? new Date(n.updatedAt).toLocaleString(undefined, {
                         month: "short",
@@ -331,6 +280,7 @@ export default function Notes() {
                         minute: "2-digit",
                       })
                     : ""}
+                  {inkCount > 0 ? ` · ${inkCount} stroke${inkCount === 1 ? "" : "s"}` : ""}
                 </div>
               </div>
             );
@@ -338,19 +288,9 @@ export default function Notes() {
         </div>
       </aside>
 
-      {/* Editor */}
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {!active ? (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--text-muted)",
-              fontSize: 14,
-            }}
-          >
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 14 }}>
             Select or create a note
           </div>
         ) : (
@@ -361,7 +301,7 @@ export default function Notes() {
                 borderBottom: "1px solid var(--divider)",
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
+                gap: 8,
                 flexWrap: "wrap",
               }}
             >
@@ -388,25 +328,115 @@ export default function Notes() {
                 icon={<Type size={14} />}
               />
               <ToolBtn
-                active={mode === "pen"}
-                onClick={() => setMode("pen")}
+                active={mode === "ink" && tool === "pen"}
+                onClick={() => {
+                  setMode("ink");
+                  setTool("pen");
+                }}
                 label="Pencil"
                 icon={<PenLine size={14} />}
               />
               <ToolBtn
-                active={mode === "eraser"}
-                onClick={() => setMode("eraser")}
+                active={mode === "ink" && tool === "highlighter"}
+                onClick={() => {
+                  setMode("ink");
+                  setTool("highlighter");
+                }}
+                label="Highlight"
+                icon={<Highlighter size={14} />}
+              />
+              <ToolBtn
+                active={mode === "ink" && tool === "eraser"}
+                onClick={() => {
+                  setMode("ink");
+                  setTool("eraser");
+                }}
                 label="Eraser"
                 icon={<Eraser size={14} />}
               />
-              <ToolBtn onClick={clearInk} label="Clear ink" icon={<Undo2 size={14} />} />
+              <ToolBtn onClick={undoInk} label="Undo stroke" icon={<Undo2 size={14} />} />
+              <ToolBtn onClick={redoInk} label="Redo stroke" icon={<Redo2 size={14} />} />
+              <ToolBtn onClick={exportPng} label="Export ink" icon={<Download size={14} />} />
             </div>
 
-            <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+            {mode === "ink" && (
+              <div
+                style={{
+                  padding: "8px 16px",
+                  borderBottom: "1px solid var(--divider)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  background: "var(--bg-surface-low)",
+                }}
+              >
+                <span style={metaLabel()}>Color</span>
+                {INK_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    title={c.label}
+                    aria-label={c.label}
+                    onClick={() => setColor(c.value)}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: "50%",
+                      border: color === c.value ? "2px solid var(--accent)" : "1px solid var(--border-default)",
+                      background: c.value,
+                      cursor: "pointer",
+                      boxShadow: c.id === "chalk" ? "inset 0 0 0 1px rgba(0,0,0,0.15)" : undefined,
+                    }}
+                  />
+                ))}
+                <span style={metaLabel()}>Nib</span>
+                {INK_SIZES.map((s) => (
+                  <ToolBtn
+                    key={s.id}
+                    active={size === s.value}
+                    onClick={() => setSize(s.value)}
+                    label={s.label}
+                  />
+                ))}
+                <span style={metaLabel()}>Paper</span>
+                {["plain", "ruled", "grid"].map((p) => (
+                  <ToolBtn
+                    key={p}
+                    active={(active.ink?.paper || "ruled") === p}
+                    onClick={() => setInk(setInkPaper(active.ink || emptyInk(), p))}
+                    label={p[0].toUpperCase() + p.slice(1)}
+                  />
+                ))}
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-secondary)", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={palmReject}
+                    onChange={(e) => setPalmReject(e.target.checked)}
+                  />
+                  Palm reject
+                </label>
+                {penLive && (
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    Pencil live · double-tap toggles eraser
+                  </span>
+                )}
+              </div>
+            )}
+
+            <div style={{ flex: 1, position: "relative", minHeight: 0, background: "var(--bg-page, transparent)" }}>
               <textarea
                 value={active.text}
                 onChange={(e) => updateActive({ text: e.target.value })}
-                placeholder="Type notes here…"
+                placeholder="Type notes here. Switch to Pencil to ink with Apple Pencil — pressure, tilt, and palm rejection are on."
                 readOnly={mode !== "text"}
                 style={{
                   position: "absolute",
@@ -420,28 +450,25 @@ export default function Notes() {
                   fontSize: 15,
                   lineHeight: 1.55,
                   fontFamily: "var(--font-body)",
-                  background: "var(--bg-page, transparent)",
+                  background: "transparent",
                   color: "var(--text-primary)",
                   pointerEvents: mode === "text" ? "auto" : "none",
                   zIndex: 1,
                 }}
               />
-              <canvas
-                ref={canvasRef}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  touchAction: "none",
-                  cursor: mode === "text" ? "default" : "crosshair",
-                  zIndex: 2,
-                  pointerEvents: mode === "text" ? "none" : "auto",
+              <InkCanvas
+                doc={active.ink || emptyInk()}
+                onChange={(ink) => {
+                  redo.current = [];
+                  setInk(ink);
                 }}
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={onPointerUp}
+                tool={tool}
+                color={color}
+                size={size}
+                mode={mode === "ink" ? "ink" : "text"}
+                acceptEvent={acceptEvent}
+                onPenSeen={markPen}
+                themeInk={themeInk}
               />
             </div>
           </>
@@ -483,4 +510,29 @@ function ToolBtn({ active, onClick, label, icon }) {
       <span>{label}</span>
     </button>
   );
+}
+
+function iconBtn() {
+  return {
+    width: 28,
+    height: 28,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 6,
+    border: "1px solid var(--border-default)",
+    background: "var(--bg-surface-low)",
+    cursor: "pointer",
+    color: "var(--text-primary)",
+  };
+}
+
+function metaLabel() {
+  return {
+    fontFamily: "var(--font-mono)",
+    fontSize: 9,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+  };
 }
