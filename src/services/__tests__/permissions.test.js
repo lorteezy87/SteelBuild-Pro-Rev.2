@@ -110,6 +110,16 @@ describe("canPerform — entity overrides", () => {
     expect(canPerform("owner", "delete", "budget_hour_item")).toBe(true);
   });
 
+  it("notes editors can organize folders; only PM/admin change job links", () => {
+    expect(canPerform("field", "create", "production_note")).toBe(true);
+    expect(canPerform("field", "edit", "note_folder")).toBe(true);
+    expect(canPerform("field", "edit", "note_folder_link")).toBe(false);
+    expect(canPerform("pm", "edit", "note_folder_link")).toBe(true);
+    expect(canPerform("field", "delete", "note_folder")).toBe(false);
+    expect(canPerform("pm", "delete", "note_folder")).toBe(true);
+    expect(canPerform("viewer", "create", "note_folder")).toBe(false);
+  });
+
   it("override only applies to its own entity:action, not other entities", () => {
     // field gets delivery:create via override, but not a generic widget:create
     expect(canPerform("field", "create", "widget")).toBe(false);

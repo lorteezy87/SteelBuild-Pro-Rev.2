@@ -329,6 +329,15 @@ const REGISTRY: Record<string, EntityRegistration> = {
     primary:  () => ["production-notes"],
     families: () => [
       ["production-notes"],
+      ["note-folders"],
+    ],
+  },
+
+  note_folder: {
+    primary:  () => ["note-folders"],
+    families: () => [
+      ["note-folders"],
+      ["production-notes"],
     ],
   },
 
