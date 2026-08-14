@@ -5342,7 +5342,7 @@ export type Database = {
           content: string | null
           created_at: string | null
           date: string | null
-          folder_id: string | null
+          folder_id: string
           id: string
           is_high_priority: boolean | null
           is_resolved: boolean | null
@@ -5363,7 +5363,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           date?: string | null
-          folder_id?: string | null
+          folder_id: string
           id?: string
           is_high_priority?: boolean | null
           is_resolved?: boolean | null
@@ -5384,7 +5384,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           date?: string | null
-          folder_id?: string | null
+          folder_id?: string
           id?: string
           is_high_priority?: boolean | null
           is_resolved?: boolean | null

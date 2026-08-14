@@ -143,8 +143,10 @@ export function buildFolderTree<T extends { id: string; parent_folder_id: string
   folders: readonly T[],
 ): Array<T & { depth: number; children: T[] }> {
   const children = new Map<string | null, T[]>();
+  const known = new Set(folders.map((folder) => folder.id));
   folders.forEach((folder) => {
-    const key = folder.parent_folder_id;
+    const parentVisible = folder.parent_folder_id != null && known.has(folder.parent_folder_id);
+    const key = parentVisible ? folder.parent_folder_id : null;
     const list = children.get(key) ?? [];
     list.push(folder);
     children.set(key, list);

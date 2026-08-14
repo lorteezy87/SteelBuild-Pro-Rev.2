@@ -25,10 +25,12 @@ export function FolderLinkDialog({
   pending,
 }: FolderLinkDialogProps) {
   const [selected, setSelected] = useState<string[]>(folder.effective_project_ids);
-  const makeIndependent = folder.parent_folder_id != null;
+  const isChild = folder.parent_folder_id != null;
+  const [inheritParent, setInheritParent] = useState(isChild && folder.link_mode === "inherited");
+  const makeIndependent = !isChild || !inheritParent;
   const impact = useMemo(
-    () => computeAccessImpact(folder.effective_project_ids, selected),
-    [folder.effective_project_ids, selected],
+    () => computeAccessImpact(folder.effective_project_ids, inheritParent ? folder.effective_project_ids : selected),
+    [folder.effective_project_ids, inheritParent, selected],
   );
 
   const toggle = (id: string) => {
@@ -86,7 +88,8 @@ export function FolderLinkDialog({
             </div>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-secondary)" }}>
               {folder.name}
-              {makeIndependent ? " · becomes independently linked" : ""}
+              {isChild && makeIndependent ? " · independently linked" : ""}
+              {isChild && inheritParent ? " · inherits parent jobs" : ""}
             </div>
           </div>
           <button
@@ -110,6 +113,17 @@ export function FolderLinkDialog({
           Leave every job unchecked to keep it as a general-notes folder.
         </p>
 
+        {isChild && (
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-secondary)" }}>
+            <input
+              type="checkbox"
+              checked={inheritParent}
+              onChange={(event) => setInheritParent(event.target.checked)}
+            />
+            Inherit parent job links
+          </label>
+        )}
+
         <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
           {projects.map((project) => {
             const checked = selected.includes(project.id);
@@ -126,12 +140,14 @@ export function FolderLinkDialog({
                   background: checked
                     ? "color-mix(in srgb, var(--accent) 10%, var(--bg-surface-low))"
                     : "var(--bg-surface-low)",
-                  cursor: "pointer",
+                  cursor: inheritParent ? "not-allowed" : "pointer",
+                  opacity: inheritParent ? 0.55 : 1,
                 }}
               >
                 <input
                   type="checkbox"
                   checked={checked}
+                  disabled={inheritParent}
                   onChange={() => toggle(project.id)}
                 />
                 <span style={{ display: "flex", flexDirection: "column" }}>
@@ -183,7 +199,7 @@ export function FolderLinkDialog({
           <button
             type="button"
             disabled={pending}
-            onClick={() => onSave(selected, makeIndependent)}
+            onClick={() => onSave(inheritParent ? [] : selected, makeIndependent)}
             style={primaryBtn()}
           >
             {pending ? "Saving…" : "Save links"}

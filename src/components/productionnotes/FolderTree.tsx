@@ -284,7 +284,10 @@ function NameDraft({
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
-      onBlur={onCancel}
+      onBlur={() => {
+        if (value.trim()) onSubmit();
+        else onCancel();
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
           event.preventDefault();

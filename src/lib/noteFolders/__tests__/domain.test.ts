@@ -144,4 +144,10 @@ describe("buildFolderTree", () => {
       "1:Tucson daily",
     ]);
   });
+
+  it("promotes children whose parent is missing from the visible set to roots", () => {
+    const visibleOnly = [independentChild];
+    const tree = buildFolderTree(visibleOnly);
+    expect(tree.map((node) => `${node.depth}:${node.name}`)).toEqual(["0:Phoenix only"]);
+  });
 });

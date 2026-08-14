@@ -45,9 +45,8 @@ import { reportError } from "../_shared/reportError.ts";
 const PROJECT_EXPORT_VERSION = 1;
 
 // Comprehensive project-scoped tenant table set. Every table listed has a
-// `project_id` column; reads run under RLS, so a table the caller can't see just
-// returns 0 rows (harmless). Operational-only tables (e.g. llm_telemetry) are
-// deliberately excluded — a project backup is tenant data, not telemetry.
+// `project_id` column and an `id` column; reads run under RLS. Org-scoped
+// note folders are exported separately via readNoteFolderExport.
 const PROJECT_EXPORT_TABLES: readonly string[] = [
   "action_items",
   "activities",
@@ -104,8 +103,6 @@ const PROJECT_EXPORT_TABLES: readonly string[] = [
   "model_element_links",
   "model_elements",
   "model_registry",
-  "note_folder_job_links",
-  "note_folders",
   "pay_application_lines",
   "pay_applications",
   "photos",
@@ -310,6 +307,73 @@ async function readTablePaged(
   return { rows, error: null };
 }
 
+/**
+ * Note folders are org-scoped (no project_id / no single id on the link PK).
+ * Export only folders that effectively attach to this project: direct job-link
+ * rows plus those folder records and their visible descendants.
+ */
+async function readNoteFolderExport(
+  rls: SupabaseClient,
+  projectId: string,
+): Promise<{ results: ProjectExportTableResult[]; error: string | null }> {
+  const links: Record<string, unknown>[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await rls
+      .from("note_folder_job_links")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("folder_id", { ascending: true })
+      .range(from, from + EXPORT_PAGE_SIZE - 1);
+    if (error) return { results: [], error: error.message };
+    const page = (data ?? []) as Record<string, unknown>[];
+    links.push(...page);
+    if (page.length < EXPORT_PAGE_SIZE) break;
+    from += EXPORT_PAGE_SIZE;
+  }
+
+  const folderIds = new Set<string>(
+    links
+      .map((row) => (typeof row.folder_id === "string" ? row.folder_id : null))
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const folders: Record<string, unknown>[] = [];
+  let frontier = [...folderIds];
+  while (frontier.length > 0) {
+    const chunk = frontier.splice(0, 100);
+    const { data, error } = await rls
+      .from("note_folders")
+      .select("*")
+      .in("id", chunk);
+    if (error) return { results: [], error: error.message };
+    for (const row of (data ?? []) as Record<string, unknown>[]) {
+      if (typeof row.id === "string" && !folders.some((existing) => existing.id === row.id)) {
+        folders.push(row);
+      }
+    }
+    const { data: children, error: childErr } = await rls
+      .from("note_folders")
+      .select("*")
+      .in("parent_folder_id", chunk);
+    if (childErr) return { results: [], error: childErr.message };
+    for (const row of (children ?? []) as Record<string, unknown>[]) {
+      if (typeof row.id !== "string" || folderIds.has(row.id)) continue;
+      folderIds.add(row.id);
+      folders.push(row);
+      frontier.push(row.id);
+    }
+  }
+
+  return {
+    results: [
+      { table: "note_folder_job_links", rows: links },
+      { table: "note_folders", rows: folders },
+    ],
+    error: null,
+  };
+}
+
 // ── Storage manifest ────────────────────────────────────────────────────────────
 
 /**
@@ -436,6 +500,13 @@ async function handle(req: Request): Promise<Response> {
     }
     tableResults.push({ table, rows });
   }
+
+  const folderExport = await readNoteFolderExport(rls, projectId);
+  if (folderExport.error) {
+    console.error(`[project-export] note folders fetch error: ${folderExport.error}`);
+    return errorResponse(500, "Failed to read note folders", req);
+  }
+  tableResults.push(...folderExport.results);
 
   // Storage manifest (paths + sizes only, never bytes). Best-effort: a failure
   // here is logged and skipped — it must not abort a data-complete export.

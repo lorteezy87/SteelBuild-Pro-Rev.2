@@ -67,7 +67,7 @@ COMMENT ON TABLE public.note_folder_job_links IS
 
 CREATE TABLE IF NOT EXISTS public.note_folder_audit_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE,
   folder_id uuid,
   actor_id uuid,
   action text NOT NULL,
@@ -211,7 +211,20 @@ BEGIN
     RETURN true;
   END IF;
   IF coalesce(array_length(p_project_ids, 1), 0) = 0 THEN
-    RETURN false;
+    -- Unlinked / general folder: any same-org PM may change links or archive.
+    RETURN EXISTS (
+      SELECT 1
+      FROM public.organization_members om
+      WHERE om.org_id = p_org_id
+        AND om.user_id = (SELECT auth.uid())
+        AND om.role IN ('owner', 'admin', 'pm', 'user')
+    ) OR EXISTS (
+      SELECT 1
+      FROM public.projects p
+      WHERE p.org_id = p_org_id
+        AND coalesce(p.is_deleted, false) = false
+        AND public.user_has_project_role_at_least(p.id, 'pm')
+    );
   END IF;
   FOREACH v_job IN ARRAY p_project_ids LOOP
     IF NOT public.user_has_project_role_at_least(v_job, 'pm') THEN
@@ -464,7 +477,7 @@ DECLARE
   v_links jsonb;
 BEGIN
   IF p_org_id IS NULL OR (NOT public.user_is_org_member(p_org_id) AND NOT public.user_is_system_admin()) THEN
-    RETURN public.note_folder_reject(coalesce(p_org_id, '00000000-0000-0000-0000-000000000000'::uuid), NULL, 'list', 'FORBIDDEN', 'Not a member of this workspace');
+    RETURN public.note_folder_reject(p_org_id, NULL, 'list', 'FORBIDDEN', 'Not a member of this workspace');
   END IF;
 
   v_general := public.ensure_general_notes_folder(p_org_id);
@@ -523,7 +536,7 @@ BEGIN
   END IF;
 
   IF p_org_id IS NULL OR NOT public.user_is_org_member(p_org_id) THEN
-    RETURN public.note_folder_reject(coalesce(p_org_id, '00000000-0000-0000-0000-000000000000'::uuid), NULL, 'create', 'FORBIDDEN', 'Not a member of this workspace');
+    RETURN public.note_folder_reject(p_org_id, NULL, 'create', 'FORBIDDEN', 'Not a member of this workspace');
   END IF;
   IF length(btrim(coalesce(p_name, ''))) = 0 THEN
     RETURN public.note_folder_reject(p_org_id, NULL, 'create', 'INVALID_NAME', 'Folder name is required');
@@ -598,7 +611,7 @@ BEGIN
 
   SELECT * INTO v_folder FROM public.note_folders WHERE id = p_folder_id;
   IF NOT FOUND THEN
-    RETURN public.note_folder_reject('00000000-0000-0000-0000-000000000000'::uuid, p_folder_id, 'rename', 'NOT_FOUND', 'Folder not found');
+    RETURN public.note_folder_reject(NULL, p_folder_id, 'rename', 'NOT_FOUND', 'Folder not found');
   END IF;
   IF v_folder.is_system THEN
     RETURN public.note_folder_reject(v_folder.org_id, p_folder_id, 'rename', 'SYSTEM_FOLDER', 'General Notes cannot be renamed', to_jsonb(v_folder));
@@ -661,7 +674,7 @@ BEGIN
 
   SELECT * INTO v_folder FROM public.note_folders WHERE id = p_folder_id;
   IF NOT FOUND THEN
-    RETURN public.note_folder_reject('00000000-0000-0000-0000-000000000000'::uuid, p_folder_id, 'move', 'NOT_FOUND', 'Folder not found');
+    RETURN public.note_folder_reject(NULL, p_folder_id, 'move', 'NOT_FOUND', 'Folder not found');
   END IF;
   IF v_folder.is_system THEN
     RETURN public.note_folder_reject(v_folder.org_id, p_folder_id, 'move', 'SYSTEM_FOLDER', 'General Notes cannot be moved', to_jsonb(v_folder));
@@ -745,7 +758,7 @@ BEGIN
 
   SELECT * INTO v_folder FROM public.note_folders WHERE id = p_folder_id;
   IF NOT FOUND THEN
-    RETURN public.note_folder_reject('00000000-0000-0000-0000-000000000000'::uuid, p_folder_id, 'set_links', 'NOT_FOUND', 'Folder not found');
+    RETURN public.note_folder_reject(NULL, p_folder_id, 'set_links', 'NOT_FOUND', 'Folder not found');
   END IF;
   IF v_folder.archived_at IS NOT NULL THEN
     RETURN public.note_folder_reject(v_folder.org_id, p_folder_id, 'set_links', 'ARCHIVED', 'Archived folders cannot change job links', to_jsonb(v_folder));
@@ -783,23 +796,30 @@ BEGIN
            version = version + 1,
            updated_at = now()
      WHERE id = p_folder_id AND version = p_expected_version;
+    GET DIAGNOSTICS v_updated = ROW_COUNT;
+    IF v_updated = 0 THEN
+      RETURN public.note_folder_reject(v_folder.org_id, p_folder_id, 'set_links', 'VERSION_CONFLICT', 'Folder links changed in another session. Reload and try again.', to_jsonb(v_folder));
+    END IF;
+
+    DELETE FROM public.note_folder_job_links WHERE folder_id = p_folder_id;
+    IF coalesce(array_length(p_project_ids, 1), 0) > 0 THEN
+      INSERT INTO public.note_folder_job_links (folder_id, project_id, created_by)
+      SELECT p_folder_id, pid, (SELECT auth.uid())
+      FROM unnest(p_project_ids) AS pid
+      ON CONFLICT DO NOTHING;
+    END IF;
   ELSE
+    -- Return a subfolder to inherited parent links; do not store direct links.
     UPDATE public.note_folders
-       SET version = version + 1,
+       SET link_mode = 'inherited',
+           version = version + 1,
            updated_at = now()
      WHERE id = p_folder_id AND version = p_expected_version;
-  END IF;
-  GET DIAGNOSTICS v_updated = ROW_COUNT;
-  IF v_updated = 0 THEN
-    RETURN public.note_folder_reject(v_folder.org_id, p_folder_id, 'set_links', 'VERSION_CONFLICT', 'Folder links changed in another session. Reload and try again.', to_jsonb(v_folder));
-  END IF;
-
-  DELETE FROM public.note_folder_job_links WHERE folder_id = p_folder_id;
-  IF coalesce(array_length(p_project_ids, 1), 0) > 0 THEN
-    INSERT INTO public.note_folder_job_links (folder_id, project_id, created_by)
-    SELECT p_folder_id, pid, (SELECT auth.uid())
-    FROM unnest(p_project_ids) AS pid
-    ON CONFLICT DO NOTHING;
+    GET DIAGNOSTICS v_updated = ROW_COUNT;
+    IF v_updated = 0 THEN
+      RETURN public.note_folder_reject(v_folder.org_id, p_folder_id, 'set_links', 'VERSION_CONFLICT', 'Folder links changed in another session. Reload and try again.', to_jsonb(v_folder));
+    END IF;
+    DELETE FROM public.note_folder_job_links WHERE folder_id = p_folder_id;
   END IF;
 
   v_result := jsonb_build_object(
@@ -842,7 +862,7 @@ BEGIN
 
   SELECT * INTO v_folder FROM public.note_folders WHERE id = p_folder_id;
   IF NOT FOUND THEN
-    RETURN public.note_folder_reject('00000000-0000-0000-0000-000000000000'::uuid, p_folder_id, 'archive', 'NOT_FOUND', 'Folder not found');
+    RETURN public.note_folder_reject(NULL, p_folder_id, 'archive', 'NOT_FOUND', 'Folder not found');
   END IF;
   IF v_folder.is_system THEN
     RETURN public.note_folder_reject(v_folder.org_id, p_folder_id, 'archive', 'SYSTEM_FOLDER', 'General Notes cannot be archived', to_jsonb(v_folder));
@@ -905,7 +925,7 @@ BEGIN
 
   SELECT * INTO v_folder FROM public.note_folders WHERE id = p_folder_id;
   IF NOT FOUND THEN
-    RETURN public.note_folder_reject('00000000-0000-0000-0000-000000000000'::uuid, p_folder_id, 'restore', 'NOT_FOUND', 'Folder not found');
+    RETURN public.note_folder_reject(NULL, p_folder_id, 'restore', 'NOT_FOUND', 'Folder not found');
   END IF;
   IF NOT public.user_is_org_admin(v_folder.org_id)
      AND NOT public.user_can_manage_note_folder_links(
@@ -955,6 +975,22 @@ JOIN public.note_folders f
   ON f.org_id = p.org_id AND f.is_system = true AND f.archived_at IS NULL
 WHERE pn.project_id = p.id
   AND pn.folder_id IS NULL;
+
+DO $$
+DECLARE
+  leftover integer;
+BEGIN
+  SELECT count(*) INTO leftover
+  FROM public.production_notes
+  WHERE folder_id IS NULL;
+  IF leftover > 0 THEN
+    RAISE EXCEPTION
+      'note folder backfill left % production_notes without folder_id', leftover;
+  END IF;
+END $$;
+
+ALTER TABLE public.production_notes
+  ALTER COLUMN folder_id SET NOT NULL;
 
 INSERT INTO public.note_folder_migrations (org_id, general_notes_id, notes_before, notes_after)
 SELECT
@@ -1027,26 +1063,26 @@ DROP POLICY IF EXISTS production_notes_folder_select ON public.production_notes;
 CREATE POLICY production_notes_folder_select ON public.production_notes
   AS RESTRICTIVE
   FOR SELECT TO authenticated
-  USING (folder_id IS NULL OR public.user_can_access_note_folder(folder_id));
+  USING (public.user_can_access_note_folder(folder_id));
 
 DROP POLICY IF EXISTS production_notes_folder_insert ON public.production_notes;
 CREATE POLICY production_notes_folder_insert ON public.production_notes
   AS RESTRICTIVE
   FOR INSERT TO authenticated
-  WITH CHECK (folder_id IS NULL OR public.user_can_access_note_folder(folder_id));
+  WITH CHECK (public.user_can_access_note_folder(folder_id));
 
 DROP POLICY IF EXISTS production_notes_folder_update ON public.production_notes;
 CREATE POLICY production_notes_folder_update ON public.production_notes
   AS RESTRICTIVE
   FOR UPDATE TO authenticated
-  USING (folder_id IS NULL OR public.user_can_access_note_folder(folder_id))
-  WITH CHECK (folder_id IS NULL OR public.user_can_access_note_folder(folder_id));
+  USING (public.user_can_access_note_folder(folder_id))
+  WITH CHECK (public.user_can_access_note_folder(folder_id));
 
 DROP POLICY IF EXISTS production_notes_folder_delete ON public.production_notes;
 CREATE POLICY production_notes_folder_delete ON public.production_notes
   AS RESTRICTIVE
   FOR DELETE TO authenticated
-  USING (folder_id IS NULL OR public.user_can_access_note_folder(folder_id));
+  USING (public.user_can_access_note_folder(folder_id));
 
 REVOKE ALL ON TABLE public.note_folders FROM PUBLIC, anon;
 REVOKE ALL ON TABLE public.note_folder_job_links FROM PUBLIC, anon;
