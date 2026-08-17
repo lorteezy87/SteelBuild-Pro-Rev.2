@@ -181,7 +181,7 @@ export default function FieldToday() {
           category: "Progress",
           title: "Field photo",
           location: "",
-          taken_date: todayIso,
+          taken_date: todayIsoForQuery,
         };
         let file;
         try {

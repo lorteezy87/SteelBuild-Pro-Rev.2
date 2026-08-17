@@ -59,8 +59,12 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <div
+      <button
+        type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-label={`Alerts${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         className="sbd-btn-ghost"
         style={{
           width: 32, height: 32, borderRadius: 8,
@@ -70,7 +74,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
           cursor: "pointer", position: "relative", transition: "all 0.15s",
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 20 20" fill={open ? "var(--accent)" : "var(--text-muted)"}>
+        <svg width="14" height="14" viewBox="0 0 20 20" fill={open ? "var(--accent)" : "var(--text-muted)"} aria-hidden="true">
           <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
         </svg>
         {unreadCount > 0 && (
@@ -91,10 +95,10 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
             {formatBadge(unreadCount)}
           </span>
         )}
-      </div>
+      </button>
 
       {open && (
-        <div className="sbp-opaque-popout" style={{
+        <div className="sbp-opaque-popout" role="dialog" aria-label="Alerts" style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0,
           width: 320,
           background: "var(--sbd-bg-panel-hi, var(--bg-elevated, #21262D))",
@@ -117,7 +121,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
               )}
             </div>
             {unreadCount > 0 && (
-              <button onClick={onMarkAllRead} style={{
+              <button type="button" onClick={onMarkAllRead} style={{
                 fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)",
                 letterSpacing: "0.08em", background: "none", border: "none",
                 cursor: "pointer", padding: "2px 6px", borderRadius: 4, transition: "background 0.1s",
@@ -181,7 +185,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
 
           {/* Footer */}
           <div style={{ padding: "8px 14px", borderTop: "1px solid var(--divider)", display: "flex", justifyContent: "flex-end" }}>
-            <button onClick={() => { onViewAll(); setOpen(false); }} style={{
+            <button type="button" onClick={() => { onViewAll(); setOpen(false); }} style={{
               fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)",
               letterSpacing: "0.08em", background: "none", border: "none",
               cursor: "pointer", display: "flex", alignItems: "center", gap: 4,

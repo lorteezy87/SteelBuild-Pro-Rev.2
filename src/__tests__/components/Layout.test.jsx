@@ -120,6 +120,15 @@ describe("Layout (smoke)", () => {
     expect(screen.getByText(/skip to main content/i)).toBeInTheDocument();
   });
 
+  it("renders one user-initial badge with an accessible sign-out name", () => {
+    const { container } = renderLayout({
+      authUser: { full_name: "Nicholas Lortz", email: "nick@example.com" },
+    });
+    const signOut = screen.getByRole("button", { name: /Nicholas Lortz.*sign out/i });
+    expect(signOut.querySelectorAll(".sb-dashboard-topbar__avatar")).toHaveLength(1);
+    expect(container.querySelectorAll(".sb-dashboard-topbar__user span")).toHaveLength(1);
+  });
+
   it("hydrates saved appearance preferences when the app shell mounts", async () => {
     renderLayout({
       authUser: {

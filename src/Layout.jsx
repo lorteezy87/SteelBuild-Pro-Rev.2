@@ -285,10 +285,10 @@ export default function Layout({ children, currentPageName }) {
                     type="button"
                     className="sb-dashboard-topbar__user"
                     title={`${userName} · sign out`}
+                    aria-label={`${userName} · sign out`}
                     onClick={logout}
                   >
                     <span className="sb-dashboard-topbar__avatar">{userInitials.slice(0, 2)}</span>
-                    <span>{userInitials.slice(0, 2)}</span>
                     <ChevronDown size={15} strokeWidth={1.8} aria-hidden="true" />
                   </button>
                 </div>
@@ -346,8 +346,10 @@ export default function Layout({ children, currentPageName }) {
               <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
                 <DensityToggle />
 
-                <div
+                <button
+                  type="button"
                   title="All Modules"
+                  aria-label="All modules"
                   onClick={() => setGridOpen((o) => !o)}
                   style={{
                     width: 32, height: 32, borderRadius: 8,
@@ -359,13 +361,13 @@ export default function Layout({ children, currentPageName }) {
                     transition: "all 0.15s",
                   }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
                     <rect x="0" y="0" width="6" height="6" rx="1.5" />
                     <rect x="8" y="0" width="6" height="6" rx="1.5" />
                     <rect x="0" y="8" width="6" height="6" rx="1.5" />
                     <rect x="8" y="8" width="6" height="6" rx="1.5" />
                   </svg>
-                </div>
+                </button>
 
                 {gridOpen && (
                   <Suspense fallback={null}>
