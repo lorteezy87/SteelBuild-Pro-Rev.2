@@ -9,7 +9,7 @@
  * to what the classic Command Center shows.
  */
 
-import { riskScore } from "@/pages/rfis/rfiControlCenter.derive";
+import { riskScore, rfiUrgencyLabel } from "@/pages/rfis/rfiControlCenter.derive";
 import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
 
 // ── Source record shapes (subset of entity fields we actually read) ────────
@@ -128,6 +128,7 @@ export interface PanelRow {
   label: string;
   sub: string;
   tone: PanelTone;
+  badge: string;
   itemType: string;
 }
 
@@ -219,6 +220,7 @@ function rfiTodayPriority(rfi: RfiSource): PanelRow | null {
     label: `${rfi.rfi_number || "RFI"} — ${rfi.title || rfi.subject || "Untitled RFI"}`,
     sub: subParts.join(" · "),
     tone: overdue ? "danger" : isDueToday ? "warn" : "neutral",
+    badge: rfiUrgencyLabel(rfi as Parameters<typeof rfiUrgencyLabel>[0]),
     itemType: "RFI",
   };
 }
@@ -235,6 +237,7 @@ function submittialWaitingRow(sub: SubmittalSource): PanelRow | null {
     label: `${sub.submittal_number || "SUB"} — ${sub.title || "Untitled Submittal"}`,
     sub: subParts.join(" · "),
     tone: dueDays !== null && dueDays < 0 ? "danger" : "neutral",
+    badge: dueDays !== null && dueDays < 0 ? "Overdue" : "Waiting",
     itemType: "SUB",
   };
 }
@@ -248,6 +251,7 @@ function coRiskRow(co: ChangeOrderSource): PanelRow | null {
     label: `${co.co_number || "CO"} — ${co.title || co.description || "Change Order"}`,
     sub: `${co.status} · ${age}d pending`,
     tone: age > 21 ? "danger" : "warn",
+    badge: age > 21 ? "Stale" : "Watch",
     itemType: "CO",
   };
 }
@@ -263,6 +267,7 @@ function deliveryTodayRow(del: DeliverySource): PanelRow | null {
     label: del.delivery_title || del.description || "Delivery",
     sub: isLate ? `Delayed — ${Math.abs(dueDays ?? 0)}d` : "Arriving today",
     tone: isLate ? "danger" : "neutral",
+    badge: isLate ? "Delayed" : "Due Today",
     itemType: "DEL",
   };
 }
@@ -274,6 +279,7 @@ function workPackageBlockedRow(wp: WorkPackageSource): PanelRow | null {
     label: `${wp.wp_number || "WP"} — ${wp.name || "Work Package"}`,
     sub: `${wp.phase || "—"} · On Hold`,
     tone: "danger",
+    badge: "Blocked",
     itemType: "WP",
   };
 }
@@ -513,6 +519,7 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
       label: `${rfi.rfi_number || "RFI"} — ${rfi.title || rfi.subject || "Untitled RFI"}`,
       sub: `${bic} · ${age}d`,
       tone: age > 14 ? "warn" : "neutral",
+      badge: "Waiting",
       itemType: "RFI",
     });
   }
@@ -533,6 +540,7 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
       label: `${rfi.rfi_number || "RFI"} — ${rfi.title || rfi.subject || "Untitled RFI"}`,
       sub: overdue ? `${Math.abs(daysUntilDate(rfi.date_required) ?? 0)}d past due` : `Open ${age}d`,
       tone: overdue ? "danger" : rfi.priority === "Critical" || rfi.priority === "High" ? "warn" : "neutral",
+      badge: rfiUrgencyLabel(rfi as Parameters<typeof rfiUrgencyLabel>[0]),
       itemType: "RFI",
     });
   }
@@ -552,6 +560,17 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
     ...workPackagesToActionItems(workPackages),
   ].sort((a, b) => urgencyOrder(a.urgency) - urgencyOrder(b.urgency));
 
+  const assignedPanelItems = new Set<string>();
+  const takeUnique = (rows: PanelRow[]) => rows.filter((row) => {
+    const key = `${row.itemType}:${row.id}`;
+    if (assignedPanelItems.has(key)) return false;
+    assignedPanelItems.add(key);
+    return true;
+  });
+  const uniqueTodayPriorities = takeUnique(todayPriorities);
+  const uniqueWaitingOn = takeUnique(waitingOn);
+  const uniqueRiskWatchlist = takeUnique(riskWatchlist);
+
   return {
     kpis: {
       openActionItems,
@@ -562,9 +581,9 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
       scheduleHealth: scheduleHealthLabel,
     },
     panels: {
-      todayPriorities: todayPriorities.slice(0, 6),
-      waitingOn: waitingOn.slice(0, 6),
-      riskWatchlist: riskWatchlist.slice(0, 5),
+      todayPriorities: uniqueTodayPriorities.slice(0, 6),
+      waitingOn: uniqueWaitingOn.slice(0, 6),
+      riskWatchlist: uniqueRiskWatchlist.slice(0, 5),
     },
     tones,
     actionItems,

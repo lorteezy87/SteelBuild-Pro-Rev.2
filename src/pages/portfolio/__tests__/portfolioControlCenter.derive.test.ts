@@ -87,6 +87,27 @@ describe("buildPortfolioSummary – KPIs", () => {
     expect(kpis.activeProjects).toBe(2); // p1 + p3
   });
 
+  it("does not count a 100 percent project as active or in active averages", () => {
+    const projects = [
+      makeProject({ id: "done", status: "Active" }),
+      makeProject({ id: "live", status: "Active" }),
+    ];
+    const related: PortfolioRelated = {
+      ...emptyRelated,
+      workPackages: [
+        { project_id: "done", status: "Complete" },
+        { project_id: "live", status: "Complete" },
+        { project_id: "live", status: "Complete" },
+        { project_id: "live", status: "In Progress" },
+        { project_id: "live", status: "Not Started" },
+        { project_id: "live", status: "Not Started" },
+      ],
+    };
+    const { kpis } = buildPortfolioSummary(projects, related);
+    expect(kpis.activeProjects).toBe(1);
+    expect(kpis.avgPctComplete).toBe(40);
+  });
+
   it("computes avgPctComplete from work-package counts", () => {
     const projects = [
       makeProject({ id: "p1" }),
@@ -160,9 +181,10 @@ describe("buildPortfolioSummary – health scoring", () => {
       rfis: [{ project_id: "p1", status: "Open", date_required: "2020-01-01", priority: "Low" }],
     };
     const { allRows } = buildPortfolioSummary(projects, related);
-    // baseline 92 − 9 for the single overdue RFI = 83 (still On Track, ≥ 76).
+    // Raw scoring remains 83, but canonical operational health prevents On Track.
     expect(allRows[0].score).toBe(83);
     expect(allRows[0].overdueRfis).toBe(1);
+    expect(allRows[0].health).toBe("Watch");
   });
 
   it("applies overdue action deductions", () => {

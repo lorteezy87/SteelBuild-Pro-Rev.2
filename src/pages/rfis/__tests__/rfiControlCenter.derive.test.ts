@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { daysUntil, riskScore, ballInCourtSummary, buildRfiSummary } from "../rfiControlCenter.derive";
+import { daysUntil, riskScore, rfiUrgencyLabel, ballInCourtSummary, buildRfiSummary } from "../rfiControlCenter.derive";
 
 // Build an ISO date (YYYY-MM-DD) `offsetDays` from today (UTC midnight basis).
 function isoOffset(offsetDays: number): string {
@@ -23,6 +23,10 @@ describe("daysUntil", () => {
 });
 
 describe("riskScore", () => {
+  it("derives urgency from response timing independently of priority", () => {
+    expect(rfiUrgencyLabel({ status: "Open", priority: "Low", date_required: isoOffset(-128) })).toBe("Critical");
+    expect(rfiUrgencyLabel({ status: "Open", priority: "Critical", date_required: isoOffset(20) })).toBe("Normal");
+  });
   it("ranks an overdue critical RFI above a fresh low-priority one", () => {
     const hot = { status: "Open", priority: "Critical", submitted_date: isoOffset(-30), date_required: isoOffset(-5) };
     const calm = { status: "Open", priority: "Low", submitted_date: isoOffset(-1), date_required: isoOffset(20) };
@@ -79,11 +83,17 @@ describe("buildRfiSummary", () => {
     expect(s.needAction).toBe(3); // Open + Under Review + Incomplete Response
     expect(s.overdue).toBe(1); // #1 only (not closed, date_required in past)
     expect(s.incomplete).toBe(1);
-    expect(s.critical).toBe(1);
+    expect(s.critical).toBe(0);
     expect(s.dueSoon).toBe(1); // #2 due in 2d
     expect(s.responseRate).toBe(40); // 2 of 5 answered/closed
     expect(s.costExposure).toBe(5000);
     expect(s.scheduleExposure).toBe(3);
+  });
+  it("counts a 128-day overdue RFI as critical urgency regardless of priority", () => {
+    const s = buildRfiSummary([
+      { id: "old", status: "Open", priority: "Low", date_required: isoOffset(-128) },
+    ]);
+    expect(s.critical).toBe(1);
   });
   it("returns a riskQueue and workQueue of open RFIs, hottest first", () => {
     const s = buildRfiSummary(rfis);

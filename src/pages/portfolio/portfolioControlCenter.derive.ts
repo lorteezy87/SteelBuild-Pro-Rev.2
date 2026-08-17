@@ -8,6 +8,9 @@
 import { calcContractValue, calcWpProgress, calcDaysToDeadline } from "@/utils/projectKpis";
 import { computeCostCodeTotals } from "@/services/costRollup";
 import { computePortfolioProjectHealth } from "@/services/portfolioHealthScoring";
+import { capHealthScore, deriveOperationalHealth } from "@/lib/projectHealth";
+import type { OperationalHealthLabel } from "@/lib/projectHealth";
+import { partitionFieldTasks } from "@/lib/field/fieldToday";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,6 +25,8 @@ export interface ProjectRecord {
   phase?: string | null;
   /** "Active" | "Complete" | "On Hold" | "Cancelled" (canonical values in DB). */
   status?: string | null;
+  health_status?: string | null;
+  on_hold?: boolean;
   original_contract_value?: number | null;
   target_completion_date?: string | null;
   forecast_completion_date?: string | null;
@@ -38,13 +43,24 @@ export interface PortfolioRelated {
   rfis: Array<{ project_id?: string; status?: string | null; date_required?: string | null; priority?: string | null }>;
   deliveries: Array<{ project_id?: string; status?: string | null; scheduled_date?: string | null; delivery_date?: string | null }>;
   actionItems: Array<{ project_id?: string; status?: string | null; due_date?: string | null }>;
-  scheduleTasks: Array<{ project_id?: string; status?: string | null }>;
+  scheduleTasks: Array<{
+    id?: string;
+    project_id?: string;
+    status?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    parent_task_id?: string | null;
+    is_summary?: boolean | null;
+    percent_complete?: number | null;
+  }>;
+  rfiEvidenceLoaded?: boolean;
+  scheduleEvidenceLoaded?: boolean;
 }
 
 /** One enriched row after rollup. */
 export interface EnrichedProject extends ProjectRecord {
   /** Computed health label: "On Track" | "Watch" | "At Risk" */
-  health: "On Track" | "Watch" | "At Risk";
+  health: OperationalHealthLabel;
   /** 0–100 health score (same algorithm as AIInsights.computeProjectModel). */
   score: number;
   /** From calcContractValue. */
@@ -197,7 +213,10 @@ export function buildPortfolioSummary(
     deliveries,
     actionItems,
     scheduleTasks,
+    rfiEvidenceLoaded = true,
+    scheduleEvidenceLoaded = true,
   } = related;
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   const changeOrdersByProject = bucketByProjectId(changeOrders);
   const workPackagesByProject = bucketByProjectId(workPackages);
@@ -237,8 +256,8 @@ export function buildPortfolioSummary(
     );
 
     const {
-      score,
-      health,
+      score: rawScore,
+      health: scoredHealth,
       reasons,
       openRfis,
       overdueRfis,
@@ -252,6 +271,24 @@ export function buildPortfolioSummary(
       budget,
       committed,
     });
+    const openStatuses = new Set(["Open", "Under Review", "Incomplete Response"]);
+    const criticalOverdueRfis = projRfis.filter((rfi) => {
+      const due = String(rfi.date_required || "").slice(0, 10);
+      return Boolean(due) && openStatuses.has(rfi.status || "Open") && due < todayIso && rfi.priority === "Critical";
+    }).length;
+    const operationalHealth = deriveOperationalHealth({
+      storedStatus: project.health_status || scoredHealth,
+      onHold: project.on_hold || String(project.status || "").toLowerCase() === "on hold",
+      overdueRfis,
+      criticalOverdueRfis,
+      overdueScheduleTasks: partitionFieldTasks(projTasks, todayIso).recovery.length,
+      targetDateOverdue: isOverdue,
+      percentComplete: pctComplete,
+      rfiEvidenceLoaded,
+      scheduleEvidenceLoaded,
+    });
+    const score = capHealthScore(rawScore, operationalHealth);
+    const health = operationalHealth.label;
 
     return {
       ...project,
@@ -267,39 +304,43 @@ export function buildPortfolioSummary(
       totalTons,
       budget,
       committed,
-      reasons,
+      reasons: [...new Set([...operationalHealth.reasons, ...reasons])],
     };
   });
 
   // ── KPIs ──
   const activeRows = allRows.filter(
-    (p) => ACTIVE_STATUSES.has(p.status || "") || (!p.status),
+    (p) =>
+      (ACTIVE_STATUSES.has(p.status || "") || !p.status) &&
+      p.pctComplete < 100 &&
+      String(p.phase || "").toLowerCase() !== "closeout",
   );
   const kpis: PortfolioKpis = {
     totalProjects: allRows.length,
     activeProjects: activeRows.length,
-    atRisk: allRows.filter((p) => p.health === "At Risk").length,
+    atRisk: activeRows.filter((p) => p.health === "At Risk").length,
     totalContractValue: allRows.reduce((sum, p) => sum + p.revisedContract, 0),
-    onSchedule: allRows.filter((p) => p.health === "On Track").length,
+    onSchedule: activeRows.filter((p) => p.health === "On Track").length,
     avgPctComplete:
-      allRows.length > 0
-        ? Math.round(allRows.reduce((sum, p) => sum + p.pctComplete, 0) / allRows.length)
+      activeRows.length > 0
+        ? Math.round(activeRows.reduce((sum, p) => sum + p.pctComplete, 0) / activeRows.length)
         : 0,
   };
 
   // ── Panel queues ──
-  const atRiskQueue = [...allRows]
+  const atRiskQueue = [...activeRows]
     .filter((p) => p.health === "At Risk" || p.health === "Watch")
     .sort((a, b) => a.score - b.score)
     .slice(0, 6)
     .map(toPanelRow);
 
   const topByValue = [...allRows]
+    .filter((p) => p.revisedContract > 0)
     .sort((a, b) => b.revisedContract - a.revisedContract)
     .slice(0, 6)
     .map(toPanelRow);
 
-  const closingSoon = [...allRows]
+  const closingSoon = [...activeRows]
     .filter((p) => {
       const days = daysUntilDate(p.target_completion_date as string | null);
       return days !== null && days >= 0 && days <= 90;
@@ -318,8 +359,9 @@ export function buildPortfolioSummary(
 /**
  * Status tone for the health label — maps to the command kit's PillTone.
  */
-export function healthTone(health: EnrichedProject["health"]): "danger" | "warn" | "good" {
+export function healthTone(health: EnrichedProject["health"]): "danger" | "warn" | "good" | "neutral" {
   if (health === "At Risk") return "danger";
   if (health === "Watch") return "warn";
-  return "good";
+  if (health === "On Track") return "good";
+  return "neutral";
 }

@@ -25,6 +25,12 @@ import {
   submittalPipelineRollupFromSubmittals,
   pendingCOTotal,
 } from "../dashboard/projectMetrics";
+import {
+  buildOperationalHealthIndex,
+  capHealthScore,
+  deriveOperationalHealth,
+} from "@/lib/projectHealth";
+import type { OperationalHealthResult } from "@/lib/projectHealth";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,6 +74,8 @@ export interface DashboardSummary {
   projectName: string;
   healthScore: number;
   healthLabel: string;
+  operationalHealth: OperationalHealthResult;
+  healthReasons: string[];
   /** 4 KPI strip cells */
   kpis: DashKpi[];
   /** Critical alerts panel rows (pre-filtered to non-zero) */
@@ -190,6 +198,9 @@ export function buildDashboardSummary(input: {
   inspections?: Record<string, unknown>[];
   safetyIncidents?: Record<string, unknown>[];
   qualityRecords?: Record<string, unknown>[];
+  todayIso?: string;
+  rfiEvidenceLoaded?: boolean;
+  scheduleEvidenceLoaded?: boolean;
 }): DashboardSummary {
   const {
     project = null,
@@ -209,7 +220,11 @@ export function buildDashboardSummary(input: {
     inspections = [],
     safetyIncidents = [],
     qualityRecords = [],
+    todayIso,
+    rfiEvidenceLoaded = true,
+    scheduleEvidenceLoaded = true,
   } = input;
+  const effectiveToday = todayIso ?? new Date().toISOString().slice(0, 10);
 
   // ── Reuse canonical helpers (numbers match page-owned dashboard exactly) ───────
   const openRfis = openRFICount(rfis as Parameters<typeof openRFICount>[0]);
@@ -234,7 +249,27 @@ export function buildDashboardSummary(input: {
   const openInspections = inspections.filter((i) => !CLOSED_TASK_STATUSES.has(String((i as Record<string, unknown>).status ?? ""))).length;
   const qualityHealth = clamp(100 - Math.min(40, openPunchlist + openInspections), 60, 100);
   const safetyHealth = clamp(100 - Math.min(45, safetyIncidents.length * 8), 55, 100);
-  const healthScore = Math.round((budgetHealth + scheduleHealth + qualityHealth + safetyHealth) / 4);
+  const rawHealthScore = Math.round((budgetHealth + scheduleHealth + qualityHealth + safetyHealth) / 4);
+  const projectId = String(project?.id || "");
+  const operationalHealth = (
+    projectId
+      ? buildOperationalHealthIndex(
+          [project as Record<string, unknown>],
+          rfis,
+          scheduleTasks,
+          effectiveToday,
+          { rfiEvidenceLoaded, scheduleEvidenceLoaded },
+        )[projectId]
+      : undefined
+  ) ?? deriveOperationalHealth({
+    storedStatus: String(project?.health_status || ""),
+    overdueRfis: 0,
+    criticalOverdueRfis: 0,
+    overdueScheduleTasks: 0,
+    rfiEvidenceLoaded,
+    scheduleEvidenceLoaded,
+  });
+  const healthScore = capHealthScore(rawHealthScore, operationalHealth);
 
   const contractValue = revisedContractValue(
     project as Parameters<typeof revisedContractValue>[0],
@@ -397,7 +432,9 @@ export function buildDashboardSummary(input: {
   return {
     projectName: String(project?.name || project?.project_name || "Project Dashboard"),
     healthScore,
-    healthLabel: healthScore >= 85 ? "Good" : healthScore >= 70 ? "Watch" : "At Risk",
+    healthLabel: operationalHealth.label,
+    operationalHealth,
+    healthReasons: operationalHealth.reasons,
     kpis,
     alerts,
     summaryRows,

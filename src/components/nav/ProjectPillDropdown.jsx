@@ -20,6 +20,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
   const { savePatch } = useSaveUserPrefs();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [activeOptionIndex, setActiveOptionIndex] = useState(0);
   const ref = useRef(null);
   const searchRef = useRef(null);
 
@@ -67,6 +68,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
   // Focus search input when dropdown opens
   useEffect(() => {
     if (open && searchRef.current) {
+      setActiveOptionIndex(0);
       setTimeout(() => searchRef.current?.focus(), 50);
     }
     if (!open) setSearch("");
@@ -122,6 +124,20 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
     active: sortAlpha(filtered.filter((p) => p.phase !== "Closeout" && !favorite_project_ids.includes(p.id))),
     closeout: sortAlpha(filtered.filter((p) => p.phase === "Closeout" && !favorite_project_ids.includes(p.id))),
   };
+  const orderedProjects = [...favorites, ...grouped.active, ...grouped.closeout];
+  const handleSearchKeyDown = (event) => {
+    if (!orderedProjects.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveOptionIndex((index) => (index + 1) % orderedProjects.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveOptionIndex((index) => (index - 1 + orderedProjects.length) % orderedProjects.length);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      handleSelect(orderedProjects[Math.min(activeOptionIndex, orderedProjects.length - 1)]);
+    }
+  };
   const toggleFavorite = (projectId) => {
     const next = favorite_project_ids.includes(projectId)
       ? favorite_project_ids.filter((id) => id !== projectId)
@@ -139,9 +155,14 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
       style={{ position: "relative", minWidth: 0 }}
     >
       {/* Pill trigger */}
-      <div
+      <button
+        type="button"
         className="project-pill-trigger"
         onClick={() => setOpen((o) => !o)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls="project-picker-panel"
+        aria-label={`Project picker: ${activeProject?.name || "no project selected"}`}
         style={{
           display: "flex",
           alignItems: "center",
@@ -234,11 +255,14 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
         >
           ▾
         </span>
-      </div>
+      </button>
 
       {/* Dropdown panel — solid opaque (no sbd-card glass) so page content never bleeds through */}
       {open && (
         <div
+          id="project-picker-panel"
+          role="dialog"
+          aria-label="Choose project"
           className="project-pill-dropdown-panel sbp-opaque-popout"
           style={{
             position: compact ? "fixed" : "absolute",
@@ -272,7 +296,13 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
               type="text"
               placeholder="Search projects..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setActiveOptionIndex(0); }}
+              onKeyDown={handleSearchKeyDown}
+              role="combobox"
+              aria-label="Search projects"
+              aria-controls="project-picker-options"
+              aria-expanded={open}
+              aria-activedescendant={orderedProjects[activeOptionIndex]?.id ? `project-option-${orderedProjects[activeOptionIndex].id}` : undefined}
               style={{
                 width: "100%",
                 padding: "7px 10px",
@@ -309,14 +339,17 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
             </div>
           )}
 
-          {/* Active projects */}
+          <div id="project-picker-options" role="listbox" aria-label="Projects">
           {favorites.length > 0 && (
             <div>
-              <div style={{ padding: "6px 8px 4px", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.16em", color: "var(--accent)", textTransform: "uppercase" }}>
-                Favorites ({favorites.length})
+              <div style={{ padding: "6px 8px 4px", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.16em", color: "var(--accent)", textTransform: "uppercase" }}>
+                <span>Favorites ({favorites.length})</span>
+                <button type="button" onClick={() => savePatch({ favorite_project_ids: [] })} style={{ border: 0, background: "transparent", color: "var(--text-muted)", font: "inherit", cursor: "pointer", padding: 3 }}>
+                  Clear favorites
+                </button>
               </div>
               {favorites.map((p) => (
-                <ProjectOption key={p.id} project={p} isActive={activeProject?.id === p.id} openRFIs={rfiCountByProject[p.id] || 0} onClick={() => handleSelect(p)} isFavorite onToggleFavorite={() => toggleFavorite(p.id)} showProjectNumbers={show_project_numbers} />
+                <ProjectOption key={p.id} project={p} isActive={activeProject?.id === p.id} isHighlighted={orderedProjects[activeOptionIndex]?.id === p.id} onHighlight={() => setActiveOptionIndex(orderedProjects.findIndex((item) => item.id === p.id))} openRFIs={rfiCountByProject[p.id] || 0} onClick={() => handleSelect(p)} isFavorite onToggleFavorite={() => toggleFavorite(p.id)} showProjectNumbers={show_project_numbers} />
               ))}
             </div>
           )}
@@ -341,6 +374,8 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
                   key={p.id}
                   project={p}
                   isActive={activeProject?.id === p.id}
+                  isHighlighted={orderedProjects[activeOptionIndex]?.id === p.id}
+                  onHighlight={() => setActiveOptionIndex(orderedProjects.findIndex((item) => item.id === p.id))}
                   openRFIs={rfiCountByProject[p.id] || 0}
                   onClick={() => handleSelect(p)}
                   isFavorite={false}
@@ -371,6 +406,8 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
                   key={p.id}
                   project={p}
                   isActive={activeProject?.id === p.id}
+                  isHighlighted={orderedProjects[activeOptionIndex]?.id === p.id}
+                  onHighlight={() => setActiveOptionIndex(orderedProjects.findIndex((item) => item.id === p.id))}
                   openRFIs={rfiCountByProject[p.id] || 0}
                   onClick={() => handleSelect(p)}
                   isFavorite={false}
@@ -380,6 +417,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
     </div>
@@ -387,7 +425,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
 }
 
 /* ── Individual project row ── */
-function ProjectOption({ project, isActive, openRFIs, onClick, isFavorite, onToggleFavorite, showProjectNumbers }) {
+function ProjectOption({ project, isActive, isHighlighted, onHighlight, openRFIs, onClick, isFavorite, onToggleFavorite, showProjectNumbers }) {
   const [hovered, setHovered] = useState(false);
 
   const healthColor =
@@ -422,8 +460,18 @@ function ProjectOption({ project, isActive, openRFIs, onClick, isFavorite, onTog
 
   return (
     <div
+      id={`project-option-${project.id}`}
+      role="option"
+      aria-selected={isActive}
+      tabIndex={0}
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      onMouseEnter={() => { setHovered(true); onHighlight(); }}
       onMouseLeave={() => setHovered(false)}
       style={{
         padding: "8px 10px",
@@ -431,7 +479,7 @@ function ProjectOption({ project, isActive, openRFIs, onClick, isFavorite, onTog
         alignItems: "center",
         gap: 8,
         cursor: "pointer",
-        background: isActive
+        background: isActive || isHighlighted
           ? "var(--accent-muted)"
           : hovered
             ? "color-mix(in srgb, var(--status-info) 16%, transparent)"

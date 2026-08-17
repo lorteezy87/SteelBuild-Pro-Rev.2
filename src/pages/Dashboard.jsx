@@ -76,7 +76,7 @@ export default function Dashboard() {
     [pid, liveProjectIds],
   );
 
-  const { data: allRFIs = [], isLoading: rfisLoading } = useQuery({
+  const { data: allRFIs = [], isLoading: rfisLoading, isSuccess: rfisSuccess } = useQuery({
     queryKey: ["rfis-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.RFI),
     refetchInterval: refetchMs,
@@ -114,7 +114,7 @@ export default function Dashboard() {
   // project portfolio view. Tiny payload —
   // one row per task, a few date columns — so global fetch is cheaper than
   // per-project drilldown round-trips.
-  const { data: allScheduleTasks = [] } = useQuery({
+  const { data: allScheduleTasks = [], isSuccess: scheduleTasksSuccess } = useQuery({
     queryKey: ["schedule-tasks-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.ScheduleTask, "-start_date"),
     staleTime: 60 * 1000,
@@ -246,10 +246,12 @@ export default function Dashboard() {
       deliveries: scopePortfolioRows(allDeliveries),
       actionItems: scopePortfolioRows(allActionItems),
       scheduleTasks: scopePortfolioRows(allScheduleTasks),
+      rfiEvidenceLoaded: rfisSuccess,
+      scheduleEvidenceLoaded: scheduleTasksSuccess,
     }),
     [
       allCOs, allWPs, allCodes, allRFIs, allDeliveries,
-      allActionItems, allScheduleTasks, scopePortfolioRows,
+      allActionItems, allScheduleTasks, scopePortfolioRows, rfisSuccess, scheduleTasksSuccess,
     ],
   );
 
@@ -325,6 +327,9 @@ export default function Dashboard() {
             inspections={inspections}
             safetyIncidents={safetyIncidents}
             qualityRecords={qualityRecords}
+            todayIso={new Date().toISOString().slice(0, 10)}
+            rfiEvidenceLoaded={rfisSuccess}
+            scheduleEvidenceLoaded={scheduleTasksSuccess}
             onNavigate={onNavigateDash}
           />
         </Suspense>

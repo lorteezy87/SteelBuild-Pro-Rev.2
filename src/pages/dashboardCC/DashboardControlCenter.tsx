@@ -59,6 +59,9 @@ interface DashboardControlCenterProps {
   inspections?: Record<string, unknown>[];
   safetyIncidents?: Record<string, unknown>[];
   qualityRecords?: Record<string, unknown>[];
+  todayIso?: string;
+  rfiEvidenceLoaded?: boolean;
+  scheduleEvidenceLoaded?: boolean;
   /** Navigation handler — same signature as in ProjectDashboard */
   onNavigate?: (target: string, opts?: Record<string, unknown>) => void;
 }
@@ -211,6 +214,9 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
     inspections = [],
     safetyIncidents = [],
     qualityRecords = [],
+    todayIso,
+    rfiEvidenceLoaded = true,
+    scheduleEvidenceLoaded = true,
     onNavigate,
   } = props;
 
@@ -238,18 +244,26 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
         inspections,
         safetyIncidents,
         qualityRecords,
+        todayIso,
+        rfiEvidenceLoaded,
+        scheduleEvidenceLoaded,
       }),
      
     [
       project, rfis, cos, codes, wps, deliveries, actionItems,
       expenses, submittals, drawings, sovItems, scheduleTasks,
       drawingActivity, punchlistItems, inspections, safetyIncidents, qualityRecords,
+      todayIso, rfiEvidenceLoaded, scheduleEvidenceLoaded,
     ],
   );
 
   // Hero chips
   const chips = [
-    { label: `Health: ${s.healthLabel}`, tone: s.healthScore >= 85 ? ("good" as const) : s.healthScore >= 70 ? ("warn" as const) : ("danger" as const) },
+    {
+      label: `Health: ${s.healthLabel}${s.operationalHealth.partial ? " (partial)" : ""}`,
+      tone: s.healthLabel === "On Track" ? ("good" as const) : s.healthLabel === "Watch" ? ("warn" as const) : s.healthLabel === "At Risk" ? ("danger" as const) : ("neutral" as const),
+    },
+    ...(s.healthReasons[0] ? [{ label: s.healthReasons[0], tone: "warn" as const }] : []),
     { label: `${s.openRfis} Open RFIs` },
     { label: `${s.schedulePct}% Complete` },
   ];

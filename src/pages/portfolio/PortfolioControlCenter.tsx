@@ -38,7 +38,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function fmtMoney(n: number): string {
-  if (!n) return "$0";
+  if (!n) return "Not entered";
   if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
   return `$${n.toLocaleString()}`;
@@ -52,7 +52,7 @@ function fmtDate(iso: string | null | undefined): string {
 }
 
 function daysLabel(days: number | null, isOverdue: boolean): string {
-  if (days === null) return "No date";
+  if (days === null) return "Not scheduled";
   if (isOverdue) return `${Math.abs(days)}d overdue`;
   return `${days}d`;
 }
@@ -116,13 +116,6 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
       return matchesHealth && matchesSearch;
     });
   }, [summary.allRows, search, healthFilter]);
-
-  // Hero chips
-  const heroChips = [
-    { label: `${summary.kpis.totalProjects} Projects` },
-    { label: `${summary.kpis.activeProjects} Active`, tone: "good" as const },
-    { label: `${summary.kpis.atRisk} At Risk` },
-  ];
 
   // KPI strip
   const kpiCells: KpiCellDef[] = [
@@ -232,7 +225,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
       header: "Target Completion",
       render: (p) => {
         if (!p.target_completion_date) {
-          return <span className="cmd-row__meta">No date</span>;
+          return <span className="cmd-row__meta">Not scheduled</span>;
         }
         if (p.isOverdue) {
           return (
@@ -268,12 +261,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
         <div style={{ minWidth: 0 }}>
           <div
             className="cmd-row__num"
-            style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              maxWidth: 200,
-            }}
+            style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
           >
             {row.name}
           </div>
@@ -306,21 +294,16 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
         title="Portfolio Overview"
         subtitle="Org-wide project health, contract value, schedule pressure, and steel-production progress."
         // No projectName — this is org-wide, not project-scoped
-        chips={heroChips}
         photoSrc={photoFor("PortfolioHub") ?? undefined}
-        stats={[
-          { value: fmtMoney(summary.kpis.totalContractValue), label: "Portfolio Value" },
-          { value: `${summary.kpis.avgPctComplete}%`, label: "Avg Complete" },
-        ]}
       />
 
       <KpiStrip cells={kpiCells} />
 
       <div className="cmd-panels">
         {/* Panel 1 — At-Risk Projects (worst health score first) */}
-        <DecisionPanel title="At-Risk Projects">
+        <DecisionPanel title="Projects Needing Attention">
           {summary.atRiskQueue.length === 0 ? (
-            <div className="cmd-row__meta">No projects currently at risk.</div>
+            <div className="cmd-row__meta">No Watch or At Risk projects. Review the project register below.</div>
           ) : (
             summary.atRiskQueue.map((row) =>
               renderPanelRow(row, byId.get(row.id)),
@@ -331,7 +314,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
         {/* Panel 2 — Top by Contract Value */}
         <DecisionPanel title="Top by Contract Value">
           {summary.topByValue.length === 0 ? (
-            <div className="cmd-row__meta">No projects.</div>
+            <div className="cmd-row__meta">No contract values entered. Add contract values in project details.</div>
           ) : (
             summary.topByValue.map((row) => (
               <div
@@ -342,12 +325,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
                 <div style={{ minWidth: 0 }}>
                   <div
                     className="cmd-row__num"
-                    style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      maxWidth: 200,
-                    }}
+                    style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
                   >
                     {row.name}
                   </div>
@@ -370,7 +348,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
         {/* Panel 3 — Closing Soon (target date in next 90 days) */}
         <DecisionPanel title="Closing Soon">
           {summary.closingSoon.length === 0 ? (
-            <div className="cmd-row__meta">No projects closing within 90 days.</div>
+            <div className="cmd-row__meta">No target dates within 90 days. Add dates in project details to populate this view.</div>
           ) : (
             summary.closingSoon.map((row) => (
               <div
@@ -381,12 +359,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
                 <div style={{ minWidth: 0 }}>
                   <div
                     className="cmd-row__num"
-                    style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      maxWidth: 180,
-                    }}
+                    style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
                   >
                     {row.name}
                   </div>
@@ -442,7 +415,6 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
     </div>
   );
 }
-
 
 
 

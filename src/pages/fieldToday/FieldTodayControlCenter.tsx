@@ -163,10 +163,8 @@ function scrollToTable() {
 
 const STATUS_CHIPS = [
   { label: "All",          value: "all" },
-  { label: "Overdue",      value: "overdue" },
   { label: "Due Today",    value: "due-today" },
   { label: "Active",       value: "active" },
-  { label: "Unscheduled",  value: "unscheduled" },
 ];
 
 // ── Inline progress buttons (thumb-friendly, inline style only) ───────────────
@@ -257,7 +255,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
   // ── Hero summary chips ──
   const chips = [
     { label: `${s.kpis.todaysTasks} Tasks` },
-    { label: `${s.kpis.overdueTasks} Overdue`, tone: s.kpis.overdueTasks ? "danger" as const : "neutral" as const },
+    { label: `${s.kpis.recoveryTasks} Recovery`, tone: s.kpis.recoveryTasks ? "danger" as const : "neutral" as const },
     { label: `${s.kpis.photosToday} Photos Today` },
   ];
 
@@ -272,22 +270,22 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
     {
       label: "Today's Tasks",
       value: s.kpis.todaysTasks,
-      sublabel: "scheduled",
+      sublabel: "due or active today",
       tone: "neutral" as KpiTone,
       Icon: CalendarCheck,
     },
     {
-      label: "Overdue",
-      value: s.kpis.overdueTasks,
-      sublabel: "tasks",
-      tone: (s.kpis.overdueTasks > 0 ? "danger" : "neutral") as KpiTone,
+      label: "Recovery",
+      value: s.kpis.recoveryTasks,
+      sublabel: "overdue tasks",
+      tone: (s.kpis.recoveryTasks > 0 ? "danger" : "neutral") as KpiTone,
       Icon: AlertTriangle,
     },
     {
-      label: "Completed",
-      value: s.kpis.completedToday,
-      sublabel: "today",
-      tone: (s.kpis.completedToday > 0 ? "good" : "neutral") as KpiTone,
+      label: "Completed Today",
+      value: "—",
+      sublabel: "completion time unavailable",
+      tone: "neutral" as KpiTone,
       Icon: CheckCircle2,
     },
     {
@@ -561,7 +559,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
                       {row?.activity ?? String(task.task_name || task.name || "(task)")}
                     </div>
                     <div className="cmd-row__meta">
-                      {row?.location || "No location"} · {row?.time ?? "TBD"}
+                      {row?.location || "Location not provided"} · {row?.time ?? "TBD"}
                     </div>
                     {/* Mini progress bar */}
                     <div
@@ -610,7 +608,38 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           )}
         </DecisionPanel>
 
-        {/* Panel 2: Crew Status — task completion ring + open punch items */}
+        {/* Panel 2: Recovery Backlog — explicitly separate from today's plan */}
+        <DecisionPanel title="Recovery Backlog">
+          {isLoading ? (
+            <div className="cmd-row__meta">Loading recovery work…</div>
+          ) : s.recoveryQueue.length === 0 ? (
+            <div className="cmd-row__meta">No overdue schedule tasks.</div>
+          ) : (
+            s.recoveryQueue.map((task) => {
+              const taskId = String(task.id || "");
+              return (
+                <div className="cmd-row" key={taskId}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="cmd-row__num" style={{ fontSize: 13 }}>
+                      {String(task.task_name || task.name || "(task)")}
+                    </div>
+                    <div className="cmd-row__meta">
+                      {String(task.location || task.area || "Location not provided")} · {String(task.end_date || "Due date unavailable")}
+                    </div>
+                  </div>
+                  <Pill tone="danger">OVERDUE</Pill>
+                </div>
+              );
+            })
+          )}
+          {(s.planningGapCount > 0 || s.upcomingCount > 0) && (
+            <div className="cmd-row__meta" style={{ marginTop: 8 }}>
+              {s.planningGapCount} planning gap{s.planningGapCount === 1 ? "" : "s"} · {s.upcomingCount} starting within 7 days
+            </div>
+          )}
+        </DecisionPanel>
+
+        {/* Panel 3: Crew Status — today's average progress + open punch items */}
         <DecisionPanel
           title="Crew Status"
           onViewAll={() => {
@@ -618,7 +647,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
             scrollToTable();
           }}
         >
-          {/* Completion ring (inline SVG, real value: taskCompletionPct) */}
+          {/* Progress ring (inline SVG, real value: today's average progress) */}
           <div
             style={{
               display: "flex",
@@ -629,7 +658,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
               marginBottom: 8,
             }}
           >
-            <CompletionRing pct={s.taskCompletionPct} />
+            <CompletionRing pct={s.todayProgressPct} />
             <div>
               <div
                 style={{
@@ -640,13 +669,13 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
                   lineHeight: 1,
                 }}
               >
-                {s.taskCompletionPct}%
+                {s.todayProgressPct}%
               </div>
               <div className="cmd-row__meta" style={{ marginTop: 2 }}>
-                Task completion today
+                Plan progress
               </div>
               <div className="cmd-row__meta" style={{ marginTop: 2 }}>
-                {s.kpis.completedToday} of {s.kpis.todaysTasks} done
+                Average across {s.kpis.todaysTasks} task{s.kpis.todaysTasks === 1 ? "" : "s"}
               </div>
             </div>
           </div>
@@ -672,7 +701,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
               <div className="cmd-row" key={p.id}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div className="cmd-row__num" style={{ fontSize: 12 }}>{p.title}</div>
-                  <div className="cmd-row__meta">{p.location || "No location"}</div>
+                  <div className="cmd-row__meta">{p.location || "Location not provided"}</div>
                 </div>
                 {p.priority && (
                   <Pill
@@ -692,7 +721,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           )}
         </DecisionPanel>
 
-        {/* Panel 3: Daily Photos */}
+        {/* Panel 4: Daily Photos */}
         <DecisionPanel
           title="Daily Photos"
           onViewAll={() => {

@@ -112,7 +112,7 @@ function PanelItem({ row }: { row: PanelRow }) {
         <div className="cmd-row__meta">{row.sub}</div>
       </div>
       <Pill tone={panelToneToPillTone(row.tone)}>
-        {row.tone === "danger" ? "Urgent" : row.tone === "warn" ? "At Risk" : "Pending"}
+        {row.badge}
       </Pill>
     </div>
   );

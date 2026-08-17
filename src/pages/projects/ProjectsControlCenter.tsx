@@ -33,6 +33,7 @@ import {
   type WorkPackageRecord,
   type RfiRecord,
   type ChangeOrderRecord,
+  type ScheduleTaskRecord,
   type AtRiskEntry,
   type ClosingSoonEntry,
   type RecentlyUpdatedEntry,
@@ -99,6 +100,9 @@ export interface ProjectsControlCenterProps {
   workPackages?: WorkPackageRecord[];
   rfis?: RfiRecord[];
   changeOrders?: ChangeOrderRecord[];
+  scheduleTasks?: ScheduleTaskRecord[];
+  todayIso?: string;
+  evidence?: { rfiEvidenceLoaded: boolean; scheduleEvidenceLoaded: boolean };
 
   search: string;
   onSearch: (v: string) => void;
@@ -129,7 +133,9 @@ const HEALTH_VALUES = ["On Track", "Watch", "At Risk"];
 // ── Component ─────────────────────────────────────────────────────
 export default function ProjectsControlCenter(props: ProjectsControlCenterProps) {
   const {
-    projects, workPackages = [], rfis = [], changeOrders = [],
+    projects, workPackages = [], rfis = [], changeOrders = [], scheduleTasks = [],
+    todayIso = new Date().toISOString().slice(0, 10),
+    evidence = { rfiEvidenceLoaded: true, scheduleEvidenceLoaded: true },
     search, onSearch,
     phaseFilter, onPhaseFilter,
     healthFilter, onHealthFilter,
@@ -140,8 +146,16 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
   useCommandSkin();
 
   const s = useMemo(
-    () => buildProjectsSummary(projects, workPackages, rfis, changeOrders),
-    [projects, workPackages, rfis, changeOrders]
+    () => buildProjectsSummary(
+      projects,
+      workPackages,
+      rfis,
+      changeOrders,
+      scheduleTasks,
+      todayIso,
+      evidence,
+    ),
+    [projects, workPackages, rfis, changeOrders, scheduleTasks, todayIso, evidence]
   );
 
   // ── Hero chips ────────────────────────────────────────────────
@@ -248,12 +262,21 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
     {
       key: "health",
       header: "Health",
-      render: (p) => (
-        <Pill tone={healthTone(p.health_status)}>
-          {p.health_status || "—"}
-          {p.on_hold ? " · ON HOLD" : ""}
-        </Pill>
-      ),
+      render: (p) => {
+        const health = s.healthByProjectId[p.id];
+        return (
+          <div>
+            <Pill tone={healthTone(health?.label)}>
+              {health?.label || "Unknown"}{health?.partial ? " · PARTIAL" : ""}
+            </Pill>
+            {health?.reasons[0] && (
+              <div className="cmd-row__meta" title={health.reasons.join("; ")}>
+                {health.reasons[0]}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "target",

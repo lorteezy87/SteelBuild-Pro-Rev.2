@@ -111,6 +111,28 @@ describe("buildCommandCenterSummary", () => {
     expect(ids).not.toContain("r2");
   });
 
+  it("assigns an RFI to only one summary panel", () => {
+    const summary = buildCommandCenterSummary(makeSources({
+      rfis: [{
+        id: "r1",
+        rfi_number: "001",
+        title: "Late at engineer",
+        status: "Open",
+        ball_in_court: "EOR",
+        priority: "High",
+        submitted_date: dateOffset(-40),
+        date_required: dateOffset(-10),
+      }],
+    }));
+    const appearances = [
+      ...summary.panels.todayPriorities,
+      ...summary.panels.waitingOn,
+      ...summary.panels.riskWatchlist,
+    ].filter((row) => row.id === "r1");
+    expect(appearances).toHaveLength(1);
+    expect(appearances[0].badge).toBe("Overdue");
+  });
+
   it("produces action items sorted urgency-first", () => {
     const rfis = [
       { id: "r-normal", rfi_number: "001", title: "Normal", status: "Open" },
