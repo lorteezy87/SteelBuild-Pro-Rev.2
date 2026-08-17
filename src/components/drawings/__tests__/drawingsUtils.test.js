@@ -65,6 +65,18 @@ describe("computeStatsFromSubmittals overdue authority", () => {
     expect(stats.overdue).toBe(0);
   });
 
+  it("ignores superseded sheet due dates when resolving an active package", () => {
+    const stats = computeStatsFromSubmittals(
+      [
+        { id: "d-old", drawing_set_id: "set-1", due_date: PAST, stage: "OFA", is_superseded: true },
+        { id: "d-current", drawing_set_id: "set-1", due_date: FUTURE, stage: "OFA" },
+      ],
+      drawingSets,
+      [],
+    );
+    expect(stats.overdue).toBe(0);
+  });
+
   it("matches the Hub's overdue drawing-set count while keeping unlinked submittals separate", () => {
     const linked = { id: "sub-1", drawing_set_ids: ["set-1"], status: "Under Review", required_date: PAST };
     const unlinked = { id: "sub-2", drawing_set_ids: [], status: "Under Review", required_date: PAST };

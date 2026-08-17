@@ -270,7 +270,11 @@ export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], sub
     const stage = derivedSetStage(pkg.submittals, pkg.sheets);
     if (stage === "Released") released++;
     else if (isStageInReview(stage)) inReview++;
-    if (resolveDrawingPackageDue(pkg, useWorkdays).due.overdue) overdue++;
+    const activeDuePackage = {
+      ...pkg,
+      sheets: pkg.sheets.filter((drawing) => !drawing?.is_deleted && !drawing?.is_superseded),
+    };
+    if (resolveDrawingPackageDue(activeDuePackage, useWorkdays).due.overdue) overdue++;
     if (pkg.sheets.some((d) => d.priority_flag)) priority++;
   }
 
