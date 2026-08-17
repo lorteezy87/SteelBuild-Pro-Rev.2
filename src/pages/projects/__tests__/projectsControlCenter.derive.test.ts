@@ -84,6 +84,35 @@ describe("effectivePct", () => {
 // ── buildProjectsSummary KPIs ─────────────────────────────────────
 
 describe("buildProjectsSummary – KPIs", () => {
+  it("moves stored On Track projects with five overdue leaf tasks into At Risk", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const summary = buildProjectsSummary(
+      [makeProject({ id: "p1", health_status: "On Track" })],
+      [],
+      [],
+      [],
+      Array.from({ length: 5 }, (_, i) => ({
+        id: `t${i}`,
+        project_id: "p1",
+        end_date: yesterday,
+        percent_complete: 0,
+      })),
+      today,
+      { rfiEvidenceLoaded: true, scheduleEvidenceLoaded: true },
+    );
+    expect(summary.kpis.atRisk).toBe(1);
+    expect(summary.atRiskQueue[0].project.id).toBe("p1");
+    expect(summary.healthByProjectId.p1.label).toBe("At Risk");
+  });
+
+  it("does not count a 100 percent project as active", () => {
+    const summary = buildProjectsSummary([
+      makeProject({ id: "p1", scope_complete_pct_override: 100, health_status: "On Track" }),
+    ]);
+    expect(summary.kpis.activeProjects).toBe(0);
+  });
+
   it("counts total + active + at-risk + on-hold correctly", () => {
     const projects: ProjectRecord[] = [
       makeProject({ id: "p1", health_status: "At Risk" }),

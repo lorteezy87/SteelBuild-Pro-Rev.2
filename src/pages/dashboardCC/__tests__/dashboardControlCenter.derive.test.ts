@@ -34,6 +34,20 @@ function makeProject(overrides: Record<string, unknown> = {}) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("buildDashboardSummary", () => {
+  it("caps project health when overdue RFIs contradict a Good score", () => {
+    const s = buildDashboardSummary({
+      project: { id: "p1", health_status: "On Track" },
+      rfis: [{ project_id: "p1", status: "Open", date_required: YESTERDAY }],
+      scheduleTasks: [],
+      todayIso: new Date().toISOString().slice(0, 10),
+      rfiEvidenceLoaded: true,
+      scheduleEvidenceLoaded: true,
+    });
+    expect(s.operationalHealth.label).toBe("Watch");
+    expect(s.healthScore).toBeLessThanOrEqual(84);
+    expect(s.healthReasons).toContain("1 overdue RFI");
+  });
+
   it("returns stable shape on empty input", () => {
     const s = buildDashboardSummary({});
     expect(s.projectName).toBe("Project Dashboard");

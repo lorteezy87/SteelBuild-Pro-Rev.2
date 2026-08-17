@@ -13,6 +13,7 @@ import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
+import { buildOperationalHealthIndex } from "@/lib/projectHealth";
 
 export default function Projects() {
   const qc         = useQueryClient();
@@ -47,9 +48,13 @@ export default function Projects() {
     },
     staleTime: 5 * 60 * 1000,
   });
-  const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => entities.WorkPackage.list() });
-  const { data: rawRfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => entities.RFI.list() });
-  const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => entities.ChangeOrder.list() });
+  const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => entities.WorkPackage.listAll() });
+  const { data: rawRfis = [], isSuccess: rfisSuccess } = useQuery({ queryKey: ["rfis", "all"], queryFn: () => entities.RFI.listAll() });
+  const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => entities.ChangeOrder.listAll() });
+  const { data: rawScheduleTasks = [], isSuccess: scheduleTasksSuccess } = useQuery({
+    queryKey: ["schedule-tasks-all"],
+    queryFn: () => entities.ScheduleTask.listAll("start_date"),
+  });
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
   useAutoOpenEdit(projects, setDetailProject, { enabled: !projectsLoading, param: "recordId" });
@@ -64,6 +69,19 @@ export default function Projects() {
   const changeOrders = useMemo(
     () => rawChangeOrders.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
     [liveProjectIds, rawChangeOrders],
+  );
+  const scheduleTasks = useMemo(
+    () => rawScheduleTasks.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
+    [liveProjectIds, rawScheduleTasks],
+  );
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const evidence = useMemo(
+    () => ({ rfiEvidenceLoaded: rfisSuccess, scheduleEvidenceLoaded: scheduleTasksSuccess }),
+    [rfisSuccess, scheduleTasksSuccess],
+  );
+  const healthByProjectId = useMemo(
+    () => buildOperationalHealthIndex(projects, rfis, scheduleTasks, todayIso, evidence),
+    [projects, rfis, scheduleTasks, todayIso, evidence],
   );
   const { plan } = usePlan();
   const projectLimit = plan.limits.projects;
@@ -106,9 +124,9 @@ export default function Projects() {
     const matchSearch = !q || p.name?.toLowerCase().includes(q) || p.project_number?.toLowerCase().includes(q) || p.client?.toLowerCase().includes(q) || p.general_contractor?.toLowerCase().includes(q);
     return matchSearch
       && (phaseFilter === "all"   || p.phase === phaseFilter)
-      && (healthFilter === "all"  || p.health_status === healthFilter)
+      && (healthFilter === "all"  || healthByProjectId[p.id]?.label === healthFilter)
       && (jobTypeFilter === "all" || p.job_type === jobTypeFilter);
-  }), [projects, search, phaseFilter, healthFilter, jobTypeFilter]);
+  }), [projects, search, phaseFilter, healthFilter, jobTypeFilter, healthByProjectId]);
 
   const canCreate = !atProjectLimit;
 
@@ -119,6 +137,9 @@ export default function Projects() {
         workPackages={workPackages}
         rfis={rfis}
         changeOrders={changeOrders}
+        scheduleTasks={scheduleTasks}
+        todayIso={todayIso}
+        evidence={evidence}
         search={search}
         onSearch={setSearch}
         phaseFilter={phaseFilter}

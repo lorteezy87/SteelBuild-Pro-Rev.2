@@ -77,6 +77,41 @@ describe("deriveOperationalHealth", () => {
 });
 
 describe("buildOperationalHealthIndex", () => {
+  it("does not leave a past-due incomplete project On Track", () => {
+    const index = buildOperationalHealthIndex(
+      [{
+        id: "p1",
+        health_status: "On Track",
+        target_completion_date: "2026-08-01",
+        scope_complete_pct_override: 75,
+      }],
+      [],
+      [],
+      TODAY,
+      { rfiEvidenceLoaded: true, scheduleEvidenceLoaded: true },
+    );
+    expect(index.p1).toMatchObject({
+      label: "At Risk",
+      reasons: ["Target date overdue at 75% complete"],
+    });
+  });
+
+  it("does not call a completed past-date project at risk", () => {
+    const index = buildOperationalHealthIndex(
+      [{
+        id: "p1",
+        health_status: "On Track",
+        target_completion_date: "2026-08-01",
+        scope_complete_pct_override: 100,
+      }],
+      [],
+      [],
+      TODAY,
+      { rfiEvidenceLoaded: true, scheduleEvidenceLoaded: true },
+    );
+    expect(index.p1.label).toBe("On Track");
+  });
+
   it("uses visible project evidence and excludes parent schedule rows", () => {
     const index = buildOperationalHealthIndex(
       [{ id: "p1", health_status: "On Track" }, { id: "p2", health_status: "On Track" }],

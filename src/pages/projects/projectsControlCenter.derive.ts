@@ -9,6 +9,8 @@ import {
   calcDaysToDeadline,
   calcRfiHealth,
 } from "@/utils/projectKpis";
+import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import type { OperationalHealthResult } from "@/lib/projectHealth";
 
 // ──────────────────────────────────────────────────────────────────
 // Types (mirror what Projects.jsx actually reads from the DB row)
@@ -59,6 +61,12 @@ export interface ChangeOrderRecord {
   [key: string]: unknown;
 }
 
+export interface ScheduleTaskRecord {
+  id?: string;
+  project_id?: string | null;
+  [key: string]: unknown;
+}
+
 // ──────────────────────────────────────────────────────────────────
 // KPI summary (portfolio-level, active projects only — no on-hold)
 // ──────────────────────────────────────────────────────────────────
@@ -100,6 +108,7 @@ export interface RecentlyUpdatedEntry {
 
 export interface ProjectsSummary {
   kpis: ProjectsKpiSummary;
+  healthByProjectId: Record<string, OperationalHealthResult>;
   atRiskQueue: AtRiskEntry[];
   closingSoonQueue: ClosingSoonEntry[];
   recentlyUpdatedQueue: RecentlyUpdatedEntry[];
@@ -127,26 +136,54 @@ export function buildProjectsSummary(
   projects: ProjectRecord[],
   workPackages: WorkPackageRecord[] = [],
   rfis: RfiRecord[] = [],
-  changeOrders: ChangeOrderRecord[] = []
+  changeOrders: ChangeOrderRecord[] = [],
+  scheduleTasks: ScheduleTaskRecord[] = [],
+  todayIso: string = new Date().toISOString().slice(0, 10),
+  evidence: { rfiEvidenceLoaded: boolean; scheduleEvidenceLoaded: boolean } = {
+    rfiEvidenceLoaded: true,
+    scheduleEvidenceLoaded: true,
+  },
 ): ProjectsSummary {
   // Filter child entities to those within the visible project set
   const projectIds = new Set(projects.map((p) => p.id));
   const visibleWPs = workPackages.filter((w) => w.project_id && projectIds.has(w.project_id));
   const visibleRfis = rfis.filter((r) => r.project_id && projectIds.has(r.project_id));
   const visibleCOs = changeOrders.filter((c) => c.project_id && projectIds.has(c.project_id));
+  const visibleTasks = scheduleTasks.filter(
+    (task) => task.project_id && projectIds.has(task.project_id),
+  );
+  const healthByProjectId = buildOperationalHealthIndex(
+    projects,
+    visibleRfis,
+    visibleTasks,
+    todayIso,
+    evidence,
+  );
 
-  // KPI rollup excludes on-hold projects (same rule as classic page)
-  const activeProjects = projects.filter((p) => !p.on_hold);
+  const nonHoldProjects = projects.filter((p) => !p.on_hold);
+  const isComplete = (project: ProjectRecord) => {
+    const projectWPs = visibleWPs.filter((wp) => wp.project_id === project.id);
+    const lifecycle = String(project.status || project.phase || "").toLowerCase();
+    return (
+      lifecycle === "complete" ||
+      lifecycle === "completed" ||
+      lifecycle === "closeout" ||
+      effectivePct(project, projectWPs) >= 100
+    );
+  };
+  const activeProjects = nonHoldProjects.filter((project) => !isComplete(project));
   const activeIds = new Set(activeProjects.map((p) => p.id));
   const kpiRfis = visibleRfis.filter((r) => r.project_id && activeIds.has(r.project_id));
   const kpiCOs  = visibleCOs.filter((c) => c.project_id && activeIds.has(c.project_id));
 
-  const atRiskProjects = activeProjects.filter((p) => p.health_status === "At Risk");
-  const onHoldCount    = projects.length - activeProjects.length;
-  const totalVal       = activeProjects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
+  const atRiskProjects = activeProjects.filter(
+    (project) => healthByProjectId[project.id]?.label === "At Risk",
+  );
+  const onHoldCount    = projects.filter((project) => project.on_hold).length;
+  const totalVal       = nonHoldProjects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
 
   // Average % complete over active, non-closeout projects
-  const progressable = activeProjects.filter((p) => p.phase !== "Closeout");
+  const progressable = activeProjects;
   const avgPctComplete = progressable.length
     ? Math.round(
         progressable.reduce((sum, p) => {
@@ -166,7 +203,7 @@ export function buildProjectsSummary(
 
   const kpis: ProjectsKpiSummary = {
     totalProjects: projects.length,
-    activeProjects: activeProjects.filter((p) => p.phase !== "Closeout").length,
+    activeProjects: activeProjects.length,
     atRisk: atRiskProjects.length,
     onHold: onHoldCount,
     totalContractValue: totalVal,
@@ -199,7 +236,7 @@ export function buildProjectsSummary(
   // ── Panel 2: Closing Soon (active, not closeout, target date present) ──
   const now = Date.now();
   const closingSoonQueue: ClosingSoonEntry[] = activeProjects
-    .filter((p) => p.phase !== "Closeout" && p.target_completion_date)
+    .filter((p) => p.target_completion_date)
     .map((p) => {
       const daysLeft = Math.ceil(
         (new Date(p.target_completion_date!).getTime() - now) / 86400000
@@ -226,5 +263,5 @@ export function buildProjectsSummary(
       return { project: p, pctComplete: effectivePct(p, pWPs), updatedAt: p.updated_at ?? null };
     });
 
-  return { kpis, atRiskQueue, closingSoonQueue, recentlyUpdatedQueue };
+  return { kpis, healthByProjectId, atRiskQueue, closingSoonQueue, recentlyUpdatedQueue };
 }
