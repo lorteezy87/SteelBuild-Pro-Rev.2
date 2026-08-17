@@ -21,6 +21,7 @@ import {
 import { filterEditableTasks } from "./scheduleTaskHelpers";
 import { buildScheduleResourceAssignPatch } from "./scheduleAssignmentHelpers";
 import type { ScheduleTask } from "./types";
+import { assertScheduleDateRange } from "./scheduleDateValidation";
 
 export interface UseScheduleMutationsParams {
   projectId: string | null | undefined;
@@ -116,6 +117,7 @@ export function useScheduleMutations({
   const createTaskMut = useMutation({
     mutationFn: (data: ScheduleTask) => {
       const scoped = withProjectId(data as Record<string, unknown>, projectId);
+      assertScheduleDateRange(scoped as ScheduleTask);
       const wbs = (scoped.wbs_code as string | undefined) || generateWBS(scoped.phase as string | undefined, scheduleTasks);
       return entities.ScheduleTask.create({ ...scoped, wbs_code: wbs } as any);
     },
@@ -222,13 +224,15 @@ export function useScheduleMutations({
 
   const bulkDateMut = useMutation({
     mutationFn: async ({ ids, fields }: { ids: string[]; fields: Record<string, any> }) => {
-      const selected = tasksWithEffective.filter((task) => task.id && ids.includes(task.id));
+      const selected = enrichedTasks.filter((task) => task.id && ids.includes(task.id));
       const editable = filterEditableTasks(selected);
       const skipped = selected.length - editable.length;
 
       if (editable.length === 0) {
         throw new Error("Summary tasks roll up from child tasks. Select child tasks to bulk edit dates.");
       }
+
+      editable.forEach((task) => assertScheduleDateRange({ ...task, ...fields }));
 
       const results = await batchProcess(
         editable.map((task) => task.id as string),
@@ -260,7 +264,7 @@ export function useScheduleMutations({
 
   const bulkDurationMut = useMutation({
     mutationFn: async ({ ids, mode, days }: { ids: string[]; mode: string; days: number }) => {
-      const selected = tasksWithEffective.filter((task) => task.id && ids.includes(task.id));
+      const selected = enrichedTasks.filter((task) => task.id && ids.includes(task.id));
       const editable = filterEditableTasks(selected);
       const skipped = selected.length - editable.length;
 
@@ -316,6 +320,7 @@ export function useScheduleMutations({
     setBulkSaving(true);
     try {
       const pid = projectId;
+      rows.forEach((row) => assertScheduleDateRange(row));
       // Build a running snapshot of tasks so each new WBS is unique
       const snapshot = [...scheduleTasks];
       for (const row of rows) {
@@ -356,6 +361,11 @@ export function useScheduleMutations({
       if (!allParsed.length) {
         throw new Error("Couldn't read tasks from the file. Please export the MPP as XML (File → Save As → XML) and retry.");
       }
+
+      allParsed.forEach((task) => assertScheduleDateRange({
+        start_date: task.start ?? null,
+        end_date: task.finish ?? task.start ?? null,
+      }));
 
       const pid = projectId;
       // UID → created task ID mapping (for linking predecessors + parent)

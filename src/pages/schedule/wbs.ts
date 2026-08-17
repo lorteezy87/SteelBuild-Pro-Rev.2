@@ -1,5 +1,6 @@
 import { PHASE_NUMBER } from "@/utils/phases";
 import type { SanitizedTaskUpdate, ScheduleTask } from "./types";
+import { assertScheduleDateRange } from "./scheduleDateValidation";
 
 /**
  * Auto-generate a WBS code for a task. Format is now "<phase>.<n>"
@@ -128,6 +129,8 @@ export function sanitizeScheduleTaskUpdatePayload(data: ScheduleTask): Sanitized
     if ("_stored_duration" in data) fields.duration = data._stored_duration;
     if ("_stored_percent_complete" in data) fields.percent_complete = data._stored_percent_complete;
   }
+
+  assertScheduleDateRange(fields as ScheduleTask);
 
   return { id, fields };
 }

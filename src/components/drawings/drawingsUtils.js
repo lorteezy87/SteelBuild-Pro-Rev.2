@@ -9,6 +9,7 @@ import { IN_REVIEW_STAGES, STAGE_ORDER, WORKFLOW_STAGES } from "./drawingsConfig
 import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 import { compareDrawingSetPackages, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
+import { resolveDrawingPackageDue } from "@/pages/drawingSubmittalHub/format";
 
 /**
  * Decide whether a stage transition is legal.
@@ -214,7 +215,7 @@ export function computeStats(drawings, drawingSetRecords = []) {
  * @param {Array} drawingSetRecords  — parent drawing_sets rows
  * @param {Array} submittals         — all project submittals
  */
-export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], submittals = []) {
+export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], submittals = [], useWorkdays = false) {
   // Group sheets by parent set id (FK-first; fall back to set name).
   const sheetsBySetId = new Map();
   const sheetsBySetName = new Map();
@@ -253,12 +254,12 @@ export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], sub
     seenIds.add(ds.id);
     const sheetsHere = sheetsBySetId.get(ds.id) || sheetsBySetName.get(ds.set_name?.trim()) || [];
     const subsHere = submittalsBySetId.get(ds.id) || [];
-    packages.push({ id: ds.id, name: ds.set_name, sheets: sheetsHere, submittals: subsHere });
+    packages.push({ id: ds.id, name: ds.set_name, parent: ds, sheets: sheetsHere, submittals: subsHere });
   }
   // Legacy sheets without a parent FK — group by name.
   for (const [name, sheets] of sheetsBySetName.entries()) {
     if (sheets.some((s) => s.drawing_set_id && seenIds.has(s.drawing_set_id))) continue;
-    packages.push({ id: null, name, sheets, submittals: [] });
+    packages.push({ id: null, name, parent: null, sheets, submittals: [] });
   }
 
   let released = 0;
@@ -269,7 +270,11 @@ export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], sub
     const stage = derivedSetStage(pkg.submittals, pkg.sheets);
     if (stage === "Released") released++;
     else if (isStageInReview(stage)) inReview++;
-    if (pkg.sheets.some((d) => isOverdue(d))) overdue++;
+    const activeDuePackage = {
+      ...pkg,
+      sheets: pkg.sheets.filter((drawing) => !drawing?.is_deleted && !drawing?.is_superseded),
+    };
+    if (resolveDrawingPackageDue(activeDuePackage, useWorkdays).due.overdue) overdue++;
     if (pkg.sheets.some((d) => d.priority_flag)) priority++;
   }
 

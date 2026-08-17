@@ -12,7 +12,8 @@ export const STATIC_ROUTE_METADATA = {
   "/": { lifecycle: "active", kind: "entry" },
   "/Landing": { lifecycle: "active", kind: "entry" },
   "/DesktopConnect": { lifecycle: "internal", kind: "entry" },
-  "/GanttChart": { lifecycle: "legacy", kind: "redirect", target: "/Schedule" },
+  "/Schedule": { lifecycle: "legacy", kind: "redirect", target: "/ScheduleHub" },
+  "/GanttChart": { lifecycle: "legacy", kind: "redirect", target: "/ScheduleHub" },
   "/RFIHub": { lifecycle: "legacy", kind: "redirect", target: "/RFIs" },
   "/Financials": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/CostDashboard": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
@@ -34,7 +35,7 @@ function r(component, label, opts) {
 const ROUTE_DOMAINS = {
   overview: {
     Dashboard:              r(lazyWithRetry(() => import("@/pages/Dashboard")),             "Dashboard",                 { projectScoped: true }),
-    CommandCenter:          r(lazyWithRetry(() => import("@/pages/CommandCenter")),         "Command Center"),
+    CommandCenter:          r(lazyWithRetry(() => import("@/pages/CommandCenter")),         "Command Center",           { projectScoped: true }),
     ExecutiveView:          r(lazyWithRetry(() => import("@/pages/ExecutiveView")),         "Executive View"),
     Projects:               r(lazyWithRetry(() => import("@/pages/Projects")),              "Projects"),
     ProjectsHub:            r(lazyWithRetry(() => import("@/pages/ProjectsHub")),           "Projects"),
@@ -67,7 +68,6 @@ const ROUTE_DOMAINS = {
   },
   scheduling: {
     ScheduleHub:          r(lazyWithRetry(() => import("@/pages/ScheduleHub")),         "Schedule",             { projectScoped: true }),
-    Schedule:             r(lazyWithRetry(() => import("@/pages/Schedule")),            "Schedule",             { projectScoped: true }),
     ProjectCalendar:      r(lazyWithRetry(() => import("@/pages/ProjectCalendar")),     "Project Calendar",     { projectScoped: true }),
     FieldPlan:            r(lazyWithRetry(() => import("@/pages/FieldPlan")),           "Field Plan",          { projectScoped: true }),
     ResourceHub:          r(lazyWithRetry(() => import("@/pages/ResourceHub")),         "Resources",             { projectScoped: true }),
@@ -144,7 +144,8 @@ const ROUTE_REGISTRY = Object.values(ROUTE_DOMAINS).reduce(
 
 registerRoutePrefetcher("Dashboard", () => import("@/pages/Dashboard"));
 registerRoutePrefetcher("DrawingSubmittalHub", () => import("@/pages/DrawingSubmittalHub"));
-registerRoutePrefetcher("Schedule", () => import("@/pages/Schedule"));
+registerRoutePrefetcher("CommandCenter", () => import("@/pages/CommandCenter"));
+registerRoutePrefetcher("ScheduleHub", () => import("@/pages/ScheduleHub"));
 registerRoutePrefetcher("RFIs", () => import("@/pages/RFIs"));
 registerRoutePrefetcher("Drawings", () => import("@/pages/Drawings"));
 registerRoutePrefetcher("DrawingViewer", () => import("@/pages/DrawingViewer"));

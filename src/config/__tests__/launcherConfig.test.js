@@ -59,6 +59,15 @@ describe("launcherConfig", () => {
     }
   });
 
+  it("lists Production Notes in both Project Management navigation registries", () => {
+    const expected = { label: "Production Notes", icon: "📝", page: "ProductionNotes" };
+
+    for (const groups of [NAV_GROUPS, SIDEBAR_GROUPS]) {
+      const projectManagement = groups.find((group) => group.label === "PROJECT MANAGEMENT");
+      expect(projectManagement?.items).toContainEqual(expected);
+    }
+  });
+
   it("does not duplicate Integrations in either navigation registry", () => {
     for (const groups of [NAV_GROUPS, SIDEBAR_GROUPS]) {
       expect(groups.flatMap((group) => group.items).some((item) => item.page === "Integrations")).toBe(false);

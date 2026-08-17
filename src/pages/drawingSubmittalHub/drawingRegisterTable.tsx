@@ -15,14 +15,13 @@ import {
   accent,
   border,
   currentRevisionForPackage,
-  dueInfoFor,
-  getSubmittalDueDate,
   isClosedPackage,
   mono,
   success,
   surface1,
   textMuted,
   textPrimary,
+  resolveDrawingPackageDue,
 } from "./format";
 import type { CurrentRevisionInfo } from "./types";
 import {
@@ -262,7 +261,8 @@ export function DrawingRegisterTable({
       .map((pkg: any) => {
         const sheets: any[] = pkg.sheets || [];
         const submittals: any[] = pkg.submittals || [];
-        const latestSubmittal = submittals.slice().sort((a, b) => (b.round_number || 1) - (a.round_number || 1))[0] || null;
+        const packageDue = resolveDrawingPackageDue(pkg, workdayDues);
+        const latestSubmittal = packageDue.governingSubmittal;
         const sheetCount = sheets.length || (pkg.parent?.sheet_count ?? 0);
         // Per-sheet "released" count is DISPLAY ONLY (the n/total badge). It still
         // reads the legacy columns to show progress, but it MUST NOT decide the
@@ -278,7 +278,7 @@ export function DrawingRegisterTable({
         // Released column — a mid-flow submittal can't render alongside a green
         // "Released", and a released package reads "Released" in both columns.
         const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);
-        const due = dueInfoFor(getSubmittalDueDate(latestSubmittal), { closed: done, useWorkdays: workdayDues });
+        const due = packageDue.due;
         const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
         // §20-21: the displayed Rev is a per-set rollup of the AUTHORITATIVE
         // current revision (drawing_revisions.is_current via currentRevByDrawingId)

@@ -280,7 +280,7 @@ export default function Dashboard() {
         deliveries: "/Deliveries",
         "change-orders": "/ChangeOrders",
         "field-reports": "/DailyLogs",
-        schedule: "/Schedule",
+        schedule: "/ScheduleHub",
         "fab-release": "/FabRelease",
         "budget-hours": "/BudgetHours",
         "cost-hub": "/CostHub",

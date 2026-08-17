@@ -8,7 +8,7 @@ describe("buildRecordLink", () => {
     ["rfi", "/RFIs"],
     ["change_order", "/ChangeOrders"],
     ["drawing_revision", "/DrawingViewer"],
-    ["schedule_task", "/Schedule"],
+    ["schedule_task", "/ScheduleHub"],
     ["submittal", "/Submittals"],
   ] as const)("builds the canonical %s route", (entityType, path) => {
     expect(buildRecordLink({

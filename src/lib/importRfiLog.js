@@ -260,6 +260,10 @@ export function buildRfiImportRows({ rfis = [], projectId, projectName, existing
     if (seenNumbers.has(dedupKey)) { skipped++; continue; }
     seenNumbers.add(dedupKey);
 
+    assertDateHasYear(r.date_submitted, normalizeRfiNumber(r.rfi_number), "submitted date");
+    assertDateHasYear(r.date_required, normalizeRfiNumber(r.rfi_number), "required date");
+    assertDateHasYear(r.date_answered, normalizeRfiNumber(r.rfi_number), "answered date");
+
     const submitted = normalizeDate(r.iso_submitted || r.date_submitted);
     const required  = normalizeDate(r.iso_required  || r.date_required);
     const answered  = normalizeDate(r.iso_answered  || r.date_answered);
@@ -281,6 +285,14 @@ export function buildRfiImportRows({ rfis = [], projectId, projectName, existing
   }
 
   return { rows, skipped };
+}
+
+function assertDateHasYear(value, rfiNumber, fieldLabel) {
+  if (!value) return;
+  const raw = String(value).trim();
+  if (/^\d{1,2}\/\d{1,2}$/.test(raw)) {
+    throw new Error(`${rfiNumber} ${fieldLabel} "${raw}" is missing a year. Correct the source date and retry the import.`);
+  }
 }
 
 function normalizeDate(v) {

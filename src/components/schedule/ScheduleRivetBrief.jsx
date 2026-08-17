@@ -18,9 +18,9 @@ import {
 
 const RIVET_COLLAPSED_KEY = "steelbuild:schedule-brief-collapsed";
 
-export default function ScheduleRivetBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
+export default function ScheduleRivetBrief({ tasks = [], brief: briefProp, project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
   const [copyState, setCopyState] = useState("idle");
-  const brief = useMemo(() => buildBrief(tasks), [tasks]);
+  const brief = useMemo(() => briefProp || buildBrief(tasks), [briefProp, tasks]);
   const primaryPhase = brief.phaseRows[0]?.phase || null;
   const healthTone = brief.riskScore >= 70 ? "var(--status-error)" : brief.riskScore >= 35 ? "var(--status-warning)" : "var(--status-success)";
 
@@ -463,4 +463,3 @@ function Metric({ icon: Icon, label, value, tone }) {
     </div>
   );
 }
-

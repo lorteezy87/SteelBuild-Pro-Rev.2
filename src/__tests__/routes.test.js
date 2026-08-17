@@ -31,6 +31,15 @@ describe("routes — page registry", () => {
     expect(ALL_ROUTE_PATHS).toContain("/ProjectDetail");
   });
 
+  it("keeps /Schedule as a compatibility redirect to the canonical ScheduleHub", () => {
+    expect(STATIC_ROUTE_METADATA["/Schedule"]).toMatchObject({
+      lifecycle: "legacy",
+      kind: "redirect",
+      target: "/ScheduleHub",
+    });
+    expect(PAGE_LABELS).not.toHaveProperty("Schedule");
+  });
+
   it("has no duplicate route paths", () => {
     const seen = new Set();
     for (const path of ALL_ROUTE_PATHS) {
@@ -87,7 +96,7 @@ describe("routeLabel", () => {
 describe("PROJECT_SCOPED_PAGES", () => {
   it("contains pages that genuinely depend on an active project", () => {
     expect(PROJECT_SCOPED_PAGES.has("Drawings")).toBe(true);
-    expect(PROJECT_SCOPED_PAGES.has("Schedule")).toBe(true);
+    expect(PROJECT_SCOPED_PAGES.has("ScheduleHub")).toBe(true);
     expect(PROJECT_SCOPED_PAGES.has("RFIs")).toBe(true);
   });
 

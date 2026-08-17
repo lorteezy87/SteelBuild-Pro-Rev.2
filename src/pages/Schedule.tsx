@@ -20,6 +20,7 @@ import { useScheduleModals } from "./schedule/useScheduleModals";
 import { useTaskSelection } from "./schedule/useTaskSelection";
 import { useScheduleMutations } from "./schedule/useScheduleMutations";
 import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
+import { buildBrief, scheduleHealthFromBrief } from "@/components/schedule/rivetBriefEngine";
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -183,6 +184,11 @@ export default function Schedule() {
     [enrichedTasks, effectiveDatesMap]
   );
 
+  // Rivet is the canonical live schedule-risk calculation. Build it from the
+  // stored task rows exactly once (the engine owns cascade calculation), then
+  // reuse that same result for both the brief and the hero health label.
+  const scheduleBrief = useMemo(() => buildBrief(enrichedTasks), [enrichedTasks]);
+
   const {
     updateTaskMut,
     reparentMut,
@@ -254,6 +260,7 @@ export default function Schedule() {
   // workflows without duplicating repository or mutation logic.
   const bodyProps = {
     phaseCounts,
+    scheduleBrief,
     tasksWithEffective,
     enrichedTasks,
     scheduleTasksRaw,
@@ -318,7 +325,7 @@ export default function Schedule() {
         setSelectedTask(task as ScheduleTask);
         setShowDrawer(true);
       }}
-      projectHealth={selectedProject?.health_status ?? null}
+      projectHealth={scheduleHealthFromBrief(scheduleBrief)}
       pctComplete={undefined}
       fileInput={(
         <input

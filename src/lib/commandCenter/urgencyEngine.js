@@ -463,7 +463,7 @@ export function scheduleTaskUrgency(task, projectMap = {}) {
       urgency: "awaiting",
       daysValue: daysOpen,
       displayStatus: `${prefix}Dates TBD — ${daysOpen}d unscheduled`,
-      quickAction: { label: "View Schedule", route: `/Schedule?project=${task.project_id}` },
+      quickAction: { label: "View Schedule", route: `/ScheduleHub?project=${task.project_id}` },
       itemType: "TASK",
       title: titleStr,
       owner: ownerStr,
@@ -527,7 +527,7 @@ export function scheduleTaskUrgency(task, projectMap = {}) {
     // positive numbers that sort first.
     daysValue: -dueDays,
     displayStatus: `${prefix}${displayStatus}`,
-    quickAction: { label: "View Schedule", route: `/Schedule?project=${task.project_id}` },
+    quickAction: { label: "View Schedule", route: `/ScheduleHub?project=${task.project_id}` },
     itemType: "TASK",
     title,
     owner,

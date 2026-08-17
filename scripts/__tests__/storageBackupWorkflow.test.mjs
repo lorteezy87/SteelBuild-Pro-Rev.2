@@ -11,9 +11,11 @@ describe("Storage backup workflow", () => {
 
     expect(triggers.schedule).toEqual([{ cron: "17 8 * * *" }]);
     expect(triggers).toHaveProperty("workflow_dispatch");
-    expect(workflow.jobs.backup.env.RCLONE_VERSION).toBe("1.74.4");
-    expect(workflow.jobs.backup.env.RCLONE_SHA256)
+    expect(workflow.jobs.backup.env.INSTALL_RCLONE_VERSION).toBe("1.74.4");
+    expect(workflow.jobs.backup.env.INSTALL_RCLONE_SHA256)
       .toBe("fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d");
+    expect(workflow.jobs.backup.env).not.toHaveProperty("RCLONE_VERSION");
+    expect(workflow.jobs.backup.env).not.toHaveProperty("RCLONE_SHA256");
   });
 
   it("limits production credentials and project identity to the backup step", async () => {

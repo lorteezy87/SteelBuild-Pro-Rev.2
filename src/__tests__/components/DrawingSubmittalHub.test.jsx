@@ -111,4 +111,15 @@ describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
     expect(screen.getByRole("button", { name: /Group by set/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Full editor/i })).toBeInTheDocument();
   });
+
+  it("embeds the Submittal Register without stacking a second title and KPI toolbar", async () => {
+    const user = userEvent.setup();
+    renderHub();
+
+    await user.click(await screen.findByText("Submittal Register"));
+
+    expect(await screen.findByPlaceholderText("Search # / title / spec section")).toBeInTheDocument();
+    expect(screen.getAllByText("Submittal Register")).toHaveLength(1);
+    expect(screen.queryByText("At risk")).not.toBeInTheDocument();
+  });
 });

@@ -164,7 +164,7 @@ export default function FabReleaseControlCenter({
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <Pill tone={stageTone(wp._signals.stage)}>{stageLabel(wp._signals.stage)}</Pill>
                 <span className="cmd-row__meta">
-                  {wp.released_date ? formatDate(wp.released_date as string) : "-"}
+                  {wp.released_date ? formatDate(wp.released_date as string) : "Date not recorded"}
                 </span>
               </div>
             </div>

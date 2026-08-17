@@ -592,7 +592,7 @@ export default function DrawingSubmittalHub() {
             onOpenSummary={setSummaryCard}
           />
         )}
-        {activeTab === "submittals" && <SubmittalsPage />}
+        {activeTab === "submittals" && <SubmittalsPage embedded />}
         {activeTab === "matrix" && (
           <ApprovalMatrixPanel
             drawingSets={drawingSets}
@@ -700,7 +700,7 @@ export default function DrawingSubmittalHub() {
           submittalsTotal: kpis.total,
           submittalsPending: kpis.pending,
           needsAction: kpis.rejected,
-          overdue: triage.overdue.length,
+          overdue: triage.overdueDrawingSets,
           atRisk: triage.atRiskCount,
           overdueDrawingSets: triage.overdueDrawingSets,
           overdueUnlinkedSubmittals: triage.overdueUnlinkedSubmittals,

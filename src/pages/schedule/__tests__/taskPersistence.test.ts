@@ -66,4 +66,21 @@ describe("schedule task persistence (sanitizeScheduleTaskUpdatePayload)", () => 
     expect(fields).not.toHaveProperty("_overlay");
     expect(fields).not.toHaveProperty("_isRolledUpSummary");
   });
+
+  it("rejects a finish date before the start date", () => {
+    expect(() => sanitizeScheduleTaskUpdatePayload({
+      id: "task-invalid",
+      task_name: "Main Steel Area B",
+      start_date: "2026-07-28",
+      end_date: "2026-07-23",
+    } as any)).toThrow(/finish date.*before.*start date/i);
+  });
+
+  it("allows a TBD boundary when only one date is known", () => {
+    expect(() => sanitizeScheduleTaskUpdatePayload({
+      id: "task-tbd",
+      start_date: "2026-07-28",
+      end_date: null,
+    } as any)).not.toThrow();
+  });
 });

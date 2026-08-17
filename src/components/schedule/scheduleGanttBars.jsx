@@ -37,9 +37,12 @@ const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, trans
 // distinct at a glance — the audit called the previous text-only render
 // "easy to scan but not visually strong".
 export function StatusChip({ status, overdue }) {
-  // An overdue, not-yet-complete row should read as Delayed regardless of
-  // the stored status — that matches how the Gantt bar already marks it.
-  const effective = overdue && status !== "Complete" ? "Delayed" : (status || "Not Started");
+  // Overdue is a date condition, while Delayed is an explicit stored workflow
+  // status. Keep the labels distinct so the Gantt agrees with Rivet's two
+  // separate counters.
+  const effective = overdue && status !== "Complete" && status !== "Delayed"
+    ? "Overdue"
+    : (status || "Not Started");
   const c = statusColor(effective);
   return (
     <span

@@ -17,7 +17,7 @@
  *     lives in localStorage so the user's preferred view sticks.
  *   - Event clicks navigate to the entity's existing list page
  *     (deliberate — we don't rebuild detail drawers; reuse what exists).
- *     For schedule tasks specifically, the existing /Schedule page
+ *     For schedule tasks specifically, the canonical /ScheduleHub page
  *     handles deep-link to a row; other entities share a similar
  *     pattern.
  */

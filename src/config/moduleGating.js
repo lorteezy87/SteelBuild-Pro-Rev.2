@@ -29,7 +29,7 @@ export const MODULE_GATES = Object.freeze({
   module_integrations:     ["DataExchange"],
   module_cost: [
     "CostHub", "ChangeOrders", "SOV", "Expenses", "ContractManagement",
-    "BudgetHours", "PayApplications", "Backcharges", "Billing",
+    "BudgetHours", "PayApplications", "Backcharges",
   ],
   module_quality:          ["Inspections", "Safety", "Punchlist", "QualityControl"],
   module_resources:        ["ResourceHub", "ResourceScheduling"],

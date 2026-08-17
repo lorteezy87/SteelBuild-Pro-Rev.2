@@ -69,7 +69,7 @@ const NewRoundModal = NewRoundModalRaw as unknown as ComponentType<AnyProps>;
 const ReleaseGateOverrideModal = ReleaseGateOverrideModalRaw as unknown as ComponentType<AnyProps>;
 const SheetResponseGrid = SheetResponseGridRaw as unknown as ComponentType<AnyProps>;
 
-export default function Submittals() {
+export default function Submittals({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const activeProject = useProjectContext().activeProject as any;
   const projectId = activeProject?.id as string | undefined;
@@ -665,6 +665,7 @@ export default function Submittals() {
   return (
     <div className="submittals-page" style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
       <SubmittalRegisterPanel
+        embedded={embedded}
         filtered={filteredView}
         rows={rowsView}
         stats={stats}

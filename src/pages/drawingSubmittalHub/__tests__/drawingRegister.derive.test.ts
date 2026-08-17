@@ -105,7 +105,7 @@ describe("buildDrawingRegisterRows", () => {
     // Overdue submittal due, package not closed → late.
     const overduePkg = pkg({
       sheets: [sheet({ id: "s1", stage: "IFA" })],
-      submittals: [{ id: "sub1", round_number: 1, status: "Open", required_date: "2020-01-01" }],
+      submittals: [{ id: "sub1", round_number: 1, status: "Under Review", required_date: "2020-01-01" }],
     });
     const rows = buildDrawingRegisterRows({
       setPackages: [overduePkg], healthByKey: new Map(), currentRevByDrawingId: emptyRev, summariesBySet: new Map(), workdayDues: false,

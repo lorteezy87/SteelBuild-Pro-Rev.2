@@ -192,6 +192,29 @@ export function getDrawingDueDate(drawing: Drawing | null | undefined): string |
   return drawing?.due_date || drawing?.required_date || drawing?.target_date || null;
 }
 
+/** One due-date authority for every drawing-package surface. A usable linked
+ * submittal governs; only packages without one fall back to the earliest sheet
+ * date. Closed packages can retain historical dates without appearing late. */
+export function resolveDrawingPackageDue(pkg: SetPackage, useWorkdays = false) {
+  const governingSubmittal = pickMostRecentSubmittal(
+    (pkg.submittals || []).filter((submittal) =>
+      !submittal.is_deleted
+      && submittalStatusToStage(submittal.status, submittal.ball_in_court, submittal.approved_date) !== null,
+    ),
+  );
+  const closed = isClosedPackage(pkg);
+  const submittalDue = getSubmittalDueDate(governingSubmittal);
+  const dueDate = submittalDue || earliestDate((pkg.sheets || []).map(getDrawingDueDate));
+  const dueBySubmittal = Boolean(submittalDue);
+  return {
+    governingSubmittal,
+    closed,
+    dueDate,
+    dueBySubmittal,
+    due: dueInfoFor(dueDate, { closed, useWorkdays: useWorkdays && dueBySubmittal }),
+  };
+}
+
 /** Returns the entity ids to update when an operator edits the due date on a
  *  Control Board triage item.
  *
@@ -504,9 +527,7 @@ export function buildDrawingKpis(drawings: any[], setPackages: SetPackage[]) {
   const inReview = setPackages.filter((pkg) =>
     ["IFA", "OFA", "BFA", "R&R", "OFS", "IFC"].includes(effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets))
   ).length;
-  const overdueDrawings = setPackages.filter((pkg) =>
-    pkg.sheets.some((d) => dueInfo(getDrawingDueDate(d), isClosedDrawing(d)).overdue)
-  ).length;
+  const overdueDrawings = setPackages.filter((pkg) => resolveDrawingPackageDue(pkg).due.overdue).length;
   return {
     totalSets: setPackages.length,
     totalSheets: active.length,
@@ -534,11 +555,12 @@ export function buildTriage(
     const activeSubmittals = submittals.filter((s) => !s.is_deleted) as any[];
 
     const setItems = setPackages.map((pkg) => {
-      const governingSubmittal = pickMostRecentSubmittal(
-        pkg.submittals.filter((submittal) =>
-          !submittal.is_deleted && submittalStatusToStage(submittal.status, submittal.ball_in_court, submittal.approved_date) !== null,
-        ),
-      );
+      const {
+        governingSubmittal,
+        closed,
+        dueDate,
+        due,
+      } = resolveDrawingPackageDue(pkg, useWorkdays);
       // Coalesced operational state (drafting → submittal → release). Kept
       // alongside `status` (additive) so the existing pipeline/row display is
       // unchanged; surfaced as its own chip + drives the drafting control.
@@ -552,14 +574,6 @@ export function buildTriage(
       // package that was manually released (e.g. anchor bolts: set locked
       // and/or detailing_state=Released for Erection) whose submittal was
       // never rolled to "Released for Fabrication" lingered on the hit list.
-      const closed = isClosedPackage(pkg);
-      // Prefer the governing submittal's due; only when there is none does the
-      // display fall back to the earliest sheet due. Track WHICH source won so
-      // the countdown is working-day-aware for submittal-governed dues but stays
-      // calendar-day for drawing-set (sheet) dues.
-      const submittalDue = getSubmittalDueDate(governingSubmittal);
-      const dueDate = submittalDue || earliestDate(pkg.sheets.map(getDrawingDueDate));
-      const dueBySubmittal = !!submittalDue;
       // Only surface "needs action" when the package is OPEN (closed items
       // never reach the hit list anyway, but guard against stale per-sheet
       // Rejected/Returned stages on packages that have since been released).
@@ -596,7 +610,7 @@ export function buildTriage(
         dueDate,
         // Working-day only when the flag is on AND a submittal governs the due;
         // a drawing-set (sheet) due always stays calendar-day.
-        due: dueInfoFor(dueDate, { closed, useWorkdays: useWorkdays && dueBySubmittal }),
+        due,
         closed,
         needsAction,
         routeTab: "drawings",
