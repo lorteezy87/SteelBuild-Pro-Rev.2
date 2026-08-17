@@ -205,33 +205,15 @@ export default function AppRoutes() {
         />
 
         <Route path="ProjectDetail" element={<LegacyProjectDetailRedirect />} />
-        <Route path="Schedule" element={<StaticRouteRedirect route="/Schedule" />} />
-        <Route
-          path="Financials"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/Financials"].target} replace />}
-        />
-        <Route
-          path="CostDashboard"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/CostDashboard"].target} replace />}
-        />
-        <Route
-          path="ResourceManagement"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/ResourceManagement"].target} replace />}
-        />
-        <Route
-          path="AIInsights"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/AIInsights"].target} replace />}
-        />
-        <Route
-          path="MarginRisk"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/MarginRisk"].target} replace />}
-        />
-
-        {/* /RFIHub was retired — redirect old links to /RFIs */}
-        <Route path="RFIHub" element={<Navigate to={STATIC_ROUTE_METADATA["/RFIHub"].target} replace />} />
-
-        {/* /GanttChart was retired — redirect old deep-links to /ScheduleHub */}
-        <Route path="GanttChart" element={<Navigate to={STATIC_ROUTE_METADATA["/GanttChart"].target} replace />} />
+        {Object.entries(STATIC_ROUTE_METADATA)
+          .filter(([path, meta]) => path !== "/ProjectDetail" && meta.kind === "redirect")
+          .map(([path]) => (
+            <Route
+              key={path}
+              path={path.slice(1)}
+              element={<StaticRouteRedirect route={path} />}
+            />
+          ))}
 
         <Route path="*" element={<PageNotFound />} />
       </Route>

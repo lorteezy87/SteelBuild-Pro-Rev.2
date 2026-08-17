@@ -138,15 +138,81 @@ describe("buildDashboardSummary", () => {
     expect(valueRow.value).toBe("$2.5M");
   });
 
-  it("summary row % Complete matches wpProgressPct", () => {
+  it("uses the same actionable schedule-task progress as Schedule Command", () => {
     const wps = [
       { id: "w1", percent_complete: 50 },
       { id: "w2", percent_complete: 100 },
     ];
-    const s = buildDashboardSummary({ wps });
+    const scheduleTasks = [
+      { id: "summary", _hasChildren: true, percent_complete: 90 },
+      { id: "t1", percent_complete: 0 },
+      { id: "t2", percent_complete: 25 },
+    ];
+    const s = buildDashboardSummary({ wps, scheduleTasks });
     const pctRow = s.summaryRows.find((r) => r.label === "% Complete")!;
-    expect(pctRow.value).toBe("75%"); // avg of 50+100 = 75
-    expect(s.schedulePct).toBe(75);
+    expect(pctRow.value).toBe("13%");
+    expect(s.schedulePct).toBe(13);
+    const scheduleKpi = s.kpis.find((k) => k.label === "Schedule Progress")!;
+    expect(scheduleKpi.value).toBe("13%");
+  });
+
+  it("does not count closed safety or quality records as Field Hub issues", () => {
+    const s = buildDashboardSummary({
+      punchlistItems: [],
+      safetyIncidents: [{ id: "s1", status: "Closed" }],
+      qualityRecords: [{ id: "q1", status: "Passed" }],
+      actionItems: [{ id: "a1", status: "Open", due_date: YESTERDAY }],
+    });
+    expect(s.alerts.find((a) => a.id === "field")).toBeUndefined();
+  });
+
+  it("matches Field Hub for every terminal punchlist status", () => {
+    const punchlistItems = ["Closed", "Complete", "Completed", "Done", "Resolved"].map((status, index) => ({
+      id: `terminal-${index}`,
+      status,
+    }));
+    const s = buildDashboardSummary({ punchlistItems });
+    expect(s.alerts.find((a) => a.id === "field")).toBeUndefined();
+    expect(s.modules.find((m) => m.page === "FieldHub")?.metric).toBe("0 Issues");
+  });
+
+  it("shows cost health as pending until actual or committed cost is posted", () => {
+    const s = buildDashboardSummary({
+      codes: [{ id: "c1", budget_amount: 1_333_615, committed_cost: 0, actual_cost: 0 }],
+      expenses: [],
+      sovItems: [{ id: "s1", scheduled_value: 1_333_615, total_completed_stored: 0 }],
+    });
+    const costKpi = s.kpis.find((k) => k.label === "Cost Health")!;
+    expect(costKpi.value).toBe("TBD");
+    expect(costKpi.sublabel).toBe("No costs posted");
+    expect(costKpi.tone).toBe("neutral");
+  });
+
+  it("uses actual cost as cost evidence when committed cost is zero", () => {
+    const s = buildDashboardSummary({
+      codes: [{ id: "c1", budget_amount: 1000, committed_cost: 0, actual_cost: 400 }],
+      expenses: [],
+    });
+    const costKpi = s.kpis.find((k) => k.label === "Cost Health")!;
+    expect(costKpi.value).toBe("+60.0%");
+    expect(costKpi.sublabel).toBe("Under Budget");
+  });
+
+  it("does not award perfect budget-health credit before costs are posted", () => {
+    const project = {
+      id: "p1",
+      start_date: "2020-01-01",
+      target_completion_date: "2021-01-01",
+    };
+    const scheduleTasks = [{ id: "t1", status: "In Progress", percent_complete: 40 }];
+    const withoutCostEvidence = buildDashboardSummary({ project, scheduleTasks });
+    const withUnspentBudget = buildDashboardSummary({
+      project,
+      scheduleTasks,
+      codes: [{ id: "c1", budget_amount: 1000, committed_cost: 0, actual_cost: 0 }],
+    });
+    expect(withUnspentBudget.healthScore).toBe(withoutCostEvidence.healthScore);
+    expect(withUnspentBudget.healthScore).toBe(80);
   });
 
   it("produces 8 module tiles", () => {

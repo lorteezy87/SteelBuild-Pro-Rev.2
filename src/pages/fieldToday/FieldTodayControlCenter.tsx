@@ -615,22 +615,24 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           ) : s.recoveryQueue.length === 0 ? (
             <div className="cmd-row__meta">No overdue schedule tasks.</div>
           ) : (
-            s.recoveryQueue.map((task) => {
-              const taskId = String(task.id || "");
-              return (
-                <div className="cmd-row" key={taskId}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div className="cmd-row__num" style={{ fontSize: 13 }}>
-                      {String(task.task_name || task.name || "(task)")}
+            <div style={{ maxHeight: 360, overflowY: "auto", overscrollBehavior: "contain" }}>
+              {s.recoveryQueue.map((task) => {
+                const taskId = String(task.id || "");
+                return (
+                  <div className="cmd-row" key={taskId}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="cmd-row__num" style={{ fontSize: 13 }}>
+                        {String(task.task_name || task.name || "(task)")}
+                      </div>
+                      <div className="cmd-row__meta">
+                        {String(task.location || task.area || "Location not provided")} · {String(task.end_date || "Due date unavailable")}
+                      </div>
                     </div>
-                    <div className="cmd-row__meta">
-                      {String(task.location || task.area || "Location not provided")} · {String(task.end_date || "Due date unavailable")}
-                    </div>
+                    <Pill tone="danger">OVERDUE</Pill>
                   </div>
-                  <Pill tone="danger">OVERDUE</Pill>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           )}
           {(s.planningGapCount > 0 || s.upcomingCount > 0) && (
             <div className="cmd-row__meta" style={{ marginTop: 8 }}>

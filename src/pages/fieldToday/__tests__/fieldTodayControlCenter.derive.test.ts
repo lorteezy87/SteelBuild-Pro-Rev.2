@@ -57,6 +57,19 @@ describe("buildFieldTodaySummary", () => {
       expect(s.recoveryQueue.map((t) => t.id)).toEqual(["t1"]);
     });
 
+    it("keeps every recovery row visible when the backlog exceeds six", () => {
+      const recovery = Array.from({ length: 7 }, (_, index) => ({
+        id: `recovery-${index}`,
+        task_name: `Recovery ${index}`,
+        start_date: isoOffset(-10),
+        end_date: isoOffset(-1),
+        percent_complete: 0,
+      }));
+      const backlog = buildFieldTodaySummary(recovery, [], [], TODAY, 0);
+      expect(backlog.kpis.recoveryTasks).toBe(7);
+      expect(backlog.recoveryQueue).toHaveLength(7);
+    });
+
     it("does not fabricate completed-today evidence", () => {
       expect(s.kpis.completedToday).toBeNull();
     });

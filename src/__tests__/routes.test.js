@@ -40,6 +40,19 @@ describe("routes — page registry", () => {
     expect(PAGE_LABELS).not.toHaveProperty("Schedule");
   });
 
+  it("keeps legacy Team and Budget Control links on their canonical pages", () => {
+    expect(STATIC_ROUTE_METADATA["/Team"]).toMatchObject({
+      lifecycle: "legacy",
+      kind: "redirect",
+      target: "/OrgMembers",
+    });
+    expect(STATIC_ROUTE_METADATA["/BudgetControl"]).toMatchObject({
+      lifecycle: "legacy",
+      kind: "redirect",
+      target: "/CostHub",
+    });
+  });
+
   it("has no duplicate route paths", () => {
     const seen = new Set();
     for (const path of ALL_ROUTE_PATHS) {

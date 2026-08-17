@@ -53,6 +53,7 @@ function resolveFullName(
 async function buildAuthMeResult(user: {
   id: string;
   email?: string | null;
+  created_at?: string | null;
   user_metadata?: Record<string, unknown> | null;
 }): Promise<AuthMeResult> {
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
@@ -62,6 +63,7 @@ async function buildAuthMeResult(user: {
     id: user.id,
     email: user.email ?? undefined,
     full_name: resolveFullName(meta, user.email),
+    created_date: user.created_at ?? undefined,
     role,
   };
 }

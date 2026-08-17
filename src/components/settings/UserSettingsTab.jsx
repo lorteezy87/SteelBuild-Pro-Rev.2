@@ -18,7 +18,7 @@ const TIMEZONES = [
   'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu',
 ];
 
-export default function UserSettingsTab({ user }) {
+export default function UserSettingsTab({ user, workspaceRole }) {
   const [form, setForm] = useState({
     full_name: user?.full_name || '',
     job_title: user?.job_title || '',
@@ -108,11 +108,11 @@ export default function UserSettingsTab({ user }) {
           <div>
             <label style={S.label}>Role</label>
             <div style={{ padding: '8px 12px', background: 'var(--accent-muted)', border: '1px solid var(--accent-border)', borderRadius: 8, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {user?.role || 'user'}
+              {workspaceRole || 'member'}
             </div>
           </div>
           <div>
-            <label style={S.label}>Member Since</label>
+            <label style={S.label}>Account Since</label>
             <div style={{ padding: '8px 12px', background: 'var(--bg-surface-low)', borderRadius: 8, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
               {user?.created_date ? formatLocalDate(user.created_date, 'en-US', { month: 'long', year: 'numeric' }) : '—'}
             </div>

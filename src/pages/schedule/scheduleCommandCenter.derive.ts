@@ -17,6 +17,7 @@ import {
 } from "@/components/schedule/scheduleGanttHelpers";
 import { isMilestoneTask, displayPct } from "@/components/schedule/scheduleTaskUtils";
 import { parseDateUTC } from "@/components/schedule/scheduleDateUtils";
+import { excludeSummaryTasks } from "@/lib/schedule/summaryTasks";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +37,7 @@ export interface TaskRecord {
   blockers?: string | null;
   resource_names?: string | null;
   assigned_to?: string | null;
+  parent_task_id?: string | null;
   wbs_code?: string | null;
   metadata?: unknown;
   is_critical?: boolean | null;
@@ -151,7 +153,11 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
   const today = todayUTC();
 
   // --- base populations ---
-  const actionable = tasks.filter((t) => isActionableScheduleTask(t as any));
+  // Raw entity rows are not always enriched with _hasChildren. The canonical
+  // list-aware predicate also identifies parents through child parent_task_id
+  // links, preventing parent rollups from being counted as leaf progress.
+  const actionable = (excludeSummaryTasks(tasks) as TaskRecord[])
+    .filter((t) => isActionableScheduleTask(t as any));
   const open = actionable.filter((t) => isOpenScheduleTask(t as any));
 
   // --- overdue: open actionable with a real end_date before today ---
@@ -174,7 +180,7 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
   ).length;
 
   // --- lookahead (14-day window) ---
-  const lookaheadAll = tasks.filter((t) => adaptedIsLookaheadTask(t, today, 14));
+  const lookaheadAll = actionable.filter((t) => adaptedIsLookaheadTask(t, today, 14));
 
   // --- milestones ---
   const milestoneAll = tasks.filter((t) => isMilestoneTask(t));

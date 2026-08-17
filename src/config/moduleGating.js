@@ -27,10 +27,6 @@ export const MODULE_GATES = Object.freeze({
   // 3D lives as a tab inside Detailing Control Center; tab chrome still
   // respects the existing `viewer_3d` flag. No standalone ModelViewer route.
   module_integrations:     ["DataExchange"],
-  module_cost: [
-    "CostHub", "ChangeOrders", "SOV", "Expenses", "ContractManagement",
-    "BudgetHours", "PayApplications", "Backcharges",
-  ],
   module_quality:          ["Inspections", "Safety", "Punchlist", "QualityControl"],
   module_resources:        ["ResourceHub", "ResourceScheduling"],
   module_closeout:         ["ProjectCloseout", "Warranty"],
@@ -45,7 +41,6 @@ export const MODULE_GATES = Object.freeze({
 
 export const MODULE_GATE_LABELS = Object.freeze({
   module_integrations:     "Integrations (SharePoint / Bluebeam / Data Exchange)",
-  module_cost:             "Cost & Financials",
   module_quality:          "Quality & Safety (QC / Inspections / Punchlist)",
   module_resources:        "Resource Scheduling & Management",
   module_closeout:         "Closeout & Warranty",

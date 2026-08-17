@@ -9,7 +9,6 @@ import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
 import DisplayTab from "@/components/settings/DisplayTab.jsx";
 import DashboardTab from "@/components/settings/DashboardTab.jsx";
 import ShortcutsTab from "@/components/settings/ShortcutsTab.jsx";
-import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
 import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
 import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
@@ -18,6 +17,7 @@ import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 import { WorkspaceTab } from "@/components/settings/WorkspaceTab";
 import { sanitizeUserPreferences } from "@/lib/userPreferences/schema";
 import { PreferencesDataTab } from "@/components/settings/PreferencesDataTab";
+import { useOrg } from "@/components/shared/OrgContext";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -46,7 +46,6 @@ const TAB_GROUPS = [
     label: 'Workspace',
     adminOnly: true,
     tabs: [
-      { id: 'roles',      label: 'Roles',      icon: '\u{1F451}', desc: 'Permissions and access', adminOnly: true },
       { id: 'costcodes',  label: 'Cost Codes', icon: '\u{1F4B0}', desc: 'Default budget codes for new projects', adminOnly: true },
       { id: 'system',     label: 'System',     icon: '\u2699',    desc: 'Data and app management', adminOnly: true },
     ],
@@ -73,6 +72,8 @@ export default function Settings() {
   const [hoveredTab, setHoveredTab] = useState(null);
   const isMobile = useIsMobile();
   const preferenceSave = useSaveUserPrefs();
+  const { currentRole } = useOrg();
+  const workspaceRole = currentRole || 'member';
 
   const { data: userSettings } = useQuery({
     queryKey: ['user-settings', user?.id],
@@ -113,7 +114,7 @@ export default function Settings() {
   // If auth has finished loading but there's still no user, render the page anyway
   // (the user must be authenticated to reach this route; the guard is in the router).
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = workspaceRole === 'owner' || workspaceRole === 'admin';
   const visibleGroups = TAB_GROUPS
     .filter(group => !group.adminOnly || isAdmin)
     .map(group => ({
@@ -238,6 +239,7 @@ export default function Settings() {
         {activeTab === 'profile' && (
           <UserSettingsTab
             user={user}
+            workspaceRole={workspaceRole}
           />
         )}
         {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
@@ -246,7 +248,6 @@ export default function Settings() {
         {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
         {activeTab === 'shortcuts' && <ShortcutsTab />}
         {activeTab === 'preferences-data' && <PreferencesDataTab preferences={sanitizeUserPreferences(userPrefs)} onSave={handleReplacePrefs} onPatch={handleSavePrefs} isSaving={preferenceSave.isSaving} />}
-        {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'costcodes' && <CostCodesTab />}
         {activeTab === 'system' && <SystemTab user={user} />}
         {activeTab === 'setup' && <SetupAdminTab isAdmin={isAdmin} />}
@@ -256,7 +257,7 @@ export default function Settings() {
 
   return (
     <SettingsControlCenter
-      user={user}
+      user={user ? { ...user, role: workspaceRole } : user}
       prefs={userPrefs}
       visibleSectionCount={visibleGroups.reduce((count, group) => count + group.tabs.length, 0)}
       syncState={preferenceSave.syncState}

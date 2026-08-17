@@ -86,8 +86,8 @@ export default function SettingsControlCenter({
       : []),
     ...(s.pinnedModuleCount !== null || s.favoriteProjectCount !== null
       ? [{
-          label: "Favorites",
-          value: `${s.favoriteProjectCount ?? 0} projects`,
+            label: "Favorite Projects",
+            value: `${s.favoriteProjectCount ?? 0} selected`,
           sublabel: `${s.pinnedModuleCount ?? 0} pinned modules`,
           tone: "neutral" as const,
           Icon: Star,

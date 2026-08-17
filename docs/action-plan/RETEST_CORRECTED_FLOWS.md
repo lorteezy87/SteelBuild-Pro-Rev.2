@@ -1,9 +1,9 @@
 # Corrected-flow automated retest (Action plan ID 15)
 
-**Ran:** 2026-07-24T19:59:07.299Z
+**Ran:** 2026-08-17T09:19:32.720Z
 **Result:** ✅ PASS (exit 0)
 **Files:** 18 passed
-**Tests:** 155 passed
+**Tests:** 163 passed
 
 Interactive staging UAT remains separate (IDs 102 / 110).
 
