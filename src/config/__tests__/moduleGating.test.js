@@ -18,6 +18,7 @@ describe("moduleGating", () => {
       "ScheduleHub",
       "FieldToday",
       "Settings",
+      "Billing",
     ]) {
       expect(isGatedPage(page)).toBe(false);
       expect(gateFlagForPage(page)).toBeNull();

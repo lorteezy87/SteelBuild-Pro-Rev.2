@@ -1,26 +1,14 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { auth } from "@/api/supabaseClient";
-import { useQuery } from '@tanstack/react-query';
+import { useAuth } from "@/lib/AuthContext";
 
 export default function PageNotFound() {
     const location = useLocation();
     const navigate = useNavigate();
     const pageName = location.pathname.substring(1);
-
-    const { data: authData, isFetched } = useQuery({
-        queryKey: ['user'],
-        queryFn: async () => {
-            try {
-                const user = await auth.me();
-                return { user, isAuthenticated: true };
-            } catch {
-                return { user: null, isAuthenticated: false };
-            }
-        }
-    });
+    const { user, isAuthenticated } = useAuth();
 
     return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "var(--bg-page)" }}>
+        <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "var(--bg-page)" }}>
             <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
                 <div style={{ marginBottom: 24 }}>
                     <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 72, fontWeight: 300, color: "var(--border-strong)", margin: 0, lineHeight: 1 }}>404</h1>
@@ -34,7 +22,7 @@ export default function PageNotFound() {
                     The page <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>"{pageName}"</span> could not be found in this application.
                 </p>
 
-                {isFetched && authData?.isAuthenticated && authData?.user?.role === 'admin' && (
+                {isAuthenticated && user?.role === 'admin' && (
                     <div style={{ padding: "12px 16px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 2, textAlign: "left", marginBottom: 24 }}>
                         <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>ADMIN_NOTE</p>
                         <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, margin: 0 }}>

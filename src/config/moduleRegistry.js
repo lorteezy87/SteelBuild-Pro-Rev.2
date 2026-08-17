@@ -233,6 +233,7 @@ export const SIDEBAR_GROUPS = hideNativePages([
       { label: "RFIs",           icon: "⚑", page: "RFIs", badgeKey: "rfi" },
       { label: "Action Items",   icon: "☑", page: "ActionItems" },
       { label: "Email Inbox",    icon: "✉", page: "EmailInbox" },
+      { label: "Production Notes", icon: "📝", page: "ProductionNotes" },
     ],
   },
   {

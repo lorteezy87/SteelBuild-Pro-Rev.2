@@ -10,9 +10,8 @@ import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawing
 import { effectiveDetailingState } from "@/lib/detailingPackageState";
 import {
   currentRevisionForPackage,
-  dueInfoFor,
-  getSubmittalDueDate,
   isClosedPackage,
+  resolveDrawingPackageDue,
 } from "./format";
 import type { CurrentRevisionInfo, DueInfo } from "./types";
 
@@ -60,7 +59,8 @@ export function buildDrawingRegisterRows({
   return (setPackages || []).map((pkg: any): DrawingRegisterRow => {
     const sheets: any[] = pkg.sheets || [];
     const submittals: any[] = pkg.submittals || [];
-    const latestSubmittal = submittals.slice().sort((a, b) => (b.round_number || 1) - (a.round_number || 1))[0] || null;
+    const packageDue = resolveDrawingPackageDue(pkg, workdayDues);
+    const latestSubmittal = packageDue.governingSubmittal;
     const sheetCount = sheets.length || (pkg.parent?.sheet_count ?? 0);
     // Per-sheet "released" count is DISPLAY ONLY (the n/total badge). It reads the
     // legacy columns to show progress but MUST NOT decide the package's
@@ -70,7 +70,7 @@ export function buildDrawingRegisterRows({
     // SAME predicate as the hub's "Sets Released" KPI (isClosedPackage).
     const done = isClosedPackage(pkg);
     const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);
-    const due = dueInfoFor(getSubmittalDueDate(latestSubmittal), { closed: done, useWorkdays: workdayDues });
+    const due = packageDue.due;
     const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
     // §20-21: displayed Rev is a per-set rollup of the AUTHORITATIVE current
     // revision (drawing_revisions.is_current) — highest-version sheet code — with a

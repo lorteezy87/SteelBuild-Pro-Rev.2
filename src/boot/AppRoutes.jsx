@@ -147,9 +147,8 @@ export function IndexRoute() {
  * AppRoutes — the full route table.
  *
  * All registered pages share a single Layout instance (mounted once, kept
- * across navigation). The 404 catch-all is OUTSIDE the layout route so that
- * a typo'd URL gets a clean fullscreen "not found" instead of an empty
- * shell.
+ * across navigation). Unknown URLs stay inside that authenticated shell and
+ * use the existing AuthContext instead of starting a second session check.
  */
 export default function AppRoutes() {
   return (
@@ -218,6 +217,8 @@ export default function AppRoutes() {
 
         {/* /GanttChart was retired — redirect old deep-links to /Schedule */}
         <Route path="GanttChart" element={<Navigate to={STATIC_ROUTE_METADATA["/GanttChart"].target} replace />} />
+
+        <Route path="*" element={<PageNotFound />} />
       </Route>
 
       <Route
@@ -228,11 +229,7 @@ export default function AppRoutes() {
           </LazyRoute>
         }
       />
-
-      {/* 404 — outside layout */}
-      <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
 }
-
 

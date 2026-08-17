@@ -113,6 +113,7 @@ export default function ProductionNotes() {
   });
   const folderWorkspace = foldersQuery.data;
   const folders = folderWorkspace?.folders ?? [];
+  const folderWorkspaceReady = Boolean(folderWorkspace && !foldersQuery.isError);
   const selectedFolder =
     folders.find((folder) => folder.id === selectedFolderId) ||
     folders.find((folder) => folder.id === folderWorkspace?.general_notes_id) ||
@@ -385,7 +386,7 @@ export default function ProductionNotes() {
           unit=" · BULLETS"
           subtitle={
             [
-              selectedFolder?.name || "Folders",
+              foldersQuery.isError ? "Folder data unavailable" : selectedFolder?.name || "Folders",
               highlightedCount > 0
                 ? `${projectRows.length} project${projectRows.length === 1 ? "" : "s"} · ${highlightedCount} highlighted`
                 : `${projectRows.length} project${projectRows.length === 1 ? "" : "s"}`,
@@ -436,7 +437,12 @@ export default function ProductionNotes() {
           >
             <CalendarDays size={14} />
           </button>
-          <Button variant="primary" icon="plus" onClick={() => setProjectPickerOpen(true)}>
+          <Button
+            variant="primary"
+            icon="plus"
+            disabled={!folderWorkspaceReady}
+            onClick={() => setProjectPickerOpen(true)}
+          >
             Add Project
           </Button>
         </CommandBar>
@@ -462,8 +468,8 @@ export default function ProductionNotes() {
             onArchive={(folder) => archiveFolderMut.mutate(folder)}
             onLinkJobs={setLinkingFolder}
             projects={projects}
-            canOrganize={canOrganize}
-            canManageLinks={canManageLinks}
+            canOrganize={folderWorkspaceReady && canOrganize}
+            canManageLinks={folderWorkspaceReady && canManageLinks}
           />
         </div>
         <style>{`
@@ -529,7 +535,31 @@ export default function ProductionNotes() {
           </div>
 
           {/* Rows */}
-          {notesLoading && projectRows.length === 0 ? (
+          {foldersQuery.isLoading ? (
+            <div style={{ padding: "24px" }}>
+              <LoadingSkeleton variant="table" rows={5} />
+            </div>
+          ) : foldersQuery.isError ? (
+            <div
+              role="alert"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px 24px",
+                gap: 16,
+              }}
+            >
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+                Couldn’t load note folders
+              </p>
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 360 }}>
+                {toUserErrorMessage(foldersQuery.error, "Folder data is unavailable. Notes cannot be safely edited until it loads.")}
+              </p>
+              <Button variant="outline" onClick={() => foldersQuery.refetch()}>Retry folders</Button>
+            </div>
+          ) : notesLoading && projectRows.length === 0 ? (
             <div style={{ padding: "24px" }}>
               <LoadingSkeleton variant="table" rows={5} />
             </div>
@@ -565,7 +595,13 @@ export default function ProductionNotes() {
             >
               No notes for this meeting.
               <br />
-              <Button variant="primary" icon="plus" onClick={() => setProjectPickerOpen(true)} style={{ marginTop: 12 }}>
+              <Button
+                variant="primary"
+                icon="plus"
+                disabled={!folderWorkspaceReady}
+                onClick={() => setProjectPickerOpen(true)}
+                style={{ marginTop: 12 }}
+              >
                 Add a project to get started
               </Button>
             </div>

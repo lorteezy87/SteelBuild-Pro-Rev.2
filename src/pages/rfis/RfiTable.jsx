@@ -5,6 +5,16 @@
 import RfiRow from "./RfiRow";
 import { EmptyState } from "@/components/design-system";
 
+/**
+ * @param {{
+ *   rows: any[];
+ *   totalCount: number;
+ *   selectedIds?: Set<string>;
+ *   onToggleAll?: (checked: boolean) => void;
+ *   onToggleSelect?: (id: string) => void;
+ *   onOpen?: (rfi: any) => void;
+ * }} props
+ */
 export default function RfiTable({ rows, totalCount, selectedIds = new Set(), onToggleAll = () => {}, onToggleSelect = () => {}, onOpen = () => {} }) {
   const allVisibleSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
 

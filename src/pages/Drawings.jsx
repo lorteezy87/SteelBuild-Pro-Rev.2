@@ -126,6 +126,7 @@ export default function Drawings({ embedded = false } = {}) {
   const [compareDrawing, setCompareDrawing] = useState(null);
   const [reportSet, setReportSet] = useState(null);
   const revisionAiEnabled = useFlag("revision_ai_diff");
+  const workdayDues = useFlag("submittal_workday_dues");
   // Sprint 4 — package export modal. `kind` is "fab_release" | "turnover" | "claims".
   const [exportPkgKind, setExportPkgKind] = useState(null);
   // F18: replace window.confirm() with a styled DeleteDialog. Shape:
@@ -211,8 +212,8 @@ export default function Drawings({ embedded = false } = {}) {
   // legacy sets without a submittal yet. PACKAGES / PRIORITY / OVERDUE
   // remain sheet-derived (document facets, not workflow assertions).
   const stats = useMemo(
-    () => computeStatsFromSubmittals(drawings, drawingSetRecords, submittals),
-    [drawings, drawingSetRecords, submittals],
+    () => computeStatsFromSubmittals(drawings, drawingSetRecords, submittals, workdayDues),
+    [drawings, drawingSetRecords, submittals, workdayDues],
   );
   const disciplineCounts = useMemo(() => computeDisciplineCounts(drawings, DISCIPLINES), [drawings]);
   const revisionAlerts = useMemo(() => buildRevisionAlerts(drawings, rfiMap), [drawings, rfiMap]);

@@ -241,8 +241,19 @@ describe("buildFabReleaseSummary – decision panel queues", () => {
     const noDate = makeWP("nd", { _signals: makeSignals({ inShop: true }) });
     const metrics = makeMetrics({ activeShop: [older, newer, noDate] });
     const s = buildFabReleaseSummary(metrics);
-    // noDate has no released_date → excluded from recentlyReleased
-    expect(s.recentlyReleased.map((wp) => wp.id)).toEqual(["new", "old"]);
+    // A missing release date is incomplete metadata, not evidence the release
+    // did not happen. It remains visible after dated releases.
+    expect(s.recentlyReleased.map((wp) => wp.id)).toEqual(["new", "old", "nd"]);
+  });
+
+  it("never reports released packages while showing an empty recently-released panel", () => {
+    const shopWp = makeWP("shop", { _signals: makeSignals({ stage: "shop_released", inShop: true }) });
+    const shipWp = makeWP("ship", { _signals: makeSignals({ stage: "ready_to_ship", complete: true }) });
+    const s = buildFabReleaseSummary(makeMetrics({ activeShop: [shopWp], readyToShip: [shipWp] }));
+
+    expect(s.releasedCount).toBe(2);
+    expect(s.recentlyReleased.map((wp) => wp.id)).toEqual(expect.arrayContaining(["shop", "ship"]));
+    expect(s.recentlyReleased).toHaveLength(2);
   });
 
   it("recentlyReleased is capped at 6", () => {

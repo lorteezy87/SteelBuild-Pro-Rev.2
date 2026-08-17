@@ -3,8 +3,9 @@ import {
   isOverdue, daysLate, groupByDrawingSet,
   buildRfiMap, buildSubmittalsBySetId, filterDrawings, groupByDrawingSetName,
   computeExistingSetNames, buildDrawingSetMap, computeSelectedSetName, computeStagePipeline,
-  classifyDrawingStageMutation, getDrawingSetIdentity,
+  classifyDrawingStageMutation, getDrawingSetIdentity, computeStatsFromSubmittals,
 } from "../drawingsUtils";
+import { buildTriage } from "@/pages/drawingSubmittalHub/format";
 
 const PAST = "2020-01-01";
 const FUTURE = "2999-01-01";
@@ -31,6 +32,59 @@ describe("daysLate", () => {
     expect(daysLate({ due_date: FUTURE, stage: "IFC" })).toBe(0);
     expect(daysLate({ due_date: PAST, stage: "IFC" })).toBeGreaterThan(0);
     expect(daysLate({ due_date: PAST, stage: "Released" })).toBe(0); // done = not late
+  });
+});
+
+describe("computeStatsFromSubmittals overdue authority", () => {
+  const drawingSets = [{ id: "set-1", set_name: "Main Steel" }];
+
+  it("uses the governing submittal due date instead of a stale sheet due date", () => {
+    const stats = computeStatsFromSubmittals(
+      [{ id: "d-1", drawing_set_id: "set-1", due_date: PAST, stage: "OFA" }],
+      drawingSets,
+      [{ id: "sub-1", drawing_set_ids: ["set-1"], status: "Under Review", required_date: FUTURE }],
+    );
+    expect(stats.overdue).toBe(0);
+  });
+
+  it("counts an overdue governing submittal even when the sheet date is not overdue", () => {
+    const stats = computeStatsFromSubmittals(
+      [{ id: "d-1", drawing_set_id: "set-1", due_date: FUTURE, stage: "OFA" }],
+      drawingSets,
+      [{ id: "sub-1", drawing_set_ids: ["set-1"], status: "Under Review", required_date: PAST }],
+    );
+    expect(stats.overdue).toBe(1);
+  });
+
+  it("never counts a released package overdue", () => {
+    const stats = computeStatsFromSubmittals(
+      [{ id: "d-1", drawing_set_id: "set-1", due_date: PAST, stage: "OFA" }],
+      drawingSets,
+      [{ id: "sub-1", drawing_set_ids: ["set-1"], status: "Released for Fabrication", required_date: PAST }],
+    );
+    expect(stats.overdue).toBe(0);
+  });
+
+  it("matches the Hub's overdue drawing-set count while keeping unlinked submittals separate", () => {
+    const linked = { id: "sub-1", drawing_set_ids: ["set-1"], status: "Under Review", required_date: PAST };
+    const unlinked = { id: "sub-2", drawing_set_ids: [], status: "Under Review", required_date: PAST };
+    const sheets = [{ id: "d-1", drawing_set_id: "set-1", due_date: FUTURE, stage: "OFA" }];
+    const setPackage = {
+      key: "set-1",
+      setId: "set-1",
+      name: "Main Steel",
+      parent: drawingSets[0],
+      sheets,
+      submittals: [linked],
+    };
+
+    const drawingsStats = computeStatsFromSubmittals(sheets, drawingSets, [linked, unlinked]);
+    const hubTriage = buildTriage([linked, unlinked], [setPackage], new Map());
+
+    expect(drawingsStats.overdue).toBe(hubTriage.overdueDrawingSets);
+    expect(hubTriage.overdueDrawingSets).toBe(1);
+    expect(hubTriage.overdueUnlinkedSubmittals).toBe(1);
+    expect(hubTriage.overdue).toHaveLength(2);
   });
 });
 

@@ -79,6 +79,8 @@ function KpiCell({
 }
 
 export interface SubmittalRegisterPanelProps {
+  /** The Drawing/Submittal Hub already owns the title and KPI strip. */
+  embedded?: boolean;
   /** Derived register model — counts + the visible/total lengths for the
    *  header + KPI cells. The list/detail bodies come in pre-built (below). */
   filtered: Submittal[];
@@ -114,6 +116,7 @@ export interface SubmittalRegisterPanelProps {
 }
 
 export default function SubmittalRegisterPanel({
+  embedded = false,
   filtered, rows, stats, reviewsAtRisk,
   filterStatus, filterBIC, search, onFilterStatus, onFilterBIC, onSearch,
   selectedIds, allSelected, toggleAll,
@@ -128,47 +131,51 @@ export default function SubmittalRegisterPanel({
 
   return (
     <div className="detailing-cc" style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0, overflow: "hidden" }}>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--cmd-text-muted)" }}>
-            {projectLabel} · Submittals
+      {!embedded && (
+        <>
+          {/* ── Header ─────────────────────────────────────────────────── */}
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--cmd-text-muted)" }}>
+                {projectLabel} · Submittals
+              </div>
+              <h2 style={{ margin: "3px 0 0", fontSize: 22, fontWeight: 700, color: "var(--cmd-text)" }}>
+                Submittal Register
+                <span style={{ marginLeft: 10, fontSize: 14, fontWeight: 600, color: "var(--cmd-text-muted)" }}>
+                  {filtered.length}{countUnit}
+                </span>
+              </h2>
+              <div style={{ marginTop: 3, fontSize: 13, color: "var(--cmd-text-muted)" }}>{subtitle}</div>
+            </div>
           </div>
-          <h2 style={{ margin: "3px 0 0", fontSize: 22, fontWeight: 700, color: "var(--cmd-text)" }}>
-            Submittal Register
-            <span style={{ marginLeft: 10, fontSize: 14, fontWeight: 600, color: "var(--cmd-text-muted)" }}>
-              {filtered.length}{countUnit}
-            </span>
-          </h2>
-          <div style={{ marginTop: 3, fontSize: 13, color: "var(--cmd-text-muted)" }}>{subtitle}</div>
-        </div>
-      </div>
 
-      {/* ── KPI strip (click-to-filter, kit cmd-kpi cells) ─────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-        <KpiCell
-          label="Total" value={stats.total} Icon={ClipboardList} tone="info"
-          active={filterStatus === "all" && filterBIC === "all"}
-          onClick={() => { onFilterStatus("all"); onFilterBIC("all"); }}
-        />
-        <KpiCell
-          label="Pending" value={stats.pending} Icon={Clock3} tone="warn"
-          active={filterStatus === "__pending"}
-          onClick={() => onFilterStatus("__pending")}
-        />
-        <KpiCell
-          label="Approved" value={stats.approved} Icon={CheckCircle2} tone="good"
-          active={filterStatus === "__approved"}
-          onClick={() => onFilterStatus("__approved")}
-        />
-        <KpiCell
-          label="Rejected" value={stats.rejected} Icon={ShieldAlert} tone="danger"
-          active={filterStatus === "__rejected"}
-          onClick={() => onFilterStatus("__rejected")}
-        />
-        <KpiCell label="Overdue" value={stats.overdue} Icon={AlertTriangle} tone="danger" />
-        <KpiCell label="At risk" value={reviewsAtRisk} Icon={TrendingUp} tone="warn" sub="forecast" />
-      </div>
+          {/* ── KPI strip (click-to-filter, kit cmd-kpi cells) ─────────── */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+            <KpiCell
+              label="Total" value={stats.total} Icon={ClipboardList} tone="info"
+              active={filterStatus === "all" && filterBIC === "all"}
+              onClick={() => { onFilterStatus("all"); onFilterBIC("all"); }}
+            />
+            <KpiCell
+              label="Pending" value={stats.pending} Icon={Clock3} tone="warn"
+              active={filterStatus === "__pending"}
+              onClick={() => onFilterStatus("__pending")}
+            />
+            <KpiCell
+              label="Approved" value={stats.approved} Icon={CheckCircle2} tone="good"
+              active={filterStatus === "__approved"}
+              onClick={() => onFilterStatus("__approved")}
+            />
+            <KpiCell
+              label="Rejected" value={stats.rejected} Icon={ShieldAlert} tone="danger"
+              active={filterStatus === "__rejected"}
+              onClick={() => onFilterStatus("__rejected")}
+            />
+            <KpiCell label="Overdue" value={stats.overdue} Icon={AlertTriangle} tone="danger" />
+            <KpiCell label="At risk" value={reviewsAtRisk} Icon={TrendingUp} tone="warn" sub="forecast" />
+          </div>
+        </>
+      )}
 
       <ListTruncationNotice count={rows.length} label="submittals" />
 

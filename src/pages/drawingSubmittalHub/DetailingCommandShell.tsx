@@ -77,8 +77,8 @@ export function DetailingCommandShell({
       ? [{ label: `${kpis.openItems} Open`, tone: "info" as const }]
       : []),
     ...(kpis.overdue > 0
-      ? [{ label: `${kpis.overdue} Overdue`, tone: "danger" as const }]
-      : [{ label: "No overdue", tone: "good" as const }]),
+      ? [{ label: `${kpis.overdue} Overdue Set${kpis.overdue === 1 ? "" : "s"}`, tone: "danger" as const }]
+      : [{ label: "No overdue sets", tone: "good" as const }]),
     ...(kpis.atRisk > 0
       ? [{ label: `${kpis.atRisk} At Risk`, tone: "warn" as const }]
       : []),
@@ -136,7 +136,7 @@ export function DetailingCommandShell({
       Icon: AlertTriangle,
     },
     {
-      label: "Overdue",
+      label: "Overdue Sets",
       value: kpis.overdue,
       sublabel: (() => {
         if (kpis.overdueDrawingSets > 0 && kpis.overdueUnlinkedSubmittals > 0)
@@ -145,7 +145,7 @@ export function DetailingCommandShell({
           return `${kpis.overdueUnlinkedSubmittals} unlinked subs`;
         if (kpis.overdueDrawingSets > 0)
           return `${kpis.overdueDrawingSets} drawing sets`;
-        return "packages + unlinked subs";
+        return "drawing packages";
       })(),
       tone: (kpis.overdue > 0 ? "danger" : "neutral") as KpiTone,
       Icon: CalendarClock,

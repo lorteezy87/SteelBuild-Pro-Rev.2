@@ -65,7 +65,12 @@ export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
       onClick={onOpen}
     >
       <div className="rfi-row-check" onClick={(e) => e.stopPropagation()}>
-        <input type="checkbox" checked={!!selected} onChange={onToggle} />
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={onToggle}
+          aria-label={`Select ${rfi.rfi_number || "RFI"}`}
+        />
       </div>
 
       <div className="rfi-row-number-stack">
