@@ -37,11 +37,15 @@ import { calcWpProgress } from "@/utils/projectKpis";
 import { buildRfiAlertPayload } from "./rfis/rfiMutationHelpers";
 import { planRfiOverdueAlerts } from "./rfis/rfiOverdueAlerts";
 import { useRfiPageMutations } from "./rfis/useRfiPageMutations";
+import { scopeRfiPortfolioRows } from "./rfis/rfiPortfolioScope";
+import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const projectId = useProjectId();
+  const isPortfolio = !projectId;
   const { can } = usePermissions();
 
   const [filter, setFilter] = useState("all");
@@ -71,26 +75,62 @@ export default function RFIs() {
   });
 
   /* ── Data ── */
-  const { data: projects = [] } = useQuery({
+  const {
+    data: projects = [],
+    isLoading: projectsLoading,
+    isError: projectsError,
+    error: projectsQueryError,
+    refetch: refetchProjects,
+  } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => entities.Project.list(),
+    queryFn: () => entities.Project.listAll(),
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: rfis = [], isLoading: rfisLoading } = useQuery({
-    queryKey: ["rfis", projectId],
-    queryFn: () => entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
-    enabled: !!projectId,
+  const {
+    data: rawRfis = [],
+    isLoading: rfisLoading,
+    isError: rfisError,
+    error: rfiQueryError,
+    isSuccess: rfisSuccess,
+    refetch: refetchRfis,
+  } = useQuery({
+    queryKey: ["rfis", projectId || "portfolio"],
+    queryFn: () => projectId
+      ? entities.RFI.filter({ project_id: projectId }, "-submitted_date")
+      : entities.RFI.listAll("-submitted_date"),
   });
+  const rfis = useMemo(
+    () => isPortfolio ? scopeRfiPortfolioRows(projects, rawRfis) : rawRfis,
+    [isPortfolio, projects, rawRfis],
+  );
   useAutoOpenEdit(rfis, setSelectedRFI, { enabled: !rfisLoading, param: "recordId" });
-  const { data: workPackages = [] } = useQuery({
-    queryKey: ["work-packages", projectId],
-    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
-    enabled: !!projectId,
+  const { data: rawWorkPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId || "portfolio"],
+    queryFn: () => projectId
+      ? entities.WorkPackage.filter({ project_id: projectId })
+      : entities.WorkPackage.listAll(),
     staleTime: 5 * 60 * 1000,
   });
+  const workPackages = useMemo(
+    () => isPortfolio ? scopeRfiPortfolioRows(projects, rawWorkPackages) : rawWorkPackages,
+    [isPortfolio, projects, rawWorkPackages],
+  );
+  const {
+    data: rawScheduleTasks = [],
+    isSuccess: scheduleTasksSuccess,
+  } = useQuery({
+    queryKey: ["schedule-tasks-rfis", projectId || "portfolio"],
+    queryFn: () => projectId
+      ? entities.ScheduleTask.filter({ project_id: projectId }, "-start_date")
+      : entities.ScheduleTask.listAll("-start_date"),
+  });
+  const scheduleTasks = useMemo(
+    () => isPortfolio ? scopeRfiPortfolioRows(projects, rawScheduleTasks) : rawScheduleTasks,
+    [isPortfolio, projects, rawScheduleTasks],
+  );
 
-  const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
+  const rfiQueryKeys = [["rfis", projectId || "portfolio"], ["rfis"]];
   useRealtimeInvalidation("rfis", projectId, rfiQueryKeys);
 
   /* ── URL-driven selection (from cross-page deep links) ── */
@@ -107,6 +147,7 @@ export default function RFIs() {
   // page doesn't re-open the modal and the back button still returns
   // the user to wherever they came from.
   useAutoOpenCreate(() => {
+    if (isPortfolio) return;
     setEditingRFI(null);
     setShowForm(true);
   });
@@ -161,6 +202,7 @@ export default function RFIs() {
   /* ── Overdue → Alert background effect ── */
   const alertsCreatedRef = useRef(new Set());
   useEffect(() => {
+    if (!projectId) return;
     if (!rfis.length) return;
     const createRFIAlerts = async () => {
       try {
@@ -183,10 +225,10 @@ export default function RFIs() {
     };
     const t = setTimeout(createRFIAlerts, 2500);
     return () => clearTimeout(t);
-  }, [rfis, projectMap]);
+  }, [projectId, rfis, projectMap]);
 
   /* ── Loading ── */
-  if (rfisLoading) {
+  if (rfisLoading || projectsLoading) {
     return (
       <div style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
@@ -199,7 +241,14 @@ export default function RFIs() {
   // Project-level context for the RFI Control Center hero (real, from the project
   // record + work-package progress — same %-complete source as the Projects page).
   const activeProject = projects.find((p) => p.id === projectId);
-  const projectHealth = activeProject?.health_status || null;
+  const healthByProjectId = buildOperationalHealthIndex(
+    projects,
+    rfis,
+    scheduleTasks,
+    new Date().toISOString().slice(0, 10),
+    { rfiEvidenceLoaded: rfisSuccess, scheduleEvidenceLoaded: scheduleTasksSuccess },
+  );
+  const operationalHealth = activeProject?.id ? healthByProjectId[activeProject.id] : null;
   const percentComplete =
     activeProject?.scope_complete_pct_override != null
       ? Number(activeProject.scope_complete_pct_override)
@@ -258,15 +307,15 @@ export default function RFIs() {
         onClose={() => setNudgeRFI(null)}
       />
 
-      <RfiLogImportModal
+      {!isPortfolio && <RfiLogImportModal
         open={showLogImport}
         projectId={projectId}
         projectName={projects.find((p) => p.id === projectId)?.name}
         projects={projects}
         onClose={() => setShowLogImport(false)}
-      />
+      />}
 
-      {showForm && (
+      {!isPortfolio && showForm && (
         <RFIFormModal
           open={showForm}
           onClose={() => { setShowForm(false); setEditingRFI(null); }}
@@ -305,6 +354,7 @@ export default function RFIs() {
       }}
     >
       <RfiControlCenter
+        contextMode={isPortfolio ? "portfolio" : "project"}
         projectName={activeProjectName}
         rfis={rfis}
         filtered={filtered}
@@ -332,13 +382,23 @@ export default function RFIs() {
         onToggleInsights={handleToggleInsights}
         onOpenRfi={setSelectedRFI}
         onExport={() => exportRFIsToCSV(filtered)}
-        onImport={can("create", "rfi") ? () => setShowLogImport(true) : null}
-        onCreate={can("create", "rfi") ? () => {
+        onImport={!isPortfolio && can("create", "rfi") ? () => setShowLogImport(true) : null}
+        onCreate={!isPortfolio && can("create", "rfi") ? () => {
           setEditingRFI(null);
           setShowForm(true);
         } : null}
-        projectHealth={projectHealth}
+        operationalHealth={operationalHealth}
         percentComplete={percentComplete}
+        portfolioProjectCount={projects.length}
+        portfolioAtRiskCount={projects.filter((project) => healthByProjectId[project.id]?.label === "At Risk").length}
+        loadError={
+          projectsError
+            ? toUserErrorMessage(projectsQueryError, "Project data unavailable")
+            : rfisError
+              ? toUserErrorMessage(rfiQueryError, "RFI data unavailable")
+              : null
+        }
+        onRetryLoad={() => { void refetchProjects(); void refetchRfis(); }}
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
         onToggleAll={toggleAll}

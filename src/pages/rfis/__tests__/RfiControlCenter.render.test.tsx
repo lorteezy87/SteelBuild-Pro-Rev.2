@@ -68,6 +68,6 @@ it("renders without crashing and shows key landmark text", () => {
   // DecisionPanel title for the work queue
   expect(screen.getByText("RFI Work Queue")).toBeTruthy();
   // New hero stat card + table column from wave 1
-  expect(screen.getByText("Project Health")).toBeTruthy();
+  expect(screen.getByText("Operational Health")).toBeTruthy();
   expect(screen.getByText("Impact")).toBeTruthy();
 });

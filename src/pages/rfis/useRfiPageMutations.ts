@@ -75,7 +75,7 @@ export function useRfiPageMutations(args: {
   } = args;
 
   const qc = useQueryClient();
-  const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
+  const rfiQueryKeys = [["rfis", projectId || "portfolio"], ["rfis"]];
   const [savingAttachments, setSavingAttachments] = useState(false);
   const saveInFlightRef = useRef(false);
 

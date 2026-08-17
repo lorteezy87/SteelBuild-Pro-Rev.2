@@ -8,6 +8,7 @@ import {
 import type { KpiCellDef } from "@/components/command";
 import { buildRfiSummary } from "./rfiControlCenter.derive";
 import type { RfiRecord } from "./rfiControlCenter.derive";
+import type { OperationalHealthResult } from "@/lib/projectHealth";
 import { daysOpen, isOverdue } from "./utils";
 import RfiInsightsStrip from "./RfiInsightsStrip";
 import RfiFilterToolbar from "./RfiFilterToolbar";
@@ -34,6 +35,7 @@ type RfiAgenda = {
 
 /** Canonical RFI presentation shell. RFIs.jsx remains the data and mutation authority. */
 export interface RfiControlCenterProps {
+  contextMode?: "project" | "portfolio";
   projectName: string;
   rfis: RfiRecord[];
   filtered: RfiRecord[];
@@ -60,7 +62,12 @@ export interface RfiControlCenterProps {
   onCreate?: (() => void) | null;
   /** Project-level context for the hero stat cards (real, from the project record). */
   projectHealth?: string | null;
+  operationalHealth?: OperationalHealthResult | null;
   percentComplete?: number | null;
+  portfolioProjectCount?: number;
+  portfolioAtRiskCount?: number;
+  loadError?: string | null;
+  onRetryLoad?: (() => void) | null;
   /** Wide jobsite photo for the hero band. */
   photoSrc?: string;
   /** Bulk selection (drives the register checkbox column + parent bulk actions). */
@@ -78,6 +85,7 @@ function fmtMoney(n: number): string { return n ? `$${n.toLocaleString()}` : "$0
 export default function RfiControlCenter(props: RfiControlCenterProps) {
   const {
     projectName,
+    contextMode = "project",
     rfis,
     filtered,
     search,
@@ -102,7 +110,12 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
     onImport,
     onCreate,
     projectHealth,
+    operationalHealth,
     percentComplete,
+    portfolioProjectCount = 0,
+    portfolioAtRiskCount = 0,
+    loadError,
+    onRetryLoad,
     photoSrc,
     selectedIds = new Set<string>(),
     onToggleSelect = () => {},
@@ -116,14 +129,43 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
   useCommandSkin();
   const s = useMemo(() => buildRfiSummary(rfis), [rfis]);
 
-  const heroStats = [
-    { value: projectHealth || "—", label: "Project Health" },
-    { value: percentComplete != null ? `${Math.round(percentComplete)}%` : "—", label: "Complete" },
-  ];
+  if (loadError) {
+    return (
+      <div className="rfi-cc" role="alert" style={{ padding: 24 }}>
+        <div className="cmd-panel" style={{ padding: 24, textAlign: "center" }}>
+          <div className="cmd-row__num">Couldn’t load RFIs</div>
+          <div className="cmd-row__meta" style={{ marginTop: 8 }}>{loadError}</div>
+          {onRetryLoad ? (
+            <button type="button" className="cmd-chip-btn is-action" onClick={onRetryLoad} style={{ marginTop: 16 }}>
+              Retry
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  const heroStats = contextMode === "portfolio"
+    ? [
+        { value: portfolioProjectCount, label: "Active Projects" },
+        { value: portfolioAtRiskCount, label: "At Risk" },
+      ]
+    : [
+        {
+          value: operationalHealth
+            ? `${operationalHealth.label}${operationalHealth.partial ? "*" : ""}`
+            : projectHealth || "—",
+          label: "Operational Health",
+        },
+        { value: percentComplete != null ? `${Math.round(percentComplete)}%` : "—", label: "Complete" },
+      ];
   const chips = [
     { label: `${s.total} Total` },
     { label: `${s.open} Open`, tone: "good" as const },
     { label: `${s.overdue} Overdue` },
+    ...(operationalHealth?.reasons[0]
+      ? [{ label: operationalHealth.reasons[0], tone: "warn" as const }]
+      : []),
   ];
 
   const kpiCells: KpiCellDef[] = [
