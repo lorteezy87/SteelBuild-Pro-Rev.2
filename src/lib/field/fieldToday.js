@@ -54,14 +54,6 @@ export function taskCrew(task) {
   return String(task?.resource_names || task?.assigned_to || "").trim();
 }
 
-/** Add `days` to an ISO date (YYYY-MM-DD) — deterministic from its input. */
-function addDaysIso(iso, days) {
-  const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return iso;
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 /**
  * Bucket a task by how urgent it is *relative to todayIso*:
  *   done        — 100% / Complete (excluded from the list)
@@ -112,30 +104,42 @@ function compareTasks(a, b, todayIso) {
 }
 
 /**
- * The tasks a foreman should act on today: anything overdue, due today, or
- * underway, plus unscheduled (TBD) work, plus upcoming work that starts within
- * `horizonDays`. Completed tasks and far-future work are dropped. Sorted most
- * urgent first.
+ * Partition actionable leaf work without mixing recovery backlog, planning
+ * gaps, or future work into today's plan.
  */
-export function tasksForToday(tasks, todayIso, { horizonDays = 7 } = {}) {
-  const horizonIso = addDaysIso(todayIso, horizonDays);
-  // Drop summary/parent rows: a foreman acts on leaf work items, not rolled-up
-  // parents. A summary's dates only span its children, so it would otherwise
-  // show up as "overdue"/"active" noise duplicating the child rows.
+export function partitionFieldTasks(tasks, todayIso) {
   const parentIds = buildParentIdSet(Array.isArray(tasks) ? tasks : []);
   const live = (Array.isArray(tasks) ? tasks : []).filter(
-    (t) => t && !t.is_deleted && !isSummaryTask(t, parentIds),
+    (task) =>
+      task &&
+      !task.is_deleted &&
+      !isSummaryTask(task, parentIds) &&
+      taskUrgency(task, todayIso) !== "done",
   );
+  const buckets = { today: [], recovery: [], unscheduled: [], upcoming: [] };
 
-  const relevant = live.filter((t) => {
-    const u = taskUrgency(t, todayIso);
-    if (u === "done") return false;
-    if (u === "upcoming") {
-      const start = String(t.start_date || "").slice(0, 10);
-      return !!start && start <= horizonIso;
-    }
-    return true; // overdue, due-today, active, unscheduled
-  });
+  for (const task of live) {
+    const start = String(task.start_date || "").slice(0, 10);
+    const end = String(task.end_date || "").slice(0, 10);
 
-  return relevant.sort((a, b) => compareTasks(a, b, todayIso));
+    if (end && end < todayIso) buckets.recovery.push(task);
+    else if (
+      end === todayIso ||
+      (start && start <= todayIso && (!end || end >= todayIso))
+    ) {
+      buckets.today.push(task);
+    } else if (start && start > todayIso) buckets.upcoming.push(task);
+    else if (!start) buckets.unscheduled.push(task);
+  }
+
+  buckets.today.sort((a, b) => compareTasks(a, b, todayIso));
+  buckets.recovery.sort((a, b) => compareTasks(a, b, todayIso));
+  buckets.unscheduled.sort((a, b) => taskLabel(a).localeCompare(taskLabel(b)));
+  buckets.upcoming.sort((a, b) => compareTasks(a, b, todayIso));
+  return buckets;
+}
+
+/** The leaf tasks a foreman should act on today, excluding recovery backlog. */
+export function tasksForToday(tasks, todayIso) {
+  return partitionFieldTasks(tasks, todayIso).today;
 }
