@@ -94,6 +94,14 @@ describe("buildScheduleSummary — summary task exclusion", () => {
     const s = buildScheduleSummary([summary, leaf]);
     expect(s.activities).toBe(1);
   });
+
+  it("excludes a raw parent row identified only by a child's parent_task_id", () => {
+    const parent = makeTask({ id: "parent", percent_complete: 90 });
+    const child = makeTask({ id: "child", parent_task_id: "parent", percent_complete: 10 });
+    const s = buildScheduleSummary([parent, child]);
+    expect(s.activities).toBe(1);
+    expect(s.pctComplete).toBe(10);
+  });
 });
 
 // ── Overdue ───────────────────────────────────────────────────────────────────

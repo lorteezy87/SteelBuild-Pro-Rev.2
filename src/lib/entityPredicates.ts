@@ -49,6 +49,17 @@ export const ACTION_ITEM_CLOSED_STATUSES: ReadonlySet<string> = new Set([
 export const isActionItemOpen = (a: StatusBearer): boolean =>
   !ACTION_ITEM_CLOSED_STATUSES.has(a?.status ?? "");
 
+// ── Punchlist ─────────────────────────────────────────────────────
+export const PUNCHLIST_CLOSED_STATUSES: ReadonlySet<string> = new Set([
+  "Closed",
+  "Complete",
+  "Completed",
+  "Done",
+  "Resolved",
+]);
+export const isPunchlistOpen = (item: StatusBearer): boolean =>
+  !PUNCHLIST_CLOSED_STATUSES.has(item?.status ?? "");
+
 // ── Change orders ─────────────────────────────────────────────────
 export const CO_PENDING_STATUSES: ReadonlySet<string> = new Set([
   "Submitted",

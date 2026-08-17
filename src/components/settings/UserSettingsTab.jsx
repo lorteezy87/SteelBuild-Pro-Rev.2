@@ -112,7 +112,7 @@ export default function UserSettingsTab({ user, workspaceRole }) {
             </div>
           </div>
           <div>
-            <label style={S.label}>Member Since</label>
+            <label style={S.label}>Account Since</label>
             <div style={{ padding: '8px 12px', background: 'var(--bg-surface-low)', borderRadius: 8, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
               {user?.created_date ? formatLocalDate(user.created_date, 'en-US', { month: 'long', year: 'numeric' }) : '—'}
             </div>

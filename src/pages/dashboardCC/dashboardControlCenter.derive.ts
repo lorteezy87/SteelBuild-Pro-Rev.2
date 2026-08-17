@@ -13,7 +13,7 @@ import {
   timelineElapsedPct,
   budgetCommitted,
   committedSpend,
-  costVariance,
+  actualSpend,
   revisedContractValue,
   daysRemaining,
   totalBilled,
@@ -31,6 +31,7 @@ import {
   deriveOperationalHealth,
 } from "@/lib/projectHealth";
 import type { OperationalHealthResult } from "@/lib/projectHealth";
+import { isPunchlistOpen } from "@/lib/entityPredicates";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -238,19 +239,32 @@ export function buildDashboardSummary(input: {
     codes as Parameters<typeof committedSpend>[0],
     expenses as Parameters<typeof committedSpend>[1],
   );
-  const hasPostedCosts = committed > 0;
-  const costDelta = costVariance(
-    codes as Parameters<typeof costVariance>[0],
-    expenses as Parameters<typeof costVariance>[1],
+  const actual = actualSpend(
+    codes as Parameters<typeof actualSpend>[0],
+    expenses as Parameters<typeof actualSpend>[1],
   );
+  // Cost codes can carry actual_cost without committed_cost. Use the greater
+  // resolved exposure so real spend is never presented as "no costs posted"
+  // or as a misleading +100% budget variance.
+  const costExposure = Math.max(committed, actual);
+  const hasPostedCosts = costExposure > 0;
+  const costDelta = budget - costExposure;
   const costPct = budget > 0 ? (costDelta / budget) * 100 : 0;
-  const budgetHealth = budget > 0 ? clamp(Math.round(100 + Math.min(0, costPct)), 0, 100) : 78;
+  const budgetHealth = budget > 0 && hasPostedCosts
+    ? clamp(Math.round(100 + Math.min(0, costPct)), 0, 100)
+    : null;
 
-  const openPunchlist = punchlistItems.filter((p) => !CLOSED_TASK_STATUSES.has(String((p as Record<string, unknown>).status ?? ""))).length;
+  const openPunchlist = punchlistItems.filter(isPunchlistOpen).length;
   const openInspections = inspections.filter((i) => !CLOSED_TASK_STATUSES.has(String((i as Record<string, unknown>).status ?? ""))).length;
   const qualityHealth = clamp(100 - Math.min(40, openPunchlist + openInspections), 60, 100);
   const safetyHealth = clamp(100 - Math.min(45, safetyIncidents.length * 8), 55, 100);
-  const rawHealthScore = Math.round((budgetHealth + scheduleHealth + qualityHealth + safetyHealth) / 4);
+  // Unknown cost evidence must not silently contribute a perfect score. Only
+  // include the cost dimension once a budget and actual/committed spend exist.
+  const healthComponents = [scheduleHealth, qualityHealth, safetyHealth];
+  if (budgetHealth !== null) healthComponents.push(budgetHealth);
+  const rawHealthScore = Math.round(
+    healthComponents.reduce((sum, value) => sum + value, 0) / healthComponents.length,
+  );
   const projectId = String(project?.id || "");
   const operationalHealth = (
     projectId

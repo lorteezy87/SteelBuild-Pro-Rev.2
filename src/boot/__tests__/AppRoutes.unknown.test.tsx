@@ -10,11 +10,24 @@ vi.mock("@/lib/AuthContext", () => ({
   useAuth: () => ({ user: { id: "user-1", role: "admin" }, isAuthenticated: true }),
 }));
 vi.mock("@/config/routes", () => ({
-  PAGES: {},
+  PAGES: {
+    OrgMembers: () => <div>TEAM_PAGE</div>,
+    CostHub: () => <div>COST_PAGE</div>,
+  },
   PROJECT_SCOPED_PAGES: new Set(),
   STATIC_ROUTE_METADATA: Object.fromEntries(
-    ["Schedule", "Financials", "CostDashboard", "ResourceManagement", "AIInsights", "MarginRisk", "RFIHub", "GanttChart"]
-      .map((path) => [`/${path}`, { target: "/" }]),
+    [
+      ["Schedule", "/"],
+      ["Financials", "/"],
+      ["CostDashboard", "/"],
+      ["ResourceManagement", "/"],
+      ["AIInsights", "/"],
+      ["MarginRisk", "/"],
+      ["RFIHub", "/"],
+      ["GanttChart", "/"],
+      ["Team", "/OrgMembers"],
+      ["BudgetControl", "/CostHub"],
+    ].map(([path, target]) => [`/${path}`, { lifecycle: "legacy", kind: "redirect", target }]),
   ),
 }));
 vi.mock("@/lib/lazyRetry", () => ({
@@ -64,5 +77,19 @@ describe("AppRoutes unknown URL handling", () => {
   it("preserves project context when a legacy route redirects", () => {
     expect(buildStaticRedirectTarget("/ScheduleHub", "?project=26179", "#week-4"))
       .toBe("/ScheduleHub?project=26179#week-4");
+  });
+
+  it.each([
+    ["/Team", "TEAM_PAGE"],
+    ["/BudgetControl", "COST_PAGE"],
+  ])("mounts the metadata redirect %s", (path, expectedPage) => {
+    render(
+      <MemoryRouter initialEntries={[`${path}?project=26179`]}>
+        <AppRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(expectedPage)).toBeInTheDocument();
+    expect(screen.queryByText("PAGE_NOT_FOUND")).not.toBeInTheDocument();
   });
 });

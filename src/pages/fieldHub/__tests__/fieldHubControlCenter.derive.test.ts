@@ -69,6 +69,14 @@ describe("buildFieldHubSummary", () => {
     expect(result.openFieldIssues).toBe(3);
   });
 
+  it("treats every terminal punchlist status as closed", () => {
+    const terminal = ["Closed", "Complete", "Completed", "Done", "Resolved"].map((status, index) => ({
+      id: `terminal-${index}`,
+      status,
+    }));
+    expect(buildFieldHubSummary([], [], [], terminal).openFieldIssues).toBe(0);
+  });
+
   it("counts scheduled inspections due (including today)", () => {
     // i1 Scheduled today, i2 Scheduled future → 2; i3 Completed excluded; i4 In Progress not Scheduled
     expect(result.inspectionsDue).toBe(2);

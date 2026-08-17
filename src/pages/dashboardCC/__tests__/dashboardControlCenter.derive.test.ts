@@ -166,6 +166,16 @@ describe("buildDashboardSummary", () => {
     expect(s.alerts.find((a) => a.id === "field")).toBeUndefined();
   });
 
+  it("matches Field Hub for every terminal punchlist status", () => {
+    const punchlistItems = ["Closed", "Complete", "Completed", "Done", "Resolved"].map((status, index) => ({
+      id: `terminal-${index}`,
+      status,
+    }));
+    const s = buildDashboardSummary({ punchlistItems });
+    expect(s.alerts.find((a) => a.id === "field")).toBeUndefined();
+    expect(s.modules.find((m) => m.page === "FieldHub")?.metric).toBe("0 Issues");
+  });
+
   it("shows cost health as pending until actual or committed cost is posted", () => {
     const s = buildDashboardSummary({
       codes: [{ id: "c1", budget_amount: 1_333_615, committed_cost: 0, actual_cost: 0 }],
@@ -176,6 +186,33 @@ describe("buildDashboardSummary", () => {
     expect(costKpi.value).toBe("TBD");
     expect(costKpi.sublabel).toBe("No costs posted");
     expect(costKpi.tone).toBe("neutral");
+  });
+
+  it("uses actual cost as cost evidence when committed cost is zero", () => {
+    const s = buildDashboardSummary({
+      codes: [{ id: "c1", budget_amount: 1000, committed_cost: 0, actual_cost: 400 }],
+      expenses: [],
+    });
+    const costKpi = s.kpis.find((k) => k.label === "Cost Health")!;
+    expect(costKpi.value).toBe("+60.0%");
+    expect(costKpi.sublabel).toBe("Under Budget");
+  });
+
+  it("does not award perfect budget-health credit before costs are posted", () => {
+    const project = {
+      id: "p1",
+      start_date: "2020-01-01",
+      target_completion_date: "2021-01-01",
+    };
+    const scheduleTasks = [{ id: "t1", status: "In Progress", percent_complete: 40 }];
+    const withoutCostEvidence = buildDashboardSummary({ project, scheduleTasks });
+    const withUnspentBudget = buildDashboardSummary({
+      project,
+      scheduleTasks,
+      codes: [{ id: "c1", budget_amount: 1000, committed_cost: 0, actual_cost: 0 }],
+    });
+    expect(withUnspentBudget.healthScore).toBe(withoutCostEvidence.healthScore);
+    expect(withUnspentBudget.healthScore).toBe(80);
   });
 
   it("produces 8 module tiles", () => {
