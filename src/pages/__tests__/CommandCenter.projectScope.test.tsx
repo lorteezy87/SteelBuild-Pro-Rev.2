@@ -3,12 +3,20 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { entitiesMock } = vi.hoisted(() => {
+const { entitiesMock, projectState } = vi.hoisted(() => {
   const entity = () => ({
     filter: vi.fn().mockResolvedValue([]),
     listAll: vi.fn().mockResolvedValue([]),
   });
   return {
+    projectState: {
+      id: "project-bimc" as string | null,
+      activeProject: {
+        id: "project-bimc",
+        name: "BIMC ED Expansion",
+        project_number: "26179",
+      } as { id: string; name: string; project_number: string } | null,
+    },
     entitiesMock: {
       RFI: entity(),
       Submittal: entity(),
@@ -21,14 +29,10 @@ const { entitiesMock } = vi.hoisted(() => {
 });
 
 vi.mock("@/api/supabaseClient", () => ({ entities: entitiesMock }));
-vi.mock("@/hooks/useProjectId", () => ({ useProjectId: () => "project-bimc" }));
+vi.mock("@/hooks/useProjectId", () => ({ useProjectId: () => projectState.id }));
 vi.mock("@/components/shared/ProjectContext", () => ({
   useProjectContext: () => ({
-    activeProject: {
-      id: "project-bimc",
-      name: "BIMC ED Expansion",
-      project_number: "26179",
-    },
+    activeProject: projectState.activeProject,
   }),
 }));
 vi.mock("../commandCenter/CommandCenterControlCenter", () => ({
@@ -43,12 +47,24 @@ vi.mock("../commandCenter/CommandCenterControlCenter", () => ({
 vi.mock("@/components/commandcenter/ItemDetailDrawer", () => ({ default: (): null => null }));
 vi.mock("@/components/commandcenter/ForwardLookDrawer", () => ({ default: (): null => null }));
 vi.mock("@/components/shared/LoadingSkeleton", () => ({ default: () => <div>loading</div> }));
+vi.mock("@/components/design-system/EmptyState", () => ({
+  default: ({ title, body }: { title: string; body: string }) => <div><h2>{title}</h2><p>{body}</p></div>,
+}));
+vi.mock("@/components/design-system/CommandBar", () => ({
+  default: ({ title }: { title: string }) => <h1>{title}</h1>,
+}));
 
 import CommandCenter from "../CommandCenter";
 
 describe("CommandCenter project scope", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    projectState.id = "project-bimc";
+    projectState.activeProject = {
+      id: "project-bimc",
+      name: "BIMC ED Expansion",
+      project_number: "26179",
+    };
     entitiesMock.RFI.filter.mockResolvedValue([{ id: "bimc-rfi" }]);
   });
 
@@ -73,5 +89,23 @@ describe("CommandCenter project scope", () => {
         expect(client.listAll).not.toHaveBeenCalled();
       }
     });
+  });
+
+  it("requires a project instead of rendering a misleading all-zero command center", () => {
+    projectState.id = null;
+    projectState.activeProject = null;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={client}>
+        <CommandCenter />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Select a project" })).toBeInTheDocument();
+    expect(screen.getByText(/never mix across jobs/i)).toBeInTheDocument();
+    for (const entity of Object.values(entitiesMock)) {
+      expect(entity.filter).not.toHaveBeenCalled();
+    }
   });
 });

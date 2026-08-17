@@ -6,6 +6,8 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import ItemDetailDrawer from "@/components/commandcenter/ItemDetailDrawer";
 import ForwardLookDrawer from "@/components/commandcenter/ForwardLookDrawer";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import EmptyState from "@/components/design-system/EmptyState";
+import CommandBar from "@/components/design-system/CommandBar";
 import CommandCenterControlCenter from "./commandCenter/CommandCenterControlCenter";
 
 /**
@@ -105,6 +107,23 @@ export default function CommandCenter() {
   }, [projects]);
 
   // ── Render ──────────────────────────────────────────────────────────
+  if (!projectId) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
+        <CommandBar
+          eyebrow="SteelBuild Pro · Command"
+          title="Command Center"
+          subtitle="Pick a project from the switcher to see its live priorities and risks."
+        />
+        <EmptyState
+          icon="dashboard"
+          title="Select a project"
+          body="Command Center is scoped to one project so RFIs, submittals, deliveries, work packages, and schedule risks never mix across jobs."
+        />
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="sb-dashboard-reference-page">
