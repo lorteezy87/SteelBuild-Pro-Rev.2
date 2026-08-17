@@ -46,25 +46,19 @@ describe("buildFieldTodaySummary", () => {
   const s = buildFieldTodaySummary(tasks, photos, punches, TODAY, 0);
 
   describe("kpis", () => {
-    it("todaysTasks excludes deleted + far-future (> 7d) + done tasks", () => {
-      // t1 (overdue), t2 (due-today), t3 (active) are relevant.
-      // t4 (complete = 100%) is INCLUDED in todaysWork but is 'done' bucket → stays in tasksForToday list
-      // Actually tasksForToday keeps all except done (taskUrgency==='done' filters are inside the fn).
-      // Let's verify the exact count from the helper.
-      expect(s.kpis.todaysTasks).toBeGreaterThanOrEqual(3); // at minimum t1/t2/t3
+    it("counts only due-today and active-window work as today's tasks", () => {
+      expect(s.kpis.todaysTasks).toBe(2);
+      expect(s.planQueue.map((t) => t.id)).toEqual(["t2", "t3"]);
+      expect(s.tableRows.map((r) => r.id)).toEqual(["t2", "t3"]);
     });
 
-    it("overdueTasks counts tasks whose end_date is in the past and not complete", () => {
-      // t1: end_date = -2 days, 0% → overdue. t2 ends TODAY → not overdue.
-      expect(s.kpis.overdueTasks).toBe(1);
+    it("exposes overdue work through a separate recovery queue", () => {
+      expect(s.kpis.recoveryTasks).toBe(1);
+      expect(s.recoveryQueue.map((t) => t.id)).toEqual(["t1"]);
     });
 
-    it("completedToday counts tasks with percent_complete = 100 in todaysWork", () => {
-      // t4 has percent_complete=100 but tasksForToday skips done tasks (taskUrgency='done' → filtered)
-      // Actually: tasksForToday filters out done via taskUrgency===done. So completedToday = 0.
-      // But wait — the derive re-filters from todaysWork (which already excludes done).
-      // So completedToday should be 0 here.
-      expect(s.kpis.completedToday).toBe(0);
+    it("does not fabricate completed-today evidence", () => {
+      expect(s.kpis.completedToday).toBeNull();
     });
 
     it("openPunchItems excludes Closed/Resolved punches", () => {
@@ -78,14 +72,23 @@ describe("buildFieldTodaySummary", () => {
     });
   });
 
-  describe("taskCompletionPct", () => {
+  describe("todayProgressPct", () => {
     it("is between 0 and 100", () => {
-      expect(s.taskCompletionPct).toBeGreaterThanOrEqual(0);
-      expect(s.taskCompletionPct).toBeLessThanOrEqual(100);
+      expect(s.todayProgressPct).toBeGreaterThanOrEqual(0);
+      expect(s.todayProgressPct).toBeLessThanOrEqual(100);
     });
-    it("is 0 when no tasks are complete in todaysWork", () => {
-      // Per above, completedToday=0 among todaysWork items
-      expect(s.taskCompletionPct).toBe(0);
+    it("reports average progress for today's plan", () => {
+      expect(s.todayProgressPct).toBe(38);
+    });
+    it("counts near upcoming work without including the far future", () => {
+      const withLookahead = buildFieldTodaySummary(
+        [...tasks, { id: "t7", task_name: "Near future", start_date: isoOffset(5), end_date: isoOffset(7) }],
+        photos,
+        punches,
+        TODAY,
+        0,
+      );
+      expect(withLookahead.upcomingCount).toBe(1);
     });
   });
 
@@ -134,14 +137,11 @@ describe("buildFieldTodaySummary", () => {
       expect(s.tableRows.length).toBe(s.kpis.todaysTasks);
     });
     it("row.status maps percent correctly", () => {
-      const t1row = s.tableRows.find((r) => r.id === "t1");
-      expect(t1row?.status).toBe("Not Started"); // 0%
       const t2row = s.tableRows.find((r) => r.id === "t2");
       expect(t2row?.status).toBe("In Progress"); // 50%
     });
-    it("row.urgencyBucket is overdue for t1", () => {
-      const t1row = s.tableRows.find((r) => r.id === "t1");
-      expect(t1row?.urgencyBucket).toBe("overdue");
+    it("keeps recovery rows out of today's table", () => {
+      expect(s.tableRows.some((r) => r.id === "t1")).toBe(false);
     });
   });
 
@@ -159,10 +159,10 @@ describe("buildFieldTodaySummary", () => {
     it("handles all-empty gracefully", () => {
       const empty = buildFieldTodaySummary([], [], [], TODAY, 0);
       expect(empty.kpis.todaysTasks).toBe(0);
-      expect(empty.kpis.overdueTasks).toBe(0);
+      expect(empty.kpis.recoveryTasks).toBe(0);
       expect(empty.kpis.openPunchItems).toBe(0);
       expect(empty.kpis.photosToday).toBe(0);
-      expect(empty.taskCompletionPct).toBe(0);
+      expect(empty.todayProgressPct).toBe(0);
       expect(empty.tableRows).toHaveLength(0);
       expect(empty.openPunchRows).toHaveLength(0);
       expect(empty.photoThumbnails).toHaveLength(0);

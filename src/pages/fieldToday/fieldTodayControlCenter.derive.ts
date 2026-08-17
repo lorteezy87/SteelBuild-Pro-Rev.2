@@ -13,7 +13,7 @@
 
 import {
   clampPercent,
-  tasksForToday,
+  partitionFieldTasks,
   taskUrgency,
   taskLabel,
   taskCrew,
@@ -83,12 +83,12 @@ export const URGENCY_DISPLAY: Record<UrgencyBucket, UrgencyDisplay> = {
 // ── Output shapes ─────────────────────────────────────────────────────────────
 
 export interface FieldKpiSummary {
-  /** Overdue + due-today + active task count (real: schedule_tasks filtered by tasksForToday) */
+  /** Due-today and active-window leaf work only. */
   todaysTasks: number;
-  /** Tasks in overdue bucket (real: taskUrgency = "overdue") */
-  overdueTasks: number;
-  /** Tasks fully complete (percent_complete = 100) in todaysWork */
-  completedToday: number;
+  /** Overdue leaf work, surfaced separately from today's plan. */
+  recoveryTasks: number;
+  /** Unavailable until schedule tasks record a completion timestamp. */
+  completedToday: null;
   /** Open punchlist items (real: PunchlistItem.status != "Closed"/"Resolved") */
   openPunchItems: number;
   /** Photos taken today (real: Photo.taken_date = todayIso) */
@@ -144,8 +144,14 @@ export interface FieldTodaySummary {
   kpis: FieldKpiSummary;
   /** Used for Today's Plan panel (top 6 by urgency rank) */
   planQueue: ScheduleTaskRecord[];
-  /** Used for Crew Status panel: % of todaysTasks that are complete */
-  taskCompletionPct: number;
+  /** Overdue work, separate from today's plan. */
+  recoveryQueue: ScheduleTaskRecord[];
+  /** Work missing the start date needed for trustworthy planning. */
+  planningGapCount: number;
+  /** Future work beginning within seven days. */
+  upcomingCount: number;
+  /** Average progress of the tasks in today's plan. */
+  todayProgressPct: number;
   /** Used for Daily Photos panel (today's photos, up to 6) */
   photoThumbnails: PhotoThumbnailRow[];
   /** Full task list for the DataTable */
@@ -183,6 +189,13 @@ function fmtTableDate(iso?: string | null): string {
   }
 }
 
+function isoPlusDays(iso: string, days: number): string {
+  const date = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return iso;
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 /**
  * Derive all KPIs, queues, and table rows for the Field Today Control Center.
  * Pure function — safe to call in useMemo; never reads the clock directly
@@ -195,18 +208,13 @@ export function buildFieldTodaySummary(
   todayIso: string,
   pendingSync: number,
 ): FieldTodaySummary {
-  // Today's relevant tasks (overdue / due-today / active / unscheduled / upcoming-7d)
-  // tasksForToday already sorts by urgency rank then end_date.
-  const todaysWork = tasksForToday(allTasks, todayIso);
-
-  // KPIs — all from real fields
-  const overdueTasks = todaysWork.filter(
-    (t) => taskUrgency(t, todayIso) === "overdue",
-  ).length;
-
-  const completedToday = todaysWork.filter(
-    (t) => clampPercent(t.percent_complete) >= 100,
-  ).length;
+  const partition = partitionFieldTasks(allTasks, todayIso);
+  const todaysWork = partition.today;
+  const lookaheadEnd = isoPlusDays(todayIso, 7);
+  const upcomingCount = partition.upcoming.filter((task) => {
+    const start = String(task.start_date || "").slice(0, 10);
+    return start > todayIso && start <= lookaheadEnd;
+  }).length;
 
   // openPunchItems: tasks where status is NOT in the closed set
   const openPunches = punchItems.filter(
@@ -218,19 +226,24 @@ export function buildFieldTodaySummary(
 
   const kpis: FieldKpiSummary = {
     todaysTasks: todaysWork.length,
-    overdueTasks,
-    completedToday,
+    recoveryTasks: partition.recovery.length,
+    completedToday: null,
     openPunchItems: openPunches.length,
     photosToday: photosToday.length,
   };
 
   // Plan queue — top 6 by urgency (already sorted)
   const planQueue = todaysWork.slice(0, 6);
+  const recoveryQueue = partition.recovery.slice(0, 6);
 
-  // Task completion %: completedToday / todaysWork (0 when no tasks)
-  const taskCompletionPct =
+  const todayProgressPct =
     todaysWork.length > 0
-      ? Math.round((completedToday / todaysWork.length) * 100)
+      ? Math.round(
+          todaysWork.reduce(
+            (sum, task) => sum + clampPercent(task.percent_complete),
+            0,
+          ) / todaysWork.length,
+        )
       : 0;
 
   // Daily Photos panel — up to 6 thumbnails from today
@@ -276,7 +289,10 @@ export function buildFieldTodaySummary(
   return {
     kpis,
     planQueue,
-    taskCompletionPct,
+    recoveryQueue,
+    planningGapCount: partition.unscheduled.length,
+    upcomingCount,
+    todayProgressPct,
     photoThumbnails,
     tableRows,
     openPunchRows,

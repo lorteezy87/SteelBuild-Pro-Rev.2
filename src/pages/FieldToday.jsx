@@ -21,7 +21,7 @@
  * the outbox in src/lib/field/offlineQueue.js + photoSync.js (tested).
  */
 
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -33,7 +33,7 @@ import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import { compressImage } from "@/utils/compressImage";
 import { localToday } from "@/utils/dates";
-import { tasksForToday, taskUrgency, clampPercent, progressPatch } from "@/lib/field/fieldToday";
+import { clampPercent, progressPatch } from "@/lib/field/fieldToday";
 import { useOutbox } from "@/lib/field/OutboxContext";
 import {
   makeProgressOp,
@@ -47,14 +47,6 @@ import { putPendingPhoto, reconcilePendingPhotos } from "@/lib/field/blobStore";
 import FieldTodayControlCenter from "./fieldToday/FieldTodayControlCenter";
 
 // ── Urgency presentation (logic-free; buckets come from the helper) ──
-const URGENCY = {
-  overdue: { label: "OVERDUE", color: "var(--status-error)" },
-  "due-today": { label: "DUE TODAY", color: "var(--status-warning)" },
-  active: { label: "ACTIVE", color: "var(--accent)" },
-  unscheduled: { label: "TBD", color: "var(--text-muted)" },
-  upcoming: { label: "UPCOMING", color: "var(--status-info)" },
-};
-
 function fmtShortDate(iso) {
   if (!iso) return "TBD";
   try {
@@ -97,27 +89,6 @@ export default function FieldToday() {
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
 
   const { scheduleTasks, isLoading } = useScheduleTasks(projectId);
-
-  const todayIso = localToday();
-  const todaysWork = useMemo(
-    () => tasksForToday(scheduleTasks, todayIso),
-    [scheduleTasks, todayIso],
-  );
-
-  // Group the already-sorted list by urgency so a long day (lots of overdue
-  // work) stays scannable — every item still shows; nothing is hidden.
-  const sections = useMemo(() => {
-    const order = ["overdue", "due-today", "active", "unscheduled", "upcoming"];
-    const byBucket = new Map();
-    for (const task of todaysWork) {
-      const bucket = taskUrgency(task, todayIso);
-      if (!byBucket.has(bucket)) byBucket.set(bucket, []);
-      byBucket.get(bucket).push(task);
-    }
-    return order
-      .filter((bucket) => byBucket.has(bucket))
-      .map((bucket) => ({ bucket, tasks: byBucket.get(bucket) }));
-  }, [todaysWork, todayIso]);
 
   // ── Offline outbox: queued idempotent captures replay (in order) on reconnect.
   // The single app-wide instance lives in OutboxProvider so the queue drains from
