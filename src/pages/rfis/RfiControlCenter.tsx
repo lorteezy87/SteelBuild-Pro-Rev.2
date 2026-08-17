@@ -172,7 +172,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
     { label: "Need Action", value: s.needAction, sublabel: "RFIs", tone: "warn", Icon: HelpCircle },
     { label: "Overdue", value: s.overdue, sublabel: "RFIs", tone: s.overdue ? "danger" : "neutral", Icon: Clock },
     { label: "Incomplete", value: s.incomplete, sublabel: "RFIs", tone: s.incomplete ? "danger" : "neutral", Icon: FileWarning },
-    { label: "Critical", value: s.critical, sublabel: "RFIs", tone: s.critical ? "danger" : "neutral", Icon: AlertTriangle },
+    { label: "Critical Urgency", value: s.critical, sublabel: "30+ days overdue", tone: s.critical ? "danger" : "neutral", Icon: AlertTriangle },
     { label: "Response Rate", value: `${s.responseRate}%`, sublabel: "answered/closed", tone: "good", Icon: Gauge },
     { label: "Cost Exposure", value: fmtMoney(s.costExposure), sublabel: "active impact", tone: s.costExposure ? "warn" : "neutral", Icon: DollarSign },
     { label: "Schedule Impact", value: `${s.scheduleExposure}d`, sublabel: "active impact", tone: s.scheduleExposure ? "warn" : "info", Icon: CalendarClock },

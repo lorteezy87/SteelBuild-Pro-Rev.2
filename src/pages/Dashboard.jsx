@@ -246,10 +246,12 @@ export default function Dashboard() {
       deliveries: scopePortfolioRows(allDeliveries),
       actionItems: scopePortfolioRows(allActionItems),
       scheduleTasks: scopePortfolioRows(allScheduleTasks),
+      rfiEvidenceLoaded: rfisSuccess,
+      scheduleEvidenceLoaded: scheduleTasksSuccess,
     }),
     [
       allCOs, allWPs, allCodes, allRFIs, allDeliveries,
-      allActionItems, allScheduleTasks, scopePortfolioRows,
+      allActionItems, allScheduleTasks, scopePortfolioRows, rfisSuccess, scheduleTasksSuccess,
     ],
   );
 
