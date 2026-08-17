@@ -8,7 +8,7 @@ const setSearchParams = vi.fn();
 const savePatch = vi.fn();
 
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: [] }),
+  useQuery: () => ({ data: [] as Array<Record<string, unknown>> }),
 }));
 vi.mock("react-router-dom", () => ({
   useSearchParams: () => [new URLSearchParams(), setSearchParams],
@@ -19,13 +19,13 @@ vi.mock("../../shared/ProjectContext", () => ({
       { id: "a", name: "Alpha", phase: "Fabrication" },
       { id: "b", name: "Beta", phase: "Erection" },
     ],
-    activeProject: null,
+    activeProject: null as { id: string; name: string; phase: string } | null,
     setActiveProject,
     loading: false,
   }),
 }));
 vi.mock("@/hooks/useUserPrefs", () => ({
-  useUserPrefs: () => ({ favorite_project_ids: [], show_project_numbers: true }),
+  useUserPrefs: () => ({ favorite_project_ids: [] as string[], show_project_numbers: true }),
 }));
 vi.mock("@/hooks/useSaveUserPrefs", () => ({
   useSaveUserPrefs: () => ({ savePatch }),

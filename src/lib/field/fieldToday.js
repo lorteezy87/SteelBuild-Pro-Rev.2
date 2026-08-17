@@ -106,6 +106,11 @@ function compareTasks(a, b, todayIso) {
 /**
  * Partition actionable leaf work without mixing recovery backlog, planning
  * gaps, or future work into today's plan.
+ *
+ * @template T
+ * @param {T[] | null | undefined} tasks
+ * @param {string} todayIso
+ * @returns {{ today: T[], recovery: T[], unscheduled: T[], upcoming: T[] }}
  */
 export function partitionFieldTasks(tasks, todayIso) {
   const parentIds = buildParentIdSet(Array.isArray(tasks) ? tasks : []);
