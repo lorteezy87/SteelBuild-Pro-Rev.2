@@ -508,3 +508,11 @@ export function buildBrief(tasks) {
 
   return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, unassignedTasks, shiftedTasks, effectiveDates, totalShiftDays, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore, aiNarrative };
 }
+
+export function scheduleHealthFromBrief(brief) {
+  const level = brief?.aiNarrative?.riskLevel;
+  if (level === "HIGH") return "At Risk";
+  if (level === "MEDIUM") return "Watch";
+  if (level === "LOW") return "On Track";
+  return "Awaiting Data";
+}

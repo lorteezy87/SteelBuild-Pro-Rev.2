@@ -85,6 +85,7 @@ export const STATUS_COLOR = {
   "Complete":    GANTT_STATUS_HEX.complete,
   "In Progress": GANTT_STATUS_HEX.inProgress,
   "Delayed":     GANTT_STATUS_HEX.delayed,
+  "Overdue":     GANTT_STATUS_HEX.delayed,
   "On Hold":     GANTT_STATUS_HEX.onHold,
   "Not Started": GANTT_STATUS_HEX.notStarted,
 };

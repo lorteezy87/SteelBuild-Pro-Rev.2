@@ -6,7 +6,7 @@
  * Phase chips validate against PHASES from utils/phases.js.
  *
  * (The page-route name is "Schedule" but the file is ScheduleReport.jsx
- * to avoid colliding with the existing /Schedule top-level page.)
+ * to avoid colliding with the existing /ScheduleHub top-level page.)
  */
 
 import React, { useMemo, useState } from "react";

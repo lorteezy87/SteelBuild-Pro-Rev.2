@@ -76,7 +76,7 @@ function eventsFromScheduleTask(t) {
     status:    t.status,
     accent:    isMilestone ? EVENT_COLOR.milestone : EVENT_COLOR.task,
     icon:      isMilestone ? "◆" : "▰",
-    navTo:     `/Schedule`,
+    navTo:     `/ScheduleHub`,
     priority:  isMilestone ? 0 : 1,
     raw:       t,
   }];

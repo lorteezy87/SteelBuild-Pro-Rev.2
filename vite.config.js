@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'url'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
+import { vercelSkewAssetUrl } from './scripts/vercel-skew-protection.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -36,6 +37,7 @@ function copyWebIfcWasm() {
 // is NEVER hardcoded — it is read from the environment at build time only.
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const enableSentrySourceMaps = Boolean(sentryAuthToken)
+const enableVercelSkewProtection = Boolean(vercelSkewAssetUrl('assets/probe.js'))
 
 function vendorChunk(id) {
   const n = id.replace(/\\/g, '/')
@@ -132,6 +134,15 @@ export default defineConfig({
         })]
       : []),
   ],
+  ...(enableVercelSkewProtection
+    ? {
+        experimental: {
+          renderBuiltUrl(filename) {
+            return vercelSkewAssetUrl(filename)
+          },
+        },
+      }
+    : {}),
   build: {
     // Emit hidden source maps (no sourceMappingURL comment, so they're not
     // referenced by the served bundle) only when we're going to upload them to

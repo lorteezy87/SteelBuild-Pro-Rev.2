@@ -13,7 +13,7 @@ vi.mock("@/config/routes", () => ({
   PAGES: {},
   PROJECT_SCOPED_PAGES: new Set(),
   STATIC_ROUTE_METADATA: Object.fromEntries(
-    ["Financials", "CostDashboard", "ResourceManagement", "AIInsights", "MarginRisk", "RFIHub", "GanttChart"]
+    ["Schedule", "Financials", "CostDashboard", "ResourceManagement", "AIInsights", "MarginRisk", "RFIHub", "GanttChart"]
       .map((path) => [`/${path}`, { target: "/" }]),
   ),
 }));
@@ -43,7 +43,7 @@ vi.mock("@/hooks/useProjectRole", () => ({
   useProjectRole: () => ({ role: null as string | null, isLoading: false }),
 }));
 
-import AppRoutes from "@/boot/AppRoutes";
+import AppRoutes, { buildStaticRedirectTarget } from "@/boot/AppRoutes";
 
 describe("AppRoutes unknown URL handling", () => {
   beforeEach(() => authMe.mockClear());
@@ -59,5 +59,10 @@ describe("AppRoutes unknown URL handling", () => {
     expect(screen.getByText("PAGE_NOT_FOUND")).toBeInTheDocument();
     expect(screen.getByText("ADMIN_NOTE")).toBeInTheDocument();
     expect(authMe).not.toHaveBeenCalled();
+  });
+
+  it("preserves project context when a legacy route redirects", () => {
+    expect(buildStaticRedirectTarget("/ScheduleHub", "?project=26179", "#week-4"))
+      .toBe("/ScheduleHub?project=26179#week-4");
   });
 });

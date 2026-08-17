@@ -19,7 +19,7 @@ const ROUTES: Readonly<Record<DesktopRecordEntityType, string>> = Object.freeze(
   rfi: "/RFIs",
   change_order: "/ChangeOrders",
   drawing_revision: "/DrawingViewer",
-  schedule_task: "/Schedule",
+  schedule_task: "/ScheduleHub",
   submittal: "/Submittals",
 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildBrief } from "@/components/schedule/rivetBriefEngine";
+import { buildBrief, scheduleHealthFromBrief } from "@/components/schedule/rivetBriefEngine";
 
 // buildBrief uses new Date() internally for "today"-relative bucketing, so
 // build inputs relative to today. Noon avoids midnight/DST edges (AZ has no DST).
@@ -19,6 +19,12 @@ const EXPECTED_KEYS = [
 ];
 
 describe("buildBrief (rivet schedule-brief engine)", () => {
+  it("maps live Rivet risk to the schedule hero health", () => {
+    expect(scheduleHealthFromBrief({ aiNarrative: { riskLevel: "HIGH" } })).toBe("At Risk");
+    expect(scheduleHealthFromBrief({ aiNarrative: { riskLevel: "MEDIUM" } })).toBe("Watch");
+    expect(scheduleHealthFromBrief({ aiNarrative: { riskLevel: "LOW" } })).toBe("On Track");
+  });
+
   it("returns the full view-model shape for empty input without throwing", () => {
     const brief = buildBrief([]);
     for (const key of EXPECTED_KEYS) expect(brief).toHaveProperty(key);

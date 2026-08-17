@@ -18,7 +18,7 @@ const DASHBOARD_MODULE_TARGETS = {
 const DASHBOARD_PATHS = {
   rfis: "/RFIs",
   detailing: "/DrawingSubmittalHub",
-  schedule: "/Schedule",
+  schedule: "/ScheduleHub",
   field: "/FieldHub",
   "cost-hub": "/CostHub",
   "change-orders": "/ChangeOrders",
@@ -37,5 +37,6 @@ describe("dashboard module navigation map", () => {
     expect(DASHBOARD_PATHS.documents).toBe("/Documents");
     expect(DASHBOARD_PATHS.detailing).toBe("/DrawingSubmittalHub");
     expect(DASHBOARD_PATHS.reports).toBe("/ReportsHub");
+    expect(DASHBOARD_PATHS.schedule).toBe("/ScheduleHub");
   });
 });

@@ -57,6 +57,7 @@ interface ScheduleBodyProps {
 
   // Derived data
   phaseCounts: Record<string, number>;
+  scheduleBrief: any;
   tasksWithEffective: ScheduleTask[];
   enrichedTasks: ScheduleTask[];
   // Only `.length` is read (the truncation notice). Structural type so the raw
@@ -120,6 +121,7 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
   const {
     bulkParentBackdrop,
     phaseCounts,
+    scheduleBrief,
     tasksWithEffective,
     enrichedTasks,
     scheduleTasksRaw,
@@ -199,7 +201,8 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
       <ViewTabs view={view} onSetView={setView} />
 
       <ScheduleRivetBrief
-        tasks={tasksWithEffective}
+        tasks={enrichedTasks}
+        brief={scheduleBrief}
         project={selectedProject}
         phaseFilter={phaseFilter}
         onSetPhaseFilter={setPhaseFilter}

@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { PAGES, PROJECT_SCOPED_PAGES, STATIC_ROUTE_METADATA } from "@/config/routes";
 import PageNotFound from "@/lib/PageNotFound";
@@ -63,6 +63,20 @@ function LegacyProjectDetailRedirect() {
   }
 
   return <Navigate to={`/Projects?id=${encodeURIComponent(projectId)}`} replace />;
+}
+
+export function buildStaticRedirectTarget(target, search = "", hash = "") {
+  return `${target}${search}${hash}`;
+}
+
+function StaticRouteRedirect({ route }) {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={buildStaticRedirectTarget(STATIC_ROUTE_METADATA[route].target, location.search, location.hash)}
+      replace
+    />
+  );
 }
 
 export const LANDING_REDIRECT_KEY = "sbp-landing-redirected";
@@ -191,6 +205,7 @@ export default function AppRoutes() {
         />
 
         <Route path="ProjectDetail" element={<LegacyProjectDetailRedirect />} />
+        <Route path="Schedule" element={<StaticRouteRedirect route="/Schedule" />} />
         <Route
           path="Financials"
           element={<Navigate to={STATIC_ROUTE_METADATA["/Financials"].target} replace />}
@@ -215,7 +230,7 @@ export default function AppRoutes() {
         {/* /RFIHub was retired — redirect old links to /RFIs */}
         <Route path="RFIHub" element={<Navigate to={STATIC_ROUTE_METADATA["/RFIHub"].target} replace />} />
 
-        {/* /GanttChart was retired — redirect old deep-links to /Schedule */}
+        {/* /GanttChart was retired — redirect old deep-links to /ScheduleHub */}
         <Route path="GanttChart" element={<Navigate to={STATIC_ROUTE_METADATA["/GanttChart"].target} replace />} />
 
         <Route path="*" element={<PageNotFound />} />
@@ -232,4 +247,3 @@ export default function AppRoutes() {
     </Routes>
   );
 }
-

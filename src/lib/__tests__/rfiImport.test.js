@@ -74,4 +74,18 @@ describe("RFI import helpers", () => {
       date_answered: "2026-05-10",
     });
   });
+
+  it("fails visibly instead of turning a yearless date into 2001", () => {
+    expect(() => buildRfiImportRows({
+      projectId: "project-1",
+      rfis: [
+        {
+          rfi_number: "13",
+          title: "Roof drain clarification",
+          date_submitted: "8/4",
+          iso_submitted: "2001-08-04",
+        },
+      ],
+    })).toThrow(/RFI #013.*submitted date.*missing a year/i);
+  });
 });

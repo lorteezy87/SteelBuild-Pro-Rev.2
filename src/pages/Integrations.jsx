@@ -70,7 +70,7 @@ function customerToneStyle(statusKey) {
 
 const QUICK_LINKS = [
   { label: "Documents", page: "Documents" },
-  { label: "Schedule", page: "Schedule" },
+  { label: "Schedule", page: "ScheduleHub" },
   { label: "RFIs", page: "RFIs" },
   { label: "Change Orders", page: "ChangeOrders" },
 ];
