@@ -234,7 +234,9 @@ export function buildFieldTodaySummary(
 
   // Plan queue — top 6 by urgency (already sorted)
   const planQueue = todaysWork.slice(0, 6);
-  const recoveryQueue = partition.recovery.slice(0, 6);
+  // Recovery is the only place overdue work is rendered on Field Today. Keep
+  // the queue complete so the headline count can never exceed visible rows.
+  const recoveryQueue = partition.recovery;
 
   const todayProgressPct =
     todaysWork.length > 0

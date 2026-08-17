@@ -145,6 +145,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       id: sbUser.id,
       email: sbUser.email,
       full_name: fullName,
+      created_date: sbUser.created_at,
       role,
     };
   };

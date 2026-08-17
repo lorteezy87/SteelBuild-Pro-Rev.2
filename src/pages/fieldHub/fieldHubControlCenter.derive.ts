@@ -22,6 +22,17 @@ import {
   FIELD_ACTIVITY_TYPES,
 } from "@/lib/field/fieldPhase";
 
+export const FIELD_HUB_PANEL_COPY = Object.freeze({
+  fieldIssues: Object.freeze({
+    title: "Open Field Issues",
+    empty: "No open punchlist items.",
+  }),
+  inspections: Object.freeze({
+    title: "Upcoming Inspections",
+    empty: "No scheduled inspections.",
+  }),
+});
+
 /** Adapter: resolveFieldPhase returns `source`; the row field is `phaseSource`. */
 function phaseFields(
   record: Record<string, unknown>,

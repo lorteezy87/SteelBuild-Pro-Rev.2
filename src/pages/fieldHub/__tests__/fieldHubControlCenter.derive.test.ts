@@ -3,7 +3,7 @@
  * No React, no network — pure function.
  */
 import { describe, it, expect, afterAll, vi } from "vitest";
-import { buildFieldHubSummary } from "../fieldHubControlCenter.derive";
+import { buildFieldHubSummary, FIELD_HUB_PANEL_COPY } from "../fieldHubControlCenter.derive";
 import type { DailyLogRecord, InspectionRecord, SafetyIncidentRecord, PunchlistItemRecord } from "../fieldHubControlCenter.derive";
 
 // Pin today to a known date so date-sensitive KPIs are deterministic.
@@ -127,6 +127,19 @@ describe("buildFieldHubSummary", () => {
     expect(empty.todayQueue.length).toBe(0);
     expect(empty.inspectionQueue.length).toBe(0);
     expect(empty.coordinationQueue.length).toBe(0);
+  });
+});
+
+describe("Field Hub panel copy", () => {
+  it("labels punchlist and inspection queues with the records they actually contain", () => {
+    expect(FIELD_HUB_PANEL_COPY.fieldIssues).toEqual({
+      title: "Open Field Issues",
+      empty: "No open punchlist items.",
+    });
+    expect(FIELD_HUB_PANEL_COPY.inspections).toEqual({
+      title: "Upcoming Inspections",
+      empty: "No scheduled inspections.",
+    });
   });
 });
 

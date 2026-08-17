@@ -29,6 +29,13 @@ describe("buildSettingsSummary", () => {
     expect(s.isAdmin).toBe(true);
   });
 
+  it("uses canonical workspace owner/admin/member role labels", () => {
+    expect(buildSettingsSummary({ role: "owner" }, {}, 6).roleLabel).toBe("Owner");
+    expect(buildSettingsSummary({ role: "owner" }, {}, 6).isAdmin).toBe(true);
+    expect(buildSettingsSummary({ role: "admin" }, {}, 6).roleLabel).toBe("Admin");
+    expect(buildSettingsSummary({ role: "member" }, {}, 6).roleLabel).toBe("Member");
+  });
+
   it("returns Member role label for regular users", () => {
     const s = buildSettingsSummary({ role: "user" }, {}, 3);
     expect(s.roleLabel).toBe("Member");

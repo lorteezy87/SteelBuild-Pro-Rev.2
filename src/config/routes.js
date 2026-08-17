@@ -17,6 +17,8 @@ export const STATIC_ROUTE_METADATA = {
   "/RFIHub": { lifecycle: "legacy", kind: "redirect", target: "/RFIs" },
   "/Financials": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/CostDashboard": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
+  "/BudgetControl": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
+  "/Team": { lifecycle: "legacy", kind: "redirect", target: "/OrgMembers" },
   "/ProjectDetail": { lifecycle: "legacy", kind: "redirect", target: "/Projects" },
   "/ResourceManagement": { lifecycle: "legacy", kind: "redirect", target: "/ResourceHub" },
   "/AIInsights": { lifecycle: "legacy", kind: "redirect", target: "/PortfolioHub" },

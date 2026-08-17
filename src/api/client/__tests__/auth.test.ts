@@ -58,6 +58,7 @@ describe('auth', () => {
           user: {
             id: 'u1',
             email: 'a@b.com',
+            created_at: '2026-04-06T08:59:53.219Z',
             user_metadata: { full_name: 'Ada', role: 'admin', theme: 'dark' },
           },
         },
@@ -72,6 +73,7 @@ describe('auth', () => {
         id: 'u1',
         email: 'a@b.com',
         full_name: 'Ada',
+        created_date: '2026-04-06T08:59:53.219Z',
         role: 'user',
       });
       expect(result.role).toBe('user');

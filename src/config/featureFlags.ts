@@ -10,7 +10,6 @@ export const FEATURE_FLAG_KEYS = [
   // Scope-cut module gates (see src/config/moduleGating.js)
   "module_email_inbox",
   "module_integrations",
-  "module_cost",
   "module_quality",
   "module_resources",
   "module_closeout",
@@ -21,4 +20,3 @@ export const FEATURE_FLAG_KEYS = [
 ] as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
-

@@ -10,7 +10,6 @@
 import {
   openRFICount,
   overdueRFICount,
-  wpProgressPct,
   timelineElapsedPct,
   budgetCommitted,
   committedSpend,
@@ -25,6 +24,7 @@ import {
   submittalPipelineRollupFromSubmittals,
   pendingCOTotal,
 } from "../dashboard/projectMetrics";
+import { buildScheduleSummary } from "@/pages/schedule/scheduleCommandCenter.derive";
 import {
   buildOperationalHealthIndex,
   capHealthScore,
@@ -207,7 +207,6 @@ export function buildDashboardSummary(input: {
     rfis = [],
     cos = [],
     codes = [],
-    wps = [],
     deliveries = [],
     actionItems = [],
     expenses = [],
@@ -229,7 +228,8 @@ export function buildDashboardSummary(input: {
   // ── Reuse canonical helpers (numbers match page-owned dashboard exactly) ───────
   const openRfis = openRFICount(rfis as Parameters<typeof openRFICount>[0]);
   const overdueRfis = overdueRFICount(rfis as Parameters<typeof overdueRFICount>[0]);
-  const schedulePct = wpProgressPct(wps as Parameters<typeof wpProgressPct>[0]);
+  const scheduleSummary = buildScheduleSummary(scheduleTasks);
+  const schedulePct = scheduleSummary.pctComplete;
   const elapsedPct = timelineElapsedPct(project as Parameters<typeof timelineElapsedPct>[0]);
   const scheduleHealth = clamp(Math.round(100 - Math.max(0, elapsedPct - schedulePct)), 0, 100);
 
@@ -238,6 +238,7 @@ export function buildDashboardSummary(input: {
     codes as Parameters<typeof committedSpend>[0],
     expenses as Parameters<typeof committedSpend>[1],
   );
+  const hasPostedCosts = committed > 0;
   const costDelta = costVariance(
     codes as Parameters<typeof costVariance>[0],
     expenses as Parameters<typeof costVariance>[1],
@@ -294,7 +295,9 @@ export function buildDashboardSummary(input: {
   const pendingCoDollars = pendingCOTotal(cos as Parameters<typeof pendingCOTotal>[0]);
 
   const drawingCount = drawings.filter((d) => !(d as Record<string, unknown>).is_deleted).length;
-  const fieldIssues = openPunchlist + safetyIncidents.length + qualityRecords.length;
+  // Match Field Hub's "Open Field Issues" authority exactly: open punchlist
+  // items. Closed safety observations and passed QC records are not issues.
+  const fieldIssues = openPunchlist;
 
   const submittalPipeline = submittalPipelineRollupFromSubmittals(
     submittals as Parameters<typeof submittalPipelineRollupFromSubmittals>[0],
@@ -309,16 +312,22 @@ export function buildDashboardSummary(input: {
       tone: overdueRfis ? "danger" : "neutral",
     },
     {
-      label: "Schedule Health",
-      value: `${scheduleHealth}%`,
-      sublabel: scheduleHealth >= 85 ? "On Track" : scheduleHealth >= 70 ? "Watch" : "At Risk",
-      tone: scheduleHealth >= 85 ? "good" : scheduleHealth >= 70 ? "warn" : "danger",
+      label: "Schedule Progress",
+      value: `${schedulePct}%`,
+      sublabel: scheduleSummary.overdue > 0
+        ? `${scheduleSummary.overdue} overdue`
+        : `${scheduleSummary.activities} activities`,
+      tone: scheduleSummary.overdue > 0 ? "danger" : "neutral",
     },
     {
       label: "Cost Health",
-      value: budget > 0 ? formatSignedPercent(costPct) : "TBD",
-      sublabel: budget > 0 ? (costPct >= 0 ? "Under Budget" : "Over Budget") : "Budget needed",
-      tone: budget > 0 ? (costPct >= 0 ? "good" : "danger") : "neutral",
+      value: budget > 0 && hasPostedCosts ? formatSignedPercent(costPct) : "TBD",
+      sublabel: budget <= 0
+        ? "Budget needed"
+        : hasPostedCosts
+          ? (costPct >= 0 ? "Under Budget" : "Over Budget")
+          : "No costs posted",
+      tone: budget > 0 && hasPostedCosts ? (costPct >= 0 ? "good" : "danger") : "neutral",
     },
     {
       label: "Pending Submittals",
@@ -329,10 +338,6 @@ export function buildDashboardSummary(input: {
   ];
 
   // ── Alerts panel (non-zero count only, at most 5) ─────────────────────────
-  const overdueActions = actionItems.filter((a) => {
-    const r = a as Record<string, unknown>;
-    return isPast(r.due_date as string | null) && !CLOSED_TASK_STATUSES.has(String(r.status ?? ""));
-  }).length;
   const lateDeliveries = deliveries.filter((d) => {
     const r = d as Record<string, unknown>;
     const dateStr = (r.scheduled_date || r.required_date) as string | null;
@@ -347,7 +352,7 @@ export function buildDashboardSummary(input: {
     { id: "drawings", count: staleDrawings, label: "Drawings Need Attention", priority: "high", priorityLabel: "High Priority" },
     { id: "rfis", count: overdueRfis, label: "RFIs Overdue", priority: "high", priorityLabel: "High Priority" },
     { id: "submittals", count: pendingSubmittals, label: "Submittals Open", priority: pendingSubmittals > 5 ? "medium" : "low", priorityLabel: pendingSubmittals > 5 ? "Medium Priority" : "Low Priority" },
-    { id: "field", count: fieldIssues + overdueActions, label: "Field Issues Require Attention", priority: "medium", priorityLabel: "Medium Priority" },
+    { id: "field", count: fieldIssues, label: "Field Issues Require Attention", priority: "medium", priorityLabel: "Medium Priority" },
     { id: "delivery", count: lateDeliveries + activeCos, label: "Milestones or COs at Risk", priority: lateDeliveries ? "medium" : "low", priorityLabel: lateDeliveries ? "Medium Priority" : "Low Priority" },
   ];
   const alerts = rawAlerts.filter((a) => a.count > 0).slice(0, 5);
@@ -423,7 +428,7 @@ export function buildDashboardSummary(input: {
     { page: "DrawingSubmittalHub", title: "Detailing", subtitle: "Drawings & Models", metric: `${drawingCount} Drawings`, target: "submittals", photo: photoFor("DrawingSubmittalHub") },
     { page: "ScheduleHub", title: "Schedule", subtitle: "Project Timeline", metric: `${schedulePct}% Complete`, target: "schedule", tone: schedulePct >= 80 ? "good" : undefined, photo: photoFor("ScheduleHub") },
     { page: "FieldHub", title: "Field Hub", subtitle: "Daily Field Management", metric: `${fieldIssues} Issues`, target: "field", photo: photoFor("FieldHub") },
-    { page: "CostHub", title: "Budget Control", subtitle: "Costs & Commitments", metric: budget > 0 ? `${formatSignedPercent(costPct)} ${costPct >= 0 ? "Under Budget" : "Over Budget"}` : "Budget TBD", target: "budget-hours", tone: costPct >= 0 ? "good" : undefined, photo: photoFor("CostHub") },
+    { page: "CostHub", title: "Budget Control", subtitle: "Costs & Commitments", metric: budget > 0 && hasPostedCosts ? `${formatSignedPercent(costPct)} ${costPct >= 0 ? "Under Budget" : "Over Budget"}` : budget > 0 ? "Costs not posted" : "Budget TBD", target: "cost-hub", tone: budget > 0 && hasPostedCosts && costPct >= 0 ? "good" : undefined, photo: photoFor("CostHub") },
     { page: "ChangeOrders", title: "Change Orders", subtitle: "Scope & Contract Changes", metric: `${activeCos} Active`, target: "change-orders", photo: photoFor("ChangeOrders") },
     { page: "Documents", title: "Documents", subtitle: "Project Documents", metric: `${drawingCount + submittals.length} Files`, target: "submittals", photo: photoFor("Documents") },
     { page: "ReportsHub", title: "Reports", subtitle: "Analytics & Insights", metric: `${recentActivity.length} Updates`, target: "schedule", photo: photoFor("ReportsHub") },

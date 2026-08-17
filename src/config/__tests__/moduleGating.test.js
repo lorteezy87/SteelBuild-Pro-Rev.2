@@ -17,6 +17,10 @@ describe("moduleGating", () => {
       "WorkPackages",
       "ScheduleHub",
       "FieldToday",
+      "CostHub",
+      "ChangeOrders",
+      "SOV",
+      "PayApplications",
       "Settings",
       "Billing",
     ]) {
@@ -25,10 +29,12 @@ describe("moduleGating", () => {
     }
   });
 
-  it("maps cost pages to module_cost", () => {
-    expect(gateFlagForPage("CostHub")).toBe("module_cost");
-    expect(gateFlagForPage("ChangeOrders")).toBe("module_cost");
-    expect(isGatedPage("SOV")).toBe(true);
+  it("keeps the operational cost module available without an optional flag", () => {
+    expect(MODULE_GATES.module_cost).toBeUndefined();
+    expect(MODULE_GATE_LABELS.module_cost).toBeUndefined();
+    expect(gateFlagForPage("CostHub")).toBeNull();
+    expect(gateFlagForPage("ChangeOrders")).toBeNull();
+    expect(isGatedPage("SOV")).toBe(false);
   });
 
   it("keeps Integrations and Email Inbox available while staging Data Exchange", () => {

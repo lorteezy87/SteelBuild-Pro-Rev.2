@@ -28,7 +28,7 @@ import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import { FIELD_PHASES } from "@/lib/field/fieldPhase";
 import PhaseBadge from "@/components/field/PhaseBadge";
-import { buildFieldHubSummary } from "./fieldHubControlCenter.derive";
+import { buildFieldHubSummary, FIELD_HUB_PANEL_COPY } from "./fieldHubControlCenter.derive";
 import type {
   DailyLogRecord,
   InspectionRecord,
@@ -315,14 +315,14 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
       <div className="cmd-panels">
         {/* Panel 1 — Today in the Field */}
         <DecisionPanel
-          title="Today in the Field"
+          title={FIELD_HUB_PANEL_COPY.fieldIssues.title}
           onViewAll={() => {
             onTypeFilterChange("Punchlist");
             scrollToTable();
           }}
         >
           {s.todayQueue.length === 0 ? (
-            <div className="cmd-row__meta">No open field issues.</div>
+            <div className="cmd-row__meta">{FIELD_HUB_PANEL_COPY.fieldIssues.empty}</div>
           ) : (
             s.todayQueue.map((item: SiteCoordRow) => (
               <div
@@ -355,14 +355,14 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
 
         {/* Panel 2 — Open Issues (upcoming inspections) */}
         <DecisionPanel
-          title="Open Issues"
+          title={FIELD_HUB_PANEL_COPY.inspections.title}
           onViewAll={() => {
             onTypeFilterChange("Inspection");
             scrollToTable();
           }}
         >
           {s.inspectionQueue.length === 0 ? (
-            <div className="cmd-row__meta">No upcoming inspections.</div>
+            <div className="cmd-row__meta">{FIELD_HUB_PANEL_COPY.inspections.empty}</div>
           ) : (
             s.inspectionQueue.map((insp: InspectionQueueRow) => {
               const overdue = insp.daysUntilDue !== null && insp.daysUntilDue < 0;

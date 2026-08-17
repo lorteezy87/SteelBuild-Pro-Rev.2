@@ -51,7 +51,9 @@ export interface SettingsSummary {
 }
 
 const ROLE_LABEL: Record<string, string> = {
+  owner: "Owner",
   admin: "Admin",
+  member: "Member",
   user: "Member",
 };
 
@@ -82,7 +84,7 @@ export function buildSettingsSummary(
   syncState: SettingsSyncState = "idle",
 ): SettingsSummary {
   const role = user?.role ?? "user";
-  const isAdmin = role === "admin";
+  const isAdmin = role === "owner" || role === "admin";
 
   const pinnedModules = prefs?.pinned_modules;
   const pinnedModuleCount =
