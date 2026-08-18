@@ -12,7 +12,9 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import TrueHealthChart from "../components/dashboard/TrueHealthChart";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -57,13 +59,48 @@ const healthColors = [
 
 export default function ExecutiveView() {
   const navigate = useNavigate();
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => entities.Project.list(), staleTime: 5 * 60 * 1000 });
-  const { data: rfis = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => entities.RFI.list() });
-  const { data: cos = [] } = useQuery({ queryKey: ["change-orders-global"], queryFn: () => entities.ChangeOrder.list() });
-  const { data: codes = [] } = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => entities.CostCode.list() });
-  const { data: wps = [] } = useQuery({ queryKey: ["work-packages-global"], queryFn: () => entities.WorkPackage.list() });
-  const { data: tasks = [] } = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => entities.ScheduleTask.list() });
-  const { data: expenses = [] } = useQuery({ queryKey: ["expenses-all"], queryFn: () => entities.Expense.list() });
+  const projectsQ = useQuery({ queryKey: ["projects"], queryFn: () => entities.Project.list(), staleTime: 5 * 60 * 1000 });
+  const rfisQ = useQuery({ queryKey: ["rfis"], queryFn: () => entities.RFI.list() });
+  const cosQ = useQuery({ queryKey: ["change-orders-global"], queryFn: () => entities.ChangeOrder.list() });
+  const codesQ = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => entities.CostCode.list() });
+  const wpsQ = useQuery({ queryKey: ["work-packages-global"], queryFn: () => entities.WorkPackage.list() });
+  const tasksQ = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => entities.ScheduleTask.list() });
+  const expensesQ = useQuery({ queryKey: ["expenses-all"], queryFn: () => entities.Expense.list() });
+
+  const {
+    projects = [], rfis = [], cos = [], codes = [], wps = [], tasks = [], expenses = [],
+  } = {
+    projects: projectsQ.data, rfis: rfisQ.data, cos: cosQ.data, codes: codesQ.data,
+    wps: wpsQ.data, tasks: tasksQ.data, expenses: expensesQ.data,
+  };
+
+  // An executive rollup must never present $0/empty as truth while loading or
+  // after a failed fetch — gate on the queries the KPIs are computed from.
+  const allQueries = [projectsQ, rfisQ, cosQ, codesQ, wpsQ, tasksQ, expensesQ];
+  const isLoading = allQueries.some((q) => q.isLoading);
+  const failedQuery = allQueries.find((q) => q.isError);
+
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="page" />
+      </div>
+    );
+  }
+
+  if (failedQuery) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 16 }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load portfolio data
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(failedQuery.error, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => failedQuery.refetch()}>Retry</Button>
+      </div>
+    );
+  }
 
   // Trimmed comparison matches computeRevisedContractValue — real data has
   // carried whitespace-padded CO statuses.
