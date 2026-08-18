@@ -26,11 +26,13 @@ export const InvokeLLM = async ({ prompt, system, messages, response_json_schema
   //   supabase functions deploy llm-proxy --no-verify-jwt
   // See supabase/functions/llm-proxy/index.ts (PROTOCOL_VERSION constant).
   //
-  // v3 marks the deploy where verify_jwt was turned off on the function —
-  // without that, every POST returns 401 at Supabase's gate before the
-  // function code even runs. If you see protocol v2 or lower AND POSTs are
-  // failing with 401, that's the smoking gun.
-  const EXPECTED_PROTOCOL_VERSION = 3;
+  // v8 matches the currently deployed function (see PROTOCOL_VERSION in
+  // supabase/functions/llm-proxy/index.ts). Historical note: v3 marked the
+  // deploy where verify_jwt was turned off on the function — without that,
+  // every POST returns 401 at Supabase's gate before the function code even
+  // runs. If you see protocol v2 or lower AND POSTs are failing with 401,
+  // that's the smoking gun.
+  const EXPECTED_PROTOCOL_VERSION = 8;
 
   // We track the FIRST real failure we see so that if every tier fails we
   // can surface a precise diagnosis instead of a generic "AI unavailable".
