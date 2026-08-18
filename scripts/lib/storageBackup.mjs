@@ -28,10 +28,14 @@ export function createRcloneSourceEnvironment(environment) {
   };
 }
 
+function isReservedRcloneFlagEnv(key) {
+  return /^rclone_/i.test(key) && !/^rclone_config(?:_|$)/i.test(key);
+}
+
 export function createRcloneChildEnvironment(environment) {
   const childEnvironment = { ...environment };
   for (const key of Object.keys(childEnvironment)) {
-    if (REQUIRED_ENV_KEYS.includes(key.toUpperCase())) {
+    if (REQUIRED_ENV_KEYS.includes(key.toUpperCase()) || isReservedRcloneFlagEnv(key)) {
       delete childEnvironment[key];
     }
   }
