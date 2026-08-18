@@ -26,7 +26,16 @@ export interface Organization {
   stripe_subscription_id?: string | null;
   subscription_status?: string | null;
   current_period_end?: string | null;
+  /**
+   * Role every org member implicitly holds on every org project when they
+   * have no explicit user_projects row: 'viewer' | 'field' | 'pm' | null
+   * (null = invite-only; members see nothing until added per project).
+   */
+  member_default_project_role?: string | null;
 }
+
+/** Valid values for organizations.member_default_project_role. */
+export const MEMBER_DEFAULT_PROJECT_ROLES = ["viewer", "field", "pm"] as const;
 
 export interface OrgMembership {
   role: string; // owner | admin | member
@@ -90,6 +99,21 @@ export async function listOrgMembers(orgId: string): Promise<OrgMemberRow[]> {
     profiles = Object.fromEntries((profs || []).map((p: { id: string; email: string | null; full_name: string | null }) => [p.id, p]));
   }
   return members.map((m) => ({ ...m, email: profiles[m.user_id]?.email ?? null, full_name: profiles[m.user_id]?.full_name ?? null }));
+}
+
+/**
+ * Set the workspace-wide default project role for members (org admin only —
+ * enforced by the organizations UPDATE RLS policy). Pass null to disable
+ * implicit access (invite-only mode).
+ */
+export async function updateOrgDefaultProjectRole(orgId: string, role: string | null): Promise<void> {
+  if (role !== null && !MEMBER_DEFAULT_PROJECT_ROLES.includes(role as typeof MEMBER_DEFAULT_PROJECT_ROLES[number])) {
+    throw new Error(`Invalid default project role: ${role}`);
+  }
+  const { error } = await from("organizations")
+    .update({ member_default_project_role: role })
+    .eq("id", orgId);
+  if (error) throw error;
 }
 
 export async function updateMemberRole(memberId: string, role: string): Promise<void> {
