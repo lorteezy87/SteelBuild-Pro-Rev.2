@@ -224,6 +224,29 @@ describe("Storage backup execution", () => {
     expect(childEnvironment.RCLONE_CONFIG_SUPABASE_REGION).toBe("us-east-1");
   });
 
+  it("strips non-config RCLONE_* installer flags from the rclone child environment", () => {
+    const childEnvironment = createRcloneChildEnvironment({
+      PATH: "/usr/bin",
+      RCLONE_VERSION: "1.74.4",
+      RCLONE_SHA256: "fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d",
+      rclone_verbose: "1",
+      RCLONE_CONFIG: "/tmp/rclone.conf",
+      OFFSITE_RCLONE_CONFIG_B64: "destination-secret",
+      OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_EXPECTED_PROJECT_REF: "exampleprojectref123",
+      SUPABASE_S3_ACCESS_KEY_ID: "source-key",
+      SUPABASE_S3_ENDPOINT: "https://example.storage.supabase.co/storage/v1/s3",
+      SUPABASE_S3_REGION: "us-east-1",
+      SUPABASE_S3_SECRET_ACCESS_KEY: "source-secret",
+    });
+
+    expect(childEnvironment.RCLONE_VERSION).toBeUndefined();
+    expect(childEnvironment.RCLONE_SHA256).toBeUndefined();
+    expect(childEnvironment.rclone_verbose).toBeUndefined();
+    expect(childEnvironment.RCLONE_CONFIG).toBe("/tmp/rclone.conf");
+    expect(childEnvironment.RCLONE_CONFIG_SUPABASE_TYPE).toBe("s3");
+  });
+
   it("removes case-insensitive raw backup settings from the rclone child environment", () => {
     const rawKeyVariants = {
       Offsite_Rclone_Config_B64: "destination-secret",
