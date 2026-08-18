@@ -5,14 +5,13 @@ import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawing
 import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
 import { newUploadBatchId } from "@/lib/drawingUploadUtils";
 import { logActivity } from "@/services/auditLogger";
-import { buildDrawingRecord, detectMultiSheetSamePageRegression } from "../drawingSetUploadHelpers";
+import { recordSheetSlipSheet } from "@/lib/drawingHub";
+import {
+  buildDrawingRecord,
+  detectMultiSheetSamePageRegression,
+  planExistingSetSheetReplace,
+} from "../drawingSetUploadHelpers";
 
-// ── useDrawingSetCreation ────────────────────────────────────────────
-// Wraps handleCreate: parent drawing_sets find-or-create (active → soft-deleted
-// restore → unique-constraint race re-query), bulk Drawing.bulkCreate with
-// per-row fallback, autoCreateDetailingTasks, audit logging, and React-Query
-// cache invalidation. Moved verbatim from DrawingSetUploadModal.jsx — the parent
-// find-or-create does async DB reads so it stays here (not in the pure helpers).
 export function useDrawingSetCreation({ meta, activeProject, fileResults, uploadBatchId, onComplete, qc, state }) {
   const {
     cancelledRef, setProcessError, setStep, setProcessingStatus, setCreatedCount,
@@ -29,17 +28,10 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
     const setNumber = (meta.setNumber || "").trim();
 
     try {
-      // ─────────────────────────────────────────────────────────────
-      // STEP 1 — Find or create the parent drawing_sets record.
-      //
-      // We check first so re-uploading into an existing named set just
-      // appends children to the same parent (idempotent across sessions).
-      // ─────────────────────────────────────────────────────────────
       setProcessingStatus(prev => ({ ...prev, progress: 5, message: "Creating drawing set…" }));
 
       let parentSetId = null;
       let parentSetMetadata = null;
-      // First check active (non-deleted) sets
       const existing = await entities.DrawingSet.filter({
           project_id: activeProject?.id,
           set_name:   resolvedSetName,
@@ -49,9 +41,6 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         parentSetMetadata = existing[0].metadata;
       }
 
-        // If none found, check for soft-deleted sets and restore them.
-        // The DB unique index covers ALL rows (including is_deleted=true),
-        // so creating a new row with the same name would violate the constraint.
       if (!parentSetId) {
         const deleted = await entities.DrawingSet.filter({
             project_id: activeProject?.id,
@@ -61,7 +50,6 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         if (Array.isArray(deleted) && deleted.length > 0) {
           parentSetId = deleted[0].id;
           parentSetMetadata = deleted[0].metadata;
-          // Restore the soft-deleted row
           await entities.DrawingSet.update(parentSetId, {
             is_deleted: false,
             deleted_at: null,
@@ -69,7 +57,8 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         }
       }
 
-        // Refresh the parent's metadata to reflect this upload
+      const newFileUrl = selectedSheets.find((s) => s.sourceFileUrl)?.sourceFileUrl || null;
+
       if (parentSetId) {
         try {
           await entities.DrawingSet.update(parentSetId, {
@@ -79,6 +68,7 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
               issued_by:       meta.issuedBy  || "",
               discipline:      meta.discipline || "",
               notes:           meta.notes || "",
+              ...(newFileUrl ? { file_url: newFileUrl } : {}),
               ...(setNumber ? { metadata: withDrawingSetNumberMetadata(parentSetMetadata, setNumber) } : {}),
               updated_at:      new Date().toISOString(),
             });
@@ -88,14 +78,6 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
       }
 
       if (!parentSetId) {
-        // The DB enforces UNIQUE(project_id, set_name) on drawing_sets
-        // (migration 020 / see memory/supabase_drawings_constraints.md).
-        // If a concurrent upload from another session wrote the same
-        // set_name between our lookup above and this CREATE, Postgres
-        // raises 23505 and the whole batch would die with a cryptic
-        // error. Recover: on unique_violation, re-query and attach to
-        // whichever row won the race. Only if even that lookup is empty
-        // do we surface the error to the user.
         const { record: sanitizedSet } = sanitizeDrawingSetPayload({
           project_id:      activeProject?.id,
           project_name:    activeProject?.name,
@@ -108,6 +90,7 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
           notes:           meta.notes || "",
           metadata:        withDrawingSetNumberMetadata({}, setNumber),
           upload_batch_id: batchId,
+          ...(newFileUrl ? { file_url: newFileUrl } : {}),
           sheet_count:        0,
           processed_count:    0,
           needs_review_count: 0,
@@ -136,10 +119,6 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
             parentSetId = winner[0].id;
             parentSetMetadata = winner[0].metadata;
           } else {
-            // Extremely unlikely: insert failed uniqueness but post-lookup
-            // can't find the winner (e.g. it was soft-deleted between the
-            // insert attempt and this query). Surface a clear message
-            // instead of the raw Postgres error.
             throw new Error(
               `A drawing set named "${resolvedSetName}" already exists on this project but could not be loaded. ` +
               `Refresh the page and try again, or pick a different set name.`,
@@ -152,20 +131,6 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         }
       }
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 2 — Create every child drawing row with FK + status cols.
-      //
-      // Each child gets ai_extraction_status === 'Processed' because by
-      // the time we reach this step, AI has already run and the user has
-      // reviewed the results. Rows whose AI pass failed upstream get
-      // marked 'NeedsReview' so the UI can flag them.
-      //
-      // F16: single bulk insert instead of N serial requests. An N-sheet
-      // set used to mean N round-trips; now one. If the bulk insert fails
-      // we fall back to the per-row loop so a single bad row still lets
-      // the rest land — matching the original "never abort the batch"
-      // acceptance criterion.
-      // ─────────────────────────────────────────────────────────────
       const now = new Date().toISOString();
 
       let createdRows = 0;
@@ -174,10 +139,6 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         buildDrawingRecord({ sheet, fileResults, meta, activeProject, resolvedSetName, parentSetId, batchId, now }),
       );
 
-      // Sanity check per source PDF: if a multi-page PDF ended up with
-      // pdf_page=1 across every one of its sheets, that's the original
-      // bug regressing. Log loud per source file so QA can spot it in
-      // DevTools without inspecting every record.
       for (const { sourceFile, sheetCount, pageCount } of detectMultiSheetSamePageRegression(selectedSheets, records, fileResults)) {
         console.warn(
           `[DrawingSetUploadModal] All ${sheetCount} sheets from "${sourceFile}" (a ${pageCount}-page PDF) have pdf_page=1. ` +
@@ -188,50 +149,101 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
       setProcessingStatus(prev => ({
         ...prev,
         progress: 40,
-        message:  `Creating ${records.length} drawing entries…`,
+        message:  `Saving ${records.length} drawing entries…`,
       }));
 
-      // Collect the inserted drawing rows (with DB IDs) so we can
-      // fan out matching Detailing schedule tasks after.
-      //
-      // Defensive enum pass: every record's stage / upload_status /
-      // ai_extraction_status is coerced to a DB-CHECK-valid value so a
-      // typo / stale constant / future schema drift doesn't silently
-      // fail the INSERT and lose the user's upload.
       const sanitizedRecords = records.map((r) => sanitizeDrawingPayload(r).record);
-
       const insertedRows = [];
+
+      let existingLive = [];
       try {
-        const inserted = await entities.Drawing.bulkCreate(sanitizedRecords);
-        if (Array.isArray(inserted)) insertedRows.push(...inserted);
-        createdRows = Array.isArray(inserted) ? inserted.length : sanitizedRecords.length;
-      } catch (bulkErr) {
-        // Bulk failed — fall back to per-row so one bad sheet doesn't lose
-        // the whole batch. This is the slow path; the common case is the
-        // bulk insert above succeeding.
-        console.warn("[drawings] bulkCreate failed, falling back to per-row:", bulkErr);
-        for (let i = 0; i < selectedSheets.length; i++) {
-          if (cancelledRef.current) break;
-          const sheet = selectedSheets[i];
+        const existingSheets = await entities.Drawing.filter({
+          project_id: activeProject?.id,
+          drawing_set_id: parentSetId,
+        });
+        existingLive = (existingSheets || []).filter((d) => !d.is_superseded);
+      } catch (listErr) {
+        console.warn("[drawings] could not list existing set sheets — falling back to insert-only:", listErr);
+      }
+
+      const replacePlan = existingLive.length
+        ? planExistingSetSheetReplace(existingLive, sanitizedRecords)
+        : { toUpdate: [], toCreate: sanitizedRecords, toSupersede: [] };
+
+      for (const { existing: liveSheet, record } of replacePlan.toUpdate) {
+        if (cancelledRef.current) break;
+        try {
           try {
-            const row = await entities.Drawing.create(sanitizedRecords[i]);
-            if (row) insertedRows.push(row);
-            createdRows++;
-          } catch (err) {
-            console.error("Failed to create sheet:", sheet.sheetNumber, err);
-            failedRows++;
+            const slip = await recordSheetSlipSheet({
+              drawing: liveSheet,
+              newCode: record.revision_number || meta.revision || liveSheet.revision_number || "REV",
+              newFileUrl: record.file_url,
+              newPdfPage: record.pdf_page,
+              issuedAt: meta.issueDate || null,
+              notes: meta.notes || null,
+              userId: null,
+            });
+            if (slip?.skipped && slip.revisionId) {
+              await entities.DrawingRevision.update(slip.revisionId, {
+                file_url: record.file_url,
+                pdf_page: record.pdf_page,
+              });
+            }
+          } catch (histErr) {
+            console.warn(`[DrawingSetUploadModal] Slip-sheet history failed for "${record.sheet_number}":`, histErr);
           }
-          setProcessingStatus(prev => ({
-            ...prev,
-            progress: 40 + Math.round(((createdRows + failedRows) / selectedSheets.length) * 50),
-            message:  `Recovering… ${createdRows + failedRows} of ${selectedSheets.length}`,
-          }));
+          const updated = await entities.Drawing.update(liveSheet.id, {
+            title: record.title,
+            revision_number: record.revision_number,
+            file_url: record.file_url,
+            pdf_page: record.pdf_page,
+            discipline: record.discipline,
+            upload_batch_id: batchId,
+            upload_status: record.upload_status,
+            ai_extraction_status: record.ai_extraction_status,
+            last_extracted_at: now,
+            drawing_set_id: parentSetId,
+            drawing_set_name: resolvedSetName,
+            is_superseded: false,
+          });
+          insertedRows.push(updated || { ...liveSheet, ...record });
+          createdRows++;
+        } catch (err) {
+          console.error("Failed to replace sheet:", record.sheet_number, err);
+          failedRows++;
         }
       }
 
-      // Auto-create matching Detailing/Submittal schedule tasks. Idempotent —
-      // re-running the upload won't double-insert because the helper dedupes
-      // by drawing_id in metadata.
+      for (const liveSheet of replacePlan.toSupersede) {
+        if (cancelledRef.current) break;
+        try {
+          await entities.Drawing.update(liveSheet.id, { is_superseded: true });
+        } catch (err) {
+          console.warn(`[DrawingSetUploadModal] Could not retire leftover sheet ${liveSheet.sheet_number}:`, err);
+        }
+      }
+
+      if (replacePlan.toCreate.length > 0 && !cancelledRef.current) {
+        try {
+          const inserted = await entities.Drawing.bulkCreate(replacePlan.toCreate);
+          if (Array.isArray(inserted)) insertedRows.push(...inserted);
+          createdRows += Array.isArray(inserted) ? inserted.length : replacePlan.toCreate.length;
+        } catch (bulkErr) {
+          console.warn("[drawings] bulkCreate failed, falling back to per-row:", bulkErr);
+          for (let i = 0; i < replacePlan.toCreate.length; i++) {
+            if (cancelledRef.current) break;
+            try {
+              const row = await entities.Drawing.create(replacePlan.toCreate[i]);
+              if (row) insertedRows.push(row);
+              createdRows++;
+            } catch (err) {
+              console.error("Failed to create sheet:", replacePlan.toCreate[i]?.sheet_number, err);
+              failedRows++;
+            }
+          }
+        }
+      }
+
       if (insertedRows.length > 0 && !cancelledRef.current) {
         setProcessingStatus(prev => ({
           ...prev,
@@ -254,26 +266,23 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
       setProcessingStatus(prev => ({
         ...prev,
         progress: 95,
-        message:  `Created ${createdRows} of ${selectedSheets.length} entries`,
+        message:  `Saved ${createdRows} of ${selectedSheets.length} entries`,
       }));
 
       if (cancelledRef.current) return;
       setCreatedCount(createdRows);
 
-      // Audit the AI-intake commit on the LIVE create path (importAnalyzedDrawings
-      // is dead code; this modal is the real intake). Fire-and-forget — logActivity
-      // swallows its own errors and never blocks the upload.
       if (createdRows > 0) {
         const needsReviewCount = sanitizedRecords.filter((r) => r.ai_extraction_status === "NeedsReview").length;
         void logActivity(
           "drawing",
-          "created",
+          existingLive.length ? "updated" : "created",
           { id: parentSetId, project_id: activeProject?.id, name: resolvedSetName },
           {
             projectId: activeProject?.id,
             projectName: activeProject?.name,
             description:
-              `Imported ${createdRows} sheet${createdRows === 1 ? "" : "s"} into "${resolvedSetName}" from AI intake` +
+              `${existingLive.length ? "Replaced" : "Imported"} ${createdRows} sheet${createdRows === 1 ? "" : "s"} in "${resolvedSetName}"` +
               `${needsReviewCount ? ` (${needsReviewCount} flagged for review)` : ""}` +
               `${failedRows ? ` — ${failedRows} failed to save` : ""}`,
           },
@@ -281,12 +290,10 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
       }
 
       if (failedRows > 0) {
-        setProcessError(`${failedRows} sheet(s) failed to save. ${createdRows} created successfully.`);
+        setProcessError(`${failedRows} sheet(s) failed to save. ${createdRows} saved successfully.`);
       }
 
-      // The sync_drawing_set_counts() DB trigger updates the parent aggregate;
-      // wait for every registered drawing family before reporting completion.
-      await invalidateEntities(qc, ["drawing", "drawingSet", "submittal"], activeProject?.id);
+      await invalidateEntities(qc, ["drawing", "drawingSet", "submittal", "drawing_revision"], activeProject?.id);
       setStep(5);
       if (onComplete) onComplete();
     } catch (err) {
