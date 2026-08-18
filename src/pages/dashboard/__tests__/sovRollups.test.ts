@@ -40,6 +40,23 @@ describe("latestApplicationPerLineItem", () => {
     expect(rows.find((r) => r.line_item_number === 1)?.application_number).toBe(2);
   });
 
+  it("never collapses rows that lack a line_item_number", () => {
+    const rows = latestApplicationPerLineItem([
+      { project_id: P, application_number: 1, status: "Draft", scheduled_value: 100 },
+      { project_id: P, application_number: 2, status: "Draft", scheduled_value: 200 },
+    ]);
+    expect(rows).toHaveLength(2);
+  });
+
+  it("breaks application ties by most advanced status (Certified over Draft)", () => {
+    const rows = latestApplicationPerLineItem([
+      { project_id: P, line_item_number: 9, application_number: 3, status: "Draft", scheduled_value: 100 },
+      { project_id: P, line_item_number: 9, application_number: 3, status: "Certified", scheduled_value: 100 },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("Certified");
+  });
+
   it("keeps identical line item numbers from different projects separate", () => {
     const rows = latestApplicationPerLineItem([
       ...multiAppRows,

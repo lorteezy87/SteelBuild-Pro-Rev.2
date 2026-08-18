@@ -702,18 +702,31 @@ export function latestCertifiedPerLineItem(sovItems = []) {
  * so Σ scheduled_value equals the real SOV total instead of N× it
  * (see the SOV ROW MODEL comment above).
  */
+const SOV_STATUS_RANK = { Draft: 0, Submitted: 1, Certified: 2, Paid: 3 };
+
 export function latestApplicationPerLineItem(sovItems = []) {
   const byKey = new Map();
+  const unkeyed = []; // rows without a line_item_number must never collapse together
   for (const r of sovItems) {
     if (!r || r.is_deleted) continue;
-    const key = `${r.project_id ?? ""}|${r.line_item_number ?? ""}`;
+    const lineNo = r.line_item_number;
+    if (lineNo == null || lineNo === "") {
+      unkeyed.push(r);
+      continue;
+    }
+    const key = `${r.project_id ?? ""}|${lineNo}`;
     const cur = byKey.get(key);
     const app = Number(r.application_number) || 0;
-    if (!cur || app > (Number(cur.application_number) || 0)) {
+    const curApp = cur ? Number(cur.application_number) || 0 : -1;
+    // Same application can hold a Draft AND a Certified row for a line item;
+    // on ties keep the most advanced status so the pick is deterministic.
+    const rank = SOV_STATUS_RANK[r.status] ?? -1;
+    const curRank = cur ? (SOV_STATUS_RANK[cur.status] ?? -1) : -1;
+    if (!cur || app > curApp || (app === curApp && rank > curRank)) {
       byKey.set(key, r);
     }
   }
-  return [...byKey.values()];
+  return [...byKey.values(), ...unkeyed];
 }
 
 /**
