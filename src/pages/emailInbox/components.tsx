@@ -41,6 +41,24 @@ interface EmailRowProps {
   attachmentCount: number;
 }
 
+/**
+ * recipients is jsonb but both writers JSON.stringify into it, so it can come
+ * back as a JSON string OR a real array. Render a comma list either way —
+ * never raw JSON, never a render-crashing JSON.parse(array).
+ */
+export function formatRecipientList(recipients: unknown): string {
+  if (Array.isArray(recipients)) return recipients.join(", ");
+  if (typeof recipients === "string") {
+    try {
+      const parsed = JSON.parse(recipients);
+      return Array.isArray(parsed) ? parsed.join(", ") : String(parsed ?? "");
+    } catch {
+      return recipients; // plain "a@b.com" string
+    }
+  }
+  return "";
+}
+
 export function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, attachmentCount }: EmailRowProps) {
   const isUnread = !message.is_read;
   const isOutbound = message.direction === "outbound";
@@ -297,7 +315,7 @@ export function EmailDetail({
             {/* Recipients */}
             {message.recipients && (
               <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
-                To: {typeof message.recipients === "string" ? message.recipients : JSON.parse((message.recipients as unknown as string) || "[]").join(", ")}
+                To: {formatRecipientList(message.recipients)}
               </div>
             )}
           </div>
