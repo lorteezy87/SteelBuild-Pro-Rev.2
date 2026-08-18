@@ -310,6 +310,7 @@ export default function ProductionNotes() {
       project_id: project.id,
       project_name: project.name,
       note_date: meetingDate,
+      date_noted: meetingDate,
       folder_id: activeFolderId,
       content: "",
       category: "General",
@@ -332,6 +333,7 @@ export default function ProductionNotes() {
       project_id: projectId,
       project_name: project.name,
       note_date: meetingDate,
+      date_noted: meetingDate,
       folder_id: activeFolderId,
       content,
       category: "General",
@@ -343,6 +345,10 @@ export default function ProductionNotes() {
   const updateBulletText = (note, newText) => {
     if ((note.content || "") === newText) return;
     updateMut.mutate({ id: note.id, data: { content: newText } });
+  };
+
+  const updateBulletDates = (note, patch) => {
+    updateMut.mutate({ id: note.id, data: patch });
   };
 
   const toggleHighlight = (note) => {
@@ -611,6 +617,7 @@ export default function ProductionNotes() {
                 key={row.projectId}
                 row={row}
                 onUpdateBulletText={updateBulletText}
+                onUpdateBulletDates={updateBulletDates}
                 onToggleHighlight={toggleHighlight}
                 onDeleteBullet={deleteBullet}
                 onAddBullet={addBullet}
@@ -796,7 +803,7 @@ export default function ProductionNotes() {
 // Previously defined INSIDE ProductionNotes, causing re-creation on every
 // render which destroyed input focus and defeated optimistic updates.
 
-function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, onToggleHighlight, onDeleteBullet }) {
+function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, onUpdateBulletDates, onToggleHighlight, onDeleteBullet }) {
   const [text, setText] = useState(note.content || "");
   const inputRef = useRef(null);
 
@@ -838,6 +845,8 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
   };
 
   const highlighted = !!note.is_high_priority;
+  const dateNoted = note.date_noted || "";
+  const dateDue = note.date_due || "";
 
   return (
     <div
@@ -851,18 +860,58 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
       className="bullet-row"
     >
       <span style={{ color: highlighted ? "var(--status-warning)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 14, lineHeight: 1.5, paddingTop: 1, userSelect: "none" }}>•</span>
-      <textarea
-        ref={inputRef}
-        data-bullet-input
-        value={text}
-        rows={1}
-        onChange={(e) => { setText(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
-        onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
-        onBlur={commit}
-        onKeyDown={handleKeyDown}
-        placeholder={isLast ? "Type a bullet — Enter for next, Ctrl+H to highlight" : ""}
-        style={{ flex: 1, background: "transparent", border: "none", outline: "none", resize: "none", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.55, padding: "1px 0", fontWeight: highlighted ? 600 : 400 }}
-      />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+        <textarea
+          ref={inputRef}
+          data-bullet-input
+          value={text}
+          rows={1}
+          onChange={(e) => { setText(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
+          onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
+          onBlur={commit}
+          onKeyDown={handleKeyDown}
+          placeholder={isLast ? "Type a bullet — Enter for next, Ctrl+H to highlight" : ""}
+          style={{ width: "100%", background: "transparent", border: "none", outline: "none", resize: "none", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.55, padding: "1px 0", fontWeight: highlighted ? 600 : 400 }}
+        />
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.06em", color: "var(--text-muted)", textTransform: "uppercase" }}>
+            Noted
+            <input
+              type="date"
+              value={dateNoted}
+              onChange={(e) => onUpdateBulletDates(note, { date_noted: e.target.value || null })}
+              style={{
+                background: "var(--bg-surface-low)",
+                border: "1px solid var(--border-default)",
+                borderRadius: 4,
+                color: "var(--text-primary)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                padding: "2px 6px",
+                colorScheme: "dark",
+              }}
+            />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.06em", color: "var(--text-muted)", textTransform: "uppercase" }}>
+            Due
+            <input
+              type="date"
+              value={dateDue}
+              onChange={(e) => onUpdateBulletDates(note, { date_due: e.target.value || null })}
+              style={{
+                background: "var(--bg-surface-low)",
+                border: "1px solid var(--border-default)",
+                borderRadius: 4,
+                color: "var(--text-primary)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                padding: "2px 6px",
+                colorScheme: "dark",
+              }}
+            />
+          </label>
+        </div>
+      </div>
       <div className="bullet-actions" style={{ display: "flex", gap: 4, opacity: 0.65, transition: "opacity 0.15s" }}>
         <button title="Highlight (Ctrl+H)" onClick={() => onToggleHighlight(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: highlighted ? "color-mix(in srgb, var(--status-warning) 25%, transparent)" : "transparent", color: highlighted ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Highlighter size={12} />
@@ -875,7 +924,7 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
   );
 }
 
-function ProjectRow({ row, onUpdateBulletText, onToggleHighlight, onDeleteBullet, onAddBullet }) {
+function ProjectRow({ row, onUpdateBulletText, onUpdateBulletDates, onToggleHighlight, onDeleteBullet, onAddBullet }) {
   const { project, bullets, projectId } = row;
   const renderable = bullets.length > 0 ? bullets : [];
 
@@ -895,6 +944,7 @@ function ProjectRow({ row, onUpdateBulletText, onToggleHighlight, onDeleteBullet
             isLast={idx === renderable.length - 1}
             onCreateNext={() => onAddBullet(projectId, "")}
             onUpdateBulletText={onUpdateBulletText}
+            onUpdateBulletDates={onUpdateBulletDates}
             onToggleHighlight={onToggleHighlight}
             onDeleteBullet={onDeleteBullet}
           />

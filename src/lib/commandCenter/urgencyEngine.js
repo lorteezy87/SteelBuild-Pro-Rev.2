@@ -27,8 +27,7 @@
  *       1-day-away → -1 (sorts above 5-days-away → -5).
  *     - RFI / ChangeOrder / WorkPackage / DrawingSet without a due date:
  *       store `daysSince(created/issued/submitted)` so older-is-more-urgent.
- *     - ProductionNote: store `age` (days since note_date) for the same
- *       older-is-more-urgent pattern.
+ *     - ProductionNote: prefer date_due (-dueDays); else age from note_date.
  *
  *   Both branches satisfy "higher = more urgent" — a refactor that stores
  *   `+dueDays` (positive-for-future) would silently invert the sort inside
@@ -73,6 +72,7 @@ export const THRESHOLDS = {
   // the main feed from being a firehose on big projects.
   TASK_HORIZON_DAYS: 90,
   TASK_DUE_SOON_DAYS: 7,
+  NOTE_DUE_SOON_DAYS: 3,
 };
 
 // ── RFI ─────────────────────────────────────────────────────────────────
@@ -551,7 +551,43 @@ export function productionNoteUrgency(note, projectMap = {}) {
   if (note.is_resolved) return null;
 
   const project = projectMap[note.project_id] || {};
-  const age = daysSince(note.note_date || note.created_date);
+  const text = (note.content || note.note || "").trim();
+  const titleBase = text ? text.slice(0, 80) + (text.length > 80 ? "…" : "") : "(empty note)";
+
+  // Prefer explicit due date when present
+  if (note.date_due) {
+    const dueDays = daysUntil(note.date_due);
+    let urgency = "normal";
+    let displayStatus = dueDays === 0 ? "Due today" : dueDays < 0 ? `${Math.abs(dueDays)}d past due` : `Due in ${dueDays}d`;
+
+    if (dueDays < 0) {
+      urgency = "overdue";
+    } else if (dueDays <= THRESHOLDS.NOTE_DUE_SOON_DAYS) {
+      urgency = note.is_high_priority ? "blocking" : "due-soon";
+    } else if (note.is_high_priority) {
+      urgency = "blocking";
+      displayStatus = `High priority — due in ${dueDays}d`;
+    } else {
+      return null;
+    }
+
+    return {
+      urgency,
+      daysValue: -dueDays,
+      displayStatus,
+      quickAction: { label: "View Note", route: `/ProductionNotes?project=${note.project_id}` },
+      itemType: "NOTE",
+      title: titleBase,
+      owner: note.author || null,
+      projectId: note.project_id,
+      projectNumber: project.project_number || null,
+      projectName: project.name || null,
+      sourceId: note.id,
+      raw: note,
+    };
+  }
+
+  const age = daysSince(note.date_noted || note.note_date || note.created_date);
 
   let urgency = "normal";
   let displayStatus = `Unresolved — ${age}d`;
@@ -572,7 +608,7 @@ export function productionNoteUrgency(note, projectMap = {}) {
     displayStatus,
     quickAction: { label: "View Note", route: `/ProductionNotes?project=${note.project_id}` },
     itemType: "NOTE",
-    title: `${note.note ? note.note.slice(0, 80) : "(empty note)"}${note.note && note.note.length > 80 ? "…" : ""}`,
+    title: titleBase,
     owner: note.author || null,
     projectId: note.project_id,
     projectNumber: project.project_number || null,
