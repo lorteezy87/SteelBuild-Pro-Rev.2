@@ -25,10 +25,20 @@ export const parseSortBy = (sortBy?: string | null): { column: string; ascending
  *   - Simple equality: { status: 'Open' }
  *   - IN-array:        { status: ['Open', 'Closed'] }
  *   - Range operators: { 'scheduled_date.gte': '2024-01-01' }
+ *   - NOT IN:          { 'status.nin': ['Answered', 'Closed'] }
  *   - NULL checks:     { assigned_to: null } → .is('assigned_to', null)
  */
 const RANGE_OPS: Record<string, string> = {
   gte: 'gte', gt: 'gt', lte: 'lte', lt: 'lt', neq: 'neq', like: 'like', ilike: 'ilike',
+};
+
+const encodeNinList = (value: unknown): string => {
+  const values = Array.isArray(value) ? value : [value];
+  const encoded = values
+    .filter((item) => item !== undefined && item !== null)
+    .map((item) => `"${String(item).replace(/"/g, "")}"`)
+    .join(",");
+  return `(${encoded})`;
 };
 
 export const applyConditions = (query: QueryBuilder, conditions: Conditions = {}): QueryBuilder => {
@@ -39,6 +49,11 @@ export const applyConditions = (query: QueryBuilder, conditions: Conditions = {}
     const dotIdx = key.lastIndexOf('.');
     if (dotIdx > 0) {
       const opName = key.slice(dotIdx + 1);
+      if (opName === 'nin') {
+        const col = mapColumn(key.slice(0, dotIdx));
+        query = query.not(col, 'in', encodeNinList(value));
+        continue;
+      }
       if (RANGE_OPS[opName]) {
         const col = mapColumn(key.slice(0, dotIdx));
         query = query[opName](col, value);

@@ -72,10 +72,13 @@ export const PROJECT_SCOPED_TABLES = new Set<string>([
  * explode when a reverse FK also links the tables (e.g. contacts.project_id
  * AND projects.detailer_contact_id → contacts). Sentry JAVASCRIPT-REACT-10/V.
  */
-export const projectScopedSelect = (tableName: string): string =>
-  PROJECT_SCOPED_TABLES.has(tableName)
-    ? `*, projects!${tableName}_project_id_fkey!inner(id)`
-    : '*';
+export const projectScopedSelect = (tableName: string, columns?: string): string => {
+  const trimmed = typeof columns === 'string' ? columns.trim() : '';
+  const cols = trimmed && trimmed !== '*' ? trimmed : '*';
+  return PROJECT_SCOPED_TABLES.has(tableName)
+    ? `${cols}, projects!${tableName}_project_id_fkey!inner(id)`
+    : cols;
+};
 
 export const applyLiveProjectScope = (query: QueryBuilder, tableName: string): QueryBuilder =>
   PROJECT_SCOPED_TABLES.has(tableName)

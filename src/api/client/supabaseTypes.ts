@@ -35,8 +35,8 @@ export type EntityClient<T extends TableName> = {
   /** Like list() but PAGINATES to completeness — no silent DEFAULT_LIST_LIMIT
    *  cap. For portfolio/dashboard reads that span all projects and can outgrow
    *  the cap as a tenant grows (CommandCenter / AIInsights). */
-  listAll: (sortBy?: string) => Promise<Array<RowWithAliases<T>>>;
-  filter: (conditions?: Conditions, sortBy?: string, limit?: number) => Promise<Array<RowWithAliases<T>>>;
+  listAll: (sortBy?: string, columns?: string) => Promise<Array<RowWithAliases<T>>>;
+  filter: (conditions?: Conditions, sortBy?: string, limit?: number, columns?: string) => Promise<Array<RowWithAliases<T>>>;
   get: (id: string) => Promise<RowWithAliases<T>>;
   create: (record: Insert<T>) => Promise<RowWithAliases<T>>;
   update: (id: string, updates: Update<T>) => Promise<RowWithAliases<T>>;

@@ -57,6 +57,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["drawing-register", pid],   // DrawingRegisterGrid (drawing_register_view)
       ["drawing-reviews", pid],    // ReviewQueue (drawing_reviews)
       ["drawing-impacts", pid],    // ImpactBoard (drawing_impacts)
+      ["drawings-dashboard"],      // Dashboard.jsx
     ],
   },
 
@@ -90,6 +91,8 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["modal-deliveries", pid],      // ProjectDrilldownModal.jsx
       ["del-detail", pid],            // ProjectDetailView.jsx
       ["deliveries-for-wp", pid],     // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
+      ["deliveries-dashboard"],       // Dashboard.jsx
+      ["portfolio-deliveries"],       // PortfolioHub.jsx
     ],
   },
 
@@ -98,7 +101,8 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["expenses", pid],
       ["expenses"],
-      ["expenses-all"],             // Dashboard.jsx, Reports.jsx
+      ["expenses-all"],             // Reports.jsx
+      ["expenses-dashboard"],       // Dashboard.jsx
     ],
   },
 
@@ -113,6 +117,8 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["cost-codes-dash", pid],     // CostDashboard.jsx
       ["cc-detail", pid],           // ProjectDetailView.jsx
       ["modal-codes", pid],         // ProjectDrilldownModal.jsx
+      ["codes-dashboard"],          // Dashboard.jsx
+      ["portfolio-codes"],          // PortfolioHub.jsx
     ],
   },
 
@@ -124,7 +130,9 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["change-orders-all"],        // Projects.jsx
       ["change-orders-global"],     // ExecutiveView.jsx, Reports.jsx
       ["change-orders-dash", pid],  // CostDashboard.jsx
-      ["cos-all"],                  // Dashboard.jsx, ProductionNotes.jsx
+      ["cos-all"],                  // ProductionNotes.jsx
+      ["cos-dashboard"],            // Dashboard.jsx
+      ["portfolio-cos"],            // PortfolioHub.jsx
       ["all-cos-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
       ["co-detail", pid],           // ProjectDetailView.jsx
       ["modal-cos", pid],           // ProjectDrilldownModal.jsx
@@ -149,11 +157,14 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["rfis", pid],
       ["rfis"],
       ["rfis-all"],
+      ["rfis", "all"],              // Projects.jsx (legacy spelling)
       ["rfis", "hub"],              // RFIHub.jsx
       ["rfis-nav-count", pid],      // Layout.jsx nav badge
       ["rfi-detail", pid],          // ProjectDetailView.jsx
       ["pill-rfis-quick"],          // ProjectPillDropdown.jsx
       ["modal-rfis", pid],          // ProjectDrilldownModal.jsx
+      ["rfis-dashboard"],           // Dashboard.jsx
+      ["portfolio-rfis"],           // PortfolioHub.jsx
     ],
   },
 
@@ -164,8 +175,9 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["schedule-tasks"],
       ["schedule-tasks-global"],    // ExecutiveView.jsx
       ["schedule-tasks-dashboard"], // Dashboard.jsx
-      ["schedule-tasks-all"],       // Reports.jsx
-      ["portfolio-schedule-tasks"], // AIInsights.jsx
+      ["schedule-tasks-all"],       // Reports.jsx / Projects.jsx prefix
+      ["schedule-tasks-rfis"],      // RFIs.jsx health evidence
+      ["portfolio-schedule-tasks"], // PortfolioHub.jsx / AIInsights.jsx
       ["sched-detail", pid],        // ProjectDetailView.jsx
       ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
       ["lookahead", pid],           // LookAheadSchedule.jsx
@@ -186,6 +198,8 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["wps-fab", pid],             // FabRelease.jsx
       ["wp-detail", pid],           // ProjectDetailView.jsx
       ["modal-wps", pid],           // ProjectDrilldownModal.jsx
+      ["work-packages-dashboard"],  // Dashboard.jsx
+      ["portfolio-wps"],            // PortfolioHub.jsx
     ],
   },
 
@@ -195,6 +209,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["sov-items", pid],
       ["sov-items"],
       ["sovs-cost", pid],           // CostDashboard.jsx
+      ["sov-items-dashboard"],      // Dashboard.jsx
     ],
   },
 
@@ -223,7 +238,9 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["action-items", pid],
       ["action-items"],
-      ["action-items-all"],          // Dashboard.jsx, Reports.jsx
+      ["action-items-all"],          // Reports.jsx
+      ["action-items-dashboard"],    // Dashboard.jsx
+      ["portfolio-action-items"],    // PortfolioHub.jsx
       ["all-action-items-portfolio"], // AIInsights.jsx, CostDashboard.jsx
     ],
   },
@@ -235,6 +252,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["daily-logs"],
       ["all-logs-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
       ["modal-logs", pid],           // ProjectDrilldownModal.jsx
+      ["daily-logs-dashboard"],      // Dashboard.jsx
     ],
   },
 
@@ -259,6 +277,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["inspections", pid],
       ["inspections"],
+      ["inspections-dashboard"],     // Dashboard.jsx
     ],
   },
 
@@ -267,6 +286,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["safety-incidents", pid],
       ["safety-incidents"],
+      ["safety-dashboard"],          // Dashboard.jsx
     ],
   },
 
@@ -275,6 +295,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["photos", pid],
       ["photos"],
+      ["photos-dashboard"],          // Dashboard.jsx
     ],
   },
 
@@ -298,6 +319,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["punchlist", pid],
       ["punchlist"],
+      ["punchlist-dashboard"],       // Dashboard.jsx
     ],
   },
 
@@ -306,6 +328,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["qc-records", pid],
       ["qc-records"],
+      ["qc-records-dashboard"],      // Dashboard.jsx
     ],
   },
 
@@ -398,6 +421,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["submittals-all"],
       ["submittals-nav-count", pid],
       ["submittal-detail", pid],
+      ["submittals-dashboard"],      // Dashboard.jsx
     ],
   },
 
@@ -449,6 +473,8 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["drawing-activity", pid],
       ["drawing-activity"],
+      ["drawing-activity-recent"],   // Dashboard.jsx
+      ["drawing-activity-all"],      // WeeklyStatusReports.jsx
     ],
   },
 

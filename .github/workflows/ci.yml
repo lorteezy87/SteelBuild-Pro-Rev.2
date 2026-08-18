@@ -25,7 +25,8 @@
 #   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
 #   - Secret scanning (gitleaks) / SAST — queued; needs an owner decision on
 #     tooling (see ENTERPRISE_READINESS_AUDIT.md L13).
-#   - Lighthouse / a11y / bundle-size budgets (queued for later).
+#   - Lighthouse / a11y budgets (queued for later). Bundle gzip budgets
+#     run in the `ci` job via `npm run perf:bundle` after the production build.
 
 name: CI
 
@@ -138,6 +139,11 @@ jobs:
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Bundle size budgets
+        # Uses dist/ from the previous step. Fails the job if initial or
+        # total gzip exceeds scripts/perf-bundle-report.cjs defaults.
+        run: npm run perf:bundle
 
   # ── Dependency audit (ADVISORY — never blocks a deploy) ──────────────────
   # `npm audit` over PRODUCTION dependencies, failing on high+ advisories.

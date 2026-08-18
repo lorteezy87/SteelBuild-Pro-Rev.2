@@ -152,6 +152,9 @@ follow-ups._
   organization, and fixture project are provisioned against staging.
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project
   performance** (virtualization, server-side filtering, narrow invalidation).
+  Bundle gzip budgets now run via `npm run perf:bundle` after CI `build`.
+  Remaining: RFI register + Piece Register virtualization, and server-side
+  portfolio rollups so Projects/PortfolioHub/reports stop paging full tables.
   Phase 0 tablet kit is landed; Phases 1-4 domain migrations remain pending.
 - **Dependency vulnerabilities — CLEARED (`npm audit` = 0 advisories, verified
   2026-06-17).** The 2 remaining `esbuild`-via-`vite` highs were patched within the
@@ -206,7 +209,7 @@ follow-ups._
   "86 anonymous-access" findings are no longer reported by the advisor),
   (2) optionally add a GitHub branch-protection rule requiring the "CI" status
   check on `main` (note: only gates PR merges, not the current direct-push deploy
-  flow — see the doc). No E2E / a11y / bundle budgets yet. (Sentry source-map
+  flow — see the doc). No E2E / a11y budgets yet; bundle gzip budgets run in CI. (Sentry source-map
   upload is now DONE — confirmed live via release `b5272fd7` + artifact bundle;
   see the doc §2.)
 

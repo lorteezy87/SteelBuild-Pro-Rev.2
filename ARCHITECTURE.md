@@ -644,13 +644,20 @@ DrawingViewer and ModelViewer, then add interaction tests
   members only (~5× fewer draw calls on big models)
 - Large IFC models are gzipped on upload (e.g. 52 MB → ~7 MB)
 - Sentry error + performance monitoring with masked session replay
+- `npm run perf:bundle` enforces gzip budgets after `npm run build`
+  (default 320 KB initial / 3600 KB total; CI runs the same check)
+- Nav overdue badges fetch a slim overdue projection, not the full register
+- `filter()` / `listAll()` accept an optional column list for KPI rollups
 
 ### What's not done
 
 - No Lighthouse CI / performance budgets in the build
-- No bundle-size budgets
 - Large-project virtualization / server-side filtering still partial
-- No code splitting beyond per-route lazy chunks
+  (command DataTable virtualizes at 100+ rows; RFI register and Piece
+  Register still paint every filtered row)
+- Portfolio / Projects / reports still client-aggregate full tables
+  instead of server-side rollup RPCs
+- No code splitting beyond per-route lazy chunks + vendor manualChunks
 
 Track all of these in TECH_DEBT.md.
 

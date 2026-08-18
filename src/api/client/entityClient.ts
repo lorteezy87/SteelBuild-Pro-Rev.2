@@ -106,14 +106,16 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
    * capped read — so portfolio-wide dashboards (CommandCenter / AIInsights) don't
    * silently truncate at DEFAULT_LIST_LIMIT as a tenant grows. The primary sort
    * plus an `id` tiebreaker keeps page boundaries stable (no dropped/dup rows).
+   * Pass `columns` (comma-separated table columns only) for KPI/rollup reads
+   * that must not download every payload column.
    */
-  listAll: async (sortBy) => {
+  listAll: async (sortBy, columns) => {
     const PAGE = 1000;
     const SAFETY_MAX_ROWS = 100_000;
     const sort = parseSortBy(sortBy);
     const all: Array<RowWithAliases<T>> = [];
     for (let offset = 0; offset < SAFETY_MAX_ROWS; offset += PAGE) {
-      let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
+      let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string, columns));
       q = applyLiveProjectScope(q, tableName as string);
       if (SOFT_DELETE_TABLES.has(tableName as string)) q = q.eq('is_deleted', false);
       if ((tableName as string) === 'projects') q = q.eq('on_hold', false);
@@ -134,8 +136,8 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
   /**
    * Filter records by conditions.
    */
-  filter: async (conditions = {}, sortBy, limit) => {
-    let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
+  filter: async (conditions = {}, sortBy, limit, columns) => {
+    let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string, columns));
     q = applyLiveProjectScope(q, tableName as string);
     // Soft-delete filter (unless caller explicitly filters is_deleted)
     if (SOFT_DELETE_TABLES.has(tableName as string) && !('is_deleted' in conditions)) {

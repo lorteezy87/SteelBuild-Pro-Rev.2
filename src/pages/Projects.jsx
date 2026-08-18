@@ -50,12 +50,27 @@ export default function Projects() {
     },
     staleTime: 5 * 60 * 1000,
   });
-  const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => entities.WorkPackage.listAll() });
-  const { data: rawRfis = [], isSuccess: rfisSuccess } = useQuery({ queryKey: ["rfis", "all"], queryFn: () => entities.RFI.listAll() });
-  const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => entities.ChangeOrder.listAll() });
+  const { data: rawWorkPackages = [] } = useQuery({
+    queryKey: ["work-packages-all", "projects-kpi"],
+    queryFn: () => entities.WorkPackage.listAll(
+      undefined,
+      "id,project_id,status,tonnage,shop_hours_budget,shop_hours_actual",
+    ),
+  });
+  const { data: rawRfis = [], isSuccess: rfisSuccess } = useQuery({
+    queryKey: ["rfis", "all", "projects-kpi"],
+    queryFn: () => entities.RFI.listAll(undefined, "id,project_id,status,date_required,priority"),
+  });
+  const { data: rawChangeOrders = [] } = useQuery({
+    queryKey: ["change-orders-all", "projects-kpi"],
+    queryFn: () => entities.ChangeOrder.listAll(undefined, "id,project_id,status,co_amount"),
+  });
   const { data: rawScheduleTasks = [], isSuccess: scheduleTasksSuccess } = useQuery({
-    queryKey: ["schedule-tasks-all"],
-    queryFn: () => entities.ScheduleTask.listAll("start_date"),
+    queryKey: ["schedule-tasks-all", "projects-kpi"],
+    queryFn: () => entities.ScheduleTask.listAll(
+      "start_date",
+      "id,project_id,start_date,end_date,status,percent_complete,parent_task_id,is_summary,task_name",
+    ),
   });
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);

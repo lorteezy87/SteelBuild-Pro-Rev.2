@@ -4,6 +4,18 @@ import { entities } from "@/api/supabaseClient";
 import { batchProcess } from "@/utils/batchProcess";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { filterAlertsForUser } from "@/lib/userPreferences/alerts";
+import {
+  NAV_DELIVERY_COLUMNS,
+  NAV_DRAWING_COLUMNS,
+  NAV_RFI_COLUMNS,
+  countOverdueDeliveries,
+  countOverdueDrawings,
+  countOverdueRfis,
+  deliveryNavOverdueConditions,
+  drawingNavOverdueConditions,
+  navOverdueCutoffIso,
+  rfiNavOverdueConditions,
+} from "@/lib/nav/overdueNavCounts";
 
 /**
  * useLayoutNavData — single hook that owns every cross-module count + alert
@@ -27,6 +39,8 @@ import { filterAlertsForUser } from "@/lib/userPreferences/alerts";
  *   - Module badge count queries are additionally gated by
  *     `includeModuleCounts`, so closed module menus do not start RFI,
  *     drawing, and delivery count requests on every app load.
+ *   - Badge queries ask PostgREST for overdue rows only (date + status)
+ *     and a slim column list — not the full register.
  *   - Refetch interval: 120s. Stale window: 60s. Same as the inline
  *     queries this hook replaces — nothing about cadence changed.
  *   - The alerts query catches errors so a missing `is_dismissed` column
@@ -64,7 +78,12 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
 
   const { data: navRFIs = [] } = useQuery({
     queryKey: ["rfis-nav-count", projectId],
-    queryFn: () => entities.RFI.filter({ project_id: projectId }),
+    queryFn: () => entities.RFI.filter(
+      rfiNavOverdueConditions(projectId, navOverdueCutoffIso()),
+      undefined,
+      undefined,
+      NAV_RFI_COLUMNS,
+    ),
     refetchInterval: 120_000,
     staleTime: 60_000,
     enabled: moduleCountsEnabled,
@@ -72,7 +91,12 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
 
   const { data: navDrawings = [] } = useQuery({
     queryKey: ["drawings-nav-count", projectId],
-    queryFn: () => entities.Drawing.filter({ project_id: projectId }),
+    queryFn: () => entities.Drawing.filter(
+      drawingNavOverdueConditions(projectId, navOverdueCutoffIso()),
+      undefined,
+      undefined,
+      NAV_DRAWING_COLUMNS,
+    ),
     refetchInterval: 120_000,
     staleTime: 60_000,
     enabled: moduleCountsEnabled,
@@ -80,7 +104,12 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
 
   const { data: navDeliveries = [] } = useQuery({
     queryKey: ["deliveries-nav-count", projectId],
-    queryFn: () => entities.Delivery.filter({ project_id: projectId }),
+    queryFn: () => entities.Delivery.filter(
+      deliveryNavOverdueConditions(projectId, navOverdueCutoffIso()),
+      undefined,
+      undefined,
+      NAV_DELIVERY_COLUMNS,
+    ),
     refetchInterval: 120_000,
     staleTime: 60_000,
     enabled: moduleCountsEnabled,
@@ -91,16 +120,9 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
   const { overdueRFICount, overdueDrawingCount, overdueDeliveryCount } = useMemo(() => {
     const now = Date.now();
     return {
-      overdueRFICount: navRFIs.filter((r) =>
-        r.date_required && new Date(r.date_required).getTime() < now &&
-        !["Answered", "Closed"].includes(r.status)
-      ).length,
-      overdueDrawingCount: navDrawings.filter((d) =>
-        d.due_date && new Date(d.due_date).getTime() < now && d.stage !== "Released"
-      ).length,
-      overdueDeliveryCount: navDeliveries.filter((d) =>
-        d.scheduled_date && new Date(d.scheduled_date).getTime() < now && d.status !== "Delivered"
-      ).length,
+      overdueRFICount: countOverdueRfis(navRFIs, now),
+      overdueDrawingCount: countOverdueDrawings(navDrawings, now),
+      overdueDeliveryCount: countOverdueDeliveries(navDeliveries, now),
     };
   }, [navRFIs, navDrawings, navDeliveries]);
 
