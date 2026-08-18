@@ -1,37 +1,41 @@
 /**
- * TitleblockMarkerModal — drag two rectangles on a sheet PDF to teach the
- * ingest pipeline where the title and sheet-number live in this set's
- * titleblock.
+ * TitleblockMarkerModal — drag three rectangles on a sheet PDF to teach the
+ * ingest pipeline where the title, sheet-number, and revision live in this
+ * set's titleblock.
  *
  * Coordinates are stored normalised (0..1 of page width/height) on the
  * drawing_sets row, so they survive any zoom level and apply uniformly
- * across every sheet in the set. Schema lives in migration 057; the
- * shape is enforced at the DB layer with a CHECK constraint.
+ * across every sheet in the set. Schema lives in migration 057 (title +
+ * number) and 20260818240000 (revision); the shape is enforced at the DB
+ * layer with a CHECK constraint.
  *
- * Two-step flow:
+ * Flow:
  *   1. User picks a page (defaults to page 1 of the set PDF).
- *   2. User clicks "Draw title rect" → drags a box → that snapshot is
- *      saved client-side as the title rect.
- *   3. User clicks "Draw number rect" → drags a box → same.
- *   4. "Save" writes both rects to drawing_sets.titleblock_*_rect.
+ *   2. User clicks "Mark Title" → drags a box.
+ *   3. User clicks "Mark Sheet #" → drags a box.
+ *   4. User clicks "Mark Rev" → drags a box.
+ *   5. "Save" writes all three rects to drawing_sets.titleblock_*_rect.
  *
- * Either rect can be null on save (DB allows it) but the ingest pipeline
- * (slice 3) only treats a set as templated when both are present, so the
- * Save button stays disabled until both have been drawn.
+ * Title + sheet # are required to save (ingest treats those as the template).
+ * Revision is optional so existing 2-box templates keep working.
  */
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
-import { parseTitleblockRect } from "@/lib/titleblock";
+import { normalizeTitleblockRevision, parseTitleblockRect } from "@/lib/titleblock";
 import { extractTextFromRect } from "@/lib/pdfTitleblockText";
 import { toast } from "sonner";
 
-// Set the worker once, idempotently. Same pattern as pdfSheetExtractor.js.
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-// ─── Local style helpers ────────────────────────────────────────────────
+const RECT_COLOR = {
+  title: "var(--accent)",
+  number: "var(--status-success-bright)",
+  revision: "var(--status-warning, #d97706)",
+};
+
 const overlayStyle = {
   position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
   zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
@@ -64,21 +68,12 @@ const toolbarStyle = {
 
 const canvasWrapStyle = {
   flex: 1,
-  // A flex child needs min-height/width:0 to actually shrink to the available
-  // space (instead of growing to its content) — without it the page can't be
-  // measured or scrolled correctly.
   minHeight: 0,
   minWidth: 0,
   overflow: "auto",
   background: "rgba(0,0,0,0.4)",
   position: "relative",
   display: "flex",
-  // `safe` alignment: center the sheet when it fits, but fall back to
-  // start-alignment when it's larger than the viewport. Plain `center` makes
-  // the leading (left/top) overflow unreachable by scrolling, which clips the
-  // sheet edges — exactly where titleblocks live — so the corners can't be
-  // marked. `safe` keeps every edge scroll-reachable (and degrades to a
-  // reachable flex-start on browsers that don't support the keyword).
   alignItems: "safe center",
   justifyContent: "safe center",
   padding: 16,
@@ -106,47 +101,36 @@ const btn = (variant = "secondary") => ({
   transition: "background 0.12s, opacity 0.12s",
 });
 
-// ─── Component ──────────────────────────────────────────────────────────
+function drawingLabel(kind) {
+  if (kind === "title") return "title";
+  if (kind === "number") return "sheet-number";
+  if (kind === "revision") return "revision";
+  return "";
+}
+
 export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
-  // The set may have multiple sheets; we render set.file_url which is the
-  // full set PDF (every page is one sheet). When set.file_url is missing
-  // we fall back to the first sheet's file_url.
   const sourceUrl = set?.file_url || set?.sheets?.[0]?.file_url || null;
 
-  // Render state.
   const canvasRef = useRef(null);
   const overlayRef = useRef(null);
   const pdfDocRef = useRef(null);
-  const wrapRef = useRef(null); // the scroll container — measured to fit the page
+  const wrapRef = useRef(null);
   const [pdfReady, setPdfReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [pageNum, setPageNum] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  // The viewport size at the rendered scale — we need this to convert
-  // mouse coords to normalised PDF coords on save.
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-  // Measured content area of the scroll container (via ResizeObserver), used to
-  // fit the whole page to view on open + refit on resize.
   const [wrapSize, setWrapSize] = useState({ width: 0, height: 0 });
-  // Zoom relative to fit-to-page: 1 = the whole sheet; >1 zooms in to mark precisely.
   const [zoom, setZoom] = useState(1);
 
-  // Marker state. Rects are stored in NORMALISED coords (0..1) regardless
-  // of zoom, so changing the page or zoom doesn't invalidate them.
   const [titleRect, setTitleRect] = useState(() => parseTitleblockRect(set?.titleblock_title_rect));
   const [numberRect, setNumberRect] = useState(() => parseTitleblockRect(set?.titleblock_number_rect));
-  // Which rect we're currently drawing: 'title' | 'number' | null.
+  const [revisionRect, setRevisionRect] = useState(() => parseTitleblockRect(set?.titleblock_revision_rect));
   const [drawing, setDrawing] = useState(null);
-  // In-progress drag (also normalised coords) so the preview rectangle
-  // tracks the mouse as the user is dragging.
   const [dragRect, setDragRect] = useState(null);
   const [saving, setSaving] = useState(false);
-  // Progress while we re-extract the existing sheets in the set after
-  // the rectangles save. Shape: null = not running; { done, total }
-  // = X of Y completed.
   const [reExtractProgress, setReExtractProgress] = useState(null);
 
-  // ── Load + render ───────────────────────────────────────────────────
   useEffect(() => {
     if (!sourceUrl) {
       setLoadError("No file is attached to this set yet.");
@@ -155,8 +139,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     let cancelled = false;
     (async () => {
       try {
-        // Storage paths come back as private object keys; resolveFileUrl()
-        // signs them. http(s) URLs pass straight through.
         const signed = await resolveFileUrl(sourceUrl);
         if (cancelled) return;
         const resp = await fetch(signed);
@@ -174,11 +156,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     return () => { cancelled = true; };
   }, [sourceUrl]);
 
-  // Render the current page whenever the page changes or the PDF loads, sized so
-  // the ENTIRE sheet is visible on open (fit-to-page / "contain") — no scrolling
-  // to find the titleblock. We rasterise at a higher internal resolution
-  // (× devicePixelRatio) but DISPLAY at the fit size, so the whole page fits the
-  // viewport yet stays sharp. `fitTick` re-fits on window resize.
   useEffect(() => {
     if (!pdfReady || !pdfDocRef.current || !canvasRef.current) return;
     let cancelled = false;
@@ -187,15 +164,11 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
         const page = await pdfDocRef.current.getPage(pageNum);
         if (cancelled) return;
 
-        const base = page.getViewport({ scale: 1 }); // native page size
-        // Available content area of the scroll container. ResizeObserver gives the
-        // content-box directly (padding already excluded); fall back until first measure.
+        const base = page.getViewport({ scale: 1 });
         const availW = Math.max(200, wrapSize.width || 1000);
         const availH = Math.max(200, wrapSize.height || 700);
-        // Fit the whole sheet; never upscale past native (1×) so a small PDF
-        // neither blows up nor pixelates.
         const fitScale = Math.min(availW / base.width, availH / base.height, 1);
-        const scale = fitScale * zoom; // zoom 1 = fit the whole page
+        const scale = fitScale * zoom;
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
         const display = page.getViewport({ scale });
@@ -219,9 +192,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     return () => { cancelled = true; };
   }, [pageNum, pdfReady, wrapSize, zoom]);
 
-  // Measure the scroll container so the page can be fit-to-view. A ResizeObserver
-  // gives the true content size on first layout AND on any resize — no scroll-
-  // timing guesswork, so the whole sheet stays visible.
   useEffect(() => {
     const el = wrapRef.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
@@ -239,7 +209,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     return () => ro.disconnect();
   }, []);
 
-  // ── Mouse → normalised coord helpers ────────────────────────────────
   const mouseToNormalised = useCallback((e) => {
     const overlay = overlayRef.current;
     if (!overlay) return null;
@@ -281,7 +250,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
       setDragRect(null);
       return;
     }
-    // Reject zero-area drags (just a click) so we don't save 0×0 rects.
     if (dragRect.width < 0.005 || dragRect.height < 0.005) {
       dragStartRef.current = null;
       setDragRect(null);
@@ -289,17 +257,12 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     }
     if (drawing === "title") setTitleRect(dragRect);
     if (drawing === "number") setNumberRect(dragRect);
+    if (drawing === "revision") setRevisionRect(dragRect);
     dragStartRef.current = null;
     setDragRect(null);
     setDrawing(null);
   };
 
-  // ── Save ────────────────────────────────────────────────────────────
-
-  /**
-   * Load a pdfjs document, caching by storage path so multi-sheet sets
-   * that share a single PDF file don't re-download it for every sheet.
-   */
   const loadPdfCached = async (fileUrl, cache) => {
     if (cache.has(fileUrl)) return cache.get(fileUrl);
     const signed = await resolveFileUrl(fileUrl);
@@ -311,75 +274,64 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     return pdf;
   };
 
-  /**
-   * Re-extract title + sheet number for an existing drawing using the
-   * just-saved rectangles. Uses `pdfCache` so sheets sharing the same
-   * PDF file (multi-page upload) don't re-download it.
-   *
-   * Returns the patch object (only fields that actually have a value)
-   * or `null` when the OCR captured nothing usable.
-   */
-  const reextractOne = async (drawing, pdfCache) => {
-    if (!drawing?.file_url) return null;
-    if (!titleRect && !numberRect) return null;
+  const reextractOne = async (drawingRow, pdfCache) => {
+    if (!drawingRow?.file_url) return null;
+    if (!titleRect && !numberRect && !revisionRect) return null;
     let pdf;
     try {
-      pdf = await loadPdfCached(drawing.file_url, pdfCache);
+      pdf = await loadPdfCached(drawingRow.file_url, pdfCache);
     } catch (err) {
-      console.warn(`[TitleblockMarker] PDF load failed for ${drawing.file_url}:`, err?.message);
+      console.warn(`[TitleblockMarker] PDF load failed for ${drawingRow.file_url}:`, err?.message);
       return null;
     }
     if (!pdf) return null;
     let bestTitle = "";
     let bestNumber = "";
+    let bestRevision = "";
     try {
-      // Multi-sheet PDFs (one master PDF, N sheet rows pointing to it)
-      // require us to render the SPECIFIC page each row owns. Without
-      // honoring pdf_page, every sheet walks pages 1..5 starting from
-      // page 1 — so they all read the cover sheet's title/sheet_number,
-      // collide on uq_drawings_set_sheet_revision, and only the first
-      // update succeeds. (Bug observed in production logs: 2026-05-04.)
       const targetPage =
-        Number.isFinite(drawing.pdf_page) && drawing.pdf_page >= 1
-          ? Math.min(drawing.pdf_page, pdf.numPages)
+        Number.isFinite(drawingRow.pdf_page) && drawingRow.pdf_page >= 1
+          ? Math.min(drawingRow.pdf_page, pdf.numPages)
           : null;
 
+      const readPage = async (page) => {
+        if (titleRect && !bestTitle) {
+          bestTitle = (await extractTextFromRect(page, titleRect)) || "";
+        }
+        if (numberRect && !bestNumber) {
+          bestNumber = (await extractTextFromRect(page, numberRect)) || "";
+        }
+        if (revisionRect && !bestRevision) {
+          bestRevision = normalizeTitleblockRevision(await extractTextFromRect(page, revisionRect));
+        }
+      };
+
       if (targetPage) {
-        // Specific page mapping — read only that page, no fallback walk.
         const page = await pdf.getPage(targetPage);
-        if (titleRect) bestTitle = (await extractTextFromRect(page, titleRect)) || "";
-        if (numberRect) bestNumber = (await extractTextFromRect(page, numberRect)) || "";
+        await readPage(page);
       } else {
-        // Legacy fallback: pdf_page missing or zero → walk the first few
-        // pages until we find content. Single-page PDFs land on page 1.
         const maxPages = Math.min(pdf.numPages, 5);
         for (let p = 1; p <= maxPages; p++) {
           const page = await pdf.getPage(p);
-          if (titleRect && !bestTitle) {
-            bestTitle = (await extractTextFromRect(page, titleRect)) || "";
-          }
-          if (numberRect && !bestNumber) {
-            bestNumber = (await extractTextFromRect(page, numberRect)) || "";
-          }
-          if (bestTitle && bestNumber) break;
+          await readPage(page);
+          if (bestTitle && bestNumber && (!revisionRect || bestRevision)) break;
         }
       }
 
-      // Diagnostic: surface what OCR captured so DevTools shows whether
-      // the rects are landing on the right area of the page.
-      if (bestTitle || bestNumber) {
+      if (bestTitle || bestNumber || bestRevision) {
         console.info(
-          `[TitleblockMarker] OCR sheet=${drawing.sheet_number} page=${targetPage ?? "walk"}: ` +
-          `title="${bestTitle}" number="${bestNumber}"`,
+          `[TitleblockMarker] OCR sheet=${drawingRow.sheet_number} page=${targetPage ?? "walk"}: ` +
+          `title="${bestTitle}" number="${bestNumber}" rev="${bestRevision}"`,
         );
       }
     } catch (err) {
-      console.warn(`[TitleblockMarker] OCR failed for sheet ${drawing.id}:`, err?.message);
+      console.warn(`[TitleblockMarker] OCR failed for sheet ${drawingRow.id}:`, err?.message);
       return null;
     }
     const patch = {};
     if (bestTitle) patch.title = bestTitle;
     if (bestNumber) patch.sheet_number = bestNumber.toUpperCase().replace(/\s+/g, "");
+    if (bestRevision) patch.revision_number = bestRevision;
     return Object.keys(patch).length ? patch : null;
   };
 
@@ -391,18 +343,12 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     setSaving(true);
     setReExtractProgress(null);
     try {
-      // 1. Persist the rectangles on the drawing_sets row.
       await entities.DrawingSet.update(set.id, {
         titleblock_title_rect: titleRect,
         titleblock_number_rect: numberRect,
+        titleblock_revision_rect: revisionRect,
       });
 
-      // 2. Apply the just-saved rectangles to every existing sheet in
-      //    the set so titles and sheet numbers extracted by the LLM
-      //    (which may be wrong, e.g. "For field use") get overwritten
-      //    with the deterministic OCR values from the marked regions.
-      //    This is the difference between "I marked the titleblock and
-      //    nothing happened" and the user-expected outcome.
       let updated = 0;
       let unchanged = 0;
       let failed = 0;
@@ -415,8 +361,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
         total = sheets.length;
         if (total > 0) {
           setReExtractProgress({ done: 0, total });
-          // Cache loaded PDFs across sheets so multi-page sets sharing
-          // a single master PDF don't re-download it for every sheet.
           const pdfCache = new Map();
           try {
             for (let i = 0; i < sheets.length; i++) {
@@ -424,15 +368,10 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
               try {
                 const patch = await reextractOne(sheet, pdfCache);
                 if (patch) {
-                  // Skip the write if the extracted values are byte-identical
-                  // to what's already on the row — saves a round trip and
-                  // avoids touching updated_at unnecessarily.
-                  const titleSame =
-                    !patch.title || patch.title === (sheet.title || "");
-                  const numberSame =
-                    !patch.sheet_number ||
-                    patch.sheet_number === (sheet.sheet_number || "");
-                  if (titleSame && numberSame) {
+                  const titleSame = !patch.title || patch.title === (sheet.title || "");
+                  const numberSame = !patch.sheet_number || patch.sheet_number === (sheet.sheet_number || "");
+                  const revSame = !patch.revision_number || patch.revision_number === (sheet.revision_number || "");
+                  if (titleSame && numberSame && revSame) {
                     unchanged++;
                   } else {
                     await entities.Drawing.update(sheet.id, patch);
@@ -443,11 +382,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
                 }
               } catch (err) {
                 failed++;
-                // Detect the most-common failure: the master PDF has the
-                // wrong pdf_page assignment so multiple sheets land on the
-                // same titleblock and collide on uq_drawings_set_sheet_revision.
-                // Surface a clearer message so users know to re-upload the
-                // set or hand-edit pdf_page values.
                 const msg = String(err?.message || err || "");
                 const isUniqueConflict =
                   msg.includes("uq_drawings_set_sheet_revision") ||
@@ -464,7 +398,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
               setReExtractProgress({ done: i + 1, total });
             }
           } finally {
-            // Release cached pdfjs documents to free memory.
             for (const pdf of pdfCache.values()) {
               try { await pdf.destroy(); } catch { /* ignore */ }
             }
@@ -472,7 +405,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
           }
         }
       } catch (err) {
-         
         console.warn("[TitleblockMarker] could not list sheets to re-extract:", err);
       }
 
@@ -488,7 +420,11 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
         );
       }
 
-      onSaved?.({ titleblock_title_rect: titleRect, titleblock_number_rect: numberRect });
+      onSaved?.({
+        titleblock_title_rect: titleRect,
+        titleblock_number_rect: numberRect,
+        titleblock_revision_rect: revisionRect,
+      });
       onClose?.();
     } catch (err) {
       toast.error(`Save failed: ${err?.message || "Unknown error"}`);
@@ -501,14 +437,13 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   const handleClear = () => {
     setTitleRect(null);
     setNumberRect(null);
+    setRevisionRect(null);
     setDrawing(null);
     setDragRect(null);
   };
 
-  // ── Render ──────────────────────────────────────────────────────────
   const canSave = !saving && titleRect != null && numberRect != null;
 
-  // Compute pixel-space rectangles to paint over the canvas.
   const rectStyle = (rect, color) => {
     if (!rect) return null;
     return {
@@ -524,10 +459,22 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     };
   };
 
+  const markButton = (kind, drawn, idleLabel, redrawLabel) => (
+    <button
+      onClick={() => setDrawing(drawing === kind ? null : kind)}
+      disabled={!pdfReady || saving}
+      style={{
+        ...btn(drawing === kind ? "primary" : "secondary"),
+        borderColor: drawn ? "var(--status-success)" : undefined,
+      }}
+    >
+      {drawn ? redrawLabel : drawing === kind ? "Click & Drag…" : idleLabel}
+    </button>
+  );
+
   return (
     <div style={overlayStyle} role="dialog" aria-modal="true" aria-label="Mark titleblock rectangles">
       <div style={dialogStyle}>
-        {/* Header */}
         <div style={headerStyle}>
           <div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
@@ -542,32 +489,13 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
           </button>
         </div>
 
-        {/* Toolbar */}
         <div style={toolbarStyle}>
-          <button
-            onClick={() => setDrawing(drawing === "title" ? null : "title")}
-            disabled={!pdfReady || saving}
-            style={{
-              ...btn(drawing === "title" ? "primary" : "secondary"),
-              borderColor: titleRect ? "var(--status-success)" : undefined,
-            }}
-          >
-            {titleRect ? "↻ Redraw Title" : drawing === "title" ? "Click & Drag…" : "1 · Mark Title"}
-          </button>
-          <button
-            onClick={() => setDrawing(drawing === "number" ? null : "number")}
-            disabled={!pdfReady || saving}
-            style={{
-              ...btn(drawing === "number" ? "primary" : "secondary"),
-              borderColor: numberRect ? "var(--status-success)" : undefined,
-            }}
-          >
-            {numberRect ? "↻ Redraw Number" : drawing === "number" ? "Click & Drag…" : "2 · Mark Sheet #"}
-          </button>
+          {markButton("title", titleRect, "1 · Mark Title", "↻ Redraw Title")}
+          {markButton("number", numberRect, "2 · Mark Sheet #", "↻ Redraw Number")}
+          {markButton("revision", revisionRect, "3 · Mark Rev", "↻ Redraw Rev")}
 
           <div style={{ width: 1, height: 22, background: "var(--border-default)", margin: "0 4px" }} />
 
-          {/* Page navigator */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button
               onClick={() => setPageNum((n) => Math.max(1, n - 1))}
@@ -588,7 +516,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
 
           <div style={{ width: 1, height: 22, background: "var(--border-default)", margin: "0 4px" }} />
 
-          {/* Zoom (1× = fit the whole page) */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button
               onClick={() => setZoom((z) => Math.max(0.2, +(z / 1.25).toFixed(3)))}
@@ -615,15 +542,13 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
 
           <div style={{ flex: 1 }} />
 
-          {/* Hint */}
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
             {drawing
-              ? `Click & drag the ${drawing === "title" ? "title" : "sheet-number"} region`
+              ? `Click & drag the ${drawingLabel(drawing)} region`
               : "Pick a step above to draw"}
           </div>
         </div>
 
-        {/* Canvas + overlay */}
         <div ref={wrapRef} style={canvasWrapStyle}>
           {loadError && (
             <div style={{ color: "var(--status-error)", fontFamily: "var(--font-body)", fontSize: 13, padding: 24, textAlign: "center" }}>
@@ -633,10 +558,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
           {!loadError && (
             <div style={{ position: "relative", display: "inline-block" }}>
               <canvas ref={canvasRef} style={{ display: "block", boxShadow: "0 0 0 1px rgba(255,255,255,0.1)" }} />
-              {/* Mouse-tracking overlay sized to the canvas (which is sized
-                  by the render effect). Uses absolute coords matching the
-                  canvas's pixel size so getBoundingClientRect → normalised
-                  coords stays consistent. */}
               <div
                 ref={overlayRef}
                 onMouseDown={handleMouseDown}
@@ -649,42 +570,37 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
                   width: viewportSize.width,
                   height: viewportSize.height,
                   cursor: drawing ? "crosshair" : "default",
-                  // Don't intercept hover when not drawing — lets the user
-                  // copy text from the canvas via their browser's PDF
-                  // selection (well, they can't on a canvas, but at least
-                  // the cursor stays normal).
                   pointerEvents: drawing ? "auto" : "none",
                 }}
               >
-                {/* Persisted rects */}
-                {titleRect  && <div style={rectStyle(titleRect,  "var(--accent)")} />}
-                {numberRect && <div style={rectStyle(numberRect, "var(--status-success-bright)")} />}
-                {/* In-progress drag */}
+                {titleRect && <div style={rectStyle(titleRect, RECT_COLOR.title)} />}
+                {numberRect && <div style={rectStyle(numberRect, RECT_COLOR.number)} />}
+                {revisionRect && <div style={rectStyle(revisionRect, RECT_COLOR.revision)} />}
                 {dragRect && (
-                  <div style={rectStyle(
-                    dragRect,
-                    drawing === "title" ? "var(--accent)" : "var(--status-success-bright)"
-                  )} />
+                  <div style={rectStyle(dragRect, RECT_COLOR[drawing] || RECT_COLOR.title)} />
                 )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
         <div style={footerStyle}>
           <div style={{ display: "flex", gap: 14, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
             <span>
-              <span style={{ display: "inline-block", width: 10, height: 10, background: "var(--accent)", marginRight: 6, verticalAlign: "middle" }} />
+              <span style={{ display: "inline-block", width: 10, height: 10, background: RECT_COLOR.title, marginRight: 6, verticalAlign: "middle" }} />
               Title {titleRect ? "✓" : "—"}
             </span>
             <span>
-              <span style={{ display: "inline-block", width: 10, height: 10, background: "var(--status-success-bright)", marginRight: 6, verticalAlign: "middle" }} />
+              <span style={{ display: "inline-block", width: 10, height: 10, background: RECT_COLOR.number, marginRight: 6, verticalAlign: "middle" }} />
               Sheet # {numberRect ? "✓" : "—"}
+            </span>
+            <span>
+              <span style={{ display: "inline-block", width: 10, height: 10, background: RECT_COLOR.revision, marginRight: 6, verticalAlign: "middle" }} />
+              Rev {revisionRect ? "✓" : "—"}
             </span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={handleClear} disabled={saving || (!titleRect && !numberRect)} style={btn("secondary")}>
+            <button onClick={handleClear} disabled={saving || (!titleRect && !numberRect && !revisionRect)} style={btn("secondary")}>
               Clear
             </button>
             <button onClick={onClose} disabled={saving} style={btn("secondary")}>
@@ -698,7 +614,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
                 opacity: canSave ? 1 : 0.5,
                 cursor: canSave ? "pointer" : "not-allowed",
               }}
-              title={canSave ? "Save template to drawing set" : "Draw both rectangles first"}
+              title={canSave ? "Save template to drawing set" : "Draw title and sheet # first"}
             >
               {saving
                 ? (reExtractProgress
