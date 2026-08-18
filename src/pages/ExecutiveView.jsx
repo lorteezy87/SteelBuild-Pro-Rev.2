@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatBudgetPercent } from "../components/shared/formatters";
-import { computeCostCodeTotals } from "@/services/costRollup";
+import { computeCostCodeTotals, resolveProjectSpend } from "@/services/costRollup";
 import StatusBadge from "../components/shared/StatusBadge";
 import KPIStrip from "../components/shared/KPIStrip";
 import {
@@ -63,18 +63,36 @@ export default function ExecutiveView() {
   const { data: codes = [] } = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => entities.CostCode.list() });
   const { data: wps = [] } = useQuery({ queryKey: ["work-packages-global"], queryFn: () => entities.WorkPackage.list() });
   const { data: tasks = [] } = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => entities.ScheduleTask.list() });
+  const { data: expenses = [] } = useQuery({ queryKey: ["expenses-all"], queryFn: () => entities.Expense.list() });
+
+  // Trimmed comparison matches computeRevisedContractValue — real data has
+  // carried whitespace-padded CO statuses.
+  const isApprovedCO = (c) => String(c.status ?? "").trim() === "Approved";
 
   const totalContract = projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
-  const approvedCOVal = cos.filter((c) => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+  const approvedCOVal = cos.filter(isApprovedCO).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
   const revisedTotal = totalContract + approvedCOVal;
-  const { budget: totalBudget, actual: totalSpend } = computeCostCodeTotals(codes);
+  const { budget: totalBudget } = computeCostCodeTotals(codes);
+  // Canonical spend model per project (typed-in cost-code actuals win, paid
+  // expenses fall back, unmapped expenses count) so the executive "Total
+  // Spend" agrees with the Dashboard/Portfolio instead of reading $0 for
+  // expense-driven projects. Resolved per project because cost-code numbers
+  // repeat across projects.
+  const spendByProjectId = new Map(projects.map((p) => [
+    p.id,
+    resolveProjectSpend(
+      codes.filter((c) => c.project_id === p.id),
+      expenses.filter((e) => e.project_id === p.id),
+    ).actual,
+  ]));
+  const totalSpend = [...spendByProjectId.values()].reduce((s, v) => s + v, 0);
   const totalBudgetHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0) + (Number(w.field_hours_budget) || 0), 0);
   const totalActualHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0) + (Number(w.field_hours_actual) || 0), 0);
 
   const kpis = [
     { label: "Portfolio Value", value: formatCurrency(revisedTotal), color: "green" },
     { label: "Total Spend", value: formatCurrency(totalSpend), sub: `of ${formatCurrency(totalBudget)} budget`, color: totalSpend > totalBudget ? "rose" : "blue" },
-    { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${cos.filter((c) => c.status === "Approved").length} orders`, color: "purple" },
+    { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${cos.filter(isApprovedCO).length} orders`, color: "purple" },
     { label: "Labor Burn", value: formatBudgetPercent(totalBudgetHrs > 0 ? totalActualHrs / totalBudgetHrs * 100 : 0), sub: `${totalActualHrs.toLocaleString()} hrs actual`, color: "amber" },
     { label: "Open RFIs", value: rfis.filter((r) => r.status === "Open" || r.status === "Under Review").length, color: "blue" },
     { label: "At Risk Projects", value: projects.filter((p) => p.health_status === "At Risk").length, color: "rose" },
@@ -99,12 +117,12 @@ export default function ExecutiveView() {
   // Charts data
   const projectBudgetData = projects.map((p) => {
     const pc = codes.filter((c) => c.project_id === p.id);
-    const approvedCO = cos.filter((c) => c.project_id === p.id && c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+    const approvedCO = cos.filter((c) => c.project_id === p.id && isApprovedCO(c)).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     const pcTotals = computeCostCodeTotals(pc);
     return {
       name: p.project_number || p.name?.slice(0, 10),
       budget: pcTotals.budget,
-      actual: pcTotals.actual,
+      actual: spendByProjectId.get(p.id) ?? 0,
       revised: (Number(p.original_contract_value) || 0) + approvedCO,
     };
   });
@@ -127,7 +145,7 @@ export default function ExecutiveView() {
   });
 
   const waterfallData = [{ name: "Original", value: totalContract, fill: "var(--accent)" }];
-  cos.filter((c) => c.status === "Approved").forEach((c) => {
+  cos.filter(isApprovedCO).forEach((c) => {
     waterfallData.push({ name: c.co_number, value: Number(c.co_amount) || 0, fill: (Number(c.co_amount) || 0) >= 0 ? "var(--status-success)" : "var(--status-error)" });
   });
   waterfallData.push({ name: "Revised", value: revisedTotal, fill: "var(--phase-detailing)" });
