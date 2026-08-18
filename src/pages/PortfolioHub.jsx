@@ -88,10 +88,16 @@ export default function PortfolioHub() {
     staleTime: 60 * 1000,
     enabled: fetchForCC,
   });
+  const { data: expenses = [] } = useQuery({
+    queryKey: ["portfolio-expenses"],
+    queryFn: () => entities.Expense.listAll(),
+    staleTime: 60 * 1000,
+    enabled: fetchForCC,
+  });
 
   const related = useMemo(
-    () => ({ changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks }),
-    [changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks],
+    () => ({ changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks, expenses }),
+    [changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks, expenses],
   );
 
   // Navigate to the project dashboard when a row is clicked
