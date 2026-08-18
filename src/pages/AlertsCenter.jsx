@@ -56,7 +56,7 @@ export default function AlertsCenter() {
   const [typeFilter, setTypeFilter] = useState("all");
 
   const filtered = useMemo(() => alerts.filter(a => {
-    if (a.is_dismissed) return false;
+    if (a.is_dismissed || a.dismissed_at) return false;
     const matchSeverity = severityFilter === "all" || a.severity === severityFilter;
     const matchType = typeFilter === "all" || a.alert_type === typeFilter;
     return matchSeverity && matchType;

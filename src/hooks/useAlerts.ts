@@ -41,7 +41,10 @@ export function useAlerts() {
       projectId
         ? entities.Alert.filter({ project_id: projectId }, "-created_at")
         : entities.Alert.list("-created_at"),
-    refetchInterval: 60000,
+    // Realtime invalidation below keeps this fresh; the interval is only a
+    // fallback for a dropped channel (was 60s — a full tenant-wide list per
+    // minute while Alerts Center was open).
+    refetchInterval: 5 * 60 * 1000,
     staleTime: 30000,
   });
 
@@ -65,11 +68,7 @@ export function useAlerts() {
   const markRead = (alert: Alert) => {
     updateMut.mutate(
       { id: alert.id, data: { is_read: true } },
-      { onError: (err) => {
-        if (!String(err?.message).includes("column")) {
-          toast.error(`Failed to mark alert as read`);
-        }
-      }}
+      { onError: () => toast.error(`Failed to mark alert as read`) }
     );
   };
 
@@ -86,20 +85,17 @@ export function useAlerts() {
       } else {
         toast.success(`${succeeded.length} alerts marked as read`);
       }
-    } catch {
-      // is_read column may not exist yet — silently degrade
-      console.warn("[useAlerts] markAllRead failed — is_read column may not exist");
+    } catch (err) {
+      toast.error(`Failed to mark alerts as read: ${toUserErrorMessage(err, "Unknown error")}`);
     }
   };
 
   const dismiss = (alert: Alert) => {
+    // is_dismissed is what AlertsCenter filters and unreadCount check —
+    // writing only dismissed_at left the alert visibly un-dismissed.
     updateMut.mutate(
-      { id: alert.id, data: { dismissed_at: new Date().toISOString() } },
-      { onError: (err) => {
-        if (!String(err?.message).includes("column")) {
-          toast.error(`Failed to dismiss alert`);
-        }
-      }}
+      { id: alert.id, data: { is_dismissed: true, dismissed_at: new Date().toISOString() } },
+      { onError: () => toast.error(`Failed to dismiss alert`) }
     );
   };
 
@@ -119,7 +115,8 @@ export function useAlerts() {
     }
   };
 
-  const unreadCount = visibleAlerts.filter((a) => !a.is_read && !a.is_dismissed).length;
+  // dismissed_at covers legacy rows dismissed before is_dismissed was written
+  const unreadCount = visibleAlerts.filter((a) => !a.is_read && !a.is_dismissed && !a.dismissed_at).length;
 
   return {
     alerts: visibleAlerts,

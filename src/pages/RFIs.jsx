@@ -6,6 +6,7 @@
  * overdue-alert planning stays here. Presentation is under `src/pages/rfis/*`.
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import * as Sentry from "@sentry/react";
 import "./rfis/RFIs.css";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
@@ -39,6 +40,7 @@ import { planRfiOverdueAlerts } from "./rfis/rfiOverdueAlerts";
 import { useRfiPageMutations } from "./rfis/useRfiPageMutations";
 import { scopeRfiPortfolioRows } from "./rfis/rfiPortfolioScope";
 import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import { localToday } from "@/utils/dates";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 export default function RFIs() {
@@ -206,7 +208,11 @@ export default function RFIs() {
     if (!rfis.length) return;
     const createRFIAlerts = async () => {
       try {
-        const existing = await entities.Alert.filter({ alert_type: "RFI_Overdue" });
+        // Scoped to the current project: RFI numbers are per-project
+        // sequences, so an unscoped title dedupe collided across projects
+        // (silently suppressing the second project's alerts) and downloaded
+        // the tenant-wide alert list on every visit.
+        const existing = await entities.Alert.filter({ alert_type: "RFI_Overdue", project_id: projectId });
         const existingIds = new Set(existing.map((a) => a.related_record_id).filter(Boolean));
         const existingTitles = new Set(existing.map((a) => a.title));
         const planned = planRfiOverdueAlerts(rfis, {
@@ -221,11 +227,24 @@ export default function RFIs() {
         }
       } catch (e) {
         console.warn("RFI alert:", e);
+        Sentry.captureException(e, { tags: { source: "rfi-overdue-alerts" } });
       }
     };
     const t = setTimeout(createRFIAlerts, 2500);
     return () => clearTimeout(t);
   }, [projectId, rfis, projectMap]);
+
+  // Memoized: O(projects × (rfis + tasks)) — unmemoized this re-ran on every
+  // keystroke/selection. Local today (not UTC) so evening sessions don't
+  // count due-today items as overdue.
+  const healthByProjectId = useMemo(
+    () =>
+      buildOperationalHealthIndex(projects, rfis, scheduleTasks, localToday(), {
+        rfiEvidenceLoaded: rfisSuccess,
+        scheduleEvidenceLoaded: scheduleTasksSuccess,
+      }),
+    [projects, rfis, scheduleTasks, rfisSuccess, scheduleTasksSuccess],
+  );
 
   /* ── Loading ── */
   if (rfisLoading || projectsLoading) {
@@ -241,13 +260,6 @@ export default function RFIs() {
   // Project-level context for the RFI Control Center hero (real, from the project
   // record + work-package progress — same %-complete source as the Projects page).
   const activeProject = projects.find((p) => p.id === projectId);
-  const healthByProjectId = buildOperationalHealthIndex(
-    projects,
-    rfis,
-    scheduleTasks,
-    new Date().toISOString().slice(0, 10),
-    { rfiEvidenceLoaded: rfisSuccess, scheduleEvidenceLoaded: scheduleTasksSuccess },
-  );
   const operationalHealth = activeProject?.id ? healthByProjectId[activeProject.id] : null;
   const percentComplete =
     activeProject?.scope_complete_pct_override != null

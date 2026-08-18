@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as Sentry from "@sentry/react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { logActivity } from "@/services/auditLogger";
@@ -282,7 +283,10 @@ export default function Deliveries() {
     if (!projectId || !metrics.overdue.length) return undefined;
     const createDeliveryAlerts = async () => {
       try {
-        const existing = await entities.Alert.filter({ alert_type: "Delivery_Overdue" });
+        // Scoped to the current project: vendor-based titles collide across
+        // projects, so an unscoped dedupe silently suppressed the second
+        // project's alerts (and fetched the tenant-wide alert list).
+        const existing = await entities.Alert.filter({ alert_type: "Delivery_Overdue", project_id: projectId });
         const existingIds = new Set(existing.map((alert) => alert.related_record_id).filter(Boolean));
         const existingTitles = new Set(existing.map((alert) => alert.title));
         for (const delivery of metrics.overdue) {
@@ -306,6 +310,7 @@ export default function Deliveries() {
         }
       } catch (error) {
         console.warn("Delivery alert error:", error);
+        Sentry.captureException(error, { tags: { source: "delivery-overdue-alerts" } });
       }
     };
     const timer = setTimeout(createDeliveryAlerts, 4000);
