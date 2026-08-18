@@ -145,8 +145,8 @@ describe("Field Hub panel copy", () => {
       empty: "No open punchlist items.",
     });
     expect(FIELD_HUB_PANEL_COPY.inspections).toEqual({
-      title: "Upcoming Inspections",
-      empty: "No scheduled inspections.",
+      title: "Active Inspections",
+      empty: "No active inspections.",
     });
   });
 });
