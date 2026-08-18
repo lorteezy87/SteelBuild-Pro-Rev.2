@@ -19,9 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     environment: storage-backup-production
-    env:
-      INSTALL_RCLONE_VERSION: "1.74.4"
-      INSTALL_RCLONE_SHA256: fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -33,8 +30,14 @@ jobs:
 
       - name: Install verified rclone binary
         shell: bash
+        env:
+          # Do not name these RCLONE_* — rclone maps that prefix to CLI flags.
+          # RCLONE_VERSION="1.74.4" makes `rclone version` fail (issue #263).
+          INSTALL_RCLONE_VERSION: "1.74.4"
+          INSTALL_RCLONE_SHA256: fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d
         run: |
           set -euo pipefail
+          unset RCLONE_VERSION RCLONE_SHA256
           curl --fail --silent --show-error --location \
             --output rclone.zip \
             "https://downloads.rclone.org/v${INSTALL_RCLONE_VERSION}/rclone-v${INSTALL_RCLONE_VERSION}-linux-amd64.zip"

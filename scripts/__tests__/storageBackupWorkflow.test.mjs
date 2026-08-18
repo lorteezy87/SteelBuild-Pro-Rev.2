@@ -4,23 +4,45 @@ import { describe, expect, it } from "vitest";
 
 const workflowUrl = new URL("../../.github/workflows/storage-backup.yml", import.meta.url);
 
+function collectEnvMaps(workflow) {
+  const backupJob = workflow.jobs.backup;
+  return [
+    workflow.env,
+    backupJob.env,
+    ...backupJob.steps.map((step) => step.env),
+  ].filter(Boolean);
+}
+
 describe("Storage backup workflow", () => {
   it("is scheduled, manually runnable, and checksum-pins rclone", async () => {
     const workflow = load(await readFile(workflowUrl, "utf8"));
     const triggers = workflow.on ?? workflow.true;
+    const installStep = workflow.jobs.backup.steps.find(
+      ({ name }) => name === "Install verified rclone binary",
+    );
 
     expect(triggers.schedule).toEqual([{ cron: "17 8 * * *" }]);
     expect(triggers).toHaveProperty("workflow_dispatch");
-    expect(workflow.jobs.backup.env.INSTALL_RCLONE_VERSION).toBe("1.74.4");
-    expect(workflow.jobs.backup.env.INSTALL_RCLONE_SHA256)
+    expect(workflow.jobs.backup.env).toBeUndefined();
+    expect(installStep.env.INSTALL_RCLONE_VERSION).toBe("1.74.4");
+    expect(installStep.env.INSTALL_RCLONE_SHA256)
       .toBe("fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d");
-    expect(workflow.jobs.backup.env).not.toHaveProperty("RCLONE_VERSION");
-    expect(workflow.jobs.backup.env).not.toHaveProperty("RCLONE_SHA256");
+    expect(installStep.run).toContain("unset RCLONE_VERSION RCLONE_SHA256");
+    expect(installStep.run).toContain("sha256sum --check --strict");
+    expect(installStep.run).toContain("rclone version");
+    for (const env of collectEnvMaps(workflow)) {
+      expect(env).not.toHaveProperty("RCLONE_VERSION");
+      expect(env).not.toHaveProperty("RCLONE_SHA256");
+      for (const key of Object.keys(env)) {
+        expect(key.startsWith("RCLONE_CONFIG_") || !key.startsWith("RCLONE_")).toBe(true);
+      }
+    }
   });
 
   it("limits production credentials and project identity to the backup step", async () => {
     const workflow = load(await readFile(workflowUrl, "utf8"));
     const backupJob = workflow.jobs.backup;
+    const jobEnv = backupJob.env ?? {};
     const requiredSecrets = [
       "OFFSITE_RCLONE_CONFIG_B64",
       "OFFSITE_ROOT",
@@ -32,8 +54,8 @@ describe("Storage backup workflow", () => {
 
     const backupStep = backupJob.steps.find(({ name }) => name === "Back up and verify required buckets");
     for (const secret of requiredSecrets) {
-      expect(backupJob.env).not.toHaveProperty(secret);
-      expect(Object.values(backupJob.env)).not.toContain(`\${{ secrets.${secret} }}`);
+      expect(jobEnv).not.toHaveProperty(secret);
+      expect(Object.values(jobEnv)).not.toContain(`\${{ secrets.${secret} }}`);
       expect(backupStep.env[secret]).toBe(`\${{ secrets.${secret} }}`);
     }
     expect(backupStep.env.SUPABASE_EXPECTED_PROJECT_REF)
