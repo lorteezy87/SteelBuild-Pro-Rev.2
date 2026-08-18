@@ -26,6 +26,7 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { computeRevisedContractValue, preferManualActual } from "@/services/costRollup";
 import { COST_CODES } from "@/components/shared/costCodes";
+import { formatCurrency as sharedFormatCurrency } from "@/components/shared/formatters";
 import { calcEVM } from "@/utils/projectKpis";
 import { logActivity } from "@/services/auditLogger";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
@@ -51,9 +52,11 @@ export function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Delegates to the canonical shared formatter (whole-dollar display) so the
+// Cost Control Center respects user currency preferences like every other
+// financial surface. Kept as a re-export for existing call sites.
 export function formatCurrency(value: unknown): string {
-  const n = safeNumber(value);
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return sharedFormatCurrency(safeNumber(value), 0);
 }
 
 export function formatSigned(value: unknown): string {
