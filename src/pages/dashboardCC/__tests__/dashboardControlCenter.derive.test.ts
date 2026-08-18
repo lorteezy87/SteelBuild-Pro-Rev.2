@@ -156,6 +156,22 @@ describe("buildDashboardSummary", () => {
     expect(scheduleKpi.value).toBe("13%");
   });
 
+  it("renders unavailable schedule evidence as TBD instead of real 0% progress", () => {
+    const s = buildDashboardSummary({
+      project: makeProject(),
+      scheduleTasks: [],
+      scheduleEvidenceLoaded: false,
+    });
+    expect(s.schedulePct).toBeNull();
+    expect(s.kpis.find((k) => k.label === "Schedule Progress")).toMatchObject({
+      value: "TBD",
+      sublabel: "Schedule unavailable",
+      tone: "neutral",
+    });
+    expect(s.summaryRows.find((r) => r.label === "% Complete")?.value).toBe("TBD");
+    expect(s.modules.find((m) => m.page === "ScheduleHub")?.metric).toBe("Schedule unavailable");
+  });
+
   it("does not count closed safety or quality records as Field Hub issues", () => {
     const s = buildDashboardSummary({
       punchlistItems: [],

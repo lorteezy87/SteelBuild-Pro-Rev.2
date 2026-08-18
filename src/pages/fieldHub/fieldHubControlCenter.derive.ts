@@ -29,8 +29,8 @@ export const FIELD_HUB_PANEL_COPY = Object.freeze({
     empty: "No open punchlist items.",
   }),
   inspections: Object.freeze({
-    title: "Upcoming Inspections",
-    empty: "No scheduled inspections.",
+    title: "Active Inspections",
+    empty: "No active inspections.",
   }),
 });
 

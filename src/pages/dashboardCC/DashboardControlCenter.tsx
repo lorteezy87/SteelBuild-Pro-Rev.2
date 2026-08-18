@@ -257,6 +257,8 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
     ],
   );
 
+  const scheduleProgressLabel = s.schedulePct === null ? "TBD" : `${s.schedulePct}%`;
+
   // Hero chips
   const chips = [
     {
@@ -265,13 +267,13 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
     },
     ...(s.healthReasons[0] ? [{ label: s.healthReasons[0], tone: "warn" as const }] : []),
     { label: `${s.openRfis} Open RFIs` },
-    { label: `${s.schedulePct}% Complete` },
+    { label: s.schedulePct === null ? "Schedule unavailable" : `${s.schedulePct}% Complete` },
   ];
 
   // Hero stat cards
   const heroStats = [
     { value: `${s.healthScore}%`, label: "Project Health" },
-    { value: `${s.schedulePct}%`, label: "Schedule" },
+    { value: scheduleProgressLabel, label: "Schedule" },
   ];
 
   // KPI strip

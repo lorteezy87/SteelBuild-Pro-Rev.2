@@ -90,7 +90,8 @@ export interface DashboardSummary {
   /** Hero chip values */
   openRfis: number;
   overdueRfis: number;
-  schedulePct: number;
+  /** Canonical leaf-task progress, or null when schedule evidence is unavailable. */
+  schedulePct: number | null;
 }
 
 export interface ModuleTile {
@@ -230,9 +231,11 @@ export function buildDashboardSummary(input: {
   const openRfis = openRFICount(rfis as Parameters<typeof openRFICount>[0]);
   const overdueRfis = overdueRFICount(rfis as Parameters<typeof overdueRFICount>[0]);
   const scheduleSummary = buildScheduleSummary(scheduleTasks);
-  const schedulePct = scheduleSummary.pctComplete;
+  const schedulePct = scheduleEvidenceLoaded ? scheduleSummary.pctComplete : null;
   const elapsedPct = timelineElapsedPct(project as Parameters<typeof timelineElapsedPct>[0]);
-  const scheduleHealth = clamp(Math.round(100 - Math.max(0, elapsedPct - schedulePct)), 0, 100);
+  const scheduleHealth = schedulePct === null
+    ? null
+    : clamp(Math.round(100 - Math.max(0, elapsedPct - schedulePct)), 0, 100);
 
   const budget = budgetCommitted(codes as Parameters<typeof budgetCommitted>[0]);
   const committed = committedSpend(
@@ -260,7 +263,8 @@ export function buildDashboardSummary(input: {
   const safetyHealth = clamp(100 - Math.min(45, safetyIncidents.length * 8), 55, 100);
   // Unknown cost evidence must not silently contribute a perfect score. Only
   // include the cost dimension once a budget and actual/committed spend exist.
-  const healthComponents = [scheduleHealth, qualityHealth, safetyHealth];
+  const healthComponents = [qualityHealth, safetyHealth];
+  if (scheduleHealth !== null) healthComponents.push(scheduleHealth);
   if (budgetHealth !== null) healthComponents.push(budgetHealth);
   const rawHealthScore = Math.round(
     healthComponents.reduce((sum, value) => sum + value, 0) / healthComponents.length,
@@ -327,11 +331,13 @@ export function buildDashboardSummary(input: {
     },
     {
       label: "Schedule Progress",
-      value: `${schedulePct}%`,
-      sublabel: scheduleSummary.overdue > 0
-        ? `${scheduleSummary.overdue} overdue`
-        : `${scheduleSummary.activities} activities`,
-      tone: scheduleSummary.overdue > 0 ? "danger" : "neutral",
+      value: schedulePct === null ? "TBD" : `${schedulePct}%`,
+      sublabel: schedulePct === null
+        ? "Schedule unavailable"
+        : scheduleSummary.overdue > 0
+          ? `${scheduleSummary.overdue} overdue`
+          : `${scheduleSummary.activities} activities`,
+      tone: schedulePct !== null && scheduleSummary.overdue > 0 ? "danger" : "neutral",
     },
     {
       label: "Cost Health",
@@ -375,7 +381,7 @@ export function buildDashboardSummary(input: {
   const summaryRows: DashSummaryRow[] = [
     { label: "Project Value", value: formatMoney(contractValue) },
     { label: "Target Completion", value: formatDate((project?.target_completion_date || project?.forecast_completion_date) as string | null) },
-    { label: "% Complete", value: `${schedulePct}%` },
+    { label: "% Complete", value: schedulePct === null ? "TBD" : `${schedulePct}%` },
     { label: "Days Remaining", value: remainingDays == null ? "TBD" : String(remainingDays) },
     { label: "Billed / Collected", value: `${formatMoney(billed)} / ${formatMoney(collected)}` },
     { label: "Open Pay + Retainage", value: formatMoney(pendingPay.total + retention) },
@@ -440,7 +446,7 @@ export function buildDashboardSummary(input: {
   const modules: ModuleTile[] = [
     { page: "RFIs", title: "RFIs", subtitle: "Questions & Responses", metric: `${openRfis} Open`, target: "rfis", photo: photoFor("RFIs") },
     { page: "DrawingSubmittalHub", title: "Detailing", subtitle: "Drawings & Models", metric: `${drawingCount} Drawings`, target: "submittals", photo: photoFor("DrawingSubmittalHub") },
-    { page: "ScheduleHub", title: "Schedule", subtitle: "Project Timeline", metric: `${schedulePct}% Complete`, target: "schedule", tone: schedulePct >= 80 ? "good" : undefined, photo: photoFor("ScheduleHub") },
+    { page: "ScheduleHub", title: "Schedule", subtitle: "Project Timeline", metric: schedulePct === null ? "Schedule unavailable" : `${schedulePct}% Complete`, target: "schedule", tone: schedulePct !== null && schedulePct >= 80 ? "good" : undefined, photo: photoFor("ScheduleHub") },
     { page: "FieldHub", title: "Field Hub", subtitle: "Daily Field Management", metric: `${fieldIssues} Issues`, target: "field", photo: photoFor("FieldHub") },
     { page: "CostHub", title: "Budget Control", subtitle: "Costs & Commitments", metric: budget > 0 && hasPostedCosts ? `${formatSignedPercent(costPct)} ${costPct >= 0 ? "Under Budget" : "Over Budget"}` : budget > 0 ? "Costs not posted" : "Budget TBD", target: "cost-hub", tone: budget > 0 && hasPostedCosts && costPct >= 0 ? "good" : undefined, photo: photoFor("CostHub") },
     { page: "ChangeOrders", title: "Change Orders", subtitle: "Scope & Contract Changes", metric: `${activeCos} Active`, target: "change-orders", photo: photoFor("ChangeOrders") },
