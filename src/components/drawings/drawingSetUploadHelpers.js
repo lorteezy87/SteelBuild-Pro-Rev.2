@@ -1,22 +1,8 @@
-// ── drawingSetUploadHelpers — pure helpers for DrawingSetUploadModal ─────────
-//
-// Extracted from DrawingSetUploadModal.jsx so the byte formatter, the
-// oversize-short-circuit extract router, and the child drawing-row builder are
-// unit-testable in isolation. The modal keeps all state, wizard steps, and I/O
-// orchestration (parent find-or-create, bulk insert + per-row fallback, audit
-// logging, cache invalidation).
-//
-// Note: formatBytes is deliberately NOT shared with RevisionUploadModal — the
-// two modals round byte sizes differently (this one shows a sub-KB "B" tier and
-// 1-decimal KB; the revision modal rounds KB to whole numbers and has no "B"
-// tier). See the drawingUploadUtils.js header for why they stay separate.
-
 import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename, validatePdfPage } from "@/lib/pdfSheetExtractor";
+import { applyTitleblockRevisionOcr } from "@/lib/applyTitleblockRevisionOcr";
 import { normalizeRevisionNumber } from "@/lib/drawingUploadUtils";
 import { sheetReviewFlags } from "@/components/drawings/intakeReview";
 
-// AI-extraction size ceiling (MB). Above this we skip the LLM round-trip and
-// fall back to filename parsing. Shared by the file-queue UI and validateAndExtract.
 export const MAX_PDF_SIZE_MB = 32;
 
 export function formatBytes(bytes) {
@@ -46,7 +32,19 @@ export async function validateAndExtract(file, options = {}) {
       tooLarge: true,
     };
   }
-  return extractSheetsFromPdf(file, options);
+  const result = await extractSheetsFromPdf(file, options);
+  if (result?.sheets && options.titleblockTemplate?.revisionRect) {
+    try {
+      result.sheets = await applyTitleblockRevisionOcr(
+        file,
+        result.sheets,
+        options.titleblockTemplate.revisionRect,
+      );
+    } catch (err) {
+      console.warn("[validateAndExtract] revision OCR failed:", err?.message);
+    }
+  }
+  return result;
 }
 
 export function buildDrawingRecord({ sheet, fileResults, meta, activeProject, resolvedSetName, parentSetId, batchId, now }) {
@@ -138,17 +136,10 @@ export function detectMultiSheetSamePageRegression(selectedSheets, records, file
   return regressions;
 }
 
-/** Collapse sheet-number punctuation so S-101, S101, and S.101 match. */
 export function normalizeSheetKey(value) {
   return String(value || "").toUpperCase().replace(/[-.\s]/g, "");
 }
 
-/**
- * When a named set already has live sheets, a re-upload should REPLACE those
- * rows (new file + page + revision) instead of inserting duplicates.
- *
- * Matching is by normalised sheet_number. Unlisted live sheets are retired.
- */
 export function planExistingSetSheetReplace(existingLiveSheets = [], newRecords = []) {
   const byKey = new Map();
   for (const sheet of existingLiveSheets) {
