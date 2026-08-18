@@ -239,7 +239,10 @@ export function procurementStatusRollup(deliveries = []) {
   let longLead = 0;
   let longLeadSlipping = 0;
   let cancelled = 0;
+  // Local midnight so items due today don't flip to overdue at noon
+  // (the date-only shim parses "YYYY-MM-DD" as local noon).
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   for (const d of deliveries) {
     if (!d || d.is_deleted) continue;
@@ -309,6 +312,7 @@ export function procurementStatusRollup(deliveries = []) {
  */
 export function overdueWPCount(wps = []) {
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   return wps.filter((w) => {
     if (!w?.scheduled_end_date) return false;
     if (w.status === "Complete") return false;
@@ -369,6 +373,7 @@ export function openRFICount(rfis = []) {
 /** Count of RFIs past `date_required` and not yet answered. */
 export function overdueRFICount(rfis = []) {
   const now = new Date();
+  now.setHours(0, 0, 0, 0);
   return rfis.filter(
     (r) =>
       !["Answered", "Closed"].includes(r.status) &&
@@ -380,6 +385,7 @@ export function overdueRFICount(rfis = []) {
 /** Deliveries not yet delivered + past scheduled date. */
 export function overdueDeliveryCount(deliveries = []) {
   const now = new Date();
+  now.setHours(0, 0, 0, 0);
   return deliveries.filter(
     (d) =>
       d.status !== "Delivered" &&

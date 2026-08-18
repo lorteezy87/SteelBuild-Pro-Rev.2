@@ -124,7 +124,14 @@ export default function PortfolioOverview() {
   const expenses = useMemo(() => filterNotDeleted(rawExpenses), [rawExpenses]);
   const risks = useMemo(() => filterNotDeleted(rawRisks), [rawRisks]);
 
-  const now = useMemo(() => new Date(), []);
+  // Local midnight so items due today don't count as overdue mid-day
+  // (the date-only shim parses "YYYY-MM-DD" as local noon) — matches
+  // the shared formatters.isOverdue convention.
+  const now = useMemo(() => {
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    return midnight;
+  }, []);
 
   const openRFIs = useMemo(() => filterOpenRFIs(rfis), [rfis]);
   const overdueRFIs = useMemo(

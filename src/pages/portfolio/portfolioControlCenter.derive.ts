@@ -11,6 +11,7 @@ import { computePortfolioProjectHealth } from "@/services/portfolioHealthScoring
 import { capHealthScore, deriveOperationalHealth } from "@/lib/projectHealth";
 import type { OperationalHealthLabel } from "@/lib/projectHealth";
 import { partitionFieldTasks } from "@/lib/field/fieldToday";
+import { localToday } from "@/utils/dates";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -216,7 +217,7 @@ export function buildPortfolioSummary(
     rfiEvidenceLoaded = true,
     scheduleEvidenceLoaded = true,
   } = related;
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localToday();
 
   const changeOrdersByProject = bucketByProjectId(changeOrders);
   const workPackagesByProject = bucketByProjectId(workPackages);
