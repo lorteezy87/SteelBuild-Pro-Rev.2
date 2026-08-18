@@ -127,16 +127,17 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   const coPending = changeOrders.filter((co) =>
     ["Submitted", "Under Review"].includes(co.status ?? ""),
   ).length;
-  const coApproved = changeOrders.filter((co) => co.status === "Approved").length;
+  const coApproved = changeOrders.filter((co) => String(co.status ?? "").trim() === "Approved").length;
   const coStale = coAging.filter((co) => co.isStale).length;
   const topStaleCOs = coAging.filter((co) => co.isStale).slice(0, 5);
 
-  // Budget from cost-code budgets; EAC from the expense-rolled actuals
-  // (costCodeRows) + forecast-to-complete, consistent with the Actual/Committed KPIs.
-  const totalBudget = useMemo(
-    () => costCodes.reduce((s, c) => s + Number(c.budget_amount || 0), 0),
-    [costCodes],
-  );
+  // Budget KPI = revised budget (original + CO signed extras), matching the
+  // per-row "Budget" column and its Variance below — the strip previously
+  // summed raw budget_amount while labeled "revised", so the KPI Variance
+  // disagreed with the table on any project with approved COs.
+  const totalBudget = summary.revisedBudget;
+  // EAC from the expense-rolled actuals (costCodeRows) + forecast-to-complete,
+  // consistent with the Actual/Committed KPIs.
   const totalEAC = useMemo(
     () => costCodeRows.reduce((s, c) => s + Number(c.actual_cost || 0) + Number(c.forecast_to_complete || 0), 0),
     [costCodeRows],

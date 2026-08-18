@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getQueryKey } from "@/services/cacheRegistry";
 import { computeRevisedContractValue } from "@/services/costRollup";
+import { sovScheduledTotal, totalBilled } from "@/pages/dashboard/projectMetrics";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { formatDate, formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
@@ -509,12 +510,12 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
     return { approved, rejected, pending };
   }, [changeOrders]);
 
-  const sovTotal = useMemo(() => (sovItems || []).reduce((sum, item) => sum + (Number(item.scheduled_value) || 0), 0), [sovItems]);
-  const billedTotal = useMemo(() => (sovItems || []).reduce((sum, item) => {
-    const sv = Number(item.scheduled_value) || 0;
-    const prog = Math.min(100, Math.max(0, Number(item.current_percent_complete) || 0)) / 100;
-    return sum + sv * prog;
-  }, 0), [sovItems]);
+  // sov_items holds one row per (line item × application × status) — raw-row
+  // sums overcount the SOV total and billed figure ~2-3× on multi-application
+  // projects, falsely tripping the "SOV vs Contract Mismatch" alert. Use the
+  // canonical deduped rollups (same as the Revenue reports).
+  const sovTotal = useMemo(() => sovScheduledTotal(sovItems || []), [sovItems]);
+  const billedTotal = useMemo(() => totalBilled(sovItems || []), [sovItems]);
 
   const sovMismatch = Math.abs(sovTotal - revisedValue);
   const sovMismatchPct = revisedValue > 0 ? Math.round((sovMismatch / revisedValue) * 100) : 0;

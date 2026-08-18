@@ -5,7 +5,7 @@
  * computations over Supabase entities. Keeps the dashboard component
  * presentational — every number below comes from live data.
  */
-import { resolveProjectSpend } from "@/services/costRollup";
+import { computeRevisedContractValue, resolveProjectSpend } from "@/services/costRollup";
 
 export function daysBetween(from, to) {
   if (!from || !to) return null;
@@ -36,11 +36,9 @@ export function timelineElapsedPct(project) {
  * back to `original_contract_value` when no COs are loaded yet.
  */
 export function revisedContractValue(project, cos = []) {
-  const base = Number(project?.original_contract_value) || 0;
-  const approvedDelta = cos
-    .filter((c) => c.status === "Approved")
-    .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-  return base + approvedDelta;
+  // Delegates to the single source of truth (trims CO status whitespace)
+  // so the Dashboard hero can't disagree with the Projects page KPIs.
+  return computeRevisedContractValue(project, cos);
 }
 
 /**
@@ -695,6 +693,38 @@ export function latestCertifiedPerLineItem(sovItems = []) {
     }
   }
   return [...byKey.values()];
+}
+
+/**
+ * Reduce raw `sov_items` to one row per (project_id, line_item_number),
+ * keeping the highest application_number regardless of status. This is
+ * the "current schedule of values" view: each line item counted once,
+ * so Σ scheduled_value equals the real SOV total instead of N× it
+ * (see the SOV ROW MODEL comment above).
+ */
+export function latestApplicationPerLineItem(sovItems = []) {
+  const byKey = new Map();
+  for (const r of sovItems) {
+    if (!r || r.is_deleted) continue;
+    const key = `${r.project_id ?? ""}|${r.line_item_number ?? ""}`;
+    const cur = byKey.get(key);
+    const app = Number(r.application_number) || 0;
+    if (!cur || app > (Number(cur.application_number) || 0)) {
+      byKey.set(key, r);
+    }
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * Σ scheduled_value over the deduped current-SOV view. Use this (never a
+ * raw-row sum) when comparing the SOV total against the contract value.
+ */
+export function sovScheduledTotal(sovItems = []) {
+  return latestApplicationPerLineItem(sovItems).reduce(
+    (s, i) => s + (Number(i.scheduled_value) || 0),
+    0,
+  );
 }
 
 /**
