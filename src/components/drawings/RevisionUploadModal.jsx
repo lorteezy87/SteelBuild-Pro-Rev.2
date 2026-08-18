@@ -20,15 +20,12 @@ import StepSheetComparison from "./revisionUploadSteps/SheetComparisonStep";
 import StepProcessing from "./revisionUploadSteps/ProcessingStep";
 import StepSuccess from "./revisionUploadSteps/SuccessStep";
 
-// ── Main Modal ─────────────────────────────────────────────────────
 export default function RevisionUploadModal({ open, onClose, onComplete, activeProject, preSelectedSet, drawingSets = [] }) {
   const qc = useQueryClient();
-  // Derive virtual sets from drawings if drawingSets is sparse
   const [derivedSets, setDerivedSets] = React.useState([]);
   useEffect(() => {
     if (!open || !activeProject?.id) return;
     entities.Drawing.filter({ project_id: activeProject.id }).then(drawings => {
-      // Build virtual set objects for any set_name not already in drawingSets
       const existingNames = new Set(drawingSets.map(ds => ds.set_name));
       setDerivedSets(deriveVirtualSets(drawings, existingNames));
     }).catch((e) => { console.error("Failed to load drawing sets:", e); });
@@ -44,8 +41,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   });
   const [pdfFile, setPdfFile] = useState(null);
   const [matchedSheets, setMatchedSheets] = useState([]);
-  // Full re-issue (retire sheets not in this upload) is OPT-IN. Default OFF so a
-  // partial revision upload never silently supersedes the rest of the set.
   const [supersedeUnlisted, setSupersedeUnlisted] = useState(false);
   const [processingMsg, setProcessingMsg] = useState("");
   const [processingPct, setProcessingPct] = useState(0);
@@ -71,31 +66,22 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       const res = await integrations.Core.UploadFile({ file: pdfFile, workflow: "drawings" });
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
-      // Forward the set's saved titleblock template (if any) so the
-      // extractor pulls title + sheet# from the user-marked rectangles
-      // instead of asking the LLM to guess. Sets without a template
-      // pass NULL on both sides; the extractor falls through to its
-      // existing LLM-only path.
       const newSheets = await extractRevisionSheets(pdfFile, {
         titleblockTemplate: {
           titleRect:  selectedSet?.titleblock_title_rect  ?? null,
           numberRect: selectedSet?.titleblock_number_rect ?? null,
+          revisionRect: selectedSet?.titleblock_revision_rect ?? null,
         },
       });
       setProcessingMsg("Comparing sheets...");
       setProcessingPct(80);
 
-    // Get old sheets from existing Drawing records
     let oldSheets = [];
     try {
       const existing = await entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
       oldSheets = existing.filter(d => !d.is_superseded).map(d => ({ sheetNumber: d.sheet_number, sheetTitle: d.title, fileUrl: d.file_url }));
     } catch (e) { console.error("Failed to fetch existing drawings:", e); }
 
-      // Carry pdfPage and discipline/revision through matchSheets so the
-      // apply step can write per-sheet pdf_page on every revised/added
-      // drawing — without this the new revision keeps the file_url but
-      // every row points at page 1 of the new master PDF.
       const matched = matchSheets(
         oldSheets,
         newSheets.map(s => ({
@@ -106,7 +92,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           revision:    s.revision,
         })),
       );
-      // Store uploaded fileUrl on each new sheet match
       matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
       setMatchedSheets(matched);
       setSupersedeUnlisted(false);
@@ -145,7 +130,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       setProcessingMsg("Updating drawing set...");
       setProcessingPct(10);
 
-    // Snapshot current revision into history
     let history = [];
     try { history = JSON.parse(selectedSet.revision_history || "[]"); } catch {}
     history.push(buildRevisionSnapshot(selectedSet, revMeta.disposition));
@@ -153,7 +137,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     const newSheetCount = matchedSheets.filter(m => m.newSheet).length;
     const newFileUrl = matchedSheets.find(m => m.newSheet?.sourceFileUrl)?.newSheet?.sourceFileUrl || selectedSet.file_url;
 
-    // Update DrawingSet (only if a real DrawingSet record exists)
     if (selectedSet.id) {
       await entities.DrawingSet.update(selectedSet.id, {
         revision: revMeta.revisionLabel,
@@ -169,40 +152,26 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     setProcessingPct(30);
     setProcessingMsg("Updating drawing records...");
 
-    // Load existing drawings for this set
     let existingDrawings = [];
     try {
       existingDrawings = await entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
     } catch (e) { console.error("Failed to fetch drawings for apply:", e); }
 
-    // Per-sheet auditable history (drawing_revisions): every revised sheet
-    // gets its OLD file/page snapshotted as a superseded revision and the
-    // new one minted as current — this is what powers per-sheet history +
-    // the overlay compare. History failures never block the slip-sheet
-    // itself; they surface as a warning.
     let historyFailed = 0;
-
     let updated = 0, added = 0, removed = 0, failed = 0;
     for (const match of matchedSheets) {
       try {
         const existing = findExactLiveDrawing(existingDrawings, match.sheetNumber);
         if (match.change !== "added" && match.change !== "removed" && match.sheetNumber && !existing && existingDrawings.some((d) => !d.is_superseded && String(d.sheet_number || "").trim() === String(match.sheetNumber || "").trim())) {
-          // Multiple live rows share this exact number — refuse to guess.
           failed++;
           console.error(`[RevisionUploadModal] Ambiguous live sheet "${match.sheetNumber}" — skipped`);
           continue;
         }
         if (match.change === "removed") {
-          // A sheet that isn't in this upload is only retired when the user
-          // explicitly opted into a full re-issue. The default (partial
-          // revision) leaves it current and untouched — a partial upload must
-          // never silently supersede the rest of the set.
           if (!supersedeUnlisted) { continue; }
           if (existing) {
             await entities.Drawing.update(existing.id, { is_superseded: true });
             removed++;
-            // Keep an archived revision row so the dropped sheet's last
-            // file/page stays reachable from history.
             try {
               const rev = await ensureCurrentRevision({ drawing: existing, userId: null });
               if (rev?.id) {
@@ -215,11 +184,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           }
         } else if (match.change === "added") {
           const addedPage = validatePdfPage(match.newSheet?.pdfPage);
-          if (addedPage === null) {
-            console.warn(
-              `[RevisionUploadModal] Added sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
-            );
-          }
           const createdSheet = await entities.Drawing.create({
             sheet_number: match.newSheet.sheetNumber,
             title: match.newSheet.sheetTitle,
@@ -233,38 +197,19 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             file_url: newFileUrl,
             pdf_page: addedPage ?? 1,
             drawing_set_name: selectedSet.set_name,
-            // Carry the parent set FK so added sheets aren't orphaned from the
-            // count-sync trigger / fab gate / health score / 3D coloring (all
-            // key on drawing_set_id). Omitted for derived/virtual sets (no row).
             ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
             ifc_status: revMeta.revisionLabel.toUpperCase().includes("IFC") ? "IFC" : undefined,
             is_superseded: false,
           });
           added++;
-          // Mint the v1 history row for the brand-new sheet (carries the
-          // new file/page refs).
           try {
             if (createdSheet?.id) await ensureCurrentRevision({ drawing: createdSheet, userId: null });
           } catch (histErr) {
             historyFailed++;
             console.warn(`[RevisionUploadModal] History mint failed for added sheet "${match.sheetNumber}":`, histErr);
           }
-        } else {
-          if (existing) {
-            // Per-sheet pdf_page MUST be re-derived from the new PDF —
-            // the old value pointed at a page in the *previous* master
-            // PDF, which is no longer the file behind file_url. If the
-            // extractor didn't surface a page for this sheet, fall back
-            // to 1 with a warning so the user can hand-fix.
+        } else if (existing) {
             const updatedPage = validatePdfPage(match.newSheet?.pdfPage);
-            if (updatedPage === null) {
-              console.warn(
-                `[RevisionUploadModal] Updated sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
-              );
-            }
-            // Snapshot the OLD file/page as a superseded revision and mint
-            // the new one BEFORE the drawings row is overwritten in place.
-            // Idempotent on the revision code; failure → warn, never block.
             try {
               const slip = await recordSheetSlipSheet({
                 drawing: existing,
@@ -275,10 +220,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
                 notes: revMeta.notes || null,
                 userId: null,
               });
-              // When the new revision code already existed, recordSheetSlipSheet
-              // skips minting AND skips updating that current revision row — point the
-              // authoritative current drawing_revisions row at the new PDF/page, else
-              // the register/viewer keep rendering the OLD file while drawings shows new.
               if (slip?.skipped && slip.revisionId) {
                 await entities.DrawingRevision.update(slip.revisionId, { file_url: newFileUrl, pdf_page: updatedPage ?? 1 });
               }
@@ -292,13 +233,10 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               issued_by: revMeta.issuedBy || existing.issued_by,
               file_url: newFileUrl,
               pdf_page: updatedPage ?? 1,
-              // Backfill the parent set FK in case this sheet predates the FK
-              // being set, so it stays attached to the real set (not orphaned).
               ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
               is_superseded: false,
             });
             updated++;
-          }
         }
       } catch (err) {
         console.error("Failed to process sheet:", match.sheetNumber, err);
@@ -308,16 +246,8 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     }
 
       setApplyStats({ updated, added, removed });
-      // Route through the registry so EVERY drawing/revision-reading cache —
-      // including the Doc Control register view (["drawing-register", projectId])
-      // — is invalidated from one place. Without the register key the register
-      // grid served a stale current revision until a manual page reload.
       await invalidateEntity(qc, "drawing", activeProject?.id);
       await invalidateEntity(qc, "drawing_revision", activeProject?.id);
-      // When a real drawing_sets row was updated above (revision label, sheet
-      // count, set_approval_status), invalidate the drawingSet family too so
-      // set-list surfaces (hub, FabRelease, CommandCenter) reflect the new
-      // revision/count instead of serving the old values until a manual reload.
       if (selectedSet.id) await invalidateEntity(qc, "drawingSet", activeProject?.id);
       if (failed > 0) {
         setFlowError(`${failed} sheet(s) failed to process. ${updated + added + removed} succeeded.`);
@@ -350,7 +280,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   };
 
   const handleClose = () => { reset(); onClose(); };
-
   const STEP_ORDER = ["selectSet", "revMeta", "dropPDF", "comparison", "success"];
 
   return (
@@ -373,16 +302,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
 
         <div style={{ paddingTop: 8 }}>
           {flowError && step !== "processing" && (
-            <div style={{
-              marginBottom: 12,
-              padding: "8px 10px",
-              borderRadius: 8,
-              border: "1px solid var(--danger-border)",
-              background: "var(--danger-muted)",
-              fontFamily: "var(--font-body)",
-              fontSize: 11,
-              color: "var(--danger)"
-            }}>
+            <div style={{ marginBottom: 12, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--danger)" }}>
               {flowError}
             </div>
           )}
