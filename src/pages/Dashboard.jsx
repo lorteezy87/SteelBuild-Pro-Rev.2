@@ -144,7 +144,7 @@ export default function Dashboard() {
   // Recent Activity feed pulls from drawing_activity (the only
   // activity surface that's actually populated — the generic
   // `activities` table is empty everywhere). Pull the latest 50
-  // events globally and project-scope them in the section.
+  // events. `list(sort, 50)` honors that cap (it used to ignore it).
   // Budget-hour rows live per-project; fetch only when a project is active
   // so portfolio mode doesn't pay for a query that has no consumer.
   const { data: budgetHourItems = [] } = useQuery({

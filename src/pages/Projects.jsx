@@ -15,6 +15,7 @@ import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
 import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import { CO_KPI_COLUMNS, RFI_KPI_COLUMNS, SCHEDULE_KPI_COLUMNS, WP_KPI_COLUMNS } from "@/lib/kpiSelectColumns";
 import { localToday } from "@/utils/dates";
 
 export default function Projects() {
@@ -52,25 +53,19 @@ export default function Projects() {
   });
   const { data: rawWorkPackages = [] } = useQuery({
     queryKey: ["work-packages-all", "projects-kpi"],
-    queryFn: () => entities.WorkPackage.listAll(
-      undefined,
-      "id,project_id,status,tonnage,shop_hours_budget,shop_hours_actual",
-    ),
+    queryFn: () => entities.WorkPackage.listAll(undefined, WP_KPI_COLUMNS),
   });
   const { data: rawRfis = [], isSuccess: rfisSuccess } = useQuery({
     queryKey: ["rfis", "all", "projects-kpi"],
-    queryFn: () => entities.RFI.listAll(undefined, "id,project_id,status,date_required,priority"),
+    queryFn: () => entities.RFI.listAll(undefined, RFI_KPI_COLUMNS),
   });
   const { data: rawChangeOrders = [] } = useQuery({
     queryKey: ["change-orders-all", "projects-kpi"],
-    queryFn: () => entities.ChangeOrder.listAll(undefined, "id,project_id,status,co_amount"),
+    queryFn: () => entities.ChangeOrder.listAll(undefined, CO_KPI_COLUMNS),
   });
   const { data: rawScheduleTasks = [], isSuccess: scheduleTasksSuccess } = useQuery({
     queryKey: ["schedule-tasks-all", "projects-kpi"],
-    queryFn: () => entities.ScheduleTask.listAll(
-      "start_date",
-      "id,project_id,start_date,end_date,status,percent_complete,parent_task_id,is_summary,task_name",
-    ),
+    queryFn: () => entities.ScheduleTask.listAll("start_date", SCHEDULE_KPI_COLUMNS),
   });
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);

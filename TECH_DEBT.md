@@ -153,8 +153,10 @@ follow-ups._
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project
   performance** (virtualization, server-side filtering, narrow invalidation).
   Bundle gzip budgets now run via `npm run perf:bundle` after CI `build`.
-  Remaining: RFI register + Piece Register virtualization, and server-side
-  portfolio rollups so Projects/PortfolioHub/reports stop paging full tables.
+  `list()` now honors an explicit limit. Portfolio/Projects/RFI health reads
+  use slim column lists. Remaining: RFI register + Piece Register
+  virtualization, and server-side portfolio rollup RPCs so those pages stop
+  paging every matching row.
   Phase 0 tablet kit is landed; Phases 1-4 domain migrations remain pending.
 - **Dependency vulnerabilities — CLEARED (`npm audit` = 0 advisories, verified
   2026-06-17).** The 2 remaining `esbuild`-via-`vite` highs were patched within the

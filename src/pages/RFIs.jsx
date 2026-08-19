@@ -40,6 +40,7 @@ import { planRfiOverdueAlerts } from "./rfis/rfiOverdueAlerts";
 import { useRfiPageMutations } from "./rfis/useRfiPageMutations";
 import { scopeRfiPortfolioRows } from "./rfis/rfiPortfolioScope";
 import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import { SCHEDULE_KPI_COLUMNS, WP_KPI_COLUMNS } from "@/lib/kpiSelectColumns";
 import { localToday } from "@/utils/dates";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
@@ -108,10 +109,10 @@ export default function RFIs() {
   );
   useAutoOpenEdit(rfis, setSelectedRFI, { enabled: !rfisLoading, param: "recordId" });
   const { data: rawWorkPackages = [] } = useQuery({
-    queryKey: ["work-packages", projectId || "portfolio"],
+    queryKey: ["work-packages", projectId || "portfolio", "rfi-kpi"],
     queryFn: () => projectId
-      ? entities.WorkPackage.filter({ project_id: projectId })
-      : entities.WorkPackage.listAll(),
+      ? entities.WorkPackage.filter({ project_id: projectId }, undefined, undefined, WP_KPI_COLUMNS)
+      : entities.WorkPackage.listAll(undefined, WP_KPI_COLUMNS),
     staleTime: 5 * 60 * 1000,
   });
   const workPackages = useMemo(
@@ -124,8 +125,8 @@ export default function RFIs() {
   } = useQuery({
     queryKey: ["schedule-tasks-rfis", projectId || "portfolio"],
     queryFn: () => projectId
-      ? entities.ScheduleTask.filter({ project_id: projectId }, "-start_date")
-      : entities.ScheduleTask.listAll("-start_date"),
+      ? entities.ScheduleTask.filter({ project_id: projectId }, "-start_date", undefined, SCHEDULE_KPI_COLUMNS)
+      : entities.ScheduleTask.listAll("-start_date", SCHEDULE_KPI_COLUMNS),
   });
   const scheduleTasks = useMemo(
     () => isPortfolio ? scopeRfiPortfolioRows(projects, rawScheduleTasks) : rawScheduleTasks,

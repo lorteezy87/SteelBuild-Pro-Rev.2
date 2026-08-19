@@ -19,6 +19,9 @@ import {
 } from './softDelete';
 import type { EntityClient, RowWithAliases, TableName } from './supabaseTypes';
 import { emitProjectUpdated } from '@/services/projectUpdateEvents';
+import { LIST_ROW_CAP, resolveListReadArgs } from './listOptions';
+
+export { LIST_ROW_CAP } from './listOptions';
 
 // ─── Entity factory ───────────────────────────────────────────────────────────
 
@@ -44,7 +47,6 @@ const chunkIds = (ids: string[]): string[][] => {
 // in dev. Callers needing more must paginate or filter server-side.
 // Exported so the UI (e.g. ListTruncationNotice) can surface the SAME number it
 // caps at — single source of truth for "showing the first N" messaging.
-export const LIST_ROW_CAP = 2000;
 const DEFAULT_LIST_LIMIT = LIST_ROW_CAP;
 
 // Warn when a read comes back at the cap (likely truncated) so the silent-
@@ -72,11 +74,13 @@ const warnIfTruncated = (tableName: string, op: string, count: number, cap: numb
 
 export const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> => ({
   /**
-   * List all records, optionally sorted.
-   * Auto-excludes soft-deleted rows.
+   * List records, optionally sorted. Pass a positive `limit` to cap the
+   * read (e.g. recent-50 activity). A string second arg is treated as a
+   * column list so `list(sort, columns)` matches listAll's shape.
    */
-  list: async (sortBy) => {
-    let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
+  list: async (sortBy, limitOrColumns, columns) => {
+    const read = resolveListReadArgs(limitOrColumns, columns);
+    let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string, read.columns));
     q = applyLiveProjectScope(q, tableName as string);
     // Soft-delete filter
     if (SOFT_DELETE_TABLES.has(tableName as string)) {
@@ -94,10 +98,10 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
     } else {
       q = q.order('created_at', { ascending: false });
     }
-    q = q.limit(DEFAULT_LIST_LIMIT);
+    q = q.limit(read.limit);
     const { data, error } = await q;
     if (error) throw new SupabaseOperationError(tableName as string, 'list', error);
-    warnIfTruncated(tableName as string, 'list', data?.length ?? 0, DEFAULT_LIST_LIMIT);
+    warnIfTruncated(tableName as string, 'list', data?.length ?? 0, read.limit);
     return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
   },
 

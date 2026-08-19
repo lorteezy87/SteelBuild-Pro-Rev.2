@@ -31,7 +31,7 @@ export type RowWithAliases<T extends TableName> = Row<T> & {
 export type Conditions = Record<string, unknown>;
 
 export type EntityClient<T extends TableName> = {
-  list: (sortBy?: string) => Promise<Array<RowWithAliases<T>>>;
+  list: (sortBy?: string, limitOrColumns?: number | string, columns?: string) => Promise<Array<RowWithAliases<T>>>;
   /** Like list() but PAGINATES to completeness — no silent DEFAULT_LIST_LIMIT
    *  cap. For portfolio/dashboard reads that span all projects and can outgrow
    *  the cap as a tenant grows (CommandCenter / AIInsights). */

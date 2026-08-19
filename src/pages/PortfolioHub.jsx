@@ -11,6 +11,15 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import PortfolioControlCenter from "./portfolio/PortfolioControlCenter";
+import {
+  ACTION_ITEM_KPI_COLUMNS,
+  CO_KPI_COLUMNS,
+  COST_CODE_KPI_COLUMNS,
+  DELIVERY_KPI_COLUMNS,
+  RFI_KPI_COLUMNS,
+  SCHEDULE_KPI_COLUMNS,
+  WP_KPI_COLUMNS,
+} from "@/lib/kpiSelectColumns";
 
 const ExecutiveView = lazyWithRetry(() => import("@/pages/ExecutiveView"));
 
@@ -48,43 +57,43 @@ export default function PortfolioHub() {
   });
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["portfolio-cos"],
-    queryFn: () => entities.ChangeOrder.listAll(),
+    queryFn: () => entities.ChangeOrder.listAll(undefined, CO_KPI_COLUMNS),
     staleTime: 60 * 1000,
     enabled: fetchForCC,
   });
   const { data: workPackages = [] } = useQuery({
     queryKey: ["portfolio-wps"],
-    queryFn: () => entities.WorkPackage.listAll(),
+    queryFn: () => entities.WorkPackage.listAll(undefined, WP_KPI_COLUMNS),
     staleTime: 30 * 1000,
     enabled: fetchForCC,
   });
   const { data: costCodes = [] } = useQuery({
     queryKey: ["portfolio-codes"],
-    queryFn: () => entities.CostCode.listAll(),
+    queryFn: () => entities.CostCode.listAll(undefined, COST_CODE_KPI_COLUMNS),
     staleTime: 60 * 1000,
     enabled: fetchForCC,
   });
   const { data: rfis = [] } = useQuery({
     queryKey: ["portfolio-rfis"],
-    queryFn: () => entities.RFI.listAll(),
+    queryFn: () => entities.RFI.listAll(undefined, RFI_KPI_COLUMNS),
     staleTime: 30 * 1000,
     enabled: fetchForCC,
   });
   const { data: deliveries = [] } = useQuery({
     queryKey: ["portfolio-deliveries"],
-    queryFn: () => entities.Delivery.listAll(),
+    queryFn: () => entities.Delivery.listAll(undefined, DELIVERY_KPI_COLUMNS),
     staleTime: 30 * 1000,
     enabled: fetchForCC,
   });
   const { data: actionItems = [] } = useQuery({
     queryKey: ["portfolio-action-items"],
-    queryFn: () => entities.ActionItem.listAll(),
+    queryFn: () => entities.ActionItem.listAll(undefined, ACTION_ITEM_KPI_COLUMNS),
     staleTime: 30 * 1000,
     enabled: fetchForCC,
   });
   const { data: scheduleTasks = [] } = useQuery({
     queryKey: ["portfolio-schedule-tasks"],
-    queryFn: () => entities.ScheduleTask.listAll("-start_date"),
+    queryFn: () => entities.ScheduleTask.listAll("-start_date", SCHEDULE_KPI_COLUMNS),
     staleTime: 60 * 1000,
     enabled: fetchForCC,
   });
