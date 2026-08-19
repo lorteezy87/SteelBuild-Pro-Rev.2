@@ -445,13 +445,13 @@ export function buildDashboardSummary(input: {
 
   const modules: ModuleTile[] = [
     { page: "RFIs", title: "RFIs", subtitle: "Questions & Responses", metric: `${openRfis} Open`, target: "rfis", photo: photoFor("RFIs") },
-    { page: "DrawingSubmittalHub", title: "Detailing", subtitle: "Drawings & Models", metric: `${drawingCount} Drawings`, target: "submittals", photo: photoFor("DrawingSubmittalHub") },
+    { page: "DrawingSubmittalHub", title: "Detailing", subtitle: "Drawings & Models", metric: `${drawingCount} Drawings`, target: "detailing", photo: photoFor("DrawingSubmittalHub") },
     { page: "ScheduleHub", title: "Schedule", subtitle: "Project Timeline", metric: schedulePct === null ? "Schedule unavailable" : `${schedulePct}% Complete`, target: "schedule", tone: schedulePct !== null && schedulePct >= 80 ? "good" : undefined, photo: photoFor("ScheduleHub") },
     { page: "FieldHub", title: "Field Hub", subtitle: "Daily Field Management", metric: `${fieldIssues} Issues`, target: "field", photo: photoFor("FieldHub") },
     { page: "CostHub", title: "Budget Control", subtitle: "Costs & Commitments", metric: budget > 0 && hasPostedCosts ? `${formatSignedPercent(costPct)} ${costPct >= 0 ? "Under Budget" : "Over Budget"}` : budget > 0 ? "Costs not posted" : "Budget TBD", target: "cost-hub", tone: budget > 0 && hasPostedCosts && costPct >= 0 ? "good" : undefined, photo: photoFor("CostHub") },
     { page: "ChangeOrders", title: "Change Orders", subtitle: "Scope & Contract Changes", metric: `${activeCos} Active`, target: "change-orders", photo: photoFor("ChangeOrders") },
-    { page: "Documents", title: "Documents", subtitle: "Project Documents", metric: `${drawingCount + submittals.length} Files`, target: "submittals", photo: photoFor("Documents") },
-    { page: "ReportsHub", title: "Reports", subtitle: "Analytics & Insights", metric: `${recentActivity.length} Updates`, target: "schedule", photo: photoFor("ReportsHub") },
+    { page: "Documents", title: "Documents", subtitle: "Project Documents", metric: `${drawingCount + submittals.length} Files`, target: "documents", photo: photoFor("Documents") },
+    { page: "ReportsHub", title: "Reports", subtitle: "Analytics & Insights", metric: `${recentActivity.length} Updates`, target: "reports", photo: photoFor("ReportsHub") },
   ];
 
   return {
