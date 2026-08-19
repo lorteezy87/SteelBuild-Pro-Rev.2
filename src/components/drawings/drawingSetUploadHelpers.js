@@ -1,22 +1,8 @@
-// ── drawingSetUploadHelpers — pure helpers for DrawingSetUploadModal ─────────
-//
-// Extracted from DrawingSetUploadModal.jsx so the byte formatter, the
-// oversize-short-circuit extract router, and the child drawing-row builder are
-// unit-testable in isolation. The modal keeps all state, wizard steps, and I/O
-// orchestration (parent find-or-create, bulk insert + per-row fallback, audit
-// logging, cache invalidation).
-//
-// Note: formatBytes is deliberately NOT shared with RevisionUploadModal — the
-// two modals round byte sizes differently (this one shows a sub-KB "B" tier and
-// 1-decimal KB; the revision modal rounds KB to whole numbers and has no "B"
-// tier). See the drawingUploadUtils.js header for why they stay separate.
-
 import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename, validatePdfPage } from "@/lib/pdfSheetExtractor";
+import { applyTitleblockRevisionOcr } from "@/lib/applyTitleblockRevisionOcr";
 import { normalizeRevisionNumber } from "@/lib/drawingUploadUtils";
 import { sheetReviewFlags } from "@/components/drawings/intakeReview";
 
-// AI-extraction size ceiling (MB). Above this we skip the LLM round-trip and
-// fall back to filename parsing. Shared by the file-queue UI and validateAndExtract.
 export const MAX_PDF_SIZE_MB = 32;
 
 export function formatBytes(bytes) {
@@ -25,11 +11,6 @@ export function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Router: short-circuit on oversize files (skip the LLM round-trip);
-// otherwise delegate to the shared extractor. All the heavy lifting
-// (columnar pdfjs text extraction, Anthropic tool-use schema,
-// post-processing fixup, de-dup) lives in src/lib/pdfSheetExtractor.js
-// so this modal and RevisionUploadModal share a single code path.
 export async function validateAndExtract(file, options = {}) {
   const sizeMB = file.size / (1024 * 1024);
   if (sizeMB > MAX_PDF_SIZE_MB) {
@@ -51,27 +32,24 @@ export async function validateAndExtract(file, options = {}) {
       tooLarge: true,
     };
   }
-  return extractSheetsFromPdf(file, options);
+  const result = await extractSheetsFromPdf(file, options);
+  if (result?.sheets && options.titleblockTemplate?.revisionRect) {
+    try {
+      result.sheets = await applyTitleblockRevisionOcr(
+        file,
+        result.sheets,
+        options.titleblockTemplate.revisionRect,
+      );
+    } catch (err) {
+      console.warn("[validateAndExtract] revision OCR failed:", err?.message);
+    }
+  }
+  return result;
 }
 
-/**
- * Build one child `drawings` row payload from a reviewed sheet + the upload
- * context. Pure — the modal maps it over the selected sheets. The
- * ai_extraction_status gate mirrors intakeReview.sheetReviewFlags so the
- * persisted status never disagrees with the review-screen badge; pdf_page
- * falls back to 1 (with a warning) when the extractor didn't surface a valid page.
- */
 export function buildDrawingRecord({ sheet, fileResults, meta, activeProject, resolvedSetName, parentSetId, batchId, now }) {
   const sourceResult = fileResults.find(r => r.fileName === sheet.sourceFile);
-  // Same signal the review screen shows (intakeReview.sheetReviewFlags) so
-  // the persisted ai_extraction_status never disagrees with the badge — now
-  // also catches an empty sheet number, not just bad-source rows.
   const needsReview = sheetReviewFlags(sheet, sourceResult).needsReview;
-  // Validate pdf_page — must be a positive integer. Anything else
-  // falls back to 1 with a warning so the user can hand-fix via
-  // SheetFormModal. The extractor's assignPdfPages() should have
-  // populated this correctly; if we're falling back here, something
-  // upstream regressed.
   const validatedPage = validatePdfPage(sheet.pdfPage);
   if (validatedPage === null) {
     console.warn(
@@ -84,7 +62,7 @@ export function buildDrawingRecord({ sheet, fileResults, meta, activeProject, re
     project_id:       activeProject?.id,
     project_name:     activeProject?.name,
     drawing_set_id:   parentSetId,
-    drawing_set_name: resolvedSetName, // kept for back-compat reads
+    drawing_set_name: resolvedSetName,
     discipline:       sheet.discipline || meta.discipline,
     revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
     stage:            meta.defaultStage || "Not Started",
@@ -106,11 +84,6 @@ export function buildDrawingRecord({ sheet, fileResults, meta, activeProject, re
   };
 }
 
-// Build the processing-step list for the upload wizard's StepProcessing UI.
-// Pure — the modal calls this with the current active step + the set of
-// already-done step ids (and any warning flags) and renders the result.
-// NOTE: `activeId` is accepted for call-site parity but the rendered active
-// state is derived from currentStepId in StepProcessing, not from here.
 export function makeProgressSteps(activeId, doneIds = [], warnings = {}) {
   return [
     { id: "upload",  label: "Uploading files to storage...",        done: doneIds.includes("upload")  },
@@ -121,27 +94,13 @@ export function makeProgressSteps(activeId, doneIds = [], warnings = {}) {
   ];
 }
 
-/**
- * Merge AI-detected set metadata into the current meta state. Pure — the modal
- * passes the previous meta, the aggregated AI set metadata, and the default
- * issue date, and applies the returned `merged` via setMeta and `aiFilled`
- * via setAiFilledFields.
- *
- * Only fills fields the user left blank; never overwrites user input. Today's
- * default issue date and a "0"/empty revision are both treated as "blank" so
- * the AI value can win.
- *
- * @returns {{ merged: object, aiFilled: Record<string, boolean> }}
- */
 export function mergeAiSetMetadata(prev, aggregateSetMeta = {}, defaultIssueDate) {
   const merged = { ...prev };
   const aiFilled = {};
   const tryFill = (prevKey, aiKey) => {
     const current = String(prev[prevKey] ?? "").trim();
     const aiVal = String(aggregateSetMeta[aiKey] ?? "").trim();
-    // Treat today's default issueDate as "blank" so AI can overwrite it
     const isDefault = prevKey === "issueDate" && current === defaultIssueDate;
-    // Treat "0" revision as "blank" so AI can overwrite it
     const isDefaultRev = prevKey === "revision" && (current === "0" || current === "");
     if (aiVal && (!current || isDefault || isDefaultRev)) {
       merged[prevKey] = aiVal;
@@ -158,17 +117,6 @@ export function mergeAiSetMetadata(prev, aggregateSetMeta = {}, defaultIssueDate
   return { merged, aiFilled };
 }
 
-/**
- * Detect the multi-sheet-same-page regression: a source PDF with >1 page whose
- * every extracted sheet ended up with pdf_page=1 (the original bug). Pure — it
- * groups the built records by source file and returns the offending groups so
- * the caller can log a loud per-file warning. Returns an array of
- * { sourceFile, sheetCount, pageCount } — one entry per regressing PDF.
- *
- * @param {Array} selectedSheets the reviewed sheets in insert order
- * @param {Array} records        the built drawing records, index-aligned with selectedSheets
- * @param {Array} fileResults    the per-file upload results (source of pageCount)
- */
 export function detectMultiSheetSamePageRegression(selectedSheets, records, fileResults = []) {
   const recordsBySource = new Map();
   selectedSheets.forEach((sheet, i) => {
@@ -186,4 +134,40 @@ export function detectMultiSheetSamePageRegression(selectedSheets, records, file
     }
   }
   return regressions;
+}
+
+export function normalizeSheetKey(value) {
+  return String(value || "").toUpperCase().replace(/[-.\s]/g, "");
+}
+
+export function planExistingSetSheetReplace(existingLiveSheets = [], newRecords = []) {
+  const byKey = new Map();
+  for (const sheet of existingLiveSheets) {
+    if (sheet?.is_superseded) continue;
+    const key = normalizeSheetKey(sheet?.sheet_number);
+    if (!key || byKey.has(key)) continue;
+    byKey.set(key, sheet);
+  }
+
+  const toUpdate = [];
+  const toCreate = [];
+  const claimed = new Set();
+
+  for (const record of newRecords) {
+    const key = normalizeSheetKey(record?.sheet_number);
+    const existing = key ? byKey.get(key) : null;
+    if (existing) {
+      toUpdate.push({ existing, record });
+      claimed.add(key);
+    } else {
+      toCreate.push(record);
+    }
+  }
+
+  const toSupersede = [];
+  for (const [key, sheet] of byKey) {
+    if (!claimed.has(key)) toSupersede.push(sheet);
+  }
+
+  return { toUpdate, toCreate, toSupersede };
 }

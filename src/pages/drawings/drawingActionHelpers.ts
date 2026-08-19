@@ -26,6 +26,7 @@ export type DrawingSetGroupLike = {
     file_url?: string | null;
     titleblock_title_rect?: unknown;
     titleblock_number_rect?: unknown;
+    titleblock_revision_rect?: unknown;
     [key: string]: unknown;
   } | null;
   sheets?: DrawingLike[];
@@ -49,14 +50,12 @@ export type ConfirmDialogPlan = {
   description: string;
 };
 
-/** Resolve parent drawing_set id from a table/grid group shape. */
 export function resolveGroupSetId(group: DrawingSetGroupLike | null | undefined): string | null {
   if (!group) return null;
   const setIdCandidates = (group.sheets || []).map((s) => s.drawing_set_id).filter(Boolean);
   return (setIdCandidates[0] as string | undefined) || group.setId || group.parent?.id || null;
 }
 
-/** Confirm-dialog copy for a single sheet soft-delete. */
 export function buildDeleteSheetConfirm(
   drawing: DrawingLike | null | undefined,
 ): ConfirmDialogPlan {
@@ -68,10 +67,6 @@ export function buildDeleteSheetConfirm(
   };
 }
 
-/**
- * Confirm-dialog + mutate args for cascade/set delete.
- * Returns null for ungrouped rows (no-op, matches page guard).
- */
 export function buildDeleteSetConfirm(
   group: DrawingSetGroupLike,
 ): (ConfirmDialogPlan & {
@@ -107,11 +102,6 @@ export type AdvanceStagePlan =
       };
     };
 
-/**
- * Plan a single-sheet stage advance before opening AdvanceStageDialog.
- * `validate` and `classify` are injected so this module stays free of
- * drawingsConfig / drawingsUtils imports (keeps pages/drawings focused).
- */
 export function planAdvanceStage(
   drawing: DrawingLike,
   stageOrder: readonly string[],
@@ -153,10 +143,8 @@ export function planAdvanceStage(
 
 export type BulkStageBlockedToast = {
   message: string;
-  /** Set ids that still have open linked submittals (for Submittals deep-link). */
   blockedSetIds: string[];
   latestStatus: string | null;
-  /** When true, no sheets can be updated — abort after the toast. */
   abort: boolean;
 };
 
@@ -165,20 +153,12 @@ export type BulkStagePlan =
   | { kind: "error"; message: string }
   | {
       kind: "apply";
-      /** Sheet ids allowed to update (excludes open-submittal blockers). */
       ids: string[];
-      /** Blocked sheet ids retained in selection after a partial apply. */
       blockedIds: string[];
       infoMessage: string;
-      /** Present when some/all selected sheets are blocked by open linked submittals. */
       blockedToast?: BulkStageBlockedToast;
     };
 
-/**
- * Plan bulk stage APPLY (#152 semantics):
- * - Block only sheets whose linked submittals are still open.
- * - Allow closed-set sync + legacy recovery for the rest.
- */
 export function planBulkStageApply(opts: {
   bulkStage: string;
   selected: Set<string> | Iterable<string>;
@@ -190,7 +170,6 @@ export function planBulkStageApply(opts: {
     targetStage: string,
     submittalsBySetId: SubmittalsBySetId,
   ) => StageMutationDecision;
-  /** Optional label resolver for blocked set ids (set_name). */
   resolveSetLabel?: (setId: string) => string | null | undefined;
 }): BulkStagePlan {
   const { bulkStage, drawings, stageOrder, submittalsBySetId, classify, resolveSetLabel } = opts;
@@ -260,7 +239,6 @@ export function planBulkStageApply(opts: {
   };
 }
 
-/** Confirm-dialog copy for bulk sheet delete. */
 export function buildBulkDeleteConfirm(count: number): ConfirmDialogPlan | null {
   if (count === 0) return null;
   return {
@@ -276,7 +254,6 @@ export type BulkWriteToast = {
   clearSelection: boolean;
 };
 
-/** Toast after bulk stage / field update. */
 export function formatBulkUpdateToast(
   succeeded: number,
   failed: number,
@@ -307,7 +284,6 @@ export function formatBulkUpdateToast(
   };
 }
 
-/** Toast after bulk soft-delete (pre-undo). */
 export function formatBulkDeleteToast(succeeded: number, failed: number): BulkWriteToast {
   if (failed > 0) {
     return {
@@ -323,7 +299,6 @@ export function formatBulkDeleteToast(succeeded: number, failed: number): BulkWr
   };
 }
 
-/** Normalize openSetApproval target + resolve sheets / display name. */
 export function buildApprovalSetState(
   target: string | { name?: string; setId?: string; drawing_set_id?: string } | null | undefined,
   drawings: DrawingLike[],
@@ -345,7 +320,6 @@ export function buildApprovalSetState(
   };
 }
 
-/** Rename-modal state from a DrawingsTable group. */
 export function buildRenameSetState(
   group: DrawingSetGroupLike | null | undefined,
 ): { setId: string | null; setName: string; sheets: DrawingLike[] } | null {
@@ -369,11 +343,11 @@ export type MarkerSetPlan =
         file_url: string | null;
         titleblock_title_rect: unknown;
         titleblock_number_rect: unknown;
+        titleblock_revision_rect: unknown;
         sheets: DrawingLike[];
       };
     };
 
-/** Titleblock marker modal payload from a group. */
 export function buildMarkerSetState(
   group: DrawingSetGroupLike | null | undefined,
   activeProjectId: string | null | undefined,
@@ -396,12 +370,12 @@ export function buildMarkerSetState(
       file_url: (group.parent?.file_url as string | null | undefined) || sheets[0]?.file_url || null,
       titleblock_title_rect: group.parent?.titleblock_title_rect ?? null,
       titleblock_number_rect: group.parent?.titleblock_number_rect ?? null,
+      titleblock_revision_rect: group.parent?.titleblock_revision_rect ?? null,
       sheets,
     },
   };
 }
 
-/** Parent set id for set-approval writes. */
 export function resolveApprovalParentSetId(approvalSet: {
   setId?: string | null;
   sheets?: DrawingLike[];
@@ -412,7 +386,6 @@ export function resolveApprovalParentSetId(approvalSet: {
   );
 }
 
-/** Effective approval date (YYYY-MM-DD); defaults to local today. */
 export function resolveApprovalEffectiveDate(
   approvalDate: string | null | undefined,
   now: Date = new Date(),
@@ -420,7 +393,6 @@ export function resolveApprovalEffectiveDate(
   return approvalDate || now.toISOString().split("T")[0];
 }
 
-/** Append `[STATUS] notes` to an existing sheet notes string. */
 export function appendApprovalNotes(
   existingNotes: string | null | undefined,
   status: string,
@@ -430,7 +402,6 @@ export function appendApprovalNotes(
   return (existingNotes ? existingNotes + "\n" : "") + `[${status.toUpperCase()}] ${notes}`;
 }
 
-/** Per-sheet mirror patch for set approval. */
 export function buildSheetApprovalPatch(
   sheet: DrawingLike,
   opts: {
@@ -449,7 +420,6 @@ export function buildSheetApprovalPatch(
   };
 }
 
-/** Parent drawing_sets patch for set approval. */
 export function buildParentApprovalPatch(opts: {
   status: string;
   effectiveDate: string;
@@ -466,7 +436,6 @@ export function buildParentApprovalPatch(opts: {
   };
 }
 
-/** Toast after set-approval batch. */
 export function formatSetApprovalToast(
   setName: string,
   status: string,
@@ -487,7 +456,6 @@ export function formatSetApprovalToast(
   };
 }
 
-/** Rename success / partial-failure copy. */
 export function formatRenameSetToast(
   oldName: string,
   newName: string,
@@ -505,7 +473,6 @@ export function formatRenameSetToast(
   };
 }
 
-/** Toggle one id in a selection Set (immutable). */
 export function toggleIdInSet(selected: Set<string>, id: string): Set<string> {
   const next = new Set(selected);
   if (next.has(id)) next.delete(id);
@@ -513,10 +480,6 @@ export function toggleIdInSet(selected: Set<string>, id: string): Set<string> {
   return next;
 }
 
-/**
- * Select-all / deselect-all for currently visible rows, preserving
- * selections that are off-screen / filtered out.
- */
 export function toggleSelectAllIds(
   previous: Set<string>,
   visibleIds: string[],
@@ -528,10 +491,6 @@ export function toggleSelectAllIds(
   return next;
 }
 
-/**
- * Query string for Submittals handoff from AdvanceStageDialog.
- * Returns "" when neither param is present.
- */
 export function buildSubmittalAdvanceSearch(
   setId: string | null | undefined,
   mappedStatus: string | null | undefined,
@@ -543,7 +502,6 @@ export function buildSubmittalAdvanceSearch(
   return qs ? `?${qs}` : "";
 }
 
-/** Sheets to mirror when applying set approval. */
 export function resolveSheetsToApprove(
   approvalSet: { sheets: DrawingLike[] },
   applyToSheets: boolean,
@@ -551,7 +509,6 @@ export function resolveSheetsToApprove(
   return applyToSheets ? approvalSet.sheets : [approvalSet.sheets[0]];
 }
 
-/** Delete-set mutationFn strategy from setId + sheetIds. */
 export type DeleteSetStrategy =
   | { kind: "parentOnly"; setId: string }
   | { kind: "cascade"; setId: string; sheetCount: number }
@@ -567,7 +524,6 @@ export function planDeleteSetMutation(opts: {
   return { kind: "legacyChildren", sheetIds };
 }
 
-/** KPI tiles that act as stageFilter toggles flip back to ALL when re-clicked. */
 export function toggleStageFilterValue(current: string, target: string): string {
   return current === target ? "ALL" : target;
 }
