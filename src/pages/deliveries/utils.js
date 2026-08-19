@@ -22,7 +22,7 @@ const CLOSED_WP_STATUSES = new Set(["complete", "completed", "closed"]);
  * reported as "fabrication is not complete" and could not be marked delivered
  * — a real load blocked by a stale status field.
  */
-const isWorkPackageFinished = (wp) => {
+export const isWorkPackageFinished = (wp) => {
   const status = String(wp?.status || "").trim().toLowerCase();
   if (CLOSED_WP_STATUSES.has(status)) return true;
   const pct = Number(wp?.percent_complete);

@@ -1,3 +1,5 @@
+import { isWorkPackageFinished } from "./utils";
+
 const STATUS_ORDER = ["Scheduled", "Loading", "In Transit", "Partial", "Delayed", "Rejected", "Delivered"];
 const CLOSED_STATUSES = new Set(["delivered", "complete", "completed", "closed", "cancelled", "canceled"]);
 const ISSUE_STATUSES = new Set(["partial", "rejected", "delayed"]);
@@ -47,11 +49,16 @@ function addDays(date, days) {
   return next;
 }
 
+// Third copy of this rule (badge). The other two — utils.isFabComplete and the
+// delivery form's inline check — now delegate to the shared helper; this one
+// draws the "Fab not complete" badge, so it must agree or the board contradicts
+// the action. Requiring status === "Complete" exactly flagged packages already
+// fabricated to 100% but still carrying "In Progress".
 function workPackageFabReady(workPackage) {
   if (!workPackage) return true;
   const rank = PHASE_RANK[workPackage.phase] ?? 0;
   if (rank >= PHASE_RANK.Delivery) return true;
-  return rank === PHASE_RANK.Fabrication && workPackage.status === "Complete";
+  return rank === PHASE_RANK.Fabrication && isWorkPackageFinished(workPackage);
 }
 
 export function getDeliveryDisplayName(delivery, workPackage) {

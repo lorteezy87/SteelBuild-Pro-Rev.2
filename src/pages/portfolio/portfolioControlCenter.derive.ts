@@ -136,6 +136,8 @@ export interface PortfolioSummary {
 // ---------------------------------------------------------------------------
 
 const ACTIVE_STATUSES = new Set(["Active", "In Progress"]);
+/** Genuinely closed out — unlike ACTIVE_STATUSES this does not exclude Closeout. */
+const FINISHED_STATUSES = new Set(["Complete", "Completed", "Closed", "Cancelled", "Canceled"]);
 
 function dateValue(v: string | null | undefined): Date | null {
   if (!v) return null;
@@ -347,7 +349,13 @@ export function buildPortfolioSummary(
     .slice(0, 6)
     .map(toPanelRow);
 
-  const closingSoon = [...activeRows]
+  // Built from allRows, NOT activeRows: the KPI "active" filter excludes the
+  // Closeout phase and anything at 100%, which is exactly the population a
+  // "closing soon" panel exists to surface. Same defect as the Projects page —
+  // a job days from handover was filtered out of the panel meant to show it.
+  // Only genuinely finished projects are dropped here.
+  const closingSoon = allRows
+    .filter((p) => !FINISHED_STATUSES.has(p.status || ""))
     .filter((p) => {
       const days = daysUntilDate(p.target_completion_date as string | null);
       return days !== null && days >= 0 && days <= 90;

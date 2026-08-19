@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { entities, auth, integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { serializeTagList } from "@/pages/documents/utils";
 
 export default function UploadModal({ projectId, folderId = null, onClose }) {
   const [files, setFiles] = useState([]);
@@ -46,7 +47,8 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
           status: scheduleLink.isSubmittal ? "Under Review" : "Draft",
           revision_number: meta.revisionNumber || "0",
           revision_date: today.toISOString().split("T")[0],
-          tags: meta.tags || [],
+          // TEXT column — comma list, not a JS array (see serializeTagList).
+          tags: serializeTagList(meta.tags),
           uploaded_by: (await auth.me?.())?.email || "Unknown",
           uploaded_date: today.toISOString(),
           // Schedule integration fields

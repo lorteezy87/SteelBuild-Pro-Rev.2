@@ -57,7 +57,8 @@ describe("buildRfiAttachmentDocumentFields", () => {
       revision_date: "2026-07-26",
       uploaded_by: "Unknown",
       uploaded_date: "2026-07-26T15:30:00.000Z",
-      tags: ["RFI", "RFI #042"],
+      // documents.tags is a TEXT column — a comma list, not a JS array.
+      tags: "RFI, RFI #042",
     });
   });
 
@@ -70,7 +71,7 @@ describe("buildRfiAttachmentDocumentFields", () => {
       uploadedBy: "me@x.com",
       nowIso: "2026-01-01T00:00:00.000Z",
     });
-    expect(fields.tags).toEqual(["RFI", "rfi-9"]);
+    expect(fields.tags).toBe("RFI, rfi-9");
     expect(fields.description).toBe("Attachment for RFI");
     expect(fields.discipline).toBe("Other");
     expect(fields.uploaded_by).toBe("me@x.com");
