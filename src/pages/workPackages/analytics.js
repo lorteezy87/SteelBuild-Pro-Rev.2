@@ -1,5 +1,13 @@
+import { isApprovedForFab } from "@/lib/exports/fabRelease";
+import { isRejectedSheet, isSupersededSheet, isUnresolvedCurrentRevision } from "@/lib/fabReleaseGate";
+
 const PHASE_ORDER = ["Detailing", "Fabrication", "Delivery", "Erection"];
 const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
+// Loose "has some approval" set — kept ONLY for the informational
+// `approvedCount` / `hasApproved` fields. It is deliberately NOT what decides
+// fabrication readiness: it includes mid-flow outcomes ("Approved",
+// "Approved as Noted", "OFS") that the canonical gate does not treat as
+// release-ready. See fabReadyState below.
 const APPROVED_DRAWING_STAGES = new Set([
   "Released",
   "IFC",
@@ -51,14 +59,50 @@ function drawingState(wp, drawingsById) {
     APPROVED_DRAWING_STAGES.has(drawing.stage || drawing.status)
   );
 
+  // ── Fabrication readiness, per the CANONICAL gate ──────────────────────
+  // Work Packages previously called a package fab-ready when ANY ONE linked
+  // sheet sat in the loose stage set above. Fab Release evaluates every sheet
+  // and fails closed on rejected / superseded / not-IFC sheets. A package with
+  // one approved sheet and six blocked ones therefore read "ready, 0 blocked"
+  // here while Fab Release reported "6 blocked" on the same data.
+  //
+  // Reuse the gate's own per-sheet predicates so the two surfaces can't
+  // diverge again, and require EVERY linked sheet to pass. Evidence-backed
+  // approvals (submittals / revisions) aren't loaded on this page, so
+  // isApprovedForFab runs on sheet state alone — that can only be more
+  // conservative than the gate, never falsely green.
+  const rejected = linked.filter((d) => isRejectedSheet(d));
+  const superseded = linked.filter((d) => isSupersededSheet(d) && !isRejectedSheet(d));
+  // A sheet is fab-ready only if the release predicate passes AND the gate
+  // wouldn't block it for rejection/supersession. isApprovedForFab checks
+  // superseded/void/on_hold release states but not the rejected disposition,
+  // which is a separate blocking reason in computeFabReleaseGate.
+  const sheetIsFabReady = (d) =>
+    isApprovedForFab(d) &&
+    !isRejectedSheet(d) &&
+    !isSupersededSheet(d) &&
+    !isUnresolvedCurrentRevision(d);
+  const fabReady = linked.filter(sheetIsFabReady);
+  const blockedSheets = linked.filter((d) => !sheetIsFabReady(d));
+  // Unresolvable links count as blocked: we can't prove a sheet we can't see.
+  const missingLinks = ids.length - linked.length;
+  const blockedCount = blockedSheets.length + missingLinks;
+
   return {
     linkedCount: ids.length,
     knownCount: linked.length,
     approvedCount: approved.length,
-    missingLinks: ids.length - linked.length,
+    missingLinks,
     hasAny: ids.length > 0,
     hasApproved: approved.length > 0,
     allKnownApproved: linked.length > 0 && approved.length === linked.length,
+    // Canonical fab-readiness (matches the Fab Release gate's direction)
+    fabReadyCount: fabReady.length,
+    rejectedCount: rejected.length,
+    supersededCount: superseded.length,
+    blockedCount,
+    /** Every linked sheet is release-ready and at least one exists. */
+    allFabReady: ids.length > 0 && blockedCount === 0,
   };
 }
 
@@ -94,8 +138,21 @@ export function getWorkPackageSignals(wp, options = {}) {
   if (overdue) flags.push({ key: "overdue", label: "Past plan date", severity: "high" });
   if (inProductionPhase && !drawing.hasAny) {
     flags.push({ key: "no_drawings", label: "No linked drawings", severity: "high" });
-  } else if (inProductionPhase && !drawing.hasApproved) {
-    flags.push({ key: "drawings_not_released", label: "Drawings not released", severity: "high" });
+  } else if (inProductionPhase && !drawing.allFabReady) {
+    // Sheet-level count so this agrees with Fab Release instead of implying
+    // "released" the moment a single sheet is approved.
+    flags.push({
+      key: "drawings_not_released",
+      label: drawing.blockedCount > 0
+        ? `${drawing.blockedCount} sheet${drawing.blockedCount === 1 ? "" : "s"} not released`
+        : "Drawings not released",
+      severity: "high",
+    });
+  }
+  // Data-integrity contradiction: 100% complete but still an open status.
+  // Surfaced rather than silently coerced either way.
+  if (progress >= 100 && !isClosedStatus(status)) {
+    flags.push({ key: "pct_status_mismatch", label: `100% but marked ${status}`, severity: "medium" });
   }
   if (inDeliveryOrField && !wp.load_list_complete) {
     flags.push({ key: "load_list", label: "Load list open", severity: "medium" });
@@ -113,7 +170,7 @@ export function getWorkPackageSignals(wp, options = {}) {
   const high = flags.some((flag) => flag.severity === "high");
   const medium = flags.some((flag) => flag.severity === "medium");
   const readinessChecks = [
-    drawing.hasApproved || !inProductionPhase,
+    drawing.allFabReady || !inProductionPhase,
     Boolean(wp.vif_confirmed) || !inProductionPhase,
     Boolean(wp.load_list_complete) || !inDeliveryOrField,
     Boolean(wp.sequence_confirmed) || !inFieldPhase,
@@ -186,10 +243,18 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     wp._signals.flags.some((flag) => flag.key === "no_drawings" || flag.key === "drawings_not_released")
   );
   const overdue = enriched.filter((wp) => wp._signals.overdue);
+  // Fail-closed: every linked sheet must be release-ready, same direction as
+  // the Fab Release gate. `hasApproved` (any one sheet) used to qualify here.
   const readyForFab = enriched.filter((wp) =>
     wp._signals.phase === "Detailing" &&
-    wp._signals.drawing.hasApproved &&
+    wp._signals.drawing.allFabReady &&
     wp._signals.status !== "On Hold"
+  );
+  /** Packages with at least one sheet the fab gate would block. */
+  const fabBlocked = enriched.filter((wp) => (wp._signals.drawing.blockedCount ?? 0) > 0);
+  const blockedSheetCount = enriched.reduce(
+    (sum, wp) => sum + (wp._signals.drawing.blockedCount ?? 0),
+    0,
   );
   const readyForShip = enriched.filter((wp) =>
     wp._signals.phase === "Fabrication" &&
@@ -217,6 +282,8 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     drawingGaps,
     overdue,
     readyForFab,
+    fabBlocked,
+    blockedSheetCount,
     readyForShip,
     fieldReady,
   };

@@ -93,6 +93,10 @@ export interface WpMetrics {
   drawingGaps: EnrichedWp[];
   overdue: EnrichedWp[];
   readyForFab: EnrichedWp[];
+  /** Packages holding at least one sheet the Fab Release gate would block. */
+  fabBlocked: EnrichedWp[];
+  /** Total blocked sheets across all packages (agrees with Fab Release). */
+  blockedSheetCount: number;
   readyForShip: EnrichedWp[];
   fieldReady: EnrichedWp[];
 }

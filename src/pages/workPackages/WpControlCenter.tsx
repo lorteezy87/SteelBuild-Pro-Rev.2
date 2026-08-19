@@ -176,6 +176,16 @@ export default function WpControlCenter(props: WpControlCenterProps) {
       Icon: CheckSquare,
     },
     {
+      // Sheet-level blocked count, from the same predicates as the Fab Release
+      // gate — the strip previously showed no blocked figure at all, so a
+      // package with blocked sheets read as fully ready here.
+      label: "Fab Blocked",
+      value: metrics.blockedSheetCount ?? 0,
+      sublabel: `sheets · ${metrics.fabBlocked?.length ?? 0} pkg`,
+      tone: (metrics.blockedSheetCount ?? 0) > 0 ? "danger" : "good",
+      Icon: CheckSquare,
+    },
+    {
       label: "Ready to Ship",
       value: metrics.readyForShip.length,
       sublabel: "packages",
