@@ -1,4 +1,5 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import { isMissingSchemaObjectError, missingSchemaObjectUserMessage } from "@/lib/postgrestErrors";
 
 /** Standard result shape for shared mutation helpers. */
 export type MutationResult<T = unknown> =
@@ -39,6 +40,11 @@ export function withProjectId<T extends Record<string, unknown>>(
 
 /** Normalize unknown thrown values into a short user-facing message. */
 export function toUserErrorMessage(err: unknown, fallback = "Something went wrong"): string {
+  // Migration lag reads as a crash otherwise: the raw PostgREST text
+  // ("Could not find the 'x' column of 'y' in the schema cache") went straight
+  // into save toasts and told the user nothing actionable. Sentry still gets
+  // the original via normalizeThrownQueryError.
+  if (isMissingSchemaObjectError(err)) return missingSchemaObjectUserMessage(err);
   if (err instanceof Error && err.message.trim()) return err.message.trim();
   if (typeof err === "string" && err.trim()) return err.trim();
   if (err && typeof err === "object" && "message" in err) {
