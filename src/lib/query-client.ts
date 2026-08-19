@@ -1,7 +1,11 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import * as Sentry from '@sentry/react';
 import { toast } from 'sonner';
-import { normalizeThrownQueryError } from '@/lib/postgrestErrors';
+import {
+	isMissingSchemaObjectError,
+	missingSchemaObjectUserMessage,
+	normalizeThrownQueryError,
+} from '@/lib/postgrestErrors';
 
 type MaybeStatusError = { status?: number; response?: { status?: number } } | null | undefined;
 
@@ -29,7 +33,13 @@ const queryCache = new QueryCache({
 
 		if (query.state.data === undefined) {
 			// No cached data — the user is staring at an empty view; tell them.
-			toast.error('Could not load data. Please try again.');
+			// Migration lag gets its own actionable copy: "try again" is wrong
+			// advice when a pending migration is the cause.
+			toast.error(
+				isMissingSchemaObjectError(normalized)
+					? missingSchemaObjectUserMessage(normalized)
+					: 'Could not load data. Please try again.',
+			);
 		} else {
 			// A background refetch failed but we still have prior data on screen;
 			// nudge quietly, at most once per ~30s, so blips don't spam.
@@ -55,7 +65,11 @@ const mutationCache = new MutationCache({
 		});
 		if (typeof mutation.options.onError === 'function') return;
 		if (mutation.meta?.suppressGlobalErrorToast) return;
-		toast.error('Something went wrong. Please try again.');
+		toast.error(
+			isMissingSchemaObjectError(normalized)
+				? missingSchemaObjectUserMessage(normalized)
+				: 'Something went wrong. Please try again.',
+		);
 	},
 });
 

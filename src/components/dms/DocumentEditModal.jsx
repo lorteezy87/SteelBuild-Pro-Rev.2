@@ -68,7 +68,13 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       submittal_id: doc.submittal_id || doc.submittalId || "",
       is_current: doc.is_current ?? true,
     }));
-  }, [doc]);
+    // Re-seed only when a DIFFERENT document is being edited. Depending on the
+    // whole `doc` object re-seeded on every refetch: normalizeDocument builds
+    // new object identities each time the documents query settles (realtime
+    // invalidation, another mutation, window focus), so a background refetch
+    // overwrote every field mid-typing and the user lost their edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.id]);
 
   const mut = useMutation({
     mutationFn: (payload) => entities.Document.update(doc.id, payload),
