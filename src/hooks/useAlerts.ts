@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -106,12 +107,35 @@ export function useAlerts() {
   const generateAlerts = async () => {
     setGenerating(true);
     try {
-      // Cross-module generate-alerts Edge Function is not deployed. Refresh the
-      // existing alert feed instead of pretending a scan succeeded.
-      await refetch();
-      toast.message(
-        "Alerts refreshed. Overdue RFIs and deliveries create alerts from their modules; a cross-module scanner is not deployed.",
-      );
+      if (projectId) {
+        // Server-side rule engine (migration 20260819002000): overdue
+        // deliveries, overdue submittals, stalled submittals — scoped to this
+        // project and access-gated by the RPC itself. The same engine runs
+        // daily via pg_cron, so this is a manual "scan now".
+        // Untyped rpc call — generate_project_alerts ships in migration
+        // 20260819002000 and isn't in the generated DB types yet (same
+        // pattern as src/lib/org/repository.ts callRpc).
+        const rpc = supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+        const { data, error } = await rpc("generate_project_alerts", {
+          p_project_id: projectId,
+        });
+        if (error) throw error;
+        await refetch();
+        const created = Number(data) || 0;
+        toast.message(
+          created > 0
+            ? `Scan complete — ${created} new alert${created === 1 ? "" : "s"}`
+            : "Scan complete — no new alerts",
+        );
+      } else {
+        // Portfolio view: the daily server scan covers all projects; here we
+        // just reload the feed.
+        await refetch();
+        toast.message("Alerts refreshed. Select a project to run an on-demand scan.");
+      }
     } catch (err: unknown) {
       toast.error(`Failed to refresh alerts: ${toUserErrorMessage(err, "Unknown error")}`);
     } finally {
