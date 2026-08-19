@@ -467,11 +467,15 @@ export const deliveryStyles = `
   overflow-x: auto;
   padding-bottom: 4px;
 }
+/* auto-fit + minmax so the five lanes sit side-by-side on a wide screen and
+   REFLOW onto additional rows on narrower ones. The previous fixed 5-column
+   grid with a 980px min-width forced the board wider than the content area on
+   laptops/tablets, so Dispatch always scrolled sideways.
+   .delivery-lane-scroll stays as a safety net on very narrow viewports. */
 .delivery-lanes {
   display: grid;
-  grid-template-columns: repeat(5, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 10px;
-  min-width: 980px;
 }
 .delivery-lane {
   min-width: 0;
