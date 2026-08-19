@@ -239,13 +239,12 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
       header: "% Complete",
       align: "right",
       render: (p) => {
-        // Derive inline — workPackages scoped to this project may not be passed per-row,
-        // so read scope_complete_pct_override as the summary source; WP-based
-        // resolution happens in buildProjectsSummary. For the table, show the override
-        // if present, otherwise "—" (the panel already shows WP-based values).
-        const pct = p.scope_complete_pct_override != null
-          ? `${Math.round(Number(p.scope_complete_pct_override))}%`
-          : "—";
+        // Effective % complete per project (manual override, else work-package
+        // progress) comes from buildProjectsSummary. This column used to read
+        // only scope_complete_pct_override, so it rendered "—" for every
+        // project without a manual override — i.e. all of them.
+        const value = s.pctCompleteByProjectId?.[p.id];
+        const pct = Number.isFinite(value) ? `${Math.round(Number(value))}%` : "—";
         return <span className="cmd-row__num">{pct}</span>;
       },
     },

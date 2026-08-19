@@ -163,6 +163,9 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
         {["details", "linked", "versions", "activity"].map(tab => (
           <button
             key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
             onClick={() => setActiveTab(tab)}
             style={{
               flex: 1, padding: "10px 8px", background: "none", border: "none",

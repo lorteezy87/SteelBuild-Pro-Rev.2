@@ -13,7 +13,9 @@ export function normalizeDocument(d) {
   return {
     ...d,
     projectId:      d.projectId      ?? d.project_id,
-    displayName:    d.displayName    ?? d.display_name ?? d.fileName ?? d.file_name ?? d.title,
+    // Prefer human-entered names over the raw upload filename, which is often
+    // a storage hash/UUID — that's why some cards showed a hash as the title.
+    displayName:    d.displayName    ?? d.display_name ?? d.title ?? d.fileName ?? d.file_name,
     documentNumber: d.documentNumber ?? d.document_number,
     fileName:       d.fileName       ?? d.file_name,
     fileUrl:        d.fileUrl        ?? d.file_url,
@@ -24,12 +26,39 @@ export function normalizeDocument(d) {
     drawingNumber:  d.drawingNumber  ?? d.drawing_number,
     uploadedBy:     d.uploadedBy     ?? d.uploaded_by,
     uploadedDate:   d.uploadedDate   ?? d.uploaded_date ?? d.created_at,
-    tags: Array.isArray(d.tags)
-      ? d.tags
-      : d.tags
-        ? String(d.tags).split(",").map((t) => t.trim()).filter(Boolean)
-        : [],
+    tags: parseTagList(d.tags),
   };
+}
+
+/**
+ * `documents.tags` is jsonb but writers have stored it as a JSON *string*, so a
+ * row can hold a real array, `'["a","b"]'`, `'[]'`, or a plain comma list.
+ *
+ * The old path only checked Array.isArray then comma-split whatever was left,
+ * so the JSON text `"[]"` became the single tag `["[]"]` — rendered literally
+ * on every card. Same string-vs-array duality as email recipients
+ * (formatRecipientList).
+ */
+export function parseTagList(value) {
+  if (Array.isArray(value)) return value.map((t) => String(t).trim()).filter(Boolean);
+  if (value == null) return [];
+  const raw = String(value).trim();
+  if (!raw) return [];
+  // JSON-encoded array or scalar
+  if (raw.startsWith("[") || raw.startsWith('"')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map((t) => String(t).trim()).filter(Boolean);
+      const single = String(parsed).trim();
+      return single ? [single] : [];
+    } catch {
+      // Malformed JSON — fall through to comma handling rather than showing
+      // the raw brackets as a tag.
+      const stripped = raw.replace(/^\[|\]$/g, "").replace(/"/g, "");
+      return stripped.split(",").map((t) => t.trim()).filter(Boolean);
+    }
+  }
+  return raw.split(",").map((t) => t.trim()).filter(Boolean);
 }
 
 export function exportDocsCsv(docs, projectName) {

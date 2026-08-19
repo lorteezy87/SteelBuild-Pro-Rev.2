@@ -332,3 +332,31 @@ describe("planFolderDeletion", () => {
     expect(p.deleteIds).toEqual(["f3"]);
   });
 });
+
+describe("status tab matching tolerates stored casing", () => {
+  // The tab filter was an exact `===`, so a document stored as "under review"
+  // dropped out of the Under Review tab and clicking Review Queue appeared to
+  // do nothing.
+  const docs = [
+    { id: "d1", status: "Under Review" },
+    { id: "d2", status: "under review" },
+    { id: "d3", status: " Under Review " },
+    { id: "d4", status: "Approved" },
+  ] as unknown as DocumentRecord[];
+
+  const base = { docs, search: "", category: "All", statusTab: "all", currentFolderId: null } as DocumentFilterInput;
+
+  it("matches regardless of case or surrounding whitespace", () => {
+    const r = filterDocuments({ ...base, statusTab: "Under Review" });
+    expect(r.map((d) => d.id).sort()).toEqual(["d1", "d2", "d3"]);
+  });
+
+  it("still excludes other statuses", () => {
+    const r = filterDocuments({ ...base, statusTab: "Approved" });
+    expect(r.map((d) => d.id)).toEqual(["d4"]);
+  });
+
+  it("leaves the All tab unfiltered", () => {
+    expect(filterDocuments(base)).toHaveLength(4);
+  });
+});
