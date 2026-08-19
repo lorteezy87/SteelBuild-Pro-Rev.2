@@ -143,7 +143,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
       ...formData,
       project_name: proj?.name || proj?.project_name || formData.project_name || "",
       description: formData.description?.trim() || (wp ? (wp.name || wp.wp_number || "") : ""),
-      pieces: parseInt(formData.pieces) || 0,
+      // Blank stays NULL ("not recorded") instead of being written as a real 0.
+      pieces: String(formData.pieces ?? "").trim() === "" ? null : parseInt(formData.pieces, 10) || 0,
       weight_tons: parseFloat(formData.weight_tons) || 0,
     });
   };

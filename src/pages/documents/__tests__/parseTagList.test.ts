@@ -7,7 +7,7 @@
  * every document card. Same string-vs-array duality as email recipients.
  */
 import { describe, expect, it } from "vitest";
-import { parseTagList } from "../utils";
+import { parseTagList, serializeTagList } from "../utils";
 
 describe("parseTagList", () => {
   it("returns no tags for a JSON-encoded empty array (the ['[]'] bug)", () => {
@@ -42,5 +42,43 @@ describe("parseTagList", () => {
     expect(parseTagList(undefined)).toEqual([]);
     expect(parseTagList("")).toEqual([]);
     expect(parseTagList([])).toEqual([]);
+  });
+});
+
+describe("parseTagList heals repeatedly-corrupted rows", () => {
+  // documents.tags is TEXT but writers sent arrays, so PostgREST stored the
+  // array's JSON text and every edit-save round-trip added a layer:
+  // [] -> "[]" -> ["[]"] -> ...
+  it("unwraps a doubly-encoded empty list to no tags", () => {
+    expect(parseTagList('["[]"]')).toEqual([]);
+    expect(parseTagList(['[]'])).toEqual([]);
+  });
+
+  it("unwraps a doubly-encoded real list", () => {
+    expect(parseTagList('["[\\"RFI\\",\\"RFI #042\\"]"]')).toEqual(["RFI", "RFI #042"]);
+  });
+
+  it("recovers tags from a JSON array split across elements", () => {
+    expect(parseTagList(['["RFI"', '"RFI #042"]'])).toEqual(["RFI", "RFI #042"]);
+  });
+});
+
+describe("serializeTagList writes what the TEXT column holds", () => {
+  it("emits a comma list, not a JS array", () => {
+    expect(serializeTagList(["shop", "approved"])).toBe("shop, approved");
+    expect(serializeTagList("shop, approved")).toBe("shop, approved");
+  });
+
+  it("emits null for an empty list so the column stays NULL, not '[]'", () => {
+    expect(serializeTagList([])).toBeNull();
+    expect(serializeTagList("")).toBeNull();
+    expect(serializeTagList(null)).toBeNull();
+    expect(serializeTagList("[]")).toBeNull();
+  });
+
+  it("round-trips without accumulating encoding layers", () => {
+    let stored = serializeTagList(["shop"]);
+    for (let i = 0; i < 5; i++) stored = serializeTagList(parseTagList(stored));
+    expect(stored).toBe("shop");
   });
 });

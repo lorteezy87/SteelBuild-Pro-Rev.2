@@ -53,3 +53,37 @@ describe("isFabComplete", () => {
     expect(isFabComplete(delivery, wps)).toBe(false);
   });
 });
+
+describe("badge and mark-delivered gate agree", () => {
+  // Three copies of this rule existed. The badge copy (analytics.js) still
+  // required status === "Complete" exactly after the other two were fixed, so
+  // the board showed "Fab not complete" on a load it would happily deliver.
+  it("the badge does not flag a package the gate accepts", async () => {
+    const { buildDeliveryMetrics } = await import("../analytics");
+    const wp = { id: "wp-1", phase: "Fabrication", status: "In Progress", percent_complete: 100 };
+    const deliveries = [
+      { id: "d1", work_package_id: "wp-1", status: "Scheduled", scheduled_date: "2026-08-20" },
+    ];
+    const metrics = buildDeliveryMetrics(deliveries, [wp], { today: "2026-08-19" });
+    const flagged = (metrics.enriched ?? []).some((d: { _signals?: { flags?: { key: string }[] } }) =>
+      (d._signals?.flags ?? []).some((f) => f.key === "fab_not_ready"),
+    );
+    expect(metrics.enriched).toHaveLength(1); // guard: the flag path really ran
+    expect(flagged).toBe(false);
+    expect(isFabComplete(deliveries[0], [wp])).toBe(true);
+  });
+
+  it("still flags a genuinely unfinished package (negative control)", async () => {
+    const { buildDeliveryMetrics } = await import("../analytics");
+    const wp = { id: "wp-1", phase: "Fabrication", status: "In Progress", percent_complete: 60 };
+    const deliveries = [
+      { id: "d1", work_package_id: "wp-1", status: "Scheduled", scheduled_date: "2026-08-20" },
+    ];
+    const metrics = buildDeliveryMetrics(deliveries, [wp], { today: "2026-08-19" });
+    const flagged = (metrics.enriched ?? []).some((d: { _signals?: { flags?: { key: string }[] } }) =>
+      (d._signals?.flags ?? []).some((f) => f.key === "fab_not_ready"),
+    );
+    expect(flagged).toBe(true);
+    expect(isFabComplete(deliveries[0], [wp])).toBe(false);
+  });
+});

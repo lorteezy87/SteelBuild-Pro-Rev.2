@@ -40,25 +40,39 @@ export function normalizeDocument(d) {
  * (formatRecipientList).
  */
 export function parseTagList(value) {
-  if (Array.isArray(value)) return value.map((t) => String(t).trim()).filter(Boolean);
+  // Recurse per element: rows corrupted by repeated edit-save cycles hold
+  // nested encodings (the text `["[]"]`, then `["\"[]\"" ]`, …). Recursion
+  // unwraps every layer so an already-mangled row heals to an empty list on
+  // render instead of displaying its own JSON.
+  if (Array.isArray(value)) return value.flatMap(parseTagList);
   if (value == null) return [];
   const raw = String(value).trim();
   if (!raw) return [];
-  // JSON-encoded array or scalar
   if (raw.startsWith("[") || raw.startsWith('"')) {
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.map((t) => String(t).trim()).filter(Boolean);
+      // Re-parse the result: a parsed element can itself be encoded.
+      if (Array.isArray(parsed)) return parsed.flatMap(parseTagList);
       const single = String(parsed).trim();
-      return single ? [single] : [];
+      return single && single !== raw ? parseTagList(single) : single ? [single] : [];
     } catch {
-      // Malformed JSON — fall through to comma handling rather than showing
-      // the raw brackets as a tag.
+      // Malformed JSON — strip brackets/quotes rather than showing them as tags.
       const stripped = raw.replace(/^\[|\]$/g, "").replace(/"/g, "");
+      if (stripped === raw) return [];
       return stripped.split(",").map((t) => t.trim()).filter(Boolean);
     }
   }
   return raw.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+/**
+ * `documents.tags` is a TEXT column, but three writers were sending JS arrays,
+ * so PostgREST stored the JSON text of the array and every edit-save round-trip
+ * re-encoded it. Serialize to the comma list the column actually holds.
+ */
+export function serializeTagList(value) {
+  const tags = parseTagList(value);
+  return tags.length ? tags.join(", ") : null;
 }
 
 export function exportDocsCsv(docs, projectName) {

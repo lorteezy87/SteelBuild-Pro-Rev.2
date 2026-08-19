@@ -66,9 +66,17 @@ export function formatTons(value: unknown): string {
   return `${num(value).toFixed(1)}T`;
 }
 
+/**
+ * An unrecorded piece count renders "—", not "0". A load whose Pieces field
+ * was left blank was displaying a confident zero next to a "fab not complete"
+ * badge, which read as "this load contains nothing" rather than "nobody
+ * entered a count".
+ */
 export function formatPieces(value: unknown): string {
-  const pieces = num(value);
-  return pieces ? pieces.toLocaleString() : "0";
+  if (value == null || value === "") return "—";
+  const pieces = Number(value);
+  if (!Number.isFinite(pieces)) return "—";
+  return pieces.toLocaleString();
 }
 
 export function riskColor(risk: string): string {

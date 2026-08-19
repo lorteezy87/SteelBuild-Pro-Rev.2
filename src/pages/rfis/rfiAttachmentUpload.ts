@@ -3,6 +3,8 @@
  * Keep auth / integrations / React Query / toast / setState out of this module.
  */
 
+import { serializeTagList } from "@/pages/documents/utils";
+
 export type RfiAttachmentRecord = {
   id?: string | null;
   project_id?: string | null;
@@ -60,7 +62,8 @@ export function buildRfiAttachmentDocumentFields(opts: {
     revision_date: nowIso.slice(0, 10),
     uploaded_by: uploadedBy || "Unknown",
     uploaded_date: nowIso,
-    tags: ["RFI", rfiRecord.rfi_number || rfiRecord.id].filter(Boolean),
+    // TEXT column — comma list, not a JS array (see serializeTagList).
+    tags: serializeTagList(["RFI", rfiRecord.rfi_number || rfiRecord.id].filter(Boolean)),
   };
 }
 

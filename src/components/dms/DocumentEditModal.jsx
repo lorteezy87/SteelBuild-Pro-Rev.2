@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { serializeTagList } from "@/pages/documents/utils";
 
 const INPUT_STYLE = {
   width: "100%",
@@ -87,10 +88,10 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       toast.error("Name is required");
       return;
     }
-    const tags = form.tags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+    // documents.tags is a TEXT column — send the comma list it actually holds.
+    // Sending an array made PostgREST store the array's JSON text, which the
+    // reader then re-wrapped, so each save added an encoding layer.
+    const tags = serializeTagList(form.tags);
 
     mut.mutate(withProjectId({
       display_name: form.displayName,
