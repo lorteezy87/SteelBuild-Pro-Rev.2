@@ -110,6 +110,12 @@ export interface RecentlyUpdatedEntry {
 export interface ProjectsSummary {
   kpis: ProjectsKpiSummary;
   healthByProjectId: Record<string, OperationalHealthResult>;
+  /**
+   * Effective % complete per project id (override, else WP progress). The
+   * register column previously had no per-row source and rendered "—" for
+   * every project without a manual override.
+   */
+  pctCompleteByProjectId: Record<string, number>;
   atRiskQueue: AtRiskEntry[];
   closingSoonQueue: ClosingSoonEntry[];
   recentlyUpdatedQueue: RecentlyUpdatedEntry[];
@@ -169,6 +175,20 @@ export function buildProjectsSummary(
       lifecycle === "complete" ||
       lifecycle === "completed" ||
       lifecycle === "closeout" ||
+      effectivePct(project, projectWPs) >= 100
+    );
+  };
+  /**
+   * Genuinely finished — closed lifecycle or 100% scope. Unlike `isComplete`
+   * this does NOT treat the Closeout phase as finished, so a job still being
+   * closed out stays visible to the Closing Soon panel.
+   */
+  const isFinished = (project: ProjectRecord) => {
+    const projectWPs = visibleWPs.filter((wp) => wp.project_id === project.id);
+    const lifecycle = String(project.status || project.phase || "").toLowerCase();
+    return (
+      lifecycle === "complete" ||
+      lifecycle === "completed" ||
       effectivePct(project, projectWPs) >= 100
     );
   };
@@ -234,14 +254,24 @@ export function buildProjectsSummary(
       return { project: p, openRfis: openCount, overdueRfis: overdueCount, daysLeft, isOverdue };
     });
 
-  // ── Panel 2: Closing Soon (active, not closeout, target date present) ──
+  // ── Panel 2: Closing Soon (≤90 days out) ─────────────────────────────────
+  // Scoped to non-hold, not-yet-complete projects — NOT `activeProjects`,
+  // which excludes the Closeout phase. A job in closeout with a target date two
+  // weeks away is precisely what "Closing Soon" is for; excluding it made the
+  // panel report "none within 90 days" while a project was 14 days out.
+  // Falls back to forecast_completion_date when no target date is set.
   const now = Date.now();
-  const closingSoonQueue: ClosingSoonEntry[] = activeProjects
-    .filter((p) => p.target_completion_date)
-    .map((p) => {
-      const daysLeft = Math.ceil(
-        (new Date(p.target_completion_date!).getTime() - now) / 86400000
-      );
+  const closingSoonQueue: ClosingSoonEntry[] = nonHoldProjects
+    .filter((p) => !isFinished(p))
+    .map((p) => ({
+      p,
+      // forecast_completion_date isn't a declared field on ProjectRecord, so it
+      // arrives through the index signature as unknown — normalise to a string.
+      dateStr: String(p.target_completion_date || p.forecast_completion_date || ""),
+    }))
+    .filter((e) => e.dateStr !== "")
+    .map(({ p, dateStr }) => {
+      const daysLeft = Math.ceil((new Date(dateStr).getTime() - now) / 86400000);
       const pWPs = visibleWPs.filter((w) => w.project_id === p.id);
       return { project: p, daysLeft, pctComplete: effectivePct(p, pWPs) };
     })
@@ -264,5 +294,20 @@ export function buildProjectsSummary(
       return { project: p, pctComplete: effectivePct(p, pWPs), updatedAt: p.updated_at ?? null };
     });
 
-  return { kpis, healthByProjectId, atRiskQueue, closingSoonQueue, recentlyUpdatedQueue };
+  const pctCompleteByProjectId: Record<string, number> = {};
+  for (const p of projects) {
+    pctCompleteByProjectId[p.id] = effectivePct(
+      p,
+      visibleWPs.filter((w) => w.project_id === p.id),
+    );
+  }
+
+  return {
+    kpis,
+    healthByProjectId,
+    pctCompleteByProjectId,
+    atRiskQueue,
+    closingSoonQueue,
+    recentlyUpdatedQueue,
+  };
 }
