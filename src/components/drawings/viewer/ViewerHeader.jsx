@@ -8,7 +8,33 @@ import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
-export default function ViewerHeader({ projectName, activeDrawing, drawingSet, onUnlock }) {
+/** The sheet's stored page differs from the page actually rendered. */
+export function pageMismatch(activeDrawing, currentPage) {
+  const stored = Number(activeDrawing?.pdf_page);
+  const shown = Number(currentPage);
+  if (!Number.isFinite(stored) || stored < 1) return false;
+  if (!Number.isFinite(shown) || shown < 1) return false;
+  return stored !== shown;
+}
+
+/**
+ * "PDF 4 / 8" for the page on screen. Appends the stored page when it
+ * disagrees ("PDF 1 / 8 · sheet says 4") so a bad `pdf_page` is visible
+ * instead of silently showing someone the wrong sheet.
+ */
+export function pageLabel(activeDrawing, currentPage, totalPages) {
+  const shown = Number(currentPage);
+  const total = Number(totalPages);
+  if (!Number.isFinite(shown) || shown < 1) {
+    return activeDrawing?.pdf_page ? `PDF ${activeDrawing.pdf_page}` : "PDF 1";
+  }
+  const base = Number.isFinite(total) && total > 1 ? `PDF ${shown} / ${total}` : `PDF ${shown}`;
+  return pageMismatch(activeDrawing, currentPage)
+    ? `${base} · sheet says ${activeDrawing.pdf_page}`
+    : base;
+}
+
+export default function ViewerHeader({ projectName, activeDrawing, drawingSet, onUnlock, currentPage = null, totalPages = null }) {
   const navigate = useNavigate();
   const { isAdmin } = usePermissions();
   const isLocked = !!drawingSet?.is_locked;
@@ -141,7 +167,16 @@ export default function ViewerHeader({ projectName, activeDrawing, drawingSet, o
         <div className="drawing-viewer-header-status" style={statusPanelStyle}>
           <MetaBlock label="Stage" value={stageConfig?.label || stageKey} color={stageConfig?.color} />
           <MetaBlock label="Revision" value={revisionLabel} />
-          <MetaBlock label="Page" value={activeDrawing?.pdf_page ? `PDF ${activeDrawing.pdf_page}` : "PDF 1"} />
+          {/* Show the page actually on screen, not the stored pdf_page. The
+              header used to print pdf_page while the toolbar showed the
+              rendered page, so a sheet whose stored page is out of range (the
+              loader clamps it) displayed "PDF 4" over page 1 — the wrong
+              drawing with no indication. Flag the disagreement instead. */}
+          <MetaBlock
+            label="Page"
+            value={pageLabel(activeDrawing, currentPage, totalPages)}
+            color={pageMismatch(activeDrawing, currentPage) ? "var(--status-warning)" : undefined}
+          />
         </div>
       </div>
 

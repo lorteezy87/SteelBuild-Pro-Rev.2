@@ -74,3 +74,91 @@ describe("work package analytics", () => {
     expect(metrics.laborBurn).toBe(80);
   });
 });
+
+describe("fab readiness agrees with the Fab Release gate", () => {
+  // The page used to call a package ready when ANY ONE linked sheet was in a
+  // loose stage set, so a package holding blocked sheets reported "ready,
+  // 0 blocked" while Fab Release reported them blocked on the same data.
+  const wpWith = (ids) => ({
+    id: "wp-1",
+    wp_number: "WP-001",
+    phase: "Detailing",
+    status: "Not Started",
+    tonnage: 10,
+    percent_complete: 0,
+    linked_drawing_ids: ids,
+  });
+
+  it("does NOT call a package ready when only some sheets are released", () => {
+    const metrics = buildWorkPackageMetrics(
+      [wpWith("d1,d2")],
+      [
+        { id: "d1", stage: "IFC" },      // release-ready
+        { id: "d2", stage: "OFA" },      // still in approval
+      ],
+      [],
+    );
+    expect(metrics.readyForFab).toHaveLength(0);
+    expect(metrics.blockedSheetCount).toBe(1);
+    expect(metrics.fabBlocked.map((w) => w.wp_number)).toEqual(["WP-001"]);
+  });
+
+  it("calls a package ready only when every linked sheet is release-ready", () => {
+    const metrics = buildWorkPackageMetrics(
+      [wpWith("d1,d2")],
+      [{ id: "d1", stage: "IFC" }, { id: "d2", stage: "Released" }],
+      [],
+    );
+    expect(metrics.readyForFab.map((w) => w.wp_number)).toEqual(["WP-001"]);
+    expect(metrics.blockedSheetCount).toBe(0);
+  });
+
+  it("counts rejected and superseded sheets as blocked", () => {
+    const metrics = buildWorkPackageMetrics(
+      [wpWith("d1,d2,d3")],
+      [
+        { id: "d1", stage: "IFC" },
+        { id: "d2", stage: "IFC", is_superseded: true },
+        { id: "d3", stage: "IFC", set_approval_status: "Revise and Resubmit" },
+      ],
+      [],
+    );
+    expect(metrics.readyForFab).toHaveLength(0);
+    expect(metrics.blockedSheetCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it("counts an unresolved current revision as blocked (gate parity)", () => {
+    const metrics = buildWorkPackageMetrics(
+      [wpWith("d1")],
+      [{ id: "d1", stage: "IFC", current_release_status: "on_hold" }],
+      [],
+    );
+    expect(metrics.readyForFab).toHaveLength(0);
+    expect(metrics.blockedSheetCount).toBe(1);
+  });
+
+  it("treats an unresolvable sheet link as blocked, never as ready", () => {
+    const metrics = buildWorkPackageMetrics([wpWith("missing-id")], [], []);
+    expect(metrics.readyForFab).toHaveLength(0);
+    expect(metrics.blockedSheetCount).toBe(1);
+  });
+
+  it("mid-flow approvals alone do not make a package fab-ready", () => {
+    // "Approved" / "Approved as Noted" / "OFS" are mid-flow per
+    // submittalStageMapping — the old set treated them as release-ready.
+    for (const stage of ["Approved", "Approved as Noted", "OFS"]) {
+      const metrics = buildWorkPackageMetrics([wpWith("d1")], [{ id: "d1", stage }], []);
+      expect(metrics.readyForFab, `stage ${stage}`).toHaveLength(0);
+    }
+  });
+
+  it("flags a package that is 100% complete but still has an open status", () => {
+    const signals = getWorkPackageSignals(
+      { id: "wp-9", phase: "Fabrication", status: "In Progress", percent_complete: 100, linked_drawing_ids: "", crew: "A" },
+      { today: "2026-05-13" },
+    );
+    const mismatch = signals.flags.find((f) => f.key === "pct_status_mismatch");
+    expect(mismatch).toBeTruthy();
+    expect(mismatch.label).toMatch(/100% but marked In Progress/);
+  });
+});
