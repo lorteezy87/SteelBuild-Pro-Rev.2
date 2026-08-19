@@ -27,10 +27,15 @@ const JOB_TYPES = [
 export default function ProjectFormModal({ open, onClose, onSave, project }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
+  // Create-mode only: seed the new project from the standard steel workflow
+  // template (work packages + schedule scaffold). Stripped from the payload
+  // and applied via RPC by the caller after the project row exists.
+  const [applyTemplate, setApplyTemplate] = useState(false);
 
   useEffect(() => {
     setForm(project ? { ...empty, ...project } : empty);
     setErrors({});
+    setApplyTemplate(false);
   }, [project, open]);
 
   const validate = () => {
@@ -58,6 +63,7 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
       target_completion_date: form.target_completion_date || null,
       forecast_completion_date: form.forecast_completion_date || null,
       job_type: form.job_type || null,
+      ...(project ? {} : { __apply_template: applyTemplate ? "standard_steel" : null }),
     });
   };
 
@@ -147,6 +153,25 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
         <FormField label="Notes" span2>
           <textarea style={{ ...inputStyle, height: 72, resize: "vertical" }} value={form.notes} onChange={e => set("notes", e.target.value)} />
         </FormField>
+        {!project && (
+          <label style={{ gridColumn: "1 / -1", display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 8, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={applyTemplate}
+              onChange={(e) => setApplyTemplate(e.target.checked)}
+              style={{ marginTop: 2, accentColor: "var(--accent)" }}
+            />
+            <span>
+              <span style={{ display: "block", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
+                Start from the Standard Structural Steel template
+              </span>
+              <span style={{ display: "block", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.5 }}>
+                Pre-builds 5 work packages (anchor bolts, main steel seq 1–2, misc metals, joists &amp; deck)
+                and a 16-task schedule from detailing through erection, offset from the start date.
+              </span>
+            </span>
+          </label>
+        )}
       </div>
     </PhoenixModal>
   );
