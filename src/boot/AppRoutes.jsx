@@ -7,8 +7,9 @@ import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 import ProjectScopedRoute from "@/components/shared/ProjectScopedRoute";
 import LayoutRoute from "@/boot/LayoutRoute";
 import PageLoader from "@/boot/PageLoader";
-import { isGatedPage } from "@/config/moduleGating";
+import { gateFlagForPage, isGatedPage } from "@/config/moduleGating";
 import { useModuleAccess } from "@/hooks/useModuleAccess";
+import ModuleDisabledNotice from "@/components/shared/ModuleDisabledNotice";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectRole } from "@/hooks/useProjectRole";
@@ -35,13 +36,18 @@ const STANDALONE_LAYOUT_PAGES = new Set(["DesktopConnect"]);
  * feature flag is off. Non-gated pages render immediately. While flags are
  * still loading we hold on a loader instead of redirecting, so a deep-link
  * to an enabled module doesn't bounce home on first paint.
+ *
+ * A blocked page renders an explanatory notice IN PLACE rather than
+ * redirecting home. The old `<Navigate to="/" />` was indistinguishable from a
+ * broken route: the URL silently became the Dashboard with no indication the
+ * module exists but is switched off, and no path to enable it.
  */
 function ModuleGate({ page, children }) {
   const { pageEnabled } = useModuleAccess();
   if (!isGatedPage(page)) return children;
   const enabled = pageEnabled(page);
   if (enabled === undefined) return <PageLoader />;
-  return enabled ? children : <Navigate to="/" replace />;
+  return enabled ? children : <ModuleDisabledNotice page={page} flagKey={gateFlagForPage(page)} />;
 }
 
 function LazyRoute({ label, children }) {

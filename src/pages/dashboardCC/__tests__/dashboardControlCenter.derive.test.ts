@@ -249,4 +249,21 @@ describe("buildDashboardSummary", () => {
     const kpi = s.kpis.find((k) => k.label === "Pending Submittals")!;
     expect(kpi.value).toBe(2); // Under Review + Draft
   });
+
+  // Every module tile must navigate to its OWN destination. The Reports tile
+  // carried target "schedule", so "Open Reports" opened the Schedule page.
+  it("gives each module tile a distinct navigation target", () => {
+    const s = buildDashboardSummary({ project: makeProject() });
+    const reports = s.modules.find((m) => m.page === "ReportsHub")!;
+    expect(reports.target).toBe("reports");
+
+    const schedule = s.modules.find((m) => m.page === "ScheduleHub")!;
+    expect(schedule.target).toBe("schedule");
+    expect(reports.target).not.toBe(schedule.target);
+
+    // No two tiles may share a target (that's how the Reports bug hid).
+    const targets = s.modules.map((m) => m.target).filter(Boolean);
+    const shared = targets.filter((t, i) => targets.indexOf(t) !== i);
+    expect(shared).toEqual([]);
+  });
 });
