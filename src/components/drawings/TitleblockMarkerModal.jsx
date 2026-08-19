@@ -130,6 +130,11 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   const [dragRect, setDragRect] = useState(null);
   const [saving, setSaving] = useState(false);
   const [reExtractProgress, setReExtractProgress] = useState(null);
+  // Live read-back per box: null = not tested yet, { text } = what the box
+  // reads on the DISPLAYED page ("" = no extractable text there). This is the
+  // user's instant answer to "is my box right / can the PDF be read at all"
+  // — without it, a wrong box or an outlined-text PDF fails silently at save.
+  const [rectPreview, setRectPreview] = useState({ title: null, number: null, revision: null });
 
   useEffect(() => {
     if (!sourceUrl) {
@@ -223,6 +228,30 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
 
   const dragStartRef = useRef(null);
 
+  const previewRect = useCallback(async (kind, rect) => {
+    if (!pdfDocRef.current || !rect) return;
+    try {
+      const page = await pdfDocRef.current.getPage(pageNum);
+      const raw = await extractTextFromRect(page, rect);
+      const text = kind === "revision"
+        ? normalizeTitleblockRevision(raw)
+        : String(raw || "").trim();
+      setRectPreview((p) => ({ ...p, [kind]: { text } }));
+    } catch {
+      setRectPreview((p) => ({ ...p, [kind]: { text: "" } }));
+    }
+  }, [pageNum]);
+
+  // Read back all placed boxes against the displayed page — on load (existing
+  // template) and whenever the user changes pages.
+  useEffect(() => {
+    if (!pdfReady) return;
+    if (titleRect) void previewRect("title", titleRect);
+    if (numberRect) void previewRect("number", numberRect);
+    if (revisionRect) void previewRect("revision", revisionRect);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfReady, pageNum]);
+
   const handleMouseDown = (e) => {
     if (!drawing) return;
     e.preventDefault();
@@ -258,6 +287,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     if (drawing === "title") setTitleRect(dragRect);
     if (drawing === "number") setNumberRect(dragRect);
     if (drawing === "revision") setRevisionRect(dragRect);
+    void previewRect(drawing, dragRect);
     dragStartRef.current = null;
     setDragRect(null);
     setDrawing(null);
@@ -332,7 +362,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     if (bestTitle) patch.title = bestTitle;
     if (bestNumber) patch.sheet_number = bestNumber.toUpperCase().replace(/\s+/g, "");
     if (bestRevision) patch.revision_number = bestRevision;
-    return Object.keys(patch).length ? patch : null;
+    return { patch: Object.keys(patch).length ? patch : null, revText: bestRevision };
   };
 
   const handleSave = async () => {
@@ -353,6 +383,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
       let unchanged = 0;
       let failed = 0;
       let total = 0;
+      let revReadable = 0; // sheets where the Rev box produced any text
       try {
         const sheets = await entities.Drawing.filter({
           project_id: set.project_id,
@@ -366,7 +397,8 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
             for (let i = 0; i < sheets.length; i++) {
               const sheet = sheets[i];
               try {
-                const patch = await reextractOne(sheet, pdfCache);
+                const { patch, revText } = (await reextractOne(sheet, pdfCache)) || {};
+                if (revText) revReadable++;
                 if (patch) {
                   const titleSame = !patch.title || patch.title === (sheet.title || "");
                   const numberSame = !patch.sheet_number || patch.sheet_number === (sheet.sheet_number || "");
@@ -410,9 +442,26 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
 
       if (total === 0) {
         toast.success("Titleblock template saved");
+      } else if (revisionRect && revReadable === 0) {
+        // The Rev box read NOTHING on any sheet. Say so explicitly — a green
+        // "N unchanged" here hides the real situation from the user.
+        toast.warning(
+          `Template saved, but the Rev box read no text on any of the ${total} sheet${total === 1 ? "" : "s"}. ` +
+          `Either the box misses the REV cell, or these PDFs have outlined/scanned text that can't be read. ` +
+          `If the drawings were revised, upload the revised PDF via New Revision — that sets the revision and replaces the sheet files.`,
+          { duration: 12000 },
+        );
       } else if (updated === total && failed === 0) {
         toast.success(
           `Titleblock saved + ${updated} sheet${updated === 1 ? "" : "s"} updated`,
+        );
+      } else if (revisionRect && updated === 0 && failed === 0 && revReadable > 0) {
+        // Rev was readable but matched what's already stored — the attached
+        // PDFs still carry these revision values.
+        toast.message(
+          `Template saved · all ${total} sheet${total === 1 ? "" : "s"} already match what the PDFs say. ` +
+          `If the drawings were revised since, the revised files haven't been uploaded — use New Revision.`,
+          { duration: 10000 },
         );
       } else {
         toast.success(
@@ -440,6 +489,16 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     setRevisionRect(null);
     setDrawing(null);
     setDragRect(null);
+    setRectPreview({ title: null, number: null, revision: null });
+  };
+
+  /** Footer read-back: what a placed box reads on the displayed page. */
+  const previewLabel = (rect, preview) => {
+    if (!rect) return "—";
+    if (!preview) return "✓ reading…";
+    if (!preview.text) return "⚠ reads nothing";
+    const text = preview.text.length > 18 ? `${preview.text.slice(0, 18)}…` : preview.text;
+    return `✓ “${text}”`;
   };
 
   const canSave = !saving && titleRect != null && numberRect != null;
@@ -586,17 +645,17 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
 
         <div style={footerStyle}>
           <div style={{ display: "flex", gap: 14, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
-            <span>
+            <span style={{ color: titleRect && rectPreview.title && !rectPreview.title.text ? "var(--status-warning)" : undefined }}>
               <span style={{ display: "inline-block", width: 10, height: 10, background: RECT_COLOR.title, marginRight: 6, verticalAlign: "middle" }} />
-              Title {titleRect ? "✓" : "—"}
+              Title {previewLabel(titleRect, rectPreview.title)}
             </span>
-            <span>
+            <span style={{ color: numberRect && rectPreview.number && !rectPreview.number.text ? "var(--status-warning)" : undefined }}>
               <span style={{ display: "inline-block", width: 10, height: 10, background: RECT_COLOR.number, marginRight: 6, verticalAlign: "middle" }} />
-              Sheet # {numberRect ? "✓" : "—"}
+              Sheet # {previewLabel(numberRect, rectPreview.number)}
             </span>
-            <span>
+            <span style={{ color: revisionRect && rectPreview.revision && !rectPreview.revision.text ? "var(--status-warning)" : undefined }}>
               <span style={{ display: "inline-block", width: 10, height: 10, background: RECT_COLOR.revision, marginRight: 6, verticalAlign: "middle" }} />
-              Rev {revisionRect ? "✓" : "—"}
+              Rev {previewLabel(revisionRect, rectPreview.revision)}
             </span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
