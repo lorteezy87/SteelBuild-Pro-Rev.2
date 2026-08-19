@@ -1,21 +1,22 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, SetStateAction } from "react";
 /**
  * Register view: filter bar + table + bulk actions + impact panel.
  * Presentational extract from PieceRegister.tsx (behavior-preserving).
  */
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { PackageOpen, Search } from "lucide-react";
+import { shouldVirtualizeRegister } from "@/lib/registerVirtualize";
+import { PieceRegisterRow } from "./PieceRegisterRow";
 import PieceRegisterBulkBar, {
   type BulkAttributeFormValues,
 } from "@/components/pieceControl/PieceRegisterBulkBar";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import type { PieceDigitalThreadModel } from "@/lib/pieceControl/pieceIntelligenceTypes";
-import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
 import {
   nextPieceRegisterSort,
   type PieceRegisterSort,
 } from "@/lib/pieceControl/pieceRegisterSort";
 import type { PieceAttentionItem } from "@/lib/pieceControl/presentation";
-import { pieceTons } from "@/lib/pieceControl/tonnage";
 import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 import type {
   PieceRegisterDisplayRow,
@@ -73,6 +74,140 @@ export type PieceRegisterRegisterViewProps = {
   onGoImport: () => void;
 };
 
+const PIECE_REGISTER_COL_COUNT = 13;
+const ESTIMATED_PIECE_ROW_HEIGHT = 46;
+
+function PieceRegisterTableHead({
+  allFilteredSelected,
+  canBulkUpdate,
+  filteredCount,
+  registerSort,
+  setRegisterSort,
+  toggleAllFiltered,
+}: {
+  allFilteredSelected: boolean;
+  canBulkUpdate: boolean;
+  filteredCount: number;
+  registerSort: PieceRegisterSort;
+  setRegisterSort: Dispatch<SetStateAction<PieceRegisterSort>>;
+  toggleAllFiltered: () => void;
+}) {
+  return (
+    <thead>
+      <tr>
+        <th>
+          <input
+            type="checkbox"
+            aria-label="Select all visible pieces"
+            checked={allFilteredSelected}
+            disabled={!canBulkUpdate || filteredCount === 0}
+            onChange={toggleAllFiltered}
+            className="cmd-check"
+          />
+        </th>
+        {(
+          [
+            { label: "Mark / lot", key: "mark" as const },
+            { label: "Qty", key: null },
+            { label: "Profile", key: null },
+            { label: "Grade", key: null },
+            { label: "Wt each", key: null },
+            { label: "Wt total", key: null },
+            { label: "Tons", key: null },
+            { label: "Work package", key: "work_package" as const },
+            { label: "Lifecycle", key: null },
+            { label: "Hold", key: null },
+            { label: "Source", key: null },
+            { label: "Last update", key: "updated_at" as const },
+          ] as const
+        ).map((column) => (
+          <th key={column.label}>
+            {column.key ? (
+              <button
+                type="button"
+                className="piece-register-sort-th"
+                onClick={() =>
+                  setRegisterSort((current) =>
+                    nextPieceRegisterSort(current, column.key!),
+                  )
+                }
+              >
+                {column.label}
+                {registerSort.key === column.key
+                  ? registerSort.direction === "asc"
+                    ? " ↑"
+                    : " ↓"
+                  : ""}
+              </button>
+            ) : (
+              column.label
+            )}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
+}
+
+function VirtualizedPieceRegisterBody({
+  filteredRows,
+  selectedPieceIds,
+  canBulkUpdate,
+  onToggle,
+  scrollElement,
+}: {
+  filteredRows: PieceRegisterDisplayRow[];
+  selectedPieceIds: Set<string>;
+  canBulkUpdate: boolean;
+  onToggle: (id: string) => void;
+  scrollElement: HTMLElement | null;
+}) {
+  const virtualizer = useVirtualizer({
+    count: filteredRows.length,
+    getScrollElement: () => scrollElement,
+    estimateSize: () => ESTIMATED_PIECE_ROW_HEIGHT,
+    overscan: 12,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom = virtualItems.length > 0
+    ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
+    : 0;
+
+  return (
+    <tbody data-testid="piece-register-virtual-body">
+      {paddingTop > 0 ? (
+        <tr aria-hidden="true">
+          <td
+            colSpan={PIECE_REGISTER_COL_COUNT}
+            style={{ height: paddingTop, padding: 0, border: 0 }}
+          />
+        </tr>
+      ) : null}
+      {virtualItems.map((virtualRow) => {
+        const piece = filteredRows[virtualRow.index];
+        return (
+          <PieceRegisterRow
+            key={piece.id}
+            piece={piece}
+            selected={selectedPieceIds.has(piece.id)}
+            canBulkUpdate={canBulkUpdate}
+            onToggle={onToggle}
+          />
+        );
+      })}
+      {paddingBottom > 0 ? (
+        <tr aria-hidden="true">
+          <td
+            colSpan={PIECE_REGISTER_COL_COUNT}
+            style={{ height: paddingBottom, padding: 0, border: 0 }}
+          />
+        </tr>
+      ) : null}
+    </tbody>
+  );
+}
+
 export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps) {
   const {
     filters,
@@ -113,6 +248,10 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
     onRetryPieces,
     onGoImport,
   } = props;
+
+  const virtualizeRows =
+    !piecesLoading && !piecesError && shouldVirtualizeRegister(filteredRows.length);
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
 
   return (
     <section className="piece-register-workspace">
@@ -296,72 +435,33 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
           )
         ) : null}
 
-        <div className="cmd-table-wrap piece-register-table__wrap">
+        <div
+          ref={virtualizeRows ? setScrollElement : undefined}
+          className={`cmd-table-wrap piece-register-table__wrap${
+            virtualizeRows ? " is-virtualized" : ""
+          }`}
+        >
           <table className="cmd-table piece-register-table__table">
-            <thead>
-              <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    aria-label="Select all visible pieces"
-                    checked={allFilteredSelected}
-                    disabled={!canBulkUpdate || filteredRows.length === 0}
-                    onChange={toggleAllFiltered}
-                    className="cmd-check"
-                  />
-                </th>
-                {(
-                  [
-                    { label: "Mark / lot", key: "mark" as const },
-                    { label: "Qty", key: null },
-                    { label: "Profile", key: null },
-                    { label: "Grade", key: null },
-                    { label: "Wt each", key: null },
-                    { label: "Wt total", key: null },
-                    { label: "Tons", key: null },
-                    { label: "Work package", key: "work_package" as const },
-                    { label: "Lifecycle", key: null },
-                    { label: "Hold", key: null },
-                    { label: "Source", key: null },
-                    { label: "Last update", key: "updated_at" as const },
-                  ] as const
-                ).map((column) => (
-                  <th key={column.label}>
-                    {column.key ? (
-                      <button
-                        type="button"
-                        className="piece-register-sort-th"
-                        onClick={() =>
-                          setRegisterSort((current) =>
-                            nextPieceRegisterSort(current, column.key!),
-                          )
-                        }
-                      >
-                        {column.label}
-                        {registerSort.key === column.key
-                          ? registerSort.direction === "asc"
-                            ? " ↑"
-                            : " ↓"
-                          : ""}
-                      </button>
-                    ) : (
-                      column.label
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {piecesLoading && (
+            <PieceRegisterTableHead
+              allFilteredSelected={allFilteredSelected}
+              canBulkUpdate={canBulkUpdate}
+              filteredCount={filteredRows.length}
+              registerSort={registerSort}
+              setRegisterSort={setRegisterSort}
+              toggleAllFiltered={toggleAllFiltered}
+            />
+            {piecesLoading ? (
+              <tbody>
                 <tr>
-                  <td colSpan={13} className="cmd-table__empty">
+                  <td colSpan={PIECE_REGISTER_COL_COUNT} className="cmd-table__empty">
                     Loading the project piece register...
                   </td>
                 </tr>
-              )}
-              {piecesError ? (
+              </tbody>
+            ) : piecesError ? (
+              <tbody>
                 <tr>
-                  <td colSpan={13} className="cmd-table__empty">
+                  <td colSpan={PIECE_REGISTER_COL_COUNT} className="cmd-table__empty">
                     <strong className="piece-register-error">
                       The Piece Register could not be loaded.
                     </strong>
@@ -380,84 +480,11 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
                     </button>
                   </td>
                 </tr>
-              ) : null}
-              {!piecesLoading &&
-                !piecesError &&
-                filteredRows.map((piece) => {
-                  const tons = pieceTons(piece);
-                  return (
-                    <tr key={piece.id}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${piece.piece_mark} lot ${piece.lot_code}`}
-                          checked={selectedPieceIds.has(piece.id)}
-                          disabled={!canBulkUpdate}
-                          onChange={() =>
-                            setSelectedPieceIds((current) => {
-                              const next = new Set(current);
-                              if (next.has(piece.id)) next.delete(piece.id);
-                              else next.add(piece.id);
-                              return next;
-                            })
-                          }
-                          className="cmd-check"
-                        />
-                      </td>
-                      <td>
-                        <div className="piece-register-mark">{piece.piece_mark}</div>
-                        <div className="piece-register-cell-meta">
-                          {piece.parent_piece_id
-                            ? `Child lot ${piece.lot_code}`
-                            : piece.lot_code === "ALL"
-                              ? "Root lot ALL"
-                              : `Container ${piece.lot_code}`}
-                        </div>
-                      </td>
-                      <td className="piece-register-number">{piece.quantity}</td>
-                      <td>{piece.profile || "—"}</td>
-                      <td>{piece.material_grade || "—"}</td>
-                      <td className="piece-register-number">
-                        {piece.weight_each_lbs == null
-                          ? "—"
-                          : Number(piece.weight_each_lbs).toFixed(1)}
-                      </td>
-                      <td className="piece-register-number">
-                        {piece.weight_total_lbs == null
-                          ? "—"
-                          : Number(piece.weight_total_lbs).toFixed(1)}
-                      </td>
-                      <td className="piece-register-number piece-register-number--strong">
-                        {tons == null ? "—" : tons.toFixed(3)}
-                      </td>
-                      <td>{piece.workPackageLabel}</td>
-                      <td>
-                        <span className="cmd-pill cmd-pill--neutral">
-                          {pieceLifecycleLabel(piece.lifecycle_status)}
-                        </span>
-                      </td>
-                      <td>
-                        {piece.on_hold ? (
-                          <span className="piece-register-hold">Held</span>
-                        ) : (
-                          <span className="piece-register-cell-meta">Clear</span>
-                        )}
-                      </td>
-                      <td>
-                        <div>{piece.source_system || "—"}</div>
-                        <div className="piece-register-cell-meta piece-register-cell-meta--truncate">
-                          {piece.external_ref || ""}
-                        </div>
-                      </td>
-                      <td className="piece-register-updated">
-                        {new Date(piece.updated_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  );
-                })}
-              {!piecesLoading && !piecesError && filteredRows.length === 0 && (
+              </tbody>
+            ) : filteredRows.length === 0 ? (
+              <tbody>
                 <tr>
-                  <td colSpan={13} className="cmd-table__empty">
+                  <td colSpan={PIECE_REGISTER_COL_COUNT} className="cmd-table__empty">
                     <PackageOpen size={28} />
                     <strong>
                       {displayRows.length === 0
@@ -479,8 +506,42 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
                     </button>
                   </td>
                 </tr>
-              )}
-            </tbody>
+              </tbody>
+            ) : virtualizeRows ? (
+              <VirtualizedPieceRegisterBody
+                filteredRows={filteredRows}
+                selectedPieceIds={selectedPieceIds}
+                canBulkUpdate={canBulkUpdate}
+                scrollElement={scrollElement}
+                onToggle={(id) =>
+                  setSelectedPieceIds((current) => {
+                    const next = new Set(current);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  })
+                }
+              />
+            ) : (
+              <tbody>
+                {filteredRows.map((piece) => (
+                  <PieceRegisterRow
+                    key={piece.id}
+                    piece={piece}
+                    selected={selectedPieceIds.has(piece.id)}
+                    canBulkUpdate={canBulkUpdate}
+                    onToggle={(id) =>
+                      setSelectedPieceIds((current) => {
+                        const next = new Set(current);
+                        if (next.has(id)) next.delete(id);
+                        else next.add(id);
+                        return next;
+                      })
+                    }
+                  />
+                ))}
+              </tbody>
+            )}
           </table>
         </div>
       </div>

@@ -632,7 +632,8 @@
   transform: none;
 }
 
-.rfi-table-body > .rfi-record-row:first-child {
+.rfi-table-body > .rfi-record-row:first-child,
+.rfi-table-body [data-index="0"] .rfi-record-row {
   border-top: 0;
   margin-top: 0;
   position: static !important;

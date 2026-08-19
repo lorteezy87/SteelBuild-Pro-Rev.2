@@ -10,9 +10,8 @@ import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import RfiRow from "./RfiRow";
 import { EmptyState } from "@/components/design-system";
+import { shouldVirtualizeRegister } from "@/lib/registerVirtualize";
 
-/** Above this many rows the body becomes an internal scroll + virtual list. */
-const VIRTUALIZE_THRESHOLD = 150;
 const ESTIMATED_ROW_HEIGHT = 68;
 
 function VirtualizedBody({ rows, selectedIds, onToggleSelect, onOpen }) {
@@ -88,7 +87,7 @@ export default function RfiTable({ rows, totalCount, selectedIds = new Set(), on
         <div>Impact</div>
         <div></div>
       </div>
-      {rows.length > VIRTUALIZE_THRESHOLD ? (
+      {shouldVirtualizeRegister(rows.length) ? (
         <VirtualizedBody
           rows={rows}
           selectedIds={selectedIds}

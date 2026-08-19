@@ -684,6 +684,18 @@
   -webkit-overflow-scrolling: touch;
 }
 
+[data-skin="command"] .piece-register-table__wrap.is-virtualized {
+  max-height: min(640px, calc(100vh - 280px));
+  overflow: auto;
+}
+
+[data-skin="command"] .piece-register-table__wrap.is-virtualized thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--cmd-row-hover);
+}
+
 [data-skin="command"] .piece-register-table__table {
   min-width: 1380px;
   font-size: 12px;
