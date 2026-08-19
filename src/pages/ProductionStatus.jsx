@@ -14,6 +14,7 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { supabase } from "@/lib/supabase";
 import {
   bulkUpdateProductionStage,
   listPieceProduction,
@@ -81,6 +82,24 @@ export default function ProductionStatus() {
     queryFn: () => listPieceProduction(projectId),
     enabled: !!projectId,
     staleTime: 30_000,
+  });
+
+  // Count-only probe of the canonical Piece Register so an empty shop import
+  // can be explained ("register has N pieces, this feed has none") instead of
+  // reading as "this project has no pieces". head:true → no rows transferred.
+  const { data: canonicalPieceCount = 0 } = useQuery({
+    queryKey: ["production-canonical-piece-count", projectId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("pieces")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId)
+        .eq("is_deleted", false);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60_000,
   });
 
   // piece_production has no drawing column; the mark-to-sheet relationship
@@ -223,6 +242,33 @@ export default function ProductionStatus() {
 
   return (
     <div className="production-page">
+      {/* This page reads the Tekla/FabSuite import table (piece_production).
+          The canonical Piece Register is a different model, so a project with
+          a populated register showed a bare "0 pieces" here — which reads as
+          "no work exists" rather than "nothing has been imported yet". */}
+      {pieces.length === 0 && canonicalPieceCount > 0 && (
+        <div
+          style={{
+            margin: "12px 24px 0",
+            padding: "12px 16px",
+            borderRadius: 8,
+            border: "1px solid var(--warning-border)",
+            background: "var(--warning-muted)",
+            fontFamily: "var(--font-body)",
+            fontSize: 12,
+            color: "var(--text-secondary)",
+            lineHeight: 1.6,
+          }}
+        >
+          <strong style={{ color: "var(--text-primary)" }}>
+            No shop import for this project yet.
+          </strong>{" "}
+          The Piece Register has {canonicalPieceCount} piece
+          {canonicalPieceCount === 1 ? "" : "s"}, but this page tracks per-piece
+          status imported from Tekla EPM / FabSuite — a separate feed. Import a
+          production file to populate it; the register is unaffected.
+        </div>
+      )}
       <ProductionStatusControlCenter
         projectName={activeProject?.name || "All Projects"}
         pieces={pieces}

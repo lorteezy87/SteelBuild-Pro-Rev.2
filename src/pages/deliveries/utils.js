@@ -10,6 +10,25 @@ export const isSameDay = (d1, d2) =>
   d1.getMonth()    === d2.getMonth() &&
   d1.getDate()     === d2.getDate();
 
+/** Statuses that mean a work package is closed out. Mirrors workPackages/analytics.js. */
+const CLOSED_WP_STATUSES = new Set(["complete", "completed", "closed"]);
+
+/**
+ * Is the work package finished, by the same rule the Work Packages page uses
+ * (`isClosedStatus(status) || percent_complete >= 100`)?
+ *
+ * The delivery gate previously required `status === "Complete"` exactly, so a
+ * package fabricated to 100% but still carrying an "In Progress" status was
+ * reported as "fabrication is not complete" and could not be marked delivered
+ * — a real load blocked by a stale status field.
+ */
+const isWorkPackageFinished = (wp) => {
+  const status = String(wp?.status || "").trim().toLowerCase();
+  if (CLOSED_WP_STATUSES.has(status)) return true;
+  const pct = Number(wp?.percent_complete);
+  return Number.isFinite(pct) && pct >= 100;
+};
+
 /**
  * Is the linked work package's fabrication complete enough that this
  * delivery can safely be marked "Delivered"?
@@ -17,16 +36,16 @@ export const isSameDay = (d1, d2) =>
  *   - No WP linked        → allow (delivery stands on its own).
  *   - WP not found        → allow (deleted WP — don't block).
  *   - WP in Delivery/Erection phase → allow (fab is behind us).
- *   - WP in Fabrication phase AND status === "Complete" → allow.
+ *   - WP in Fabrication phase AND finished (closed status OR 100%) → allow.
  *   - Everything else     → block.
  */
 export const isFabComplete = (delivery, workPackages) => {
   if (!delivery.work_package_id) return true;
-  const wp = workPackages.find((w) => w.id === delivery.work_package_id);
+  const wp = (workPackages || []).find((w) => w.id === delivery.work_package_id);
   if (!wp) return true;
   const rank = PHASE_RANK[wp.phase] ?? 0;
   if (rank >= 2) return true;
-  if (rank === 1 && wp.status === "Complete") return true;
+  if (rank === 1 && isWorkPackageFinished(wp)) return true;
   return false;
 };
 
