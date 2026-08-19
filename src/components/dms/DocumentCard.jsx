@@ -136,7 +136,9 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
       </div>
 
       {linkedCount > 0 && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 8 }}>Linked to {linkedCount} record{linkedCount !== 1 ? "s" : ""}</div>}
-      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>{fileSizeMB} \u00B7 {uploadDate}{doc.uploadedBy && <span> \u00B7 {doc.uploadedBy}</span>}</div>
+      {/* `\u00B7` is only an escape inside a string literal — as bare JSX text
+          it renders as the literal characters, which is what shipped. */}
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>{fileSizeMB}{" \u00B7 "}{uploadDate}{doc.uploadedBy && <span>{" \u00B7 "}{doc.uploadedBy}</span>}</div>
 
       {hovered && !confirmDelete && (
         <div style={{ display: "flex", gap: 4, paddingTop: 10, borderTop: "1px solid var(--divider)" }}>
