@@ -459,16 +459,29 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      {/* Height/max-height live in CSS (not inline) so the dvh upgrade can be
+          @supports-gated with a vh fallback. The dialog is centred by Radix
+          with translateY(-50%): if the box is ever TALLER than the viewport,
+          half the overflow goes ABOVE the top edge where it can't be scrolled
+          to — that's how the header and revision selectors became unreachable
+          on short windows. max-height + overflow:hidden makes that impossible. */}
+      <style>{`
+        .rev-compare-dialog { height: 92vh; max-height: 92vh; }
+        @supports (height: 92dvh) {
+          .rev-compare-dialog { height: 92dvh; max-height: 92dvh; }
+        }
+      `}</style>
       <DialogContent
-        className="detailing-cc"
+        className="detailing-cc rev-compare-dialog"
         style={{
           maxWidth: "min(96vw, 1500px)",
           width: "96vw",
-          height: "92vh",
           display: "flex",
           flexDirection: "column",
           gap: 10,
           padding: 16,
+          overflow: "hidden",
+          minHeight: 0,
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
         }}
@@ -499,7 +512,10 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
             version will be archived here automatically for overlay compare.
           </div>
         ) : (
-          <>
+          // Scrollable body: the header above stays pinned, and if a short
+          // window can't fit the control rows plus a usable canvas, the whole
+          // body scrolls instead of pushing content out of reach.
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
             {/* ── Controls ──────────────────────────────────────────── */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
               <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 800, color: OLD_TINT, letterSpacing: "0.08em" }}>OLD</span>
@@ -621,7 +637,8 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
             )}
 
             {/* ── Canvas + AI rail ─────────────────────────────────── */}
-            <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 10 }}>
+            {/* minHeight floor keeps the sheet usable when the body scrolls. */}
+            <div style={{ flex: 1, minHeight: 260, display: "flex", gap: 10 }}>
             <div style={{
               flex: 1, minWidth: 0, overflow: "auto", borderRadius: 10,
               border: "1px solid var(--border-default)", background: "var(--bg-surface-highest)",
@@ -688,7 +705,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
               />
             )}
             </div>
-          </>
+          </div>
         )}
 
         {rfiDraft && (

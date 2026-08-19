@@ -211,11 +211,22 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      {/* Radix centres this with translateY(-50%), so a box taller than the
+          viewport loses half its overflow ABOVE the top edge where it can't be
+          scrolled to. max-height + overflow:hidden keeps it bounded; dvh is
+          @supports-gated with a vh fallback. */}
+      <style>{`
+        .rev-impact-dialog { height: 92vh; max-height: 92vh; }
+        @supports (height: 92dvh) {
+          .rev-impact-dialog { height: 92dvh; max-height: 92dvh; }
+        }
+      `}</style>
       <DialogContent
-        className="detailing-cc"
+        className="detailing-cc rev-impact-dialog"
         style={{
-          maxWidth: "min(96vw, 1100px)", width: "96vw", height: "92vh",
+          maxWidth: "min(96vw, 1100px)", width: "96vw",
           display: "flex", flexDirection: "column", gap: 12, padding: 16,
+          overflow: "hidden", minHeight: 0,
           background: "var(--bg-surface)", border: "1px solid var(--border-default)",
         }}
       >
