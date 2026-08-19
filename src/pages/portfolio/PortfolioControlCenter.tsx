@@ -26,12 +26,14 @@ import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import {
   buildPortfolioSummary,
+  buildPortfolioSummaryFromRollups,
   healthTone,
   type ProjectRecord,
   type PortfolioRelated,
   type EnrichedProject,
   type PortfolioPanelRow,
 } from "./portfolioControlCenter.derive";
+import type { PortfolioProjectRollup } from "@/lib/portfolio/projectRollups";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -64,8 +66,10 @@ function daysLabel(days: number | null, isOverdue: boolean): string {
 export interface PortfolioControlCenterProps {
   /** All raw project records (full org — NOT project-scoped). */
   projects: ProjectRecord[];
-  /** Cross-entity arrays for rollup calculations. */
+  /** Cross-entity arrays for rollup calculations (row-scan fallback). */
   related: PortfolioRelated;
+  /** Server-side counts; when present, related rows are not scanned. */
+  rollups?: PortfolioProjectRollup[] | null;
   /** Active search string. */
   search: string;
   onSearch: (v: string) => void;
@@ -90,6 +94,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
   const {
     projects,
     related,
+    rollups,
     search,
     onSearch,
     healthFilter,
@@ -101,8 +106,11 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
 
   // Derive all KPIs + panel queues from raw data
   const summary = useMemo(
-    () => buildPortfolioSummary(projects, related),
-    [projects, related],
+    () =>
+      Array.isArray(rollups)
+        ? buildPortfolioSummaryFromRollups(projects, rollups)
+        : buildPortfolioSummary(projects, related),
+    [projects, related, rollups],
   );
 
   // Client-side filter for the DataTable

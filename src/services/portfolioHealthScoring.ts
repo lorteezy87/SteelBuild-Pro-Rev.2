@@ -80,6 +80,74 @@ function isClosed(status: unknown, closedStatuses: Set<string>): boolean {
   return closedStatuses.has(normalizeStatus(status));
 }
 
+export interface PortfolioScoreCounts {
+  overdueRfis: number;
+  criticalRfis: number;
+  lateDeliveries: number;
+  overdueActions: number;
+  delayedTasks: number;
+  budget: number;
+  committed: number;
+  originalContractValue?: number | null;
+}
+
+/**
+ * Shared deduction math for portfolio health. Used by both the row-scanning
+ * scorer and the server-side rollup path so the two cannot drift.
+ */
+export function scorePortfolioFromCounts(
+  counts: PortfolioScoreCounts,
+): Pick<PortfolioHealthScoringResult, "score" | "health" | "reasons"> {
+  const overdueRfis = n(counts.overdueRfis);
+  const criticalRfis = n(counts.criticalRfis);
+  const lateDeliveries = n(counts.lateDeliveries);
+  const overdueActions = n(counts.overdueActions);
+  const delayedTasks = n(counts.delayedTasks);
+  const budget = n(counts.budget);
+  const committed = n(counts.committed);
+
+  let score = 100;
+  const reasons: string[] = [];
+
+  if (overdueRfis) {
+    score -= Math.min(28, overdueRfis * 9);
+    reasons.push(`${overdueRfis} overdue RFI${overdueRfis === 1 ? "" : "s"}`);
+  }
+  if (criticalRfis) {
+    score -= Math.min(16, criticalRfis * 5);
+    reasons.push(`${criticalRfis} high-priority RFI${criticalRfis === 1 ? "" : "s"}`);
+  }
+  if (lateDeliveries) {
+    score -= Math.min(24, lateDeliveries * 8);
+    reasons.push(`${lateDeliveries} late deliver${lateDeliveries === 1 ? "y" : "ies"}`);
+  }
+  if (overdueActions) {
+    score -= Math.min(14, overdueActions * 4);
+    reasons.push(`${overdueActions} overdue action${overdueActions === 1 ? "" : "s"}`);
+  }
+  if (delayedTasks) {
+    score -= Math.min(18, delayedTasks * 6);
+    reasons.push(`${delayedTasks} delayed task${delayedTasks === 1 ? "" : "s"}`);
+  }
+  if (budget > 0 && committed > budget) {
+    score -= Math.min(22, Math.ceil(((committed - budget) / budget) * 100));
+    reasons.push("Cost exposure over budget");
+  }
+  if (budget === 0 && n(counts.originalContractValue) > 0) {
+    score -= 8;
+    reasons.push("Budget not fully set up");
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  const health: HealthLevel =
+    score >= DEFAULT_HEALTH_THRESHOLDS.onTrack ? "On Track"
+    : score >= DEFAULT_HEALTH_THRESHOLDS.watch ? "Watch"
+    : "At Risk";
+
+  return { score, health, reasons };
+}
+
 export function computePortfolioProjectHealth(inputs: PortfolioScoringInputs): PortfolioHealthScoringResult {
   const {
     originalContractValue = 0,
@@ -106,49 +174,19 @@ export function computePortfolioProjectHealth(inputs: PortfolioScoringInputs): P
 
   const delayedTasks = scheduleTasks.filter((task) => normalizeStatus(task.status).includes("delay"));
 
-  let score = 100;
-  const reasons: string[] = [];
-
-  if (overdueRfis.length) {
-    score -= Math.min(28, overdueRfis.length * 9);
-    reasons.push(`${overdueRfis.length} overdue RFI${overdueRfis.length === 1 ? "" : "s"}`);
-  }
-  if (criticalRfis.length) {
-    score -= Math.min(16, criticalRfis.length * 5);
-    reasons.push(`${criticalRfis.length} high-priority RFI${criticalRfis.length === 1 ? "" : "s"}`);
-  }
-  if (lateDeliveries.length) {
-    score -= Math.min(24, lateDeliveries.length * 8);
-    reasons.push(`${lateDeliveries.length} late deliver${lateDeliveries.length === 1 ? "y" : "ies"}`);
-  }
-  if (overdueActions.length) {
-    score -= Math.min(14, overdueActions.length * 4);
-    reasons.push(`${overdueActions.length} overdue action${overdueActions.length === 1 ? "" : "s"}`);
-  }
-  if (delayedTasks.length) {
-    score -= Math.min(18, delayedTasks.length * 6);
-    reasons.push(`${delayedTasks.length} delayed task${delayedTasks.length === 1 ? "" : "s"}`);
-  }
-  if (budget > 0 && committed > budget) {
-    score -= Math.min(22, Math.ceil(((committed - budget) / budget) * 100));
-    reasons.push("Cost exposure over budget");
-  }
-  if (budget === 0 && n(originalContractValue) > 0) {
-    score -= 8;
-    reasons.push("Budget not fully set up");
-  }
-
-  score = Math.max(0, Math.min(100, Math.round(score)));
-
-  const health: HealthLevel =
-    score >= DEFAULT_HEALTH_THRESHOLDS.onTrack ? "On Track"
-    : score >= DEFAULT_HEALTH_THRESHOLDS.watch ? "Watch"
-    : "At Risk";
+  const scored = scorePortfolioFromCounts({
+    overdueRfis: overdueRfis.length,
+    criticalRfis: criticalRfis.length,
+    lateDeliveries: lateDeliveries.length,
+    overdueActions: overdueActions.length,
+    delayedTasks: delayedTasks.length,
+    budget,
+    committed,
+    originalContractValue,
+  });
 
   return {
-    score,
-    health,
-    reasons,
+    ...scored,
     openRfis: openRfis.length,
     overdueRfis: overdueRfis.length,
     criticalRfis: criticalRfis.length,

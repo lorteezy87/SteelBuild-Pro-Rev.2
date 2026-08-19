@@ -7,10 +7,12 @@
 import { describe, it, expect } from "vitest";
 import {
   buildPortfolioSummary,
+  buildPortfolioSummaryFromRollups,
   healthTone,
   type ProjectRecord,
   type PortfolioRelated,
 } from "../portfolioControlCenter.derive";
+import { EMPTY_PORTFOLIO_ROLLUP } from "@/lib/portfolio/projectRollups";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -319,5 +321,36 @@ describe("buildPortfolioSummary – late deliveries", () => {
     };
     const { allRows } = buildPortfolioSummary(projects, related);
     expect(allRows[0].lateDeliveries).toBe(2);
+  });
+});
+
+describe("buildPortfolioSummaryFromRollups", () => {
+  it("matches the empty-related summary for a clean project", () => {
+    const projects = [makeProject({ id: "p1" })];
+    const fromRows = buildPortfolioSummary(projects, emptyRelated);
+    const fromRollups = buildPortfolioSummaryFromRollups(projects, [
+      { project_id: "p1", ...EMPTY_PORTFOLIO_ROLLUP },
+    ]);
+    expect(fromRollups.kpis).toEqual(fromRows.kpis);
+    expect(fromRollups.allRows[0].score).toBe(fromRows.allRows[0].score);
+    expect(fromRollups.allRows[0].health).toBe(fromRows.allRows[0].health);
+  });
+
+  it("adds approved CO value to the revised contract", () => {
+    const projects = [makeProject({ id: "p1", original_contract_value: 500_000 })];
+    const { kpis } = buildPortfolioSummaryFromRollups(projects, [
+      { project_id: "p1", ...EMPTY_PORTFOLIO_ROLLUP, approved_co_value: 100_000 },
+    ]);
+    expect(kpis.totalContractValue).toBe(600_000);
+  });
+
+  it("marks Watch from one scoring overdue RFI", () => {
+    const projects = [makeProject({ id: "p1" })];
+    const { allRows } = buildPortfolioSummaryFromRollups(projects, [
+      { project_id: "p1", ...EMPTY_PORTFOLIO_ROLLUP, overdue_rfis: 1 },
+    ]);
+    expect(allRows[0].overdueRfis).toBe(1);
+    expect(allRows[0].score).toBe(83);
+    expect(allRows[0].health).toBe("Watch");
   });
 });

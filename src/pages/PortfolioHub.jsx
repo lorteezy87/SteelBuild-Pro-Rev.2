@@ -20,6 +20,7 @@ import {
   SCHEDULE_KPI_COLUMNS,
   WP_KPI_COLUMNS,
 } from "@/lib/kpiSelectColumns";
+import { fetchPortfolioProjectRollups } from "@/lib/portfolio/projectRollups";
 
 const ExecutiveView = lazyWithRetry(() => import("@/pages/ExecutiveView"));
 
@@ -55,53 +56,66 @@ export default function PortfolioHub() {
     staleTime: 5 * 60 * 1000,
     enabled: fetchForCC,
   });
+  const {
+    data: rollups,
+    isError: rollupsError,
+    isSuccess: rollupsSuccess,
+    isLoading: rollupsLoading,
+  } = useQuery({
+    queryKey: ["portfolio-rollups"],
+    queryFn: fetchPortfolioProjectRollups,
+    staleTime: 30 * 1000,
+    enabled: fetchForCC,
+    retry: 1,
+  });
+  const useRowFallback = Boolean(fetchForCC && rollupsError);
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["portfolio-cos"],
     queryFn: () => entities.ChangeOrder.listAll(undefined, CO_KPI_COLUMNS),
     staleTime: 60 * 1000,
-    enabled: fetchForCC,
+    enabled: useRowFallback,
   });
   const { data: workPackages = [] } = useQuery({
     queryKey: ["portfolio-wps"],
     queryFn: () => entities.WorkPackage.listAll(undefined, WP_KPI_COLUMNS),
     staleTime: 30 * 1000,
-    enabled: fetchForCC,
+    enabled: useRowFallback,
   });
   const { data: costCodes = [] } = useQuery({
     queryKey: ["portfolio-codes"],
     queryFn: () => entities.CostCode.listAll(undefined, COST_CODE_KPI_COLUMNS),
     staleTime: 60 * 1000,
-    enabled: fetchForCC,
+    enabled: useRowFallback,
   });
   const { data: rfis = [] } = useQuery({
     queryKey: ["portfolio-rfis"],
     queryFn: () => entities.RFI.listAll(undefined, RFI_KPI_COLUMNS),
     staleTime: 30 * 1000,
-    enabled: fetchForCC,
+    enabled: useRowFallback,
   });
   const { data: deliveries = [] } = useQuery({
     queryKey: ["portfolio-deliveries"],
     queryFn: () => entities.Delivery.listAll(undefined, DELIVERY_KPI_COLUMNS),
     staleTime: 30 * 1000,
-    enabled: fetchForCC,
+    enabled: useRowFallback,
   });
   const { data: actionItems = [] } = useQuery({
     queryKey: ["portfolio-action-items"],
     queryFn: () => entities.ActionItem.listAll(undefined, ACTION_ITEM_KPI_COLUMNS),
     staleTime: 30 * 1000,
-    enabled: fetchForCC,
+    enabled: useRowFallback,
   });
   const { data: scheduleTasks = [] } = useQuery({
     queryKey: ["portfolio-schedule-tasks"],
     queryFn: () => entities.ScheduleTask.listAll("-start_date", SCHEDULE_KPI_COLUMNS),
     staleTime: 60 * 1000,
-    enabled: fetchForCC,
+    enabled: useRowFallback,
   });
   const { data: expenses = [] } = useQuery({
     queryKey: ["portfolio-expenses"],
     queryFn: () => entities.Expense.listAll(),
     staleTime: 60 * 1000,
-    enabled: fetchForCC,
+    enabled: useRowFallback,
   });
 
   const related = useMemo(
@@ -115,7 +129,7 @@ export default function PortfolioHub() {
   };
 
   if (activeKey === "overview") {
-    if (projectsLoading) {
+    if (projectsLoading || (rollupsLoading && !rollupsError)) {
       return <LoadingSkeleton variant="page" />;
     }
 
@@ -123,6 +137,7 @@ export default function PortfolioHub() {
       <PortfolioControlCenter
         projects={projects}
         related={related}
+        rollups={rollupsSuccess ? rollups : null}
         search={search}
         onSearch={setSearch}
         healthFilter={healthFilter}

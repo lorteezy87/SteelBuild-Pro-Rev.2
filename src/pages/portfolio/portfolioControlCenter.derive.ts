@@ -7,7 +7,14 @@
  */
 import { calcContractValue, calcWpProgress, calcDaysToDeadline } from "@/utils/projectKpis";
 import { computeCostCodeTotals, resolveProjectSpend } from "@/services/costRollup";
-import { computePortfolioProjectHealth } from "@/services/portfolioHealthScoring";
+import {
+  computePortfolioProjectHealth,
+  scorePortfolioFromCounts,
+} from "@/services/portfolioHealthScoring";
+import {
+  EMPTY_PORTFOLIO_ROLLUP,
+  type PortfolioProjectRollup,
+} from "@/lib/portfolio/projectRollups";
 import { capHealthScore, deriveOperationalHealth } from "@/lib/projectHealth";
 import type { OperationalHealthLabel } from "@/lib/projectHealth";
 import { partitionFieldTasks } from "@/lib/field/fieldToday";
@@ -315,6 +322,75 @@ export function buildPortfolioSummary(
     };
   });
 
+  return assemblePortfolioSummary(allRows);
+}
+
+/**
+ * Same PortfolioSummary as buildPortfolioSummary, from server-side per-project
+ * counts (public.portfolio_project_rollups) instead of shipping every related row.
+ */
+export function buildPortfolioSummaryFromRollups(
+  projects: ProjectRecord[],
+  rollups: PortfolioProjectRollup[],
+): PortfolioSummary {
+  const byId = new Map(rollups.map((row) => [row.project_id, row]));
+
+  const allRows: EnrichedProject[] = projects.map((project) => {
+    const rollup = byId.get(project.id) ?? { project_id: project.id, ...EMPTY_PORTFOLIO_ROLLUP };
+    const { daysLeft, isOverdue } = calcDaysToDeadline(project);
+    const pctComplete =
+      rollup.wp_count > 0
+        ? Math.round((rollup.wp_complete_count / rollup.wp_count) * 100)
+        : 0;
+    const revisedContract =
+      (Number(project.original_contract_value) || 0) + rollup.approved_co_value;
+    const budget = rollup.budget_amount;
+    const committed = Math.max(rollup.committed_cost, rollup.actual_cost);
+    const scored = scorePortfolioFromCounts({
+      overdueRfis: rollup.overdue_rfis,
+      criticalRfis: rollup.high_priority_open_rfis,
+      lateDeliveries: rollup.late_deliveries,
+      overdueActions: rollup.overdue_action_items,
+      delayedTasks: rollup.delayed_schedule_tasks,
+      budget,
+      committed,
+      originalContractValue: project.original_contract_value,
+    });
+    const operationalHealth = deriveOperationalHealth({
+      storedStatus: project.health_status || scored.health,
+      onHold: project.on_hold || String(project.status || "").toLowerCase() === "on hold",
+      overdueRfis: rollup.overdue_rfis,
+      criticalOverdueRfis: rollup.critical_overdue_rfis,
+      overdueScheduleTasks: rollup.overdue_schedule_tasks,
+      targetDateOverdue: isOverdue,
+      percentComplete: pctComplete,
+      rfiEvidenceLoaded: true,
+      scheduleEvidenceLoaded: true,
+    });
+    const score = capHealthScore(scored.score, operationalHealth);
+
+    return {
+      ...project,
+      health: operationalHealth.label,
+      score,
+      revisedContract,
+      pctComplete,
+      daysLeft,
+      isOverdue,
+      openRfis: rollup.open_rfis,
+      overdueRfis: rollup.overdue_rfis,
+      lateDeliveries: rollup.late_deliveries,
+      totalTons: rollup.wp_tons,
+      budget,
+      committed,
+      reasons: [...new Set([...operationalHealth.reasons, ...scored.reasons])],
+    };
+  });
+
+  return assemblePortfolioSummary(allRows);
+}
+
+function assemblePortfolioSummary(allRows: EnrichedProject[]): PortfolioSummary {
   // ── KPIs ──
   const activeRows = allRows.filter(
     (p) =>

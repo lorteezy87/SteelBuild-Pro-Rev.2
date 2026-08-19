@@ -51,6 +51,7 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["del-detail", "proj-1"]);
     expect(families).toContainEqual(["deliveries-dashboard"]);
     expect(families).toContainEqual(["portfolio-deliveries"]);
+    expect(families).toContainEqual(["portfolio-rollups"]);
   });
 
   it("returns all change_order query keys (includes projects)", () => {
@@ -60,6 +61,7 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["cos-all"]);
     expect(families).toContainEqual(["cos-dashboard"]);
     expect(families).toContainEqual(["portfolio-cos"]);
+    expect(families).toContainEqual(["portfolio-rollups"]);
     expect(families).toContainEqual(["all-cos-portfolio"]);
     expect(families).toContainEqual(["change-orders-global"]);
     expect(families).toContainEqual(["change-orders-dash", "proj-1"]);
@@ -76,6 +78,7 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["modal-codes", "proj-1"]);
     expect(families).toContainEqual(["codes-dashboard"]);
     expect(families).toContainEqual(["portfolio-codes"]);
+    expect(families).toContainEqual(["portfolio-rollups"]);
   });
 
   it("returns all work_package query keys", () => {
@@ -88,6 +91,7 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["wps-fab", "proj-1"]);
     expect(families).toContainEqual(["work-packages-dashboard"]);
     expect(families).toContainEqual(["portfolio-wps"]);
+    expect(families).toContainEqual(["portfolio-rollups"]);
   });
 
   it("returns all rfi query keys", () => {
@@ -100,6 +104,7 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["rfis", "all"]);
     expect(families).toContainEqual(["rfis-dashboard"]);
     expect(families).toContainEqual(["portfolio-rfis"]);
+    expect(families).toContainEqual(["portfolio-rollups"]);
   });
 
   it("returns dashboard and RFI health keys for schedule_task", () => {
@@ -107,6 +112,7 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["schedule-tasks-dashboard"]);
     expect(families).toContainEqual(["schedule-tasks-rfis"]);
     expect(families).toContainEqual(["portfolio-schedule-tasks"]);
+    expect(families).toContainEqual(["portfolio-rollups"]);
   });
 
   it("includes the Doc Control register key for drawing, drawing_revision, and drawingSet", () => {

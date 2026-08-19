@@ -154,9 +154,11 @@ follow-ups._
   performance** (virtualization, server-side filtering, narrow invalidation).
   Bundle gzip budgets now run via `npm run perf:bundle` after CI `build`.
   `list()` now honors an explicit limit. Portfolio/Projects/RFI health reads
-  use slim column lists. Remaining: RFI register + Piece Register
-  virtualization, and server-side portfolio rollup RPCs so those pages stop
-  paging every matching row.
+  use slim column lists. RFI register and Piece Register virtualize above
+  100 filtered rows. PortfolioHub and /Projects call
+  `portfolio_project_rollups()` and only fall back to slim `listAll` if the
+  RPC is missing. Remaining large-project work: server-side register filters
+  and report rollups.
   Phase 0 tablet kit is landed; Phases 1-4 domain migrations remain pending.
 - **Dependency vulnerabilities — CLEARED (`npm audit` = 0 advisories, verified
   2026-06-17).** The 2 remaining `esbuild`-via-`vite` highs were patched within the

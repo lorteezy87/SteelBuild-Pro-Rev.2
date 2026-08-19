@@ -42,6 +42,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
     primary:  (pid) => ["projects"],
     families: (pid) => [
       ["projects"],
+      ["portfolio-rollups"],        // PortfolioHub / Projects server rollup
     ],
   },
 
@@ -93,6 +94,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["deliveries-for-wp", pid],     // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
       ["deliveries-dashboard"],       // Dashboard.jsx
       ["portfolio-deliveries"],       // PortfolioHub.jsx
+      ["portfolio-rollups"],
     ],
   },
 
@@ -103,6 +105,8 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["expenses"],
       ["expenses-all"],             // Reports.jsx
       ["expenses-dashboard"],       // Dashboard.jsx
+      ["portfolio-expenses"],       // PortfolioHub.jsx row-scan fallback
+      ["portfolio-rollups"],
     ],
   },
 
@@ -119,6 +123,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["modal-codes", pid],         // ProjectDrilldownModal.jsx
       ["codes-dashboard"],          // Dashboard.jsx
       ["portfolio-codes"],          // PortfolioHub.jsx
+      ["portfolio-rollups"],
     ],
   },
 
@@ -133,6 +138,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["cos-all"],                  // ProductionNotes.jsx
       ["cos-dashboard"],            // Dashboard.jsx
       ["portfolio-cos"],            // PortfolioHub.jsx
+      ["portfolio-rollups"],
       ["all-cos-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
       ["co-detail", pid],           // ProjectDetailView.jsx
       ["modal-cos", pid],           // ProjectDrilldownModal.jsx
@@ -165,6 +171,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["modal-rfis", pid],          // ProjectDrilldownModal.jsx
       ["rfis-dashboard"],           // Dashboard.jsx
       ["portfolio-rfis"],           // PortfolioHub.jsx
+      ["portfolio-rollups"],
     ],
   },
 
@@ -178,6 +185,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["schedule-tasks-all"],       // Reports.jsx / Projects.jsx prefix
       ["schedule-tasks-rfis"],      // RFIs.jsx health evidence
       ["portfolio-schedule-tasks"], // PortfolioHub.jsx / AIInsights.jsx
+      ["portfolio-rollups"],
       ["sched-detail", pid],        // ProjectDetailView.jsx
       ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
       ["lookahead", pid],           // LookAheadSchedule.jsx
@@ -200,6 +208,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["modal-wps", pid],           // ProjectDrilldownModal.jsx
       ["work-packages-dashboard"],  // Dashboard.jsx
       ["portfolio-wps"],            // PortfolioHub.jsx
+      ["portfolio-rollups"],
     ],
   },
 
@@ -241,6 +250,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["action-items-all"],          // Reports.jsx
       ["action-items-dashboard"],    // Dashboard.jsx
       ["portfolio-action-items"],    // PortfolioHub.jsx
+      ["portfolio-rollups"],
       ["all-action-items-portfolio"], // AIInsights.jsx, CostDashboard.jsx
     ],
   },

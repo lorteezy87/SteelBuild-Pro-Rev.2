@@ -648,15 +648,20 @@ DrawingViewer and ModelViewer, then add interaction tests
   (default 320 KB initial / 3600 KB total; CI runs the same check)
 - Nav overdue badges fetch a slim overdue projection, not the full register
 - `filter()` / `listAll()` accept an optional column list for KPI rollups
+- `public.portfolio_project_rollups()` returns per-project KPI/health counts
+  so Portfolio and Projects do not page every related row
+- RFI register and Piece Register virtualize above 100 filtered rows
+  (`src/lib/registerVirtualize.ts`)
 
 ### What's not done
 
 - No Lighthouse CI / performance budgets in the build
 - Large-project virtualization / server-side filtering still partial
-  (command DataTable virtualizes at 100+ rows; RFI register and Piece
-  Register still paint every filtered row)
-- Portfolio / Projects / reports still client-aggregate full tables
-  instead of server-side rollup RPCs
+  (command DataTable, RFI register, and Piece Register virtualize above
+  100 filtered rows; search/filter still run client-side)
+- Reports still client-aggregate full tables. PortfolioHub and /Projects
+  use `public.portfolio_project_rollups()` (SECURITY INVOKER) with a
+  slim `listAll` fallback when the RPC is unavailable
 - No code splitting beyond per-route lazy chunks + vendor manualChunks
 
 Track all of these in TECH_DEBT.md.

@@ -14,8 +14,9 @@ import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
-import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import { buildOperationalHealthIndex, buildOperationalHealthIndexFromRollups } from "@/lib/projectHealth";
 import { CO_KPI_COLUMNS, RFI_KPI_COLUMNS, SCHEDULE_KPI_COLUMNS, WP_KPI_COLUMNS } from "@/lib/kpiSelectColumns";
+import { fetchPortfolioProjectRollups } from "@/lib/portfolio/projectRollups";
 import { localToday } from "@/utils/dates";
 
 export default function Projects() {
@@ -51,21 +52,36 @@ export default function Projects() {
     },
     staleTime: 5 * 60 * 1000,
   });
+  const {
+    data: rollups,
+    isError: rollupsError,
+    isSuccess: rollupsSuccess,
+  } = useQuery({
+    queryKey: ["portfolio-rollups"],
+    queryFn: fetchPortfolioProjectRollups,
+    staleTime: 30 * 1000,
+    retry: 1,
+  });
+  const useRowFallback = rollupsError;
   const { data: rawWorkPackages = [] } = useQuery({
     queryKey: ["work-packages-all", "projects-kpi"],
     queryFn: () => entities.WorkPackage.listAll(undefined, WP_KPI_COLUMNS),
+    enabled: useRowFallback,
   });
   const { data: rawRfis = [], isSuccess: rfisSuccess } = useQuery({
     queryKey: ["rfis", "all", "projects-kpi"],
     queryFn: () => entities.RFI.listAll(undefined, RFI_KPI_COLUMNS),
+    enabled: useRowFallback,
   });
   const { data: rawChangeOrders = [] } = useQuery({
     queryKey: ["change-orders-all", "projects-kpi"],
     queryFn: () => entities.ChangeOrder.listAll(undefined, CO_KPI_COLUMNS),
+    enabled: useRowFallback,
   });
   const { data: rawScheduleTasks = [], isSuccess: scheduleTasksSuccess } = useQuery({
     queryKey: ["schedule-tasks-all", "projects-kpi"],
     queryFn: () => entities.ScheduleTask.listAll("start_date", SCHEDULE_KPI_COLUMNS),
+    enabled: useRowFallback,
   });
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
@@ -88,12 +104,18 @@ export default function Projects() {
   );
   const todayIso = localToday();
   const evidence = useMemo(
-    () => ({ rfiEvidenceLoaded: rfisSuccess, scheduleEvidenceLoaded: scheduleTasksSuccess }),
-    [rfisSuccess, scheduleTasksSuccess],
+    () => ({
+      rfiEvidenceLoaded: rollupsSuccess || rfisSuccess,
+      scheduleEvidenceLoaded: rollupsSuccess || scheduleTasksSuccess,
+    }),
+    [rollupsSuccess, rfisSuccess, scheduleTasksSuccess],
   );
   const healthByProjectId = useMemo(
-    () => buildOperationalHealthIndex(projects, rfis, scheduleTasks, todayIso, evidence),
-    [projects, rfis, scheduleTasks, todayIso, evidence],
+    () =>
+      rollupsSuccess && Array.isArray(rollups)
+        ? buildOperationalHealthIndexFromRollups(projects, rollups, todayIso)
+        : buildOperationalHealthIndex(projects, rfis, scheduleTasks, todayIso, evidence),
+    [projects, rfis, scheduleTasks, rollups, rollupsSuccess, todayIso, evidence],
   );
   const { plan } = usePlan();
   const projectLimit = plan.limits.projects;
@@ -116,6 +138,7 @@ export default function Projects() {
     },
     onSuccess: ({ template, templateError }) => {
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["portfolio-rollups"] });
       if (template) {
         qc.invalidateQueries({ queryKey: ["work-packages"] });
         qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
@@ -132,7 +155,13 @@ export default function Projects() {
   });
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.Project.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project updated"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["portfolio-rollups"] });
+      setModalOpen(false);
+      setEditing(null);
+      toast.success("Project updated");
+    },
     onError: (err) => toast.error(toUserErrorMessage(err, "Failed to update project")),
   });
   const deleteMut = useMutation({
@@ -141,6 +170,7 @@ export default function Projects() {
       removeProject(id);
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["projects", "all-including-on-hold"] });
+      qc.invalidateQueries({ queryKey: ["portfolio-rollups"] });
       if (detailProject?.id === id) setDetailProject(null);
       setDeleteTarget(null);
       toast.success("Project archived");
@@ -175,6 +205,7 @@ export default function Projects() {
         rfis={rfis}
         changeOrders={changeOrders}
         scheduleTasks={scheduleTasks}
+        rollups={rollupsSuccess ? rollups : null}
         todayIso={todayIso}
         evidence={evidence}
         search={search}

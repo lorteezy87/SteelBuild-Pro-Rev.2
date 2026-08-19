@@ -29,6 +29,7 @@ import type { Column, KpiCellDef, PillTone } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import {
   buildProjectsSummary,
+  buildProjectsSummaryFromRollups,
   type ProjectRecord,
   type WorkPackageRecord,
   type RfiRecord,
@@ -38,6 +39,7 @@ import {
   type ClosingSoonEntry,
   type RecentlyUpdatedEntry,
 } from "./projectsControlCenter.derive";
+import type { PortfolioProjectRollup } from "@/lib/portfolio/projectRollups";
 
 // ── Inline formatters ──────────────────────────────────────────────
 function fmtMoney(n: number): string {
@@ -101,6 +103,8 @@ export interface ProjectsControlCenterProps {
   rfis?: RfiRecord[];
   changeOrders?: ChangeOrderRecord[];
   scheduleTasks?: ScheduleTaskRecord[];
+  /** Server-side counts; when present, related rows are not scanned. */
+  rollups?: PortfolioProjectRollup[] | null;
   todayIso?: string;
   evidence?: { rfiEvidenceLoaded: boolean; scheduleEvidenceLoaded: boolean };
 
@@ -134,6 +138,7 @@ const HEALTH_VALUES = ["On Track", "Watch", "At Risk"];
 export default function ProjectsControlCenter(props: ProjectsControlCenterProps) {
   const {
     projects, workPackages = [], rfis = [], changeOrders = [], scheduleTasks = [],
+    rollups,
     todayIso = new Date().toISOString().slice(0, 10),
     evidence = { rfiEvidenceLoaded: true, scheduleEvidenceLoaded: true },
     search, onSearch,
@@ -146,16 +151,19 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
   useCommandSkin();
 
   const s = useMemo(
-    () => buildProjectsSummary(
-      projects,
-      workPackages,
-      rfis,
-      changeOrders,
-      scheduleTasks,
-      todayIso,
-      evidence,
-    ),
-    [projects, workPackages, rfis, changeOrders, scheduleTasks, todayIso, evidence]
+    () =>
+      Array.isArray(rollups)
+        ? buildProjectsSummaryFromRollups(projects, rollups, todayIso)
+        : buildProjectsSummary(
+            projects,
+            workPackages,
+            rfis,
+            changeOrders,
+            scheduleTasks,
+            todayIso,
+            evidence,
+          ),
+    [projects, workPackages, rfis, changeOrders, scheduleTasks, rollups, todayIso, evidence]
   );
 
   // ── Hero chips ────────────────────────────────────────────────

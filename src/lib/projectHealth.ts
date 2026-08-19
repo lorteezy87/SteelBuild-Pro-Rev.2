@@ -1,4 +1,5 @@
 import { partitionFieldTasks } from "@/lib/field/fieldToday";
+import type { PortfolioProjectRollup } from "@/lib/portfolio/projectRollups";
 
 export type OperationalHealthLabel =
   | "On Track"
@@ -173,6 +174,42 @@ export function buildOperationalHealthIndex(
       targetDateOverdue: Boolean(targetDate) && targetDate < todayIso,
       percentComplete,
       ...evidence,
+    });
+  }
+
+  return results;
+}
+
+export function buildOperationalHealthIndexFromRollups(
+  projects: ProjectRow[],
+  rollups: Array<Pick<
+    PortfolioProjectRollup,
+    "project_id" | "ops_overdue_rfis" | "critical_overdue_rfis" | "overdue_schedule_tasks"
+  >>,
+  todayIso: string,
+): Record<string, OperationalHealthResult> {
+  const byId = new Map(rollups.map((row) => [String(row.project_id), row]));
+  const results: Record<string, OperationalHealthResult> = {};
+
+  for (const project of projects) {
+    const projectId = String(project.id || "");
+    if (!projectId) continue;
+    const rollup = byId.get(projectId);
+    const targetDate = String(project.target_completion_date || "").slice(0, 10);
+    const rawPercent = project.scope_complete_pct_override ?? project.percent_complete;
+    const percentComplete =
+      typeof rawPercent === "number" && Number.isFinite(rawPercent) ? rawPercent : null;
+
+    results[projectId] = deriveOperationalHealth({
+      storedStatus: String(project.health_status || ""),
+      onHold: project.on_hold === true || String(project.status || "").toLowerCase() === "on hold",
+      overdueRfis: rollup?.ops_overdue_rfis ?? 0,
+      criticalOverdueRfis: rollup?.critical_overdue_rfis ?? 0,
+      overdueScheduleTasks: rollup?.overdue_schedule_tasks ?? 0,
+      targetDateOverdue: Boolean(targetDate) && targetDate < todayIso,
+      percentComplete,
+      rfiEvidenceLoaded: true,
+      scheduleEvidenceLoaded: true,
     });
   }
 

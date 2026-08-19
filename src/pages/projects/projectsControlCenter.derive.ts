@@ -9,8 +9,15 @@ import {
   calcDaysToDeadline,
   calcRfiHealth,
 } from "@/utils/projectKpis";
-import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import {
+  buildOperationalHealthIndex,
+  buildOperationalHealthIndexFromRollups,
+} from "@/lib/projectHealth";
 import type { OperationalHealthResult } from "@/lib/projectHealth";
+import {
+  EMPTY_PORTFOLIO_ROLLUP,
+  type PortfolioProjectRollup,
+} from "@/lib/portfolio/projectRollups";
 import { localToday } from "@/utils/dates";
 
 // ──────────────────────────────────────────────────────────────────
@@ -263,6 +270,130 @@ export function buildProjectsSummary(
       const pWPs = visibleWPs.filter((w) => w.project_id === p.id);
       return { project: p, pctComplete: effectivePct(p, pWPs), updatedAt: p.updated_at ?? null };
     });
+
+  return { kpis, healthByProjectId, atRiskQueue, closingSoonQueue, recentlyUpdatedQueue };
+}
+
+function rollupPct(project: ProjectRecord, rollup: PortfolioProjectRollup): number {
+  if (project.scope_complete_pct_override != null) {
+    return Math.round(Number(project.scope_complete_pct_override));
+  }
+  return rollup.wp_count > 0
+    ? Math.round((rollup.wp_complete_count / rollup.wp_count) * 100)
+    : 0;
+}
+
+/**
+ * Same ProjectsSummary as buildProjectsSummary, from server-side per-project
+ * counts instead of shipping every WP / RFI / CO / schedule row.
+ */
+export function buildProjectsSummaryFromRollups(
+  projects: ProjectRecord[],
+  rollups: PortfolioProjectRollup[],
+  todayIso: string = localToday(),
+): ProjectsSummary {
+  const byId = new Map(rollups.map((row) => [row.project_id, row]));
+  const rollupFor = (projectId: string): PortfolioProjectRollup =>
+    byId.get(projectId) ?? { project_id: projectId, ...EMPTY_PORTFOLIO_ROLLUP };
+  const healthByProjectId = buildOperationalHealthIndexFromRollups(projects, rollups, todayIso);
+
+  const nonHoldProjects = projects.filter((p) => !p.on_hold);
+  const isComplete = (project: ProjectRecord) => {
+    const lifecycle = String(project.status || project.phase || "").toLowerCase();
+    return (
+      lifecycle === "complete" ||
+      lifecycle === "completed" ||
+      lifecycle === "closeout" ||
+      rollupPct(project, rollupFor(project.id)) >= 100
+    );
+  };
+  const activeProjects = nonHoldProjects.filter((project) => !isComplete(project));
+  const atRiskProjects = activeProjects.filter(
+    (project) => healthByProjectId[project.id]?.label === "At Risk",
+  );
+  const onHoldCount = projects.filter((project) => project.on_hold).length;
+  const totalVal = nonHoldProjects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
+  const avgPctComplete = activeProjects.length
+    ? Math.round(
+        activeProjects.reduce((sum, p) => sum + rollupPct(p, rollupFor(p.id)), 0) /
+          activeProjects.length,
+      )
+    : 0;
+
+  let openRfis = 0;
+  let overdueRfis = 0;
+  let pendingCOCount = 0;
+  let pendingCOValue = 0;
+  for (const project of activeProjects) {
+    const rollup = rollupFor(project.id);
+    openRfis += rollup.kpi_open_rfis;
+    overdueRfis += rollup.kpi_overdue_rfis;
+    pendingCOCount += rollup.pending_co_count;
+    pendingCOValue += rollup.pending_co_value;
+  }
+
+  const kpis: ProjectsKpiSummary = {
+    totalProjects: projects.length,
+    activeProjects: activeProjects.length,
+    atRisk: atRiskProjects.length,
+    onHold: onHoldCount,
+    totalContractValue: totalVal,
+    avgPctComplete,
+    openRfis,
+    overdueRfis,
+    pendingCOValue,
+    pendingCOCount,
+  };
+
+  const atRiskQueue: AtRiskEntry[] = atRiskProjects
+    .slice()
+    .sort((a, b) => {
+      const da = calcDaysToDeadline(a);
+      const db = calcDaysToDeadline(b);
+      if (da.isOverdue !== db.isOverdue) return da.isOverdue ? -1 : 1;
+      if (da.daysLeft != null && db.daysLeft != null) return da.daysLeft - db.daysLeft;
+      return 0;
+    })
+    .slice(0, 6)
+    .map((p) => {
+      const rollup = rollupFor(p.id);
+      const { daysLeft, isOverdue } = calcDaysToDeadline(p);
+      return {
+        project: p,
+        openRfis: rollup.kpi_open_rfis,
+        overdueRfis: rollup.kpi_overdue_rfis,
+        daysLeft,
+        isOverdue,
+      };
+    });
+
+  const now = Date.now();
+  const closingSoonQueue: ClosingSoonEntry[] = activeProjects
+    .filter((p) => p.target_completion_date)
+    .map((p) => {
+      const daysLeft = Math.ceil(
+        (new Date(p.target_completion_date!).getTime() - now) / 86400000,
+      );
+      return { project: p, daysLeft, pctComplete: rollupPct(p, rollupFor(p.id)) };
+    })
+    .filter((e) => e.daysLeft >= 0 && e.daysLeft <= 90)
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+    .slice(0, 6);
+
+  const recentlyUpdatedQueue: RecentlyUpdatedEntry[] = projects
+    .slice()
+    .filter((p) => p.updated_at)
+    .sort((a, b) => {
+      const at = a.updated_at ?? "";
+      const bt = b.updated_at ?? "";
+      return bt.localeCompare(at);
+    })
+    .slice(0, 6)
+    .map((p) => ({
+      project: p,
+      pctComplete: rollupPct(p, rollupFor(p.id)),
+      updatedAt: p.updated_at ?? null,
+    }));
 
   return { kpis, healthByProjectId, atRiskQueue, closingSoonQueue, recentlyUpdatedQueue };
 }

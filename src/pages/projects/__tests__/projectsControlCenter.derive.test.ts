@@ -5,12 +5,14 @@
 import { describe, it, expect } from "vitest";
 import {
   buildProjectsSummary,
+  buildProjectsSummaryFromRollups,
   effectivePct,
   type ProjectRecord,
   type WorkPackageRecord,
   type RfiRecord,
   type ChangeOrderRecord,
 } from "../projectsControlCenter.derive";
+import { EMPTY_PORTFOLIO_ROLLUP } from "@/lib/portfolio/projectRollups";
 
 // ── Fixtures ──────────────────────────────────────────────────────
 
@@ -252,5 +254,33 @@ describe("buildProjectsSummary – edge cases", () => {
     const orphanRfi = makeRfi({ id: "orphan", project_id: "ghost", status: "Open" });
     const { kpis } = buildProjectsSummary(projects, [], [orphanRfi]);
     expect(kpis.openRfis).toBe(0);
+  });
+});
+
+describe("buildProjectsSummaryFromRollups", () => {
+  it("counts pending COs on active projects only", () => {
+    const projects: ProjectRecord[] = [
+      makeProject({ id: "p1" }),
+      makeProject({ id: "p2", on_hold: true }),
+    ];
+    const { kpis } = buildProjectsSummaryFromRollups(projects, [
+      { project_id: "p1", ...EMPTY_PORTFOLIO_ROLLUP, pending_co_count: 1, pending_co_value: 10_000 },
+      { project_id: "p2", ...EMPTY_PORTFOLIO_ROLLUP, pending_co_count: 1, pending_co_value: 20_000 },
+    ]);
+    expect(kpis.pendingCOCount).toBe(1);
+    expect(kpis.pendingCOValue).toBe(10_000);
+  });
+
+  it("counts KPI-open RFIs on active projects only", () => {
+    const projects: ProjectRecord[] = [
+      makeProject({ id: "p1" }),
+      makeProject({ id: "p2", on_hold: true }),
+    ];
+    const { kpis } = buildProjectsSummaryFromRollups(projects, [
+      { project_id: "p1", ...EMPTY_PORTFOLIO_ROLLUP, kpi_open_rfis: 1, kpi_overdue_rfis: 1 },
+      { project_id: "p2", ...EMPTY_PORTFOLIO_ROLLUP, kpi_open_rfis: 4, kpi_overdue_rfis: 4 },
+    ]);
+    expect(kpis.openRfis).toBe(1);
+    expect(kpis.overdueRfis).toBe(1);
   });
 });
