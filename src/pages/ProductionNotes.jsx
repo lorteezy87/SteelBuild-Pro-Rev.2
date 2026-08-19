@@ -805,17 +805,35 @@ export default function ProductionNotes() {
 
 function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, onUpdateBulletDates, onToggleHighlight, onDeleteBullet }) {
   const [text, setText] = useState(note.content || "");
+  // Local state so optimistic/refetch races cannot clear the date inputs mid-edit.
+  const [dateNoted, setDateNoted] = useState(note.date_noted || "");
+  const [dateDue, setDateDue] = useState(note.date_due || "");
   const inputRef = useRef(null);
 
   useEffect(() => {
     setText(note.content || "");
   }, [note.id, note.content]);
 
+  useEffect(() => {
+    setDateNoted(note.date_noted || "");
+    setDateDue(note.date_due || "");
+  }, [note.id, note.date_noted, note.date_due]);
+
+  const isTempId = !!note._optimistic || String(note.id || "").startsWith("tmp-");
+
   const commit = () => {
     const trimmed = text.replace(/\s+$/, "");
     if (trimmed !== (note.content || "")) {
       onUpdateBulletText(note, trimmed);
     }
+  };
+
+  const commitDate = (field, value) => {
+    if (isTempId) return;
+    const next = value || null;
+    const prev = note[field] || null;
+    if (next === prev) return;
+    onUpdateBulletDates(note, { [field]: next });
   };
 
   const handleKeyDown = (e) => {
@@ -845,8 +863,6 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
   };
 
   const highlighted = !!note.is_high_priority;
-  const dateNoted = note.date_noted || "";
-  const dateDue = note.date_due || "";
 
   return (
     <div
@@ -879,7 +895,11 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
             <input
               type="date"
               value={dateNoted}
-              onChange={(e) => onUpdateBulletDates(note, { date_noted: e.target.value || null })}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDateNoted(v);
+                commitDate("date_noted", v);
+              }}
               style={{
                 background: "var(--bg-surface-low)",
                 border: "1px solid var(--border-default)",
@@ -897,7 +917,11 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
             <input
               type="date"
               value={dateDue}
-              onChange={(e) => onUpdateBulletDates(note, { date_due: e.target.value || null })}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDateDue(v);
+                commitDate("date_due", v);
+              }}
               style={{
                 background: "var(--bg-surface-low)",
                 border: "1px solid var(--border-default)",
