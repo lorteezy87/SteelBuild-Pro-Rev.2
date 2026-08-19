@@ -2,7 +2,8 @@
  * Pure derive helpers for Portfolio Overview — date formatting, KPI rollups,
  * matrix filtering/sorting, and chart data. No React; safe to unit-test.
  */
-import { computeCostCodeTotals } from "@/services/costRollup";
+import { computeCostCodeTotals, resolveProjectSpend } from "@/services/costRollup";
+import type { CostCodeLike, ExpenseLike } from "@/services/costRollup";
 import {
   isRfiOpen,
   isCoPending,
@@ -73,16 +74,20 @@ export function buildProjectRows(input: BuildProjectRowsInput): ProjectRow[] {
     const ccBudget = pCodeTotals.budget;
     const baseContract = Number(p.original_contract_value) || 0;
     const approvedDelta = changeOrders
-      .filter((c) => c.project_id === p.id && c.status === "Approved")
+      .filter((c) => c.project_id === p.id && String(c.status ?? "").trim() === "Approved")
       .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     const revisedContract = baseContract + approvedDelta;
     const budget = ccBudget || revisedContract || baseContract;
-    const pExpenses = expenses.filter(
-      (e) => e.project_id === p.id && e.payment_status !== "Voided",
-    );
-    const expenseActual = pExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const ccActual = pCodeTotals.actual;
-    const actual = expenseActual > 0 ? expenseActual : ccActual;
+    const pExpenses = expenses.filter((e) => e.project_id === p.id);
+    // Canonical spend model (typed-in cost-code actuals win, paid expenses
+    // fall back, unmapped expenses still count) — previously this summed ALL
+    // non-voided expenses as "Actual" and let a single logged expense hide
+    // typed-in actuals, so this report disagreed with Budget Control and the
+    // Dashboard under the same label.
+    const actual = resolveProjectSpend(
+      pCodes as CostCodeLike[],
+      pExpenses as ExpenseLike[],
+    ).actual;
     const variance = budget > 0 ? actual - budget : 0;
     const var_pct = budget > 0 ? (variance / budget) * 100 : 0;
     const health = computeHealth(budget, actual);

@@ -94,7 +94,7 @@ export default function CommentThread({
     },
     enabled: !!entityId && !!entityType,
     staleTime: 30_000,
-    refetchInterval: 60_000,       // fallback poll in case realtime is off
+    refetchInterval: 5 * 60_000,   // fallback poll in case realtime is off
   });
 
   // Realtime subscription

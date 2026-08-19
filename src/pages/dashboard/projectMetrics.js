@@ -5,7 +5,7 @@
  * computations over Supabase entities. Keeps the dashboard component
  * presentational — every number below comes from live data.
  */
-import { resolveProjectSpend } from "@/services/costRollup";
+import { computeRevisedContractValue, resolveProjectSpend } from "@/services/costRollup";
 
 export function daysBetween(from, to) {
   if (!from || !to) return null;
@@ -36,11 +36,9 @@ export function timelineElapsedPct(project) {
  * back to `original_contract_value` when no COs are loaded yet.
  */
 export function revisedContractValue(project, cos = []) {
-  const base = Number(project?.original_contract_value) || 0;
-  const approvedDelta = cos
-    .filter((c) => c.status === "Approved")
-    .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-  return base + approvedDelta;
+  // Delegates to the single source of truth (trims CO status whitespace)
+  // so the Dashboard hero can't disagree with the Projects page KPIs.
+  return computeRevisedContractValue(project, cos);
 }
 
 /**
@@ -239,7 +237,10 @@ export function procurementStatusRollup(deliveries = []) {
   let longLead = 0;
   let longLeadSlipping = 0;
   let cancelled = 0;
+  // Local midnight so items due today don't flip to overdue at noon
+  // (the date-only shim parses "YYYY-MM-DD" as local noon).
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   for (const d of deliveries) {
     if (!d || d.is_deleted) continue;
@@ -309,6 +310,7 @@ export function procurementStatusRollup(deliveries = []) {
  */
 export function overdueWPCount(wps = []) {
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   return wps.filter((w) => {
     if (!w?.scheduled_end_date) return false;
     if (w.status === "Complete") return false;
@@ -369,6 +371,7 @@ export function openRFICount(rfis = []) {
 /** Count of RFIs past `date_required` and not yet answered. */
 export function overdueRFICount(rfis = []) {
   const now = new Date();
+  now.setHours(0, 0, 0, 0);
   return rfis.filter(
     (r) =>
       !["Answered", "Closed"].includes(r.status) &&
@@ -380,6 +383,7 @@ export function overdueRFICount(rfis = []) {
 /** Deliveries not yet delivered + past scheduled date. */
 export function overdueDeliveryCount(deliveries = []) {
   const now = new Date();
+  now.setHours(0, 0, 0, 0);
   return deliveries.filter(
     (d) =>
       d.status !== "Delivered" &&
@@ -689,6 +693,51 @@ export function latestCertifiedPerLineItem(sovItems = []) {
     }
   }
   return [...byKey.values()];
+}
+
+/**
+ * Reduce raw `sov_items` to one row per (project_id, line_item_number),
+ * keeping the highest application_number regardless of status. This is
+ * the "current schedule of values" view: each line item counted once,
+ * so Σ scheduled_value equals the real SOV total instead of N× it
+ * (see the SOV ROW MODEL comment above).
+ */
+const SOV_STATUS_RANK = { Draft: 0, Submitted: 1, Certified: 2, Paid: 3 };
+
+export function latestApplicationPerLineItem(sovItems = []) {
+  const byKey = new Map();
+  const unkeyed = []; // rows without a line_item_number must never collapse together
+  for (const r of sovItems) {
+    if (!r || r.is_deleted) continue;
+    const lineNo = r.line_item_number;
+    if (lineNo == null || lineNo === "") {
+      unkeyed.push(r);
+      continue;
+    }
+    const key = `${r.project_id ?? ""}|${lineNo}`;
+    const cur = byKey.get(key);
+    const app = Number(r.application_number) || 0;
+    const curApp = cur ? Number(cur.application_number) || 0 : -1;
+    // Same application can hold a Draft AND a Certified row for a line item;
+    // on ties keep the most advanced status so the pick is deterministic.
+    const rank = SOV_STATUS_RANK[r.status] ?? -1;
+    const curRank = cur ? (SOV_STATUS_RANK[cur.status] ?? -1) : -1;
+    if (!cur || app > curApp || (app === curApp && rank > curRank)) {
+      byKey.set(key, r);
+    }
+  }
+  return [...byKey.values(), ...unkeyed];
+}
+
+/**
+ * Σ scheduled_value over the deduped current-SOV view. Use this (never a
+ * raw-row sum) when comparing the SOV total against the contract value.
+ */
+export function sovScheduledTotal(sovItems = []) {
+  return latestApplicationPerLineItem(sovItems).reduce(
+    (s, i) => s + (Number(i.scheduled_value) || 0),
+    0,
+  );
 }
 
 /**

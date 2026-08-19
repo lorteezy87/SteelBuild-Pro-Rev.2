@@ -6,11 +6,12 @@
  * All functions are pure: (projects, relatedRecords) → summary. Easy to unit-test.
  */
 import { calcContractValue, calcWpProgress, calcDaysToDeadline } from "@/utils/projectKpis";
-import { computeCostCodeTotals } from "@/services/costRollup";
+import { computeCostCodeTotals, resolveProjectSpend } from "@/services/costRollup";
 import { computePortfolioProjectHealth } from "@/services/portfolioHealthScoring";
 import { capHealthScore, deriveOperationalHealth } from "@/lib/projectHealth";
 import type { OperationalHealthLabel } from "@/lib/projectHealth";
 import { partitionFieldTasks } from "@/lib/field/fieldToday";
+import { localToday } from "@/utils/dates";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,6 +54,12 @@ export interface PortfolioRelated {
     is_summary?: boolean | null;
     percent_complete?: number | null;
   }>;
+  /**
+   * Optional: expenses power the canonical spend fallback (a project tracked
+   * through logged expenses instead of typed cost-code columns still reports
+   * real committed spend). Callers that omit this fall back to typed columns.
+   */
+  expenses?: Array<{ project_id?: string; amount?: number | string | null; cost_code?: string | null; payment_status?: string | null }>;
   rfiEvidenceLoaded?: boolean;
   scheduleEvidenceLoaded?: boolean;
 }
@@ -81,7 +88,7 @@ export interface EnrichedProject extends ProjectRecord {
   totalTons: number;
   /** Budget from cost codes (computeCostCodeTotals). */
   budget: number;
-  /** Committed cost from cost codes (max(committed, actual) per code). */
+  /** Committed spend via resolveProjectSpend (floored at resolved actual). */
   committed: number;
   /** reasons[] for health deductions (same as AIInsights). */
   reasons: string[];
@@ -129,11 +136,6 @@ export interface PortfolioSummary {
 // ---------------------------------------------------------------------------
 
 const ACTIVE_STATUSES = new Set(["Active", "In Progress"]);
-
-function n(v: unknown): number {
-  const num = Number(v);
-  return Number.isFinite(num) ? num : 0;
-}
 
 function dateValue(v: string | null | undefined): Date | null {
   if (!v) return null;
@@ -213,14 +215,16 @@ export function buildPortfolioSummary(
     deliveries,
     actionItems,
     scheduleTasks,
+    expenses = [],
     rfiEvidenceLoaded = true,
     scheduleEvidenceLoaded = true,
   } = related;
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localToday();
 
   const changeOrdersByProject = bucketByProjectId(changeOrders);
   const workPackagesByProject = bucketByProjectId(workPackages);
   const costCodesByProject = bucketByProjectId(costCodes);
+  const expensesByProject = bucketByProjectId(expenses);
   const rfisByProject = bucketByProjectId(rfis);
   const deliveriesByProject = bucketByProjectId(deliveries);
   const actionItemsByProject = bucketByProjectId(actionItems);
@@ -250,10 +254,13 @@ export function buildPortfolioSummary(
 
     // ── Cost codes ──
     const { budget } = computeCostCodeTotals(projCodes);
-    const committed = projCodes.reduce(
-      (sum, c) => sum + Math.max(n(c.committed_cost), n(c.actual_cost)),
-      0,
-    );
+    // Canonical spend model: typed cost-code columns win, expenses fall back,
+    // unmapped expenses still count (resolveProjectSpend). The project-level
+    // max(committed, actual) preserves the domain invariant committed ≥ actual
+    // when only actuals were typed onto the codes.
+    const projExpenses = expensesByProject.get(pId) ?? [];
+    const spend = resolveProjectSpend(projCodes, projExpenses);
+    const committed = Math.max(spend.committed, spend.actual);
 
     const {
       score: rawScore,

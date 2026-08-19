@@ -14,6 +14,7 @@ import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
 import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import { localToday } from "@/utils/dates";
 
 export default function Projects() {
   const qc         = useQueryClient();
@@ -74,7 +75,7 @@ export default function Projects() {
     () => rawScheduleTasks.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
     [liveProjectIds, rawScheduleTasks],
   );
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localToday();
   const evidence = useMemo(
     () => ({ rfiEvidenceLoaded: rfisSuccess, scheduleEvidenceLoaded: scheduleTasksSuccess }),
     [rfisSuccess, scheduleTasksSuccess],

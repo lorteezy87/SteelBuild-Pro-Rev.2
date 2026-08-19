@@ -145,4 +145,48 @@ describe("buildSovStaged", () => {
     expect(staged[0].record.line_item_number).toBe(5);
     expect(staged[0].record.sov_id).toBe("SOV-005");
   });
+
+  it("normalizes status case-insensitively onto the canonical enum", () => {
+    const rows = [
+      { description: "A", scheduled_value: "100", status: "certified" },
+      { description: "B", scheduled_value: "100", status: " PAID " },
+      { description: "C", scheduled_value: "100", status: "" },
+    ];
+    const staged = buildSovStaged(rows, { project, costCodes: COST_CODES });
+    expect(staged[0].record.status).toBe("Certified");
+    expect(staged[0].valid).toBe(true);
+    expect(staged[1].record.status).toBe("Paid");
+    expect(staged[1].valid).toBe(true);
+    expect(staged[2].record.status).toBe("Draft");
+    expect(staged[2].valid).toBe(true);
+  });
+
+  it("fails closed on an unrecognized status instead of importing it verbatim", () => {
+    const rows = [{ description: "A", scheduled_value: "100", status: "Certified Payment" }];
+    const staged = buildSovStaged(rows, { project, costCodes: COST_CODES });
+    expect(staged[0].valid).toBe(false);
+    expect(staged[0].reason).toMatch(/unknown status/i);
+    expect(staged[0].record.status).toBe("Draft");
+  });
+
+  it("parses currency-formatted values and %-suffixed percents", () => {
+    const rows = [{
+      description: "Mobilization",
+      scheduled_value: "$25,000.50",
+      current_percent_complete: "50%",
+      previous_percent_complete: "",
+    }];
+    const staged = buildSovStaged(rows, { project, costCodes: COST_CODES });
+    expect(staged[0].valid).toBe(true);
+    expect(staged[0].record.scheduled_value).toBe(25000.5);
+    expect(staged[0].record.current_percent_complete).toBe(50);
+    expect(staged[0].record.previous_percent_complete).toBe(0);
+  });
+
+  it("fails closed when a percent cell is not a number instead of zeroing it", () => {
+    const rows = [{ description: "A", scheduled_value: "100", current_percent_complete: "half" }];
+    const staged = buildSovStaged(rows, { project, costCodes: COST_CODES });
+    expect(staged[0].valid).toBe(false);
+    expect(staged[0].reason).toMatch(/percent/i);
+  });
 });

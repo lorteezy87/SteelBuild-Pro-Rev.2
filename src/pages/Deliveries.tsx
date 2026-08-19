@@ -3,7 +3,9 @@
  * in-transit tracking, receiving, and exception follow-up.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import * as Sentry from "@sentry/react";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { logActivity } from "@/services/auditLogger";
@@ -24,7 +26,9 @@ import { withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import DeliveryFormModalRaw from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModalRaw from "@/components/deliveries/ShippingTicketImportModal";
-import ShippingListImportModal from "@/components/deliveries/ShippingListImportModal";
+// Lazy: this modal statically imports xlsx (~430 kB) — loading it on demand
+// keeps the spreadsheet engine out of the Deliveries page chunk.
+const ShippingListImportModal = lazyWithRetry(() => import("@/components/deliveries/ShippingListImportModal")) as unknown as ComponentType<AnyProps>;
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
@@ -96,7 +100,10 @@ export default function Deliveries() {
     queryFn: () =>
       projectId ? entities.Delivery.filter({ project_id: projectId }) : entities.Delivery.list(),
     staleTime: 60000,
-    refetchInterval: 60000,
+    // Realtime invalidation (below) covers cross-user freshness; the interval
+    // is only a dropped-channel fallback (was 60s — a full list re-download
+    // per minute on top of realtime).
+    refetchInterval: 5 * 60 * 1000,
   });
 
   useRealtimeInvalidation("deliveries", projectId, [["deliveries", projectId || "all"]]);
@@ -282,7 +289,10 @@ export default function Deliveries() {
     if (!projectId || !metrics.overdue.length) return undefined;
     const createDeliveryAlerts = async () => {
       try {
-        const existing = await entities.Alert.filter({ alert_type: "Delivery_Overdue" });
+        // Scoped to the current project: vendor-based titles collide across
+        // projects, so an unscoped dedupe silently suppressed the second
+        // project's alerts (and fetched the tenant-wide alert list).
+        const existing = await entities.Alert.filter({ alert_type: "Delivery_Overdue", project_id: projectId });
         const existingIds = new Set(existing.map((alert) => alert.related_record_id).filter(Boolean));
         const existingTitles = new Set(existing.map((alert) => alert.title));
         for (const delivery of metrics.overdue) {
@@ -306,6 +316,7 @@ export default function Deliveries() {
         }
       } catch (error) {
         console.warn("Delivery alert error:", error);
+        Sentry.captureException(error, { tags: { source: "delivery-overdue-alerts" } });
       }
     };
     const timer = setTimeout(createDeliveryAlerts, 4000);
@@ -450,16 +461,20 @@ export default function Deliveries() {
           invalidateDeliveries();
         }}
       />
-      <ShippingListImportModal
-        open={showListImport}
-        projectId={projectId}
-        projectName={activeProject?.name}
-        onImported={() => invalidateDeliveries()}
-        onClose={() => {
-          setShowListImport(false);
-          invalidateDeliveries();
-        }}
-      />
+      {showListImport && (
+        <Suspense fallback={null}>
+          <ShippingListImportModal
+            open={showListImport}
+            projectId={projectId}
+            projectName={activeProject?.name}
+            onImported={() => invalidateDeliveries()}
+            onClose={() => {
+              setShowListImport(false);
+              invalidateDeliveries();
+            }}
+          />
+        </Suspense>
+      )}
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}

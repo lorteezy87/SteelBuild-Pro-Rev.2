@@ -12,8 +12,14 @@ import RenameSetModal from "@/components/drawings/RenameSetModal";
 import TitleblockMarkerModal from "@/components/drawings/TitleblockMarkerModal";
 import BulkEditModal from "@/components/drawings/BulkEditModal";
 import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
-import DrawingLogImportModal from "@/components/drawings/DrawingLogImportModal";
 import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
+import { Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazyRetry";
+
+// Lazy: this modal statically imports xlsx (~430 kB) — loading it on demand
+// keeps the spreadsheet engine out of the Drawings page chunk. Same pattern
+// as drawingSubmittalHub/drawingRegisterTable.tsx.
+const DrawingLogImportModal = lazyWithRetry(() => import("@/components/drawings/DrawingLogImportModal"));
 import RevisionCompareModal from "@/components/drawings/RevisionCompareModal";
 import RevisionImpactReportModal from "@/components/drawings/RevisionImpactReportModal";
 import ExportFabReleaseModal from "@/components/drawings/ExportFabReleaseModal";
@@ -134,13 +140,17 @@ export default function DrawingsPageModals({
         existingSetNames={existingSetNames}
       />
 
-      <DrawingLogImportModal
-        open={logImportOpen}
-        projectId={projectId}
-        projectName={activeProject?.name}
-        onClose={onCloseLogImport}
-        onImported={onLogImported}
-      />
+      {logImportOpen && (
+        <Suspense fallback={null}>
+          <DrawingLogImportModal
+            open={logImportOpen}
+            projectId={projectId}
+            projectName={activeProject?.name}
+            onClose={onCloseLogImport}
+            onImported={onLogImported}
+          />
+        </Suspense>
+      )}
 
       {/* New Revision flow — marks prior sheets is_superseded=true and
           inserts the replacement revision under the same set. F14. */}

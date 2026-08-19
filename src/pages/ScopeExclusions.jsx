@@ -6,6 +6,7 @@ import ScopeItemFormModal from "@/components/scope/ScopeItemFormModal";
 import ScopeItemList from "@/components/scope/ScopeItemList";
 import BulkScopeModal from "@/components/scope/BulkScopeModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toast } from "sonner";
 import { Check, X, Info, Search, Upload } from "lucide-react";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
@@ -31,7 +32,13 @@ export default function ScopeExclusions() {
   const [search, setSearch] = useState("");
   const [hideCompleted, setHideCompleted] = useState(false);
 
-  const { data: scopeItems = [] } = useQuery({
+  const {
+    data: scopeItems = [],
+    isLoading: scopeLoading,
+    isError: scopeError,
+    error: scopeErrorDetail,
+    refetch: refetchScope,
+  } = useQuery({
     queryKey: ["scope-items", projectId],
     queryFn: () =>
       projectId
@@ -164,6 +171,30 @@ export default function ScopeExclusions() {
   const categories = ["Structural", "Misc Metals", "Connections", "Coatings", "Erection", "Engineering", "Other"];
 
   const openCreate = () => { setEditing(null); setShowForm(true); };
+
+  // Contract-scope data must not render "No scope items yet" while the fetch
+  // is in flight (or worse, after it failed) — that's an authoritative-looking
+  // lie on a commercial document register.
+  if (scopeLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+  if (scopeError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 16 }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load scope items
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(scopeErrorDetail, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => refetchScope()}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>

@@ -92,7 +92,7 @@ export default function Documents() {
   React.useEffect(() => { setCurrentFolderId(null); }, [activeProject?.id]);
 
   /* ── Data ── */
-  const { data: rawDocuments = [], isLoading } = useQuery({
+  const { data: rawDocuments = [], isLoading, isError: docsError, error: docsErrorDetail, refetch: refetchDocs } = useQuery({
     queryKey: ["documents", activeProject?.id],
     queryFn: () =>
       activeProject?.id
@@ -576,6 +576,20 @@ export default function Documents() {
         {isLoading ? (
           <div style={{ padding: 16 }}>
             <LoadingSkeleton variant="table" rows={6} />
+          </div>
+        ) : docsError ? (
+          // A failed fetch must not render the "upload your first document"
+          // empty state over a register that may hold real documents.
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 12 }}>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+              Couldn’t load documents
+            </p>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+              {toUserErrorMessage(docsErrorDetail, "Something went wrong. Try again.")}
+            </p>
+            <button type="button" onClick={() => refetchDocs()} style={{ border: "1px solid var(--border-default)", background: "var(--bg-surface)", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>
+              Retry
+            </button>
           </div>
         ) : allDocuments.length === 0 ? (
           <EmptyState onUploadOpen={() => setUploadOpen(true)} />

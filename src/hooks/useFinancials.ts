@@ -26,6 +26,8 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { computeRevisedContractValue, preferManualActual } from "@/services/costRollup";
 import { COST_CODES } from "@/components/shared/costCodes";
+import { formatCurrency as sharedFormatCurrency } from "@/components/shared/formatters";
+import { sovScheduledTotal } from "@/pages/dashboard/projectMetrics";
 import { calcEVM } from "@/utils/projectKpis";
 import { logActivity } from "@/services/auditLogger";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
@@ -51,9 +53,11 @@ export function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Delegates to the canonical shared formatter (whole-dollar display) so the
+// Cost Control Center respects user currency preferences like every other
+// financial surface. Kept as a re-export for existing call sites.
 export function formatCurrency(value: unknown): string {
-  const n = safeNumber(value);
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return sharedFormatCurrency(safeNumber(value), 0);
 }
 
 export function formatSigned(value: unknown): string {
@@ -154,8 +158,11 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   );
 
   // ── Derived: approved COs ───────────────────────────────────────────
+  // Trimmed comparison matches computeRevisedContractValue — real data has
+  // carried whitespace-padded statuses, and summary.contractValue already
+  // trims, so exact-matching here would let the two KPIs disagree.
   const approvedCOs = useMemo(
-    () => changeOrders.filter((co) => co.status === "Approved"),
+    () => changeOrders.filter((co) => String(co.status ?? "").trim() === "Approved"),
     [changeOrders]
   );
 
@@ -224,7 +231,10 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   // ── Derived: project-level summary ──────────────────────────────────
   const summary = useMemo<FinancialSummary>(() => {
     const contractValue = computeRevisedContractValue(project, changeOrders);
-    const sovTotal = sovItems.reduce((s, item) => s + safeNumber(item.scheduled_value), 0);
+    // sov_items holds one row per (line item × application × status), so a
+    // raw-row sum overcounts the SOV total ~2-3× on multi-application
+    // projects and falsely trips the "SOV ≠ contract" review flag.
+    const sovTotal = sovScheduledTotal(sovItems);
     const revisedBudget = costCodeRows.reduce((s, r) => s + r.revised_budget, 0);
     const actual = costCodeRows.reduce((s, r) => s + r.actual_cost, 0);
     const committed = costCodeRows.reduce((s, r) => s + r.committed_cost, 0);
@@ -299,7 +309,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
 
   // ── KPI 1: Change Order Impact ─────────────────────────────────────
   const changeOrderImpact = useMemo(() => {
-    const approved = changeOrders.filter((co) => co.status === "Approved");
+    const approved = changeOrders.filter((co) => String(co.status ?? "").trim() === "Approved");
     const pending  = changeOrders.filter((co) => ["Submitted", "Under Review"].includes(co.status as string));
     const rejected = changeOrders.filter((co) => ["Rejected", "Void"].includes(co.status as string));
 

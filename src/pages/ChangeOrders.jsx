@@ -25,7 +25,7 @@ import COFormModal from "@/components/changeorders/COFormModal";
 import ChangeOrderImportModal from "@/components/changeorders/ChangeOrderImportModal";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { toast } from "sonner";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -76,7 +76,7 @@ export default function ChangeOrders() {
   }, [search]);
 
   /* -- Data -- */
-  const { data: cos = [], isLoading } = useQuery({
+  const { data: cos = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["change-orders", projectId],
     queryFn: () =>
       projectId
@@ -373,6 +373,24 @@ export default function ChangeOrders() {
     return (
       <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  // A failed fetch must not render zeroed KPIs + "no change orders" — this is
+  // a money register asserting an empty book.
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 16 }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load change orders
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(error, "Something went wrong. Try again.")}
+        </p>
+        <button type="button" onClick={() => refetch()} style={{ border: "1px solid var(--border-default)", background: "var(--bg-surface)", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>
+          Retry
+        </button>
       </div>
     );
   }

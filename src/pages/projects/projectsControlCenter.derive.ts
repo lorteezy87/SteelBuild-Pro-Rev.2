@@ -11,6 +11,7 @@ import {
 } from "@/utils/projectKpis";
 import { buildOperationalHealthIndex } from "@/lib/projectHealth";
 import type { OperationalHealthResult } from "@/lib/projectHealth";
+import { localToday } from "@/utils/dates";
 
 // ──────────────────────────────────────────────────────────────────
 // Types (mirror what Projects.jsx actually reads from the DB row)
@@ -138,7 +139,7 @@ export function buildProjectsSummary(
   rfis: RfiRecord[] = [],
   changeOrders: ChangeOrderRecord[] = [],
   scheduleTasks: ScheduleTaskRecord[] = [],
-  todayIso: string = new Date().toISOString().slice(0, 10),
+  todayIso: string = localToday(),
   evidence: { rfiEvidenceLoaded: boolean; scheduleEvidenceLoaded: boolean } = {
     rfiEvidenceLoaded: true,
     scheduleEvidenceLoaded: true,

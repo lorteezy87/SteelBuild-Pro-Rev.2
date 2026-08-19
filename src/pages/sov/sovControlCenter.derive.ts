@@ -11,6 +11,7 @@
  * can run in test workers without DOM globals. Formatting stays in the
  * component layer.
  */
+import { latestApplicationPerLineItem } from "@/pages/dashboard/projectMetrics";
 
 /** Minimal shape of one SOV line item (real DB columns). */
 export interface SovLineItem {
@@ -138,6 +139,14 @@ export function buildSovSummary(
   lines: SovLineItem[],
   effectiveRetainage: number | null = null,
 ): SovSummary {
+  // sov_items holds one row per (line item × application × status) — see the
+  // SOV ROW MODEL comment in projectMetrics.js. KPI totals must run over the
+  // deduped "current SOV" view (latest application per line item) or a
+  // project with N pay applications shows ~N× its real contract value. The
+  // Billing Progress panel below intentionally stays on raw rows — grouping
+  // by application is the one place the per-application rows are the point.
+  const currentLines = latestApplicationPerLineItem(lines) as SovLineItem[];
+
   // ── Totals pass ──────────────────────────────────────────────────
   let contractValue = 0;
   let billedToDate = 0;
@@ -149,7 +158,7 @@ export function buildSovSummary(
   let pendingApprovalCount = 0;
   let draftCount = 0;
 
-  for (const item of lines) {
+  for (const item of currentLines) {
     const c = calcRow(item, effectiveRetainage);
     contractValue = roundCents(contractValue + roundCents(Number(item.scheduled_value) || 0));
     billedToDate = roundCents(billedToDate + c.toDate);
@@ -199,7 +208,7 @@ export function buildSovSummary(
 
   // ── By Division/Phase panel ───────────────────────────────────────
   const divBuckets = new Map<string, { scheduled: number; toDate: number; balance: number; count: number }>();
-  for (const item of lines) {
+  for (const item of currentLines) {
     const key = divisionLabel(item);
     const c = calcRow(item, effectiveRetainage);
     const existing = divBuckets.get(key);
@@ -228,10 +237,12 @@ export function buildSovSummary(
     .sort((a, b) => b.scheduled - a.scheduled); // highest scheduled value first
 
   // ── Items Needing Attention ───────────────────────────────────────
-  // Priority: over-billed first, then Submitted (awaiting approval), then 0% not started
-  const overBilled = lines.filter((item) => calcRow(item, effectiveRetainage).overBilled);
-  const submitted = lines.filter((item) => item.status === "Submitted" && !calcRow(item, effectiveRetainage).overBilled);
-  const notStarted = lines.filter(
+  // Priority: over-billed first, then Submitted (awaiting approval), then 0% not started.
+  // Runs on the current-SOV view so a superseded app-1 row can't surface as
+  // "not started" when the same line item is at 100% in a later application.
+  const overBilled = currentLines.filter((item) => calcRow(item, effectiveRetainage).overBilled);
+  const submitted = currentLines.filter((item) => item.status === "Submitted" && !calcRow(item, effectiveRetainage).overBilled);
+  const notStarted = currentLines.filter(
     (item) =>
       (Number(item.current_percent_complete) || 0) === 0 &&
       item.status !== "Paid" &&

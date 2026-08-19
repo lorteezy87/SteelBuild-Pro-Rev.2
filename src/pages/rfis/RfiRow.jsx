@@ -41,7 +41,9 @@ function impactSummary(rfi) {
   return { primary, secondary, live: Boolean(cost || schedule || flags.length || rfi.cost_impact || rfi.schedule_impact) };
 }
 
-export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
+// Memoized: the register re-renders on every selection/filter change, and
+// with stable id-taking handlers only the affected rows actually re-render.
+function RfiRow({ rfi, selected, onToggleSelect, onOpen }) {
   const overdue = isOverdue(rfi);
   const due = dueSummary(rfi);
   const impact = impactSummary(rfi);
@@ -62,13 +64,13 @@ export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
         overdue ? "is-overdue" : "",
         rfi.priority === "Critical" ? "is-critical" : "",
       ].filter(Boolean).join(" ")}
-      onClick={onOpen}
+      onClick={() => onOpen(rfi)}
     >
       <div className="rfi-row-check" onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           checked={!!selected}
-          onChange={onToggle}
+          onChange={() => onToggleSelect(rfi.id)}
           aria-label={`Select ${rfi.rfi_number || "RFI"}`}
         />
       </div>
@@ -117,3 +119,5 @@ export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
     </div>
   );
 }
+
+export default React.memo(RfiRow);
