@@ -2,7 +2,7 @@
  * Layout.jsx - Application shell
  *
  * Thin composition layer that wires together:
- *  - Top utility bar (brand, search, density, modules, bell, user, project)
+ *  - Top utility bar (brand, search, density, bell, user, project)
  *  - Desktop sidebar navigation
  *  - Mobile hamburger drawer
  *  - Content area with error banner
@@ -40,7 +40,6 @@ import { setRuntimeUserPreferences } from "@/lib/userPreferences/runtime";
 
 // Shared components — use lazyWithRetry so stale-chunk 404s after a deploy
 // trigger a single page reload instead of a hard "LOAD ERROR" crash.
-const ModuleLauncherGrid = lazyWithRetry(() => import("./components/nav/ModuleLauncherGrid"));
 const GlobalSearchModal = lazyWithRetry(() => import("./components/search/GlobalSearchModal"));
 const MobileDrawer = lazyWithRetry(() => import("./components/nav/MobileDrawer"));
 const Toaster = lazyWithRetry(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
@@ -88,7 +87,6 @@ export default function Layout({ children, currentPageName }) {
   const logout = authCtx?.logout || (() => {});
 
   // UI state
-  const [gridOpen, setGridOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { band, isPhone, isTablet } = useResponsiveBreakpoint();
@@ -250,31 +248,6 @@ export default function Layout({ children, currentPageName }) {
                   >
                     <Search size={18} strokeWidth={1.8} aria-hidden="true" />
                   </button>
-                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                    <button
-                      type="button"
-                      className="sb-dashboard-topbar__icon"
-                      aria-label="All modules"
-                      title="All Modules"
-                      onClick={() => setGridOpen((o) => !o)}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-                        <rect x="0" y="0" width="6" height="6" rx="1.5" />
-                        <rect x="8" y="0" width="6" height="6" rx="1.5" />
-                        <rect x="0" y="8" width="6" height="6" rx="1.5" />
-                        <rect x="8" y="8" width="6" height="6" rx="1.5" />
-                      </svg>
-                    </button>
-                    {gridOpen && (
-                      <Suspense fallback={null}>
-                        <ModuleLauncherGrid
-                          open={gridOpen}
-                          onClose={() => setGridOpen(false)}
-                          onNavigate={handleNavigate}
-                        />
-                      </Suspense>
-                    )}
-                  </div>
                   <BellDropdown
                     alerts={unreadAlerts}
                     unreadCount={unreadCount}
@@ -341,45 +314,8 @@ export default function Layout({ children, currentPageName }) {
             {/* Search trigger — see TopBarSearchButton for context. */}
             <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isPhone} />
 
-            {/* Density toggle + Modules grid — desktop only */}
-            {!isPhone && (
-              <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
-                <DensityToggle />
-
-                <button
-                  type="button"
-                  title="All Modules"
-                  aria-label="All modules"
-                  onClick={() => setGridOpen((o) => !o)}
-                  style={{
-                    width: 32, height: 32, borderRadius: 8,
-                    background: gridOpen ? "var(--accent-muted)" : "var(--hover-bg)",
-                    border: `1px solid ${gridOpen ? "var(--accent-border)" : "var(--border)"}`,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer",
-                    color: gridOpen ? "var(--accent)" : "var(--text-muted)",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-                    <rect x="0" y="0" width="6" height="6" rx="1.5" />
-                    <rect x="8" y="0" width="6" height="6" rx="1.5" />
-                    <rect x="0" y="8" width="6" height="6" rx="1.5" />
-                    <rect x="8" y="8" width="6" height="6" rx="1.5" />
-                  </svg>
-                </button>
-
-                {gridOpen && (
-                  <Suspense fallback={null}>
-                    <ModuleLauncherGrid
-                      open={gridOpen}
-                      onClose={() => setGridOpen(false)}
-                      onNavigate={handleNavigate}
-                    />
-                  </Suspense>
-                )}
-              </div>
-            )}
+            {/* Density toggle — desktop only */}
+            {!isPhone && <DensityToggle />}
 
             {/* Theme + Contrast Toggles */}
             {!isPhone && <ThemeToggleButton />}
