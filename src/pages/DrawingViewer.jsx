@@ -494,6 +494,8 @@ export default function DrawingViewer() {
           projectName={activeProject?.name}
           activeDrawing={activeDrawing}
           drawingSet={activeDrawingSet}
+          currentPage={currentPage}
+          totalPages={totalPages}
           onUnlock={async (reason) => {
             try {
               await unlockSetSvc({ setId: activeDrawingSet.id, reason });
