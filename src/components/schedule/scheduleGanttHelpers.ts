@@ -49,15 +49,15 @@ export function shiftDateOnly(input: unknown, days: number): string | null {
 // localStorage so the user's layout sticks across reloads.
 //
 // Header order: WBS · TASK · DUR · START · FINISH · PRED · RESOURCES ·
-//               STATUS · STAGE · %
-export const DEFAULT_COL_WIDTHS = [50, 0, 40, 68, 68, 48, 80, 72, 88, 36];
+//               STATUS · %
+export const DEFAULT_COL_WIDTHS = [50, 0, 40, 68, 68, 48, 80, 72, 36];
 export const MIN_COL_WIDTH = 24;
 // Task-name (flex) column gets at least this much. Bumped from 140 → 240
 // to make names readable out of the box — the user complained names were
 // too cramped. Users can still drag other columns narrower for more name
 // room, or drag the name column's handle to pin a specific width.
 export const MIN_NAME_WIDTH = 240;
-export const COL_WIDTHS_KEY = "sbp-gantt-col-widths-v1";
+export const COL_WIDTHS_KEY = "sbp-gantt-col-widths-v2";
 
 export function loadColWidths(): number[] {
   try {
