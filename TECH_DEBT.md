@@ -106,10 +106,14 @@ follow-ups._
   the founding-org prefix, DB references rewritten, and the legacy storage RLS
   branch closed. Originals are retained as rollback material; deleting them is a
   separate owner decision (see `docs/app-files-tenant-isolation-plan.md`).
-- **Org → project access model** — `user_has_project_access` now gates by org
-  membership while `user_projects` still drives project *role*. Decide whether
-  org members auto-see all org projects or stay per-project before onboarding
-  teams (today a new member sees a project only once added to `user_projects`).
+- **Org → project access model — ✅ RESOLVED 2026-08-19** (migration
+  `20260819001000_org_member_default_project_access`): org members implicitly
+  hold a workspace-configurable default role (`viewer` by default) on every
+  org project when they have no explicit `user_projects` row, so a new
+  teammate's first session shows the org's projects instead of an empty app.
+  An explicit `user_projects` row always wins (grant more or restrict below
+  the default); org admins can switch the default (Viewer/Field/PM) or turn
+  it off (invite-only) from Team → "Default project access for members".
 - **Deprecated edge functions** — `sharepoint-proxy` / `bluebeam-proxy` /
   orphan Stripe Sync functions may still be deployed remotely. Owner-run helper:
   `npm run supabase:delete-deprecated-fns` (dry-run by default; `DRY_RUN=0` to
