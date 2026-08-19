@@ -3,6 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ProjectFormModal from "@/components/projects/ProjectFormModal";
+import { applyProjectTemplate } from "@/lib/projectTemplates";
 import ProjectDetailView from "@/components/projects/ProjectDetailView";
 import SecureDeleteDialog from "@/components/shared/SecureDeleteDialog";
 import { toast } from "sonner";
@@ -90,8 +91,33 @@ export default function Projects() {
 
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: (d) => entities.Project.create(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project created"); },
+    mutationFn: async (d) => {
+      const { __apply_template, ...projectData } = d;
+      const created = await entities.Project.create(projectData);
+      if (!__apply_template) return { created, template: null };
+      // Template failure must not look like a failed creation — the project
+      // row exists either way. Report it separately and keep the modal closed.
+      try {
+        const summary = await applyProjectTemplate(created.id, __apply_template);
+        return { created, template: summary };
+      } catch (templateErr) {
+        return { created, template: null, templateError: templateErr };
+      }
+    },
+    onSuccess: ({ template, templateError }) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      if (template) {
+        qc.invalidateQueries({ queryKey: ["work-packages"] });
+        qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
+        toast.success(`Project created — template added ${template.work_packages} work packages and ${template.schedule_tasks} schedule tasks`);
+      } else if (templateError) {
+        toast.warning(`Project created, but the template could not be applied: ${toUserErrorMessage(templateError, "Unknown error")}`);
+      } else {
+        toast.success("Project created");
+      }
+      setModalOpen(false);
+      setEditing(null);
+    },
     onError: (err) => toast.error(toUserErrorMessage(err, "Failed to create project")),
   });
   const updateMut = useMutation({
