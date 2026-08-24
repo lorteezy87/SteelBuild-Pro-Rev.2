@@ -32,6 +32,7 @@ import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
 import { mono, normalizeSN, parseZonePayload } from "@/pages/drawingViewer/drawingViewerUtils";
 import { parseAnnotationLink } from "@/pages/drawingViewer/annotationLinks";
 import { useAutoScaleOnLoad } from "@/pages/drawingViewer/useAutoScaleOnLoad";
+import { useResponsivePdfZoom } from "@/pages/drawingViewer/useResponsivePdfZoom";
 import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
 import { useDrawingsList } from "@/pages/drawingViewer/useDrawingsList";
 import { usePdfLoader } from "@/pages/drawingViewer/usePdfLoader";
@@ -75,7 +76,7 @@ export default function DrawingViewer() {
 
   const [activeId, setActiveId] = useState(initialId || null);
   const [search, setSearch] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Closed by default — the bottom thumbnail filmstrip duplicates the left
   // Sheet Navigator, so starting it closed keeps the drawing surface clean.
@@ -84,7 +85,6 @@ export default function DrawingViewer() {
   // Right-side Sheet Intelligence panel starts CLOSED for a drawing-first view;
   // the toolbar's CONTEXT toggle opens it on demand.
   const [contextOpen, setContextOpen] = useState(false);
-  const [zoom, setZoom] = useState(1.0);
   const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270
   // "canvas" = pdfjs canvas render (enables clickable hyperlinks + cross-sheet nav)
   // "iframe" = browser-native PDF viewer (fallback, no annotation layer)
@@ -161,6 +161,14 @@ export default function DrawingViewer() {
     setCurrentPage,
     setPdfError,
   } = usePdfLoader({ activeDrawing, renderMode });
+
+  const {
+    zoom,
+    setZoom,
+    viewportRef,
+    fitPage,
+    fitWidth,
+  } = useResponsivePdfZoom({ pdfDoc, currentPage, rotation });
 
   // Canvas-side renderer. Owns the <canvas> ref + the in-flight render task
   // and re-renders whenever the document, page index, zoom, or rotation
@@ -407,38 +415,14 @@ export default function DrawingViewer() {
     setActiveTool,
   });
 
-  // ── Fit width / Fit page / zoom preset ────────────────────────────────────
-  const handleFitWidth = useCallback(async () => {
-    if (!pdfDoc || !canvasRef.current) return;
-    const page = await pdfDoc.getPage(currentPage);
-    const vp = page.getViewport({ scale: 1, rotation });
-    const container = canvasRef.current.parentElement;
-    if (container) {
-      // 16px pad so the page doesn't butt up against the scroll container edges.
-      const target = (container.clientWidth - 32) / vp.width;
-      setZoom(+target.toFixed(2));
-    }
-  }, [pdfDoc, currentPage, rotation, canvasRef]);
-
-  const handleFitPage = useCallback(async () => {
-    if (!pdfDoc || !canvasRef.current) return;
-    const page = await pdfDoc.getPage(currentPage);
-    const vp = page.getViewport({ scale: 1, rotation });
-    const container = canvasRef.current.parentElement;
-    if (!container) return;
-    const sX = (container.clientWidth - 32) / vp.width;
-    const sY = (container.clientHeight - 32) / vp.height;
-    setZoom(+Math.min(sX, sY).toFixed(2));
-  }, [pdfDoc, currentPage, rotation, canvasRef]);
-
   // Dispatch from the zoom preset <select>. Keeps the select value in sync
   // with `zoom` state because the first option is always the current zoom.
   const handleZoomPreset = useCallback((v) => {
-    if (v === "fitW") { handleFitWidth(); return; }
-    if (v === "fitP") { handleFitPage();  return; }
+    if (v === "fitW") { fitWidth(); return; }
+    if (v === "fitP") { fitPage();  return; }
     const n = parseFloat(v);
     if (Number.isFinite(n) && n > 0) setZoom(n);
-  }, [handleFitWidth, handleFitPage]);
+  }, [fitPage, fitWidth, setZoom]);
 
   // Ctrl/Cmd + wheel = zoom at cursor. Without the ctrl check, users trying
   // to scroll the drawing with a touchpad would accidentally zoom.
@@ -648,6 +632,7 @@ export default function DrawingViewer() {
           className={`drawing-viewer-canvas-scroll ${spacePan ? "is-panning" : ""}`}
           onWheel={handleCanvasWheel}
           ref={(el) => {
+            viewportRef.current = el;
             // Keep a pan drag ref so spacebar-hold → drag pans. This is the
             // standard pro-viewer pan: hold space, mouse drag scrolls the
             // container, cursor flips to grab/grabbing for feedback.

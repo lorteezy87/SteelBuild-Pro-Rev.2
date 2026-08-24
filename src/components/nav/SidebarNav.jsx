@@ -71,6 +71,7 @@ export default function SidebarNav({
   visible,
   variant = "default",
   forceRail = false,
+  defaultRail = false,
 }) {
   const { theme } = useTheme();
   const isLightTheme = theme === "light";
@@ -237,6 +238,7 @@ export default function SidebarNav({
         currentPageName={currentPageName}
         onNavigate={onNavigate}
         forceRail={forceRail}
+        defaultCollapsed={defaultRail}
       />
     );
   }
@@ -585,8 +587,8 @@ export default function SidebarNav({
   );
 }
 
-function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = false }) {
-  const [collapsed, setCollapsed] = useState(false);
+function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = false, defaultCollapsed = false }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   // Per-category collapse, persisted in the shared sidebar group state
   // (localStorage "sbp-nav-groups"). A missing/falsy entry means expanded.
   const [groupCollapsed, setGroupCollapsed] = useState(loadSidebarState);
@@ -598,6 +600,10 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
       .filter((g) => g.items.length > 0),
     [isPageVisible],
   );
+
+  useEffect(() => {
+    if (defaultCollapsed) setCollapsed(true);
+  }, [defaultCollapsed]);
 
   const toggleGroup = useCallback((label) => {
     setGroupCollapsed((prev) => {

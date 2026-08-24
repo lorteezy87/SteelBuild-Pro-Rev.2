@@ -2,6 +2,7 @@ export const drawingViewerStyles = `
 .drawing-viewer-redesign {
   --viewer-sidebar-width: 320px;
   --viewer-context-width: 336px;
+  --viewer-paper-padding: 40px;
   --viewer-panel-bg: color-mix(in srgb, var(--bg-surface) 96%, var(--bg-page) 4%);
   --viewer-panel-bg-soft: color-mix(in srgb, var(--bg-surface-low) 92%, var(--bg-page) 8%);
   --viewer-line: color-mix(in srgb, var(--border-default) 82%, transparent);
@@ -89,7 +90,7 @@ export const drawingViewerStyles = `
 
 .drawing-viewer-paper-wrap {
   position: relative;
-  padding: 40px;
+  padding: var(--viewer-paper-padding);
   min-width: min-content;
 }
 
@@ -202,11 +203,9 @@ export const drawingViewerStyles = `
   .drawing-viewer-redesign {
     --viewer-sidebar-width: 292px;
     --viewer-context-width: 306px;
+    --viewer-paper-padding: 28px;
   }
 
-  .drawing-viewer-paper-wrap {
-    padding: 28px;
-  }
 }
 
 @media (max-width: 920px) {
@@ -246,6 +245,7 @@ export const drawingViewerStyles = `
   .drawing-viewer-redesign {
     height: calc(100dvh - 52px);
     max-height: calc(100dvh - 52px);
+    --viewer-paper-padding: 18px;
   }
 
   .drawing-viewer-breadcrumb-row {
@@ -264,10 +264,6 @@ export const drawingViewerStyles = `
 
   .drawing-viewer-toolbar {
     padding: 7px 10px;
-  }
-
-  .drawing-viewer-paper-wrap {
-    padding: 18px;
   }
 
   .drawing-viewer-empty-state {

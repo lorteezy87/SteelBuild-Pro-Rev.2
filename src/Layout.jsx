@@ -91,6 +91,7 @@ export default function Layout({ children, currentPageName }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const { band, isPhone, isTablet } = useResponsiveBreakpoint();
   const useDashboardChrome = isDashboardPage && !isPhone;
+  const defaultSidebarRail = currentPageName === "DrawingViewer";
   const userPrefs = useUserPrefs();
   // Shared non-React formatters read this synchronous snapshot. Updating it
   // during the shell render ensures child pages format with the same prefs on
@@ -215,6 +216,7 @@ export default function Layout({ children, currentPageName }) {
                 visible
                 variant="dashboard"
                 forceRail={isTablet}
+                defaultRail={defaultSidebarRail}
               />
             </Suspense>
 
@@ -347,6 +349,7 @@ export default function Layout({ children, currentPageName }) {
                 onNavigate={handleNavigate}
                 visible={!isPhone}
                 forceRail={isTablet}
+                defaultRail={defaultSidebarRail}
               />
             </Suspense>
           )}

@@ -178,6 +178,18 @@ describe("Layout (smoke)", () => {
     expect(screen.queryByRole("button", { name: /expand sidebar|collapse sidebar/i })).not.toBeInTheDocument();
   });
 
+  it("starts the Drawing Viewer navigation as a desktop rail that can expand on demand", async () => {
+    const { container } = renderLayout({ currentPageName: "DrawingViewer" });
+
+    await waitFor(() => {
+      expect(container.querySelector(".sb-dashboard-reference-sidebar")).not.toBeNull();
+    });
+
+    expect(container.querySelector(".sb-dashboard-reference-sidebar")).toHaveClass("is-collapsed");
+    fireEvent.click(screen.getByRole("button", { name: /expand sidebar/i }));
+    expect(container.querySelector(".sb-dashboard-reference-sidebar")).not.toHaveClass("is-collapsed");
+  });
+
   it("preserves a user-collapsed dashboard sidebar across tablet rail resizing", async () => {
     const { container } = renderLayout({ currentPageName: "Projects" });
 
