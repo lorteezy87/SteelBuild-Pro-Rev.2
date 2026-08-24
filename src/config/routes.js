@@ -46,6 +46,7 @@ const ROUTE_DOMAINS = {
   },
   communications: {
     RFIs:             r(lazyWithRetry(() => import("@/pages/RFIs")),             "RFIs",                { projectScoped: true }),
+    DetailQueries:    r(lazyWithRetry(() => import("@/pages/DetailQueries")),    "Detail Queries",      { projectScoped: true }),
     ActionItems:      r(lazyWithRetry(() => import("@/pages/ActionItems")),      "Action Items",        { projectScoped: true }),
     ProductionNotes:  r(lazyWithRetry(() => import("@/pages/ProductionNotes")),  "Production Notes",    { projectScoped: true }),
     EmailInbox:       r(lazyWithRetry(() => import("@/pages/EmailInbox")),       "Email Inbox",         { projectScoped: true }),
@@ -149,6 +150,7 @@ registerRoutePrefetcher("DrawingSubmittalHub", () => import("@/pages/DrawingSubm
 registerRoutePrefetcher("CommandCenter", () => import("@/pages/CommandCenter"));
 registerRoutePrefetcher("ScheduleHub", () => import("@/pages/ScheduleHub"));
 registerRoutePrefetcher("RFIs", () => import("@/pages/RFIs"));
+registerRoutePrefetcher("DetailQueries", () => import("@/pages/DetailQueries"));
 registerRoutePrefetcher("Drawings", () => import("@/pages/Drawings"));
 registerRoutePrefetcher("DrawingViewer", () => import("@/pages/DrawingViewer"));
 registerRoutePrefetcher("WorkPackages", () => import("@/pages/WorkPackages"));

@@ -64,9 +64,20 @@ function VirtualizedBody({ rows, selectedIds, onToggleSelect, onOpen }) {
  *   onToggleAll?: (checked: boolean) => void;
  *   onToggleSelect?: (id: string) => void;
  *   onOpen?: (rfi: any) => void;
+ *   recordLabel?: string;
+ *   recordLabelPlural?: string;
  * }} props
  */
-export default function RfiTable({ rows, totalCount, selectedIds = new Set(), onToggleAll = () => {}, onToggleSelect = () => {}, onOpen = () => {} }) {
+export default function RfiTable({
+  rows,
+  totalCount,
+  selectedIds = new Set(),
+  onToggleAll = () => {},
+  onToggleSelect = () => {},
+  onOpen = () => {},
+  recordLabel = "RFI",
+  recordLabelPlural = "RFIs",
+}) {
   const allVisibleSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
 
   return (
@@ -77,10 +88,10 @@ export default function RfiTable({ rows, totalCount, selectedIds = new Set(), on
             type="checkbox"
             checked={allVisibleSelected}
             onChange={(e) => onToggleAll(e.target.checked)}
-            aria-label="Select all visible RFIs"
+            aria-label={`Select all visible ${recordLabelPlural}`}
           />
         </div>
-        <div>RFI</div>
+        <div>{recordLabel}</div>
         <div>Question / Reference</div>
         <div>Ball in Court</div>
         <div>Status</div>
@@ -111,10 +122,12 @@ export default function RfiTable({ rows, totalCount, selectedIds = new Set(), on
         <div className="rfi-empty-wrap">
           <EmptyState
             icon="rfi"
-            title={totalCount === 0 ? "No RFIs yet" : "No RFIs match your filters"}
+            title={totalCount === 0 ? `No ${recordLabelPlural} yet` : `No ${recordLabelPlural} match your filters`}
             body={
               totalCount === 0
-                ? "Create the first RFI or import an existing RFI log from CSV."
+                ? recordLabel === "RFI"
+                  ? "Create the first RFI or import an existing RFI log from CSV."
+                  : `Create the first ${recordLabel}.`
                 : "Try clearing filters or widening the search query."
             }
           />

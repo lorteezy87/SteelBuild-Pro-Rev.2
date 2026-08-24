@@ -35,6 +35,8 @@ type RfiAgenda = {
 
 /** Canonical RFI presentation shell. RFIs.jsx remains the data and mutation authority. */
 export interface RfiControlCenterProps {
+  recordLabel?: string;
+  recordLabelPlural?: string;
   contextMode?: "project" | "portfolio";
   projectName: string;
   rfis: RfiRecord[];
@@ -84,6 +86,8 @@ function fmtMoney(n: number): string { return n ? `$${n.toLocaleString()}` : "$0
 
 export default function RfiControlCenter(props: RfiControlCenterProps) {
   const {
+    recordLabel = "RFI",
+    recordLabelPlural = "RFIs",
     projectName,
     contextMode = "project",
     rfis,
@@ -133,7 +137,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
     return (
       <div className="rfi-cc" role="alert" style={{ padding: 24 }}>
         <div className="cmd-panel" style={{ padding: 24, textAlign: "center" }}>
-          <div className="cmd-row__num">Couldn’t load RFIs</div>
+          <div className="cmd-row__num">Couldn’t load {recordLabelPlural}</div>
           <div className="cmd-row__meta" style={{ marginTop: 8 }}>{loadError}</div>
           {onRetryLoad ? (
             <button type="button" className="cmd-chip-btn is-action" onClick={onRetryLoad} style={{ marginTop: 16 }}>
@@ -169,9 +173,9 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
   ];
 
   const kpiCells: KpiCellDef[] = [
-    { label: "Need Action", value: s.needAction, sublabel: "RFIs", tone: "warn", Icon: HelpCircle },
-    { label: "Overdue", value: s.overdue, sublabel: "RFIs", tone: s.overdue ? "danger" : "neutral", Icon: Clock },
-    { label: "Incomplete", value: s.incomplete, sublabel: "RFIs", tone: s.incomplete ? "danger" : "neutral", Icon: FileWarning },
+    { label: "Need Action", value: s.needAction, sublabel: recordLabelPlural, tone: "warn", Icon: HelpCircle },
+    { label: "Overdue", value: s.overdue, sublabel: recordLabelPlural, tone: s.overdue ? "danger" : "neutral", Icon: Clock },
+    { label: "Incomplete", value: s.incomplete, sublabel: recordLabelPlural, tone: s.incomplete ? "danger" : "neutral", Icon: FileWarning },
     { label: "Critical Urgency", value: s.critical, sublabel: "30+ days overdue", tone: s.critical ? "danger" : "neutral", Icon: AlertTriangle },
     { label: "Response Rate", value: `${s.responseRate}%`, sublabel: "answered/closed", tone: "good", Icon: Gauge },
     { label: "Cost Exposure", value: fmtMoney(s.costExposure), sublabel: "active impact", tone: s.costExposure ? "warn" : "neutral", Icon: DollarSign },
@@ -188,8 +192,8 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
 
       <PageHero
         Icon={HelpCircle}
-        title="RFI Control Center"
-        subtitle="Track, manage, and resolve RFIs to keep steel fabrication and field work on track."
+        title={`${recordLabel} Control Center`}
+        subtitle={`Track, manage, and resolve ${recordLabelPlural} to keep steel fabrication and field work on track.`}
         projectName={projectName}
         chips={chips}
         stats={heroStats}
@@ -199,12 +203,12 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
       <KpiStrip cells={kpiCells} />
 
       <div className="cmd-panels">
-        <DecisionPanel title="RFI Work Queue" onViewAll={() => { onFilterChange("open"); scrollToBody(); }}>
+        <DecisionPanel title={`${recordLabel} Work Queue`} onViewAll={() => { onFilterChange("open"); scrollToBody(); }}>
           {s.workQueue.map((r) => (
             <div className="cmd-row is-clickable" key={r.id} onClick={() => onOpenRfi(r)}>
               <div>
                 <div className="cmd-row__num">{r.rfi_number || "RFI"}</div>
-                <div className="cmd-row__meta">{r.title || "Untitled RFI"}</div>
+                <div className="cmd-row__meta">{r.title || `Untitled ${recordLabel}`}</div>
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <Pill tone={priorityTone(r.priority)}>{r.priority || "—"}</Pill>
@@ -222,10 +226,10 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
               <div className="cmd-row__meta">{b.count} open · oldest {b.oldestNumber} · avg {b.avgAgeDays}d</div>
             </div>
           ))}
-          {s.ballInCourt.length === 0 ? <div className="cmd-row__meta">No open RFIs.</div> : null}
+          {s.ballInCourt.length === 0 ? <div className="cmd-row__meta">No open {recordLabelPlural}.</div> : null}
         </DecisionPanel>
 
-        <DecisionPanel title="Highest-Risk RFIs" onViewAll={scrollToBody}>
+        <DecisionPanel title={`Highest-Risk ${recordLabelPlural}`} onViewAll={scrollToBody}>
           {s.riskQueue.map((r) => (
             <div className="cmd-row is-clickable" key={r.id} onClick={() => onOpenRfi(r)}>
               <div>
@@ -235,7 +239,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
               <Pill tone={isOverdue(r) ? "danger" : "neutral"}>{isOverdue(r) ? "Late" : `${daysOpen(r)}d`}</Pill>
             </div>
           ))}
-          {s.riskQueue.length === 0 ? <div className="cmd-row__meta">No active RFIs.</div> : null}
+          {s.riskQueue.length === 0 ? <div className="cmd-row__meta">No active {recordLabelPlural}.</div> : null}
         </DecisionPanel>
       </div>
 
@@ -250,6 +254,8 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
 
         <div className="rfi-register-pin">
           <RfiFilterToolbarView
+            recordLabel={recordLabel}
+            recordLabelPlural={recordLabelPlural}
             search={search}
             onSearch={onSearch}
             filter={filter}
@@ -283,6 +289,8 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
         ) : null}
 
         <RfiTableView
+          recordLabel={recordLabel}
+          recordLabelPlural={recordLabelPlural}
           rows={filtered}
           totalCount={rfis.length}
           selectedIds={selectedIds}

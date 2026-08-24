@@ -17,6 +17,7 @@ const STATUS_FILTERS = [
 ];
 
 export default function RfiFilterToolbar({
+  recordLabel = "RFI", recordLabelPlural = "RFIs",
   search, onSearch,
   filter = "all", onFilterChange = () => {},
   disciplineFilter, onDisciplineChange,
@@ -37,7 +38,7 @@ export default function RfiFilterToolbar({
           className="rfi-search-input"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search RFI number, title, drawing, question, or answer"
+          placeholder={`Search ${recordLabel} number, title, drawing, question, or answer`}
         />
       </div>
 
@@ -90,7 +91,7 @@ export default function RfiFilterToolbar({
         type="button"
         className={`rfi-agenda-toggle${agendaOpen ? " is-active" : ""}${agendaUrgent > 0 ? " is-urgent" : ""}`}
         onClick={onToggleAgenda}
-        title="Today's RFI Agenda — overdue, blocking, due-soon, and awaiting RFIs for the production meeting"
+        title={`Today's ${recordLabel} Agenda — overdue, blocking, due-soon, and awaiting ${recordLabelPlural} for the production meeting`}
       >
         <span className="rfi-agenda-toggle__icon" aria-hidden="true">⚑</span>
         Today's Agenda
@@ -119,7 +120,7 @@ export default function RfiFilterToolbar({
         ) : null}
         {onCreate ? (
           <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate}>
-            <Icon name="plus" size={13} /> New RFI
+            <Icon name="plus" size={13} /> New {recordLabel}
           </button>
         ) : null}
       </div>

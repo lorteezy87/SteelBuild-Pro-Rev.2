@@ -48,6 +48,7 @@ type ProjectRow = {
 };
 
 export function useRfiPageMutations(args: {
+  recordLabel?: string;
   projectId: string | undefined;
   projects: ProjectRow[];
   projectMap: Record<string, string>;
@@ -61,6 +62,7 @@ export function useRfiPageMutations(args: {
   editingRFI: RfiRow | null;
 }) {
   const {
+    recordLabel = "RFI",
     projectId,
     projects,
     projectMap,
@@ -92,9 +94,9 @@ export function useRfiPageMutations(args: {
           !key[1] || record.project_id === key[1]) as unknown as () => boolean,
       );
       await invalidateCrudQueries(qc, rfiQueryKeys);
-      toast.success("RFI created");
+      toast.success(`${recordLabel} created`);
     },
-    onError: (e: unknown) => toastCrudError(e, "Failed to create RFI"),
+    onError: (e: unknown) => toastCrudError(e, `Failed to create ${recordLabel}`),
   });
 
   const updateMut = useMutation({
@@ -104,9 +106,9 @@ export function useRfiPageMutations(args: {
       replaceRecordInCaches(qc, rfiQueryKeys, updated);
       if (selectedRFI?.id === updated.id) setSelectedRFI(updated);
       await invalidateCrudQueries(qc, rfiQueryKeys);
-      toast.success("RFI updated");
+      toast.success(`${recordLabel} updated`);
     },
-    onError: (e: unknown) => toastCrudError(e, "Failed to update RFI"),
+    onError: (e: unknown) => toastCrudError(e, `Failed to update ${recordLabel}`),
   });
 
   const deleteMut = useMutation({
@@ -116,9 +118,9 @@ export function useRfiPageMutations(args: {
       if (selectedRFI?.id === deletedId) setSelectedRFI(null);
       setDeleteTarget(null);
       await invalidateCrudQueries(qc, rfiQueryKeys);
-      toast.success("RFI deleted");
+      toast.success(`${recordLabel} deleted`);
     },
-    onError: (e: unknown) => toastCrudError(e, "Failed to delete RFI"),
+    onError: (e: unknown) => toastCrudError(e, `Failed to delete ${recordLabel}`),
   });
 
   const bulkUpdateMut = useMutation({
@@ -293,7 +295,7 @@ export function useRfiPageMutations(args: {
           );
         } else {
           const allocationProjectId = (data.project_id as string) || projectId;
-          if (!allocationProjectId) throw new Error("Select a project before creating an RFI.");
+          if (!allocationProjectId) throw new Error(`Select a project before creating a ${recordLabel}.`);
           const num =
             (data.rfi_number as string) ||
             (await getNextFormattedNumber({
@@ -303,7 +305,7 @@ export function useRfiPageMutations(args: {
               fieldName: "rfi_number",
               prefix: "RFI #",
             }));
-          if (!num) throw new Error("RFI number allocation failed. The RFI was not saved.");
+          if (!num) throw new Error(`RFI number allocation failed. The ${recordLabel} was not saved.`);
           const created = await createMut.mutateAsync({
             ...data,
             rfi_number: num,
@@ -317,7 +319,7 @@ export function useRfiPageMutations(args: {
         setShowForm(false);
         setEditingRFI(null);
       } catch (error) {
-        toastCrudError(error, "Failed to save RFI");
+        toastCrudError(error, `Failed to save ${recordLabel}`);
       } finally {
         saveInFlightRef.current = false;
       }
@@ -331,6 +333,7 @@ export function useRfiPageMutations(args: {
       uploadRfiPdfDocuments,
       setShowForm,
       setEditingRFI,
+      recordLabel,
     ],
   );
 

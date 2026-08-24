@@ -111,6 +111,12 @@ describe("PROJECT_SCOPED_PAGES", () => {
     expect(PROJECT_SCOPED_PAGES.has("Drawings")).toBe(true);
     expect(PROJECT_SCOPED_PAGES.has("ScheduleHub")).toBe(true);
     expect(PROJECT_SCOPED_PAGES.has("RFIs")).toBe(true);
+    expect(PROJECT_SCOPED_PAGES.has("DetailQueries")).toBe(true);
+  });
+
+  it("registers the separate Detail Queries page", () => {
+    expect(ALL_ROUTE_PATHS).toContain("/DetailQueries");
+    expect(PAGE_LABELS.DetailQueries).toBe("Detail Queries");
   });
 
   it("contains operational pages that read the active project context", () => {

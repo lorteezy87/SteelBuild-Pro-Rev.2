@@ -36,7 +36,7 @@ const Field = ({ label, span = 1, children }) => (
 
 // Deterministic RFI preflight scorecard (always on). Renders the checks
 // from buildRfiPreflight() with a score; required failures read as blockers.
-const PreflightScorecard = ({ result }) => {
+const PreflightScorecard = ({ result, recordLabel = "RFI" }) => {
   if (!result) return null;
   const scoreColor = result.passed
     ? "var(--status-success)"
@@ -45,7 +45,7 @@ const PreflightScorecard = ({ result }) => {
     <div style={{ gridColumn: "span 3", border: "1px solid var(--border-default)", borderRadius: 6, padding: 12, background: "var(--bg-surface-low)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>
-          RFI Preflight
+          {recordLabel} Preflight
         </span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 800, color: scoreColor }}>
           {result.score}%{result.passed ? " · Ready" : ` · ${result.blockers.length} to fix`}
@@ -100,7 +100,7 @@ const DuplicateWarning = ({ matches }) => {
   );
 };
 
-export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "", prefill = null }) {
+export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "", prefill = null, recordLabel = "RFI", recordLabelPlural = "RFIs" }) {
   const qc = useQueryClient();
   const trapRef = useFocusTrap(true);
   const pdfInputRef = useRef(null);
@@ -268,11 +268,11 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       // Invalidate both keyed and unkeyed RFI queries so the list refreshes
       qc.invalidateQueries({ queryKey: ["rfis"] });
       if (projectId) qc.invalidateQueries({ queryKey: ["rfis", projectId] });
-      toast.success(rfi ? "RFI updated" : "RFI created");
+      toast.success(rfi ? `${recordLabel} updated` : `${recordLabel} created`);
       onClose();
     },
     onError: (err) =>
-      toast.error(`Failed to save RFI: ${toUserErrorMessage(err, "Unknown error")}`),
+      toast.error(`Failed to save ${recordLabel}: ${toUserErrorMessage(err, "Unknown error")}`),
   });
 
   const submitInFlightRef = useRef(false);
@@ -301,7 +301,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       if (isPdf) pdfs.push(file);
       else rejected.push(file.name || "Unknown file");
     }
-    if (rejected.length) toast.warning("Only PDF files can be attached to RFIs");
+    if (rejected.length) toast.warning(`Only PDF files can be attached to ${recordLabelPlural}`);
     if (!pdfs.length) return;
     setPendingPdfFiles((prev) => {
       const existing = new Set(prev.map((file) => `${file.name}:${file.size}`));
@@ -411,8 +411,8 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   });
 
   const title = rfi
-    ? `${rfi.rfi_number || "RFI"} — ${(rfi.title || "").slice(0, 30)}${(rfi.title || "").length > 30 ? "…" : ""}`
-    : "New RFI";
+    ? `${rfi.rfi_number || recordLabel} — ${(rfi.title || "").slice(0, 30)}${(rfi.title || "").length > 30 ? "…" : ""}`
+    : `New ${recordLabel}`;
 
   const preflight = buildRfiPreflight(formData);
   const duplicateMatches = findDuplicateRfis(formData, existingRfis);
@@ -452,7 +452,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 <input id={id} style={iStyle} value={formData.title} onChange={(e) => set("title", e.target.value)} required />
               )}
             </FormField>
-            <Field label="RFI Type" span={3}>
+            <Field label={`${recordLabel} Type`} span={3}>
               <DarkSelect
                 value={formData.rfi_type || ""}
                 onChange={(value) => set("rfi_type", value)}
@@ -589,7 +589,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
               )}
             </FormField>
             {duplicateMatches.length > 0 && <DuplicateWarning matches={duplicateMatches} />}
-            <PreflightScorecard result={preflight} />
+            <PreflightScorecard result={preflight} recordLabel={recordLabel} />
             {!preflight.passed && (
               <div style={{ gridColumn: "span 3", border: "1px solid var(--status-error)", borderRadius: 6, padding: 12, background: "var(--danger-muted)" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: overrideAck ? 8 : 0 }}>
@@ -722,10 +722,10 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
               >
                 <div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                    Attach RFI PDFs
+                    Attach {recordLabel} PDFs
                   </div>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                    Upload sketches, vendor responses, marked-up sheets, or official RFI PDFs. Files are linked to this RFI after save.
+                    Upload sketches, vendor responses, marked-up sheets, or official PDFs. Files are linked to this {recordLabel} after save.
                   </div>
                 </div>
                 <button type="button" onClick={() => pdfInputRef.current?.click()} style={uploadButtonStyle}>
@@ -775,7 +775,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             Cancel
           </button>
           <button type="submit" form="rfi-form" disabled={isSaving} style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.6 : 1 }}>
-            {isSaving ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
+            {isSaving ? "Saving..." : rfi ? `Update ${recordLabel}` : `Submit ${recordLabel}`}
           </button>
         </div>
       </div>

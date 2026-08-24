@@ -6,7 +6,7 @@
  */
 import {
   LayoutDashboard, Terminal, Grid3x3, Briefcase, BarChart3,
-  CalendarRange, CalendarDays, CheckSquare, HelpCircle, DollarSign, Mail,
+  CalendarRange, CalendarDays, CheckSquare, HelpCircle, MessageSquareQuote, DollarSign, Mail,
   FileText, Eye, Box, ScanLine,
   Package, Truck, Wrench, Users2,
   Wallet, TrendingUp, Receipt,
@@ -32,6 +32,7 @@ export const PAGE_ICON = {
   ProjectCalendar: CalendarDays,
   ActionItems: CheckSquare,
   RFIs: HelpCircle,
+  DetailQueries: MessageSquareQuote,
   RFIHub: HelpCircle,
   Submittals: FileText,
   ChangeOrders: DollarSign,

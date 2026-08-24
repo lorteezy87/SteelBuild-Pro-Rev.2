@@ -15,7 +15,7 @@ function hideNativePages(groups) {
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
   { label: "PROJECTS",    pages: ["ProjectsHub", "Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
-  { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
+  { label: "RFIs",        pages: ["RFIs", "DetailQueries"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "PieceRegister", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
@@ -51,7 +51,8 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDC65", name: "Project Members",          group: "Projects",      page: "ProjectMembers" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
   { icon: "\u25A6", name: "Detailing Control Center",    group: "Detailing",     page: "DrawingSubmittalHub" },
-  { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
+  { icon: "\u2691", name: "RFI Register",             group: "Comms",         page: "RFIs" },
+  { icon: "?", name: "Detail Queries",                group: "Comms",         page: "DetailQueries" },
   { icon: "\uD83D\uDCDD", name: "Production Notes",   group: "Comms",         page: "ProductionNotes" },
   { icon: "\u2713", name: "Action Items",             group: "Comms",         page: "ActionItems" },
   { icon: "\u2709", name: "Email Inbox",              group: "Comms",         page: "EmailInbox" },
@@ -124,10 +125,16 @@ export const NAV_GROUPS = hideNativePages([
     ],
   },
   {
+    label: "RFIs",
+    items: [
+      { label: "RFI Register",   icon: "⚑", page: "RFIs", badgeKey: "rfi" },
+      { label: "Detail Queries", icon: "?", page: "DetailQueries" },
+    ],
+  },
+  {
     label: "PROJECT MANAGEMENT",
     items: [
       { label: "Schedule",     icon: "▥", page: "ScheduleHub" },
-      { label: "RFIs",         icon: "⚑", page: "RFIs", badgeKey: "rfi" },
       { label: "Action Items", icon: "☑", page: "ActionItems" },
       { label: "Email Inbox",  icon: "✉", page: "EmailInbox" },
       { label: "Production Notes", icon: "📝", page: "ProductionNotes" },
@@ -190,7 +197,7 @@ export const NAV_GROUPS = hideNativePages([
   },
 ]);
 
-const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DETAILING", "PROJECT MANAGEMENT"];
+const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DETAILING", "RFIs", "PROJECT MANAGEMENT"];
 const COLUMN_2_GROUPS = ["PRODUCTION", "FIELD", "DOCUMENTS & REPORTS"];
 const COLUMN_3_GROUPS = ["COST", "ADMINISTRATION", "TOOLS"];
 
@@ -225,11 +232,18 @@ export const SIDEBAR_GROUPS = hideNativePages([
     ],
   },
   {
+    label: "RFIs",
+    collapsible: true,
+    items: [
+      { label: "RFI Register",   icon: "⚑", page: "RFIs", badgeKey: "rfi" },
+      { label: "Detail Queries", icon: "?", page: "DetailQueries" },
+    ],
+  },
+  {
     label: "PROJECT MANAGEMENT",
     collapsible: true,
     items: [
       { label: "Schedule",       icon: "▥", page: "ScheduleHub" },
-      { label: "RFIs",           icon: "⚑", page: "RFIs", badgeKey: "rfi" },
       { label: "Action Items",   icon: "☑", page: "ActionItems" },
       { label: "Email Inbox",    icon: "✉", page: "EmailInbox" },
       { label: "Production Notes", icon: "📝", page: "ProductionNotes" },

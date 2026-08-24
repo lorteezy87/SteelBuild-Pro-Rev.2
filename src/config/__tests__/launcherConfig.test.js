@@ -68,6 +68,21 @@ describe("launcherConfig", () => {
     }
   });
 
+  it("gives RFIs a separate navigation section with both registers", () => {
+    const expected = [
+      { label: "RFI Register", icon: "⚑", page: "RFIs", badgeKey: "rfi" },
+      { label: "Detail Queries", icon: "?", page: "DetailQueries" },
+    ];
+
+    for (const groups of [NAV_GROUPS, SIDEBAR_GROUPS]) {
+      const rfiGroup = groups.find((group) => group.label === "RFIs");
+      const projectManagement = groups.find((group) => group.label === "PROJECT MANAGEMENT");
+
+      expect(rfiGroup?.items).toEqual(expected);
+      expect(projectManagement?.items.some((item) => item.page === "RFIs")).toBe(false);
+    }
+  });
+
   it("does not duplicate Integrations in either navigation registry", () => {
     for (const groups of [NAV_GROUPS, SIDEBAR_GROUPS]) {
       expect(groups.flatMap((group) => group.items).some((item) => item.page === "Integrations")).toBe(false);

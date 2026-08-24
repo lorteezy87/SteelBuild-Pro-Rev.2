@@ -71,3 +71,27 @@ it("renders without crashing and shows key landmark text", () => {
   expect(screen.getByText("Operational Health")).toBeTruthy();
   expect(screen.getByText("Impact")).toBeTruthy();
 });
+
+it("renders Detail Query language while retaining the shared workflow", () => {
+  render(
+    <RfiControlCenter
+      projectName="Test Project"
+      rfis={[]}
+      filtered={[]}
+      search=""
+      onSearch={() => {}}
+      disciplineFilter="All"
+      onDisciplineChange={() => {}}
+      onOpenRfi={() => {}}
+      onExport={() => {}}
+      onCreate={() => {}}
+      recordLabel="Detail Query"
+      recordLabelPlural="Detail Queries"
+    />,
+  );
+
+  expect(screen.getByText("Detail Query Control Center")).toBeInTheDocument();
+  expect(screen.getByText("Detail Query Work Queue")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /New Detail Query/i })).toBeInTheDocument();
+  expect(screen.getByText("No Detail Queries yet")).toBeInTheDocument();
+});

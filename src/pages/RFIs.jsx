@@ -42,8 +42,15 @@ import { scopeRfiPortfolioRows } from "./rfis/rfiPortfolioScope";
 import { buildOperationalHealthIndex } from "@/lib/projectHealth";
 import { localToday } from "@/utils/dates";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { filterRfiRecordsByKind, withRfiRecordKind } from "./rfis/rfiRecordKind";
 
-export default function RFIs() {
+const RECORD_COPY = {
+  rfi: { singular: "RFI", plural: "RFIs" },
+  detail_query: { singular: "Detail Query", plural: "Detail Queries" },
+};
+
+export default function RFIs({ recordKind = "rfi" }) {
+  const recordCopy = RECORD_COPY[recordKind] || RECORD_COPY.rfi;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const projectId = useProjectId();
@@ -102,9 +109,13 @@ export default function RFIs() {
       ? entities.RFI.filter({ project_id: projectId }, "-submitted_date")
       : entities.RFI.listAll("-submitted_date"),
   });
-  const rfis = useMemo(
+  const scopedRfis = useMemo(
     () => isPortfolio ? scopeRfiPortfolioRows(projects, rawRfis) : rawRfis,
     [isPortfolio, projects, rawRfis],
+  );
+  const rfis = useMemo(
+    () => filterRfiRecordsByKind(scopedRfis, recordKind),
+    [recordKind, scopedRfis],
   );
   useAutoOpenEdit(rfis, setSelectedRFI, { enabled: !rfisLoading, param: "recordId" });
   const { data: rawWorkPackages = [] } = useQuery({
@@ -188,6 +199,7 @@ export default function RFIs() {
     saveRfi,
     isSaving,
   } = useRfiPageMutations({
+    recordLabel: recordCopy.singular,
     projectId,
     projects,
     projectMap,
@@ -205,7 +217,7 @@ export default function RFIs() {
   const alertsCreatedRef = useRef(new Set());
   useEffect(() => {
     if (!projectId) return;
-    if (!rfis.length) return;
+    if (!scopedRfis.length) return;
     const createRFIAlerts = async () => {
       try {
         // Scoped to the current project: RFI numbers are per-project
@@ -215,7 +227,7 @@ export default function RFIs() {
         const existing = await entities.Alert.filter({ alert_type: "RFI_Overdue", project_id: projectId });
         const existingIds = new Set(existing.map((a) => a.related_record_id).filter(Boolean));
         const existingTitles = new Set(existing.map((a) => a.title));
-        const planned = planRfiOverdueAlerts(rfis, {
+        const planned = planRfiOverdueAlerts(scopedRfis, {
           existingRelatedIds: existingIds,
           existingTitles,
           alreadyCreatedIds: alertsCreatedRef.current,
@@ -232,18 +244,18 @@ export default function RFIs() {
     };
     const t = setTimeout(createRFIAlerts, 2500);
     return () => clearTimeout(t);
-  }, [projectId, rfis, projectMap]);
+  }, [projectId, scopedRfis, projectMap]);
 
   // Memoized: O(projects × (rfis + tasks)) — unmemoized this re-ran on every
   // keystroke/selection. Local today (not UTC) so evening sessions don't
   // count due-today items as overdue.
   const healthByProjectId = useMemo(
     () =>
-      buildOperationalHealthIndex(projects, rfis, scheduleTasks, localToday(), {
+      buildOperationalHealthIndex(projects, scopedRfis, scheduleTasks, localToday(), {
         rfiEvidenceLoaded: rfisSuccess,
         scheduleEvidenceLoaded: scheduleTasksSuccess,
       }),
-    [projects, rfis, scheduleTasks, rfisSuccess, scheduleTasksSuccess],
+    [projects, scopedRfis, scheduleTasks, rfisSuccess, scheduleTasksSuccess],
   );
 
   /* ── Loading ── */
@@ -271,6 +283,7 @@ export default function RFIs() {
       {/* Modals */}
       <RfiDetailModal
         rfi={selectedRFI}
+        recordLabel={recordCopy.singular}
         onClose={() => setSelectedRFI(null)}
         onEdit={() => {
           setEditingRFI(selectedRFI);
@@ -319,7 +332,7 @@ export default function RFIs() {
         onClose={() => setNudgeRFI(null)}
       />
 
-      {!isPortfolio && <RfiLogImportModal
+      {!isPortfolio && recordKind === "rfi" && <RfiLogImportModal
         open={showLogImport}
         projectId={projectId}
         projectName={projects.find((p) => p.id === projectId)?.name}
@@ -331,10 +344,12 @@ export default function RFIs() {
         <RFIFormModal
           open={showForm}
           onClose={() => { setShowForm(false); setEditingRFI(null); }}
-          onSave={saveRfi}
+          onSave={(data, pdfFiles) => saveRfi(withRfiRecordKind(data, recordKind), pdfFiles)}
           saving={isSaving}
           rfi={editingRFI}
           projectId={projectId}
+          recordLabel={recordCopy.singular}
+          recordLabelPlural={recordCopy.plural}
         />
       )}
 
@@ -343,7 +358,7 @@ export default function RFIs() {
         onClose={() => setDeleteTarget(null)}
         busy={deleteMut.isPending}
         onConfirm={() => deleteMut.mutateAsync(deleteTarget.id)}
-        title="Delete RFI"
+        title={`Delete ${recordCopy.singular}`}
         description={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
       />
       <DeleteDialog
@@ -351,8 +366,8 @@ export default function RFIs() {
         onClose={() => setShowBulkDelete(false)}
         busy={bulkDeleteMut.isPending}
         onConfirm={() => bulkDeleteMut.mutateAsync([...selectedIds])}
-        title={`Delete ${selectedIds.size} RFIs`}
-        description={`Permanently delete ${selectedIds.size} selected RFI${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
+        title={`Delete ${selectedIds.size} ${selectedIds.size === 1 ? recordCopy.singular : recordCopy.plural}`}
+        description={`Permanently delete ${selectedIds.size} selected ${selectedIds.size === 1 ? recordCopy.singular : recordCopy.plural}? This cannot be undone.`}
       />
     </>
   );
@@ -366,6 +381,8 @@ export default function RFIs() {
       }}
     >
       <RfiControlCenter
+        recordLabel={recordCopy.singular}
+        recordLabelPlural={recordCopy.plural}
         contextMode={isPortfolio ? "portfolio" : "project"}
         projectName={activeProjectName}
         rfis={rfis}
@@ -394,7 +411,7 @@ export default function RFIs() {
         onToggleInsights={handleToggleInsights}
         onOpenRfi={setSelectedRFI}
         onExport={() => exportRFIsToCSV(filtered)}
-        onImport={!isPortfolio && can("create", "rfi") ? () => setShowLogImport(true) : null}
+        onImport={!isPortfolio && recordKind === "rfi" && can("create", "rfi") ? () => setShowLogImport(true) : null}
         onCreate={!isPortfolio && can("create", "rfi") ? () => {
           setEditingRFI(null);
           setShowForm(true);
@@ -407,14 +424,14 @@ export default function RFIs() {
           projectsError
             ? toUserErrorMessage(projectsQueryError, "Project data unavailable")
             : rfisError
-              ? toUserErrorMessage(rfiQueryError, "RFI data unavailable")
+              ? toUserErrorMessage(rfiQueryError, `${recordCopy.singular} data unavailable`)
               : null
         }
         onRetryLoad={() => { void refetchProjects(); void refetchRfis(); }}
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
         onToggleAll={toggleAll}
-        listTruncationNotice={<ListTruncationNotice count={rfis.length} label="RFIs" />}
+        listTruncationNotice={<ListTruncationNotice count={rfis.length} label={recordCopy.plural} />}
         bulkActions={(
           <BulkActionBar
             count={selectedIds.size}

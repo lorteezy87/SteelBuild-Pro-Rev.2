@@ -32,7 +32,7 @@ function impactValue(rfi) {
   return parts.join(" / ") || "No known impact";
 }
 
-export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO, onDownstreamAction }) {
+export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO, onDownstreamAction, recordLabel = "RFI" }) {
   if (!rfi) return null;
 
   const age = daysOpen(rfi);
@@ -50,7 +50,7 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
       open={!!rfi}
       onClose={onClose}
       eyebrow={`${rfi.rfi_number || rfi.id} / ${(rfi.discipline || "GENERAL").toUpperCase()}`}
-      title={rfi.title || "Untitled RFI"}
+      title={rfi.title || `Untitled ${recordLabel}`}
       width={920}
       footer={
         <>
