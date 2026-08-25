@@ -14,7 +14,9 @@ import RoundTimelineRaw from "@/components/submittals/RoundTimeline";
 import ResponseMatrixRaw from "@/components/submittals/ResponseMatrix";
 import IfcIssueDialog from "@/components/submittals/IfcIssueDialog";
 import CommentDispositionChecklist from "@/components/submittals/CommentDispositionChecklist";
+import ApproverNotesPanel from "@/components/submittals/ApproverNotesPanel";
 import type { CommentDispositionStatus } from "@/lib/commentDispositionGate";
+import { evaluateApproverNotes, type ApproverNote } from "@/lib/approverNotes";
 import SubmittalForecastCard from "@/components/submittals/SubmittalForecastCard";
 import { buildResponseMatrix } from "@/lib/submittalResubmittal";
 import { forecastSubmittal } from "@/lib/submittalForecast";
@@ -232,6 +234,7 @@ export function SubmittalDetail({
   }
 
   const cfg = STATUS_CFG[submittal.status ?? ""] || STATUS_CFG.Draft;
+  const approverNotesStatus = evaluateApproverNotes(submittal);
   const overdue =
     submittal.required_date &&
     !["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(submittal.status ?? "") &&
@@ -281,6 +284,22 @@ export function SubmittalDetail({
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 3, color: cfg.color, background: cfg.bg }}>
                 {submittal.status}
               </span>
+              {approverNotesStatus.label && (
+                <span
+                  title={`${approverNotesStatus.unansweredCount} unanswered question(s) for EOR/AOR`}
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: "3px 8px",
+                    borderRadius: 3,
+                    color: "var(--status-warning)",
+                    background: "var(--status-review-muted, color-mix(in srgb, var(--status-warning) 14%, transparent))",
+                  }}
+                >
+                  Incomplete · {approverNotesStatus.flag}
+                </span>
+              )}
               {(CLOSED_SUBMITTAL_STATUSES.has(submittal.status ?? "") || submittal.ball_in_court) && (
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 3, color: "var(--text-secondary)", background: "var(--bg-surface-high)" }}>
                   BIC · {CLOSED_SUBMITTAL_STATUSES.has(submittal.status ?? "") ? "Closed" : submittal.ball_in_court}
@@ -446,6 +465,13 @@ export function SubmittalDetail({
             <SubmittalForecastCard forecast={forecast} />
           </DetailSection>
         )}
+
+        <DetailSection title="Approver Notes">
+          <ApproverNotesPanel
+            notes={submittal.approver_notes ?? (submittal.metadata as { approver_notes?: unknown } | undefined)?.approver_notes}
+            onChange={(next: ApproverNote[]) => patch("approver_notes", next)}
+          />
+        </DetailSection>
 
         <DetailSection title="Status workflow">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>

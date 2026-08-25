@@ -194,5 +194,23 @@ describe("summarizeBoard", () => {
     expect(summary.needsAction).toBe(1);
     expect(summary.overdue).toBeGreaterThanOrEqual(1);
     expect(summary.criticalRisk).toBeGreaterThanOrEqual(1);
+    expect(summary.pendingEor).toBe(0);
+  });
+
+  it("flags packages with unanswered approver notes as pending EOR/AOR", () => {
+    const pkg = {
+      ...setPackage,
+      submittals: [
+        {
+          ...setPackage.submittals[0],
+          approver_notes: [{ id: "n1", note: "Confirm CJP at B-4?", response: "" }],
+        },
+      ],
+    };
+    const items = buildBoardItems([pkg], pkg.submittals);
+    const row = items.find((i) => i.id === "set-id:set-1");
+    expect(row?.pendingEorResponse).toBe(true);
+    expect(summarizeBoard(items).pendingEor).toBe(1);
+    expect(filterItems(items, "pending-eor", "").map((i) => i.id)).toEqual(["set-id:set-1"]);
   });
 });

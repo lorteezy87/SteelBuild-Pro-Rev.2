@@ -16,6 +16,7 @@ import {
 } from "@/lib/submittalComponents";
 import { STATUS_CFG } from "./format";
 import type { DrawingSetsById, Submittal } from "./types";
+import { evaluateApproverNotes } from "@/lib/approverNotes";
 
 // ── Virtual list wrapper ───────────────────────────────────────────────
 
@@ -154,6 +155,7 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
     row.required_date &&
     !["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(row.status ?? "") &&
     daysUntil(row.required_date) < 0;
+  const pendingEor = evaluateApproverNotes(row);
 
   // The list is dense — give each row a status-tinted left rail and a
   // very faint status-tinted background wash so adjacent statuses
@@ -269,6 +271,20 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
             }}>
               {row.status}
             </span>
+            {pendingEor.flag && (
+              <span
+                title={pendingEor.label ?? pendingEor.flag}
+                style={{
+                  fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                  padding: "2px 6px", borderRadius: 3, letterSpacing: "0.04em",
+                  color: "var(--status-warning)",
+                  background: "var(--status-review-muted, color-mix(in srgb, var(--status-warning) 14%, transparent))",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Incomplete
+              </span>
+            )}
           </div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "var(--status-error)" : "var(--text-muted)", marginTop: 4 }}>
             {row.required_date ? formatDate(row.required_date) : "—"}
