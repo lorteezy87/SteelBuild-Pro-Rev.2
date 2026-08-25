@@ -11,6 +11,7 @@
 import { daysBetween } from "@/lib/dateMath";
 import { compareSubmittalsByDrawingSet } from "./format";
 import type { DrawingSetsById, Submittal } from "./types";
+import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 
 /**
  * KPI cards filter by GROUPED status (matching their stat counts); the status
@@ -41,6 +42,7 @@ export interface SubmittalStats {
   approved: number;
   rejected: number;
   overdue: number;
+  pendingEor: number;
 }
 
 /** Selection state is derived from the visible filtered rows only. */
@@ -63,10 +65,14 @@ export function getVisibleSelectionState(
 export function filterSubmittals(rows: Submittal[], f: SubmittalFilterState): Submittal[] {
   let list = rows;
   if (f.filterStatus !== "all") {
-    const group = STATUS_GROUPS[f.filterStatus];
-    list = group
-      ? list.filter((r) => group.includes(r.status ?? ""))
-      : list.filter((r) => r.status === f.filterStatus);
+    if (f.filterStatus === "__pending_eor") {
+      list = list.filter((r) => hasUnansweredApproverNotes(r));
+    } else {
+      const group = STATUS_GROUPS[f.filterStatus];
+      list = group
+        ? list.filter((r) => group.includes(r.status ?? ""))
+        : list.filter((r) => r.status === f.filterStatus);
+    }
   }
   if (f.filterBIC !== "all") list = list.filter((r) => r.ball_in_court === f.filterBIC);
   if (f.search.trim()) {
@@ -124,5 +130,6 @@ export function computeSubmittalStats(rows: Submittal[], today: string): Submitt
     if (OVERDUE_EXEMPT_STATUSES.includes(r.status ?? "")) return false;
     return daysBetween(today, r.required_date) < 0;
   }).length;
-  return { total, pending, approved, rejected, overdue };
+  const pendingEor = rows.filter((r) => hasUnansweredApproverNotes(r)).length;
+  return { total, pending, approved, rejected, overdue, pendingEor };
 }

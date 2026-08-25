@@ -135,6 +135,7 @@ describe("computeSubmittalStats", () => {
     expect(s.pending).toBe(2); // Submitted + Under Review
     expect(s.approved).toBe(3); // Approved + Approved as Noted + Released for Fabrication
     expect(s.rejected).toBe(2); // Rejected + Revise and Resubmit
+    expect(s.pendingEor).toBe(0);
   });
 
   it("counts overdue: required_date in the past AND status is open", () => {
@@ -148,6 +149,18 @@ describe("computeSubmittalStats", () => {
     ];
     const s = computeSubmittalStats(rows, "2026-07-05");
     expect(s.overdue).toBe(1);
+  });
+
+  it("counts pending EOR/AOR when an approver note has no response", () => {
+    const rows: Submittal[] = [
+      sub({ id: "open", approver_notes: [{ id: "1", note: "Confirm camber?", response: "" }] }),
+      sub({ id: "done", approver_notes: [{ id: "2", note: "Confirm camber?", response: "3/4 OK" }] }),
+      sub({ id: "none" }),
+    ];
+    expect(computeSubmittalStats(rows, "2026-07-05").pendingEor).toBe(1);
+    expect(
+      filterSubmittals(rows, { filterStatus: "__pending_eor", filterBIC: "all", search: "" }).map((r) => r.id),
+    ).toEqual(["open"]);
   });
 });
 

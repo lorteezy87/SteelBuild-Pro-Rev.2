@@ -6942,6 +6942,7 @@ export type Database = {
           approval_chain: Json | null
           approval_chain_step: number | null
           approved_date: string | null
+          approver_notes: Json
           ball_in_court: string | null
           created_at: string | null
           current_round_id: string | null
@@ -6984,6 +6985,7 @@ export type Database = {
           approval_chain?: Json | null
           approval_chain_step?: number | null
           approved_date?: string | null
+          approver_notes?: Json
           ball_in_court?: string | null
           created_at?: string | null
           current_round_id?: string | null
@@ -7026,6 +7028,7 @@ export type Database = {
           approval_chain?: Json | null
           approval_chain_step?: number | null
           approved_date?: string | null
+          approver_notes?: Json
           ball_in_court?: string | null
           created_at?: string | null
           current_round_id?: string | null

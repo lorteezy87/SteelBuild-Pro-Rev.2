@@ -29,6 +29,7 @@ import {
 } from "@/lib/submittalRiskAging";
 import { dueInfoFor } from "@/pages/drawingSubmittalHub/format";
 import type { DueInfo } from "@/pages/drawingSubmittalHub/types";
+import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 
 const ACTION_STATUSES = new Set(["Rejected", "Revise and Resubmit"]);
 const CLOSED_SUBMITTAL_STATUSES = new Set(["Released for Fabrication", "Void"]);
@@ -56,6 +57,8 @@ export interface BoardItem {
   drawingSetId?: string | null;
   /** Slice 7 — R&R/OFS/BFA aging risk (null when stage is not scored). */
   risk: SubmittalRiskAssessment | null;
+  /** Unanswered Approver Notes — Incomplete, pending EOR/AOR response. */
+  pendingEorResponse: boolean;
 }
 
 export interface BoardSummary {
@@ -66,9 +69,10 @@ export interface BoardSummary {
   unlinked: number;
   released: number;
   criticalRisk: number;
+  pendingEor: number;
 }
 
-export type BoardFilter = "all" | "overdue" | "needs-action" | "unlinked" | "critical";
+export type BoardFilter = "all" | "overdue" | "needs-action" | "unlinked" | "critical" | "pending-eor";
 
 function riskForBoardStage(
   stage: string | null | undefined,
@@ -206,6 +210,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
       routeTab: latestSubmittal ? "submittals" : "drawings",
       drawingSetId: pkg.setId || null,
       risk: riskForBoardStage(stage, dueDate, latestSubmittal, useWorkdays && !!submittalDue),
+      pendingEorResponse: hasUnansweredApproverNotes(latestSubmittal),
     };
   });
 
@@ -243,6 +248,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
         discipline: submittal.discipline || submittal.submittal_type || "",
         routeTab: "submittals",
         risk: riskForBoardStage(stage, dueDate, submittal, useWorkdays),
+        pendingEorResponse: hasUnansweredApproverNotes(submittal),
       };
     });
 
@@ -265,6 +271,7 @@ export function filterItems(items: BoardItem[], filter: BoardFilter, search: str
     if (filter === "needs-action" && !item.needsAction) return false;
     if (filter === "unlinked" && item.linked) return false;
     if (filter === "critical" && item.risk?.tier !== "critical") return false;
+    if (filter === "pending-eor" && !item.pendingEorResponse) return false;
     if (!q) return true;
     return (
       item.title.toLowerCase().includes(q) ||
@@ -301,5 +308,6 @@ export function summarizeBoard(allItems: BoardItem[]): BoardSummary {
     unlinked: allItems.filter((item) => !item.linked).length,
     released: allItems.filter((item) => item.stage === "Released").length,
     criticalRisk: allItems.filter((item) => item.risk?.tier === "critical").length,
+    pendingEor: allItems.filter((item) => item.pendingEorResponse).length,
   };
 }

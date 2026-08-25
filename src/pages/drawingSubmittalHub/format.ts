@@ -7,6 +7,7 @@ import { computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { workingDaysBetween } from "@/lib/workingDays";
 import { todayLocalISO } from "@/lib/dateMath";
 import { pickMostRecentSubmittal, submittalStatusToStage } from "@/lib/submittalStageMapping";
+import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
@@ -788,7 +789,13 @@ export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], s
         closed: latestSubmittal ? isClosedSubmittal(latestSubmittal) : false,
         useWorkdays,
       });
-      return { ...set, submittals: linked, latestSubmittal, due };
+      return {
+        ...set,
+        submittals: linked,
+        latestSubmittal,
+        due,
+        pendingEorResponse: hasUnansweredApproverNotes(latestSubmittal),
+      };
     })
     .filter((set: any) => {
       if (!search) return true;
@@ -805,7 +812,7 @@ export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], s
 
 export interface ApprovalMatrixSummary {
   noSubmittal: number; pending: number; approved: number; rejected: number;
-  overdue: number; dueSoon: number; total: number;
+  overdue: number; dueSoon: number; total: number; pendingEor: number;
 }
 
 /**
@@ -815,7 +822,7 @@ export interface ApprovalMatrixSummary {
  */
  
 export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummary {
-  let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0;
+  let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0, pendingEor = 0;
   for (const row of matrixRows || []) {
     if (!row.latestSubmittal) { noSubmittal++; continue; }
     const st = row.latestSubmittal.status;
@@ -824,6 +831,7 @@ export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummar
     else pending++;
     if (row.due.overdue) overdue++;
     if (row.due.dueSoon) dueSoon++;
+    if (row.pendingEorResponse || hasUnansweredApproverNotes(row.latestSubmittal)) pendingEor++;
   }
-  return { noSubmittal, pending, approved, rejected, overdue, dueSoon, total: (matrixRows || []).length };
+  return { noSubmittal, pending, approved, rejected, overdue, dueSoon, pendingEor, total: (matrixRows || []).length };
 }

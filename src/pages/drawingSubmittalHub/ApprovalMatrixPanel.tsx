@@ -7,7 +7,7 @@
  */
 import { Fragment, useMemo, useState } from "react";
 import type { ComponentType } from "react";
-import { AlertTriangle, ClipboardList, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ClipboardList, MessageSquareWarning, ShieldCheck } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
@@ -26,6 +26,7 @@ import {
 import type { DueInfo } from "./types";
 import { FilterBar, Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
+import { evaluateApproverNotes, INCOMPLETE_EOR_AOR_LABEL } from "@/lib/approverNotes";
 
 type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
@@ -89,6 +90,7 @@ export function ApprovalMatrixPanel({ drawingSets, submittals, roundsBySubmittal
           <>
             <SummaryPill icon={AlertTriangle} label="Overdue" value={summary.overdue} tone="danger" />
             <SummaryPill icon={ClipboardList} label="Pending" value={summary.pending} tone="warn" />
+            <SummaryPill icon={MessageSquareWarning} label="Incomplete · EOR/AOR" value={summary.pendingEor} tone={summary.pendingEor ? "warn" : "neutral"} />
             <SummaryPill icon={ShieldCheck} label="Approved" value={summary.approved} tone="good" />
             <SummaryPill icon={AlertTriangle} label="Needs Action" value={summary.rejected} tone="review" />
           </>
@@ -148,6 +150,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
   const [expanded, setExpanded] = useState(false);
   const rowRail = sub ? getStatusColor(sub.status) : "var(--cmd-warn)";
   const hasHistory = allSubmittals.length > 1 || (sub && (roundsBySubmittal[sub.id]?.length ?? 0) > 0);
+  const approverNotes = evaluateApproverNotes(sub);
 
   return (
     <>
@@ -164,7 +167,16 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
         {sub ? (
           <>
             <td style={{ color: "var(--cmd-gold)" }}>{sub.submittal_number}</td>
-            <td><Pill tone={statusTone(sub.status)}>{sub.status}</Pill></td>
+            <td>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                <Pill tone={statusTone(sub.status)}>{sub.status}</Pill>
+                {approverNotes.label && (
+                  <span title={approverNotes.label}>
+                    <Pill tone="warn">Incomplete</Pill>
+                  </span>
+                )}
+              </div>
+            </td>
             <td><Pill tone={dueTone(due)}>{due.label}</Pill></td>
             <td>{CLOSED_SUBMITTAL_STATUSES.has(sub.status ?? "") ? "Closed" : (sub.ball_in_court || "—")}</td>
             <td style={{ textAlign: "center" }}>
@@ -194,6 +206,27 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
                 </>
               )}
             </div>
+
+            {approverNotes.unansweredCount > 0 && (
+              <div
+                style={{
+                  marginBottom: 10,
+                  padding: "8px 10px",
+                  borderRadius: 3,
+                  border: "1px solid color-mix(in srgb, var(--cmd-warn) 40%, var(--cmd-border))",
+                  background: "color-mix(in srgb, var(--cmd-warn) 10%, transparent)",
+                }}
+              >
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--cmd-warn)", marginBottom: 6 }}>
+                  {INCOMPLETE_EOR_AOR_LABEL}
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 16, color: "var(--cmd-text)", fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {approverNotes.unanswered.map((note) => (
+                    <li key={note.id}>{note.note}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {allSubmittals.filter((s) => s.id !== sub?.id).map((s) => {
               const childDue = dueInfoFor(getSubmittalDueDate(s), { closed: isClosedSubmittal(s), useWorkdays });
