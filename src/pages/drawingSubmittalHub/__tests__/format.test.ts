@@ -471,6 +471,21 @@ describe("buildApprovalMatrixRows", () => {
   it("handles empty input", () => {
     expect(buildApprovalMatrixRows([], [])).toEqual([]);
   });
+
+  it("flags unanswered Approver Notes on the latest submittal", () => {
+    const rows = buildApprovalMatrixRows(
+      [{ id: "s1", set_name: "Main Steel", is_deleted: false }],
+      [{
+        id: "a",
+        drawing_set_ids: ["s1"],
+        round_number: 1,
+        status: "Submitted",
+        submittal_number: "001",
+        approver_notes: [{ id: "n1", note: "Confirm CJP at B-4?", response: "" }],
+      }],
+    );
+    expect(rows[0].pendingEorResponse).toBe(true);
+  });
 });
 
 describe("summarizeApprovalMatrix", () => {
@@ -492,7 +507,23 @@ describe("summarizeApprovalMatrix", () => {
     expect(s.noSubmittal).toBe(1);
     expect(s.overdue).toBe(1);
     expect(s.dueSoon).toBe(1);
+    expect(s.pendingEor).toBe(0);
     expect(s.total).toBe(5);
+  });
+  it("counts unanswered Approver Notes as pending EOR/AOR", () => {
+    const s = summarizeApprovalMatrix([
+      {
+        latestSubmittal: { status: "Submitted", approver_notes: [{ id: "1", note: "Confirm camber?", response: "" }] },
+        due: { overdue: false, dueSoon: false },
+        pendingEorResponse: true,
+      },
+      {
+        latestSubmittal: { status: "Submitted", approver_notes: [{ id: "2", note: "Confirm camber?", response: "3/4 OK" }] },
+        due: { overdue: false, dueSoon: false },
+        pendingEorResponse: false,
+      },
+    ]);
+    expect(s.pendingEor).toBe(1);
   });
   it("handles empty input", () => {
     expect(summarizeApprovalMatrix([])).toMatchObject({ total: 0, approved: 0 });

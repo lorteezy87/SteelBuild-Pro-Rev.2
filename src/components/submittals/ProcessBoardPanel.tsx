@@ -130,7 +130,7 @@ export default function ProcessBoardPanel({
             <SummaryPill icon={Clock3} label="Due Soon" value={summary.dueSoon} tone="warn" />
             <SummaryPill icon={ShieldCheck} label="Released" value={summary.released} tone="good" />
             <SummaryPill icon={Link2} label="Unlinked" value={summary.unlinked} tone={summary.unlinked ? "warn" : "neutral"} />
-            <SummaryPill icon={Clock3} label="Pending EOR/AOR" value={summary.pendingEor} tone={summary.pendingEor ? "warn" : "neutral"} />
+            <SummaryPill icon={Clock3} label="Incomplete · EOR/AOR" value={summary.pendingEor} tone={summary.pendingEor ? "warn" : "neutral"} />
           </>
         }
       />
@@ -141,7 +141,7 @@ export default function ProcessBoardPanel({
         <FilterChip active={filter === "critical"} onClick={() => setFilter("critical")} label="Critical" value={summary.criticalRisk} />
         <FilterChip active={filter === "overdue"} onClick={() => setFilter("overdue")} label="Overdue" value={summary.overdue} />
         <FilterChip active={filter === "needs-action"} onClick={() => setFilter("needs-action")} label="Needs Action" value={summary.needsAction} />
-        <FilterChip active={filter === "pending-eor"} onClick={() => setFilter("pending-eor")} label="Pending EOR/AOR" value={summary.pendingEor} />
+        <FilterChip active={filter === "pending-eor"} onClick={() => setFilter("pending-eor")} label="Incomplete · EOR/AOR" value={summary.pendingEor} />
         <FilterChip active={filter === "unlinked"} onClick={() => setFilter("unlinked")} label="Unlinked" value={summary.unlinked} />
       </div>
 
@@ -356,7 +356,11 @@ function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: str
           </span>
         )}
         {item.needsAction && <Pill tone="review">{item.isRR ? "R&R" : "Action"}</Pill>}
-        {item.pendingEorResponse && <Pill tone="warn">Pending EOR/AOR</Pill>}
+        {item.pendingEorResponse && (
+          <span title="Incomplete — Pending EOR/AOR Response">
+            <Pill tone="warn">Incomplete · EOR/AOR</Pill>
+          </span>
+        )}
         {!item.linked && <Pill tone="warn">Unlinked</Pill>}
         {!item.linked && item.kind === "Drawing Set" && item.drawingSetId && (
           <span

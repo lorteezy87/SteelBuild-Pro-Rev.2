@@ -4,7 +4,7 @@
  * Unanswered notes flag the package Incomplete — Pending EOR/AOR Response.
  * No <form> tags.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   INCOMPLETE_EOR_AOR_LABEL,
@@ -29,6 +29,8 @@ export default function ApproverNotesPanel({
   const parsed = parseApproverNotes(notes);
   const [draftNote, setDraftNote] = useState("");
   const [rows, setRows] = useState<ApproverNote[]>(parsed);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
   useEffect(() => {
     setRows(parseApproverNotes(notes));
@@ -69,7 +71,7 @@ export default function ApproverNotesPanel({
   };
 
   const handleResponseBlur = async () => {
-    await commit(rows);
+    await commit(rowsRef.current);
   };
 
   const handleRemove = async (id: string) => {

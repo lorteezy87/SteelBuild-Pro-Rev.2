@@ -128,7 +128,7 @@ export default function SubmittalRegisterPanel({
   const subtitle = stats.overdue > 0
     ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
     : stats.pendingEor > 0
-      ? `${stats.pendingEor} pending EOR/AOR · ${stats.pending} awaiting review`
+      ? `${stats.pendingEor} incomplete — pending EOR/AOR response · ${stats.pending} awaiting review`
       : `${stats.pending} awaiting review · ${stats.approved} approved`;
 
   return (
@@ -175,7 +175,7 @@ export default function SubmittalRegisterPanel({
             />
             <KpiCell label="Overdue" value={stats.overdue} Icon={AlertTriangle} tone="danger" />
             <KpiCell
-              label="Pending EOR/AOR" value={stats.pendingEor} Icon={Clock3} tone="warn"
+              label="Incomplete · EOR/AOR" value={stats.pendingEor} Icon={Clock3} tone="warn"
               sub="unanswered notes"
               active={filterStatus === "__pending_eor"}
               onClick={() => onFilterStatus("__pending_eor")}
@@ -229,7 +229,7 @@ export default function SubmittalRegisterPanel({
               style={{ padding: "7px 10px", borderRadius: 8, fontSize: 12, minHeight: 34 }}
             >
               <option value="all">All Statuses</option>
-              <option value="__pending_eor">Pending EOR/AOR Response</option>
+              <option value="__pending_eor">Incomplete — Pending EOR/AOR Response</option>
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             <select
