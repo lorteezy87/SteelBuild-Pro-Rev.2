@@ -73,4 +73,20 @@ describe("WPFormModal — set-based drawing assignment (§21)", () => {
     // …as sets (sheet-count summary), not raw sheet-number rows.
     expect(screen.queryByText(/\[A-101\]/)).toBeNull();
   });
+
+  it("keeps drawing-set picker rows readable after hover (theme tokens, not hardcoded navy)", () => {
+    renderModal({ allDrawings: setDrawings, defaultProjectId: "proj-1" });
+    const search = screen.getByPlaceholderText(/search drawing sets by name/i);
+    fireEvent.focus(search);
+    const row = screen.getByText("Anchor Bolts - OFA").closest("div");
+    expect(row.style.color).toBe("var(--text-primary)");
+    expect(row.style.background).not.toMatch(/rgb\(\s*18\s*,\s*25\s*,\s*38\s*\)/);
+    fireEvent.mouseEnter(row);
+    expect(row.style.background).toBe("var(--hover-bg)");
+    expect(row.style.color).toBe("var(--text-primary)");
+    fireEvent.mouseLeave(row);
+    expect(row.style.background).toBe("transparent");
+    expect(row.style.color).toBe("var(--text-primary)");
+    expect(row.style.background).not.toMatch(/rgb\(\s*12\s*,\s*17\s*,\s*25\s*\)/);
+  });
 });
