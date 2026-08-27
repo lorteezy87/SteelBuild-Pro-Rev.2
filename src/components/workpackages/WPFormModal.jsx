@@ -470,9 +470,9 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
                      <div
                        key={opt.key}
                        onMouseDown={() => addSet(opt)}
-                       style={{ padding: "8px 10px", borderBottom: "1px solid var(--divider)", cursor: "pointer", fontSize: 11, color: "var(--text-secondary)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
-                       onMouseEnter={e => e.currentTarget.style.background = "rgb(18,25,38)"}
-                       onMouseLeave={e => e.currentTarget.style.background = "rgb(12,17,25)"}
+                       style={{ padding: "8px 10px", borderBottom: "1px solid var(--divider)", cursor: "pointer", fontSize: 11, color: "var(--text-primary)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: "transparent" }}
+                       onMouseEnter={e => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-primary)"; }}
                      >
                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                          {num !== "TBD" ? <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)", marginRight: 6 }}>{num}</span> : null}
