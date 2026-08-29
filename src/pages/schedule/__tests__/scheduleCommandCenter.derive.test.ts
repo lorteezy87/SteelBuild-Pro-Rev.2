@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildScheduleSummary } from "../scheduleCommandCenter.derive";
 import type { TaskRecord } from "../scheduleCommandCenter.derive";
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────
 
 /** ISO date string offset from today by `days`. Negative = past. */
 function daysFromToday(days: number): string {
@@ -18,7 +18,7 @@ const IN_7_DAYS = daysFromToday(7);
 const IN_20_DAYS = daysFromToday(20);
 const THREE_WEEKS_AGO = daysFromToday(-21);
 
-// ── Factory ───────────────────────────────────────────────────────────────────
+// ── Factory ───────────────────────────────────────────────────────
 
 let idSeq = 0;
 function makeTask(overrides: Partial<TaskRecord> = {}): TaskRecord {
@@ -40,7 +40,7 @@ function makeTask(overrides: Partial<TaskRecord> = {}): TaskRecord {
   };
 }
 
-// ── Counts and TBD ────────────────────────────────────────────────────────────
+// ── Counts and TBD ───────────────────────────────────────────────
 
 describe("buildScheduleSummary — totals and TBD", () => {
   it("returns zeroed summary for empty task list", () => {
@@ -57,6 +57,11 @@ describe("buildScheduleSummary — totals and TBD", () => {
     expect(s.lookaheadQueue).toHaveLength(0);
     expect(s.milestoneQueue).toHaveLength(0);
     expect(s.riskQueue).toHaveLength(0);
+    expect(s.floatGone).toBe(0);
+    expect(s.floatThin).toBe(0);
+    expect(s.floatWatch).toBe(0);
+    expect(s.gated).toBe(0);
+    expect(s.loadClashes).toBe(0);
   });
 
   it("counts tasks with no start AND no end as TBD", () => {
@@ -77,7 +82,7 @@ describe("buildScheduleSummary — totals and TBD", () => {
   });
 });
 
-// ── Summary tasks excluded from activities ────────────────────────────────────
+// ── Summary tasks excluded from activities ─────────────────────────────
 
 describe("buildScheduleSummary — summary task exclusion", () => {
   it("excludes _hasChildren summary from activities count", () => {
@@ -104,7 +109,7 @@ describe("buildScheduleSummary — summary task exclusion", () => {
   });
 });
 
-// ── Overdue ───────────────────────────────────────────────────────────────────
+// ── Overdue ────────────────────────────────────────────────────────
 
 describe("buildScheduleSummary — overdue", () => {
   it("flags open task whose end_date is yesterday", () => {
@@ -132,7 +137,7 @@ describe("buildScheduleSummary — overdue", () => {
   });
 });
 
-// ── Critical path ─────────────────────────────────────────────────────────────
+// ── Critical path ────────────────────────────────────────────────
 
 describe("buildScheduleSummary — critical", () => {
   it("counts tasks with metadata.is_critical as critical", () => {
@@ -155,7 +160,7 @@ describe("buildScheduleSummary — critical", () => {
   });
 });
 
-// ── atRisk ────────────────────────────────────────────────────────────────────
+// ── atRisk ─────────────────────────────────────────────────────────
 
 describe("buildScheduleSummary — atRisk", () => {
   it("flags open actionable tasks with Critical priority", () => {
@@ -183,7 +188,7 @@ describe("buildScheduleSummary — atRisk", () => {
   });
 });
 
-// ── pctComplete ───────────────────────────────────────────────────────────────
+// ── pctComplete ─────────────────────────────────────────────────
 
 describe("buildScheduleSummary — pctComplete", () => {
   it("averages displayPct across actionable tasks", () => {
@@ -218,7 +223,7 @@ describe("buildScheduleSummary — pctComplete", () => {
   });
 });
 
-// ── Lookahead queue ───────────────────────────────────────────────────────────
+// ── Lookahead queue ──────────────────────────────────────────────
 
 describe("buildScheduleSummary — lookaheadQueue", () => {
   it("includes tasks starting within 14 days", () => {
@@ -255,7 +260,7 @@ describe("buildScheduleSummary — lookaheadQueue", () => {
   });
 });
 
-// ── Milestone queue ───────────────────────────────────────────────────────────
+// ── Milestone queue ──────────────────────────────────────────────
 
 describe("buildScheduleSummary — milestoneQueue", () => {
   it("includes tasks with milestone flag", () => {
@@ -289,7 +294,7 @@ describe("buildScheduleSummary — milestoneQueue", () => {
   });
 });
 
-// ── Risk queue ────────────────────────────────────────────────────────────────
+// ── Risk queue ───────────────────────────────────────────────────
 
 describe("buildScheduleSummary — riskQueue", () => {
   it("caps riskQueue at 5", () => {
@@ -316,7 +321,67 @@ describe("buildScheduleSummary — riskQueue", () => {
   });
 });
 
-// ── Null-date boundary (CLAUDE.md §22 enforcement) ───────────────────────────
+// ── SteelOps overlay KPIs ─────────────────────────────────────
+
+describe("buildScheduleSummary — SteelOps float / gates", () => {
+  it("counts overlay float flags without changing legacy atRisk", () => {
+    const gone = makeTask({
+      id: "gone",
+      _floatFlags: [{ code: "float_gone", severity: "critical" }],
+      _readiness: { status: "not_ready", reasons: [] },
+      _cpm: { totalFloat: 0 },
+    });
+    const thin = makeTask({
+      id: "thin",
+      _floatFlags: [{ code: "float_thin", severity: "alert" }],
+      _readiness: { status: "not_ready", reasons: [] },
+      _cpm: { totalFloat: 6 },
+    });
+    const watch = makeTask({
+      id: "watch",
+      _floatFlags: [{ code: "float_watch", severity: "watch" }],
+      _readiness: { status: "not_ready", reasons: [] },
+      _cpm: { totalFloat: 12 },
+    });
+    const s = buildScheduleSummary([gone, thin, watch]);
+    expect(s.floatGone).toBe(1);
+    expect(s.floatThin).toBe(1);
+    expect(s.floatWatch).toBe(1);
+    expect(s.atRisk).toBe(0);
+    expect(s.riskQueue[0].id).toBe("gone");
+  });
+
+  it("counts gated / rfi / vif / blocked as gated", () => {
+    const tasks = [
+      makeTask({ id: "g", _readiness: { status: "gated", reasons: ["Not fabricated"] }, _cpm: {}, _floatFlags: [] }),
+      makeTask({ id: "r", _readiness: { status: "rfi", reasons: ["Open RFI"] }, _cpm: {}, _floatFlags: [] }),
+      makeTask({ id: "ok", _readiness: { status: "ready", reasons: [] }, _cpm: {}, _floatFlags: [] }),
+    ];
+    const s = buildScheduleSummary(tasks);
+    expect(s.gated).toBe(2);
+  });
+
+  it("counts load-sequence clashes from overlay", () => {
+    const ship = makeTask({
+      id: "ship",
+      _cpm: {},
+      _floatFlags: [],
+      _readiness: { status: "not_ready", reasons: [] },
+      _loadClashes: [{ shipTaskId: "ship", erectTaskId: "erect" }],
+    });
+    const erect = makeTask({
+      id: "erect",
+      _cpm: {},
+      _floatFlags: [],
+      _readiness: { status: "not_ready", reasons: [] },
+      _loadClashes: [{ shipTaskId: "ship", erectTaskId: "erect" }],
+    });
+    const s = buildScheduleSummary([ship, erect]);
+    expect(s.loadClashes).toBe(2);
+  });
+});
+
+// ── Null-date boundary (CLAUDE.md §22 enforcement) ──────────────────────
 
 describe("buildScheduleSummary — null-date / TBD invariants (CLAUDE.md §22)", () => {
   it("never treats a task with null dates as overdue", () => {
