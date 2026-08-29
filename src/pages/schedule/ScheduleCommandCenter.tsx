@@ -40,6 +40,33 @@ function fmtDate(dateStr: string | null | undefined): string {
   });
 }
 
+function riskReasons(t: TaskRecord): string[] {
+  const reasons: string[] = [];
+  const endD = parseDateUTC(t.end_date);
+  const now = new Date();
+  now.setUTCHours(0, 0, 0, 0);
+  if (endD && endD < now) reasons.push("Overdue");
+  if (!t.end_date && !t.start_date) reasons.push("TBD dates");
+  if (t.priority === "Critical") reasons.push("Critical priority");
+  if (t.blockers && String(t.blockers).trim()) reasons.push("Blocked");
+  if (!t.resource_names && !t.assigned_to) reasons.push("Unassigned");
+  const flags = Array.isArray(t._floatFlags) ? (t._floatFlags as { code?: string }[]) : [];
+  const codes = new Set(flags.map((f) => f.code));
+  if (codes.has("float_gone")) reasons.push("Float gone");
+  else if (codes.has("float_thin")) reasons.push("Float thin");
+  else if (codes.has("float_watch")) reasons.push("Float watch");
+  if (codes.has("slip_over")) reasons.push("Baseline slip");
+  const ready = t._readiness as { status?: string } | undefined;
+  if (ready?.status === "blocked") reasons.push("Install blocked");
+  else if (ready?.status === "rfi") reasons.push("Open RFI");
+  else if (ready?.status === "vif") reasons.push("VIF hold");
+  else if (ready?.status === "gated") reasons.push("Install gated");
+  if (Array.isArray(t._loadClashes) && (t._loadClashes as unknown[]).length) {
+    reasons.push("Ship/erect clash");
+  }
+  return reasons;
+}
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -116,20 +143,22 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
   );
   const s = computedSummary;
 
-  // ── Hero chips ────────────────────────────────────────────────────────────
+  // ── Hero chips ─────────────────────────────────────────────────────────
   const chips = [
     { label: `${s.total} Tasks` },
     { label: `${s.critical} Critical`, tone: s.critical ? ("danger" as const) : undefined },
     { label: `${s.tbd} TBD`, tone: s.tbd ? ("warn" as const) : undefined },
+    ...(s.floatGone ? [{ label: `${s.floatGone} Float gone`, tone: "danger" as const }] : []),
+    ...(s.gated ? [{ label: `${s.gated} Gated`, tone: "warn" as const }] : []),
   ];
 
-  // ── Hero stats ────────────────────────────────────────────────────────────
+  // ── Hero stats ─────────────────────────────────────────────────────────
   const heroStats = [
     { value: `${pctComplete !== undefined ? pctComplete : s.pctComplete}%`, label: "Complete" },
     { value: projectHealth || "—", label: "Project Health" },
   ];
 
-  // ── KPI strip ─────────────────────────────────────────────────────────────
+  // ── KPI strip ──────────────────────────────────────────────────────────
   const kpiCells: KpiCellDef[] = [
     {
       label: "Critical Path",
@@ -154,6 +183,30 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
       value: s.overdue,
       sublabel: "tasks",
       tone: s.overdue ? "danger" : "neutral",
+    },
+    {
+      label: "Float Gone",
+      value: s.floatGone,
+      sublabel: "≤0d float",
+      tone: s.floatGone ? "danger" : "neutral",
+    },
+    {
+      label: "Float Thin",
+      value: s.floatThin,
+      sublabel: "<10d",
+      tone: s.floatThin ? "warn" : "neutral",
+    },
+    {
+      label: "Gated",
+      value: s.gated,
+      sublabel: "RFI / VIF / hold",
+      tone: s.gated ? "warn" : "neutral",
+    },
+    {
+      label: "Ship/Erect Clash",
+      value: s.loadClashes,
+      sublabel: "loads",
+      tone: s.loadClashes ? "danger" : "neutral",
     },
     {
       label: "In Lookahead",
@@ -181,13 +234,13 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
     },
   ];
 
-  // ── Scroll helper ─────────────────────────────────────────────────────────
+  // ── Scroll helper ──────────────────────────────────────────────────────
   const bodyRef = useRef<HTMLDivElement | null>(null);
   function scrollToBody() {
     bodyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────
   return (
     <div className="sched-cc">
       <PageHero
@@ -265,16 +318,11 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
             <div className="cmd-row__meta">No significant schedule risks detected.</div>
           ) : (
             s.riskQueue.map((t) => {
-              // Derive a concise risk reason for display
-              const reasons: string[] = [];
-              const endD = parseDateUTC(t.end_date);
-              const now = new Date();
-              now.setUTCHours(0, 0, 0, 0);
-              if (endD && endD < now) reasons.push("Overdue");
-              if (!t.end_date && !t.start_date) reasons.push("TBD dates");
-              if (t.priority === "Critical") reasons.push("Critical priority");
-              if (t.blockers && String(t.blockers).trim()) reasons.push("Blocked");
-              if (!t.resource_names && !t.assigned_to) reasons.push("Unassigned");
+              const reasons = riskReasons(t);
+              const tone =
+                reasons.includes("Overdue") || reasons.includes("Float gone") || reasons.includes("Ship/erect clash")
+                  ? "danger"
+                  : "warn";
 
               return (
                 <div
@@ -288,7 +336,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
                       {reasons.length ? reasons.join(" · ") : "Flagged"}
                     </div>
                   </div>
-                  <Pill tone={reasons.includes("Overdue") ? "danger" : "warn"}>
+                  <Pill tone={tone}>
                     {reasons[0] || "Risk"}
                   </Pill>
                 </div>

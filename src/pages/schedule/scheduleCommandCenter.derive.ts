@@ -18,6 +18,7 @@ import {
 import { isMilestoneTask, displayPct } from "@/components/schedule/scheduleTaskUtils";
 import { parseDateUTC } from "@/components/schedule/scheduleDateUtils";
 import { excludeSummaryTasks } from "@/lib/schedule/summaryTasks";
+import { applySteelOpsSchedule } from "@/lib/schedule/applySteelOpsSchedule";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,6 +81,16 @@ export interface ScheduleSummary {
   milestoneQueue: TaskRecord[];
   /** Top 5 tasks by risk score. */
   riskQueue: TaskRecord[];
+  /** Unique leaf tasks with total float ≤ 0 (float_gone). */
+  floatGone: number;
+  /** Unique leaf tasks with 1–9d total float (float_thin). */
+  floatThin: number;
+  /** Unique leaf tasks with 10–14d total float (float_watch). */
+  floatWatch: number;
+  /** Unique leaf tasks gated/blocked/rfi/vif for install. */
+  gated: number;
+  /** Unique ship/erect pairs with ship-after-erect start clash. */
+  loadClashes: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,10 +127,44 @@ function adaptedIsLookaheadTask(task: TaskRecord, today: Date, days = 14): boole
   );
 }
 
+function overlayTasks(tasks: TaskRecord[]): TaskRecord[] {
+  const already = tasks.some(
+    (t) => t._floatFlags != null || t._readiness != null || t._cpm != null,
+  );
+  if (already) return tasks;
+  return applySteelOpsSchedule(tasks as Record<string, any>[]).tasks as TaskRecord[];
+}
+
+function flagCodes(task: TaskRecord): string[] {
+  const flags = Array.isArray(task._floatFlags) ? (task._floatFlags as { code?: string }[]) : [];
+  return flags.map((f) => String(f?.code || ""));
+}
+
+function readinessStatus(task: TaskRecord): string {
+  const r = task._readiness as { status?: string } | undefined;
+  return String(r?.status || "");
+}
+
+function hasLoadClash(task: TaskRecord): boolean {
+  return Array.isArray(task._loadClashes) && (task._loadClashes as unknown[]).length > 0;
+}
+
+function countUniqueBy(
+  tasks: TaskRecord[],
+  pred: (t: TaskRecord) => boolean,
+): number {
+  const ids = new Set<string>();
+  for (const t of tasks) {
+    if (!pred(t)) continue;
+    ids.add(String(t.id ?? t.task_name ?? Math.random()));
+  }
+  return ids.size;
+}
+
 /**
  * Risk score for a task — higher = more urgent.
  * Overdue dominates, then stalled, then critical-path, then unassigned, then blocked.
- * Used only for riskQueue ranking; not a KPI.
+ * SteelOps float-gone / gates / load clashes add pressure but never outrank overdue.
  */
 function riskScore(task: TaskRecord, today: Date, isOverdue: boolean): number {
   let score = 0;
@@ -128,6 +173,15 @@ function riskScore(task: TaskRecord, today: Date, isOverdue: boolean): number {
   if (isCriticalTask(task as any)) score += 300;
   if (isUnassignedTask(task as any)) score += 200;
   if (task.blockers && String(task.blockers).trim()) score += 150;
+  const codes = flagCodes(task);
+  if (codes.includes("float_gone")) score += 250;
+  else if (codes.includes("float_thin")) score += 180;
+  else if (codes.includes("float_watch") || codes.includes("slip_window")) score += 80;
+  if (codes.includes("slip_over")) score += 120;
+  const ready = readinessStatus(task);
+  if (ready === "blocked") score += 220;
+  else if (ready === "rfi" || ready === "vif" || ready === "gated") score += 160;
+  if (hasLoadClash(task)) score += 210;
   return score;
 }
 
@@ -151,6 +205,8 @@ function byStartAscNullLast(a: TaskRecord, b: TaskRecord): number {
  */
 export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
   const today = todayUTC();
+  const steelOps = overlayTasks(tasks);
+  const steelOpsById = new Map(steelOps.filter((t) => t.id).map((t) => [String(t.id), t]));
 
   // --- base populations ---
   // Raw entity rows are not always enriched with _hasChildren. The canonical
@@ -197,11 +253,20 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
   // riskQueue: open actionable tasks ranked by score, top 5
   const overdueSet = new Set(overdueList.map((t) => t.id));
   const riskQueue = [...open]
-    .map((t) => ({ task: t, score: riskScore(t, today, overdueSet.has(t.id)) }))
+    .map((t) => {
+      const overlaid = (t.id && steelOpsById.get(String(t.id))) || t;
+      return { task: t, score: riskScore(overlaid, today, overdueSet.has(t.id)) };
+    })
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
-    .map(({ task }) => task);
+    .map(({ task }) => {
+      const overlaid = (task.id && steelOpsById.get(String(task.id))) || task;
+      return overlaid;
+    });
+
+  const leafOps = (excludeSummaryTasks(steelOps) as TaskRecord[])
+    .filter((t) => isActionableScheduleTask(t as any));
 
   return {
     total: tasks.length,
@@ -216,5 +281,13 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
     lookaheadQueue,
     milestoneQueue,
     riskQueue,
+    floatGone: countUniqueBy(leafOps, (t) => flagCodes(t).includes("float_gone")),
+    floatThin: countUniqueBy(leafOps, (t) => flagCodes(t).includes("float_thin")),
+    floatWatch: countUniqueBy(leafOps, (t) => flagCodes(t).includes("float_watch")),
+    gated: countUniqueBy(leafOps, (t) => {
+      const st = readinessStatus(t);
+      return st === "gated" || st === "blocked" || st === "rfi" || st === "vif";
+    }),
+    loadClashes: countUniqueBy(leafOps, hasLoadClash),
   };
 }
