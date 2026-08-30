@@ -3,7 +3,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
-import { PHASES } from "@/utils/phases";
 import { batchProcess } from "@/utils/batchProcess";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { addDaysIso } from "@/services/scheduleCascade";
@@ -11,13 +10,8 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { reparentTasks } from "@/lib/schedule/reparentTasks";
 import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./wbs";
-import {
-  PHASE_NAME_MAP,
-  derivePhaseFromHierarchy,
-  deriveMppDependencies,
-  inferTaskType,
-  parseMsProjectXml,
-} from "./mppImport";
+import { parseMsProjectXml } from "./mppImport";
+import { commitImportedScheduleTasks } from "./commitImportedTasks";
 import { filterEditableTasks } from "./scheduleTaskHelpers";
 import { buildScheduleResourceAssignPatch } from "./scheduleAssignmentHelpers";
 import type { ScheduleTask } from "./types";
@@ -362,80 +356,12 @@ export function useScheduleMutations({
         throw new Error("Couldn't read tasks from the file. Please export the MPP as XML (File → Save As → XML) and retry.");
       }
 
-      allParsed.forEach((task) => assertScheduleDateRange({
-        start_date: task.start ?? null,
-        end_date: task.finish ?? task.start ?? null,
-      }));
-
-      const pid = projectId;
-      // UID → created task ID mapping (for linking predecessors + parent)
-      const uidToDbId: Record<string, string> = {};
-      // UID → parent UID mapping (based on outline levels)
-      const uidToParentUid: Record<string, string> = {};
-      const summaryStack: Array<{ uid: string; outlineLevel: number }> = []; // stack of { uid, outlineLevel }
-
-      // First pass: determine parent relationships from outline levels
-      allParsed.forEach((t) => {
-        while (summaryStack.length > 0 && summaryStack[summaryStack.length - 1].outlineLevel >= t.outlineLevel) {
-          summaryStack.pop();
-        }
-        if (summaryStack.length > 0) {
-          uidToParentUid[t.uid] = summaryStack[summaryStack.length - 1].uid;
-        }
-        if (t.isSummary) {
-          summaryStack.push({ uid: t.uid, outlineLevel: t.outlineLevel });
-        }
+      const { created } = await commitImportedScheduleTasks({
+        tasks: allParsed,
+        projectId,
+        qc,
       });
-
-      // Create ALL tasks (including summaries) in order — sequential to preserve parent refs
-      for (const t of allParsed) {
-        const phaseName = derivePhaseFromHierarchy(t, allParsed);
-        const phase = PHASE_NAME_MAP[phaseName?.toUpperCase() ?? ""] || phaseName || "Fabrication";
-
-        const parentUid = uidToParentUid[t.uid];
-        const parentDbId = parentUid ? uidToDbId[parentUid] : null;
-
-        const record = await entities.ScheduleTask.create(withProjectId({
-          task_name: t.name,
-          task_type: inferTaskType(t.name, t.isSummary, t.milestone),
-          phase: PHASES.includes(phase) ? phase : "Fabrication",
-          // Unknown imported dates stay null (rendered as TBD) — never invent today.
-          start_date: t.start ?? null,
-          end_date: t.finish ?? t.start ?? null,
-          status: t.pct >= 100 ? "Complete" : t.pct > 0 ? "In Progress" : "Not Started",
-          percent_complete: t.pct,
-          priority: "Normal",
-          milestone: t.milestone,
-          wbs_code: t.outlineNumber || null,
-          outline_level: t.outlineLevel,
-          duration: t.durationDays,
-          resource_names: t.resources.length > 0 ? t.resources.join(", ") : null,
-          parent_task_id: parentDbId,
-          notes: t.notes || null,
-          is_summary: t.isSummary || false,
-          // Dependencies will be set in a second pass after all tasks exist
-        }, pid) as any);
-        uidToDbId[t.uid] = record.id;
-      }
-
-      // Second pass: set dependencies (predecessors) now that all tasks have DB IDs.
-      // MS Project encodes link type as Type (0=FF, 1=FS, 2=SF, 3=SS) and
-      // LinkLag as tenths of minutes (positive = lag, negative = lead).
-      // We now persist the full link object — { id, type, lag_days } —
-      // so the cascade picks up the right semantics on first render
-      // instead of assuming FS+1 for everything imported.
-      const depItems = deriveMppDependencies(allParsed, uidToDbId);
-      if (depItems.length > 0) {
-        await batchProcess(
-          depItems,
-          ({ dbId, predLinks }: any) => entities.ScheduleTask.update(dbId, {
-            dependencies: JSON.stringify(predLinks),
-          }),
-        );
-      }
-
-      invalidateEntity(qc, "schedule_task", projectId);
-      toast.success(`Imported ${Object.keys(uidToDbId).length} tasks from ${file.name}`);
+      toast.success(`Imported ${created} tasks from ${file.name}`);
     } catch (e: unknown) {
       toast.error(toUserErrorMessage(e, "Import failed"));
     } finally {

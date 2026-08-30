@@ -24,6 +24,8 @@ export interface ScheduleModals {
   setShowBulkParent: React.Dispatch<React.SetStateAction<boolean>>;
   showBulkDeleteConfirm: boolean;
   setShowBulkDeleteConfirm: React.Dispatch<React.SetStateAction<boolean>>;
+  showCsvImport: boolean;
+  setShowCsvImport: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export function useScheduleModals(): ScheduleModals {
@@ -36,6 +38,7 @@ export function useScheduleModals(): ScheduleModals {
   const [showBulkDuration, setShowBulkDuration] = useState(false);
   const [showBulkParent, setShowBulkParent] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showCsvImport, setShowCsvImport] = useState(false);
 
   return {
     showDrawer,
@@ -56,5 +59,7 @@ export function useScheduleModals(): ScheduleModals {
     setShowBulkParent,
     showBulkDeleteConfirm,
     setShowBulkDeleteConfirm,
+    showCsvImport,
+    setShowCsvImport,
   };
 }
