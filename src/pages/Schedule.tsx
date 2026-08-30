@@ -56,6 +56,7 @@ export default function Schedule() {
     setShowBulkDuration,
     setShowBulkParent,
     setShowBulkDeleteConfirm,
+    setShowCsvImport,
   } = modals;
   const selection = useTaskSelection();
   const { selectedIds, setSelectedIds } = selection;
@@ -71,6 +72,7 @@ export default function Schedule() {
     setShowBulkDuration(false);
     setShowBulkParent(false);
     setShowBulkDeleteConfirm(false);
+    setShowCsvImport(false);
     setSelectedTask(null);
     setDeleteTarget(null);
     setSelectedIds(new Set());
@@ -314,6 +316,7 @@ export default function Schedule() {
       onBulkAdd={() => setShowBulkAdd(true)}
       onWbsBuilder={() => setShowWbsBuilder(true)}
       onImportMpp={() => fileInputRef.current?.click()}
+      onImportCsv={() => setShowCsvImport(true)}
       importing={importing}
       onExportIcs={handleExportIcs}
       onExportPdf={handleExportPdf}

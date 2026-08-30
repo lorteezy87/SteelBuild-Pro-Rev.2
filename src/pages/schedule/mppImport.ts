@@ -133,6 +133,30 @@ export function deriveMppDependencies(
   return depItems;
 }
 
+/**
+ * Parent UID from outline nesting. Only summary rows become parents —
+ * two consecutive leaf tasks at the same outline level share the nearest
+ * enclosing summary. Used by both MPP XML and CSV import commit.
+ */
+export function deriveParentUids(
+  allParsed: Array<{ uid: string; outlineLevel: number; isSummary: boolean }>,
+): Record<string, string> {
+  const uidToParentUid: Record<string, string> = {};
+  const summaryStack: Array<{ uid: string; outlineLevel: number }> = [];
+  allParsed.forEach((t) => {
+    while (summaryStack.length > 0 && summaryStack[summaryStack.length - 1].outlineLevel >= t.outlineLevel) {
+      summaryStack.pop();
+    }
+    if (summaryStack.length > 0) {
+      uidToParentUid[t.uid] = summaryStack[summaryStack.length - 1].uid;
+    }
+    if (t.isSummary) {
+      summaryStack.push({ uid: t.uid, outlineLevel: t.outlineLevel });
+    }
+  });
+  return uidToParentUid;
+}
+
 export function inferTaskType(name: string, isSummary: boolean, isMilestone: boolean): string {
   if (isMilestone) return "Milestone";
   if (isSummary) return "Task";

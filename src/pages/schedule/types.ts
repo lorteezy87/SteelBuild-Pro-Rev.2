@@ -52,4 +52,8 @@ export interface ParsedMppTask {
   durationDays: number | null;
   resources: string[];
   notes: string;
+  /** CSV import: explicit phase when the file has a Phase column. */
+  phaseHint?: string | null;
+  /** CSV import: DB-legal status already reconciled with percent_complete. */
+  statusHint?: string | null;
 }

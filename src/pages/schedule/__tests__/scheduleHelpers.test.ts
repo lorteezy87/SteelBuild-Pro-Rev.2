@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { computePhaseWbs, generateWBS, sanitizeScheduleTaskUpdatePayload } from "../wbs";
 import { normalizeSchedulePhase } from "../schedulePageHelpers";
-import { derivePhaseFromHierarchy, deriveMppDependencies, inferTaskType, parseMsProjectXml } from "../mppImport";
+import { derivePhaseFromHierarchy, deriveMppDependencies, deriveParentUids, inferTaskType, parseMsProjectXml } from "../mppImport";
 import type { ParsedMppTask, ScheduleTask } from "../types";
 
 describe("generateWBS", () => {
@@ -185,6 +185,23 @@ describe("derivePhaseFromHierarchy", () => {
 
   it("returns null when no preceding level-1 summary exists", () => {
     expect(derivePhaseFromHierarchy(child, [child])).toBeNull();
+  });
+});
+
+describe("deriveParentUids", () => {
+  it("nests leaf tasks under the nearest enclosing summary", () => {
+    const summary = { uid: "1", outlineLevel: 1, isSummary: true };
+    const a = { uid: "2", outlineLevel: 2, isSummary: false };
+    const b = { uid: "3", outlineLevel: 2, isSummary: false };
+    expect(deriveParentUids([summary, a, b])).toEqual({ "2": "1", "3": "1" });
+  });
+
+  it("pops the stack when outline level returns to the parent depth", () => {
+    const p1 = { uid: "1", outlineLevel: 1, isSummary: true };
+    const c1 = { uid: "2", outlineLevel: 2, isSummary: false };
+    const p2 = { uid: "3", outlineLevel: 1, isSummary: true };
+    const c2 = { uid: "4", outlineLevel: 2, isSummary: false };
+    expect(deriveParentUids([p1, c1, p2, c2])).toEqual({ "2": "1", "4": "3" });
   });
 });
 

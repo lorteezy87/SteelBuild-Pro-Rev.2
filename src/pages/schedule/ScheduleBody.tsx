@@ -50,6 +50,9 @@ const BulkDurationEditModal = lazyWithRetry(
 const WbsBuilderModal = lazyWithRetry(
   () => import("@/components/schedule/WbsBuilderModal"),
 ) as unknown as ComponentType<AnyProps>;
+const ScheduleCsvImportModal = lazyWithRetry(
+  () => import("@/components/schedule/ScheduleCsvImportModal"),
+) as unknown as ComponentType<AnyProps>;
 
 interface ScheduleBodyProps {
   // Backdrop for the bulk "Set Parent" modal.
@@ -186,6 +189,8 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
     setShowBulkParent,
     showBulkDeleteConfirm,
     setShowBulkDeleteConfirm,
+    showCsvImport,
+    setShowCsvImport,
   } = modals;
 
   return (
@@ -342,6 +347,18 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
             projectName={selectedProject?.name || ""}
             isSaving={bulkSaving}
             existingTasks={enrichedTasks}
+          />
+        </Suspense>
+      )}
+
+      {showCsvImport && (
+        <Suspense fallback={null}>
+          <ScheduleCsvImportModal
+            open={showCsvImport}
+            projectId={projectId}
+            projectName={selectedProject?.name || ""}
+            existingTasks={enrichedTasks}
+            onClose={() => setShowCsvImport(false)}
           />
         </Suspense>
       )}

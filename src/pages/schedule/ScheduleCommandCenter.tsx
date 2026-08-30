@@ -10,7 +10,7 @@
  * schedule data logic. All data/state/mutations stay in Schedule.tsx.
  */
 import { useMemo, useRef, type ReactNode } from "react";
-import { CalendarDays, CalendarRange, Download, ListPlus, Plus, Sparkles, Upload } from "lucide-react";
+import { CalendarDays, CalendarRange, Download, FileSpreadsheet, ListPlus, Plus, Sparkles, Upload } from "lucide-react";
 import "@/styles/command.css";
 import {
   PageHero,
@@ -59,6 +59,8 @@ export interface ScheduleCommandCenterProps {
   onWbsBuilder: () => void;
   /** Open the hidden Microsoft Project XML file input. */
   onImportMpp: () => void;
+  /** Open the CSV import preview modal. */
+  onImportCsv: () => void;
   importing: boolean;
   /** Export the effective schedule to calendar format. */
   onExportIcs: () => void;
@@ -92,6 +94,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
     onBulkAdd,
     onWbsBuilder,
     onImportMpp,
+    onImportCsv,
     importing,
     onExportIcs,
     onExportPdf,
@@ -312,6 +315,15 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
             title="Import Microsoft Project XML"
           >
             <Upload size={14} /> {importing ? "Importing..." : "Import MS Project"}
+          </button>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            disabled={!projectAvailable || importing}
+            onClick={onImportCsv}
+            title="Import schedule tasks from CSV (MS Project, P6, or Excel)"
+          >
+            <FileSpreadsheet size={14} /> Import CSV
           </button>
           <button
             type="button"
