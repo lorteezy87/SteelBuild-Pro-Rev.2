@@ -53,7 +53,7 @@ export function downloadScheduleCsvTemplate(): void {
   URL.revokeObjectURL(url);
 }
 
-// ── Column aliases ──────────────────────────────────────────────────
+// ── Column aliases ─────────────────────────────────
 
 const COLUMN_ALIASES: Record<string, string[]> = {
   uid: [
@@ -139,7 +139,7 @@ function buildColumnIndex(headerRow: string[]): Record<string, number> {
   return idx;
 }
 
-// ── Date / number / flag helpers ────────────────────────────────────
+// ── Date / number / flag helpers ────────────────────────────
 
 const MONTHS: Record<string, number> = {
   jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
@@ -578,7 +578,7 @@ export function parseScheduleCsv(csvText: string, { fileName = "" }: { fileName?
   };
 
   pendingPreds.forEach(({ taskIndex, tokens }) => {
-    const preds = [];
+    const preds: ParsedMppTask["preds"] = [];
     for (const tok of tokens) {
       const predUid = resolveToken(tok.token);
       if (!predUid) {
