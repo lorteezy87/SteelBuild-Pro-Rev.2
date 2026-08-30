@@ -1,152 +1,216 @@
 /**
  * exportGanttPdf.js — Export the Schedule Gantt to a PDF file.
  *
- * Strategy: the on-screen gantt has two independently-scrolling panels
- * (left task list + right timeline). We can't just screenshot the
- * visible viewport — we need the whole thing. So:
+ * Data-driven (jsPDF text + shapes). The previous html2canvas path cloned the
+ * live Gantt, but that surface is virtualized and dual-scrolled, so the clone
+ * only contained the viewport rows. html2canvas also chokes on color-mix /
+ * CSS variables used by the dark theme. A task-list + bar chart drawn from
+ * schedule data is what GCs and shops actually need to print.
  *
- *   1. Clone the gantt root off-screen.
- *   2. Kill internal scrolling on the clone: set overflow:visible and
- *      expand each scroll container to its scrollWidth/scrollHeight so
- *      the entire content is laid out in one big block.
- *   3. Strip UI chrome that doesn't belong in a distributed PDF
- *      (toolbar stats, drag handles, resize cursors).
- *   4. html2canvas the clone at 2× device pixels for crisp text.
- *   5. Tile the resulting image across tabloid-landscape PDF pages.
- *      The LEFT panel's pixel width is detected from the first header
- *      row so every page can repeat the task-list columns — readers
- *      always see task names alongside the timeline slice on their
- *      current page.
- *   6. Add a title-bar (project name, project #, today's date) and a
- *      footer (page x of y) to every page.
- *
- * Call site: Schedule.jsx wires this to an EXPORT PDF button. Returns a
- * Promise so the caller can disable the button while export runs.
+ * Call site: useScheduleMutations.handleExportPdf. Pass `tasks` (prefer the
+ * effective-date overlay so bars match the on-screen Gantt).
  */
 
-import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import { parseDateUTC, fmtDate } from "@/components/schedule/scheduleDateUtils";
 
-// ── Tuning constants ─────────────────────────────────────────────────
-const CAPTURE_SCALE = 2;     // 2× for retina / print quality
-const PAGE_FORMAT   = "tabloid"; // 11x17" — roughly the standard steel-schedule size
-const PAGE_ORIENT   = "landscape";
-const PAGE_MARGIN   = 24;    // pt
-const HEADER_H      = 52;    // pt — title band at top of each page
-const FOOTER_H      = 22;    // pt — page number strip at bottom
+const PAGE_FORMAT = "tabloid";
+const PAGE_ORIENT = "landscape";
+const PAGE_MARGIN = 24;
+const HEADER_H = 48;
+const FOOTER_H = 20;
+const COL_HEADER_H = 22;
+const ROW_H = 16;
+const PHASE_H = 18;
 
-// Brand-ish colours (RGB) to match the app
-const C_ACCENT   = [200, 155, 32];
-const C_MUTED    = [110, 118, 132];
-const C_BORDER   = [215, 219, 227];
-const C_TEXT     = [20,  24,  32];
+const C_ACCENT = [200, 155, 32];
+const C_MUTED = [110, 118, 132];
+const C_BORDER = [215, 219, 227];
+const C_TEXT = [20, 24, 32];
+const C_PHASE_BG = [245, 246, 248];
+const C_ROW_ALT = [250, 251, 252];
+const C_TODAY = [200, 80, 40];
+const C_BAR_TRACK = [230, 233, 238];
 
-/**
- * Format a Date as "MMM D, YYYY" using UTC to avoid TZ wobble.
- */
-function formatDate(d = new Date()) {
-  return d.toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
+const STATUS_RGB = {
+  Complete: [16, 185, 129],
+  "In Progress": [46, 168, 255],
+  Delayed: [239, 68, 68],
+  Overdue: [239, 68, 68],
+  "On Hold": [200, 155, 32],
+  "Not Started": [100, 116, 139],
+};
+
+const PHASE_ORDER = [
+  "Pre-Construction",
+  "Detailing",
+  "Procurement",
+  "Fabrication",
+  "Delivery",
+  "Installation",
+  "Closeout",
+];
+
+const LEFT_COLS = [
+  { key: "wbs", label: "WBS", width: 48 },
+  { key: "name", label: "TASK", width: 168 },
+  { key: "dur", label: "DUR", width: 28 },
+  { key: "start", label: "START", width: 50 },
+  { key: "finish", label: "FINISH", width: 50 },
+  { key: "status", label: "STATUS", width: 62 },
+  { key: "pct", label: "%", width: 26 },
+];
+
+const LEFT_W = LEFT_COLS.reduce((sum, col) => sum + col.width, 0);
+
+function localDateKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-/**
- * Build a sanitized clone of the live gantt suitable for rasterizing.
- * The clone is absolutely positioned off-screen so it doesn't flash
- * into the user's view during the synchronous layout read.
- */
-function buildExportClone(source) {
-  const clone = source.cloneNode(true);
-
-  // Drop the toolbar + anything explicitly marked as excluded from export.
-  clone.querySelectorAll("[data-gantt-export-exclude]").forEach(el => el.remove());
-
-  // Remove every column-resize drag handle — they're cursor-interactive
-  // and the grabber bars look weird in a printed document.
-  clone.querySelectorAll('[style*="cursor: col-resize"]').forEach(el => el.remove());
-
-  // Kill scrolling on every overflow container so html2canvas sees the
-  // full content, not just the viewport slice.
-  clone.querySelectorAll("*").forEach(el => {
-    const cs = window.getComputedStyle(el);
-    if (cs.overflow !== "visible" || cs.overflowX !== "visible" || cs.overflowY !== "visible") {
-      el.style.overflow = "visible";
-      el.style.overflowX = "visible";
-      el.style.overflowY = "visible";
-      // Push width out so content doesn't wrap / get clipped.
-      if (el.scrollWidth > el.clientWidth) el.style.width = `${el.scrollWidth}px`;
-      if (el.scrollHeight > el.clientHeight) el.style.minHeight = `${el.scrollHeight}px`;
-    }
-    // Force any max-heights off so the phase list renders in full.
-    el.style.maxHeight = "none";
-  });
-
-  // The gantt root itself needs a concrete size — html2canvas uses
-  // scrollWidth/Height of the element, but after we removed the scroll
-  // limiter the root's natural size is now the full content size.
-  clone.style.position = "absolute";
-  clone.style.left = "-99999px";
-  clone.style.top = "0";
-  clone.style.height = "auto";
-  clone.style.maxHeight = "none";
-  clone.style.overflow = "visible";
-  // If the source is styled with height:100% the clone won't know its
-  // parent height. Give it a big upper bound so layout can compute.
-  clone.style.width = `${source.scrollWidth || source.offsetWidth}px`;
-
-  return clone;
+function formatHeaderDate(d = new Date()) {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-/**
- * Find the pixel width of the LEFT task-list panel inside the clone —
- * needed later to repeat the left columns on every PDF page.
- */
-function detectLeftPanelWidth(cloneRoot) {
-  // The left panel is rendered with display:grid and our GRID template;
-  // the outermost cell of the synchronized header row has that width.
-  // Easiest reliable signal: find the first grid with 10 columns
-  // (WBS..%).
-  const grids = cloneRoot.querySelectorAll('[style*="display: grid"]');
-  for (const g of grids) {
-    // Anchor on the synchronized header row — first grid in the flow
-    // with multiple column headers.
-    if (g.children.length >= 8 && g.offsetWidth > 200 && g.offsetWidth < 1200) {
-      return g.offsetWidth;
+function statusRgb(status) {
+  return STATUS_RGB[status] || STATUS_RGB["Not Started"];
+}
+
+function normalizePhaseKey(task) {
+  const raw = String(task?.phase || "").trim();
+  if (raw === "Erection") return "Installation";
+  return PHASE_ORDER.includes(raw) ? raw : raw || "Uncategorized";
+}
+
+function taskStart(task) {
+  return parseDateUTC(task?.start_date);
+}
+
+function taskEnd(task) {
+  return parseDateUTC(task?.end_date) || taskStart(task);
+}
+
+function durationDays(task) {
+  const n = Number(task?.duration);
+  if (Number.isFinite(n) && n >= 0) return Math.round(n);
+  const s = taskStart(task);
+  const e = taskEnd(task);
+  if (!s || !e) return null;
+  return Math.max(0, Math.round((e - s) / 86400000));
+}
+
+function displayPct(task) {
+  if (!task) return 0;
+  if (task.status === "Complete") return 100;
+  const v = Number(task.percent_complete);
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+}
+
+function taskName(task) {
+  const raw = String(task?.task_name || "").trim();
+  return raw || "Untitled task";
+}
+
+function startOfUtcWeek(date) {
+  const d = new Date(date.getTime());
+  const dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - dow);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+function addUtcDays(date, days) {
+  const d = new Date(date.getTime());
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
+}
+
+function buildPrintRows(tasks) {
+  const buckets = new Map();
+  for (const task of tasks || []) {
+    if (!task) continue;
+    const phase = normalizePhaseKey(task);
+    if (!buckets.has(phase)) buckets.set(phase, []);
+    buckets.get(phase).push(task);
+  }
+
+  const phaseKeys = [
+    ...PHASE_ORDER.filter((key) => buckets.has(key)),
+    ...[...buckets.keys()].filter((key) => !PHASE_ORDER.includes(key)),
+  ];
+
+  const rows = [];
+  for (const phase of phaseKeys) {
+    const items = buckets.get(phase) || [];
+    items.sort((a, b) => String(a.wbs_code || "").localeCompare(String(b.wbs_code || ""), undefined, { numeric: true }));
+    rows.push({ type: "phase", phase, count: items.length });
+    for (const task of items) {
+      rows.push({ type: "task", task, phase });
     }
   }
-  return 700; // defensible fallback
+  return rows;
 }
 
-/**
- * Stamp a title band at the top of the given page.
- */
-function drawHeader(pdf, { project, pageIndex, pageCount }) {
+function computeRange(tasks) {
+  let min = null;
+  let max = null;
+  for (const task of tasks || []) {
+    const s = taskStart(task);
+    const e = taskEnd(task);
+    if (s && (!min || s < min)) min = s;
+    if (e && (!max || e > max)) max = e;
+  }
+  const today = new Date();
+  const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  if (!min || !max) {
+    min = addUtcDays(todayUtc, -14);
+    max = addUtcDays(todayUtc, 42);
+  }
+  const start = startOfUtcWeek(addUtcDays(min, -7));
+  let end = addUtcDays(max, 7);
+  if (end <= start) end = addUtcDays(start, 7);
+  const weeks = [];
+  for (let cursor = new Date(start.getTime()); cursor < end; cursor = addUtcDays(cursor, 7)) {
+    weeks.push(new Date(cursor.getTime()));
+  }
+  return { start, end, weeks, todayUtc };
+}
+
+function clip(pdf, text, maxWidth) {
+  const raw = String(text ?? "");
+  if (!raw) return "";
+  if (pdf.getTextWidth(raw) <= maxWidth) return raw;
+  const ellipsis = "…";
+  let out = raw;
+  while (out.length > 1 && pdf.getTextWidth(out + ellipsis) > maxWidth) {
+    out = out.slice(0, -1);
+  }
+  return `${out}${ellipsis}`;
+}
+
+function drawHeader(pdf, { project, pageIndex, pageCount, now }) {
   const pageW = pdf.internal.pageSize.getWidth();
   const y = PAGE_MARGIN;
-
-  // Divider under the title
   pdf.setDrawColor(...C_BORDER);
   pdf.setLineWidth(0.75);
-  pdf.line(PAGE_MARGIN, y + HEADER_H - 6, pageW - PAGE_MARGIN, y + HEADER_H - 6);
+  pdf.line(PAGE_MARGIN, y + HEADER_H - 8, pageW - PAGE_MARGIN, y + HEADER_H - 8);
 
-  // Title: "Schedule — <Project>"
   pdf.setTextColor(...C_TEXT);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(14);
-  const title = `Schedule — ${project?.name || "Project"}`;
-  pdf.text(title, PAGE_MARGIN, y + 14);
+  pdf.text(`Schedule — ${project?.name || "Project"}`, PAGE_MARGIN, y + 14);
 
-  // Subtitle: project number · exported date
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
   pdf.setTextColor(...C_MUTED);
-  const metaBits = [];
-  if (project?.project_number) metaBits.push(`Project #${project.project_number}`);
-  metaBits.push(`Exported ${formatDate()}`);
-  if (pageCount > 1) metaBits.push(`Page ${pageIndex + 1} of ${pageCount}`);
-  pdf.text(metaBits.join("  ·  "), PAGE_MARGIN, y + 28);
+  const bits = [];
+  if (project?.project_number) bits.push(`Project #${project.project_number}`);
+  bits.push(`Exported ${formatHeaderDate(now)}`);
+  if (pageCount > 1) bits.push(`Page ${pageIndex + 1} of ${pageCount}`);
+  pdf.text(bits.join("  ·  "), PAGE_MARGIN, y + 28);
 
-  // Accent bar on the right — purely decorative, matches app accent
   pdf.setFillColor(...C_ACCENT);
   pdf.rect(pageW - PAGE_MARGIN - 60, y + 6, 60, 4, "F");
 }
@@ -157,155 +221,238 @@ function drawFooter(pdf, { pageIndex, pageCount }) {
   pdf.setTextColor(...C_MUTED);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(8);
-  pdf.text(
-    `${pageIndex + 1} / ${pageCount}`,
-    pageW - PAGE_MARGIN,
-    pageH - PAGE_MARGIN / 2,
-    { align: "right" },
-  );
-  pdf.text(
-    "SteelBuild Pro",
-    PAGE_MARGIN,
-    pageH - PAGE_MARGIN / 2,
-  );
+  pdf.text("SteelBuild Pro", PAGE_MARGIN, pageH - PAGE_MARGIN / 2);
+  pdf.text(`${pageIndex + 1} / ${pageCount}`, pageW - PAGE_MARGIN, pageH - PAGE_MARGIN / 2, { align: "right" });
+}
+
+function drawLeftHeader(pdf, x, y) {
+  let cursor = x;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(7);
+  pdf.setTextColor(...C_MUTED);
+  for (const col of LEFT_COLS) {
+    pdf.text(col.label, cursor + 3, y + 13);
+    cursor += col.width;
+  }
+  pdf.setDrawColor(...C_BORDER);
+  pdf.setLineWidth(0.4);
+  pdf.line(x, y + COL_HEADER_H, x + LEFT_W, y + COL_HEADER_H);
+}
+
+function drawWeekHeader(pdf, weeks, weekStartIndex, weekCount, timelineX, timelineW, y, rangeStart) {
+  const weekW = timelineW / weekCount;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(6.5);
+  for (let i = 0; i < weekCount; i++) {
+    const week = weeks[weekStartIndex + i];
+    if (!week) continue;
+    const x = timelineX + i * weekW;
+    const label = week.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+    pdf.setTextColor(...C_MUTED);
+    pdf.text(label, x + 3, y + 13);
+    pdf.setDrawColor(...C_BORDER);
+    pdf.setLineWidth(0.3);
+    pdf.line(x, y, x, y + COL_HEADER_H);
+  }
+  pdf.setDrawColor(...C_BORDER);
+  pdf.setLineWidth(0.4);
+  pdf.line(timelineX, y + COL_HEADER_H, timelineX + timelineW, y + COL_HEADER_H);
+  return { weekW, rangeStart };
+}
+
+function drawPhaseRow(pdf, row, x, y, width) {
+  pdf.setFillColor(...C_PHASE_BG);
+  pdf.rect(x, y, width, PHASE_H, "F");
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(8);
+  pdf.setTextColor(...C_TEXT);
+  pdf.text(`${row.phase}  ·  ${row.count}`, x + 6, y + 12);
+}
+
+function drawTaskRow(pdf, row, x, y, alt) {
+  if (alt) {
+    pdf.setFillColor(...C_ROW_ALT);
+    pdf.rect(x, y, LEFT_W, ROW_H, "F");
+  }
+
+  const task = row.task;
+  const values = {
+    wbs: task.wbs_code || "",
+    name: taskName(task),
+    dur: durationDays(task) == null ? "—" : `${durationDays(task)}d`,
+    start: fmtDate(task.start_date),
+    finish: fmtDate(task.end_date),
+    status: task.status || "Not Started",
+    pct: `${displayPct(task)}`,
+  };
+
+  let cursor = x;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(7);
+  pdf.setTextColor(...C_TEXT);
+  for (const col of LEFT_COLS) {
+    const text = clip(pdf, values[col.key], col.width - 6);
+    if (col.key === "status") pdf.setTextColor(...statusRgb(task.status || "Not Started"));
+    else pdf.setTextColor(...C_TEXT);
+    pdf.text(text, cursor + 3, y + 11);
+    cursor += col.width;
+  }
+}
+
+function drawTaskBar(pdf, task, timelineX, y, weekW, weekStartIndex, weekCount, rangeStart) {
+  const start = taskStart(task);
+  const end = taskEnd(task);
+  if (!start || !end) return;
+
+  const sliceStart = addUtcDays(rangeStart, weekStartIndex * 7);
+  const sliceEnd = addUtcDays(sliceStart, weekCount * 7);
+  const clippedStart = start < sliceStart ? sliceStart : start;
+  const clippedEnd = end > sliceEnd ? sliceEnd : end;
+  if (clippedEnd < sliceStart || clippedStart > sliceEnd) return;
+
+  const startDays = (clippedStart - sliceStart) / 86400000;
+  const spanDays = Math.max(0.6, (clippedEnd - clippedStart) / 86400000);
+  const pxPerDay = weekW / 7;
+  const barX = timelineX + startDays * pxPerDay;
+  const barW = Math.max(3, spanDays * pxPerDay);
+  const barY = y + 4;
+  const barH = ROW_H - 8;
+
+  pdf.setFillColor(...C_BAR_TRACK);
+  pdf.rect(barX, barY, barW, barH, "F");
+
+  const pct = displayPct(task) / 100;
+  const [r, g, b] = statusRgb(task.status || "Not Started");
+  if (pct > 0) {
+    pdf.setFillColor(r, g, b);
+    pdf.rect(barX, barY, Math.max(2, barW * pct), barH, "F");
+  } else {
+    pdf.setDrawColor(r, g, b);
+    pdf.setLineWidth(0.6);
+    pdf.rect(barX, barY, barW, barH);
+  }
+}
+
+function drawTodayLine(pdf, todayUtc, timelineX, y, height, weekW, weekStartIndex, weekCount, rangeStart) {
+  const sliceStart = addUtcDays(rangeStart, weekStartIndex * 7);
+  const sliceEnd = addUtcDays(sliceStart, weekCount * 7);
+  if (todayUtc < sliceStart || todayUtc > sliceEnd) return;
+  const days = (todayUtc - sliceStart) / 86400000;
+  const x = timelineX + days * (weekW / 7);
+  pdf.setDrawColor(...C_TODAY);
+  pdf.setLineWidth(0.8);
+  pdf.line(x, y, x, y + height);
 }
 
 /**
- * Main entry point.
- *
- * @param {object} opts
- * @param {HTMLElement} opts.container  — gantt root element (the one
- *   tagged data-gantt-export-root). If omitted, we scan the document.
- * @param {object}      opts.project    — project record (name,
- *   project_number) used in the title bar + filename.
- * @returns {Promise<{pageCount:number, filename:string}>}
+ * Build the schedule PDF from task records.
+ * @param {object} args
+ * @param {object} [args.project]
+ * @param {Array}  [args.tasks]
+ * @param {Date}   [args.now]
+ * @returns {jsPDF}
  */
-export async function exportGanttToPdf({ container, project = {} } = {}) {
-  const root = container || document.querySelector("[data-gantt-export-root]");
-  if (!root) throw new Error("Gantt container not found — open the Gantt view first.");
-
-  // 1. Build off-screen clone with scrolling flattened.
-  const clone = buildExportClone(root);
-  document.body.appendChild(clone);
-
-  // Force a layout + one paint before capture so getComputedStyle /
-  // scrollWidth reads are settled.
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-  let canvas;
-  let leftPanelPx;
-  try {
-    leftPanelPx = detectLeftPanelWidth(clone);
-    canvas = await html2canvas(clone, {
-      scale: CAPTURE_SCALE,
-      backgroundColor: "#FFFFFF",
-      logging: false,
-      useCORS: true,
-      // html2canvas inherits window width; force the full clone width so
-      // no responsive rules collapse anything mid-capture.
-      windowWidth: clone.scrollWidth,
-      windowHeight: clone.scrollHeight,
-    });
-  } finally {
-    clone.remove();
+export function buildGanttPdf({ project = {}, tasks = [], now = new Date() } = {}) {
+  const list = Array.isArray(tasks) ? tasks.filter(Boolean) : [];
+  if (!list.length) {
+    throw new Error("No schedule tasks to export.");
   }
 
-  // 2. Build the PDF and tile the canvas across pages.
-  const pdf = new jsPDF({
-    orientation: PAGE_ORIENT,
-    unit: "pt",
-    format: PAGE_FORMAT,
-  });
+  const rows = buildPrintRows(list);
+  const range = computeRange(list);
+  const pdf = new jsPDF({ orientation: PAGE_ORIENT, unit: "pt", format: PAGE_FORMAT });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const availW = pageW - PAGE_MARGIN * 2;
   const availH = pageH - PAGE_MARGIN - HEADER_H - FOOTER_H;
+  const timelineX = PAGE_MARGIN + LEFT_W;
+  const timelineW = Math.max(120, availW - LEFT_W);
+  const weeksPerPage = Math.max(4, Math.min(range.weeks.length, Math.floor(timelineW / 28)));
+  const weekSlices = Math.max(1, Math.ceil(range.weeks.length / weeksPerPage));
 
-  // Canvas px → PDF pt scaling. We want the canvas height to match
-  // availH (fit vertically) and then slice the width across pages. If
-  // the canvas is actually short enough to fit vertically AND
-  // horizontally on one page, great — one page it is.
-  const cw = canvas.width;
-  const ch = canvas.height;
-  const scale = availH / ch; // fit full height on one page
-  const projectedW = cw * scale;
+  const bodyH = availH - COL_HEADER_H;
+  const chunks = [];
+  let cursor = 0;
+  while (cursor < rows.length) {
+    const chunk = [];
+    let used = 0;
+    while (cursor < rows.length) {
+      const row = rows[cursor];
+      const h = row.type === "phase" ? PHASE_H : ROW_H;
+      if (chunk.length > 0 && used + h > bodyH) break;
+      chunk.push(row);
+      used += h;
+      cursor += 1;
+    }
+    chunks.push(chunk);
+  }
 
-  if (projectedW <= availW) {
-    // Fits on a single page.
-    pdf.addImage(canvas, "PNG", PAGE_MARGIN, PAGE_MARGIN + HEADER_H, projectedW, availH);
-    drawHeader(pdf, { project, pageIndex: 0, pageCount: 1 });
-    drawFooter(pdf, { pageIndex: 0, pageCount: 1 });
-  } else {
-    // Multi-page: split horizontally. To keep the left panel visible on
-    // every page, the LEFT slice is drawn first (width = leftPanelPx in
-    // canvas px × scale in pt), and then successive pages scroll the
-    // right-panel slice.
-    const leftPdfW = leftPanelPx * CAPTURE_SCALE * scale; // render width of left panel in pt
-    const rightAvailW = availW - leftPdfW;
-    if (rightAvailW < 100) {
-      // Left panel eats too much of the page — fall back to single-page
-      // with full scaling (accept tiny text rather than crash on zero
-      // right-width).
-      const fitScale = Math.min(availW / cw, availH / ch);
-      pdf.addImage(canvas, "PNG", PAGE_MARGIN, PAGE_MARGIN + HEADER_H, cw * fitScale, ch * fitScale);
-      drawHeader(pdf, { project, pageIndex: 0, pageCount: 1 });
-      drawFooter(pdf, { pageIndex: 0, pageCount: 1 });
-    } else {
-      // Pre-split the canvas into the LEFT tile + horizontal slices of
-      // the RIGHT tile. All slices share the same height (full ch).
-      const leftCanvasPx = leftPanelPx * CAPTURE_SCALE;
-      const rightWidthCanvasPx = cw - leftCanvasPx;
-      const rightSliceCanvasPx = rightAvailW / scale; // px of source per slice
-      const pageCount = Math.max(1, Math.ceil(rightWidthCanvasPx / rightSliceCanvasPx));
+  const pageCount = Math.max(1, chunks.length * weekSlices);
+  let pageIndex = 0;
 
-      // Pre-cut the LEFT tile once — we'll redraw it on every page.
-      const leftTile = cropCanvas(canvas, 0, 0, leftCanvasPx, ch);
-      const leftDataUrl = leftTile.toDataURL("image/png");
+  for (let weekSlice = 0; weekSlice < weekSlices; weekSlice++) {
+    const weekStartIndex = weekSlice * weeksPerPage;
+    const weekCount = Math.min(weeksPerPage, range.weeks.length - weekStartIndex);
+    const weekW = timelineW / weekCount;
 
-      for (let i = 0; i < pageCount; i++) {
-        if (i > 0) pdf.addPage(PAGE_FORMAT, PAGE_ORIENT);
-        drawHeader(pdf, { project, pageIndex: i, pageCount });
-        drawFooter(pdf, { pageIndex: i, pageCount });
+    for (const chunk of chunks) {
+      if (pageIndex > 0) pdf.addPage(PAGE_FORMAT, PAGE_ORIENT);
+      drawHeader(pdf, { project, pageIndex, pageCount, now });
+      drawFooter(pdf, { pageIndex, pageCount });
 
-        // Left tile
-        pdf.addImage(leftDataUrl, "PNG", PAGE_MARGIN, PAGE_MARGIN + HEADER_H, leftPdfW, availH);
+      const gridY = PAGE_MARGIN + HEADER_H;
+      drawLeftHeader(pdf, PAGE_MARGIN, gridY);
+      drawWeekHeader(pdf, range.weeks, weekStartIndex, weekCount, timelineX, timelineW, gridY, range.start);
 
-        // Right slice
-        const rightStart = leftCanvasPx + i * rightSliceCanvasPx;
-        const rightSliceW = Math.min(rightSliceCanvasPx, cw - rightStart);
-        const rightTile = cropCanvas(canvas, rightStart, 0, rightSliceW, ch);
-        const rightPdfW = rightSliceW * scale;
-        pdf.addImage(
-          rightTile.toDataURL("image/png"),
-          "PNG",
-          PAGE_MARGIN + leftPdfW,
-          PAGE_MARGIN + HEADER_H,
-          rightPdfW,
-          availH,
-        );
+      let y = gridY + COL_HEADER_H;
+      let taskIndex = 0;
+      for (const row of chunk) {
+        if (row.type === "phase") {
+          drawPhaseRow(pdf, row, PAGE_MARGIN, y, availW);
+          y += PHASE_H;
+          continue;
+        }
+        drawTaskRow(pdf, row, PAGE_MARGIN, y, taskIndex % 2 === 1);
+        drawTaskBar(pdf, row.task, timelineX, y, weekW, weekStartIndex, weekCount, range.start);
+        y += ROW_H;
+        taskIndex += 1;
       }
+
+      drawTodayLine(
+        pdf,
+        range.todayUtc,
+        timelineX,
+        gridY + COL_HEADER_H,
+        Math.max(0, y - gridY - COL_HEADER_H),
+        weekW,
+        weekStartIndex,
+        weekCount,
+        range.start,
+      );
+      pageIndex += 1;
     }
   }
 
-  // Filename: schedule-<projNum>-<YYYY-MM-DD>.pdf
-  const now = new Date();
-  const dateKey = now.toISOString().slice(0, 10);
-  const projectKey = project?.project_number || project?.name?.replace(/\s+/g, "_") || "project";
-  const filename = `schedule-${projectKey}-${dateKey}.pdf`;
-  pdf.save(filename);
+  return pdf;
+}
 
-  return { pageCount: pdf.internal.getNumberOfPages(), filename };
+function filenameFor(project, now = new Date()) {
+  const dateKey = localDateKey(now);
+  const raw = project?.project_number || project?.name || "project";
+  const projectKey = String(raw).replace(/[^\w.-]+/g, "_").slice(0, 60) || "project";
+  return `schedule-${projectKey}-${dateKey}.pdf`;
 }
 
 /**
- * Create a new canvas that's a sub-rectangle of `src`. Used to slice the
- * full gantt capture into the pieces that go on each PDF page.
+ * @param {object} opts
+ * @param {object} [opts.project]
+ * @param {Array}  [opts.tasks]
+ * @param {Date}   [opts.now]
+ * @returns {Promise<{pageCount:number, filename:string}>}
  */
-function cropCanvas(src, sx, sy, sw, sh) {
-  const out = document.createElement("canvas");
-  out.width = Math.round(sw);
-  out.height = Math.round(sh);
-  const ctx = out.getContext("2d");
-  ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
-  return out;
+export async function exportGanttToPdf({ project = {}, tasks = [], now = new Date() } = {}) {
+  const pdf = buildGanttPdf({ project, tasks, now });
+  const filename = filenameFor(project, now);
+  pdf.save(filename);
+  return { pageCount: pdf.internal.getNumberOfPages(), filename };
 }
