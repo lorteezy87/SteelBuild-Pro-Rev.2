@@ -21,7 +21,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
     mutationFn: async (filesToUpload) => {
       const created = [];
       for (const file of filesToUpload) {
-        const { file_url } = await integrations.Core.UploadFile({ file });
+        const { file_url } = await integrations.Core.UploadFile({ file, workflow: "documents" });
 
         const meta = metadata[file.name] || {};
         // Calculate due date from lead time if this is a submittal

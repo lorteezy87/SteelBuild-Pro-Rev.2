@@ -1,7 +1,10 @@
 import { toast } from "sonner";
+import { quotaExceededUserMessage } from "@/lib/quotaExceeded";
 
 export function getCrudErrorMessage(error, fallback = "Request failed") {
   if (!error) return fallback;
+  const quota = quotaExceededUserMessage(error);
+  if (quota) return quota;
   if (typeof error === "string") return error;
   if (error?.message) return error.message;
   if (error?.response?.data?.message) return error.response.data.message;

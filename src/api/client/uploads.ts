@@ -9,6 +9,7 @@
 import { supabase } from '@/lib/supabase';
 import { getActiveOrgId } from '@/lib/activeOrg';
 import { assertUploadAllowed, sanitizeFilename } from '@/lib/uploadValidation';
+import { remapQuotaError } from '@/lib/quotaExceeded';
 import type { UploadFileArgs, UploadFileResult } from './supabaseTypes';
 
 /**
@@ -85,7 +86,7 @@ export const UploadFile = async ({ file, workflow }: UploadFileArgs): Promise<Up
   const { data, error } = await supabase.storage
     .from('app-files')
     .upload(path, file, { contentType, upsert: false });
-  if (error) throw error;
+  if (error) remapQuotaError(error);
   // Store the storage path — call getSignedUrl(path) on demand when displaying.
   // Sanitize the display/stored name (strip control chars, path components,
   // overly-long names). Normal filenames pass through unchanged.

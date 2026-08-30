@@ -49,6 +49,10 @@ describe("toUserErrorMessage", () => {
     expect(toUserErrorMessage("Nope")).toBe("Nope");
   });
 
+  it("maps quota-exceeded errors to the file-storage message", () => {
+    expect(toUserErrorMessage(new Error("The quota has been exceeded."))).toMatch(/File storage is full/);
+  });
+
   it("falls back when the value has no usable message", () => {
     expect(toUserErrorMessage(null)).toBe("Something went wrong");
     expect(toUserErrorMessage({ code: 42 }, "Retry later")).toBe("Retry later");

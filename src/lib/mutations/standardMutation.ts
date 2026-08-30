@@ -1,5 +1,6 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { isMissingSchemaObjectError, missingSchemaObjectUserMessage } from "@/lib/postgrestErrors";
+import { quotaExceededUserMessage } from "@/lib/quotaExceeded";
 
 /** Standard result shape for shared mutation helpers. */
 export type MutationResult<T = unknown> =
@@ -45,6 +46,8 @@ export function toUserErrorMessage(err: unknown, fallback = "Something went wron
   // into save toasts and told the user nothing actionable. Sentry still gets
   // the original via normalizeThrownQueryError.
   if (isMissingSchemaObjectError(err)) return missingSchemaObjectUserMessage(err);
+  const quota = quotaExceededUserMessage(err);
+  if (quota) return quota;
   if (err instanceof Error && err.message.trim()) return err.message.trim();
   if (typeof err === "string" && err.trim()) return err.trim();
   if (err && typeof err === "object" && "message" in err) {
