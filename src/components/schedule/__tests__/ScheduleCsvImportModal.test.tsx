@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ScheduleCsvImportModal from "../ScheduleCsvImportModal";
 
 vi.mock("@/hooks/useFocusTrap", () => ({
-  useFocusTrap: () => ({ current: null }),
+  useFocusTrap: (): { current: HTMLElement | null } => ({ current: null }),
 }));
 
 vi.mock("@/lib/importScheduleCsv", async () => {

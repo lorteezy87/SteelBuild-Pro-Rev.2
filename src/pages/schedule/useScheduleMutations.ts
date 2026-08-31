@@ -313,7 +313,6 @@ export function useScheduleMutations({
     if (!projectId) return;
     setBulkSaving(true);
     try {
-      const pid = projectId;
       rows.forEach((row) => assertScheduleDateRange(row));
       // Build a running snapshot of tasks so each new WBS is unique
       const snapshot = [...scheduleTasks];
@@ -391,14 +390,15 @@ export function useScheduleMutations({
   };
 
   const handleExportPdf = async () => {
-    if (!projectId || scheduleTasks.length === 0 || view !== "gantt" || exportingPdf) return;
+    if (!projectId || scheduleTasks.length === 0 || exportingPdf) return;
     setExportingPdf(true);
     const t = toast.loading("Generating PDF…");
     try {
       const { exportGanttToPdf } = await import("@/lib/exportGanttPdf");
       const { pageCount, filename } = await exportGanttToPdf({
         project: selectedProject,
-      } as any);
+        tasks: tasksWithEffective.length ? tasksWithEffective : scheduleTasks,
+      });
       toast.success(
         `Exported ${filename}${pageCount > 1 ? ` (${pageCount} pages)` : ""}`,
         { id: t },
@@ -410,6 +410,8 @@ export function useScheduleMutations({
       setExportingPdf(false);
     }
   };
+
+  void view;
 
   const bulkUpdateStatus = (status: string) => {
     const ids = Array.from(selectedIds);
