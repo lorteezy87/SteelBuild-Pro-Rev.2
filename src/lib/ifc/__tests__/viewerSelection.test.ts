@@ -109,7 +109,7 @@ describe("summarizeSelection", () => {
     expect(s.holdCount).toBe(1);
     expect(s.actions.every((a) => !a.enabled)).toBe(true);
     const held = summarizeSelection(["g3"], ctx);
-    expect(held.actions.find((a) => a.action === "erect").reason).toMatch(/hold/i);
+    expect(held.actions.find((a) => a.action === "erect")?.reason).toMatch(/hold/i);
   });
 
   it("explains when nothing linked is selected", () => {
