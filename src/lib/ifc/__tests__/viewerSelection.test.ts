@@ -27,8 +27,8 @@ const rows = [
   { element_guid: "gone", piece_mark: "1B1", piece_id: "p1", is_deleted: true },
 ];
 const pieces = [
-  { id: "p1", lifecycle_status: "fabricated", on_hold: false, is_container: false, is_deleted: false, deleted_at: null },
-  { id: "p2", lifecycle_status: "delivered", on_hold: true, is_container: false, is_deleted: false, deleted_at: null },
+  { id: "p1", lifecycle_status: "fabricated", on_hold: false, is_container: false, is_deleted: false, deleted_at: null as string | null },
+  { id: "p2", lifecycle_status: "delivered", on_hold: true, is_container: false, is_deleted: false, deleted_at: null as string | null },
 ];
 const markByGuid = buildMarkByGuid(rows);
 const seqByGuid = buildSeqByGuid(rows);

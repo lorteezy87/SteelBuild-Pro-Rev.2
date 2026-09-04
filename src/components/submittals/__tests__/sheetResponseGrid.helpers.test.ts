@@ -41,7 +41,7 @@ describe("mergeResponseRows", () => {
   it("drops rows for sheets that are no longer present and adds new ones", () => {
     const prev = buildResponseRows(drawings, []);
     const merged = mergeResponseRows(prev, buildResponseRows([drawings[1], { id: "d3", sheet_number: "S-3" }], []));
-    expect(merged.map((r) => r.drawing_id)).toEqual(["d2", "d3"]);
+    expect(merged.map((r: { drawing_id: string }) => r.drawing_id)).toEqual(["d2", "d3"]);
   });
 });
 

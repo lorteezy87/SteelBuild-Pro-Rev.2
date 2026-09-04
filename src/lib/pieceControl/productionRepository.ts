@@ -92,7 +92,7 @@ export async function fetchProductionSnapshot(
         'piece_station_completions',
         projectId,
         { orderBy: 'sort_order' },
-      ).then((data) => ({ data, error: null })),
+      ).then((data) => ({ data, error: null as Error | null })),
       db
         .from('fab_releases')
         .select('work_package_id')

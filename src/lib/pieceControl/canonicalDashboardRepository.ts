@@ -35,7 +35,7 @@ export async function fetchCanonicalDashboardSnapshot(
     await Promise.all([
       fetchAllProjectRowsPaged<CanonicalRollupPiece>(db, "pieces", projectId, {
         orderBy: "normalized_piece_mark",
-      }).then((data) => ({ data, error: null })),
+      }).then((data) => ({ data, error: null as Error | null })),
       db
         .from("work_packages")
         .select("*")
@@ -53,7 +53,7 @@ export async function fetchCanonicalDashboardSnapshot(
         db,
         "piece_station_completions",
         projectId,
-      ).then((data) => ({ data, error: null })),
+      ).then((data) => ({ data, error: null as Error | null })),
       db
         .from("piece_production")
         .select("id,quantity,weight,status,ship_date")

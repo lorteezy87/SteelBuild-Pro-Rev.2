@@ -240,7 +240,7 @@ describe("buildCommandCenterSummary", () => {
     // start_date in the past with no end_date is not a missed finish commitment.
     const noDeadline = buildCommandCenterSummary(makeSources({
       scheduleTasks: Array.from({ length: 4 }, (_, i) => ({
-        id: `t${i}`, task_name: `Task ${i}`, status: "In Progress", start_date: dateOffset(-20), end_date: null, project_id: "p1",
+        id: `t${i}`, task_name: `Task ${i}`, status: "In Progress", start_date: dateOffset(-20), end_date: null as string | null, project_id: "p1",
       })),
     }));
     expect(noDeadline.kpis.scheduleHealth).toBe("On Track");
