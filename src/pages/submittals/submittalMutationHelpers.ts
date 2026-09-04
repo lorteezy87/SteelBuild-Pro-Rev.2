@@ -6,6 +6,7 @@
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { isFabReleaseBlocked } from "@/lib/fabRelease/releaseStatus";
 import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
+import { validateSubmittalTransition } from "@/lib/submittalTransitions";
 import type { DrawingType } from "@/lib/submittalComponents";
 
 /** Append bulk-edit notes to an existing notes field (blank-safe). */
@@ -21,6 +22,27 @@ export function appendSubmittalNotes(
 export function isSubmittalDuplicateNumberError(err: unknown): boolean {
   const msg = toUserErrorMessage(err, "");
   return /submittals_unique_per_project|duplicate key/i.test(msg);
+}
+
+/** Status a new round forces onto the parent submittal (resubmission). */
+export const NEW_ROUND_STATUS = "Submitted";
+
+/**
+ * Friendly reason a new round cannot be started from `currentStatus`, or null
+ * when the round is allowed. Mirrors the client-side transition graph — a new
+ * round moves the submittal to Submitted, which the DB gate rejects from
+ * Approved / Approved as Noted / Released for Fabrication / Void.
+ */
+export function newRoundBlockReason(currentStatus: string | null | undefined): string | null {
+  const check = validateSubmittalTransition(currentStatus, NEW_ROUND_STATUS);
+  if (check.ok) return null;
+  const from = String(currentStatus || "").trim() || "Draft";
+  return `A new round resubmits the package (status → ${NEW_ROUND_STATUS}), which is not allowed while it is "${from}". Use Revise and Resubmit / Rejected to reopen the review cycle, or void it and start a spin-off.`;
+}
+
+/** True when the "+ New Round" action should be offered for this status. */
+export function canStartNewRound(currentStatus: string | null | undefined): boolean {
+  return newRoundBlockReason(currentStatus) === null;
 }
 
 /** User-facing create/update error for a single-row submittal mutation. */

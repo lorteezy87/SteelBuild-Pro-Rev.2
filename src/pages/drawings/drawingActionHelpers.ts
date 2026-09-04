@@ -4,6 +4,9 @@
  * Coordinates with drawingMutationHelpers for toast/error copy on writes.
  */
 
+import { openLinkedSubmittalsForSet, type LinkableSubmittal } from "@/lib/submittalLinkGlue";
+import { pickMostRecentSubmittal, type SubmittalLike } from "@/lib/submittalStageMapping";
+
 export type DrawingLike = {
   id: string;
   sheet_number?: string | null;
@@ -121,7 +124,7 @@ export function planAdvanceStage(
     };
   }
   if (idx >= stageOrder.length - 1) {
-    return { kind: "info", message: "Already at final stage (IFC)" };
+    return { kind: "info", message: `Already at final stage (${stageOrder[stageOrder.length - 1]})` };
   }
   const target = stageOrder[idx + 1];
   const v = validate(drawing.stage, target);
@@ -494,12 +497,38 @@ export function toggleSelectAllIds(
 export function buildSubmittalAdvanceSearch(
   setId: string | null | undefined,
   mappedStatus: string | null | undefined,
+  ballInCourt?: string | null,
 ): string {
   const params = new URLSearchParams();
   if (setId) params.set("targetSetId", setId);
   if (mappedStatus) params.set("prefilledStatus", mappedStatus);
+  // The (status, ball_in_court) PAIR identifies the stage — without BIC,
+  // BFA / OFS both read as "Approved as Noted" and IFC collapses to Approved.
+  if (mappedStatus && ballInCourt) params.set("prefilledBallInCourt", ballInCourt);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
+}
+
+/**
+ * Where the Drawings page sends the user for a stage move that a submittal
+ * owns: the latest OPEN submittal already linked to the set (`?recordId=`,
+ * read by Submittals.tsx via useAutoOpenEdit) when one exists — never a
+ * duplicate create — else the create-new prefill params.
+ */
+export function buildSubmittalNavigationSearch(opts: {
+  setId: string | null | undefined;
+  mapped: { status?: string | null; ball_in_court?: string | null } | null | undefined;
+  submittals: LinkableSubmittal[] | null | undefined;
+}): string {
+  const { setId, mapped, submittals } = opts;
+  const open = openLinkedSubmittalsForSet(setId, submittals);
+  const latestOpen = pickMostRecentSubmittal(open as Array<LinkableSubmittal & SubmittalLike>);
+  if (latestOpen?.id) {
+    const params = new URLSearchParams();
+    params.set("recordId", latestOpen.id);
+    return `?${params.toString()}`;
+  }
+  return buildSubmittalAdvanceSearch(setId, mapped?.status, mapped?.ball_in_court);
 }
 
 export function resolveSheetsToApprove(

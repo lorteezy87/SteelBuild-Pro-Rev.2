@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeSubmittalRiskAging,
   RISK_AGING_STAGES,
+  toLocalDateOnly,
 } from "../submittalRiskAging";
 
 describe("computeSubmittalRiskAging", () => {
@@ -109,5 +110,45 @@ describe("computeSubmittalRiskAging", () => {
         useWorkdays: true,
       }),
     ).toMatchObject({ tier: "urgent" });
+  });
+});
+
+describe("toLocalDateOnly / statusChangedAt timestamps", () => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const localIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  it("returns a bare date-only string as written", () => {
+    expect(toLocalDateOnly("2026-07-24")).toBe("2026-07-24");
+    expect(toLocalDateOnly(" 2026-07-24 ")).toBe("2026-07-24");
+  });
+
+  it("converts a timestamptz to the LOCAL calendar day instead of slicing the UTC prefix", () => {
+    // 23:30 local on Jul 24 — its UTC representation can land on Jul 25 in
+    // negative-offset zones (MST), which the old prefix slice would report.
+    const lateLocal = new Date(2026, 6, 24, 23, 30);
+    expect(toLocalDateOnly(lateLocal.toISOString())).toBe("2026-07-24");
+    expect(toLocalDateOnly(lateLocal)).toBe("2026-07-24");
+    // 00:30 local on Jul 25 — positive-offset zones flip the other way.
+    const earlyLocal = new Date(2026, 6, 25, 0, 30);
+    expect(toLocalDateOnly(earlyLocal.toISOString())).toBe("2026-07-25");
+  });
+
+  it("returns null for empty / invalid input", () => {
+    expect(toLocalDateOnly(null)).toBeNull();
+    expect(toLocalDateOnly("")).toBeNull();
+    expect(toLocalDateOnly("not-a-date")).toBeNull();
+  });
+
+  it("counts days-in-status from the local day of a timestamptz statusChangedAt", () => {
+    const changed = new Date(2026, 6, 21, 23, 30); // Tue Jul 21, late evening local
+    const today = localIso(new Date(2026, 6, 25));
+    const res = computeSubmittalRiskAging({
+      stage: "OFS",
+      dueDate: null,
+      today,
+      statusChangedAt: changed.toISOString(),
+      useWorkdays: false,
+    });
+    expect(res?.daysInStatus).toBe(4);
   });
 });

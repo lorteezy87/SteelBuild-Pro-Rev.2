@@ -5,7 +5,8 @@
  * overdue detection, CSV export, and filter/stat computation.
  */
 
-import { IN_REVIEW_STAGES, STAGE_ORDER, WORKFLOW_STAGES } from "./drawingsConfig";
+import { IN_REVIEW_STAGES, STAGE_ORDER, WORKFLOW_STAGES, compareRevisionLabels, revisionSortRank } from "./drawingsConfig";
+import { localToday, toLocalDay } from "@/utils/dates";
 import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 import { compareDrawingSetPackages, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
@@ -99,7 +100,12 @@ export function isOverdue(drawing) {
   if (drawing.stage === "Released") return false;
   if (drawing.is_superseded) return false;
   if (drawing.set_approval_status === "approved") return false;
-  return new Date(drawing.due_date) < new Date();
+  // Date-only compare against the LOCAL calendar day — `due_date` is a `date`
+  // column (parsed to local noon by the dateOnly shim), so a clock compare
+  // would flip a sheet to "overdue" at noon on its due day.
+  const due = toLocalDay(drawing.due_date);
+  if (!due) return false;
+  return due < toLocalDay(localToday());
 }
 
 /**
@@ -110,7 +116,9 @@ export function isOverdue(drawing) {
  */
 export function daysLate(drawing) {
   if (!isOverdue(drawing) || !drawing.due_date) return 0;
-  return Math.max(1, Math.floor((Date.now() - new Date(drawing.due_date).getTime()) / 86400000));
+  const due = toLocalDay(drawing.due_date);
+  const today = toLocalDay(localToday());
+  return Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
 }
 
 /**
@@ -502,11 +510,14 @@ export function groupByDrawingSet(drawings, drawingSetMap = {}) {
     // Priority
     const hasPriority = sheets.some((s) => s.priority_flag);
 
-    // Latest revision (numeric max)
-    const revNums = sheets
-      .map((s) => Number(String(s.revision_number || "0").replace(/[^\d]/g, "")))
-      .filter((n) => !isNaN(n));
-    let maxRev = revNums.length ? Math.max(...revNums) : 0;
+    // Latest revision — natural compare so letter (pre-IFC) and numeric
+    // (post-IFC) labels both roll up correctly. Numeric labels reduce to the
+    // number ("Rev 5" → 5); letter labels keep the letter ("Rev B" → "B").
+    const maxRevLabel = sheets
+      .map((s) => s.revision_number)
+      .reduce((best, cur) => (compareRevisionLabels(cur, best) > 0 ? cur : best), null);
+    const maxRevRank = revisionSortRank(maxRevLabel);
+    let maxRev = maxRevRank.klass === 2 ? maxRevRank.num : (maxRevRank.klass === 1 ? maxRevRank.label : 0);
 
     // Parent-derived fallbacks for set-level-only rows (no child sheets).
     // We pull from the drawing_sets row so the group summary shows something
@@ -598,13 +609,16 @@ export function buildRfiMap(rfis) {
  * Reverse-index submittals by drawing_set_id → { total, open, latestStatus,
  * latestId }. A submittal links a uuid[] of sets, so each fans out. "Open" =
  * not in the terminal-approved set (passed in as `terminalApprovedStatuses`,
- * the single source of truth) nor "Void". Submittals arrive pre-sorted by
- * -submitted_date, so the FIRST encountered status for a set is the latest.
+ * the single source of truth) nor "Void". The input is sorted here (copy) by
+ * submitted_date desc, falling back to created_at, so the FIRST encountered
+ * status for a set is the latest regardless of the caller's ordering.
  */
 export function buildSubmittalsBySetId(submittals, terminalApprovedStatuses) {
   const CLOSED = new Set([...terminalApprovedStatuses, "Void"]);
   const map = {};
-  (submittals || []).forEach((s) => {
+  const sortKey = (s) => String(s?.submitted_date || s?.created_at || "");
+  const ordered = (submittals || []).slice().sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+  ordered.forEach((s) => {
     if (s.is_deleted) return;
     const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
     const open = !CLOSED.has(s.status);
@@ -623,6 +637,20 @@ export function buildSubmittalsBySetId(submittals, terminalApprovedStatuses) {
     });
   });
   return map;
+}
+
+/**
+ * Narrow to one drawing set (`?set=<drawing_set_id>` deep link). Matches the
+ * FK first; legacy rows with no FK match on the set's name. No-op when
+ * `setId` is empty.
+ */
+export function filterDrawingsBySet(drawings, setId, drawingSetMap = {}) {
+  if (!setId) return drawings;
+  const setName = (drawingSetMap?.[setId]?.set_name || "").trim().toLowerCase();
+  return (drawings || []).filter((d) => {
+    if (d.drawing_set_id) return d.drawing_set_id === setId;
+    return !!setName && (d.drawing_set_name || "").trim().toLowerCase() === setName;
+  });
 }
 
 /**

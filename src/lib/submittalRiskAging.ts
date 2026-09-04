@@ -53,9 +53,24 @@ function calendarDaysUntil(dueDate: string, today: string): number | null {
   return Math.round((due.getTime() - now.getTime()) / 86_400_000);
 }
 
+/**
+ * Reduce a date-ish value to a LOCAL YYYY-MM-DD. A bare date-only string is
+ * taken as written; a timestamp (timestamptz such as status_changed_at) is
+ * converted through the local clock first — slicing its UTC prefix would put
+ * an evening MST change on the next calendar day.
+ */
+export function toLocalDateOnly(value: string | Date | null | undefined): string | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
+}
+
 function daysBetween(start: string, end: string, useWorkdays: boolean): number | null {
-  const startDay = String(start).match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
-  const endDay = String(end).match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+  const startDay = toLocalDateOnly(start);
+  const endDay = toLocalDateOnly(end);
   if (!startDay || !endDay) return null;
   if (useWorkdays) {
     return workingDaysBetween(startDay, endDay);

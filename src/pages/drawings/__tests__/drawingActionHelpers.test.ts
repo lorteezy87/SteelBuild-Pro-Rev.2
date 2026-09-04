@@ -10,6 +10,7 @@ import {
   buildRenameSetState,
   buildSheetApprovalPatch,
   buildSubmittalAdvanceSearch,
+  buildSubmittalNavigationSearch,
   formatBulkDeleteToast,
   formatBulkUpdateToast,
   formatRenameSetToast,
@@ -100,7 +101,7 @@ describe("planAdvanceStage", () => {
   it("infos when already at final stage", () => {
     expect(
       planAdvanceStage({ id: "1", stage: "Released" }, STAGE_ORDER, {}, validateOk, classifyAllow),
-    ).toEqual({ kind: "info", message: "Already at final stage (IFC)" });
+    ).toEqual({ kind: "info", message: "Already at final stage (Released)" });
   });
 
   it("opens dialog for next stage", () => {
@@ -360,6 +361,41 @@ describe("selection + navigation helpers", () => {
     expect(buildSubmittalAdvanceSearch("set-1", "In Review")).toBe(
       "?targetSetId=set-1&prefilledStatus=In+Review",
     );
+  });
+
+  it("carries ball_in_court so BFA / OFS / IFC do not collapse to a bare status", () => {
+    expect(buildSubmittalAdvanceSearch("set-1", "Approved as Noted", "Detailer")).toBe(
+      "?targetSetId=set-1&prefilledStatus=Approved+as+Noted&prefilledBallInCourt=Detailer",
+    );
+    expect(buildSubmittalAdvanceSearch("set-1", "Approved", "GC")).toBe(
+      "?targetSetId=set-1&prefilledStatus=Approved&prefilledBallInCourt=GC",
+    );
+    // BIC without a status is meaningless — dropped.
+    expect(buildSubmittalAdvanceSearch("set-1", null, "GC")).toBe("?targetSetId=set-1");
+  });
+});
+
+describe("buildSubmittalNavigationSearch", () => {
+  const mapped = { status: "Approved as Noted", ball_in_court: "Detailer" };
+  it("opens the latest OPEN linked submittal instead of creating a new one", () => {
+    const submittals = [
+      { id: "old", status: "Submitted", submitted_date: "2026-01-01", drawing_set_ids: ["set-1"] },
+      { id: "newest", status: "Under Review", submitted_date: "2026-03-01", drawing_set_ids: ["set-1"] },
+      { id: "closed", status: "Released for Fabrication", submitted_date: "2026-04-01", drawing_set_ids: ["set-1"] },
+      { id: "other", status: "Submitted", submitted_date: "2026-05-01", drawing_set_ids: ["set-2"] },
+    ];
+    expect(buildSubmittalNavigationSearch({ setId: "set-1", mapped, submittals })).toBe("?recordId=newest");
+  });
+
+  it("falls back to the create-new prefill (with BIC) when no open linked submittal exists", () => {
+    const submittals = [
+      { id: "closed", status: "Approved", submitted_date: "2026-04-01", drawing_set_ids: ["set-1"] },
+      { id: "gone", status: "Submitted", is_deleted: true, drawing_set_ids: ["set-1"] },
+    ];
+    expect(buildSubmittalNavigationSearch({ setId: "set-1", mapped, submittals })).toBe(
+      "?targetSetId=set-1&prefilledStatus=Approved+as+Noted&prefilledBallInCourt=Detailer",
+    );
+    expect(buildSubmittalNavigationSearch({ setId: null, mapped: null, submittals: [] })).toBe("");
   });
 });
 

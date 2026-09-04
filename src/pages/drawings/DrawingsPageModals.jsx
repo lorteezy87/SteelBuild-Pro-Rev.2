@@ -191,6 +191,7 @@ export default function DrawingsPageModals({
         kind={exportPkgKind || "fab_release"}
         project={activeProject}
         drawings={drawings}
+        drawingSets={drawingSetRecords}
       />
 
       {/* F18: styled confirm replacing window.confirm() for destructive

@@ -33,6 +33,22 @@ import {
   downloadTextFile,
 } from "@/lib/exports/fabRelease";
 
+/**
+ * Group key for a sheet: the FK set id, else the id of the drawing_sets row
+ * whose name matches (so legacy name-only sheets join their FK siblings),
+ * else the raw legacy name.
+ */
+export function resolveDrawingSetKey(drawing, drawingSets = []) {
+  if (!drawing) return null;
+  if (drawing.drawing_set_id) return drawing.drawing_set_id;
+  const name = String(drawing.drawing_set_name || "").trim().toLowerCase();
+  if (!name) return null;
+  const match = (drawingSets || []).find(
+    (set) => set && !set.is_deleted && String(set.set_name || "").trim().toLowerCase() === name,
+  );
+  return match?.id || drawing.drawing_set_name || null;
+}
+
 /** Slice 8 — submittal + signoff evidence for IFC/Released readiness. */
 function useFabApprovalEvidence(open, projectId, drawings) {
   const [evidence, setEvidence] = useState({
@@ -136,6 +152,7 @@ export default function ExportFabReleaseModal({
   kind = "fab_release",
   project,
   drawings = [],
+  drawingSets = [],
 }) {
   const cfg = KIND_CONFIG[kind] || KIND_CONFIG.fab_release;
   const [busy, setBusy] = useState(false);
@@ -158,11 +175,18 @@ export default function ExportFabReleaseModal({
   const requireSignoffs = !!project?.metadata?.require_fab_signoffs;
   const packageDrawings = useMemo(() => {
     if (kind === "claims") return filteredDrawings;
-    const setKey = (d) => d?.drawing_set_id || d?.drawing_set_name || null;
+    const setKey = (d) => resolveDrawingSetKey(d, drawingSets);
     const releasedSets = new Set(filteredDrawings.map(setKey).filter(Boolean));
     if (releasedSets.size === 0) return filteredDrawings;
     return (drawings || []).filter((d) => d && !d.is_deleted && releasedSets.has(setKey(d)));
-  }, [drawings, filteredDrawings, kind]);
+  }, [drawings, drawingSets, filteredDrawings, kind]);
+  // Identity of the package membership — the override resets only when the
+  // modal opens or the set of sheets in the package actually changes, not on
+  // every approval-evidence refresh (which re-creates the array).
+  const packageKey = useMemo(
+    () => packageDrawings.map((d) => d?.id).filter(Boolean).sort().join(","),
+    [packageDrawings],
+  );
 
   // ── Fab Release gate ─────────────────────────────────────────────────
   // Don't let a package ship to the shop while an open RFI references one of
@@ -180,6 +204,10 @@ export default function ExportFabReleaseModal({
     if (!open) return;
     setOverride(false);
     setOverrideReason("");
+  }, [open, packageKey]);
+
+  useEffect(() => {
+    if (!open) return;
     setLinkedRfis([]);
     setGateSignoffs([]);
     if (!gated || !project?.id) return;

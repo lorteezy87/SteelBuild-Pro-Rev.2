@@ -22,6 +22,7 @@ import {
   toLocalDay,
   buildApprovalMatrixRows,
   summarizeApprovalMatrix,
+  sheetNeedsAction,
 } from "../format";
 
 // These guard the Arizona (MST, UTC-7, no DST) date-display bug: a date-only
@@ -302,8 +303,16 @@ describe("rollupDrawingStage", () => {
     expect(rollupDrawingStage([{ stage: "Released" }, { stage: "Released" }] as any)).toBe("Released");
   });
 
-  it("surfaces 'Needs Action' when any sheet is rejected / R&R / returned", () => {
-    expect(rollupDrawingStage([{ stage: "IFA" }, { stage: "Rejected" }] as any)).toBe("Needs Action");
+  it("surfaces 'Needs Action' when any sheet's set-level verdict is rejected (stage can never be 'Rejected')", () => {
+    expect(rollupDrawingStage([{ stage: "IFA" }, { stage: "BFA", set_approval_status: "rejected" }] as any)).toBe("Needs Action");
+    expect(rollupDrawingStage([{ stage: "IFA" }, { stage: "BFA", set_approval_status: "REJECTED" }] as any)).toBe("Needs Action");
+  });
+
+  it("sheetNeedsAction keys off set_approval_status only", () => {
+    expect(sheetNeedsAction({ set_approval_status: "rejected" } as any)).toBe(true);
+    expect(sheetNeedsAction({ set_approval_status: "pending_review" } as any)).toBe(false);
+    expect(sheetNeedsAction({ stage: "Rejected" } as any)).toBe(false);
+    expect(sheetNeedsAction(null)).toBe(false);
   });
 
   it("rolls up to 'In Review' when a sheet is mid-approval (IFA…IFC)", () => {
@@ -509,6 +518,13 @@ describe("summarizeApprovalMatrix", () => {
     expect(s.dueSoon).toBe(1);
     expect(s.pendingEor).toBe(0);
     expect(s.total).toBe(5);
+  });
+  it("does NOT count a Void submittal as pending", () => {
+    const s = summarizeApprovalMatrix([row("Void"), row("Submitted")]);
+    expect(s.pending).toBe(1);
+    expect(s.approved).toBe(0);
+    expect(s.rejected).toBe(0);
+    expect(s.total).toBe(2);
   });
   it("counts unanswered Approver Notes as pending EOR/AOR", () => {
     const s = summarizeApprovalMatrix([

@@ -190,11 +190,34 @@ export const btnGhost = { ...btnBase, background: "none", border: "1px solid var
 // field (or a pseudo-field like "overdue") and given a comparator that knows
 // how to handle the type. Keeping this out of the component body so it's a
 // stable reference and doesn't churn the memo on every render.
+/**
+ * Natural revision-label compare. Per this app's convention, pre-IFC
+ * revisions are letters (A, B, C / "Rev B") and post-IFC revisions are
+ * numeric ("1", "Rev 5", "IFC Rev 2"), so letters always sort BEFORE numbers,
+ * then letters alphabetically and numbers by numeric value (10 after 2).
+ * Empty / null labels sort first. Returns <0, 0, >0 like a comparator.
+ */
+export function revisionSortRank(raw) {
+  const label = String(raw ?? "").trim().toUpperCase();
+  if (!label) return { klass: 0, num: 0, label };
+  const digits = label.match(/\d+/);
+  if (digits) return { klass: 2, num: Number(digits[0]), label };
+  return { klass: 1, num: 0, label: label.replace(/^REV\.?\s*/, "") };
+}
+
+export function compareRevisionLabels(a, b) {
+  const ra = revisionSortRank(a);
+  const rb = revisionSortRank(b);
+  if (ra.klass !== rb.klass) return ra.klass - rb.klass;
+  if (ra.klass === 2 && ra.num !== rb.num) return ra.num - rb.num;
+  return ra.label.localeCompare(rb.label, undefined, { numeric: true, sensitivity: "base" });
+}
+
 export const SORTABLE_FIELDS = {
   sheet_number:    { label: "SET / SHEET #", cmp: (a, b) => String(a.sheet_number || "").localeCompare(String(b.sheet_number || ""), undefined, { numeric: true, sensitivity: "base" }) },
   title:           { label: "TITLE",        cmp: (a, b) => String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" }) },
   discipline:      { label: "DISCIPLINE",   cmp: (a, b) => String(a.discipline || "").localeCompare(String(b.discipline || ""), undefined, { sensitivity: "base" }) },
-  revision_number: { label: "REV",          cmp: (a, b) => (Number(a.revision_number) || 0) - (Number(b.revision_number) || 0) },
+  revision_number: { label: "REV",          cmp: (a, b) => compareRevisionLabels(a.revision_number, b.revision_number) },
   stage:           { label: "STAGE",        cmp: (a, b) => STAGE_ORDER.indexOf(a.stage || "") - STAGE_ORDER.indexOf(b.stage || "") },
   submitted_date:  { label: "SUBMITTED",    cmp: (a, b) => String(a.submitted_date || "").localeCompare(String(b.submitted_date || "")) },
   due_date:        { label: "DUE DATE",     cmp: (a, b) => String(a.due_date || "9999").localeCompare(String(b.due_date || "9999")) },

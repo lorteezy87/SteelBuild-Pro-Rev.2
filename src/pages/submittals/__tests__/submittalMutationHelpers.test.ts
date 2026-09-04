@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   appendSubmittalNotes,
   buildBulkSubmittalCreatePayload,
+  canStartNewRound,
+  newRoundBlockReason,
   buildBulkUpdateRowPatch,
   classifyBulkOutcome,
   formatBulkSubmittalToast,
@@ -127,5 +129,23 @@ describe("splitCreateSubmittalPayload", () => {
       chosenTypes: ["Shop", "Erection"],
       submittalData: { title: "Beams" },
     });
+  });
+});
+
+describe("newRoundBlockReason / canStartNewRound", () => {
+  it("allows a new round from statuses that may move to Submitted", () => {
+    for (const st of ["Draft", "Submitted", "Under Review", "Revise and Resubmit", "Rejected", null, ""]) {
+      expect(newRoundBlockReason(st)).toBeNull();
+      expect(canStartNewRound(st)).toBe(true);
+    }
+  });
+
+  it("blocks a new round from Approved / Approved as Noted / Released for Fabrication / Void with a friendly reason", () => {
+    for (const st of ["Approved", "Approved as Noted", "Released for Fabrication", "Void"]) {
+      const reason = newRoundBlockReason(st);
+      expect(reason).toContain(`"${st}"`);
+      expect(reason).toContain("Submitted");
+      expect(canStartNewRound(st)).toBe(false);
+    }
   });
 });

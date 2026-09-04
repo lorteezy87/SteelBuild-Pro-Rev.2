@@ -94,6 +94,30 @@ describe("buildStatusSuggestPatch", () => {
     expect(patch).toBeNull();
   });
 
+  it("re-stamps returned_date on every transition INTO a verdict status, even when a prior cycle's date exists", () => {
+    const patch = buildStatusSuggestPatch(
+      { status: "Under Review", ball_in_court: "EOR", submitted_date: "2026-07-20", returned_date: "2026-06-01" },
+      "Approved as Noted",
+      { today: "2026-07-26" },
+    );
+    expect(patch?.returned_date).toBe("2026-07-26");
+    const rr = buildStatusSuggestPatch(
+      { status: "Approved", ball_in_court: "GC", returned_date: "2026-06-01", approved_date: "2026-06-01" },
+      "Revise and Resubmit",
+      { today: "2026-07-26" },
+    );
+    expect(rr?.returned_date).toBe("2026-07-26");
+  });
+
+  it("does not re-stamp returned_date on a same-status edit that already has one", () => {
+    const patch = buildStatusSuggestPatch(
+      { status: "Approved", ball_in_court: "GC", returned_date: "2026-06-01", approved_date: "2026-06-01" },
+      "Approved",
+      { today: "2026-07-26" },
+    );
+    expect(patch?.returned_date).toBeUndefined();
+  });
+
   it("clears BIC suggestion for Void / Released for Fabrication", () => {
     const patch = buildStatusSuggestPatch(
       { status: "Approved", ball_in_court: "GC", approved_date: "2026-07-01" },
@@ -124,6 +148,19 @@ describe("buildCreateInitialFromSet", () => {
       requireLinkedSet: true,
     });
   });
+
+  it("carries the ball_in_court half of the stage pair, but only alongside a status", () => {
+    expect(buildCreateInitialFromSet("set-1", { prefilledStatus: "Approved as Noted", prefilledBallInCourt: "Detailer" })).toEqual({
+      drawing_set_ids: ["set-1"],
+      status: "Approved as Noted",
+      ball_in_court: "Detailer",
+      requireLinkedSet: true,
+    });
+    expect(buildCreateInitialFromSet("set-1", { prefilledBallInCourt: "GC" })).toEqual({
+      drawing_set_ids: ["set-1"],
+      requireLinkedSet: true,
+    });
+  });
 });
 
 describe("filterSuggestAgainstCurrent", () => {
@@ -133,6 +170,15 @@ describe("filterSuggestAgainstCurrent", () => {
       { ball_in_court: "EOR", submitted_date: "2026-07-26", returned_date: null },
     );
     expect(filtered).toEqual({ returned_date: "2026-07-26" });
+  });
+
+  it("keeps a returned_date suggestion when the row only carries a stale prior-cycle date", () => {
+    expect(
+      filterSuggestAgainstCurrent(
+        { returned_date: "2026-07-26" },
+        { returned_date: "2026-06-01" },
+      ),
+    ).toEqual({ returned_date: "2026-07-26" });
   });
 
   it("returns null when nothing remains", () => {

@@ -12,7 +12,31 @@ import {
   hasAmbiguousSheetMatches,
   findExactLiveDrawing,
 } from "@/lib/drawingUploadUtils";
-import { extractRevisionSheets, deriveVirtualSets, buildRevisionSnapshot } from "./revisionUploadHelpers";
+import { extractRevisionSheets, deriveVirtualSets, buildRevisionSnapshot, mergeSetDrawings } from "./revisionUploadHelpers";
+import { dominantStage } from "@/lib/submittalStageMapping";
+
+/**
+ * Load the live sheets for a set: by FK (`drawing_set_id`) first, then legacy
+ * rows that only carry `drawing_set_name` (no FK at all).
+ */
+async function loadSetDrawings(projectId, set) {
+  const byId = set?.id ? await entities.Drawing.filter({ project_id: projectId, drawing_set_id: set.id }) : [];
+  const byName = set?.set_name ? await entities.Drawing.filter({ project_id: projectId, drawing_set_name: set.set_name }) : [];
+  return mergeSetDrawings(byId, byName);
+}
+
+/**
+ * `drawing_sets` has no `stage` column — derive the set's current stage from
+ * its live sheets (dominant stage), falling back to the set-level approval
+ * verdict (approved ⇒ post-IFC numeric revisions).
+ */
+function deriveSetStage(set, sheets) {
+  const live = (sheets || []).filter((d) => !d.is_superseded && !d.is_deleted);
+  const fromSheets = live.length ? dominantStage(live.map((d) => d.stage)) : "";
+  if (fromSheets && fromSheets !== "Not Started") return fromSheets;
+  if (String(set?.set_approval_status || "").toLowerCase() === "approved") return "IFC";
+  return fromSheets || "";
+}
 import StepSelectSet from "./revisionUploadSteps/SelectSetStep";
 import StepRevMeta from "./revisionUploadSteps/RevMetaStep";
 import StepDropPDF from "./revisionUploadSteps/DropPdfStep";
@@ -78,7 +102,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
 
     let oldSheets = [];
     try {
-      const existing = await entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
+      const existing = await loadSetDrawings(activeProject?.id, selectedSet);
       oldSheets = existing.filter(d => !d.is_superseded).map(d => ({ sheetNumber: d.sheet_number, sheetTitle: d.title, fileUrl: d.file_url }));
     } catch (e) { console.error("Failed to fetch existing drawings:", e); }
 
@@ -120,7 +144,11 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         setStep("comparison");
         return;
       }
-      const currentStage = selectedSet?.stage || selectedSet?.stage_summary || (selectedSet?.set_approval_status === "approved" ? "IFC" : "");
+      let existingDrawings = [];
+      try {
+        existingDrawings = await loadSetDrawings(activeProject?.id, selectedSet);
+      } catch (e) { console.error("Failed to fetch drawings for apply:", e); }
+      const currentStage = deriveSetStage(selectedSet, existingDrawings);
       const revisionCheck = validateRevisionLabel(revMeta.revisionLabel, currentStage);
       if (!revisionCheck.ok) {
         setFlowError(revisionCheck.reason);
@@ -151,11 +179,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     }
     setProcessingPct(30);
     setProcessingMsg("Updating drawing records...");
-
-    let existingDrawings = [];
-    try {
-      existingDrawings = await entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
-    } catch (e) { console.error("Failed to fetch drawings for apply:", e); }
 
     let historyFailed = 0;
     let updated = 0, added = 0, removed = 0, failed = 0;
@@ -192,8 +215,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             discipline: match.newSheet.discipline || selectedSet.discipline || "Structural",
             revision_number: normalizeRevisionNumber(match.newSheet.revision ?? revMeta.revisionLabel),
             stage: "Not Started",
-            issue_date: revMeta.issueDate,
-            issued_by: revMeta.issuedBy,
             file_url: newFileUrl,
             pdf_page: addedPage ?? 1,
             drawing_set_name: selectedSet.set_name,
@@ -229,8 +250,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             }
             await entities.Drawing.update(existing.id, {
               revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
-              issue_date: revMeta.issueDate,
-              issued_by: revMeta.issuedBy || existing.issued_by,
               file_url: newFileUrl,
               pdf_page: updatedPage ?? 1,
               ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
