@@ -79,6 +79,20 @@ describe("buildFieldTodaySummary", () => {
       expect(s.kpis.openPunchItems).toBe(2);
     });
 
+    it("openPunchItems uses the canonical punchlist closed set (Done/Completed/Complete are closed too)", () => {
+      const terminal = ["Closed", "Complete", "Completed", "Done", "Resolved"].map((status, i) => ({
+        id: `term-${i}`, status, priority: "Low", title: `Punch ${i}`,
+      }));
+      const live = [
+        { id: "open", status: "Open", priority: "Low", title: "Open punch" },
+        { id: "held", status: "On Hold", priority: "Low", title: "Held punch" },
+        { id: "deferred", status: "Deferred", priority: "Low", title: "Deferred punch" },
+      ];
+      const r = buildFieldTodaySummary([], [], [...terminal, ...live], TODAY, 0);
+      expect(r.kpis.openPunchItems).toBe(3);
+      expect(r.openPunchRows.map((row) => row.status)).toEqual(["Open", "On Hold", "Deferred"]);
+    });
+
     it("photosToday counts only photos taken on todayIso", () => {
       // p1 + p2 are TODAY; p3 is yesterday
       expect(s.kpis.photosToday).toBe(2);

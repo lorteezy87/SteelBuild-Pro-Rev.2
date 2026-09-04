@@ -111,10 +111,23 @@ describe("buildRiskSummary – counts", () => {
     expect(s.criticalCount).toBe(2);
   });
 
-  it("counts high = critical + high items", () => {
+  it("counts high items only — critical is reported separately", () => {
     const s = buildRiskSummary([RFI_SIGNAL], []);
-    // 1 critical + 1 high from RFI_SIGNAL
-    expect(s.highCount).toBe(2);
+    // RFI_SIGNAL carries 1 critical + 1 high; High must not double-count the critical one
+    expect(s.highCount).toBe(1);
+    expect(s.criticalCount).toBe(1);
+    expect(s.criticalCount + s.highCount + s.mediumCount).toBe(s.total);
+  });
+
+  it("treats Complete and Cancelled constraints as closed, like Resolved/Closed", () => {
+    const terminal: ConstraintRecord[] = ["Complete", "Cancelled", "Resolved", "Closed"].map((status, i) => ({
+      ...CONSTRAINTS[0],
+      id: `term-${i}`,
+      status,
+    }));
+    const s = buildRiskSummary([], [...terminal, CONSTRAINTS[0], CONSTRAINTS[1]]);
+    expect(s.total).toBe(2);
+    expect(s.openCount).toBe(2);
   });
 
   it("counts medium items", () => {

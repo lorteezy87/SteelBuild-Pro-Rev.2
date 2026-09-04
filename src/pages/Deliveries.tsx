@@ -38,6 +38,7 @@ import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/Se
 import { exportDeliveriesCSV, isFabComplete } from "./deliveries/utils";
 import {
   buildDeliveryMetrics,
+  isProcurementRow,
   deliveryLane,
   getDeliveryDisplayName,
   sortDeliveriesForDispatch,
@@ -139,8 +140,10 @@ export default function Deliveries() {
     return map;
   }, [workPackages]);
 
+  // Logistics loads only — the procurement pipeline (delivery_type =
+  // 'PROCUREMENT') shares this table but is surfaced on /Procurement.
   const activeDeliveries = useMemo(
-    () => deliveries.filter((delivery) => !delivery?.is_deleted),
+    () => deliveries.filter((delivery) => !delivery?.is_deleted && !isProcurementRow(delivery)),
     [deliveries]
   );
 

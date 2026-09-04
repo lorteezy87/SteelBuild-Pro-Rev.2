@@ -38,24 +38,25 @@ export const PRIORITY_ORDER: Record<Priority, number> = {
 };
 
 // ─── RFIs ────────────────────────────────────────────────────────────────
+// Mirrors the DB CHECK constraint chk_rfis_status.
 export const RFI_STATUS = {
-  DRAFT: "Draft",
-  SUBMITTED: "Submitted",
+  OPEN: "Open",
   UNDER_REVIEW: "Under Review",
+  INCOMPLETE_RESPONSE: "Incomplete Response",
   ANSWERED: "Answered",
   CLOSED: "Closed",
+  VOID: "Void",
 } as const;
 export type RfiStatus = typeof RFI_STATUS[keyof typeof RFI_STATUS];
 
 // ─── Change requests / change orders ─────────────────────────────────────
+// Mirrors the DB CHECK constraint chk_change_requests_status.
 export const CHANGE_REQUEST_STATUS = {
   SUBMITTED: "Submitted",
   UNDER_REVIEW: "Under Review",
-  AWAITING_APPROVAL: "Awaiting Approval",
   APPROVED: "Approved",
   REJECTED: "Rejected",
-  APPROVED_WITH_CONDITIONS: "Approved with Conditions",
-  ON_HOLD: "On Hold",
+  DEFERRED: "Deferred",
 } as const;
 export type ChangeRequestStatus = typeof CHANGE_REQUEST_STATUS[keyof typeof CHANGE_REQUEST_STATUS];
 

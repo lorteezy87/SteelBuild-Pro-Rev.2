@@ -7,6 +7,8 @@ const STATUS_COLORS = {
   "Awaiting Approval": "var(--status-warning)",
   Approved: "var(--status-success)",
   Rejected: "var(--status-error)",
+  Deferred: "var(--text-muted)",
+  // Legacy values kept for rows written before chk_change_requests_status.
   "Approved with Conditions": "var(--accent)",
   "On Hold": "var(--text-muted)",
 };

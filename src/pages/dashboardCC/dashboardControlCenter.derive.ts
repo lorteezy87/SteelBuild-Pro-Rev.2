@@ -31,7 +31,7 @@ import {
   deriveOperationalHealth,
 } from "@/lib/projectHealth";
 import type { OperationalHealthResult } from "@/lib/projectHealth";
-import { isPunchlistOpen } from "@/lib/entityPredicates";
+import { isPunchlistOpen, CO_TERMINAL_STATUSES } from "@/lib/entityPredicates";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -104,12 +104,20 @@ export interface ModuleTile {
   photo: string;
 }
 
-// ── Closed-status sets (mirrors ProjectDashboard.jsx exactly) ─────────────────
+// ── Closed-status sets (DB CHECK vocabularies) ────────────────────────────────
 
-const CLOSED_CO_STATUSES = new Set(["Approved", "Approved as Noted", "Rejected", "Void", "Executed"]);
+/** change_orders.status terminal set: Approved / Rejected / Void (entityPredicates). */
+const CLOSED_CO_STATUSES = CO_TERMINAL_STATUSES;
 const CLOSED_SUBMITTAL_STATUSES = new Set(["Approved", "Approved as Noted", "Released for Fabrication", "Void"]);
 const CLOSED_TASK_STATUSES = new Set(["Complete", "Completed", "Done", "Closed"]);
-const CLOSED_DELIVERY_STATUSES = new Set(["Delivered", "Complete", "Completed", "Received", "Cancelled"]);
+/**
+ * deliveries is a union table (logistics + PROCUREMENT pipeline). Terminal
+ * across both vocabularies: Delivered / Received / Cancelled. Compared
+ * case-insensitively — legacy rows carry mixed casing.
+ */
+const CLOSED_DELIVERY_STATUSES = new Set(["delivered", "received", "cancelled"]);
+const isClosedDeliveryStatus = (status: unknown): boolean =>
+  CLOSED_DELIVERY_STATUSES.has(String(status ?? "").trim().toLowerCase());
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -361,11 +369,14 @@ export function buildDashboardSummary(input: {
   const lateDeliveries = deliveries.filter((d) => {
     const r = d as Record<string, unknown>;
     const dateStr = (r.scheduled_date || r.required_date) as string | null;
-    return isPast(dateStr) && !CLOSED_DELIVERY_STATUSES.has(String(r.status ?? ""));
+    return isPast(dateStr) && !isClosedDeliveryStatus(r.status);
   }).length;
+  // drawings has no `status` column. Review disposition lives in
+  // set_approval_status (lowercase: approved / rejected / superseded /
+  // pending_review); `stage` is the detailing lifecycle, not a disposition.
   const staleDrawings = drawings.filter((d) => {
     const r = d as Record<string, unknown>;
-    return !r.is_deleted && ["Rejected", "Revise and Resubmit"].includes(String(r.status ?? r.stage ?? r.set_approval_status ?? ""));
+    return !r.is_deleted && String(r.set_approval_status ?? "").trim().toLowerCase() === "rejected";
   }).length;
 
   const rawAlerts: DashAlertRow[] = [

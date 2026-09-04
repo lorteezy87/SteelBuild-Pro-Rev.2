@@ -38,6 +38,12 @@ import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/Seque
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus, Search } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
+import { ACTION_ITEM_CLOSED_STATUSES } from "@/lib/entityPredicates";
+
+// Constraints are action_items rows (chk_action_items_status: Open / In Progress /
+// Complete / Cancelled / Resolved / Closed). "Open" must exclude every terminal
+// status, not just Resolved/Closed.
+const isClosedConstraint = (c) => ACTION_ITEM_CLOSED_STATUSES.has(c?.status ?? "");
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
 import { buildConstraintPrefillFromRfi } from "./constraints/rfiConstraintHandoff";
 
@@ -207,7 +213,7 @@ export default function Constraints() {
   );
 
   const kpis = useMemo(() => {
-    const open = allConstraints.filter((c) => !RESOLVED_STATUSES.includes(c.status));
+    const open = allConstraints.filter((c) => !isClosedConstraint(c));
     const resolved = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.RESOLVED);
     const closed = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.CLOSED);
     const overdue = open.filter(isOverdue);
@@ -242,7 +248,7 @@ export default function Constraints() {
     return allConstraints
       .filter((c) => {
         if (filterType !== "all" && c.constraint_type !== filterType) return false;
-        if (filterStatus === "open" && RESOLVED_STATUSES.includes(c.status)) return false;
+        if (filterStatus === "open" && isClosedConstraint(c)) return false;
         if (filterStatus !== "all" && filterStatus !== "open" && c.status !== filterStatus) return false;
         if (filterPriority !== "all" && c.priority !== filterPriority) return false;
         if (!matchesSequenceFilter(c, seqFilter)) return false;

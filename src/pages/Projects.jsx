@@ -23,7 +23,6 @@ export default function Projects() {
   const [search,        setSearch]        = useState("");
   const [phaseFilter,   setPhaseFilter]   = useState("all");
   const [healthFilter,  setHealthFilter]  = useState("all");
-  const [jobTypeFilter, setJobTypeFilter] = useState("all");
   const [modalOpen,     setModalOpen]     = useState(false);
   const [editing,       setEditing]       = useState(null);
   const [detailProject, setDetailProject] = useState(null);
@@ -151,9 +150,8 @@ export default function Projects() {
     const matchSearch = !q || p.name?.toLowerCase().includes(q) || p.project_number?.toLowerCase().includes(q) || p.client?.toLowerCase().includes(q) || p.general_contractor?.toLowerCase().includes(q);
     return matchSearch
       && (phaseFilter === "all"   || p.phase === phaseFilter)
-      && (healthFilter === "all"  || healthByProjectId[p.id]?.label === healthFilter)
-      && (jobTypeFilter === "all" || p.job_type === jobTypeFilter);
-  }), [projects, search, phaseFilter, healthFilter, jobTypeFilter, healthByProjectId]);
+      && (healthFilter === "all"  || healthByProjectId[p.id]?.label === healthFilter);
+  }), [projects, search, phaseFilter, healthFilter, healthByProjectId]);
 
   const canCreate = !atProjectLimit;
 

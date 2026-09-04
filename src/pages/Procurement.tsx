@@ -108,9 +108,11 @@ export default function Procurement() {
 
   // Filter to the procurement subset and drop soft-deleted rows. Same
   // useMemo(filter !is_deleted) pattern Budget Hours uses so the page
-  // can't accidentally render a tombstoned row.
+  // can't accidentally render a tombstoned row. A row is procurement when
+  // it is tagged delivery_type='PROCUREMENT' (what this page writes) OR
+  // carries a procurement_category (legacy rows from before the tag).
   const items = useMemo(
-    () => rawItems.filter((r) => !r.is_deleted && r.procurement_category),
+    () => rawItems.filter((r) => !r.is_deleted && (r.delivery_type === 'PROCUREMENT' || r.procurement_category)),
     [rawItems],
   );
 

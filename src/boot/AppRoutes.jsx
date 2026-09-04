@@ -68,7 +68,9 @@ function LegacyProjectDetailRedirect() {
     return <Navigate to="/Projects" replace />;
   }
 
-  return <Navigate to={`/Projects?id=${encodeURIComponent(projectId)}`} replace />;
+  // /Projects opens its detail view from `?recordId=` (useAutoOpenEdit param);
+  // `?id=` would be ignored and the legacy link would land on the bare list.
+  return <Navigate to={`/Projects?recordId=${encodeURIComponent(projectId)}`} replace />;
 }
 
 export function buildStaticRedirectTarget(target, search = "", hash = "") {

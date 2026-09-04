@@ -7,6 +7,7 @@
  */
 
 import { computeRevisedContractValue } from "@/services/costRollup";
+import { isRfiOpen } from "@/lib/entityPredicates";
 
 /**
  * Work-package progress for a single project.
@@ -111,7 +112,7 @@ export function calcRfiHealth(rfis = []) {
   // (the date-only shim parses "YYYY-MM-DD" as local noon).
   const now      = new Date();
   now.setHours(0, 0, 0, 0);
-  const active   = rfis.filter(r => !["Answered", "Closed"].includes(r.status));
+  const active   = rfis.filter(isRfiOpen); // excludes Answered / Closed / Void
   const openCount    = active.length;
   const overdueCount = active.filter(r => r.date_required && new Date(r.date_required) < now).length;
   return { openCount, overdueCount };
