@@ -161,6 +161,7 @@ describe("linkModelElementsToPieces", () => {
       const chain: Record<string, unknown> = {};
       chain.select = vi.fn(() => chain);
       chain.eq = vi.fn(() => chain);
+      chain.order = vi.fn(() => chain);
       chain.range = vi.fn(async () => result);
       return chain;
     }
@@ -193,6 +194,7 @@ describe("linkModelElementsToPieces", () => {
           select: vi.fn(() => {
             const chain: Record<string, unknown> = {};
             chain.eq = vi.fn(() => chain);
+            chain.order = vi.fn(() => chain);
             chain.range = vi.fn(async () => ({
               data: [{ id: "e1", piece_mark: "B1", metadata: null, piece_id: null }],
               error: null,

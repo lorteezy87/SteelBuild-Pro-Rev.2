@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
 import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -233,6 +234,9 @@ export default function PieceRegister() {
   useCommandSkin();
   const { activeProject, updateActiveProject } = useProjectContext() as any;
   const projectId = activeProject?.id as string | undefined;
+  // Two people working the same register: refetch on the other's station
+  // advance / ship / hold instead of waiting for the 30s staleTime.
+  useCanonicalReportingRealtime(projectId);
   const mode = String(activeProject?.piece_control_mode ?? "off") as PieceControlMode;
   const enabled = Boolean(projectId && mode !== "off");
   const queryClient = useQueryClient();
@@ -599,21 +603,11 @@ export default function PieceRegister() {
     },
   ];
 
+  // Archive / bulk-assign / bulk-hold change production + logistics eligibility
+  // too, so use the shared "all" scope instead of a hand-rolled key list that
+  // left the station board, logistics and release gate stale.
   const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["piece-register", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["piece-import-batches", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["piece-import-rows", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["piece-relationships", projectId] }),
-      queryClient.invalidateQueries({ queryKey: pieceControlKeys.intelligence(projectId!) }),
-      queryClient.invalidateQueries({ queryKey: ["piece-register-work-packages", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["work-packages", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
-      // Piece-mark / lifecycle edits must refresh the 3D link map (fab mode).
-      queryClient.invalidateQueries({ queryKey: ["model-elements", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["canonical-reporting", projectId] }),
-    ]);
+    await invalidatePieceControlQueries(queryClient, projectId, "all");
   };
 
   const invalidateProtectedActionQueries = async () => {
@@ -1493,12 +1487,8 @@ export default function PieceRegister() {
                       toast.success(
                         `Linked ${summary.linked ?? 0} · unmatched ${summary.unmatched ?? 0} · ambiguous ${summary.ambiguous ?? 0}${viaClient}`,
                       );
-                      void queryClient.invalidateQueries({
-                        queryKey: ["model-elements", projectId],
-                      });
-                      void queryClient.invalidateQueries({
-                        queryKey: ["canonical-pieces-3d", projectId],
-                      });
+                      // Link coverage shows on Relationships + Overview too.
+                      void invalidatePieceControlQueries(queryClient, projectId, "relationships");
                     })
                     .catch((error: Error) =>
                       toast.error(

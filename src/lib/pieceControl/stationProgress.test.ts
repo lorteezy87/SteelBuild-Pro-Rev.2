@@ -110,5 +110,27 @@ describe('canonical station progress', () => {
 
     expect(calculateWeightedProductionProgress(pieces, configurations, completions)).toBe(14);
   });
+
+  it('falls back to quantity weighting when any actionable piece has no weight', () => {
+    // 5,000 lb lot next to a 3-piece lot with no weight: pounds and piece
+    // counts must never share a denominator (the unweighted lot used to
+    // contribute 3/5003 of the percentage).
+    const pieces: ProductionPiece[] = [
+      { id: 'heavy', quantity: 1, weight_each_lbs: 5000, weight_total_lbs: 5000, current_station: null, is_container: false, is_deleted: false },
+      { id: 'light', quantity: 3, weight_each_lbs: null, weight_total_lbs: null, current_station: null, is_container: false, is_deleted: false },
+    ];
+    const completions = [completion('light', 'cut')]; // 15% earned on the 3-pc lot
+    // qty basis: heavy 1 × 0 + light 3 × 15 = 45 / 4 = 11.25
+    expect(calculateWeightedProductionProgress(pieces, configurations, completions)).toBeCloseTo(11.25, 5);
+  });
+
+  it('uses pounds when every actionable piece carries a weight', () => {
+    const pieces: ProductionPiece[] = [
+      { id: 'a', quantity: 1, weight_each_lbs: 300, weight_total_lbs: 300, current_station: null, is_container: false, is_deleted: false },
+      { id: 'b', quantity: 1, weight_each_lbs: 100, weight_total_lbs: 100, current_station: null, is_container: false, is_deleted: false },
+    ];
+    const completions = [completion('b', 'cut')]; // 15% on the 100 lb lot
+    expect(calculateWeightedProductionProgress(pieces, configurations, completions)).toBeCloseTo(3.75, 5);
+  });
 });
 

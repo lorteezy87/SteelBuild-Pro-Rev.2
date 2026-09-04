@@ -6,6 +6,9 @@ import { pieceControlKeys } from "@/lib/pieceControl/queryKeys";
 export const CANONICAL_REPORTING_REALTIME_TABLES = [
   "pieces",
   "piece_events",
+  // Station advances write completions; an override-only insert doesn't touch
+  // pieces, so the station board must listen here directly.
+  "piece_station_completions",
   "piece_drawings",
   "material_requirements",
   "fab_releases",

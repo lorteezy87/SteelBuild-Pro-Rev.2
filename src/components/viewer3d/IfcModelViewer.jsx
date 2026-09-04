@@ -6,8 +6,17 @@
  * Graphics: ACES tone-map, multi-light studio setup, soft ground disc.
  * Navigation: OrbitControls with "walk-zoom" so wheel zoom never stalls at
  * minDistance (the old "running out of gas" feel).
+ *
+ * Imperative API (via ref) for the host tab's piece-tracking controls:
+ *   selectGuids(guids, { fly })  — replace the selection, optionally fly to it
+ *   fitToGuids(guids)            — frame a set of parts
+ *   fitView()                    — frame the whole model
+ *   isolate(guids) / hide(guids) — ghost everything else / hide the given parts
+ *   showAll()                    — clear isolation + hidden set
+ *   setClipHeight(fraction|null) — horizontal level cut (0 = bottom, 1 = top)
+ *   clearSelection()
  */
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { loadIfcGeometry } from "@/lib/ifc/loadIfcGeometry";
@@ -19,30 +28,43 @@ import {
 
 const HIGHLIGHT = new THREE.Color("#f5d90a");
 const MEASURE_COLOR = 0xf5d90a;
+/** Pointer travel (px) beyond which a mouseup is an orbit drag, not a click. */
+const CLICK_SLOP_PX = 5;
+/** Opacity for parts outside the isolated set (kept as context, not pickable). */
+const GHOST_OPACITY = 0.07;
 
-export default function IfcModelViewer({
+const IfcModelViewer = forwardRef(function IfcModelViewer({
   buffer,
   colorFor,
+  labelFor,
   onPick,
   onSelect,
   onLoaded,
   onColorStats,
   measureMode = false,
   onMeasure,
-}) {
+}, ref) {
   const mountRef = useRef(null);
   const apiRef = useRef(null);
   const selectedRef = useRef(new Map());
   const measureRef = useRef({ a: null, b: null, group: null });
   const measureModeRef = useRef(measureMode);
   const onMeasureRef = useRef(onMeasure);
+  const onPickRef = useRef(onPick);
+  const onSelectRef = useRef(onSelect);
+  const labelForRef = useRef(labelFor);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
   const [count, setCount] = useState(0);
   const [measureLabel, setMeasureLabel] = useState(null);
+  const [hover, setHover] = useState(null);
+  const [visibility, setVisibility] = useState({ isolated: 0, hidden: 0 });
 
   measureModeRef.current = measureMode;
   onMeasureRef.current = onMeasure;
+  onPickRef.current = onPick;
+  onSelectRef.current = onSelect;
+  labelForRef.current = labelFor;
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -89,6 +111,10 @@ export default function IfcModelViewer({
     renderer.domElement.style.display = "block";
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
+    renderer.domElement.style.outline = "none";
+    // Focusable so keyboard shortcuts (F / I / H / U / Esc) only fire while the
+    // viewer is the active element — never while typing in the Find box.
+    renderer.domElement.tabIndex = 0;
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(mount);
@@ -189,6 +215,8 @@ export default function IfcModelViewer({
     apiRef.current = {
       scene, camera, renderer, controls, model: null, raf: 0, ro, flyTo,
       focusDist: 1, measureGroup, modelRadius: 1,
+      meshesByGuid: new Map(), isolated: null, hidden: new Set(), clipPlane: null,
+      bounds: null,
     };
 
     // Kick a render loop immediately so the mount isn't a black void while
@@ -212,6 +240,17 @@ export default function IfcModelViewer({
           scene.add(model.group);
           api.model = model;
 
+          // GUID → meshes index (an assembly part can be several placed
+          // geometries) so select/isolate/fit by GUID never walks 10k children.
+          const byGuid = new Map();
+          for (const mesh of model.group.children) {
+            const g = mesh.userData?.guid;
+            if (!g) continue;
+            if (!byGuid.has(g)) byGuid.set(g, []);
+            byGuid.get(g).push(mesh);
+          }
+          api.meshesByGuid = byGuid;
+
           const box = new THREE.Box3().setFromObject(model.group);
           if (box.isEmpty()) {
             setCount(0);
@@ -219,6 +258,7 @@ export default function IfcModelViewer({
             setStatus("ready");
             return;
           }
+          api.bounds = box.clone();
           const sphere = box.getBoundingSphere(new THREE.Sphere());
           const r = Math.max(
             Number.isFinite(sphere.radius) && sphere.radius > 0 ? sphere.radius : 1,
@@ -305,11 +345,16 @@ export default function IfcModelViewer({
       apiRef.current?.ground?.material?.dispose?.();
       apiRef.current?.model?.dispose();
       clearMeasureVisuals();
+      renderer.clippingPlanes = [];
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
       apiRef.current = null;
       selectedRef.current = new Map();
       measureRef.current = { a: null, b: null, group: null };
+      setHover(null);
+      setVisibility({ isolated: 0, hidden: 0 });
+      setStatus("loading");
+      setError(null);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buffer]);
@@ -394,12 +439,190 @@ export default function IfcModelViewer({
     g.add(tick);
   }
 
+  // ── Selection / visibility primitives (shared by clicks + the ref API) ──
+
+  function setMeshHighlight(mesh, on) {
+    if (!mesh.material?.emissive) return;
+    if (on) mesh.material.emissive.copy(HIGHLIGHT).multiplyScalar(0.4);
+    else mesh.material.emissive.set("#000000");
+  }
+
+  function emitSelection() {
+    const sel = selectedRef.current;
+    const guids = [...new Set([...sel.values()].map((m) => m.userData?.guid).filter(Boolean))];
+    onSelectRef.current?.(guids);
+    return guids;
+  }
+
+  function clearSelectionInternal({ emit = true } = {}) {
+    const sel = selectedRef.current;
+    for (const mesh of sel.values()) setMeshHighlight(mesh, false);
+    sel.clear();
+    if (emit) {
+      onPickRef.current?.(null);
+      onSelectRef.current?.([]);
+    }
+  }
+
+  function selectGuidsInternal(guids, { additive = false } = {}) {
+    const api = apiRef.current;
+    if (!api?.model) return [];
+    if (!additive) clearSelectionInternal({ emit: false });
+    const sel = selectedRef.current;
+    let firstMesh = null;
+    for (const guid of guids || []) {
+      for (const mesh of api.meshesByGuid.get(guid) || []) {
+        if (api.hidden.has(guid) || (api.isolated && !api.isolated.has(guid))) continue;
+        sel.set(mesh.userData.expressID, mesh);
+        setMeshHighlight(mesh, true);
+        if (!firstMesh) firstMesh = mesh;
+      }
+    }
+    const out = emitSelection();
+    if (out.length === 1 && firstMesh) {
+      api.model.pickInfo(firstMesh.userData.expressID).then((info) => {
+        if (apiRef.current && selectedRef.current.size) onPickRef.current?.(info);
+      });
+    } else {
+      onPickRef.current?.(null);
+    }
+    return out;
+  }
+
+  /** Re-apply isolation / hidden state to every mesh (idempotent). */
+  function applyVisibility() {
+    const api = apiRef.current;
+    if (!api?.model) return;
+    const { isolated, hidden } = api;
+    let ghosted = 0;
+    for (const mesh of api.model.group.children) {
+      const guid = mesh.userData?.guid;
+      const isHidden = guid ? hidden.has(guid) : false;
+      const isGhost = !isHidden && isolated ? !(guid && isolated.has(guid)) : false;
+      mesh.visible = !isHidden;
+      mesh.userData.ghost = isGhost;
+      const mat = mesh.material;
+      if (!mat) continue;
+      if (mat.userData.baseOpacity == null) {
+        mat.userData.baseOpacity = mat.opacity;
+        mat.userData.baseTransparent = mat.transparent;
+      }
+      if (isGhost) {
+        ghosted += 1;
+        mat.transparent = true;
+        mat.opacity = GHOST_OPACITY;
+        mat.depthWrite = false;
+      } else {
+        mat.transparent = mat.userData.baseTransparent;
+        mat.opacity = mat.userData.baseOpacity;
+        mat.depthWrite = true;
+      }
+    }
+    // Drop selection entries that are no longer visible / pickable.
+    const sel = selectedRef.current;
+    let changed = false;
+    for (const [id, mesh] of [...sel.entries()]) {
+      if (!mesh.visible || mesh.userData.ghost) {
+        setMeshHighlight(mesh, false);
+        sel.delete(id);
+        changed = true;
+      }
+    }
+    if (changed) emitSelection();
+    setVisibility({ isolated: isolated ? isolated.size : 0, hidden: hidden.size, ghosted });
+  }
+
+  function boundsForGuids(guids) {
+    const api = apiRef.current;
+    if (!api?.model) return null;
+    const box = new THREE.Box3();
+    let any = false;
+    for (const guid of guids || []) {
+      for (const mesh of api.meshesByGuid.get(guid) || []) {
+        if (!mesh.visible) continue;
+        box.expandByObject(mesh);
+        any = true;
+      }
+    }
+    return any && !box.isEmpty() ? box : null;
+  }
+
+  function fitToBox(box) {
+    const api = apiRef.current;
+    if (!api || !box) return;
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    const r = Math.max(sphere.radius, api.modelRadius * 0.002, 0.05);
+    // Keep the current viewing direction so the user doesn't lose orientation.
+    const dir = api.camera.position.clone().sub(api.controls.target);
+    if (dir.lengthSq() < 1e-10) dir.set(1, 0.7, 1);
+    dir.normalize();
+    const fovRad = (api.camera.fov * Math.PI) / 180;
+    const dist = (r / Math.sin(fovRad / 2)) * 1.15;
+    api.flyTo(sphere.center.clone(), sphere.center.clone().addScaledVector(dir, dist));
+  }
+
+  function setClipHeightInternal(fraction) {
+    const api = apiRef.current;
+    if (!api) return;
+    if (fraction == null || !api.bounds) {
+      api.clipPlane = null;
+      api.renderer.clippingPlanes = [];
+      return;
+    }
+    const f = Math.min(1, Math.max(0, Number(fraction)));
+    const { min, max } = api.bounds;
+    const y = min.y + (max.y - min.y) * f;
+    // Keep everything at or below y: plane normal points down, constant = y.
+    const plane = api.clipPlane || new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
+    plane.set(new THREE.Vector3(0, -1, 0), y);
+    api.clipPlane = plane;
+    api.renderer.clippingPlanes = [plane];
+  }
+
+  useImperativeHandle(ref, () => ({
+    selectGuids: (guids, { fly = false, additive = false } = {}) => {
+      const out = selectGuidsInternal(guids, { additive });
+      if (fly && out.length) fitToBox(boundsForGuids(out));
+      return out;
+    },
+    clearSelection: () => clearSelectionInternal(),
+    fitToGuids: (guids) => fitToBox(boundsForGuids(guids)),
+    fitView: () => apiRef.current?.fitView?.(),
+    isolate: (guids) => {
+      const api = apiRef.current;
+      if (!api) return;
+      api.isolated = guids && guids.length ? new Set(guids) : null;
+      applyVisibility();
+      if (api.isolated) fitToBox(boundsForGuids([...api.isolated]));
+    },
+    hide: (guids) => {
+      const api = apiRef.current;
+      if (!api) return;
+      for (const g of guids || []) api.hidden.add(g);
+      applyVisibility();
+    },
+    showAll: () => {
+      const api = apiRef.current;
+      if (!api) return;
+      api.isolated = null;
+      api.hidden = new Set();
+      applyVisibility();
+    },
+    setClipHeight: (fraction) => setClipHeightInternal(fraction),
+    getSelectedGuids: () => [...new Set([...selectedRef.current.values()].map((m) => m.userData?.guid).filter(Boolean))],
+    getVisibility: () => ({ ...visibility }),
+  // The *Internal helpers are stable per render (they only touch refs) — listing
+  // them would recreate the handle every render for no benefit.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [visibility]);
+
   useEffect(() => {
     const mount = mountRef.current;
     const ctx = apiRef.current;
     if (!mount || !ctx || status !== "ready") return undefined;
     const raycaster = new THREE.Raycaster();
     const ndc = new THREE.Vector2();
+    const pickable = (m) => m.visible && !m.userData?.ghost;
 
     const hitMesh = (ev) => {
       const ctx2 = apiRef.current;
@@ -411,10 +634,35 @@ export default function IfcModelViewer({
       ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(ndc, ctx2.camera);
       const hits = raycaster.intersectObjects(model.group.children, false);
-      return hits[0] || null;
+      // Respect the level cut: ignore hits above the clipping plane.
+      const plane = ctx2.clipPlane;
+      for (const h of hits) {
+        if (!pickable(h.object)) continue;
+        if (plane && plane.distanceToPoint(h.point) < 0) continue;
+        return h;
+      }
+      return null;
+    };
+
+    // Distinguish an orbit drag from a click: OrbitControls' mouseup fires a
+    // synthetic click, which used to clear the selection every time you rotated.
+    let down = null;
+    const onPointerDown = (ev) => {
+      down = { x: ev.clientX, y: ev.clientY, button: ev.button };
+      // Take keyboard focus so F / I / H / U / Esc work right after a click.
+      try { ev.currentTarget?.focus?.({ preventScroll: true }); } catch { /* ignore */ }
+    };
+    const wasDrag = (ev) => {
+      if (!down) return true;
+      const dx = ev.clientX - down.x;
+      const dy = ev.clientY - down.y;
+      return Math.hypot(dx, dy) > CLICK_SLOP_PX;
     };
 
     const onClick = (ev) => {
+      const dragged = wasDrag(ev);
+      down = null;
+      if (dragged) return;
       const ctx2 = apiRef.current;
       const model = ctx2?.model;
       if (!model) return;
@@ -456,32 +704,34 @@ export default function IfcModelViewer({
       const hit = hitMesh(ev);
       const additive = ev.ctrlKey || ev.metaKey || ev.shiftKey;
       const sel = selectedRef.current;
-      const clearAll = () => {
-        for (const mesh of sel.values()) mesh.material.emissive?.set("#000000");
-        sel.clear();
-      };
 
       if (!hit) {
-        if (!additive) { clearAll(); onPick?.(null); onSelect?.([]); }
+        if (!additive) clearSelectionInternal();
         return;
       }
       const mesh = hit.object;
-      const { expressID } = mesh.userData || {};
-
-      if (additive && sel.has(expressID)) {
-        mesh.material.emissive?.set("#000000");
-        sel.delete(expressID);
-      } else {
-        if (!additive) clearAll();
-        sel.set(expressID, mesh);
-        if (mesh.material?.emissive) {
-          mesh.material.emissive.copy(HIGHLIGHT).multiplyScalar(0.4);
+      const { expressID, guid } = mesh.userData || {};
+      // Alt-click selects every part of the same assembly mark (when the host
+      // can resolve one) — the fast way to grab a whole beam with its clips.
+      const sameMark = ev.altKey && guid && labelForRef.current?.(guid);
+      let targetMeshes = [mesh];
+      if (sameMark) {
+        targetMeshes = [];
+        for (const [g, list] of ctx2.meshesByGuid) {
+          if (labelForRef.current?.(g) === sameMark) targetMeshes.push(...list.filter(pickable));
         }
       }
 
-      onSelect?.([...sel.values()].map((x) => x.userData?.guid).filter(Boolean));
-      if (sel.has(expressID)) model.pickInfo(expressID).then((info) => onPick?.(info));
-      else onPick?.(null);
+      if (additive && sel.has(expressID)) {
+        for (const m of targetMeshes) { setMeshHighlight(m, false); sel.delete(m.userData.expressID); }
+      } else {
+        if (!additive) clearSelectionInternal({ emit: false });
+        for (const m of targetMeshes) { sel.set(m.userData.expressID, m); setMeshHighlight(m, true); }
+      }
+
+      emitSelection();
+      if (sel.has(expressID)) model.pickInfo(expressID).then((info) => onPickRef.current?.(info));
+      else onPickRef.current?.(null);
     };
 
     const onDblClick = (ev) => {
@@ -497,14 +747,97 @@ export default function IfcModelViewer({
       ctx2.flyTo(p.clone(), toPos);
     };
 
+    // Hover label: one raycast per animation frame at most, only while the
+    // pointer actually moves, and only when the host can name the part.
+    let hoverPending = null;
+    let hoverRaf = 0;
+    let lastHoverGuid = null;
+    const onPointerMove = (ev) => {
+      if (!labelForRef.current) return;
+      if (down && wasDrag(ev)) { // orbiting — drop the label
+        if (lastHoverGuid) { lastHoverGuid = null; setHover(null); }
+        return;
+      }
+      hoverPending = { clientX: ev.clientX, clientY: ev.clientY };
+      if (hoverRaf) return;
+      hoverRaf = requestAnimationFrame(() => {
+        hoverRaf = 0;
+        const ev2 = hoverPending;
+        hoverPending = null;
+        if (!ev2 || !apiRef.current) return;
+        const hit = hitMesh(ev2);
+        const guid = hit?.object?.userData?.guid || null;
+        if (guid === lastHoverGuid && guid) {
+          setHover((h) => (h ? { ...h, x: ev2.clientX, y: ev2.clientY } : h));
+          return;
+        }
+        lastHoverGuid = guid;
+        if (!guid) { setHover(null); return; }
+        const label = labelForRef.current?.(guid);
+        if (!label) { setHover(null); return; }
+        const rect = apiRef.current.renderer.domElement.getBoundingClientRect();
+        setHover({ label, x: ev2.clientX - rect.left, y: ev2.clientY - rect.top });
+      });
+    };
+    const onPointerLeave = () => { lastHoverGuid = null; setHover(null); };
+
+    const onKeyDown = (ev) => {
+      const api = apiRef.current;
+      if (!api?.model) return;
+      const k = ev.key;
+      if (k === "Escape") {
+        if (measureModeRef.current) {
+          clearMeasureVisuals();
+          measureRef.current.a = null; measureRef.current.b = null;
+          setMeasureLabel(null);
+          onMeasureRef.current?.(null);
+        } else {
+          clearSelectionInternal();
+        }
+        ev.preventDefault();
+        return;
+      }
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      const key = k.toLowerCase();
+      const selGuids = [...new Set([...selectedRef.current.values()].map((m) => m.userData?.guid).filter(Boolean))];
+      if (key === "f") {
+        if (selGuids.length) fitToBox(boundsForGuids(selGuids)); else api.fitView?.();
+      } else if (key === "i" && selGuids.length) {
+        api.isolated = new Set(selGuids);
+        applyVisibility();
+        fitToBox(boundsForGuids(selGuids));
+      } else if (key === "h" && selGuids.length) {
+        for (const g of selGuids) api.hidden.add(g);
+        applyVisibility();
+      } else if (key === "u") {
+        api.isolated = null; api.hidden = new Set();
+        applyVisibility();
+      } else {
+        return;
+      }
+      ev.preventDefault();
+    };
+
     const el = ctx.renderer.domElement;
+    el.addEventListener("pointerdown", onPointerDown);
     el.addEventListener("click", onClick);
     el.addEventListener("dblclick", onDblClick);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerleave", onPointerLeave);
+    el.addEventListener("keydown", onKeyDown);
     return () => {
+      if (hoverRaf) cancelAnimationFrame(hoverRaf);
+      el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("click", onClick);
       el.removeEventListener("dblclick", onDblClick);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerleave", onPointerLeave);
+      el.removeEventListener("keydown", onKeyDown);
     };
-  }, [status, onPick, onSelect]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  const filtered = visibility.isolated > 0 || visibility.hidden > 0;
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 420 }}>
@@ -531,9 +864,20 @@ export default function IfcModelViewer({
       )}
       {status === "ready" && count > 0 && (
         <>
-          <button type="button" onClick={() => apiRef.current?.fitView?.()} title="Fit whole model in view" style={fitBtn}>
+          <button type="button" onClick={() => apiRef.current?.fitView?.()} title="Fit whole model in view (F)" style={fitBtn}>
             Fit view
           </button>
+          {hover && !measureMode && (
+            <div
+              style={{
+                ...hoverTip,
+                left: Math.max(8, hover.x + 14),
+                top: Math.max(8, hover.y - 30),
+              }}
+            >
+              {hover.label}
+            </div>
+          )}
           {measureMode && measureLabel?.formatted?.ftIn && (
             <div style={measureHud} aria-live="polite">
               <span style={{ fontWeight: 800 }}>{measureLabel.formatted.ftIn}</span>
@@ -554,18 +898,21 @@ export default function IfcModelViewer({
             </div>
           )}
           <div style={{
-            position: "absolute", left: 12, bottom: 10,
+            position: "absolute", left: 12, bottom: 10, right: 12,
             fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", pointerEvents: "none",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
             {measureMode
-              ? `${count.toLocaleString()} parts · MEASURE · click two points (vertex/edge snap · nearest 1/16″) · toggle off to clear`
-              : `${count.toLocaleString()} parts · drag orbit · scroll zoom (no limit) · click member · ctrl/shift multi · double-click fly in`}
+              ? `${count.toLocaleString()} parts · MEASURE · click two points (vertex/edge snap · nearest 1/16″) · Esc clears · toggle off to exit`
+              : `${count.toLocaleString()} parts${filtered ? ` · ${visibility.isolated ? `isolating ${visibility.isolated.toLocaleString()}` : ""}${visibility.isolated && visibility.hidden ? " · " : ""}${visibility.hidden ? `${visibility.hidden.toLocaleString()} hidden` : ""} (U shows all)` : ""} · drag orbit · scroll zoom · click part · ctrl/shift add · alt whole mark · dbl-click fly · F fit · I isolate · H hide · Esc clear`}
           </div>
         </>
       )}
     </div>
   );
-}
+});
+
+export default IfcModelViewer;
 
 const overlay = {
   position: "absolute", inset: 0, display: "flex", alignItems: "center",
@@ -577,6 +924,13 @@ const fitBtn = {
   border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
   color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
   fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer", zIndex: 2,
+};
+
+const hoverTip = {
+  position: "absolute", padding: "3px 8px", borderRadius: 6, zIndex: 3,
+  background: "rgba(13,17,23,0.9)", border: "1px solid var(--border-default)",
+  color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 11,
+  fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap", pointerEvents: "none",
 };
 
 const measureHud = {

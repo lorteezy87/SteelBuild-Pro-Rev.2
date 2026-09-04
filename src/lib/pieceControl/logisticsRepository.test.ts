@@ -33,10 +33,15 @@ const mocks = vi.hoisted(() => {
         return chain;
       }),
       order: vi.fn((column: string, options?: { ascending?: boolean }) => {
-        orderColumn = column;
-        orderAscending = options?.ascending ?? true;
+        // Only the events query sorts by created_at; the paged pieces query
+        // adds mark/lot/id orders which must not clobber the events sort.
+        if (column === "created_at") {
+          orderColumn = column;
+          orderAscending = options?.ascending ?? true;
+        }
         return chain;
       }),
+      range: vi.fn(() => chain),
       then: (resolve: (result: { data: unknown[]; error: null }) => void) => {
         if (table === "pieces") {
           resolve({ data: [...pieces], error: null });

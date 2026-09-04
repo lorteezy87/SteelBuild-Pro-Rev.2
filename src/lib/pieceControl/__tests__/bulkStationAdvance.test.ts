@@ -101,6 +101,22 @@ describe("bulkStationAdvance", () => {
     ]);
   });
 
+  it("skips soft-deleted lots and split parents with live children", () => {
+    const parent = piece({ id: "parent", is_container: false });
+    const child = piece({ id: "child", parent_piece_id: "parent" });
+    const gone = piece({ id: "gone", deleted_at: "2026-08-01T00:00:00.000Z" });
+    const plan = planBulkStationAdvance({
+      mode: "next",
+      selectedPieceIds: ["parent", "child", "gone"],
+      pieces: [parent, child, gone],
+      stations,
+      completions: [],
+      releasedWorkPackageIds: ["wp-1"],
+    });
+    expect(plan.eligiblePieceIds).toEqual(["child"]);
+    expect(plan.skipped.map((s) => s.pieceId).sort()).toEqual(["gone", "parent"]);
+  });
+
   it("skips lots that already completed the target station", () => {
     const completions: StationCompletion[] = [
       {

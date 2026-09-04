@@ -20,6 +20,7 @@ function chainFor(result: { data: unknown; error: unknown }) {
   chain.select = vi.fn(() => chain);
   chain.eq = vi.fn(() => chain);
   chain.is = vi.fn(() => chain);
+  chain.order = vi.fn(() => chain);
   chain.range = vi.fn(async () => result);
   return chain;
 }

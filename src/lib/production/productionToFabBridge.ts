@@ -18,6 +18,7 @@ import { supabase } from "@/lib/supabase";
 import type { ProductionStage } from "@/lib/importProductionStatus";
 import type { FabStatus } from "@/lib/fabStatus";
 import { FAB_STATUS_ORDER } from "@/lib/fabStatus";
+import { fetchAllProjectRowsPaged } from "@/lib/pieceControl/pagedSelect";
 import type { StagedProductionRow } from "./repository";
 import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 
@@ -165,14 +166,17 @@ export async function syncProductionRowsToModelAndPieces(
   summary.mode = mode;
   if (mode !== "pilot" && mode !== "live") return summary;
 
-  const { data: pieces, error: piecesErr } = await from("pieces")
-    .select(
-      "id, normalized_piece_mark, lot_code, lifecycle_status, is_container, is_deleted, deleted_at, parent_piece_id",
-    )
-    .eq("project_id", projectId)
-    .eq("is_deleted", false)
-    .is("deleted_at", null);
-  if (piecesErr) throw piecesErr;
+  // Paged so marks past row 1000 are not silently left un-advanced.
+  const pieces = await fetchAllProjectRowsPaged<Record<string, unknown>>(
+    supabase as any,
+    "pieces",
+    projectId,
+    {
+      select:
+        "id, normalized_piece_mark, lot_code, lifecycle_status, is_container, is_deleted, deleted_at, parent_piece_id",
+      build: (query) => query.eq("is_deleted", false).is("deleted_at", null),
+    },
+  );
 
   const all = (pieces || []) as Array<{
     id: string;

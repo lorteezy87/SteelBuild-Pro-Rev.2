@@ -267,6 +267,7 @@ async function fetchLinkCandidatePieces(
         "id, normalized_piece_mark, lot_code, is_container, parent_piece_id, is_deleted, deleted_at, work_package_id, lifecycle_status",
       )
       .eq("project_id", projectId)
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw normalizeThrownQueryError(error);
     rows.push(...((data ?? []) as LinkCandidatePiece[]));
@@ -286,6 +287,7 @@ async function fetchLinkCandidateElements(
       .select("id, piece_mark, metadata, piece_id")
       .eq("project_id", projectId)
       .eq("is_deleted", false)
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw normalizeThrownQueryError(error);
     rows.push(...((data ?? []) as LinkCandidateElement[]));

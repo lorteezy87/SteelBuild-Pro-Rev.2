@@ -50,10 +50,17 @@ export function aggregatePieceRowsByMark(rows: ImportPayload[]): ImportPayload[]
         ? (existingTotal ?? 0) + (weightTotal ?? 0)
         : null;
 
+    // A merged row's per-piece weight must agree with its merged total, or
+    // pieceTons() (which prefers each × qty) silently inflates tonnage.
+    const nextEach =
+      nextTotal != null && nextQuantity > 0
+        ? nextTotal / nextQuantity
+        : (asNumber(existing.weight_each_lbs) ?? weightEach ?? null);
     byMark.set(normalized, {
       ...existing,
       quantity: nextQuantity,
       ...(nextTotal != null ? { weight_total_lbs: nextTotal } : {}),
+      ...(nextEach != null ? { weight_each_lbs: nextEach } : {}),
       profile: existing.profile ?? row.profile ?? null,
       material_grade: existing.material_grade ?? row.material_grade ?? row.grade ?? null,
       sequence_number: existing.sequence_number ?? row.sequence_number ?? null,

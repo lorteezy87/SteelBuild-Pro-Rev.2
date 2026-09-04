@@ -125,9 +125,16 @@ export function calculateWeightedProductionProgress(
   const actionablePieces = pieces.filter(
     (piece) => !piece.is_deleted && !piece.is_container,
   );
-  const weighted = actionablePieces.map((piece) => {
-    const pounds = pieceTotalWeightLbs(piece);
-    const basis = pounds && pounds > 0 ? pounds : Math.max(Number(piece.quantity), 0);
+  // One unit per denominator: weight by pounds when every actionable piece has
+  // a weight, otherwise by quantity. Mixing the two (5,000 lb next to "3 pcs")
+  // made unweighted lots vanish from the percentage.
+  const pounds = actionablePieces.map((piece) => pieceTotalWeightLbs(piece));
+  const allWeighted =
+    actionablePieces.length > 0 && pounds.every((lbs) => lbs != null && lbs > 0);
+  const weighted = actionablePieces.map((piece, index) => {
+    const basis = allWeighted
+      ? (pounds[index] as number)
+      : Math.max(Number(piece.quantity) || 0, 0);
     return {
       basis,
       earned: earnedPercentForPiece(piece.id, configurations, completions),
