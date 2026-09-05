@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { DecisionPanel, Pill, type PillTone } from "@/components/command";
 import { PIECE_IMPORT_SOURCE_OPTIONS } from "@/lib/pieceControl/importAdapters";
+import {
+  describeAppliedAssignment,
+  type AppliedAssignmentSummary,
+} from "@/lib/pieceControl/importAssign";
 import { downloadPieceRegisterCsvTemplate } from "@/lib/pieceControl/pieceRegisterCsvTemplate";
 import type {
   ImportPayload,
@@ -47,6 +51,10 @@ export type PieceRegisterImportViewProps = {
   decisionTone: Record<string, PillTone>;
   assignPending: boolean;
   onAssignImport: () => void;
+  /** Where the applied pieces sit in the live register (null while loading). */
+  appliedAssignment?: AppliedAssignmentSummary | null;
+  /** Applied rows carrying a sheet_number / drawing_no hint. */
+  sheetHintCount?: number;
 };
 
 export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
@@ -75,7 +83,25 @@ export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
     decisionTone,
     assignPending,
     onAssignImport,
+    appliedAssignment = null,
+    sheetHintCount = 0,
   } = props;
+
+  // The selected target is where every applied piece already lives → the
+  // button can only add drawing links, so say that instead of "Assign".
+  const alreadyInTarget =
+    Boolean(importTargetWorkPackageId) &&
+    Boolean(appliedAssignment) &&
+    appliedAssignment!.pieceCount > 0 &&
+    appliedAssignment!.buckets.length === 1 &&
+    appliedAssignment!.buckets[0].workPackageId === importTargetWorkPackageId;
+  const assignButtonLabel = importTargetWorkPackageId
+    ? alreadyInTarget
+      ? sheetHintCount > 0
+        ? "Already assigned · link drawings from import"
+        : "Already assigned · re-run"
+      : "Assign + link from import"
+    : "Apply WP / drawing hints from import";
 
   return (
     <section className="piece-register-embedded-workspace piece-import-workspace">
@@ -292,10 +318,20 @@ export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
                         disabled={assignPending}
                         onClick={onAssignImport}
                       >
-                        {importTargetWorkPackageId
-                          ? "Assign + link from import"
-                          : "Apply WP / drawing hints from import"}
+                        {assignButtonLabel}
                       </button>
+                      {appliedAssignment && appliedAssignment.pieceCount > 0 && (
+                        <p
+                          className="piece-import-apply__note"
+                          data-testid="piece-import-applied-assignment"
+                          style={{ margin: 0, flexBasis: "100%", fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}
+                        >
+                          {describeAppliedAssignment(appliedAssignment)}{" "}
+                          {sheetHintCount > 0
+                            ? `${sheetHintCount.toLocaleString()} row${sheetHintCount === 1 ? "" : "s"} carry a drawing sheet hint.`
+                            : "This import carries no drawing sheet hints (sheet_number / drawing_no), so no drawing links will be made from it."}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

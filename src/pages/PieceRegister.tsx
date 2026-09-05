@@ -54,6 +54,9 @@ import { readPieceImportFile } from "@/lib/pieceControl/importAdapters";
 import {
   collectAppliedPieceIds,
   collectAppliedPiecesByWpNumber,
+  countWpHints,
+  describeImportAssignResult,
+  summarizeAppliedAssignment,
 } from "@/lib/pieceControl/importAssign";
 import {
   applyImportDrawingLinks,
@@ -412,6 +415,23 @@ export default function PieceRegister() {
     () => buildPieceDisplayRows(piecesQuery.data, workPackageMap),
     [piecesQuery.data, workPackageMap],
   );
+  // Where the selected batch's applied pieces sit in the live register, so
+  // the Imports tab shows "204 of 204 in WP-014" instead of a blank dropdown.
+  const appliedAssignment = useMemo(
+    () =>
+      batchRowsQuery.data && piecesQuery.data
+        ? summarizeAppliedAssignment(
+            batchRowsQuery.data,
+            piecesQuery.data,
+            (id) => workPackageMap.get(id) ?? id,
+          )
+        : null,
+    [batchRowsQuery.data, piecesQuery.data, workPackageMap],
+  );
+  const appliedSheetHintCount = useMemo(
+    () => collectAppliedPieceSheetHints(batchRowsQuery.data ?? []).length,
+    [batchRowsQuery.data],
+  );
   const selectedPieceRecord = useMemo(
     () => (piecesQuery.data ?? []).find((piece) => piece.id === selectedPieceId) ?? null,
     [piecesQuery.data, selectedPieceId],
@@ -746,6 +766,10 @@ export default function PieceRegister() {
   const finalizeImportedBatchHints = async (batchId: string) => {
     const rows = await fetchPieceImportRows(projectId!, batchId);
     let assigned = 0;
+    // Pieces the RPC found already in the target package. Apply with a package
+    // selected assigns as part of apply, so a second click here is all
+    // "unchanged" — that is not "no hints found" and must not read as such.
+    let unchanged = 0;
     let linked = 0;
 
     if (importTargetWorkPackageId) {
@@ -757,6 +781,7 @@ export default function PieceRegister() {
           importTargetWorkPackageId,
         );
         assigned += Number(summary.assigned ?? pieceIds.length);
+        unchanged += Number(summary.unchanged ?? 0);
       }
     } else {
       const byWpNumber = collectAppliedPiecesByWpNumber(rows);
@@ -777,6 +802,7 @@ export default function PieceRegister() {
           match.id,
         );
         assigned += Number(summary.assigned ?? pieceIds.length);
+        unchanged += Number(summary.unchanged ?? 0);
       }
     }
 
@@ -790,7 +816,14 @@ export default function PieceRegister() {
       linked = result.linked;
     }
 
-    return { assigned, linked, pieceCount: collectAppliedPieceIds(rows).length };
+    return {
+      assigned,
+      unchanged,
+      linked,
+      pieceCount: collectAppliedPieceIds(rows).length,
+      sheetHintCount: hints.length,
+      wpHintCount: countWpHints(rows),
+    };
   };
 
   const stageMutation = useMutation({
@@ -853,20 +886,18 @@ export default function PieceRegister() {
     mutationFn: () => finalizeImportedBatchHints(selectedBatch!.id),
     onSuccess: async (result) => {
       await invalidate();
-      if (result.assigned === 0 && result.linked === 0) {
-        toast.message(
-          "No work package or drawing sheet hints found for applied pieces.",
-        );
-        return;
-      }
-      const parts: string[] = [];
-      if (result.assigned > 0) {
-        parts.push(`${result.assigned} piece(s) assigned`);
-      }
-      if (result.linked > 0) {
-        parts.push(`${result.linked} drawing link(s)`);
-      }
-      toast.success(parts.join(" · "));
+      const target = importTargetWorkPackageId
+        ? (workPackagesQuery.data ?? []).find((wp) => wp.id === importTargetWorkPackageId) ?? null
+        : null;
+      const { tone, message } = describeImportAssignResult({
+        ...result,
+        targetLabel: target
+          ? formatWorkPackageTitle(target)
+          : importTargetWorkPackageId || null,
+      });
+      if (tone === "success") toast.success(message);
+      else if (tone === "warning") toast.warning(message);
+      else toast.message(message);
     },
     onError: (error: Error) =>
       toast.error(
@@ -1554,6 +1585,8 @@ export default function PieceRegister() {
             decisionTone={IMPORT_DECISION_TONE}
             assignPending={assignImportMutation.isPending}
             onAssignImport={() => assignImportMutation.mutate()}
+            appliedAssignment={appliedAssignment}
+            sheetHintCount={appliedSheetHintCount}
           />
         )}
       </div>
