@@ -37,7 +37,7 @@ const calcStyle = (val, ref) => ({
   color: Number(val) > Number(ref) && Number(ref) > 0 ? "var(--status-error)" : "var(--text-muted)"
 });
 
-export default function WPFormModal({ open, onClose, onSave, wp, projects = [], nextNumber, allDrawings = [], defaultProjectId = "" }) {
+export default function WPFormModal({ open, onClose, onSave, wp, projects = [], nextNumber, allDrawings = [], defaultProjectId = "", isSaving = false }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [linkedDrawingIds, setLinkedDrawingIds] = useState([]);
@@ -45,6 +45,9 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const [showSetDropdown, setShowSetDropdown] = useState(false);
 
   const activeProjectId = form.project_id || (wp && wp.project_id);
+  // Editing an existing package: the project is fixed. Moving a package
+  // between projects would orphan its pieces, releases and deliveries.
+  const projectLocked = Boolean(wp?.id);
   const { data: projectRfis = [] } = useQuery({
     queryKey: ["rfis", activeProjectId],
     queryFn: () => activeProjectId ? entities.RFI.filter({ project_id: activeProjectId }) : [],
@@ -58,28 +61,25 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     staleTime: 30_000,
     queryFn: async () => {
       const db = supabase;
-      const [{ data: project }, { data: pieces, error }] = await Promise.all([
-        db.from("projects").select("piece_control_mode").eq("id", activeProjectId).maybeSingle(),
-        db
-          .from("pieces")
-          .select("id, parent_piece_id, is_container, is_deleted, deleted_at")
-          .eq("project_id", activeProjectId)
-          .eq("work_package_id", wp.id)
-          .eq("is_deleted", false)
-          .is("deleted_at", null),
-      ]);
+      const { data: project } = await db
+        .from("projects")
+        .select("piece_control_mode")
+        .eq("id", activeProjectId)
+        .maybeSingle();
+      const mode = project?.piece_control_mode ?? "off";
+      // Only the leaf-lot *existence* matters here; a HEAD count avoids
+      // downloading every piece row on the package just to open the form.
+      if (mode === "off") return { mode, leafCount: 0 };
+      const { count, error } = await db
+        .from("pieces")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", activeProjectId)
+        .eq("work_package_id", wp.id)
+        .eq("is_deleted", false)
+        .is("deleted_at", null)
+        .or("is_container.is.null,is_container.eq.false");
       if (error) throw error;
-      const rows = pieces || [];
-      const parentIds = new Set(
-        rows.map((row) => row.parent_piece_id).filter(Boolean),
-      );
-      const leafCount = rows.filter(
-        (row) => !row.is_container && !parentIds.has(row.id),
-      ).length;
-      return {
-        mode: project?.piece_control_mode ?? "off",
-        leafCount,
-      };
+      return { mode, leafCount: count ?? 0 };
     },
   });
   const pieceDrivenProgress = isPieceDrivenWorkPackageProgress(
@@ -89,7 +89,12 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
 
   useEffect(() => {
     if (wp) {
-      setForm({ ...empty, ...wp });
+      // Null columns from the DB would render as "null" in inputs and warn
+      // about uncontrolled → controlled; coalesce to the empty defaults.
+      const clean = Object.fromEntries(
+        Object.entries(wp).filter(([, value]) => value !== null && value !== undefined),
+      );
+      setForm({ ...empty, ...clean });
       const drawingIds = (wp.linked_drawing_ids || "").split(",").map(s => s.trim()).filter(Boolean);
       setLinkedDrawingIds(drawingIds);
     } else {
@@ -107,20 +112,25 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const validate = () => {
     const e = {};
     if (!form.name?.trim()) e.name = "Required";
-    // Enforce workflow: Fabrication requires at least one approved linked drawing
-    if (form.phase === "Fabrication" && linkedDrawingIds.length === 0) {
+    if (!form.project_id) e.project_id = "Required";
+    // Fabrication with no linked sheets is a hard stop; sheets that are linked
+    // but not yet IFC only warn — Fab Release owns that gate and can release
+    // as an exception, so blocking here contradicted its own banner.
+    if (form.phase === "Fabrication" && linkedDrawingIds.length === 0 && !pieceDrivenProgress) {
       e.phase = "Cannot advance to Fabrication without linked drawings";
-    } else if (form.phase === "Fabrication" && !hasApprovedLinkedDrawings) {
-      e.phase = "Linked drawings must be approved (Released/IFC) before Fabrication";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
+  // Date columns must be null, not "", or PostgREST rejects the row.
+  const dateOrNull = (value) => (value ? value : null);
+
   const handleSave = () => {
+    if (isSaving) return;
     if (!validate()) return;
     // Strip read-only / server-generated fields before sending
-    const { id: _id, created_at: _ca, updated_at: _ua, created_date: _cd, updated_date: _ud, ...rest } = form;
+    const { id: _id, created_at: _ca, updated_at: _ua, created_date: _cd, updated_date: _ud, _signals: _sig, ...rest } = form;
     const data = {
       ...rest,
       linked_drawing_ids: linkedDrawingIds.join(","),
@@ -130,11 +140,17 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
       field_hours_budget: Number(form.field_hours_budget) || 0,
       field_hours_actual: Number(form.field_hours_actual) || 0,
       percent_complete: Math.min(100, Math.max(0, Number(form.percent_complete) || 0)),
+      released_date: dateOrNull(form.released_date),
+      scheduled_start_date: dateOrNull(form.scheduled_start_date),
+      scheduled_end_date: dateOrNull(form.scheduled_end_date),
+      vif_confirmed_date: dateOrNull(form.vif_confirmed_date),
     };
     if (pieceDrivenProgress) {
-      // Progress is written by refresh_work_package_progress from leaf pieces.
+      // Progress, status and phase are written by refresh_work_package_progress
+      // from leaf pieces; a hand edit would be reverted on the next piece event.
       delete data.percent_complete;
       delete data.status;
+      delete data.phase;
     }
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
@@ -161,12 +177,16 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     setLinkedDrawingIds((prev) => prev.filter((id) => !remove.has(id)));
   };
 
-  const projectDrawings = allDrawings.filter(d => !form.project_id || d.project_id === form.project_id);
+  const projectDrawings = useMemo(
+    () => allDrawings.filter(d => !form.project_id || d.project_id === form.project_id),
+    [allDrawings, form.project_id],
+  );
+  const drawingById = useMemo(() => new Map(allDrawings.map((d) => [d.id, d])), [allDrawings]);
 
-  // "Approved" = drawings past the BFA gate. In the corrected 7-stage flow
-  // (migration 077): OFS, IFC, Released. "Approved" string kept for any
-  // legacy submittal-shape data flowing through here.
-  const APPROVED_STAGES = ["Released", "IFC", "Issued for Construction", "OFS", "Approved", "Approved as Noted"];
+  // "Approved" = release-ready. Same direction as the Fab Release gate: IFC /
+  // Released only (OFS still has a submittal round open). "Approved" strings
+  // kept for legacy submittal-shape data flowing through here.
+  const APPROVED_STAGES = ["Released", "IFC", "Issued for Construction", "Approved", "Approved as Noted"];
 
   // Group the project's drawings into SETS — the assignable unit. Set identity
   // is the (required) drawing_set_name; ungrouped sheets fall under "Unassigned"
@@ -211,7 +231,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const linkedSetGroups = useMemo(() => {
     const map = new Map();
     for (const id of linkedDrawingIds) {
-      const d = allDrawings.find((dw) => dw.id === id);
+      const d = drawingById.get(id);
       const name = (d?.drawing_set_name || "").trim();
       const key = name.toLowerCase() || "__unassigned__";
       let g = map.get(key);
@@ -226,13 +246,13 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
       if (g) g.total = opt.drawings.length;
     }
     return sortDrawingSetPackages([...map.values()]);
-  }, [linkedDrawingIds, allDrawings, drawingSetOptions]);
+  }, [linkedDrawingIds, drawingById, drawingSetOptions]);
 
   const draftWarning = getDraftDrawingsWarning(linkedDrawingIds.join(","), allDrawings);
   const hasProjectSelected = !!form.project_id;
   const projectDrawingCount = projectDrawings.length;
   const hasApprovedLinkedDrawings = linkedDrawingIds.some(id => {
-    const d = allDrawings.find(dw => dw.id === id);
+    const d = drawingById.get(id);
     return d && APPROVED_STAGES.includes(d.stage || d.status);
   });
 
@@ -252,9 +272,14 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
       onClose={onClose}
       title={wp ? `Edit WP ${wp.wp_number || ""}` : "New Work Package"}
       footer={<>
-        <button style={btnSecondary} onClick={onClose}>Cancel</button>
-        <button style={btnPrimary} onClick={handleSave}>
-          {wp ? "Update" : "Create"}
+        <button type="button" style={btnSecondary} onClick={onClose} disabled={isSaving}>Cancel</button>
+        <button
+          type="button"
+          style={{ ...btnPrimary, opacity: isSaving ? 0.6 : 1, cursor: isSaving ? "wait" : "pointer" }}
+          onClick={handleSave}
+          disabled={isSaving}
+        >
+          {isSaving ? "Saving…" : wp?.id ? "Update" : "Create"}
         </button>
       </>}
     >
@@ -266,15 +291,17 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         <FormField label="WP Number">
           <input style={inputDisabledStyle} value={form.wp_number || nextNumber || ""} disabled readOnly />
         </FormField>
-        <FormField label="Project">
+        <FormField label="Project *" error={errors.project_id}>
           <select
-            style={selectStyle}
+            style={projectLocked ? inputDisabledStyle : selectStyle}
             value={form.project_id}
+            disabled={projectLocked}
+            title={projectLocked ? "A package cannot move between projects" : undefined}
             onChange={e => {
               set("project_id", e.target.value);
               setLinkedDrawingIds([]);
             }}>
-            <option value="">Select project (optional)</option>
+            <option value="">Select project</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </FormField>
@@ -302,7 +329,13 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           />
         </div>
         <FormField label="Phase" error={errors.phase}>
-          <select style={selectStyle} value={form.phase} onChange={e => set("phase", e.target.value)}>
+          <select
+            style={pieceDrivenProgress ? inputDisabledStyle : selectStyle}
+            value={form.phase}
+            disabled={pieceDrivenProgress}
+            title={pieceDrivenProgress ? "Phase follows the furthest piece on this package" : undefined}
+            onChange={e => set("phase", e.target.value)}
+          >
             {["Detailing", "Fabrication", "Delivery", "Erection"].map(o => <option key={o} value={o}>{o}</option>)}
           </select>
         </FormField>
@@ -319,21 +352,21 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         </FormField>
         {pieceDrivenProgress && (
           <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--info-muted)", border: "1px solid var(--info-border)", borderLeft: "3px solid var(--status-info)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-info)", letterSpacing: "0.08em" }}>
-            STATUS &amp; % COMPLETE ARE DRIVEN BY PIECE FABRICATION — assign pieces and advance stations in Piece Control.
+            PHASE, STATUS &amp; % COMPLETE ARE DRIVEN BY PIECE FABRICATION — assign pieces and advance stations in Piece Control.
           </div>
         )}
 
-        {form.phase === "Fabrication" && linkedDrawingIds.length === 0 && (
+        {form.phase === "Fabrication" && linkedDrawingIds.length === 0 && !pieceDrivenProgress && (
           <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderLeft: "3px solid var(--status-error)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-error)", letterSpacing: "0.08em" }}>
             ⊘ NO DRAWING SETS LINKED — Cannot advance to Fabrication without at least one linked drawing set. Link a set below first.
           </div>
         )}
         {form.phase === "Fabrication" && linkedDrawingIds.length > 0 && !hasApprovedLinkedDrawings && (
           <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.08em" }}>
-            ⚠ LINKED DRAWINGS NOT YET APPROVED — Fabrication should not begin until all linked drawings are Released/IFC. Proceeding will create a workflow flag.
+            ⚠ LINKED DRAWINGS NOT YET IFC — Fab Release gates the shop on this. Saving is allowed; the package will carry a "sheets not released" flag until the drawings clear or a release exception is recorded.
           </div>
         )}
-        {["Erection", "Installation"].includes(form.phase) && (
+        {form.phase === "Erection" && (
           <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--info-muted)", border: "1px solid var(--info-border)", borderLeft: "3px solid var(--status-info)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-info)", letterSpacing: "0.08em" }}>
             ⓘ ERECTION PHASE — Ensure material delivery is confirmed before field crews mobilize. Resources can be scheduled in advance of delivery.
           </div>
@@ -361,7 +394,13 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input style={inputStyle} value={form.crew} onChange={e => set("crew", e.target.value)} placeholder="Crew name or person..." />
         </FormField>
         <FormField label="Released Date">
-          <input type="date" style={inputStyle} value={form.released_date} onChange={e => set("released_date", e.target.value)} />
+          <input
+            type="date"
+            style={inputStyle}
+            value={form.released_date || ""}
+            onChange={e => set("released_date", e.target.value)}
+            title="Stamped automatically by a canonical Fab Release; set by hand only for packages released outside Piece Control"
+          />
         </FormField>
 
         {/* Scheduling window — drives placement on the Resource Scheduling
@@ -527,7 +566,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input style={inputStyle} value={form.vif_confirmed_by} onChange={e => set("vif_confirmed_by", e.target.value)} placeholder="Name or email..." disabled={!form.vif_confirmed} />
         </FormField>
         <FormField label="VIF Confirmed Date">
-          <input type="date" style={inputStyle} value={form.vif_confirmed_date} onChange={e => set("vif_confirmed_date", e.target.value)} disabled={!form.vif_confirmed} />
+          <input type="date" style={inputStyle} value={form.vif_confirmed_date || ""} onChange={e => set("vif_confirmed_date", e.target.value)} disabled={!form.vif_confirmed} />
         </FormField>
         <FormField label="Load List Complete">
           <input type="checkbox" checked={form.load_list_complete} onChange={e => set("load_list_complete", e.target.checked)} style={{ cursor: "pointer", width: 16, height: 16 }} />

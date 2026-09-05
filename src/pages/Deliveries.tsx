@@ -80,7 +80,9 @@ export default function Deliveries() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [scheduleFilter, setScheduleFilter] = useState("all");
   const [riskFilter, setRiskFilter] = useState("all");
-  const [search, setSearch] = useState("");
+  // `?wp=WP-014` from the Work Package Control Center pre-fills the search so
+  // the loads for that package are the first thing on screen.
+  const [search, setSearch] = useState(() => searchParams.get("wp")?.trim() || "");
   const [seqFilter, setSeqFilter] = useState<unknown>(null);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);

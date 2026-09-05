@@ -19,11 +19,11 @@ import {
   CheckSquare,
   Timer,
   AlertTriangle,
-  BookOpen,
   PauseCircle,
   Download,
   Plus,
   Upload,
+  ShieldCheck,
 } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -42,11 +42,8 @@ import { ControlPanel } from "./components";
 import { RESPONSIVE_CSS, contentGridStyle, pageStyle } from "./styles";
 
 // ---------------------------------------------------------------------------
-// Constants
+// Helpers
 // ---------------------------------------------------------------------------
-
-const PHASES = ["All", "Detailing", "Fabrication", "Delivery", "Erection"];
-const STATUSES = ["All", "Not Started", "In Progress", "Complete", "On Hold"];
 
 /** Map phase name to the phase's next step label (for "Ready to Advance" panel). */
 function nextPhase(phase: string): string {
@@ -103,6 +100,8 @@ export interface WpControlCenterProps {
   percentComplete?: number | null;
   sequenceFilter?: ReactNode;
   exceptionPanel?: ReactNode;
+  /** Project-level notice (on-hold project, stale phases, …) under the hero. */
+  banner?: ReactNode;
   listTruncationNotice?: ReactNode;
   bulkActions?: ReactNode;
   modals?: ReactNode;
@@ -143,6 +142,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
     percentComplete,
     sequenceFilter,
     exceptionPanel,
+    banner,
     listTruncationNotice,
     bulkActions,
     modals,
@@ -154,18 +154,31 @@ export default function WpControlCenter(props: WpControlCenterProps) {
 
   const panels = useMemo(() => buildWpPanels(metrics), [metrics]);
 
-  // Hero
+  // Hero — say how the headline progress was weighted. 36 of 81 production
+  // packages carry no tonnage, so "weighted progress" silently ignored them.
+  const tonnageMissing = metrics.tonnageMissingCount ?? 0;
+  const progressLabel = metrics.progressMethod === "count"
+    ? "Avg Progress (no tonnage)"
+    : metrics.progressMethod === "partial-tonnage"
+      ? `Ton-Weighted (${tonnageMissing} w/o tons)`
+      : "Ton-Weighted Progress";
   const heroStats = [
-    { value: formatTons(metrics.totalTons), label: "Total Tonnage" },
-    { value: `${metrics.progress}%`, label: "Weighted Progress" },
+    {
+      value: formatTons(metrics.totalTons),
+      label: tonnageMissing ? `Tonnage (${tonnageMissing} pkg missing)` : "Total Tonnage",
+    },
+    { value: `${metrics.progress}%`, label: progressLabel },
   ];
+  const releasedCount = metrics.released?.length ?? 0;
+  const exceptionCount = metrics.exceptionReleases?.length ?? 0;
   const heroChips = [
     { label: `${metrics.totalCount} Packages` },
     { label: `${metrics.highRisk.length} Exceptions`, tone: "danger" as const },
     { label: `${metrics.overdue.length} Overdue`, tone: "warn" as const },
+    { label: `${releasedCount} Released`, tone: releasedCount ? "good" as const : "neutral" as const },
   ];
 
-  // KPI strip — 7 cells
+  // KPI strip — 8 cells
   const laborBurnTone = metrics.laborBurn > 100 ? "danger" as const : "neutral" as const;
   const kpiCells: KpiCellDef[] = [
     {
@@ -202,16 +215,18 @@ export default function WpControlCenter(props: WpControlCenterProps) {
     {
       label: "Labor Burn",
       value: `${metrics.laborBurn}%`,
-      sublabel: "actual vs budget",
+      sublabel: `${formatHours(metrics.totalActualHours)} / ${formatHours(metrics.totalBudgetHours)}`,
       tone: laborBurnTone,
       Icon: Timer,
     },
     {
-      label: "Budget Hours",
-      value: formatHours(metrics.totalBudgetHours),
-      sublabel: `${formatHours(metrics.totalActualHours)} actual`,
-      tone: "neutral",
-      Icon: BookOpen,
+      // What Fab Release recorded — the strip had no release figure, so a
+      // package released as an exception still read "drawings not released".
+      label: "Released",
+      value: releasedCount,
+      sublabel: exceptionCount ? `${exceptionCount} exception` : "fab releases",
+      tone: exceptionCount ? "warn" : releasedCount ? "good" : "neutral",
+      Icon: ShieldCheck,
     },
     {
       label: "Drawing Gaps",
@@ -235,6 +250,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
     <div className="wp-cc sb-dashboard-reference-page" style={pageStyle}>
       <style>{RESPONSIVE_CSS}</style>
       {listTruncationNotice}
+      {banner}
       {/* ------------------------------------------------------------------ */}
       {/* HERO                                                                 */}
       {/* ------------------------------------------------------------------ */}
@@ -412,7 +428,10 @@ export default function WpControlCenter(props: WpControlCenterProps) {
               <div
                 className="cmd-row is-clickable"
                 key={w.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onOpenWp(w)}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenWp(w); } }}
               >
                 <div>
                   <div className="cmd-row__num">{w.wp_number || "WP"}</div>
@@ -440,7 +459,10 @@ export default function WpControlCenter(props: WpControlCenterProps) {
             <div
               className="cmd-row is-clickable"
               key={w.id}
+              role="button"
+              tabIndex={0}
               onClick={() => onOpenWp(w)}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenWp(w); } }}
             >
               <div>
                 <div className="cmd-row__num">{w.wp_number || "WP"}</div>
@@ -459,12 +481,21 @@ export default function WpControlCenter(props: WpControlCenterProps) {
         </DecisionPanel>
 
         {/* At Risk — over labor budget or overdue */}
-        <DecisionPanel title="At Risk" onViewAll={() => scrollToBody(bodyRef.current)}>
+        <DecisionPanel
+          title="At Risk"
+          onViewAll={() => {
+            onRiskFilter("overdue");
+            scrollToBody(bodyRef.current);
+          }}
+        >
           {panels.atRisk.map((w) => (
             <div
               className="cmd-row is-clickable"
               key={w.id}
+              role="button"
+              tabIndex={0}
               onClick={() => onOpenWp(w)}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenWp(w); } }}
             >
               <div>
                 <div className="cmd-row__num">{w.wp_number || "WP"}</div>

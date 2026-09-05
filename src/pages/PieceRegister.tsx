@@ -264,6 +264,22 @@ export default function PieceRegister() {
     [setPieceRegisterLocation],
   );
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+  // `?wp=<work_package_id>` from the Work Package Control Center: open the
+  // register already scoped to that package, then drop the one-shot param so
+  // clearing the filter does not re-apply it on the next render.
+  useEffect(() => {
+    const wpParam = searchParams.get("wp")?.trim();
+    if (!wpParam) return;
+    setFilters({ ...EMPTY_FILTERS, workPackageId: wpParam });
+    setSearchParams(
+      (current) => {
+        const next = writePieceRegisterLocation(current, { view: "register" });
+        next.delete("wp");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [searchParams, setSearchParams]);
   const [sourceType, setSourceType] = useState<PieceImportSourceType>("csv");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importRows, setImportRows] = useState<ImportPayload[]>([]);

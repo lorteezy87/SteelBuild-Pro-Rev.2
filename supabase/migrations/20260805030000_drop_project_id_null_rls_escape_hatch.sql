@@ -1,6 +1,6 @@
 -- Re-homed from migrations_archive (2026-05-25 F-1) so new/staging
 -- environments receive the same remediations already applied on prod.
--- Safe to re-run: DROP POLICY IF EXISTS / REVOKE are idempotent.
+-- Safe to re-run: DROP POLICY IF EXISTS is idempotent.
 
 -- Security remediation F-1: remove the `project_id IS NULL` escape hatch.
 --
@@ -12,10 +12,17 @@
 -- such rows today, so this is a latent fail-open pattern (and an INSERT path that
 -- let any member create cross-tenant-visible rows), not active exposure.
 --
--- Fix: regenerate the policy using the canonical user_has_project_access(project_id)
--- helper (already used by the sibling project_select/update/delete policies on these
--- tables), which is a clean membership EXISTS check that fails closed on NULL.
--- Roles (authenticated) and command (ALL) are preserved exactly.
+-- 2026-09-05 (Work Package Control Center audit, §4): the original version of
+-- this file re-created `project_member_access FOR ALL TO authenticated USING
+-- (user_has_project_access(project_id))` on every table below. That policy is
+-- membership-only — no role check — so on any environment that applied it, a
+-- *viewer* could UPDATE and DELETE work packages, RFIs, change orders, … in
+-- OR with the per-role `project_select/insert/update/delete` policies that
+-- carry the field/PM floors. Production never ran this file (verified: the
+-- work_packages policy set is the four per-role policies only), so this is
+-- now DROP-only: it removes the escape hatch and leaves the per-role
+-- policies, which already exist on every listed table, as the sole access
+-- path.
 
 DO $$
 DECLARE t text;
@@ -30,13 +37,9 @@ DECLARE t text;
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
-    EXECUTE format('DROP POLICY IF EXISTS project_member_access ON public.%I;', t);
-    EXECUTE format($f$
-      CREATE POLICY project_member_access ON public.%I
-        FOR ALL TO authenticated
-        USING (user_has_project_access(project_id))
-        WITH CHECK (user_has_project_access(project_id));
-    $f$, t);
+    IF to_regclass('public.' || t) IS NOT NULL THEN
+      EXECUTE format('DROP POLICY IF EXISTS project_member_access ON public.%I;', t);
+    END IF;
   END LOOP;
 END $$;
 

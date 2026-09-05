@@ -62,7 +62,35 @@ export interface EnrichedWp {
       approvedCount: number;
       hasAny: boolean;
       hasApproved: boolean;
+      fabReadyCount?: number;
+      blockedCount?: number;
     };
+    /** Canonical inputs (present once the page joins pieces + releases). */
+    pieceDriven?: boolean;
+    storedPhase?: string | null;
+    derivedPhase?: string;
+    phaseMismatch?: boolean;
+    released?: boolean;
+    release?: {
+      id: string;
+      releaseNumber: string | null;
+      released: boolean;
+      isException: boolean;
+      weightTons: number | null;
+      releaseDate: string | null;
+      count: number;
+    } | null;
+    pieces?: {
+      leafCount: number;
+      onHold: number;
+      notStarted: number;
+      released: number;
+      inFabrication: number;
+      fabricated: number;
+      shipped: number;
+      delivered: number;
+      erected: number;
+    } | null;
   };
   [key: string]: unknown;
 }
@@ -99,6 +127,13 @@ export interface WpMetrics {
   blockedSheetCount: number;
   readyForShip: EnrichedWp[];
   fieldReady: EnrichedWp[];
+  /** Packages with a live Fab Release row in released state. */
+  released?: EnrichedWp[];
+  exceptionReleases?: EnrichedWp[];
+  pieceDrivenCount?: number;
+  phaseMismatches?: EnrichedWp[];
+  tonnageMissingCount?: number;
+  progressMethod?: "tonnage" | "partial-tonnage" | "count";
 }
 
 export interface WpPanels {

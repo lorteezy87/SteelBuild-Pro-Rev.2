@@ -5,13 +5,21 @@
  * This page owns data access and mutations. Presentation is organized
  * around real execution questions: what is ready, what is blocked, what
  * is slipping, and what needs a human update next.
+ *
+ * Truth alignment: rows are joined with the live Fab Release row and the
+ * piece rollup for each package, so a package released as an exception no
+ * longer reads "drawings not released", and a piece-driven package sits in
+ * the phase its pieces put it in rather than the hand-typed column.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { PauseCircle } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
@@ -32,16 +40,30 @@ import WPBulkAddModalRaw from "@/components/workpackages/WPBulkAddModal";
 import { getNextNumber } from "@/components/shared/numberSequencing";
 import { withProjectId } from "@/lib/mutations/standardMutation";
 import { batchProcess } from "@/utils/batchProcess";
+import { createPageUrl } from "@/utils";
+import { fetchAllProjectRowsPaged } from "@/lib/pieceControl/pagedSelect";
 import { BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
 import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { exportWorkPackagesCSV } from "./workPackages/utils";
 import { prepareBulkWorkPackageRows } from "./workPackages/creation";
-import { buildWorkPackageMetrics, sortWorkPackagesForExecution } from "./workPackages/analytics";
+import {
+  buildWorkPackageMetrics,
+  compareForRegisterSort,
+  matchesFocusFilter,
+  sortWorkPackagesForExecution,
+} from "./workPackages/analytics";
+import {
+  indexReleasesByWorkPackage,
+  summarizePiecesByWorkPackage,
+  type CanonicalPieceRow,
+  type ReleaseRow,
+} from "./workPackages/canonical";
 import {
   ExceptionPanel,
   PhaseFlowView,
   RegisterView,
   StatusBoardView,
+  type RegisterSort,
 } from "./workPackages/components";
 import type { WorkPackage } from "./workPackages/types";
 import WpControlCenter from "./workPackages/WpControlCenter";
@@ -61,9 +83,24 @@ const WPBulkAddModal = WPBulkAddModalRaw as unknown as ComponentType<AnyProps>;
 const WPFormModal = WPFormModalRaw as unknown as ComponentType<AnyProps>;
 const WorkPackageDetailModal = WorkPackageDetailModalRaw as unknown as ComponentType<AnyProps>;
 
+/** Sibling pages the drawer and rows link out to. */
+export type WorkPackageNavTarget = "fab_release" | "piece_register" | "drawings" | "deliveries";
+
+interface ProjectRow {
+  id?: string;
+  name?: string;
+  on_hold?: boolean | null;
+  health_status?: string | null;
+  piece_control_mode?: string | null;
+  scope_complete_pct_override?: number | null;
+  [key: string]: unknown;
+}
+
 export default function WorkPackages() {
   const projectId = useProjectId();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { can } = usePermissions();
 
   const [view, setView] = useState("flow");
@@ -72,10 +109,13 @@ export default function WorkPackages() {
   const [riskFilter, setRiskFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [seqFilter, setSeqFilter] = useState<unknown>(null);
+  const [registerSort, setRegisterSort] = useState<RegisterSort>({ key: null, direction: "asc" });
   const [editingWP, setEditingWP] = useState<WorkPackage | null>(null);
   const [wpModalOpen, setWPModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WorkPackage | null>(null);
-  const [detailWP, setDetailWP] = useState<WorkPackage | null>(null);
+  // The drawer holds an id, not a row snapshot, so a status change or a
+  // realtime refetch is visible without closing and reopening it.
+  const [detailWPId, setDetailWPId] = useState<string | null>(null);
   const [selectedWPs, setSelectedWPs] = useState<Set<string>>(new Set());
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [allocatingNumber, setAllocatingNumber] = useState(false);
@@ -96,8 +136,9 @@ export default function WorkPackages() {
   });
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
-  const selectedProject = projects.find((p) => p.id === projectId) || null;
+  const selectedProject = (projects.find((p) => p.id === projectId) || null) as ProjectRow | null;
   const effectiveProjectId = selectedProject?.id || null;
+  const pieceControlMode = String(selectedProject?.piece_control_mode ?? "off");
   const workPackages = useMemo(
     () => projectId
       ? (selectedProject ? rawWorkPackages : [])
@@ -108,7 +149,14 @@ export default function WorkPackages() {
   const { data: drawings = [] } = useQuery({
     queryKey: ["drawings", projectId],
     queryFn: async () => {
-      if (projectId) return entities.Drawing.filter({ project_id: projectId });
+      // Paged: the entity client caps a list at 2,000 rows, and a project
+      // drawing log can pass that, which would silently blank readiness.
+      if (projectId) {
+        return fetchAllProjectRowsPaged<Record<string, unknown>>(supabase, "drawings", projectId, {
+          orderBy: "sheet_number",
+          build: (query) => query.eq("is_deleted", false).is("deleted_at", null),
+        });
+      }
       return entities.Drawing.list();
     },
     staleTime: 30 * 1000,
@@ -123,9 +171,39 @@ export default function WorkPackages() {
     staleTime: 30 * 1000,
   });
 
+  // What Fab Release recorded for each package (live rows only).
+  const { data: fabReleases = [] } = useQuery({
+    queryKey: ["wp-fab-releases", projectId],
+    queryFn: () => projectId
+      ? fetchAllProjectRowsPaged<ReleaseRow>(supabase, "fab_releases", projectId, {
+        select: "id, project_id, work_package_id, status, is_exception, canonical_release, weight_tons, release_date, released_at, release_number, is_deleted",
+        orderBy: "release_date",
+        build: (query) => query.eq("is_deleted", false).not("work_package_id", "is", null),
+      })
+      : [],
+    enabled: !!projectId,
+    staleTime: 30 * 1000,
+  });
+
+  // Leaf-lot counts per package; only read when piece control is on.
+  const piecesEnabled = !!projectId && pieceControlMode !== "off";
+  const { data: pieces = [] } = useQuery({
+    queryKey: ["wp-piece-counts", projectId],
+    queryFn: () => projectId
+      ? fetchAllProjectRowsPaged<CanonicalPieceRow>(supabase, "pieces", projectId, {
+        select: "id, work_package_id, parent_piece_id, is_container, lifecycle_status, on_hold, is_deleted, deleted_at",
+        build: (query) => query.eq("is_deleted", false).is("deleted_at", null).not("work_package_id", "is", null),
+      })
+      : [],
+    enabled: piecesEnabled,
+    staleTime: 30 * 1000,
+  });
+
   const wpQueryKeys = [["work-packages", projectId], ["work-packages"], ["wps-all"]];
 
   useRealtimeInvalidation("work_packages", projectId, wpQueryKeys);
+  useRealtimeInvalidation("fab_releases", projectId, [["wp-fab-releases", projectId]]);
+  useRealtimeInvalidation("pieces", piecesEnabled ? projectId : null, [["wp-piece-counts", projectId]]);
 
   const invalidateWps = () => {
     qc.invalidateQueries({ queryKey: ["work-packages"] });
@@ -173,6 +251,7 @@ export default function WorkPackages() {
       removeRecordFromCaches(qc, wpQueryKeys, deletedId);
       invalidateWps();
       setDeleteTarget(null);
+      setDetailWPId((current) => (current === deletedId ? null : current));
       toast.success("Work package deleted");
     },
     onError: (err) => toastCrudError(err, "Failed to delete work package"),
@@ -220,18 +299,33 @@ export default function WorkPackages() {
     onError: (err) => toastCrudError(err, "Bulk update failed"),
   });
 
+  // Single-row status change from the drawer (hold / resume / complete).
+  const quickStatusMut = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => entities.WorkPackage.update(id, { status }),
+    onSuccess: async (updated, { status }) => {
+      replaceRecordInCaches(qc, wpQueryKeys, updated);
+      invalidateWps();
+      toast.success(`Marked ${status}`);
+      await invalidateCrudQueries(qc, wpQueryKeys);
+    },
+    onError: (err) => toastCrudError(err, "Failed to update status"),
+  });
+
+  const releasesByWp = useMemo(() => indexReleasesByWorkPackage(fabReleases), [fabReleases]);
+  const piecesByWp = useMemo(() => summarizePiecesByWorkPackage(pieces), [pieces]);
+
   const metrics = useMemo(
-    () => buildWorkPackageMetrics(workPackages, drawings, projectDeliveries),
-    [workPackages, drawings, projectDeliveries]
+    () => buildWorkPackageMetrics(workPackages, drawings, projectDeliveries, { releasesByWp, piecesByWp, pieceControlMode }),
+    [workPackages, drawings, projectDeliveries, releasesByWp, piecesByWp, pieceControlMode]
   );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return metrics.enriched
+    const rows = metrics.enriched
       .filter((wp) => {
         if (phaseFilter !== "all" && wp._signals.phase !== phaseFilter) return false;
         if (statusFilter !== "all" && wp._signals.status !== statusFilter) return false;
-        if (riskFilter !== "all" && wp._signals.risk !== riskFilter) return false;
+        if (!matchesFocusFilter(wp, riskFilter, metrics)) return false;
         if (!matchesSequenceFilter(wp, seqFilter)) return false;
         if (!q) return true;
         return [
@@ -239,17 +333,36 @@ export default function WorkPackages() {
           wp.name,
           wp.project_name,
           wp.crew,
+          wp.area,
+          wp.sequence_number,
+          wp.trade_phase,
+          wp.shipping_phase,
+          wp.install_phase,
           wp.phase,
           wp.status,
           wp.notes,
+          wp._signals.release?.releaseNumber,
         ].some((value) => String(value || "").toLowerCase().includes(q));
-      })
-      .sort(sortWorkPackagesForExecution);
-  }, [metrics.enriched, phaseFilter, statusFilter, riskFilter, seqFilter, search]);
+      });
+    if (view === "register" && registerSort.key) {
+      return rows.sort((a, b) => compareForRegisterSort(a, b, registerSort.key, registerSort.direction));
+    }
+    return rows.sort(sortWorkPackagesForExecution);
+  }, [metrics, phaseFilter, statusFilter, riskFilter, seqFilter, search, view, registerSort]);
 
   const selectedRows = useMemo(
     () => filtered.filter((wp) => selectedWPs.has(wp.id)),
     [filtered, selectedWPs]
+  );
+  // Piece-driven packages get status from the piece rollup; a bulk "Set
+  // Complete" there is silently reverted by the next piece event.
+  const pieceDrivenSelected = useMemo(
+    () => selectedRows.filter((wp) => wp._signals.pieceDriven),
+    [selectedRows]
+  );
+  const manualSelectedIds = useMemo(
+    () => selectedRows.filter((wp) => !wp._signals.pieceDriven).map((wp) => wp.id as string),
+    [selectedRows]
   );
 
   useEffect(() => {
@@ -259,13 +372,44 @@ export default function WorkPackages() {
     });
   }, [filtered]);
 
+  // Inbound deep link: `?id=<uuid>` (Alerts Center, Fab Release) or
+  // `?wp=WP-014` (typed / shared). Opens the drawer once rows are loaded,
+  // then strips the param so closing the drawer sticks.
+  useEffect(() => {
+    if (wpLoading) return;
+    const idParam = searchParams.get("id")?.trim();
+    const numberParam = searchParams.get("wp")?.trim();
+    if (!idParam && !numberParam) return;
+    // Rows are gated on the project list; do not judge "not found" (and drop
+    // the param) before the project record has arrived.
+    if (projectId && !selectedProject) return;
+    const match = workPackages.find((wp) =>
+      (idParam && wp.id === idParam) ||
+      (numberParam && String(wp.wp_number || "").trim().toLowerCase() === numberParam.toLowerCase())
+    );
+    if (match) {
+      setDetailWPId(match.id);
+    } else if (rawWorkPackages.length > 0 || !projectId) {
+      toast.error(`Work package ${idParam || numberParam} was not found in this project.`);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("id");
+    next.delete("wp");
+    setSearchParams(next, { replace: true });
+  }, [wpLoading, workPackages, rawWorkPackages.length, projectId, selectedProject, searchParams, setSearchParams]);
+
+  const detailWP = useMemo(
+    () => (detailWPId ? metrics.enriched.find((wp) => wp.id === detailWPId) || null : null),
+    [detailWPId, metrics.enriched]
+  );
+
   const projectName = selectedProject?.name || (projectId ? "No active project" : "All Projects");
 
   // Project-level context for the canonical execution shell.
-  const projectHealth = (selectedProject as unknown as { health_status?: string | null })?.health_status ?? null;
+  const projectHealth = selectedProject?.health_status ?? null;
   const percentComplete =
-    (selectedProject as unknown as { scope_complete_pct_override?: number | null })?.scope_complete_pct_override != null
-      ? Number((selectedProject as unknown as { scope_complete_pct_override: number }).scope_complete_pct_override)
+    selectedProject?.scope_complete_pct_override != null
+      ? Number(selectedProject.scope_complete_pct_override)
       : (workPackages.length ? calcWpProgress(workPackages).pct : null);
 
   const toggleSelect = (id: string) =>
@@ -304,6 +448,41 @@ export default function WorkPackages() {
 
   useAutoOpenCreate(handleWPCreate, { enabled: !!effectiveProjectId });
 
+  /** Outbound links carry the project so the sibling page lands scoped. */
+  const navigateFromWp = useCallback((target: WorkPackageNavTarget, wp: WorkPackage) => {
+    const params = new URLSearchParams();
+    if (wp.project_id) params.set("project", String(wp.project_id));
+    let page = "";
+    switch (target) {
+      case "fab_release":
+        page = "FabRelease";
+        params.set("view", "register");
+        if (wp.wp_number) params.set("search", String(wp.wp_number));
+        break;
+      case "piece_register":
+        page = "PieceRegister";
+        if (wp.id) params.set("wp", String(wp.id));
+        break;
+      case "drawings":
+        page = "Drawings";
+        break;
+      case "deliveries":
+        page = "Deliveries";
+        if (wp.wp_number) params.set("wp", String(wp.wp_number));
+        break;
+      default:
+        return;
+    }
+    navigate(`${createPageUrl(page)}?${params.toString()}`);
+  }, [navigate]);
+
+  const handleRegisterSort = (key: string) =>
+    setRegisterSort((current) =>
+      current.key === key
+        ? (current.direction === "asc" ? { key, direction: "desc" } : { key: null, direction: "asc" })
+        : { key, direction: "asc" }
+    );
+
   if (wpLoading) {
     return (
       <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
@@ -312,9 +491,51 @@ export default function WorkPackages() {
     );
   }
 
+  const isSaving = createWPMut.isPending || updateWPMut.isPending;
   const canCreate = !!effectiveProjectId && can("create", "work_package") && !allocatingNumber;
   const canEdit = can("edit", "work_package");
   const canDelete = can("delete", "work_package");
+
+  const projectBanner = (selectedProject?.on_hold || (metrics.phaseMismatches?.length ?? 0) > 0) ? (
+    <div style={{ display: "grid", gap: 8, padding: "0 24px" }}>
+      {selectedProject?.on_hold && (
+        <div
+          role="status"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid var(--warning-border)",
+            background: "var(--warning-muted)",
+            color: "var(--status-warning)",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          <PauseCircle size={16} />
+          <span>{projectName} is on hold. Package status updates and releases here should wait for the hold to lift.</span>
+        </div>
+      )}
+      {(metrics.phaseMismatches?.length ?? 0) > 0 && (
+        <div
+          role="status"
+          style={{
+            padding: "8px 14px",
+            borderRadius: 10,
+            border: "1px solid var(--info-border)",
+            background: "var(--info-muted)",
+            color: "var(--status-info)",
+            fontSize: 12,
+          }}
+        >
+          {metrics.phaseMismatches!.length} package{metrics.phaseMismatches!.length === 1 ? "" : "s"} show a phase derived from piece status
+          (marked *) that differs from the stored phase. The next piece event rewrites the stored value.
+        </div>
+      )}
+    </div>
+  ) : null;
 
   const wpModals = (
     <>
@@ -342,6 +563,7 @@ export default function WorkPackages() {
           nextNumber={editingWP?.wp_number || ""}
           allDrawings={drawings}
           defaultProjectId={effectiveProjectId || ""}
+          isSaving={isSaving}
         />
       )}
 
@@ -349,8 +571,14 @@ export default function WorkPackages() {
         <WorkPackageDetailModal
           wp={detailWP}
           drawings={drawings}
-          onClose={() => setDetailWP(null)}
-          onEdit={(wp: WorkPackage) => { setDetailWP(null); handleWPEdit(wp); }}
+          onClose={() => setDetailWPId(null)}
+          onEdit={canEdit ? (wp: WorkPackage) => { setDetailWPId(null); handleWPEdit(wp); } : null}
+          onDelete={canDelete ? (wp: WorkPackage) => setDeleteTarget(wp) : null}
+          onSetStatus={canEdit && !detailWP._signals.pieceDriven
+            ? (wp: WorkPackage, status: string) => { if (wp.id) quickStatusMut.mutate({ id: wp.id, status }); }
+            : null}
+          statusPending={quickStatusMut.isPending}
+          onNavigate={navigateFromWp}
         />
       )}
 
@@ -359,28 +587,47 @@ export default function WorkPackages() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => { if (deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }}
         title="Delete Work Package"
-        description={`Delete "${deleteTarget?.name}" (${deleteTarget?.wp_number})? This cannot be undone.`}
+        description={`Delete "${deleteTarget?.name}" (${deleteTarget?.wp_number})? Assigned pieces are unassigned. This cannot be undone.`}
       />
     </>
   );
+
+  const runBulkStatus = (status: string) => {
+    if (manualSelectedIds.length === 0) {
+      toast.info("Selected packages take status from their pieces. Advance them in Piece Control.");
+      return;
+    }
+    if (pieceDrivenSelected.length > 0) {
+      toast.info(`${pieceDrivenSelected.length} piece-driven package${pieceDrivenSelected.length === 1 ? "" : "s"} skipped; status comes from pieces.`);
+    }
+    bulkStatusMut.mutate({ ids: manualSelectedIds, status });
+  };
 
   const bulkActions = (
     <BulkActionBar
       count={selectedWPs.size}
       onClear={() => setSelectedWPs(new Set())}
       actions={[
-        {
-          label: "SET COMPLETE",
-          icon: "check",
-          onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "Complete" }),
-          disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
-        },
-        {
-          label: "SET IN PROGRESS",
-          icon: "arrow",
-          onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "In Progress" }),
-          disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
-        },
+        ...(canEdit ? [
+          {
+            label: manualSelectedIds.length < selectedRows.length ? `SET COMPLETE (${manualSelectedIds.length})` : "SET COMPLETE",
+            icon: "check",
+            onClick: () => runBulkStatus("Complete"),
+            disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+          },
+          {
+            label: manualSelectedIds.length < selectedRows.length ? `SET IN PROGRESS (${manualSelectedIds.length})` : "SET IN PROGRESS",
+            icon: "arrow",
+            onClick: () => runBulkStatus("In Progress"),
+            disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+          },
+          {
+            label: "SET ON HOLD",
+            icon: "pause",
+            onClick: () => runBulkStatus("On Hold"),
+            disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+          },
+        ] : []),
         {
           label: "EXPORT",
           icon: "download",
@@ -416,7 +663,7 @@ export default function WorkPackages() {
       }}
       filteredCount={filtered.length}
       totalCount={metrics.totalCount}
-      onOpenWp={setDetailWP as unknown as Parameters<typeof WpControlCenter>[0]["onOpenWp"]}
+      onOpenWp={(wp) => setDetailWPId(wp.id)}
       onExport={() => exportWorkPackagesCSV(filtered)}
       onBulkAdd={() => setBulkAddOpen(true)}
       onCreate={canCreate ? handleWPCreate : null}
@@ -428,14 +675,14 @@ export default function WorkPackages() {
       }
       projectHealth={projectHealth}
       percentComplete={percentComplete}
+      banner={projectBanner}
       sequenceFilter={<SequenceFilter items={workPackages} value={seqFilter} onChange={setSeqFilter} />}
       exceptionPanel={
         <ExceptionPanel
           metrics={metrics}
           onRiskFilter={setRiskFilter}
           onStatusFilter={setStatusFilter}
-          onPhaseFilter={setPhaseFilter}
-          onOpen={setDetailWP}
+          onOpen={(wp) => setDetailWPId(wp.id ?? null)}
         />
       }
       listTruncationNotice={<ListTruncationNotice count={rawWorkPackages.length} label="work packages" />}
@@ -447,7 +694,7 @@ export default function WorkPackages() {
           <PhaseFlowView
             rows={filtered}
             phaseRollup={metrics.phaseRollup}
-            onOpen={setDetailWP}
+            onOpen={(wp) => setDetailWPId(wp.id ?? null)}
             onEdit={canEdit ? handleWPEdit : null}
             onDelete={canDelete ? setDeleteTarget : null}
             selectedWPs={selectedWPs}
@@ -458,9 +705,11 @@ export default function WorkPackages() {
         {view === "board" && (
           <StatusBoardView
             rows={filtered}
-            onOpen={setDetailWP}
+            onOpen={(wp) => setDetailWPId(wp.id ?? null)}
             onEdit={canEdit ? handleWPEdit : null}
             onDelete={canDelete ? setDeleteTarget : null}
+            selectedWPs={selectedWPs}
+            onToggleSelect={toggleSelect}
           />
         )}
 
@@ -469,9 +718,11 @@ export default function WorkPackages() {
             rows={filtered}
             selectedWPs={selectedWPs}
             onToggleSelect={toggleSelect}
-            onOpen={setDetailWP}
+            onOpen={(wp) => setDetailWPId(wp.id ?? null)}
             onEdit={canEdit ? handleWPEdit : null}
             onDelete={canDelete ? setDeleteTarget : null}
+            sort={registerSort}
+            onSort={handleRegisterSort}
           />
         )}
       </main>
