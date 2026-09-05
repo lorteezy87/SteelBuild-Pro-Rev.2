@@ -66,6 +66,62 @@ export function describePersistFailure(step: PersistStep, err: unknown): string 
   }
 }
 
+export interface RosterDiagnostics {
+  schema?: string;
+  partsFound: number;
+  partsByType: Record<string, number>;
+  otherTypes: Record<string, number>;
+  relCount: number;
+  relsTouchingParts: number;
+  propertySets: Array<{ name: string; count: number }>;
+  propertyKeys: Array<{ name: string; count: number }>;
+  markedFromTag: number;
+  skipped: { noGuid: number; noMark: number; duplicateGuid: number; unreadable: number };
+}
+
+const fmtCounts = (rec: Record<string, number>, max = 5): string =>
+  Object.entries(rec)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+    .map(([k, n]) => `${n.toLocaleString()} ${k}`)
+    .join(", ");
+
+/**
+ * Say precisely why an IFC produced no roster rows, from what the extractor
+ * saw, so the fix (re-export settings, property-set config) is obvious to the
+ * detailer instead of a generic "reference/proxy export" guess.
+ */
+export function describeEmptyRoster(d: RosterDiagnostics | null | undefined): string {
+  if (!d) {
+    return "No structural members found in this IFC. Re-export from your detailer with beams, columns, plates and members, then load it again.";
+  }
+  const schema = d.schema ? ` (${d.schema})` : "";
+  if (d.partsFound === 0) {
+    const others = fmtCounts(d.otherTypes);
+    return (
+      `No beams, columns, plates, members or proxies in this IFC${schema}` +
+      (others ? `; it contains ${others}.` : "; it contains no structural elements at all.") +
+      " Re-export from your detailer with parts as IfcBeam / IfcColumn / IfcPlate / IfcMember, then load it again."
+    );
+  }
+  const found = fmtCounts(d.partsByType);
+  if (d.relsTouchingParts === 0) {
+    return (
+      `Found ${d.partsFound.toLocaleString()} parts (${found}) but the file carries no property sets on them, so there are no piece marks to import. ` +
+      "Re-export with property sets enabled (Tekla: include \"Part Properties\" or the stock \"Tekla Common\" set; SDS/2: export custom properties)."
+    );
+  }
+  const sets = d.propertySets.map((s) => `${s.name} (${s.count.toLocaleString()})`).join(", ");
+  const keys = d.propertyKeys.slice(0, 8).map((k) => k.name).join(", ");
+  return (
+    `Found ${d.partsFound.toLocaleString()} parts (${found}) with property sets [${sets}]` +
+    (keys ? ` carrying [${keys}]` : "") +
+    ", but none of those properties is a piece mark. " +
+    "Ask your detailer to include Assembly Mark / Part Mark (Tekla \"Part Properties\" or \"Tekla Common\") in the IFC property-set config, then re-export."
+  );
+}
+
 /** Progress caption for the save banner. */
 export function describePersistProgress(state: {
   step: string;

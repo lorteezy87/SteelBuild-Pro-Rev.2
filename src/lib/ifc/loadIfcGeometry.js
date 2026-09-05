@@ -27,9 +27,13 @@ import { getEngine } from "@/lib/ifc/ifcEngine";
 export async function loadIfcGeometry(buffer, opts = {}) {
   const { api, WebIFC } = await getEngine();
   const defaultColor = opts.defaultColor || "#9aa4b2";
+  // Keep in step with PART_TYPES in extractIfcRoster.js: whatever the roster
+  // imports must also be drawn, or its status colours have nothing to land on.
+  // Proxies are how exports that never mapped their parts arrive.
   const TYPE_NAME = {
     [WebIFC.IFCBEAM]: "beam", [WebIFC.IFCCOLUMN]: "column",
     [WebIFC.IFCPLATE]: "plate", [WebIFC.IFCMEMBER]: "member",
+    [WebIFC.IFCBUILDINGELEMENTPROXY]: "proxy",
   };
 
   const modelID = api.OpenModel(new Uint8Array(buffer), {
