@@ -341,10 +341,20 @@ export function isClosedPackage(pkg: SetPackage | null | undefined): boolean {
   return false;
 }
 
+/**
+ * A sheet needs action when its set-level review verdict is "rejected".
+ * `drawings.stage` is CHECK-constrained to the 7 workflow stages, so it can
+ * never hold Rejected / Revise and Resubmit / Returned — the verdict lives in
+ * `set_approval_status` (lowercase approved|rejected|superseded|pending_review).
+ */
+export function sheetNeedsAction(drawing: Drawing | null | undefined): boolean {
+  return String(drawing?.set_approval_status ?? "").toLowerCase() === "rejected";
+}
+
 export function rollupDrawingStage(sheets: Drawing[]): string {
   if (!sheets.length) return "No sheets";
   if (sheets.every(isClosedDrawing)) return "Released";
-  if (sheets.some((d) => ["Rejected", "Revise and Resubmit", "Returned"].includes(d.stage ?? ""))) return "Needs Action";
+  if (sheets.some(sheetNeedsAction)) return "Needs Action";
   if (sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage ?? ""))) return "In Review";
   return sheets[0]?.stage || "No stage";
 }
@@ -580,7 +590,7 @@ export function buildTriage(
       // Rejected/Returned stages on packages that have since been released).
       const needsAction = !closed && (
         (governingSubmittal && ACTION_STATUSES.has(governingSubmittal.status ?? "")) ||
-        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage ?? ""))
+        pkg.sheets.some(sheetNeedsAction)
       );
       const status = governingSubmittal?.status || rollupDrawingStage(pkg.sheets);
       const canDraft = !hasGoverningSubmittal(pkg.submittals);
@@ -828,7 +838,7 @@ export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummar
     const st = row.latestSubmittal.status;
     if (st === "Approved" || st === "Approved as Noted" || st === "Released for Fabrication") approved++;
     else if (st === "Rejected" || st === "Revise and Resubmit") rejected++;
-    else pending++;
+    else if (st !== "Void") pending++; // Void is terminal — never "pending"
     if (row.due.overdue) overdue++;
     if (row.due.dueSoon) dueSoon++;
     if (row.pendingEorResponse || hasUnansweredApproverNotes(row.latestSubmittal)) pendingEor++;

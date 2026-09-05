@@ -409,9 +409,11 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
                         <div className="piece-register-cell-meta">
                           {piece.parent_piece_id
                             ? `Child lot ${piece.lot_code}`
-                            : piece.lot_code === "ALL"
-                              ? "Root lot ALL"
-                              : `Container ${piece.lot_code}`}
+                            : piece.is_container
+                              ? `Container ${piece.lot_code}`
+                              : piece.lot_code === "ALL"
+                                ? "Root lot ALL"
+                                : `Lot ${piece.lot_code}`}
                         </div>
                       </td>
                       <td className="piece-register-number">{piece.quantity}</td>

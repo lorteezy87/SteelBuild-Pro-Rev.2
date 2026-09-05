@@ -83,6 +83,16 @@ export async function invalidatePieceControlQueries(
     push(pieceControlKeys.register(projectId));
   }
 
+  // Station advances and ship/deliver/erect both run refresh_work_package_progress,
+  // which rewrites work_packages.percent_complete + status — so the WP lists
+  // (Package Board, dashboards) must refetch on production/logistics writes too.
+  if (scope === "production" || scope === "logistics") {
+    push(pieceControlKeys.workPackages(projectId));
+    push(pieceControlKeys.workPackagesLegacy(projectId));
+    push(pieceControlKeys.workPackagesAlt(projectId));
+    push(pieceControlKeys.productionWorkPackages(projectId));
+  }
+
   if (scope === "all" || scope === "relationships" || scope === "register") {
     push(pieceControlKeys.relationships(projectId));
   }

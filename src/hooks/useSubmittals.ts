@@ -438,25 +438,26 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   try {
     updated = await entities.Submittal.update(s.id, patch as Update<"submittals">);
   } catch (err) {
-    // Backstop: the trigger blocked the transition (e.g. an RFI opened between
-    // the pre-check and this write). Undo what we did to the round so it can't
-    // drift from the (unchanged) submittal status — delete a freshly-inserted
-    // round, or revert an in-place update to its pre-write state.
+    // Backstop: the submittal write failed AFTER the round was written (a
+    // trigger block, RLS, network, …). Undo what we did to the round on ANY
+    // failure so it can't drift from the (unchanged) submittal status — delete
+    // a freshly-inserted round, or revert an in-place update to its pre-write
+    // state.
+    try {
+      if (plan.action === "insert" && round?.id) {
+        await entities.SubmittalRound.delete(round.id as string);
+      } else if (plan.action === "update" && currentRound?.id) {
+        await entities.SubmittalRound.update(currentRound.id, {
+          status: currentRound.status ?? null,
+          ball_in_court: currentRound.ball_in_court ?? null,
+          returned_date: currentRound.returned_date ?? null,
+        } as Update<"submittal_rounds">);
+      }
+    } catch {
+      /* best-effort cleanup */
+    }
     if (isFabReleaseBlocked(err)) {
       const msg = (err as { message?: string })?.message || "Fab release blocked by open RFIs";
-      try {
-        if (plan.action === "insert" && round?.id) {
-          await entities.SubmittalRound.delete(round.id as string);
-        } else if (plan.action === "update" && currentRound?.id) {
-          await entities.SubmittalRound.update(currentRound.id, {
-            status: currentRound.status ?? null,
-            ball_in_court: currentRound.ball_in_court ?? null,
-            returned_date: currentRound.returned_date ?? null,
-          } as Update<"submittal_rounds">);
-        }
-      } catch {
-        /* best-effort cleanup */
-      }
       throw new FabReleaseBlockedError(msg, parseBlockedRfiNumbers(msg));
     }
     throw err;

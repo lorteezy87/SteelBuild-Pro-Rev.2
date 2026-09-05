@@ -148,7 +148,7 @@ export default function ChangeRequests() {
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: "8px" }}>
           <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Status:</span>
-          {["all", ...statuses.slice(0, 3)].map((status) => (
+          {["all", ...statuses].map((status) => (
             <button key={status} onClick={() => setFilterStatus(status)} style={{ background: filterStatus === status ? "var(--accent)" : "var(--bg-surface-low)", color: filterStatus === status ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               {status === "all" ? "All" : status.slice(0, 6)}
             </button>

@@ -14,6 +14,7 @@ import {
   extractRevisionSheets,
   deriveVirtualSets,
   buildRevisionSnapshot,
+  mergeSetDrawings,
 } from "../revisionUploadHelpers";
 
 describe("formatBytes (revision modal variant)", () => {
@@ -71,12 +72,37 @@ describe("deriveVirtualSets", () => {
     expect(result[0]).toMatchObject({ id: null, set_name: "Set A", sheet_count: 2, revision: "3", revision_history: "[]" });
   });
 
+  it("never reads issue_date / issued_by off drawing rows (those columns live on drawing_sets)", () => {
+    const result = deriveVirtualSets(
+      [{ drawing_set_name: "Set E", revision_number: 1, issue_date: "2026-01-01", issued_by: "ACME" }],
+      new Set(),
+    );
+    expect(result[0].issued_date).toBeNull();
+    expect(result[0].issued_by).toBe("");
+  });
+
   it("coerces a null revision_number to the em-dash placeholder", () => {
     const result = deriveVirtualSets(
       [{ drawing_set_name: "Set D", revision_number: null, is_superseded: false }],
       new Set(),
     );
     expect(result[0].revision).toBe("—");
+  });
+});
+
+describe("mergeSetDrawings", () => {
+  it("prefers FK rows and only adds name-matched rows that have NO drawing_set_id", () => {
+    const byId = [{ id: "a", drawing_set_id: "set-1" }, { id: "b", drawing_set_id: "set-1" }];
+    const byName = [
+      { id: "a", drawing_set_id: "set-1" },      // duplicate of FK row
+      { id: "legacy", drawing_set_name: "X" },   // legacy: no FK → kept
+      { id: "other", drawing_set_id: "set-2" },  // linked elsewhere → dropped
+    ];
+    expect(mergeSetDrawings(byId, byName).map((d) => d.id)).toEqual(["a", "b", "legacy"]);
+  });
+
+  it("tolerates missing inputs", () => {
+    expect(mergeSetDrawings(undefined, undefined)).toEqual([]);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   buildRfiMap, buildSubmittalsBySetId, filterDrawings, groupByDrawingSetName,
   computeExistingSetNames, buildDrawingSetMap, computeSelectedSetName, computeStagePipeline,
   classifyDrawingStageMutation, getDrawingSetIdentity, computeStatsFromSubmittals,
+  filterDrawingsBySet,
 } from "../drawingsUtils";
 import { buildTriage } from "@/pages/drawingSubmittalHub/format";
 
@@ -24,6 +25,18 @@ describe("isOverdue", () => {
     expect(isOverdue({ due_date: PAST, stage: "Released" })).toBe(false);
     expect(isOverdue({ due_date: PAST, stage: "IFC", is_superseded: true })).toBe(false);
     expect(isOverdue({ due_date: PAST, stage: "IFC", set_approval_status: "approved" })).toBe(false);
+  });
+
+  it("is a date-only compare against the LOCAL calendar day (due today is not overdue, even in the afternoon)", () => {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    expect(isOverdue({ due_date: today, stage: "IFC" })).toBe(false);
+    expect(daysLate({ due_date: today, stage: "IFC" })).toBe(0);
+    const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const yesterday = `${y.getFullYear()}-${pad(y.getMonth() + 1)}-${pad(y.getDate())}`;
+    expect(isOverdue({ due_date: yesterday, stage: "IFC" })).toBe(true);
+    expect(daysLate({ due_date: yesterday, stage: "IFC" })).toBe(1);
   });
 });
 
@@ -192,6 +205,25 @@ describe("groupByDrawingSet", () => {
     const groups = groupByDrawingSet(drawings, { "set-1": { id: "set-1", set_name: "X" } });
     expect(groups[0].aggregates.maxRev).toBe(5);
   });
+
+  it("rolls letter (pre-IFC) revisions up to the latest letter instead of 0", () => {
+    const drawings = [
+      { id: "s1", drawing_set_id: "set-1", sheet_number: "S-1", revision_number: "A", stage: "IFA" },
+      { id: "s2", drawing_set_id: "set-1", sheet_number: "S-2", revision_number: "Rev C", stage: "IFA" },
+      { id: "s3", drawing_set_id: "set-1", sheet_number: "S-3", revision_number: "B", stage: "IFA" },
+    ];
+    const groups = groupByDrawingSet(drawings, { "set-1": { id: "set-1", set_name: "X" } });
+    expect(groups[0].aggregates.maxRev).toBe("C");
+  });
+
+  it("ranks a numeric (post-IFC) revision above any letter revision in a mixed set", () => {
+    const drawings = [
+      { id: "s1", drawing_set_id: "set-1", sheet_number: "S-1", revision_number: "C", stage: "IFC" },
+      { id: "s2", drawing_set_id: "set-1", sheet_number: "S-2", revision_number: "1", stage: "IFC" },
+    ];
+    const groups = groupByDrawingSet(drawings, { "set-1": { id: "set-1", set_name: "X" } });
+    expect(groups[0].aggregates.maxRev).toBe(1);
+  });
 });
 
 // ─── Drawings page derivations (extracted from Drawings.jsx) ─────────────────
@@ -222,12 +254,23 @@ describe("buildSubmittalsBySetId", () => {
     expect(map["set-2"]).toEqual({ total: 2, open: 1, latestStatus: "OFA", latestId: "s1" });
     expect(map["set-3"]).toBeUndefined();
   });
-  it("keeps the FIRST encountered status as latest (submittals arrive pre-sorted by -submitted_date)", () => {
+  it("keeps the FIRST encountered status as latest when the input is already ordered", () => {
     const map = buildSubmittalsBySetId([
       { id: "new", status: "BFA", drawing_set_ids: ["s"] },
       { id: "old", status: "OFA", drawing_set_ids: ["s"] },
     ], TERMINAL);
     expect(map["s"]).toEqual({ total: 2, open: 2, latestStatus: "BFA", latestId: "new" });
+  });
+  it("sorts UNSORTED input by submitted_date desc (created_at fallback) so the latest wins", () => {
+    const input = [
+      { id: "old", status: "Submitted", submitted_date: "2026-01-05", drawing_set_ids: ["s"] },
+      { id: "newest", status: "Approved", submitted_date: "2026-03-01", drawing_set_ids: ["s"] },
+      { id: "mid", status: "Under Review", created_at: "2026-02-01T10:00:00Z", drawing_set_ids: ["s"] },
+    ];
+    const snapshot = JSON.stringify(input);
+    const map = buildSubmittalsBySetId(input, TERMINAL);
+    expect(map["s"]).toEqual({ total: 3, open: 2, latestStatus: "Approved", latestId: "newest" });
+    expect(JSON.stringify(input)).toBe(snapshot); // input not mutated
   });
 });
 
@@ -355,5 +398,24 @@ describe("computeStagePipeline", () => {
       stageFilter: "ALL",
     });
     expect(r.pipeStages.find(s => s.id === "Not Started").count).toBe(1);
+  });
+});
+
+describe("filterDrawingsBySet (?set= deep link)", () => {
+  const map = { "set-1": { id: "set-1", set_name: "Main Steel" } };
+  const drawings = [
+    { id: "a", drawing_set_id: "set-1" },
+    { id: "b", drawing_set_id: "set-2", drawing_set_name: "Main Steel" }, // FK wins over name
+    { id: "c", drawing_set_name: "main steel" },                          // legacy, name match
+    { id: "d", drawing_set_name: "Misc" },
+  ];
+  it("is a no-op without a set id", () => {
+    expect(filterDrawingsBySet(drawings, null, map)).toBe(drawings);
+  });
+  it("keeps FK matches plus legacy name-only rows for that set", () => {
+    expect(filterDrawingsBySet(drawings, "set-1", map).map((d) => d.id)).toEqual(["a", "c"]);
+  });
+  it("keeps only FK matches when the set id is unknown to the map", () => {
+    expect(filterDrawingsBySet(drawings, "set-2", map).map((d) => d.id)).toEqual(["b"]);
   });
 });

@@ -45,8 +45,10 @@ export function deriveVirtualSets(drawings, existingNames) {
           id: null,
           set_name: d.drawing_set_name,
           revision: d.revision_number != null ? String(d.revision_number) : "—",
-          issued_date: d.issue_date || null,
-          issued_by: d.issued_by || "",
+          // `drawings` rows carry no issue_date / issued_by (those live on
+          // drawing_sets); a virtual set has no parent row to read them from.
+          issued_date: null,
+          issued_by: "",
           file_url: d.file_url || null,
           sheet_count: 0,
           revision_history: "[]",
@@ -56,6 +58,17 @@ export function deriveVirtualSets(drawings, existingNames) {
     }
   });
   return Object.values(byName);
+}
+
+/**
+ * Merge the sheets found by FK (`drawing_set_id`) with legacy rows that only
+ * carry `drawing_set_name`. FK rows win; a name-matched row is only kept when
+ * it has NO FK at all (a row linked to a different set is a different set).
+ */
+export function mergeSetDrawings(byId = [], byName = []) {
+  const seen = new Set((byId || []).map((d) => d?.id).filter(Boolean));
+  const legacy = (byName || []).filter((d) => d && !d.drawing_set_id && !seen.has(d.id));
+  return [...(byId || []), ...legacy];
 }
 
 export function buildRevisionSnapshot(selectedSet, disposition) {

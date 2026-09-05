@@ -36,6 +36,7 @@ export interface CreateFromSetInitial {
   drawing_set_ids: string[];
   requireLinkedSet: true;
   status?: string;
+  ball_in_court?: string;
 }
 
 const SENT_STATUSES = new Set(["Submitted", "Under Review"]);
@@ -104,7 +105,12 @@ export function buildStatusSuggestPatch(
     if (SENT_STATUSES.has(nextStatus) && !before?.submitted_date) {
       patch.submitted_date = today;
     }
-    if (VERDICT_STATUSES.has(nextStatus) && !before?.returned_date) {
+    // A verdict (returned) status stamps returned_date whenever the status
+    // actually CHANGES into it — a later cycle's return must not keep the
+    // first cycle's date. Same-status edits leave an existing date alone.
+    const enteringVerdict =
+      VERDICT_STATUSES.has(nextStatus) && (before?.status ?? null) !== nextStatus;
+    if (enteringVerdict || (VERDICT_STATUSES.has(nextStatus) && !before?.returned_date)) {
       patch.returned_date = today;
     }
     if (
@@ -129,13 +135,15 @@ export function needsUnlinkedSubmittalHint(input: {
 /** Seed create-modal initial fields when navigating from a set context. */
 export function buildCreateInitialFromSet(
   setId: string,
-  extras?: { prefilledStatus?: string | null },
+  extras?: { prefilledStatus?: string | null; prefilledBallInCourt?: string | null },
 ): CreateFromSetInitial {
   const out: CreateFromSetInitial = {
     drawing_set_ids: [setId],
     requireLinkedSet: true,
   };
   if (extras?.prefilledStatus) out.status = extras.prefilledStatus;
+  // BIC only means something alongside a status — the pair is the stage.
+  if (extras?.prefilledStatus && extras?.prefilledBallInCourt) out.ball_in_court = extras.prefilledBallInCourt;
   return out;
 }
 
@@ -166,7 +174,9 @@ export function filterSuggestAgainstCurrent(
     out.ball_in_court = patch.ball_in_court ?? null;
   }
   if (patch.submitted_date && !current?.submitted_date) out.submitted_date = patch.submitted_date;
-  if (patch.returned_date && !current?.returned_date) out.returned_date = patch.returned_date;
+  // returned_date re-stamps on every transition INTO a verdict, so only drop
+  // it when the row already carries THIS date (not any stale prior-cycle one).
+  if (patch.returned_date && current?.returned_date !== patch.returned_date) out.returned_date = patch.returned_date;
   if (patch.approved_date && !current?.approved_date) out.approved_date = patch.approved_date;
   return Object.keys(out).length > 0 ? out : null;
 }

@@ -12,15 +12,12 @@ import { FAB_STATUS_META } from "@/lib/fabStatus";
 
 export const TYPE_PALETTE = { beam: "#3b82f6", column: "#f97316", plate: "#22c55e", member: "#a855f7", other: "#94a3b8" };
 export const SEQ_PALETTE = ["#3b82f6", "#f97316", "#22c55e", "#a855f7", "#eab308", "#ef4444", "#14b8a6", "#ec4899", "#8b5cf6", "#84cc16", "#06b6d4", "#f59e0b"];
+// One palette for both the canonical Piece Control lifecycle and the legacy
+// per-part fab_status, so a linked lot and an unlinked part at the same stage
+// paint the same color (the legend used to disagree with the model).
 export const CANONICAL_PIECE_COLORS = {
   hold: "#dc2626",
-  not_started: "#64748b",
-  released: "#7c3aed",
-  in_fabrication: "#2563eb",
-  fabricated: "#16a34a",
-  shipped: "#f59e0b",
-  delivered: "#0891b2",
-  erected: "#15803d",
+  ...Object.fromEntries(Object.entries(FAB_STATUS_META).map(([k, v]) => [k, v.color])),
 };
 
 export function canonicalPieceColor(piece) {
@@ -37,7 +34,7 @@ export function buildCanonicalPieceByGuid(modelElements, pieces) {
   );
   const map = new Map();
   for (const element of modelElements || []) {
-    if (!element?.element_guid || !element.piece_id) continue;
+    if (!element?.element_guid || !element.piece_id || element.is_deleted) continue;
     const piece = pieceById.get(element.piece_id);
     if (piece) map.set(element.element_guid, piece);
   }
@@ -70,7 +67,7 @@ export function buildStatusByGuid(modelMapping) {
 export function buildSeqByGuid(rows) {
   const map = new Map();
   for (const r of rows || []) {
-    if (r?.element_guid && r.sequence_number != null && r.sequence_number !== "") {
+    if (r?.element_guid && !r.is_deleted && r.sequence_number != null && r.sequence_number !== "") {
       map.set(r.element_guid, String(r.sequence_number));
     }
   }
@@ -81,7 +78,7 @@ export function buildSeqByGuid(rows) {
 export function buildFabByGuid(rows) {
   const map = new Map();
   for (const r of rows || []) {
-    if (r?.element_guid && r.fab_status) map.set(r.element_guid, r.fab_status);
+    if (r?.element_guid && !r.is_deleted && r.fab_status) map.set(r.element_guid, r.fab_status);
   }
   return map;
 }
@@ -98,7 +95,7 @@ export function buildFabByGuid(rows) {
 export function buildMarkByGuid(rows) {
   const map = new Map();
   for (const r of rows || []) {
-    if (r?.element_guid && r.piece_mark) map.set(r.element_guid, normalizePieceMark(r.piece_mark));
+    if (r?.element_guid && !r.is_deleted && r.piece_mark) map.set(r.element_guid, normalizePieceMark(r.piece_mark));
   }
   return map;
 }
@@ -107,6 +104,7 @@ export function buildMarkByGuid(rows) {
 export function buildSeqByMark(rows) {
   const map = new Map();
   for (const r of rows || []) {
+    if (r?.is_deleted) continue;
     const mark = normalizePieceMark(r?.piece_mark);
     if (mark && r.sequence_number != null && r.sequence_number !== "" && !map.has(mark)) {
       map.set(mark, String(r.sequence_number));
@@ -119,6 +117,7 @@ export function buildSeqByMark(rows) {
 export function buildFabByMark(rows) {
   const map = new Map();
   for (const r of rows || []) {
+    if (r?.is_deleted) continue;
     const mark = normalizePieceMark(r?.piece_mark);
     if (mark && r.fab_status && !map.has(mark)) map.set(mark, r.fab_status);
   }

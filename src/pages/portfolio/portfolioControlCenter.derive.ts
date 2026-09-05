@@ -22,12 +22,12 @@ export interface ProjectRecord {
   id: string;
   name?: string | null;
   project_number?: string | null;
-  /** "Planning" | "Detailing" | "Fabrication" | "Erection" | "Complete" etc. */
+  /** chk_projects_phase: Pre-Construction / Detailing / Procurement / Fabrication / Delivery / Installation / Erection / Closeout. */
   phase?: string | null;
-  /** "Active" | "Complete" | "On Hold" | "Cancelled" (canonical values in DB). */
-  status?: string | null;
+  /** chk_projects_health: On Track / Watch / At Risk / Awaiting Data. */
   health_status?: string | null;
-  on_hold?: boolean;
+  /** projects has no `status` column — on_hold (+ phase) is the lifecycle signal. */
+  on_hold?: boolean | null;
   original_contract_value?: number | null;
   target_completion_date?: string | null;
   forecast_completion_date?: string | null;
@@ -134,8 +134,6 @@ export interface PortfolioSummary {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-const ACTIVE_STATUSES = new Set(["Active", "In Progress"]);
 
 function dateValue(v: string | null | undefined): Date | null {
   if (!v) return null;
@@ -285,7 +283,7 @@ export function buildPortfolioSummary(
     }).length;
     const operationalHealth = deriveOperationalHealth({
       storedStatus: project.health_status || scoredHealth,
-      onHold: project.on_hold || String(project.status || "").toLowerCase() === "on hold",
+      onHold: Boolean(project.on_hold),
       overdueRfis,
       criticalOverdueRfis,
       overdueScheduleTasks: partitionFieldTasks(projTasks, todayIso).recovery.length,
@@ -316,9 +314,11 @@ export function buildPortfolioSummary(
   });
 
   // ── KPIs ──
+  // Active = not on hold, not fully complete, and not in Closeout. (projects
+  // has no status column; on_hold + phase are the only lifecycle signals.)
   const activeRows = allRows.filter(
     (p) =>
-      (ACTIVE_STATUSES.has(p.status || "") || !p.status) &&
+      !p.on_hold &&
       p.pctComplete < 100 &&
       String(p.phase || "").toLowerCase() !== "closeout",
   );

@@ -97,7 +97,11 @@ export default function QualityControl() {
     pending: qcRecords.filter((r) => r.status === "Pending").length,
   };
 
-  const conclusiveCount = qcRecords.filter((r) => r.result !== "Inconclusive").length;
+  // Pass rate denominator = records with a conclusive result. Allowlist the
+  // real result values so Inconclusive AND not-yet-recorded (null/blank) results
+  // never deflate the rate.
+  const CONCLUSIVE_RESULTS = new Set(["Pass", "Fail", "Conditional Pass"]);
+  const conclusiveCount = qcRecords.filter((r) => CONCLUSIVE_RESULTS.has(r.result)).length;
   const passRate = conclusiveCount > 0
     ? Math.round(((stats.passed + stats.conditional) / conclusiveCount) * 100)
     : 0;

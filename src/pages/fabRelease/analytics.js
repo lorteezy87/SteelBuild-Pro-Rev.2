@@ -118,12 +118,10 @@ function drawingSetKey(drawing) {
 
 function drawingIsReleasedForFab(drawing) {
   if (!drawing || drawing.is_deleted || drawing.is_superseded) return false;
-  const candidates = [
-    drawing.stage,
-    drawing.status,
-    drawing.set_approval_status,
-    drawing.ifc_status,
-  ];
+  // `drawings` has no status column and a bare set_approval_status=approved
+  // is NOT fab-ready (matches src/lib/pieceControl/drawingReleaseReady.ts) —
+  // only stage / ifc_status ∈ {IFC, Released} count.
+  const candidates = [drawing.stage, drawing.ifc_status];
   return candidates.some((value) => RELEASED_DRAWING_STATES.has(normalize(value)));
 }
 

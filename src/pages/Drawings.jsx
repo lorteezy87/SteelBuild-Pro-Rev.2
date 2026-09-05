@@ -32,7 +32,7 @@ import {
   buildParentApprovalPatch,
   buildRenameSetState,
   buildSheetApprovalPatch,
-  buildSubmittalAdvanceSearch,
+  buildSubmittalNavigationSearch,
   formatBulkDeleteToast,
   formatBulkUpdateToast,
   formatRenameSetToast,
@@ -60,7 +60,7 @@ import {
   computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
   validateStageTransition, classifyDrawingStageMutation, buildRfiMap, buildSubmittalsBySetId, filterDrawings,
   groupByDrawingSetName, computeExistingSetNames, buildDrawingSetMap, computeSelectedSetName,
-  computeStagePipeline,
+  computeStagePipeline, filterDrawingsBySet,
 } from "@/components/drawings/drawingsUtils";
 import { stageToSubmittalStatus } from "@/lib/submittalStageMapping";
 import { TERMINAL_APPROVED_STATUSES } from "@/hooks/useSubmittals";
@@ -98,6 +98,8 @@ export default function Drawings({ embedded = false } = {}) {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [view, setView] = useState("list");
   const [search, setSearch] = useState(searchParams.get("search") || searchParams.get("sheet") || "");
+  // ?set=<drawing_set_id> deep link (viewer breadcrumb) — pre-filters to that set.
+  const [setFilterId, setSetFilterId] = useState(searchParams.get("set") || null);
   const [discipline, setDiscipline] = useState("ALL");
   const [stageFilter, setStageFilter] = useState("ALL");
   const [selected, setSelected] = useState(new Set());
@@ -182,7 +184,7 @@ export default function Drawings({ embedded = false } = {}) {
   useEffect(() => {
     const next = searchParams.get("search") || searchParams.get("sheet") || "";
     setSearch(next);
-     
+    setSetFilterId(searchParams.get("set") || null);
   }, [searchParams]);
 
   // ── Derived data ──────────────────────────────────────────────────────────
@@ -202,10 +204,26 @@ export default function Drawings({ embedded = false } = {}) {
     [submittals],
   );
 
+  // id → parent set record lookup. DrawingsTable groups by drawing_set_id and
+  // pulls display names from this map so the FK is the source of truth for
+  // grouping, not the legacy denormalized drawing_set_name string. (F8)
+  const drawingSetMap = useMemo(() => buildDrawingSetMap(drawingSetRecords), [drawingSetRecords]);
+
   const filtered = useMemo(
-    () => filterDrawings(drawings, { search, discipline, stageFilter }),
-    [drawings, search, discipline, stageFilter],
+    () => filterDrawingsBySet(
+      filterDrawings(drawings, { search, discipline, stageFilter }),
+      setFilterId,
+      drawingSetMap,
+    ),
+    [drawings, search, discipline, stageFilter, setFilterId, drawingSetMap],
   );
+  // When pre-filtered to a set, only that set's (possibly sheet-less) group
+  // should be seeded into the table.
+  const visibleSetMap = useMemo(
+    () => (setFilterId ? (drawingSetMap[setFilterId] ? { [setFilterId]: drawingSetMap[setFilterId] } : {}) : drawingSetMap),
+    [drawingSetMap, setFilterId],
+  );
+  const setFilterLabel = setFilterId ? (drawingSetMap[setFilterId]?.set_name || "Selected set") : null;
 
   // Sprint 5: KPI tiles read submittal status (RELEASED, IN REVIEW) where
   // a submittal exists, falling back to dominant sheet.stage for
@@ -227,11 +245,6 @@ export default function Drawings({ embedded = false } = {}) {
     () => computeExistingSetNames(drawingSets, drawingSetRecords),
     [drawingSets, drawingSetRecords],
   );
-
-  // id → parent set record lookup. DrawingsTable groups by drawing_set_id and
-  // pulls display names from this map so the FK is the source of truth for
-  // grouping, not the legacy denormalized drawing_set_name string. (F8)
-  const drawingSetMap = useMemo(() => buildDrawingSetMap(drawingSetRecords), [drawingSetRecords]);
 
   const selectedSetName = useMemo(() => computeSelectedSetName(selected, drawings), [selected, drawings]);
 
@@ -438,7 +451,9 @@ export default function Drawings({ embedded = false } = {}) {
     if (plan.blockedToast) {
       const targetSetId = plan.blockedToast.blockedSetIds[0] || null;
       const mapped = stageToSubmittalStatus(bulkStage);
-      const qs = buildSubmittalAdvanceSearch(targetSetId, mapped?.status);
+      // Open the existing latest open submittal when one is linked; only
+      // fall back to the create-new prefill when nothing is in flight.
+      const qs = buildSubmittalNavigationSearch({ setId: targetSetId, mapped, submittals });
       toast.error(plan.blockedToast.message, {
         duration: 8000,
         action: {
@@ -737,10 +752,12 @@ export default function Drawings({ embedded = false } = {}) {
         search={search}
         discipline={discipline}
         stageFilter={stageFilter}
+        setFilterLabel={setFilterLabel}
         onClearSearch={() => setSearch("")}
         onClearDiscipline={() => setDiscipline("ALL")}
         onClearStage={() => setStageFilter("ALL")}
-        onClearAll={() => { setSearch(""); setDiscipline("ALL"); setStageFilter("ALL"); }}
+        onClearSet={() => setSetFilterId(null)}
+        onClearAll={() => { setSearch(""); setDiscipline("ALL"); setStageFilter("ALL"); setSetFilterId(null); }}
       />
 
       {/* ── Bulk Actions ───────────────────────────────────────────────────── */}
@@ -792,7 +809,7 @@ export default function Drawings({ embedded = false } = {}) {
             onMarkTitleblock={openMarkTitleblock}
             onPackageReport={revisionAiEnabled ? setReportSet : null}
             rfiMap={rfiMap}
-            drawingSetMap={drawingSetMap}
+            drawingSetMap={visibleSetMap}
             submittalsBySetId={submittalsBySetId}
           />
         ) : (
@@ -858,7 +875,7 @@ export default function Drawings({ embedded = false } = {}) {
           // navigating without a status if the stage maps to "Not Started"
           // or an unknown stage (stageToSubmittalStatus returns null).
           const mapped = stageToSubmittalStatus(targetStage);
-          navigate(`/Submittals${buildSubmittalAdvanceSearch(setId, mapped?.status)}`);
+          navigate(`/Submittals${buildSubmittalNavigationSearch({ setId, mapped, submittals })}`);
           setAdvanceTarget(null);
         }}
         approvalSet={approvalSet}

@@ -611,6 +611,19 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
     expect(deleteRound).toHaveBeenCalledWith("round-1"); // …then undone
   });
 
+  it("rolls back the logged round on ANY submittal-update failure (not only fab-release blocks)", async () => {
+    updateSubmittal.mockRejectedValueOnce(new Error("permission denied for table submittals"));
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "s4b", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0, status: "Under Review" },
+        status: "Approved",
+        ball_in_court: "EOR",
+      }),
+    ).rejects.toThrow("permission denied");
+    expect(createRound).toHaveBeenCalled();
+    expect(deleteRound).toHaveBeenCalledWith("round-1");
+  });
+
   it("does NOT pre-check non-release moves (e.g. Approved)", async () => {
     await addSubmittalRound({
       submittal: { id: "s5", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0, status: "Under Review" },

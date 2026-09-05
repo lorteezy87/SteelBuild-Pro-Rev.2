@@ -101,7 +101,7 @@ export default function CommandCenter() {
   const projectMap = useMemo(() => {
     const m = {};
     for (const p of projects) {
-      m[p.id] = { project_number: p.project_number, name: p.name, gc_name: p.gc_name };
+      m[p.id] = { project_number: p.project_number, name: p.name, general_contractor: p.general_contractor };
     }
     return m;
   }, [projects]);

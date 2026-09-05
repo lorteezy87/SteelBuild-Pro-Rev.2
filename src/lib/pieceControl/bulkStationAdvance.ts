@@ -10,8 +10,14 @@ export interface BulkStationAdvancePlan {
   skipped: Array<{ pieceId: string; reason: string }>;
 }
 
-function isActionableLeaf(piece: PieceRegisterRow): boolean {
-  return !piece.is_container && !piece.is_deleted;
+function isActionableLeaf(piece: PieceRegisterRow, all: PieceRegisterRow[]): boolean {
+  if (piece.is_container || piece.is_deleted || piece.deleted_at) return false;
+  // A split parent whose container flag was never set still isn't advanceable —
+  // the atomic server batch would reject the whole request.
+  return !all.some(
+    (other) =>
+      other.parent_piece_id === piece.id && !other.is_deleted && !other.deleted_at,
+  );
 }
 
 function completedStationKeys(
@@ -71,7 +77,7 @@ export function planBulkStationAdvance(args: {
       skipped.push({ pieceId, reason: "Lot not in current production scope" });
       continue;
     }
-    if (!isActionableLeaf(piece)) {
+    if (!isActionableLeaf(piece, pieces)) {
       skipped.push({ pieceId, reason: "Tracking rows are not physical piece lots" });
       continue;
     }

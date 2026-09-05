@@ -4,6 +4,14 @@ import { entities } from "@/api/supabaseClient";
 import { batchProcess } from "@/utils/batchProcess";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { filterAlertsForUser } from "@/lib/userPreferences/alerts";
+import { isRfiOpen } from "@/lib/entityPredicates";
+
+// deliveries is a union table: PROCUREMENT rows belong to the procurement
+// pipeline, not logistics. Terminal statuses across both vocabularies.
+const CLOSED_DELIVERY_STATUSES = new Set(["delivered", "received", "cancelled"]);
+const isOpenLogisticsDelivery = (d) =>
+  d?.delivery_type !== "PROCUREMENT" &&
+  !CLOSED_DELIVERY_STATUSES.has(String(d?.status || "").trim().toLowerCase());
 
 /**
  * useLayoutNavData — single hook that owns every cross-module count + alert
@@ -14,9 +22,9 @@ import { filterAlertsForUser } from "@/lib/userPreferences/alerts";
  *   - allAlerts            full alert list scoped to the active project
  *   - unreadAlerts         allAlerts filtered to unread + not-dismissed
  *   - unreadCount          unreadAlerts.length
- *   - overdueRFICount      RFIs past their date_required and not Answered/Closed
+ *   - overdueRFICount      RFIs past their date_required and not Answered/Closed/Void
  *   - overdueDrawingCount  drawings past their due_date and not Released
- *   - overdueDeliveryCount deliveries past scheduled_date and not Delivered
+ *   - overdueDeliveryCount logistics deliveries past scheduled_date and not Delivered/Received/Cancelled
  *   - alertCounts          object the ModulesDropdown consumes for its badges
  *                          ({ unread, rfi, co, drawings, deliveries })
  *   - markAllRead          mutate-fn shorthand: marks every unread alert read
@@ -92,14 +100,13 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
     const now = Date.now();
     return {
       overdueRFICount: navRFIs.filter((r) =>
-        r.date_required && new Date(r.date_required).getTime() < now &&
-        !["Answered", "Closed"].includes(r.status)
+        r.date_required && new Date(r.date_required).getTime() < now && isRfiOpen(r)
       ).length,
       overdueDrawingCount: navDrawings.filter((d) =>
         d.due_date && new Date(d.due_date).getTime() < now && d.stage !== "Released"
       ).length,
       overdueDeliveryCount: navDeliveries.filter((d) =>
-        d.scheduled_date && new Date(d.scheduled_date).getTime() < now && d.status !== "Delivered"
+        d.scheduled_date && new Date(d.scheduled_date).getTime() < now && isOpenLogisticsDelivery(d)
       ).length,
     };
   }, [navRFIs, navDrawings, navDeliveries]);

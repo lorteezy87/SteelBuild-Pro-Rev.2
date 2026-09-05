@@ -24,6 +24,7 @@ import { listPieceProduction, commitProductionRows } from "@/lib/production/repo
 import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
 import { resolveCanonicalShipTargets } from "@/lib/pieceControl/shippingCanonicalBridge";
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
+import { fetchAllProjectRowsPaged } from "@/lib/pieceControl/pagedSelect";
 import { summarizeShippingListCommit } from "@/lib/deliveries/summarizeShippingListCommit";
 
 const mono = { fontFamily: "var(--font-mono)" };
@@ -437,13 +438,12 @@ async function markCanonicalPiecesShipped(keptLoads, projectId) {
     return { shipped: 0, skipped: 0 };
   }
 
-  const { data: pieces, error: piecesError } = await supabase
-    .from("pieces")
-    .select("id, piece_mark, lifecycle_status, on_hold, is_container, is_deleted, deleted_at, parent_piece_id")
-    .eq("project_id", projectId)
-    .eq("is_deleted", false)
-    .is("deleted_at", null);
-  if (piecesError) throw piecesError;
+  // Paged — an unpaged select capped at 1000 lots and reported the rest as
+  // "No canonical leaf lot matched this mark".
+  const pieces = await fetchAllProjectRowsPaged(supabase, "pieces", projectId, {
+    select: "id, piece_mark, lifecycle_status, on_hold, is_container, is_deleted, deleted_at, parent_piece_id",
+    build: (query) => query.eq("is_deleted", false).is("deleted_at", null),
+  });
 
   const actionable = selectActionableLeafPieces(pieces || []);
   const { shipIds, skipped } = resolveCanonicalShipTargets(keptLoads, actionable);

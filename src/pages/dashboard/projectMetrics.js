@@ -6,6 +6,13 @@
  * presentational — every number below comes from live data.
  */
 import { computeRevisedContractValue, resolveProjectSpend } from "@/services/costRollup";
+import { isRfiOpen } from "@/lib/entityPredicates";
+
+/** Logistics rows only — deliveries is a union table; PROCUREMENT rows are the procurement pipeline. */
+const isLogisticsDelivery = (d) => d?.delivery_type !== "PROCUREMENT";
+/** Terminal delivery statuses (case-insensitive): delivered / received / cancelled. */
+const CLOSED_DELIVERY_STATUSES = new Set(["delivered", "received", "cancelled"]);
+const isOpenDelivery = (d) => !CLOSED_DELIVERY_STATUSES.has(String(d?.status || "").trim().toLowerCase());
 
 export function daysBetween(from, to) {
   if (!from || !to) return null;
@@ -363,9 +370,9 @@ export function erectedProgressPct(wps = []) {
   return Math.round((done / erecting.length) * 100);
 }
 
-/** Count of RFIs where status ∉ Answered/Closed. */
+/** Count of RFIs where status ∉ Answered/Closed/Void (canonical isRfiOpen). */
 export function openRFICount(rfis = []) {
-  return rfis.filter((r) => !["Answered", "Closed"].includes(r.status)).length;
+  return rfis.filter(isRfiOpen).length;
 }
 
 /** Count of RFIs past `date_required` and not yet answered. */
@@ -374,19 +381,20 @@ export function overdueRFICount(rfis = []) {
   now.setHours(0, 0, 0, 0);
   return rfis.filter(
     (r) =>
-      !["Answered", "Closed"].includes(r.status) &&
+      isRfiOpen(r) &&
       r.date_required &&
       new Date(r.date_required) < now
   ).length;
 }
 
-/** Deliveries not yet delivered + past scheduled date. */
+/** Logistics deliveries not yet delivered/received/cancelled + past scheduled date. */
 export function overdueDeliveryCount(deliveries = []) {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   return deliveries.filter(
     (d) =>
-      d.status !== "Delivered" &&
+      isLogisticsDelivery(d) &&
+      isOpenDelivery(d) &&
       d.scheduled_date &&
       new Date(d.scheduled_date) < now
   ).length;
@@ -402,7 +410,7 @@ export function scheduledDeliveryCount(deliveries = []) {
  * Returns counts + total + percentage each bucket contributes.
  */
 export function rfiAgingBuckets(rfis = []) {
-  const open = rfis.filter((r) => !["Answered", "Closed"].includes(r.status));
+  const open = rfis.filter(isRfiOpen);
   const now = new Date();
   const buckets = { "0-7": 0, "8-14": 0, "15-30": 0, "30+": 0 };
   open.forEach((r) => {
@@ -428,7 +436,7 @@ export function rfiAgingBuckets(rfis = []) {
  * sub-metric in the aging card header.
  */
 export function oldestOpenRFIAgeDays(rfis = []) {
-  const open = rfis.filter((r) => !["Answered", "Closed"].includes(r.status));
+  const open = rfis.filter(isRfiOpen);
   if (!open.length) return 0;
   const now = new Date();
   const ages = open
@@ -490,25 +498,22 @@ export function wpPipelineRollup(wps = []) {
 }
 
 /**
- * RFI status rollup — 5 buckets matching the prototype. "Pending"
- * collapses Under Review + Incomplete Response (both wait on the
- * BIC), "Responded" maps to the canonical "Answered" status.
+ * RFI status rollup — one bucket per canonical rfis.status value
+ * (DB CHECK: Open / Under Review / Incomplete Response / Answered /
+ * Closed / Void). Unknown or missing statuses are not counted.
  */
 export function rfiStatusRollup(rfis = []) {
   const buckets = {
-    Draft:     0,
-    Submitted: 0,
-    Pending:   0,
-    Responded: 0,
-    Closed:    0,
+    "Open":                0,
+    "Under Review":        0,
+    "Incomplete Response": 0,
+    "Answered":            0,
+    "Closed":              0,
+    "Void":                0,
   };
   for (const r of rfis) {
     const s = r?.status;
-    if (s === "Draft") buckets.Draft++;
-    else if (s === "Submitted") buckets.Submitted++;
-    else if (s === "Under Review" || s === "Incomplete Response") buckets.Pending++;
-    else if (s === "Answered") buckets.Responded++;
-    else if (s === "Closed") buckets.Closed++;
+    if (Object.prototype.hasOwnProperty.call(buckets, s)) buckets[s]++;
   }
   return buckets;
 }
@@ -569,7 +574,7 @@ export function submittalPipelineRollupFromSubmittals(submittals = []) {
  */
 export function ballInCourtRollup(rfis = []) {
   const buckets = { Architect: 0, Engineer: 0, GC: 0, Owner: 0, Internal: 0 };
-  const open = rfis.filter((r) => !["Answered", "Closed"].includes(r.status));
+  const open = rfis.filter(isRfiOpen);
   for (const r of open) {
     const bic = String(r?.ball_in_court || "").trim();
     if (bic === "Architect")    buckets.Architect++;

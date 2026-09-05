@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
       eq: vi.fn(() => chain),
       is: vi.fn(() => chain),
       order: vi.fn(() => chain),
+      range: vi.fn(() => chain),
       then: (resolve: (result: { data: unknown[]; error: null }) => void) =>
         resolve({ data: [], error: null }),
     };

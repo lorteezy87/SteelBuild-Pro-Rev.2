@@ -16,6 +16,17 @@ describe("aggregatePieceRowsByMark", () => {
     expect(b1?.quantity).toBe(5);
     expect(b1?.weight_total_lbs).toBe(500);
   });
+
+  it("recomputes weight_each_lbs on merge so each × qty agrees with the merged total", () => {
+    const rows = aggregatePieceRowsByMark([
+      { piece_mark: "B2", quantity: 2, weight_each_lbs: 100, weight_total_lbs: 200 },
+      { piece_mark: "B2", quantity: 2, weight_each_lbs: 100, weight_total_lbs: 200 },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].quantity).toBe(4);
+    expect(rows[0].weight_total_lbs).toBe(400);
+    expect(rows[0].weight_each_lbs).toBe(100); // was carried over unchanged, which drifted when totals were per-mark
+  });
 });
 
 describe("parseKissPieceRows", () => {

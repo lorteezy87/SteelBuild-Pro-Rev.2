@@ -72,6 +72,7 @@ async function fetchProjectRows<T>(
       .from(table)
       .select(select)
       .eq("project_id", projectId)
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw taggedTableError(table, error);
     rows.push(...((data ?? []) as T[]));
@@ -95,6 +96,7 @@ async function fetchActiveWorkPackages(
       .eq("project_id", projectId)
       .eq("is_deleted", false)
       .is("deleted_at", null)
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw taggedTableError("work_packages", error);
     rows.push(...((data ?? []) as ReadinessWorkPackage[]));

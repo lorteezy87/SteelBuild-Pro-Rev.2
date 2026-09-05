@@ -27,7 +27,7 @@ import {
   computeSubmittalRiskAging,
   type SubmittalRiskAssessment,
 } from "@/lib/submittalRiskAging";
-import { dueInfoFor } from "@/pages/drawingSubmittalHub/format";
+import { dueInfoFor, sheetNeedsAction } from "@/pages/drawingSubmittalHub/format";
 import type { DueInfo } from "@/pages/drawingSubmittalHub/types";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 
@@ -202,7 +202,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
       linked: !!latestSubmittal,
       needsAction:
         ACTION_STATUSES.has(latestSubmittal?.status) ||
-        (pkg.sheets || []).some((drawing: any) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage)),
+        (pkg.sheets || []).some((drawing: any) => sheetNeedsAction(drawing)),
       isRR: isRRStatus(latestSubmittal?.status),
       sheetCount: (pkg.sheets || []).length,
       submittalCount: (pkg.submittals || []).length,

@@ -20,6 +20,8 @@ import {
   formatBulkSubmittalToast,
   formatSheetResponseSaveToast,
   formatSubmittalWriteError,
+  newRoundBlockReason,
+  NEW_ROUND_STATUS,
 } from "./submittalMutationHelpers";
 
 export type ReleaseBlock = { input: Parameters<typeof addSubmittalRound>[0]; rfis: string[] };
@@ -293,13 +295,20 @@ export function useSubmittalsPageMutations(args: {
   const createRoundMut = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
       let round: { id?: string } | null = null;
+      // Pre-validate: the round forces the submittal to Submitted, which the
+      // DB gate rejects from a terminal / approved status. Fail before the
+      // round insert so nothing needs rolling back and the user gets a
+      // readable reason instead of a trigger error.
+      const current = rows.find((r) => r.id === data.submittal_id);
+      const blocked = newRoundBlockReason((current?.status as string | null | undefined) ?? null);
+      if (blocked) throw new Error(blocked);
       try {
         round = await entities.SubmittalRound.create(withProjectId(data, projectId) as any);
         if (round?.id && data.submittal_id) {
           await entities.Submittal.update(data.submittal_id as string, {
             current_round_id: round.id,
             total_rounds: Number(data.round_number) || 1,
-            status: "Submitted",
+            status: NEW_ROUND_STATUS,
             ball_in_court: String(data.ball_in_court || "EOR"),
             submitted_date: String(data.submitted_date || new Date().toISOString().split("T")[0]),
           });

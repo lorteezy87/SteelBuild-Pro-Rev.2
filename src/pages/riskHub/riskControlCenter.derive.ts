@@ -21,6 +21,7 @@
  */
 
 import type { RiskItem, RiskSignal } from "@/services/marginRiskEngine";
+import { ACTION_ITEM_CLOSED_STATUSES } from "@/lib/entityPredicates";
 
 export type { RiskItem, RiskSignal };
 
@@ -74,7 +75,7 @@ export interface CategorySummaryRow {
 export interface RiskSummary {
   /** Total flat-risk items (engine + constraints). */
   total: number;
-  /** Items with severity === "high" | "critical". */
+  /** Items with severity === "high" only (critical is reported separately in criticalCount). */
   highCount: number;
   /** Items with severity === "medium". */
   mediumCount: number;
@@ -82,8 +83,9 @@ export interface RiskSummary {
   criticalCount: number;
   /**
    * "Open" = not resolved/closed. For engine items, all items are open by
-   * definition (the engine filters out resolved entities). For Constraints,
-   * open = status not in RESOLVED_STATUSES.
+   * definition (the engine filters out resolved entities). For Constraints
+   * (action_items rows), open = status not in ACTION_ITEM_CLOSED_STATUSES
+   * (Complete / Closed / Resolved / Cancelled).
    */
   openCount: number;
   /**
@@ -101,8 +103,10 @@ export interface RiskSummary {
   needsMitigation: FlatRisk[];
 }
 
-// Constraint statuses considered "resolved" (mirrors the constraints module).
-const RESOLVED_STATUSES = new Set(["Resolved", "Closed"]);
+// Constraints are action_items rows (chk_action_items_status: Open / In Progress /
+// Complete / Cancelled / Resolved / Closed). A Complete or Cancelled constraint is
+// no more "open" than a Resolved one — use the canonical closed set.
+const RESOLVED_STATUSES = ACTION_ITEM_CLOSED_STATUSES;
 
 /** Map a Constraint priority string to a severity level. */
 function priorityToSeverity(priority: string | null): FlatRisk["severity"] {
@@ -214,10 +218,12 @@ export function buildRiskSummary(
   const all = [...engineItems, ...constraintItems];
 
   const criticalCount = all.filter((i) => i.severity === "critical").length;
-  const highCount = all.filter((i) => i.severity === "high" || i.severity === "critical").length;
+  // Severity tiers are disjoint: critical + high + medium === total.
+  const highCount = all.filter((i) => i.severity === "high").length;
   const mediumCount = all.filter((i) => i.severity === "medium").length;
-  // Engine items are always "open"; constraint items are open when !resolved
-  // (flattenConstraints already filters resolved ones out).
+  // Engine items are always "open"; constraint items are open when their
+  // action_items status is not terminal (flattenConstraints filters closed
+  // ones out, so `all` is exactly the open set).
   const openCount = all.length;
   const mitigatingCount = all.filter((i) => i.mitigationStatus === "In Progress").length;
   const totalExposure = all.reduce((sum, i) => sum + i.exposure, 0);

@@ -36,6 +36,7 @@ import {
 } from "@/lib/submittalComponents";
 import { BIC_CHOICES, STATUSES, STATUS_CFG, TYPES } from "./format";
 import { SubmittalTypeChips } from "./components";
+import { canStartNewRound } from "./submittalMutationHelpers";
 import type { DrawingSet, Submittal, SubmittalRoundRecord } from "./types";
 
 type GenericProps = Record<string, unknown>;
@@ -532,7 +533,7 @@ export function SubmittalDetail({
             submittalId={submittal.id}
             onReturnRound={onReturnRound}
           />
-          {onNewRound && (() => {
+          {onNewRound && canStartNewRound(submittal.status) && (() => {
             const isResubmit = ["Revise and Resubmit", "Rejected"].includes(submittal.status ?? "");
             const lastRoundNum = rounds.length
               ? (rounds[rounds.length - 1].round_number || rounds.length)

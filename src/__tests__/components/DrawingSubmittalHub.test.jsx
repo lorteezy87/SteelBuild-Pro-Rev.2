@@ -118,7 +118,11 @@ describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
 
     await user.click(await screen.findByText("Submittal Register"));
 
-    expect(await screen.findByPlaceholderText("Search # / title / spec section")).toBeInTheDocument();
+    // The Submittal Register is a lazy chunk; under a loaded worker (full-suite
+    // run) it can take longer than the 1s default to land.
+    expect(
+      await screen.findByPlaceholderText("Search # / title / spec section", {}, { timeout: 8000 }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Submittal Register")).toHaveLength(1);
     expect(screen.queryByText("At risk")).not.toBeInTheDocument();
   });

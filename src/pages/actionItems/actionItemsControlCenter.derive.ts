@@ -4,6 +4,7 @@
  */
 import { daysUntil as libDaysUntil } from "@/lib/dateMath";
 import { ACTION_ITEM_STATUS } from "@/lib/enums";
+import { ACTION_ITEM_CLOSED_STATUSES } from "@/lib/entityPredicates";
 
 /** Canonical shape we consume from the entity rows. */
 export interface ActionItemRecord {
@@ -41,7 +42,7 @@ export interface ActionItemsSummary {
   completed: number;
   /** Active = not complete, not cancelled. */
   active: number;
-  /** Completion % across ALL items (including setup). */
+  /** Completion % = completed / (all non-SETUP items minus Cancelled). */
   completionPct: number;
   /** Top 6 items ranked for today's priority queue. */
   todayQueue: ActionItemRecord[];
@@ -55,6 +56,15 @@ const ACTIVE_STATUSES = new Set<string>([
   ACTION_ITEM_STATUS.OPEN,
   ACTION_ITEM_STATUS.IN_PROGRESS,
 ]);
+
+/**
+ * Done = Complete / Resolved / Closed (chk_action_items_status). Cancelled is
+ * terminal but not an accomplishment, so it is neither completed nor part of
+ * the completion-rate denominator.
+ */
+const COMPLETED_STATUSES = new Set<string>(
+  [...ACTION_ITEM_CLOSED_STATUSES].filter((s) => s !== ACTION_ITEM_STATUS.CANCELLED),
+);
 
 /** Days until due_date using the shared dateMath helper. Returns Infinity if no date. */
 function daysUntilDue(item: ActionItemRecord): number {
@@ -122,9 +132,10 @@ export function buildActionItemsSummary(
   const actionItems = rows.filter((r) => r.category !== "SETUP");
 
   const active = actionItems.filter((r) => ACTIVE_STATUSES.has(r.status));
-  const completed = actionItems.filter(
-    (r) => r.status === ACTION_ITEM_STATUS.COMPLETE
-  );
+  const completed = actionItems.filter((r) => COMPLETED_STATUSES.has(r.status));
+  const cancelledCount = actionItems.filter(
+    (r) => r.status === ACTION_ITEM_STATUS.CANCELLED
+  ).length;
   const overdue = active.filter((r) => isOverdue(r));
   const dueToday = active.filter((r) => {
     const d = daysUntilDue(r);
@@ -159,7 +170,7 @@ export function buildActionItemsSummary(
     critical: critical.length,
     completed: completed.length,
     active: active.length,
-    completionPct: percent(completed.length, actionItems.length),
+    completionPct: percent(completed.length, actionItems.length - cancelledCount),
     todayQueue,
     waitingQueue,
     byOwner: ownerBreakdown(active),

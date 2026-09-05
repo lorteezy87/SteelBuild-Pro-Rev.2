@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter, Outlet } from "react-router-dom";
+import { MemoryRouter, Outlet, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { authMe } = vi.hoisted(() => ({ authMe: vi.fn() }));
@@ -13,6 +13,7 @@ vi.mock("@/config/routes", () => ({
   PAGES: {
     OrgMembers: () => <div>TEAM_PAGE</div>,
     CostHub: () => <div>COST_PAGE</div>,
+    Projects: () => <div>PROJECTS_PAGE</div>,
   },
   PROJECT_SCOPED_PAGES: new Set(),
   STATIC_ROUTE_METADATA: Object.fromEntries(
@@ -58,6 +59,11 @@ vi.mock("@/hooks/useProjectRole", () => ({
 
 import AppRoutes, { buildStaticRedirectTarget } from "@/boot/AppRoutes";
 
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+}
+
 describe("AppRoutes unknown URL handling", () => {
   beforeEach(() => authMe.mockClear());
 
@@ -77,6 +83,21 @@ describe("AppRoutes unknown URL handling", () => {
   it("preserves project context when a legacy route redirects", () => {
     expect(buildStaticRedirectTarget("/ScheduleHub", "?project=26179", "#week-4"))
       .toBe("/ScheduleHub?project=26179#week-4");
+  });
+
+  it.each([
+    ["/ProjectDetail?id=proj-42"],
+    ["/ProjectDetail?projectId=proj-42"],
+  ])("redirects legacy %s to /Projects?recordId= (the param /Projects actually reads)", (path) => {
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <AppRoutes />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/Projects?recordId=proj-42");
+    expect(screen.getByText("PROJECTS_PAGE")).toBeInTheDocument();
   });
 
   it.each([

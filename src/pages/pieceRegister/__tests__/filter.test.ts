@@ -63,6 +63,18 @@ describe("Piece Register filters", () => {
     expect(result.map((row) => row.id)).toEqual(["1"]);
   });
 
+  it("searches lot code, sequence, erection area and external ref too", () => {
+    const base = { workPackageId: "", profile: "", grade: "", lifecycle: "", source: "", hold: "all" as const };
+    const enriched = rows.map((row, index) =>
+      index === 0
+        ? { ...row, lot_code: "LOT-7", sequence_number: "SEQ-3", erection_area: "AREA-B", external_ref: "EXT-99" }
+        : row,
+    );
+    for (const search of ["lot-7", "seq-3", "area-b", "ext-99"]) {
+      expect(filterPieceRegisterRows(enriched, { ...base, search }).map((r) => r.id)).toEqual(["1"]);
+    }
+  });
+
   it("combines lifecycle, source, and hold filters", () => {
     const result = filterPieceRegisterRows(rows, {
       search: "",

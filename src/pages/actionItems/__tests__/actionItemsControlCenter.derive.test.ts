@@ -146,6 +146,26 @@ describe("buildActionItemsSummary", () => {
     expect(s.completionPct).toBe(67); // Math.round(2/3 * 100) = 67
   });
 
+  it("counts Resolved and Closed as completed, and drops Cancelled from the denominator", () => {
+    const rows = [
+      makeItem({ id: "1", status: "Complete" }),
+      makeItem({ id: "2", status: "Resolved" }),
+      makeItem({ id: "3", status: "Closed" }),
+      makeItem({ id: "4", status: "Open" }),
+      makeItem({ id: "5", status: "Cancelled" }),
+    ];
+    const s = buildActionItemsSummary(rows);
+    expect(s.completed).toBe(3);
+    expect(s.total).toBe(5);
+    expect(s.completionPct).toBe(75); // 3 done of 4 non-cancelled
+  });
+
+  it("completionPct is 0 when every item is cancelled", () => {
+    const s = buildActionItemsSummary([makeItem({ id: "1", status: "Cancelled" })]);
+    expect(s.completed).toBe(0);
+    expect(s.completionPct).toBe(0);
+  });
+
   it("excludes SETUP items from KPIs", () => {
     const rows = [
       makeItem({ id: "1", status: "Open", category: "SETUP" }),

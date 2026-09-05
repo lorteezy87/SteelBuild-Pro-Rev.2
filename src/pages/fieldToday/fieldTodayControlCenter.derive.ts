@@ -20,6 +20,7 @@ import {
 } from "@/lib/field/fieldToday";
 import { canonicalFieldPhase, PHASE_SOURCE } from "@/lib/field/fieldPhase";
 import { derivePhase } from "@/utils/phases";
+import { isPunchlistOpen } from "@/lib/entityPredicates";
 
 // ── Type shapes (real DB column names) ────────────────────────────────────────
 
@@ -164,9 +165,6 @@ export interface FieldTodaySummary {
 
 // ── Pure derivation ───────────────────────────────────────────────────────────
 
-const OPEN_PUNCH_STATUSES = new Set(["Open", "In Progress", "Pending", "New"]);
-const CLOSED_PUNCH_STATUSES = new Set(["Closed", "Resolved", "Completed", "Complete"]);
-
 /** Derives the "next action" label for a task row — deterministic. */
 function nextActionForTask(task: ScheduleTaskRecord, bucket: UrgencyBucket): string {
   const pct = clampPercent(task.percent_complete);
@@ -216,10 +214,9 @@ export function buildFieldTodaySummary(
     return start > todayIso && start <= lookaheadEnd;
   }).length;
 
-  // openPunchItems: tasks where status is NOT in the closed set
-  const openPunches = punchItems.filter(
-    (p) => !CLOSED_PUNCH_STATUSES.has(p.status || "Open"),
-  );
+  // openPunchItems: punch items whose status is not terminal — the same
+  // PUNCHLIST_CLOSED_STATUSES predicate every other punchlist KPI uses.
+  const openPunches = punchItems.filter(isPunchlistOpen);
 
   // Photos taken today (real field: Photo.taken_date)
   const photosToday = photos.filter((p) => p.taken_date === todayIso);
@@ -262,7 +259,7 @@ export function buildFieldTodaySummary(
     title: p.title || "(untitled)",
     priority: p.priority || null,
     location: p.location || null,
-    status: OPEN_PUNCH_STATUSES.has(p.status || "Open") ? (p.status || "Open") : (p.status || "Open"),
+    status: p.status || "Open",
   }));
 
   // Full table rows — every task in todaysWork

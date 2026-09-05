@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type { PieceRegisterRow } from "./repository";
 import type { LogisticsAction } from "./lifecycle";
 import { unwrapPieceControlRpc } from "./rpcResult";
+import { fetchAllProjectRowsPaged } from "./pagedSelect";
 
 const LOGISTICS_EVENT_PIECE_BATCH_SIZE = 100;
 
@@ -36,24 +37,16 @@ export async function fetchLogisticsSnapshot(
   workPackageId?: string | null,
 ): Promise<LogisticsSnapshot> {
   const db = supabase as any;
-  let piecesQuery = db
-    .from("pieces")
-    .select("*")
-    .eq("project_id", projectId)
-    .eq("is_deleted", false)
-    .is("deleted_at", null)
-    .order("normalized_piece_mark")
-    .order("lot_code");
-  if (workPackageId === null) {
-    piecesQuery = piecesQuery.is("work_package_id", null);
-  } else if (workPackageId) {
-    piecesQuery = piecesQuery.eq("work_package_id", workPackageId);
-  }
-
-  const piecesResult = await piecesQuery;
-  if (piecesResult.error) throw piecesResult.error;
-
-  const pieces = (piecesResult.data ?? []) as PieceRegisterRow[];
+  // Paged — the ship/deliver/erect lists silently stopped at 1000 lots.
+  const pieces = await fetchAllProjectRowsPaged<PieceRegisterRow>(db, "pieces", projectId, {
+    orderBy: ["normalized_piece_mark", "lot_code"],
+    build: (query) => {
+      let scoped = query.eq("is_deleted", false).is("deleted_at", null);
+      if (workPackageId === null) scoped = scoped.is("work_package_id", null);
+      else if (workPackageId) scoped = scoped.eq("work_package_id", workPackageId);
+      return scoped;
+    },
+  });
   const pieceIds = pieces.map((piece) => piece.id);
   if (pieceIds.length === 0) return { pieces, events: [] };
 

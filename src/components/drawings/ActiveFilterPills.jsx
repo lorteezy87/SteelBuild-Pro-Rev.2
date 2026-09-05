@@ -14,12 +14,17 @@ export default function ActiveFilterPills({
   search,
   discipline,
   stageFilter,
+  setFilterLabel,
   onClearSearch,
   onClearDiscipline,
   onClearStage,
+  onClearSet,
   onClearAll,
 }) {
   const pills = [];
+  if (setFilterLabel) {
+    pills.push({ key: "set", label: `SET: ${setFilterLabel}`, onClear: onClearSet });
+  }
   if (search?.trim()) {
     pills.push({ key: "search", label: `SEARCH: "${search.trim()}"`, onClear: onClearSearch });
   }

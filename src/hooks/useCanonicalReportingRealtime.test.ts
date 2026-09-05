@@ -10,6 +10,7 @@ describe("canonical reporting realtime scope", () => {
     expect(CANONICAL_REPORTING_REALTIME_TABLES).toEqual([
       "pieces",
       "piece_events",
+      "piece_station_completions",
       "piece_drawings",
       "material_requirements",
       "fab_releases",

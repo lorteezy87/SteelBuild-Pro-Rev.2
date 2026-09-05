@@ -75,6 +75,9 @@ async function fetchAllProjectRows<T>(table: string, projectId: string): Promise
       .from(table)
       .select("*")
       .eq("project_id", projectId)
+      // Offset paging needs a stable sort or Postgres may repeat/skip rows
+      // across page boundaries.
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw normalizeThrownQueryError(error);
     rows.push(...((data ?? []) as T[]));

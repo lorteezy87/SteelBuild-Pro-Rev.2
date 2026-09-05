@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 
 /**
  * SheetResponseGrid — per-sheet response entry when a submittal round
@@ -33,6 +33,57 @@ const RESPONSE_COLORS = {
   "See Comments":        { color: "var(--status-info)", bg: "var(--info-muted)" },
 };
 
+/** Seed one editable row per sheet, hydrated from any saved response. */
+export function buildResponseRows(drawings = [], existingResponses = []) {
+  const existingMap = new Map();
+  (existingResponses || []).forEach((r) => {
+    existingMap.set(r.drawing_id, r);
+  });
+  return (drawings || []).map((d) => {
+    const existing = existingMap.get(d.id);
+    return {
+      id: existing?.id,
+      drawing_id: d.id,
+      drawing_set_id: existing?.drawing_set_id || d.drawing_set_id || null,
+      sheet_number: d.sheet_number || d.drawing_number || "",
+      title: d.title || d.drawing_title || "",
+      discipline: d.discipline || "",
+      response_status: existing?.response_status || "No Exception",
+      reviewer_comment: existing?.reviewer_comment || "",
+    };
+  });
+}
+
+/** Stable identity of the inputs — changes only when sheets or saved responses change. */
+export function responseSyncKey(drawings = [], existingResponses = []) {
+  const sheets = (drawings || []).map((d) => d?.id).join(",");
+  const saved = (existingResponses || [])
+    .map((r) => `${r?.id}:${r?.drawing_id}:${r?.response_status}:${r?.reviewer_comment ?? ""}`)
+    .sort()
+    .join("|");
+  return `${sheets}::${saved}`;
+}
+
+/**
+ * Merge a fresh seed into the current rows: a row the server has since
+ * hydrated (fresh has an id, prev did not) adopts the saved response; an
+ * already-hydrated row keeps the user's in-progress edits.
+ */
+export function mergeResponseRows(prevRows, freshRows) {
+  const prevByDrawing = new Map((prevRows || []).map((r) => [r.drawing_id, r]));
+  return (freshRows || []).map((row) => {
+    const prev = prevByDrawing.get(row.drawing_id);
+    if (!prev) return row;
+    if (row.id && !prev.id) return row;
+    return {
+      ...row,
+      id: prev.id || row.id,
+      response_status: prev.response_status,
+      reviewer_comment: prev.reviewer_comment,
+    };
+  });
+}
+
 export default function SheetResponseGrid({
   round,
   drawings = [],
@@ -41,29 +92,23 @@ export default function SheetResponseGrid({
   onClose,
   saving = false,
 }) {
-  // Build initial state from existing responses or default
-  const initialRows = useMemo(() => {
-    const existingMap = new Map();
-    existingResponses.forEach((r) => {
-      existingMap.set(r.drawing_id, r);
-    });
-
-    return drawings.map((d) => {
-      const existing = existingMap.get(d.id);
-      return {
-        id: existing?.id,
-        drawing_id: d.id,
-        sheet_number: d.sheet_number || d.drawing_number || "",
-        title: d.title || d.drawing_title || "",
-        discipline: d.discipline || "",
-        response_status: existing?.response_status || "No Exception",
-        reviewer_comment: existing?.reviewer_comment || "",
-      };
-    });
-  }, [drawings, existingResponses]);
-
-  const [rows, setRows] = useState(initialRows);
+  const [rows, setRows] = useState(() => buildResponseRows(drawings, existingResponses));
   const [applyAllStatus, setApplyAllStatus] = useState("");
+
+  // Re-sync when the sheet list or the server-side responses change identity
+  // (e.g. existingResponses arrive after the grid mounted). Keyed on a stable
+  // string — the parent passes freshly filtered arrays every render — so
+  // in-progress edits are not clobbered by unrelated re-renders.
+  const latestProps = useRef({ drawings, existingResponses });
+  latestProps.current = { drawings, existingResponses };
+  const syncKey = useMemo(
+    () => responseSyncKey(drawings, existingResponses),
+    [drawings, existingResponses],
+  );
+  useEffect(() => {
+    const { drawings: d, existingResponses: e } = latestProps.current;
+    setRows((prev) => mergeResponseRows(prev, buildResponseRows(d, e)));
+  }, [syncKey]);
 
   const updateRow = useCallback((idx, field, value) => {
     setRows((prev) => {
@@ -86,6 +131,7 @@ export default function SheetResponseGrid({
     const responses = rows.map((r) => ({
       id: r.id,
       drawing_id: r.drawing_id,
+      drawing_set_id: r.drawing_set_id || null,
       sheet_number: r.sheet_number,
       response_status: r.response_status,
       reviewer_comment: r.reviewer_comment || null,

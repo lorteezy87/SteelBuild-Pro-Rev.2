@@ -55,20 +55,53 @@ describe("buildCommandCenterSummary", () => {
     expect(s.kpis.overdueRfis).toBe(1);
   });
 
-  it("counts approvals pending for OFA and IFA statuses", () => {
+  it("counts approvals pending for Submitted and Under Review submittals", () => {
     const submittals = [
-      { id: "s1", submittal_number: "SUB-001", title: "Main Steel", status: "OFA" },
-      { id: "s2", submittal_number: "SUB-002", title: "Anchor Bolts", status: "IFA" },
+      { id: "s1", submittal_number: "SUB-001", title: "Main Steel", status: "Submitted" },
+      { id: "s2", submittal_number: "SUB-002", title: "Anchor Bolts", status: "Under Review" },
       { id: "s3", submittal_number: "SUB-003", title: "Misc Metals", status: "Approved" }, // not pending
+      { id: "s4", submittal_number: "SUB-004", title: "Stairs", status: "Draft" }, // ours, not awaiting approval
+      { id: "s5", submittal_number: "SUB-005", title: "Legacy", status: "OFA" }, // drawing stage, not a submittal status
     ];
     const s = buildCommandCenterSummary(makeSources({ submittals }));
     expect(s.kpis.approvalsPending).toBe(2);
+  });
+
+  it("counts pending submittals (Draft/Submitted/Under Review/Revise and Resubmit) in openActionItems", () => {
+    const submittals = [
+      { id: "s1", status: "Draft" },
+      { id: "s2", status: "Submitted" },
+      { id: "s3", status: "Under Review" },
+      { id: "s4", status: "Revise and Resubmit" },
+      { id: "s5", status: "Approved as Noted" }, // terminal
+      { id: "s6", status: "Released for Fabrication" }, // terminal
+      { id: "s7", status: "Void" }, // terminal
+    ];
+    const s = buildCommandCenterSummary(makeSources({ submittals }));
+    expect(s.kpis.openActionItems).toBe(4);
+    expect(s.actionItems.filter((a) => a.itemType === "SUB")).toHaveLength(4);
+  });
+
+  it("reads submittal due dates from required_date", () => {
+    const submittals = [
+      { id: "late", submittal_number: "S-01", title: "Late", status: "Submitted", required_date: dateOffset(-3) },
+      { id: "ok", submittal_number: "S-02", title: "Fine", status: "Submitted", required_date: dateOffset(3) },
+    ];
+    const s = buildCommandCenterSummary(makeSources({ submittals }));
+    const late = s.actionItems.find((a) => a.id === "late")!;
+    const ok = s.actionItems.find((a) => a.id === "ok")!;
+    expect(late.urgency).toBe("overdue");
+    expect(late.dueDate).toBe(dateOffset(-3));
+    expect(ok.urgency).toBe("awaiting");
+    const lateRow = s.panels.waitingOn.find((r) => r.id === "late")!;
+    expect(lateRow.badge).toBe("Overdue");
   });
 
   it("counts field issues from WPs on hold and delayed deliveries", () => {
     const workPackages = [
       { id: "w1", wp_number: "WP-01", name: "Erection Area 1", status: "On Hold" },
       { id: "w2", wp_number: "WP-02", name: "Erection Area 2", status: "In Progress" }, // not blocked
+      { id: "w3", wp_number: "WP-03", name: "Legacy", status: "Blocked" }, // not a work_packages status
     ];
     const deliveries = [
       { id: "d1", delivery_title: "Load 1", status: "Delayed", scheduled_date: dateOffset(-2) },
@@ -89,15 +122,17 @@ describe("buildCommandCenterSummary", () => {
     expect(ids).not.toContain("r2");
   });
 
-  it("surfaces OFA/IFA submittals in waitingOn panel", () => {
+  it("surfaces Submitted/Under Review submittals in waitingOn panel", () => {
     const submittals = [
-      { id: "s1", submittal_number: "S-01", title: "Main Steel", status: "OFA", ball_in_court: "EOR" },
-      { id: "s2", submittal_number: "S-02", title: "Misc", status: "BFA", ball_in_court: "Contractor" }, // not waiting
+      { id: "s1", submittal_number: "S-01", title: "Main Steel", status: "Under Review", ball_in_court: "EOR" },
+      { id: "s2", submittal_number: "S-02", title: "Misc", status: "Draft", ball_in_court: "Contractor" }, // not waiting
+      { id: "s3", submittal_number: "S-03", title: "Legacy", status: "OFA", ball_in_court: "EOR" }, // drawing stage, not a submittal status
     ];
     const s = buildCommandCenterSummary(makeSources({ submittals }));
     const ids = s.panels.waitingOn.map((r) => r.id);
     expect(ids).toContain("s1");
     expect(ids).not.toContain("s2");
+    expect(ids).not.toContain("s3");
   });
 
   it("puts RFIs whose BIC != Contractor into waitingOn", () => {
@@ -186,16 +221,45 @@ describe("buildCommandCenterSummary", () => {
     expect(withParent.kpis.scheduleHealth).toBe(leafOnly.kpis.scheduleHealth);
   });
 
-  it("pending COs flow into openActionItems and budgetVariance", () => {
+  it("pending COs (Submitted / Under Review) flow into openActionItems and budgetVariance", () => {
     const changeOrders = [
       { id: "co1", co_number: "CO-001", title: "Extra beam", status: "Submitted" },
-      { id: "co2", co_number: "CO-002", title: "Rework", status: "Draft" },
+      { id: "co2", co_number: "CO-002", title: "Rework", status: "Under Review" },
       { id: "co3", co_number: "CO-003", title: "Approved CO", status: "Approved" }, // closed
+      { id: "co4", co_number: "CO-004", title: "Unsent draft", status: "Draft" }, // not yet pending approval
+      { id: "co5", co_number: "CO-005", title: "Legacy", status: "Pending" }, // not a change_orders status
     ];
     const s = buildCommandCenterSummary(makeSources({ changeOrders }));
     // budgetVariance = count of pending COs
     expect(s.kpis.budgetVariance).toBe(2);
     // both pending COs count in openActionItems
     expect(s.kpis.openActionItems).toBe(2);
+  });
+
+  it("schedule health only treats a task as overdue by its end_date", () => {
+    // start_date in the past with no end_date is not a missed finish commitment.
+    const noDeadline = buildCommandCenterSummary(makeSources({
+      scheduleTasks: Array.from({ length: 4 }, (_, i) => ({
+        id: `t${i}`, task_name: `Task ${i}`, status: "In Progress", start_date: dateOffset(-20), end_date: null as string | null, project_id: "p1",
+      })),
+    }));
+    expect(noDeadline.kpis.scheduleHealth).toBe("On Track");
+
+    const missedEnd = buildCommandCenterSummary(makeSources({
+      scheduleTasks: Array.from({ length: 4 }, (_, i) => ({
+        id: `t${i}`, task_name: `Task ${i}`, status: "In Progress", start_date: dateOffset(-20), end_date: dateOffset(-5), project_id: "p1",
+      })),
+    }));
+    expect(missedEnd.kpis.scheduleHealth).toBe("Behind");
+  });
+
+  it("schedule health ignores Complete tasks even when past their end_date", () => {
+    const s = buildCommandCenterSummary(makeSources({
+      scheduleTasks: [
+        { id: "done", task_name: "Done", status: "Complete", end_date: dateOffset(-30), project_id: "p1" },
+        { id: "live", task_name: "Live", status: "In Progress", end_date: dateOffset(10), project_id: "p1" },
+      ],
+    }));
+    expect(s.kpis.scheduleHealth).toBe("On Track");
   });
 });

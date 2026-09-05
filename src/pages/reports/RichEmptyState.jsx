@@ -75,7 +75,7 @@ export default function RichEmptyState({ navigate }) {
           + Create Project
         </button>
         <button
-          onClick={() => navigate(createPageUrl("ImportData"))}
+          onClick={() => navigate(createPageUrl("DataExchange"))}
           style={{
             background: "transparent",
             color: "var(--accent)",

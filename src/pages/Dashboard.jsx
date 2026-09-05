@@ -105,10 +105,12 @@ export default function Dashboard() {
     refetchInterval: refetchMs,
     enabled: true,
   });
+  // Loaded in both modes: the project CC uses expenses for spend, and the
+  // portfolio CC's resolveProjectSpend falls back to expenses so its totals
+  // match PortfolioHub (which always passes expenses).
   const { data: allExpenses = [] } = useQuery({
     queryKey: ["expenses-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.Expense),
-    enabled: !!pid,
   });
   // Portfolio timeline column needs schedule_tasks for every non-singleton
   // project portfolio view. Tiny payload —
@@ -145,14 +147,6 @@ export default function Dashboard() {
   // activity surface that's actually populated — the generic
   // `activities` table is empty everywhere). Pull the latest 50
   // events globally and project-scope them in the section.
-  // Budget-hour rows live per-project; fetch only when a project is active
-  // so portfolio mode doesn't pay for a query that has no consumer.
-  const { data: budgetHourItems = [] } = useQuery({
-    queryKey: ["budget-hour-items", pid],
-    queryFn: () => (pid ? entities.BudgetHourItem.filter({ project_id: pid }, "sort_order") : []),
-    enabled: !!pid,
-    staleTime: 30 * 1000,
-  });
   const { data: allDrawingActivity = [] } = useQuery({
     queryKey: ["drawing-activity-recent", projectScope],
     queryFn: () =>
@@ -166,21 +160,10 @@ export default function Dashboard() {
     enabled: !!pid,
   });
   // ── Field activity rollup (added with the Field overhaul) ──
-  // Each field surface (Daily Logs / Photos / Punchlist / Inspections /
-  // Safety / QC) feeds the project dashboard plus its corresponding module.
+  // The field surfaces the control center actually reads (Punchlist /
+  // Inspections / Safety / QC) feed the project dashboard. Daily logs and
+  // photos are not consumed by DashboardControlCenter, so they are not fetched.
   // Pull per-project only to avoid portfolio-mode overhead.
-  const { data: allDailyLogs = [] } = useQuery({
-    queryKey: ["daily-logs-dashboard", projectScope],
-    queryFn: () => listForDashboard(entities.DailyLog, "-date"),
-    staleTime: 60 * 1000,
-    enabled: !!pid,
-  });
-  const { data: allPhotos = [] } = useQuery({
-    queryKey: ["photos-dashboard", projectScope],
-    queryFn: () => listForDashboard(entities.Photo, "-taken_date"),
-    staleTime: 60 * 1000,
-    enabled: !!pid,
-  });
   const { data: allPunchlist = [] } = useQuery({
     queryKey: ["punchlist-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.PunchlistItem),
@@ -228,8 +211,6 @@ export default function Dashboard() {
     () => (pid ? allDrawingActivity.filter((a) => a.project_id === pid) : []),
     [allDrawingActivity, pid],
   );
-  const dailyLogs        = useMemo(() => (pid ? allDailyLogs.filter((r) => r.project_id === pid)        : []), [allDailyLogs, pid]);
-  const photosForProject = useMemo(() => (pid ? allPhotos.filter((r) => r.project_id === pid)           : []), [allPhotos, pid]);
   const punchlistItems   = useMemo(() => (pid ? allPunchlist.filter((r) => r.project_id === pid)        : []), [allPunchlist, pid]);
   const inspections      = useMemo(() => (pid ? allInspections.filter((r) => r.project_id === pid)      : []), [allInspections, pid]);
   const safetyIncidents  = useMemo(() => (pid ? allSafetyIncidents.filter((r) => r.project_id === pid)  : []), [allSafetyIncidents, pid]);
@@ -246,11 +227,12 @@ export default function Dashboard() {
       deliveries: scopePortfolioRows(allDeliveries),
       actionItems: scopePortfolioRows(allActionItems),
       scheduleTasks: scopePortfolioRows(allScheduleTasks),
+      expenses: scopePortfolioRows(allExpenses),
       rfiEvidenceLoaded: rfisSuccess,
       scheduleEvidenceLoaded: scheduleTasksSuccess,
     }),
     [
-      allCOs, allWPs, allCodes, allRFIs, allDeliveries,
+      allCOs, allWPs, allCodes, allRFIs, allDeliveries, allExpenses,
       allActionItems, allScheduleTasks, scopePortfolioRows, rfisSuccess, scheduleTasksSuccess,
     ],
   );

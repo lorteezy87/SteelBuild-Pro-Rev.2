@@ -3,8 +3,9 @@
  * repair, CSV export. No React, no state, no network.
  */
 
-import { parseUTCDate } from "@/components/shared/formatters";
 import { RFI_NUMBER_PATTERN, DENSITY_LS_KEY, DENSITY_PRESETS, INSIGHTS_LS_KEY } from "./constants";
+import { isRfiClosed } from "@/lib/entityPredicates";
+import { localToday } from "@/utils/dates";
 
 export const extractRfiSequence = (value) => {
   if (!value) return null;
@@ -101,10 +102,21 @@ export const daysOpen = (r) => {
   return Math.max(0, Math.floor((end - start) / 86400000));
 };
 
-export const isClosed = (r) => ["Answered", "Closed"].includes(r.status);
+/** Terminal RFI statuses: Answered / Closed / Void (canonical entityPredicates). */
+export const isClosed = (r) => isRfiClosed(r);
 
-export const isOverdue = (r) =>
-  !isClosed(r) && r.date_required && parseUTCDate(r.date_required) < new Date();
+/**
+ * Overdue = still open and `date_required` is strictly before local today.
+ * Date-only comparison: `date_required` is a DATE column, and the date-only
+ * shim parses "YYYY-MM-DD" as local NOON — comparing that against `new Date()`
+ * made an RFI due today flip to overdue at 12:00. A day-string compare has no
+ * time-of-day to flip on, and matches rfiControlCenter.derive's daysUntil.
+ */
+export const isOverdue = (r) => {
+  if (!r || isClosed(r) || !r.date_required) return false;
+  const due = String(r.date_required).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(due) && due < localToday();
+};
 
 /**
  * Map a raw RFI status to the short label shown in the row pipeline /

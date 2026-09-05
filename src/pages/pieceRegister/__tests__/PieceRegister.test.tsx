@@ -92,11 +92,18 @@ vi.mock("@/api/supabaseClient", () => ({
   },
 }));
 
-vi.mock("@/lib/supabase", () => ({
-  supabase: {
-    rpc: vi.fn(),
-  },
-}));
+vi.mock("@/lib/supabase", () => {
+  // Realtime subscription (useCanonicalReportingRealtime) needs a channel stub.
+  const channel = { on: vi.fn(), subscribe: vi.fn() };
+  channel.on.mockReturnValue(channel);
+  return {
+    supabase: {
+      rpc: vi.fn(),
+      channel: vi.fn(() => channel),
+      removeChannel: vi.fn(),
+    },
+  };
+});
 
 vi.mock("@/lib/pieceControl/productionRepository", () => ({
   setPieceHold: vi.fn(),

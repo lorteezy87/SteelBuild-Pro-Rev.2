@@ -81,6 +81,7 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
   const [createFromSet, setCreateFromSet] = useState<{
     drawing_set_ids: string[];
     status?: string;
+    ball_in_court?: string;
     requireLinkedSet: boolean;
   } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -137,10 +138,12 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
     if (!targetSetId) return;
     const seeded = buildCreateInitialFromSet(targetSetId, {
       prefilledStatus: searchParams.get("prefilledStatus"),
+      prefilledBallInCourt: searchParams.get("prefilledBallInCourt"),
     });
     setCreateFromSet({
       drawing_set_ids: seeded.drawing_set_ids,
       status: seeded.status,
+      ball_in_court: seeded.ball_in_court,
       requireLinkedSet: true,
     });
     setShowCreate(true);
@@ -149,6 +152,7 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
     const next = new URLSearchParams(searchParams);
     next.delete("targetSetId");
     next.delete("prefilledStatus");
+    next.delete("prefilledBallInCourt");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -699,6 +703,7 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
                 ? {
                     drawing_set_ids: createFromSet.drawing_set_ids,
                     ...(createFromSet.status ? { status: createFromSet.status } : {}),
+                    ...(createFromSet.ball_in_court ? { ball_in_court: createFromSet.ball_in_court } : {}),
                   }
                 : {})
           }

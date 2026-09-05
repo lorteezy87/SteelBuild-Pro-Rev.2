@@ -15,6 +15,7 @@ import TrueHealthChart from "../components/dashboard/TrueHealthChart";
 import { CommandBar, Button } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { isRfiOpen } from "@/lib/entityPredicates";
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -59,13 +60,19 @@ const healthColors = [
 
 export default function ExecutiveView() {
   const navigate = useNavigate();
-  const projectsQ = useQuery({ queryKey: ["projects"], queryFn: () => entities.Project.list(), staleTime: 5 * 60 * 1000 });
-  const rfisQ = useQuery({ queryKey: ["rfis"], queryFn: () => entities.RFI.list() });
-  const cosQ = useQuery({ queryKey: ["change-orders-global"], queryFn: () => entities.ChangeOrder.list() });
-  const codesQ = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => entities.CostCode.list() });
-  const wpsQ = useQuery({ queryKey: ["work-packages-global"], queryFn: () => entities.WorkPackage.list() });
-  const tasksQ = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => entities.ScheduleTask.list() });
-  const expensesQ = useQuery({ queryKey: ["expenses-all"], queryFn: () => entities.Expense.list() });
+  // Portfolio-wide rollup: listAll() pages through every row instead of the
+  // capped list() read, so totals don't silently truncate as a tenant grows.
+  // Keys sit under each entity's cacheRegistry primary prefix (so mutations
+  // still invalidate them) but are distinct from the capped list() caches
+  // ("rfis-all", "expenses-all", …) so a full read is never served from — or
+  // overwritten by — a truncated one.
+  const projectsQ = useQuery({ queryKey: ["projects", "executive-all"], queryFn: () => entities.Project.listAll(), staleTime: 5 * 60 * 1000 });
+  const rfisQ = useQuery({ queryKey: ["rfis", "executive-all"], queryFn: () => entities.RFI.listAll() });
+  const cosQ = useQuery({ queryKey: ["change-orders", "executive-all"], queryFn: () => entities.ChangeOrder.listAll() });
+  const codesQ = useQuery({ queryKey: ["cost-codes", "executive-all"], queryFn: () => entities.CostCode.listAll() });
+  const wpsQ = useQuery({ queryKey: ["work-packages", "executive-all"], queryFn: () => entities.WorkPackage.listAll() });
+  const tasksQ = useQuery({ queryKey: ["schedule-tasks", "executive-all"], queryFn: () => entities.ScheduleTask.listAll() });
+  const expensesQ = useQuery({ queryKey: ["expenses", "executive-all"], queryFn: () => entities.Expense.listAll() });
 
   const {
     projects = [], rfis = [], cos = [], codes = [], wps = [], tasks = [], expenses = [],
@@ -131,7 +138,7 @@ export default function ExecutiveView() {
     { label: "Total Spend", value: formatCurrency(totalSpend), sub: `of ${formatCurrency(totalBudget)} budget`, color: totalSpend > totalBudget ? "rose" : "blue" },
     { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${cos.filter(isApprovedCO).length} orders`, color: "purple" },
     { label: "Labor Burn", value: formatBudgetPercent(totalBudgetHrs > 0 ? totalActualHrs / totalBudgetHrs * 100 : 0), sub: `${totalActualHrs.toLocaleString()} hrs actual`, color: "amber" },
-    { label: "Open RFIs", value: rfis.filter((r) => r.status === "Open" || r.status === "Under Review").length, color: "blue" },
+    { label: "Open RFIs", value: rfis.filter(isRfiOpen).length, color: "blue" },
     { label: "At Risk Projects", value: projects.filter((p) => p.health_status === "At Risk").length, color: "rose" },
     {
       label: 'Delayed Tasks',
@@ -142,7 +149,7 @@ export default function ExecutiveView() {
       label: 'Complete This Week',
       value: tasks.filter(t => {
         if (t.status !== 'Complete') return false;
-        const d = new Date(t.end_date || t.updated_date || '');
+        const d = new Date(t.end_date || t.updated_at || '');
         const now = new Date();
         const weekAgo = new Date(now - 7 * 86400000);
         return d >= weekAgo && d <= now;
@@ -205,7 +212,7 @@ export default function ExecutiveView() {
   // RFI aging table
   const rfiAging = projects.map(p => {
     const pRFIs = rfis.filter(r => r.project_id === p.id);
-    const open = pRFIs.filter(r => !["Answered", "Closed"].includes(r.status));
+    const open = pRFIs.filter(isRfiOpen);
     const overdue = open.filter(r => r.date_required && new Date(r.date_required) < new Date());
     const avgDays = open.length > 0
       ? Math.round(open.reduce((s, r) => {
@@ -440,7 +447,7 @@ export default function ExecutiveView() {
             const pc = codes.filter((c) => c.project_id === p.id);
             const { budget, actual } = computeCostCodeTotals(pc);
             const pctSpend = budget > 0 ? actual / budget * 100 : 0;
-            const projRFIs = rfis.filter((r) => r.project_id === p.id && (r.status === "Open" || r.status === "Under Review")).length;
+            const projRFIs = rfis.filter((r) => r.project_id === p.id && isRfiOpen(r)).length;
             return (
               <div key={p.id}
                 style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: 14, cursor: "pointer", transition: "all 0.15s", background: "var(--bg-surface-low)" }}

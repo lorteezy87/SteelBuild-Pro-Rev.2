@@ -5,6 +5,7 @@ import type {
   StationConfiguration,
 } from './stationProgress';
 import { unwrapPieceControlRpc } from './rpcResult';
+import { fetchAllProjectRowsPaged } from './pagedSelect';
 
 export interface ProductionSnapshot {
   pieces: PieceRegisterRow[];
@@ -84,11 +85,14 @@ export async function fetchProductionSnapshot(
         .eq('project_id', projectId)
         .eq('is_active', true)
         .order('sort_order'),
-      db
-        .from('piece_station_completions')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('sort_order'),
+      // Paged like the pieces above — >1000 completions used to drop
+      // silently, under-reporting earned % on the station board.
+      fetchAllProjectRowsPaged<StationCompletion>(
+        db,
+        'piece_station_completions',
+        projectId,
+        { orderBy: 'sort_order' },
+      ).then((data) => ({ data, error: null as Error | null })),
       db
         .from('fab_releases')
         .select('work_package_id')

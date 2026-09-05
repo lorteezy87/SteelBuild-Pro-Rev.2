@@ -138,14 +138,30 @@ export default function DrawingViewer() {
     staleTime: 5 * 60 * 1000,
   });
   useEffect(() => {
-    if (!requestedRevisionId || !requestedRevisionFetched || !activeDrawing) return;
-    if (!requestedRevision || requestedRevision.drawing_id !== activeDrawing.id) {
+    if (!requestedRevisionId || !requestedRevisionFetched || drawingsLoading) return;
+    const targetDrawingId = requestedRevision?.drawing_id || null;
+    const stripParam = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete("revisionId");
+      setSearchParams(next, { replace: true });
+    };
+    if (targetDrawingId && targetDrawingId !== activeId) {
+      // The revision belongs to another sheet in this project — follow the
+      // deep link there instead of erroring. The effect re-runs once the
+      // active drawing has switched and then strips the param.
+      if (drawings.some((d) => d.id === targetDrawingId)) {
+        setActiveId(targetDrawingId);
+        return;
+      }
+      toast.error("The requested drawing revision is unavailable for this project.");
+      stripParam();
+      return;
+    }
+    if (!targetDrawingId) {
       toast.error("The requested drawing revision is unavailable for this project.");
     }
-    const next = new URLSearchParams(searchParams);
-    next.delete("revisionId");
-    setSearchParams(next, { replace: true });
-  }, [activeDrawing, requestedRevision, requestedRevisionFetched, requestedRevisionId, searchParams, setSearchParams]);
+    stripParam();
+  }, [activeId, drawings, drawingsLoading, requestedRevision, requestedRevisionFetched, requestedRevisionId, searchParams, setSearchParams]);
   const markupScale = activeDrawing?.markup_scale || null;
 
   // PDF lifecycle: file_url → signed URL → pdfjs document. Owns currentPage

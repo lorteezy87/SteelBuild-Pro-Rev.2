@@ -122,13 +122,48 @@ describe("buildDashboardSummary", () => {
     expect(s.alerts.find((a) => a.id === "rfis")).toBeUndefined();
   });
 
-  it("surfaces drawing alert when drawings are stale", () => {
-    const drawings = [{ id: "d1", is_deleted: false, status: "Rejected" }];
+  it("surfaces drawing alert when drawings are rejected (set_approval_status)", () => {
+    const drawings = [
+      { id: "d1", is_deleted: false, set_approval_status: "rejected" },
+      { id: "d2", is_deleted: false, set_approval_status: "Rejected" }, // legacy casing
+      { id: "d3", is_deleted: false, set_approval_status: "approved" },
+      { id: "d4", is_deleted: false, set_approval_status: "pending_review", stage: "IFA" },
+      { id: "d5", is_deleted: true, set_approval_status: "rejected" }, // soft-deleted
+      { id: "d6", is_deleted: false, status: "Rejected" }, // no such column on drawings
+    ];
     const s = buildDashboardSummary({ drawings });
     const alert = s.alerts.find((a) => a.id === "drawings")!;
     expect(alert).toBeDefined();
-    expect(alert.count).toBe(1);
+    expect(alert.count).toBe(2);
     expect(alert.priority).toBe("high");
+  });
+
+  it("treats Delivered / Received / Cancelled deliveries as closed regardless of casing", () => {
+    const deliveries = [
+      { id: "a", scheduled_date: YESTERDAY, status: "Scheduled" },   // late + open
+      { id: "b", scheduled_date: YESTERDAY, status: "delivered" },   // closed (lowercase)
+      { id: "c", scheduled_date: YESTERDAY, status: "Received" },    // closed (procurement terminal)
+      { id: "d", scheduled_date: YESTERDAY, status: "Cancelled" },   // closed
+      { id: "e", scheduled_date: YESTERDAY, status: "In Transit" },  // late + open
+    ];
+    const s = buildDashboardSummary({ deliveries });
+    const alert = s.alerts.find((a) => a.id === "delivery")!;
+    expect(alert).toBeDefined();
+    expect(alert.count).toBe(2);
+  });
+
+  it("counts only Submitted / Under Review / Draft COs as active (Approved / Rejected / Void are terminal)", () => {
+    const cos = [
+      { id: "c1", status: "Draft" },
+      { id: "c2", status: "Submitted" },
+      { id: "c3", status: "Under Review" },
+      { id: "c4", status: "Approved" },
+      { id: "c5", status: "Rejected" },
+      { id: "c6", status: "Void" },
+    ];
+    const s = buildDashboardSummary({ cos });
+    const alert = s.alerts.find((a) => a.id === "delivery")!;
+    expect(alert.count).toBe(3);
   });
 
   it("summary rows include project value from contract", () => {

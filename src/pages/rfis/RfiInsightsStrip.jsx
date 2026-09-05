@@ -20,6 +20,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { DonutChartSVG } from "../reports/charts";
 import { rfiAgingBuckets, oldestOpenRFIAgeDays } from "../dashboard/projectMetrics";
 import { isOverdue } from "./utils";
+import { isRfiOpen } from "@/lib/entityPredicates";
 
 /**
  * Small unit-agnostic bar chart for RFI counts. Reusing the reports
@@ -226,9 +227,9 @@ function PaneTitle({ children }) {
 
 export default function RfiInsightsStrip({ rfis, collapsed, onToggleCollapsed }) {
   const stats = useMemo(() => {
-    const openRfis = rfis.filter((r) => !["Answered", "Closed"].includes(r.status));
+    const openRfis = rfis.filter(isRfiOpen);
     const overdue = rfis.filter((r) => isOverdue(r));
-    const critical = rfis.filter((r) => r.priority === "Critical" && !["Closed"].includes(r.status));
+    const critical = openRfis.filter((r) => r.priority === "Critical");
     return {
       totalOpen: openRfis.length,
       avgAge: avgAgeDays(openRfis),

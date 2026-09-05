@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { invalidatePieceControlQueries } from "@/lib/pieceControl/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Link2, PackageCheck, Sparkles, Unlink2 } from "lucide-react";
 import { toast } from "sonner";
@@ -251,14 +252,10 @@ export default function PieceRelationshipManager({
 
   const invalidate = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["piece-relationships", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["piece-register", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["work-packages", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["model-elements", projectId] }),
+      // Shared scope: register, relationships, station board, logistics,
+      // Overview snapshot, release gate and the 3D link map.
+      invalidatePieceControlQueries(queryClient, projectId, "all"),
       queryClient.invalidateQueries({ queryKey: ["modelElements", projectId] }),
-      // Fab color map is pieces.lifecycle via model_elements.piece_id — refresh after link/assign.
-      queryClient.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["ifc", projectId] }),
     ]);
   };

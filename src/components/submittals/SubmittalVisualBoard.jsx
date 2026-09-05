@@ -29,7 +29,7 @@ import { formatShortDate } from "@/utils/dates";
 // below is retained for DRAWING-set (sheet) dues, which stay calendar-day; only
 // SUBMITTAL-governed dues switch to working days when `useWorkdays` is on. Shares
 // the SAME tested engine as the Control Board / Approval Matrix so all three agree.
-import { dueInfoFor } from "@/pages/drawingSubmittalHub/format";
+import { dueInfoFor, sheetNeedsAction } from "@/pages/drawingSubmittalHub/format";
 
 const surfaceLow = "var(--bg-surface-low)";
 const surfaceHigh = "var(--bg-surface-high)";
@@ -171,7 +171,7 @@ function buildBoardItems(setPackages, submittals, useWorkdays = false) {
       linked: !!latestSubmittal,
       needsAction:
         ACTION_STATUSES.has(latestSubmittal?.status) ||
-        (pkg.sheets || []).some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage)),
+        (pkg.sheets || []).some((drawing) => sheetNeedsAction(drawing)),
       isRR: isRRStatus(latestSubmittal?.status),
       sheetCount: (pkg.sheets || []).length,
       submittalCount: (pkg.submittals || []).length,
