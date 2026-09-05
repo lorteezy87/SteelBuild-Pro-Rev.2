@@ -22,7 +22,9 @@ import { buildRowsByGuid, buildFabLegend, findGuidsByMark, summarizeSelection, d
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
-import { assertStorageObjectSize, describePersistFailure, describePersistProgress, formatMb } from "@/lib/ifc/persistSteps";
+import {
+  assertStorageObjectSize, describeEmptyRoster, describePersistFailure, describePersistProgress, formatMb,
+} from "@/lib/ifc/persistSteps";
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -250,12 +252,12 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         { model },
       );
       if (!result.rows.length) {
-        setRoster({ step: "idle" });
-        toast.warning(
-          "No structural members found — this IFC has no beams, columns, plates, or members " +
-          "(it looks like a reference/proxy export). Re-export from your detailer with structural " +
-          "members, then load it again.",
-        );
+        // Say what the file DID contain (types, property sets, keys) so the
+        // detailer can fix the export config instead of guessing.
+        console.warn("[Model3DTab] IFC produced no roster rows:", result.diagnostics);
+        const message = describeEmptyRoster(result.diagnostics);
+        setRoster({ step: "error", message });
+        toast.warning(message, { duration: 15000 });
         return;
       }
 
