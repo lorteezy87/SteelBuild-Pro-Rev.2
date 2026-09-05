@@ -611,6 +611,8 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     setClipHeight: (fraction) => setClipHeightInternal(fraction),
     getSelectedGuids: () => [...new Set([...selectedRef.current.values()].map((m) => m.userData?.guid).filter(Boolean))],
     getVisibility: () => ({ ...visibility }),
+    /** Open web-ifc model handle (null until loaded) — lets the save path reuse this parse. */
+    getModelHandle: () => apiRef.current?.model?.handle || null,
   // The *Internal helpers are stable per render (they only touch refs) — listing
   // them would recreate the handle every render for no benefit.
   // eslint-disable-next-line react-hooks/exhaustive-deps

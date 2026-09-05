@@ -4,16 +4,33 @@
  * model_elements.element_guid (IFC GlobalId), so summarizeElementStatuses can
  * build guidsByStatus and the 3D viewer can color geometry by fab status.
  *
- * Replace-on-import (MVP is one IFC model per project): any prior active IFC
- * model is superseded and its roster soft-deleted, then the new model + roster
- * are written. CSV-sourced model_elements are left untouched (only source='ifc'
- * rows are replaced).
+ * Replace-on-import (MVP is one IFC model per project), written so a failed
+ * save never leaves the project without a model: the NEW registry row + roster
+ * are inserted first, and only once every chunk landed is the prior active
+ * model superseded and its IFC roster soft-deleted. If a chunk fails the new
+ * model is discarded and the old one stays active. (The previous order —
+ * retire the old model, then insert — is why a project ended up with only
+ * `superseded` registry rows after one bad save.) CSV-sourced model_elements
+ * are left untouched (only source='ifc' rows are replaced).
  */
 import { supabase } from "@/lib/supabase";
 import { entities } from "@/api/supabaseClient";
 import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
 
 const CHUNK = 500;
+
+/** Best-effort removal of a half-written model so the prior one stays active. */
+async function discardModel(projectId, modelId, now) {
+  await supabase
+    .from("model_elements")
+    .update({ is_deleted: true, deleted_at: now })
+    .eq("project_id", projectId)
+    .eq("model_id", modelId);
+  await supabase
+    .from("model_registry")
+    .update({ is_deleted: true, deleted_at: now, status: "archived", updated_at: now })
+    .eq("id", modelId);
+}
 
 /**
  * @param {object} args
@@ -23,31 +40,17 @@ const CHUNK = 500;
  * @param {string} [args.fileUrl]     Storage path of the uploaded .ifc (so the
  *                                     viewer can auto-load it next visit)
  * @param {Array}  args.rows          extractIfcRoster().rows
- * @returns {Promise<{ modelId: string, created: number }>}
+ * @param {(done: number, total: number) => void} [args.onProgress]  roster rows written
+ * @returns {Promise<{ modelId: string, created: number, linkSummary: object|null }>}
  */
-export async function importIfcRoster({ projectId, fileName, schema, fileUrl, rows }) {
+export async function importIfcRoster({ projectId, fileName, schema, fileUrl, rows, onProgress }) {
   if (!projectId) throw new Error("No active project.");
   const safeRows = rows || []; // a model with no marks still persists (file_url only)
   const now = new Date().toISOString();
 
-  // 1. Replace any prior IFC model for this project.
-  const { error: supErr } = await supabase
-    .from("model_registry")
-    .update({ status: "superseded", updated_at: now })
-    .eq("project_id", projectId)
-    .eq("file_type", "IFC")
-    .eq("status", "active");
-  if (supErr) throw supErr;
-
-  const { error: delErr } = await supabase
-    .from("model_elements")
-    .update({ is_deleted: true, deleted_at: now })
-    .eq("project_id", projectId)
-    .eq("source", "ifc")
-    .eq("is_deleted", false);
-  if (delErr) throw delErr;
-
-  // 2. Create the model anchor.
+  // 1. Create the new model anchor. It is `active` from the start so the
+  //    stored-model query (latest active by upload_date) picks it up as soon as
+  //    the roster is complete; the prior model is retired in step 3.
   const { data: reg, error: regErr } = await supabase
     .from("model_registry")
     .insert({
@@ -67,7 +70,7 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
   if (regErr) throw regErr;
   const modelId = reg.id;
 
-  // 3. Bulk-insert the roster. Each row carries the IFC GlobalId (element_guid)
+  // 2. Bulk-insert the roster. Each row carries the IFC GlobalId (element_guid)
   //    + the assembly mark (piece_mark) — the geometry↔status join.
   const records = safeRows.map((r) => ({
     project_id: projectId,
@@ -82,11 +85,38 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
   }));
 
   let created = 0;
-  for (let i = 0; i < records.length; i += CHUNK) {
-    const chunk = records.slice(i, i + CHUNK);
-    await entities.ModelElement.bulkCreate(chunk);
-    created += chunk.length;
+  onProgress?.(0, records.length);
+  try {
+    for (let i = 0; i < records.length; i += CHUNK) {
+      const chunk = records.slice(i, i + CHUNK);
+      await entities.ModelElement.bulkCreate(chunk);
+      created += chunk.length;
+      onProgress?.(created, records.length);
+    }
+  } catch (err) {
+    try { await discardModel(projectId, modelId, now); } catch { /* keep the original error */ }
+    throw err;
   }
+
+  // 3. Retire the previous IFC model + roster now that the replacement is whole.
+  const { error: supErr } = await supabase
+    .from("model_registry")
+    .update({ status: "superseded", superseded_by: modelId, updated_at: now })
+    .eq("project_id", projectId)
+    .eq("file_type", "IFC")
+    .eq("status", "active")
+    .neq("id", modelId);
+  if (supErr) throw supErr;
+
+  const { error: delErr } = await supabase
+    .from("model_elements")
+    .update({ is_deleted: true, deleted_at: now })
+    .eq("project_id", projectId)
+    .eq("source", "ifc")
+    .eq("is_deleted", false)
+    // Legacy IFC rows can carry a null model_id; `neq` alone would skip them.
+    .or(`model_id.is.null,model_id.neq.${modelId}`);
+  if (delErr) throw delErr;
 
   // Lot-aware mark → canonical piece link (RPC or client fallback if migration lag).
   let linkSummary = null;
