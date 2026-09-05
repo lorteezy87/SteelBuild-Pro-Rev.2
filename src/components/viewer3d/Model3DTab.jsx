@@ -22,6 +22,7 @@ import { buildRowsByGuid, buildFabLegend, findGuidsByMark, summarizeSelection, d
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
+import { assertStorageObjectSize, describePersistFailure, describePersistProgress, formatMb } from "@/lib/ifc/persistSteps";
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -234,10 +235,19 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
 
   const persistModel = async (file, buf) => {
     if (!projectId) return;
-    setRoster({ step: "extracting", done: 0, total: 0 });
+    // Which pipeline step is running — names the failure for the operator and
+    // for Sentry, since "Couldn't save the model" alone was undiagnosable.
+    let step = "extract";
+    setRoster({ step: "extracting", done: 0, total: 0, phase: "index" });
     try {
-      const result = await extractIfcRoster(buf, (done, total) =>
-        setRoster({ step: "extracting", done, total }),
+      // Reuse the viewer's already-parsed model when it is still open; a second
+      // OpenModel of a 100 MB+ IFC is what used to push Safari over its memory
+      // ceiling on the save path.
+      const model = viewerRef.current?.getModelHandle?.() || null;
+      const result = await extractIfcRoster(
+        buf,
+        (done, total, phase) => setRoster({ step: "extracting", done, total, phase }),
+        { model },
       );
       if (!result.rows.length) {
         setRoster({ step: "idle" });
@@ -248,13 +258,24 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         );
         return;
       }
-      setRoster({ step: "saving" });
+
+      step = "compress";
+      setRoster({ step: "saving", stage: "compressing model" });
       let uploadFile = file;
       const gz = await gzipBuffer(buf).catch(() => null);
       if (gz) uploadFile = new File([gz], `${file.name}.gz`);
+      assertStorageObjectSize(uploadFile.size, gz ? "compressed model" : "model");
+
+      step = "upload";
+      setRoster({ step: "saving", stage: `uploading ${formatMb(uploadFile.size)}` });
       const up = await integrations.Core.UploadFile({ file: uploadFile });
+
+      step = "register";
+      setRoster({ step: "saving", stage: `writing pieces 0 / ${result.rows.length.toLocaleString()}` });
       const { created, linkSummary } = await importIfcRoster({
         projectId, fileName: file.name, schema: result.schema, fileUrl: up.path, rows: result.rows,
+        onProgress: (done, total) =>
+          setRoster({ step: "saving", stage: `writing pieces ${done.toLocaleString()} / ${total.toLocaleString()}` }),
       });
       qc.invalidateQueries({ queryKey: ["project-model", projectId] });
       await invalidatePieceControlQueries(qc, projectId, "import");
@@ -269,8 +290,10 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         `Model saved to this project${created ? ` · ${created.toLocaleString()} pieces` : ""}${linkNote}.`,
       );
     } catch (err) {
-      setRoster({ step: "error", message: err?.message || String(err) });
-      toast.error("Couldn't save the model: " + (err?.message || String(err)));
+      const message = describePersistFailure(step, err);
+      console.error(`[Model3DTab] save failed at step "${step}":`, err);
+      setRoster({ step: "error", message });
+      toast.error(message);
     }
   };
 
@@ -493,7 +516,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
           <div style={saveBanner}>
             {(roster.step === "extracting" || roster.step === "saving") ? (
               <span style={{ ...mono, fontSize: 12, color: "var(--text-primary)" }}>
-                Saving to project…{roster.step === "extracting" && roster.total ? ` ${roster.done.toLocaleString()}/${roster.total.toLocaleString()}` : ""}
+                {describePersistProgress(roster)}
               </span>
             ) : (
               <>
@@ -525,7 +548,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
             <div style={{ marginTop: 10 }}>
               {(roster.step === "extracting" || roster.step === "saving") && (
                 <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
-                  Saving to project…{roster.step === "extracting" && roster.total ? ` reading pieces ${roster.done.toLocaleString()} / ${roster.total.toLocaleString()}` : ""}
+                  {describePersistProgress(roster)}
                 </div>
               )}
 
@@ -542,7 +565,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
               )}
               {source === "picked" && roster.step === "error" && (
                 <div style={{ ...mono, fontSize: 10, color: "var(--status-error)", lineHeight: 1.5 }}>
-                  Couldn't save: {roster.message}.{" "}
+                  {roster.message}{" "}
                   <button type="button" onClick={() => modelFile && buffer && persistModel(modelFile, buffer)} style={linkBtn}>Retry</button>
                 </div>
               )}

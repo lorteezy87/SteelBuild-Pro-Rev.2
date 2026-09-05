@@ -21,7 +21,8 @@ import { getEngine } from "@/lib/ifc/ifcEngine";
  * @param {(guid: string) => string|undefined} [opts.colorForGuid]  hex per GlobalId
  * @param {string} [opts.defaultColor]  hex for unmatched/unstatused members
  * @returns {Promise<{ group: THREE.Group, dispose: () => void, count: number,
- *   pickInfo: (expressID: number) => object, recolor: (fn) => void }>}
+ *   pickInfo: (expressID: number) => object, recolor: (fn) => void,
+ *   handle: { modelID: number, isOpen: () => boolean } }>}
  */
 export async function loadIfcGeometry(buffer, opts = {}) {
   const { api, WebIFC } = await getEngine();
@@ -143,7 +144,20 @@ export async function loadIfcGeometry(buffer, opts = {}) {
     return out;
   };
 
+  // Open-model handle so the roster extractor can read properties from THIS
+  // parse instead of opening the IFC a second time (halves peak wasm memory on
+  // save). isOpen() goes false once dispose() ran.
+  let closed = false;
+  const handle = {
+    modelID,
+    isOpen: () => {
+      if (closed) return false;
+      try { return typeof api.IsModelOpen === "function" ? api.IsModelOpen(modelID) : true; } catch { return false; }
+    },
+  };
+
   const dispose = () => {
+    closed = true;
     group.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) o.material.dispose();
@@ -151,5 +165,5 @@ export async function loadIfcGeometry(buffer, opts = {}) {
     try { api.CloseModel(modelID); } catch { /* ignore */ }
   };
 
-  return { group, dispose, count: group.children.length, pickInfo, recolor };
+  return { group, dispose, count: group.children.length, pickInfo, recolor, handle };
 }
