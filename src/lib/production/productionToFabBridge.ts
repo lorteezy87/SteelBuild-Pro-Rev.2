@@ -9,18 +9,27 @@
  * Neither of those was updated by commitProductionRows, so EPM imports never
  * recolored the model. This bridge closes that gap.
  *
- * Efficiency: one paged roster fetch for model_elements + one pieces fetch,
- * then in-memory mark grouping and batched updates by target fab_status.
- * Avoids the previous N+1 ilike-per-mark pattern on large imports.
+ * Two write paths:
+ *   1) model_elements.fab_status by mark — a direct batched UPDATE (the table
+ *      grants authenticated writes) so unlinked parts recolor immediately.
+ *   2) canonical pieces — ONLY through the sync_production_stages_to_pieces
+ *      RPC. Browser sessions cannot write `pieces`, and a direct write would
+ *      skip station completions / piece_events anyway.
  */
 
 import { supabase } from "@/lib/supabase";
 import type { ProductionStage } from "@/lib/importProductionStatus";
 import type { FabStatus } from "@/lib/fabStatus";
 import { FAB_STATUS_ORDER } from "@/lib/fabStatus";
-import { fetchAllProjectRowsPaged } from "@/lib/pieceControl/pagedSelect";
+import { isMissingSchemaObjectError } from "@/lib/postgrestErrors";
+import { unwrapPieceControlRpc } from "@/lib/pieceControl/rpcResult";
 import type { StagedProductionRow } from "./repository";
 import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
+import {
+  planProductionStageSync,
+  type StageSyncResultRow,
+  type StageSyncRpcSummary,
+} from "./productionStageStations";
 
 const from = (table: string): any =>
   (supabase.from as unknown as (t: string) => any)(table);
@@ -61,17 +70,28 @@ function normalizeMark(mark: string | null | undefined): string {
 
 export interface ProductionBridgeSummary {
   modelElementsUpdated: number;
+  /** Lots that gained at least one station completion or were shipped. */
   piecesAdvanced: number;
+  /** Lots the RPC could not act on (not released, on hold, ambiguous mark…). */
   piecesSkipped: number;
+  /** Lots already at or past the requested stage. */
+  piecesUnchanged: number;
+  /** Per-mark outcomes from the RPC (empty when piece control is off). */
+  results: StageSyncResultRow[];
+  /** True when the hosted schema lacks the sync RPC (migration not applied). */
+  rpcMissing: boolean;
   mode: string;
 }
 
 export interface SyncProductionBridgeOpts {
   /**
-   * When true, allow pieces.lifecycle_status to move backward (operator bulk
-   * stage correction). Import path leaves this false so EPM never regresses.
+   * Legacy `model_elements.fab_status` always follows the batch, forward or
+   * back. Canonical lots are append-only (stations complete, lots ship), so a
+   * backward EPM stage is reported as unchanged/skipped, never applied.
    */
   allowLifecycleRegress?: boolean;
+  /** Recorded on piece_events / ship reference data. */
+  source?: string;
 }
 
 const UPDATE_CHUNK = 200;
@@ -106,6 +126,9 @@ export async function syncProductionRowsToModelAndPieces(
     modelElementsUpdated: 0,
     piecesAdvanced: 0,
     piecesSkipped: 0,
+    piecesUnchanged: 0,
+    results: [],
+    rpcMissing: false,
     mode: "off",
   };
   if (!projectId || !rows?.length) return summary;
@@ -156,7 +179,11 @@ export async function syncProductionRowsToModelAndPieces(
     });
   }
 
-  // ── Pilot/live: advance unique leaf pieces ────────────────────────────────
+  // ── Pilot/live: drive canonical lots through their stations via RPC ──────
+  // `pieces` is SELECT-only for browser sessions; the sanctioned write path is
+  // sync_production_stages_to_pieces, which walks each lot through the same
+  // advance_piece_station / ship functions the register uses (completions,
+  // events, WP progress), and reports per-lot skips instead of failing the batch.
   const { data: project, error: projectErr } = await from("projects")
     .select("piece_control_mode")
     .eq("id", projectId)
@@ -166,78 +193,32 @@ export async function syncProductionRowsToModelAndPieces(
   summary.mode = mode;
   if (mode !== "pilot" && mode !== "live") return summary;
 
-  // Paged so marks past row 1000 are not silently left un-advanced.
-  const pieces = await fetchAllProjectRowsPaged<Record<string, unknown>>(
-    supabase as any,
-    "pieces",
-    projectId,
-    {
-      select:
-        "id, normalized_piece_mark, lot_code, lifecycle_status, is_container, is_deleted, deleted_at, parent_piece_id",
-      build: (query) => query.eq("is_deleted", false).is("deleted_at", null),
-    },
-  );
+  const updates = planProductionStageSync(rows);
+  if (updates.length === 0) return summary;
 
-  const all = (pieces || []) as Array<{
-    id: string;
-    normalized_piece_mark: string | null;
-    lot_code: string | null;
-    lifecycle_status: string | null;
-    is_container?: boolean | null;
-    parent_piece_id?: string | null;
-  }>;
-
-  const childParentIds = new Set(
-    all.filter((p) => p.parent_piece_id).map((p) => p.parent_piece_id as string),
-  );
-  const leaves = all.filter(
-    (p) => !p.is_container && !childParentIds.has(p.id),
-  );
-
-  const leavesByMark = new Map<string, typeof leaves>();
-  for (const leaf of leaves) {
-    const mk = normalizeMark(leaf.normalized_piece_mark);
-    if (!mk) continue;
-    const list = leavesByMark.get(mk) ?? [];
-    list.push(leaf);
-    leavesByMark.set(mk, list);
+  const { data, error } = await (supabase as any).rpc("sync_production_stages_to_pieces", {
+    p_project_id: projectId,
+    p_updates: updates.map(({ mark, target_station, ship }) => ({ mark, target_station, ship })),
+    p_source: opts?.source ?? "production_import",
+  });
+  if (error) {
+    if (isMissingSchemaObjectError(error)) {
+      // Hosted schema hasn't picked up the migration yet. Never fall back to a
+      // direct pieces UPDATE (blocked by grants and skips station history).
+      console.warn(
+        "[piece_production] sync_production_stages_to_pieces RPC missing — pieces not advanced; apply migration 20260905090000",
+      );
+      summary.rpcMissing = true;
+      summary.piecesSkipped += updates.length;
+      return summary;
+    }
+    throw error;
   }
-
-  // Collect advances grouped by target fab so we can batch .in() updates.
-  const advanceIdsByFab = new Map<FabStatus, string[]>();
-  for (const [mark, fab] of fabByMark) {
-    const candidates = leavesByMark.get(mark) ?? [];
-    if (candidates.length !== 1) {
-      summary.piecesSkipped += candidates.length;
-      continue;
-    }
-    const leaf = candidates[0];
-    const currentRank = fabRank(leaf.lifecycle_status);
-    const nextRank = fabRank(fab);
-    // Import path never regresses. Explicit operator bulk may pass
-    // allowLifecycleRegress to apply corrections (e.g. Shipped → Cut).
-    if (nextRank < 0) {
-      summary.piecesSkipped += 1;
-      continue;
-    }
-    if (!opts?.allowLifecycleRegress && nextRank <= currentRank) {
-      summary.piecesSkipped += 1;
-      continue;
-    }
-    if (opts?.allowLifecycleRegress && nextRank === currentRank) {
-      summary.piecesSkipped += 1;
-      continue;
-    }
-    const bucket = advanceIdsByFab.get(fab);
-    if (bucket) bucket.push(leaf.id);
-    else advanceIdsByFab.set(fab, [leaf.id]);
-  }
-
-  for (const [fab, ids] of advanceIdsByFab) {
-    summary.piecesAdvanced += await batchUpdateByIds("pieces", ids, {
-      lifecycle_status: fab,
-    });
-  }
+  const result = unwrapPieceControlRpc<StageSyncRpcSummary>(data);
+  summary.piecesAdvanced = Number(result.advanced ?? 0);
+  summary.piecesSkipped = Number(result.skipped ?? 0);
+  summary.piecesUnchanged = Number(result.unchanged ?? 0);
+  summary.results = Array.isArray(result.results) ? result.results : [];
 
   return summary;
 }

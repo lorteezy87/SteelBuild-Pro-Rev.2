@@ -15,6 +15,7 @@ import { X, Upload, FileText, CheckCircle2, Factory } from "lucide-react";
 import { toast } from "sonner";
 import { parseProductionCsv } from "@/lib/importProductionStatus";
 import { commitProductionRows } from "@/lib/production/repository";
+import { describeProductionSync } from "@/lib/production/productionStageStations";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -86,13 +87,18 @@ export default function ProductionStatusImportModal({
 
     setStep("committing"); setErr(null);
     try {
-      const { created, updated } = await commitProductionRows(projectId, kept);
+      const { created, updated, pieceControl } = await commitProductionRows(projectId, kept);
       setLastResult({ created, updated });
       toast.success(
         `${created} piece${created === 1 ? "" : "s"} imported`
         + (updated ? `, ${updated} updated` : ""),
       );
-      onImported?.({ created, updated });
+      const syncNote = describeProductionSync(pieceControl);
+      if (syncNote) {
+        if (pieceControl?.rpcMissing) toast.warning(syncNote);
+        else toast.message(syncNote);
+      }
+      onImported?.({ created, updated, pieceControl });
       setStep("done");
       setTimeout(() => { reset(); onClose(); }, 1500);
     } catch (e) {
