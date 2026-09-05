@@ -24,6 +24,7 @@ import {
   MODEL_ELEMENT_DRAWING_LINK_COLUMNS,
 } from "@/lib/ifc/fetchAllModelElements";
 import { buildPieceDrawingMap } from "@/lib/production/pieceDrawingLinks";
+import { describeProductionSync } from "@/lib/production/productionStageStations";
 import { normalizePieceMark } from "@/services/modelElementStatus";
 import ProductionStatusImportModal from "@/components/production/ProductionStatusImportModal";
 import TeklaEpmImportModal from "@/components/production/TeklaEpmImportModal";
@@ -155,6 +156,11 @@ export default function ProductionStatus() {
       toast.success(
         `Set ${result.updated} piece${result.updated === 1 ? "" : "s"} to ${stage}.`,
       );
+      const syncNote = describeProductionSync(result.pieceControl);
+      if (syncNote) {
+        if (result.pieceControl?.rpcMissing) toast.warning(syncNote);
+        else toast.message(syncNote);
+      }
       setSelectedIds(new Set());
       await invalidatePieceControlQueries(queryClient, projectId, "production");
     },

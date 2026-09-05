@@ -9,7 +9,10 @@
 
 import { supabase } from "@/lib/supabase";
 import { PRODUCTION_STAGES, STAGE_PERCENT, type ProductionStage } from "@/lib/importProductionStatus";
-import { syncProductionRowsToModelAndPieces } from "./productionToFabBridge";
+import {
+  syncProductionRowsToModelAndPieces,
+  type ProductionBridgeSummary,
+} from "./productionToFabBridge";
 
 const TABLE = "piece_production";
 
@@ -125,7 +128,7 @@ const UPDATE_CONCURRENCY = 25;
 export async function commitProductionRows(
   projectId: string,
   rows: StagedProductionRow[],
-): Promise<{ created: number; updated: number }> {
+): Promise<{ created: number; updated: number; pieceControl: ProductionBridgeSummary | null }> {
   const importedAt = new Date().toISOString();
   const creates = rows.filter((r) => r.action === "create").map((r) => toFields(r, projectId, importedAt));
   const updates = rows.filter((r) => r.action === "update" && r.existing_id);
@@ -155,8 +158,11 @@ export async function commitProductionRows(
     updated += results.length;
   }
 
+  let pieceControl: ProductionBridgeSummary | null = null;
   try {
-    await syncProductionRowsToModelAndPieces(projectId, rows);
+    pieceControl = await syncProductionRowsToModelAndPieces(projectId, rows, {
+      source: "production_import",
+    });
   } catch (bridgeError) {
     console.warn(
       "[piece_production] production→fab bridge failed after commit:",
@@ -164,7 +170,7 @@ export async function commitProductionRows(
     );
   }
 
-  return { created, updated };
+  return { created, updated, pieceControl };
 }
 
 export async function softDeletePieceProduction(id: string): Promise<void> {
@@ -182,8 +188,8 @@ export async function bulkUpdateProductionStage(
   projectId: string,
   ids: string[],
   stage: ProductionStage,
-): Promise<{ updated: number }> {
-  if (!projectId || !ids.length) return { updated: 0 };
+): Promise<{ updated: number; pieceControl: ProductionBridgeSummary | null }> {
+  if (!projectId || !ids.length) return { updated: 0, pieceControl: null };
   if (!(PRODUCTION_STAGES as readonly string[]).includes(stage)) {
     throw new Error(`Invalid production stage: ${stage}`);
   }
@@ -202,7 +208,7 @@ export async function bulkUpdateProductionStage(
     selected.push(...((data || []) as PieceProductionRow[]));
   }
 
-  if (selected.length === 0) return { updated: 0 };
+  if (selected.length === 0) return { updated: 0, pieceControl: null };
 
   const selectedIds = selected.map((r) => r.id);
   for (let i = 0; i < selectedIds.length; i += CHUNK) {
@@ -231,15 +237,17 @@ export async function bulkUpdateProductionStage(
     external_ref: row.external_ref,
   }));
 
+  let pieceControl: ProductionBridgeSummary | null = null;
   try {
-    // Explicit operator bulk may correct backward (Shipped → Cut). Import path
-    // leaves allowLifecycleRegress unset so EPM never regresses lifecycle.
-    await syncProductionRowsToModelAndPieces(projectId, staged, {
+    // Operator bulk may correct the legacy stage backward (Shipped → Cut);
+    // model_elements.fab_status follows, canonical lots never regress.
+    pieceControl = await syncProductionRowsToModelAndPieces(projectId, staged, {
       allowLifecycleRegress: true,
+      source: "production_bulk_stage",
     });
   } catch (bridgeError) {
     console.warn("[piece_production] bulk stage → fab bridge failed:", bridgeError);
   }
 
-  return { updated: selected.length };
+  return { updated: selected.length, pieceControl };
 }
