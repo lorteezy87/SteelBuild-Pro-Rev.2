@@ -27,6 +27,71 @@ weekly; **P2** = real defect, narrower blast radius; **P3** = hygiene.
 
 ---
 
+## 0. Status — implemented 2026-09-05 (same branch)
+
+All five batches in §7 are implemented in this PR. What changed, by layer:
+
+**Pure layer** — `src/pages/workPackages/canonical.ts` (new): leaf-lot counts
+per package, phase derived from the furthest piece, latest live Fab Release
+per package. `analytics.js` takes `{ releasesByWp, piecesByWp,
+pieceControlMode }`; a released package is no longer a drawing gap, an
+exception release is a medium flag, piece-driven packages use the derived
+phase (and report `phaseMismatch`), metrics expose `released`,
+`exceptionReleases`, `phaseMismatches`, `tonnageMissingCount`,
+`progressMethod`; `matchesFocusFilter` and `compareForRegisterSort` added;
+`due_date` removed.
+
+**Page / shell** — `?id=<uuid>` and `?wp=<number>` open the drawer;
+Fab Release / Piece Register / Drawings / Deliveries links from the drawer
+(`?search=` on Fab Release, `?wp=` on Piece Register and Deliveries now
+pre-filter); on-hold project banner and stored-vs-derived phase banner;
+Fab Release + piece rollups joined (paged reads, realtime-invalidated);
+drawings read paged; the drawer holds an id and renders the live cache row;
+Escape closes it; Hold / Resume / Start / Mark complete quick actions when
+status is hand-set; bulk status actions skip piece-driven packages and say
+so; Set On Hold added; Register columns sort; Board cards have checkboxes;
+cards and rows open from the keyboard; Edit/Delete render only when
+permitted; exception rail counts route to the Focus filter that produces the
+same set; "N/M sheets fab-ready" replaces the "released" caption; Released
+KPI + hero chip; hero says how progress was weighted.
+
+**Modals** — create/edit: `isSaving` pending state, project required and
+locked on edit, null columns coalesced, date fields sent as `null`,
+Fabrication with un-IFC sheets warns instead of blocking (Fab Release owns
+that gate), phase locked on piece-driven packages, approved stages exclude
+OFS, HEAD-count piece probe, memoized drawing maps. Bulk add: paste buffer
+resets on close, duplicate WP numbers (existing or repeated in the paste) are
+blocked, colours via CSS variables.
+
+**Database** — `20260905130000_work_package_control_center.sql`: partial
+unique index `(project_id, lower(btrim(wp_number)))` on live rows (preflight
+raises with the offending numbers); `refresh_work_package_progress` is
+pilot/live-only, derives `phase`, leaves values alone at zero leaf lots,
+single pass, writes only on change, EXECUTE revoked from `authenticated`;
+canonical release stamps `released_date`, bumps Detailing → Fabrication,
+suppresses the per-piece rollup and runs it once; assign/unassign do the
+same per touched package. `20260805030000` is now DROP-only (it re-created a
+membership-only `FOR ALL` policy on 33 tables). Migration tests in
+`supabase/migrations/__tests__/workPackageControlCenter.test.js`.
+
+**Cleanup** — `WPGantt`, `WorkPackageList`, `SiteMapView`, `WPCostSummary`,
+`WorkflowBadge` deleted; hero/summary/metric styles removed from
+`styles.ts`; display font token; drawer overlay/pills via `color-mix`;
+drawing due dates via `toLocalDay` with no hardcoded year.
+
+**Not done (deliberately)** — a SQL `piece_tons` helper shared by the rollup
+and the release: the rollup keeps its inline rule (identical to the client
+`pieceTons`), and the release's weight sum is unchanged; consolidating both
+into one SQL function is a follow-up. Deleting a package still soft-deletes
+without a confirm on piece count (the dialog text now says pieces are
+unassigned).
+
+**Apply order** — the migration must be applied by an admin
+(`supabase db push` or the SQL editor). Until then the UI still works: the
+unique index and rollup changes are server-side only.
+
+---
+
 ## 1. Logic and reasoning
 
 ### P1 — Three sources of truth for "where is this package"

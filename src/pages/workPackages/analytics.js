@@ -1,5 +1,6 @@
 import { isApprovedForFab } from "@/lib/exports/fabRelease";
 import { isRejectedSheet, isSupersededSheet, isUnresolvedCurrentRevision } from "@/lib/fabReleaseGate";
+import { derivePhaseFromPieces, isPieceDrivenPackage } from "./canonical";
 
 const PHASE_ORDER = ["Detailing", "Fabrication", "Delivery", "Erection"];
 const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
@@ -111,17 +112,40 @@ function phaseIndex(phase) {
   return idx >= 0 ? idx : 0;
 }
 
+/**
+ * @param {object} wp
+ * @param {object} [options]
+ * @param {Map<string, object>} [options.drawingsById]
+ * @param {Map<string, object[]>} [options.deliveriesByWp]
+ * @param {Map<string, object>} [options.releasesByWp]  indexReleasesByWorkPackage()
+ * @param {Map<string, object>} [options.piecesByWp]    summarizePiecesByWorkPackage()
+ * @param {string} [options.pieceControlMode]           projects.piece_control_mode
+ * @param {string|Date} [options.today]
+ */
 export function getWorkPackageSignals(wp, options = {}) {
   const drawingsById = options.drawingsById || new Map();
   const deliveriesByWp = options.deliveriesByWp || new Map();
+  const releasesByWp = options.releasesByWp || new Map();
+  const piecesByWp = options.piecesByWp || new Map();
   const today = options.today ? dateValue(options.today) || options.today : todayStart();
   if (today?.setHours) today.setHours(0, 0, 0, 0);
 
+  const wpKey = wp?.id != null ? String(wp.id) : "";
+  const pieces = piecesByWp.get(wpKey) || null;
+  const release = releasesByWp.get(wpKey) || null;
+  const released = Boolean(release?.released);
+  const pieceDriven = isPieceDrivenPackage(options.pieceControlMode, pieces);
+
   const status = wp.status || "Not Started";
-  const phase = PHASE_ORDER.includes(wp.phase) ? wp.phase : "Detailing";
+  const storedPhase = PHASE_ORDER.includes(wp.phase) ? wp.phase : "Detailing";
+  // On piece-driven packages the pieces decide the phase; the stored column is
+  // hand-typed and drifts (Erection with nothing fabricated was observed).
+  const derivedPhase = pieceDriven ? derivePhaseFromPieces(pieces) : storedPhase;
+  const phase = derivedPhase;
+  const phaseMismatch = pieceDriven && storedPhase !== derivedPhase;
   const progress = clampPercent(wp.percent_complete);
   const complete = isClosedStatus(status) || progress >= 100;
-  const endDate = dateValue(wp.scheduled_end_date || wp.due_date);
+  const endDate = dateValue(wp.scheduled_end_date);
   const overdue = Boolean(endDate && endDate < today && !complete);
   const drawing = drawingState(wp, drawingsById);
   const phaseIdx = phaseIndex(phase);
@@ -136,7 +160,13 @@ export function getWorkPackageSignals(wp, options = {}) {
   const flags = [];
   if (status === "On Hold") flags.push({ key: "on_hold", label: "On hold", severity: "high" });
   if (overdue) flags.push({ key: "overdue", label: "Past plan date", severity: "high" });
-  if (inProductionPhase && !drawing.hasAny) {
+  if (released) {
+    // Fab Release already judged the sheets; repeating "not released" here
+    // contradicted the release. An exception release still deserves a flag.
+    if (release.isException) {
+      flags.push({ key: "exception_release", label: "Exception release", severity: "medium" });
+    }
+  } else if (inProductionPhase && !drawing.hasAny) {
     flags.push({ key: "no_drawings", label: "No linked drawings", severity: "high" });
   } else if (inProductionPhase && !drawing.allFabReady) {
     // Sheet-level count so this agrees with Fab Release instead of implying
@@ -154,6 +184,9 @@ export function getWorkPackageSignals(wp, options = {}) {
   if (progress >= 100 && !isClosedStatus(status)) {
     flags.push({ key: "pct_status_mismatch", label: `100% but marked ${status}`, severity: "medium" });
   }
+  if (!endDate && !complete) {
+    flags.push({ key: "no_plan_date", label: "No plan date", severity: "low" });
+  }
   if (inDeliveryOrField && !wp.load_list_complete) {
     flags.push({ key: "load_list", label: "Load list open", severity: "medium" });
   }
@@ -170,7 +203,7 @@ export function getWorkPackageSignals(wp, options = {}) {
   const high = flags.some((flag) => flag.severity === "high");
   const medium = flags.some((flag) => flag.severity === "medium");
   const readinessChecks = [
-    drawing.allFabReady || !inProductionPhase,
+    drawing.allFabReady || released || !inProductionPhase,
     Boolean(wp.vif_confirmed) || !inProductionPhase,
     Boolean(wp.load_list_complete) || !inDeliveryOrField,
     Boolean(wp.sequence_confirmed) || !inFieldPhase,
@@ -183,6 +216,13 @@ export function getWorkPackageSignals(wp, options = {}) {
 
   return {
     phase,
+    storedPhase,
+    derivedPhase,
+    phaseMismatch,
+    pieceDriven,
+    pieces,
+    release,
+    released,
     status,
     progress,
     complete,
@@ -198,7 +238,16 @@ export function getWorkPackageSignals(wp, options = {}) {
   };
 }
 
-export function buildWorkPackageMetrics(workPackages = [], drawings = [], deliveries = []) {
+/**
+ * @param {object[]} workPackages
+ * @param {object[]} drawings
+ * @param {object[]} deliveries
+ * @param {object} [extras]
+ * @param {Map<string, object>} [extras.releasesByWp]
+ * @param {Map<string, object>} [extras.piecesByWp]
+ * @param {string} [extras.pieceControlMode]
+ */
+export function buildWorkPackageMetrics(workPackages = [], drawings = [], deliveries = [], extras = {}) {
   const drawingsById = new Map(drawings.map((drawing) => [String(drawing.id), drawing]));
   const deliveriesByWp = new Map();
   for (const delivery of deliveries || []) {
@@ -208,18 +257,32 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     next.push(delivery);
     deliveriesByWp.set(key, next);
   }
+  const signalOptions = {
+    drawingsById,
+    deliveriesByWp,
+    releasesByWp: extras.releasesByWp,
+    piecesByWp: extras.piecesByWp,
+    pieceControlMode: extras.pieceControlMode,
+  };
 
   const enriched = workPackages.map((wp) => ({
     ...wp,
-    _signals: getWorkPackageSignals(wp, { drawingsById, deliveriesByWp }),
+    _signals: getWorkPackageSignals(wp, signalOptions),
   }));
 
   const totalTons = enriched.reduce((sum, wp) => sum + num(wp.tonnage), 0);
+  const tonnageMissingCount = enriched.filter((wp) => num(wp.tonnage) <= 0).length;
   const totalBudgetHours = enriched.reduce((sum, wp) => sum + wp._signals.totalBudgetHours, 0);
   const totalActualHours = enriched.reduce((sum, wp) => sum + wp._signals.totalActualHours, 0);
   const progress = totalTons > 0
     ? Math.round(enriched.reduce((sum, wp) => sum + num(wp.tonnage) * wp._signals.progress, 0) / totalTons)
     : Math.round(enriched.reduce((sum, wp) => sum + wp._signals.progress, 0) / Math.max(1, enriched.length));
+  // How the headline progress was weighted, so the hero can say so instead of
+  // presenting a tonnage-weighted number that silently ignored 36 packages.
+  /** @type {"tonnage" | "partial-tonnage" | "count"} */
+  const progressMethod = totalTons <= 0
+    ? "count"
+    : tonnageMissingCount > 0 ? "partial-tonnage" : "tonnage";
 
   const phaseRollup = PHASE_ORDER.map((phase) => {
     const items = enriched.filter((wp) => wp._signals.phase === phase);
@@ -245,8 +308,10 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
   const overdue = enriched.filter((wp) => wp._signals.overdue);
   // Fail-closed: every linked sheet must be release-ready, same direction as
   // the Fab Release gate. `hasApproved` (any one sheet) used to qualify here.
+  // A package Fab Release already released is past this bucket.
   const readyForFab = enriched.filter((wp) =>
     wp._signals.phase === "Detailing" &&
+    !wp._signals.released &&
     wp._signals.drawing.allFabReady &&
     wp._signals.status !== "On Hold"
   );
@@ -256,6 +321,10 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     (sum, wp) => sum + (wp._signals.drawing.blockedCount ?? 0),
     0,
   );
+  const released = enriched.filter((wp) => wp._signals.released);
+  const exceptionReleases = released.filter((wp) => wp._signals.release?.isException);
+  const pieceDrivenCount = enriched.filter((wp) => wp._signals.pieceDriven).length;
+  const phaseMismatches = enriched.filter((wp) => wp._signals.phaseMismatch);
   const readyForShip = enriched.filter((wp) =>
     wp._signals.phase === "Fabrication" &&
     wp._signals.progress >= 90 &&
@@ -271,7 +340,9 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     enriched,
     totalCount: enriched.length,
     totalTons,
+    tonnageMissingCount,
     progress,
+    progressMethod,
     totalBudgetHours,
     totalActualHours,
     laborBurn: totalBudgetHours > 0 ? Math.round((totalActualHours / totalBudgetHours) * 100) : 0,
@@ -284,9 +355,37 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     readyForFab,
     fabBlocked,
     blockedSheetCount,
+    released,
+    exceptionReleases,
+    pieceDrivenCount,
+    phaseMismatches,
     readyForShip,
     fieldReady,
   };
+}
+
+/** The "Focus" filter ids the Control Center understands beyond risk levels. */
+export function matchesFocusFilter(wp, focus, metrics) {
+  if (!focus || focus === "all") return true;
+  const s = wp._signals || {};
+  switch (focus) {
+    case "high":
+    case "medium":
+    case "clear":
+      return s.risk === focus;
+    case "drawing_gaps":
+      return (s.flags || []).some((f) => f.key === "no_drawings" || f.key === "drawings_not_released");
+    case "ready_fab":
+      return Boolean(metrics?.readyForFab?.some((w) => w.id === wp.id));
+    case "released":
+      return Boolean(s.released);
+    case "exception":
+      return Boolean(s.release?.isException);
+    case "overdue":
+      return Boolean(s.overdue);
+    default:
+      return true;
+  }
 }
 
 export function sortWorkPackagesForExecution(a, b) {
@@ -295,10 +394,53 @@ export function sortWorkPackagesForExecution(a, b) {
   if (riskDiff !== 0) return riskDiff;
   const phaseDiff = phaseIndex(a._signals?.phase || a.phase) - phaseIndex(b._signals?.phase || b.phase);
   if (phaseDiff !== 0) return phaseDiff;
-  const dateA = a.scheduled_end_date || a.due_date || "9999-12-31";
-  const dateB = b.scheduled_end_date || b.due_date || "9999-12-31";
+  const dateA = a.scheduled_end_date || "9999-12-31";
+  const dateB = b.scheduled_end_date || "9999-12-31";
   if (dateA !== dateB) return String(dateA).localeCompare(String(dateB));
-  return String(a.wp_number || "").localeCompare(String(b.wp_number || ""));
+  return String(a.wp_number || "").localeCompare(String(b.wp_number || ""), undefined, { numeric: true });
+}
+
+/** Register-column sort keys. `null` key = execution order. */
+export const REGISTER_SORT_KEYS = ["wp_number", "name", "phase", "status", "progress", "readiness", "labor", "tonnage", "release"];
+
+export function compareForRegisterSort(a, b, key, direction = "asc") {
+  const dir = direction === "desc" ? -1 : 1;
+  const sa = a._signals || {};
+  const sb = b._signals || {};
+  let result = 0;
+  switch (key) {
+    case "wp_number":
+      result = String(a.wp_number || "").localeCompare(String(b.wp_number || ""), undefined, { numeric: true });
+      break;
+    case "name":
+      result = String(a.name || "").localeCompare(String(b.name || ""));
+      break;
+    case "phase":
+      result = phaseIndex(sa.phase) - phaseIndex(sb.phase);
+      break;
+    case "status":
+      result = String(sa.status || "").localeCompare(String(sb.status || ""));
+      break;
+    case "progress":
+      result = num(sa.progress) - num(sb.progress);
+      break;
+    case "readiness":
+      result = num(sa.readinessScore) - num(sb.readinessScore);
+      break;
+    case "labor":
+      result = num(sa.hourBurn) - num(sb.hourBurn);
+      break;
+    case "tonnage":
+      result = num(a.tonnage) - num(b.tonnage);
+      break;
+    case "release":
+      result = Number(Boolean(sa.released)) - Number(Boolean(sb.released));
+      break;
+    default:
+      return sortWorkPackagesForExecution(a, b);
+  }
+  if (result === 0) return sortWorkPackagesForExecution(a, b);
+  return result * dir;
 }
 
 export { PHASE_ORDER };

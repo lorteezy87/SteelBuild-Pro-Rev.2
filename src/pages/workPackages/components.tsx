@@ -1,17 +1,16 @@
-import type { ComponentType, PropsWithChildren, ReactNode } from "react";
+import type { ComponentType, KeyboardEvent, MouseEvent, PropsWithChildren, ReactNode } from "react";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
-  Gauge,
   Package,
   Pencil,
   Search,
-  ShipWheel,
   Trash2,
   Users,
 } from "lucide-react";
 import {
-  Button as ButtonRaw,
   EmptyState as EmptyStateRaw,
   ProgressBar as ProgressBarRaw,
   StatusPill as StatusPillRaw,
@@ -23,8 +22,6 @@ import {
   RISK_FILTERS,
   STATUS_OPTIONS,
   STATUS_TONE,
-  VIEW_OPTIONS,
-  formatHours,
   formatTons,
   num,
   phaseColor,
@@ -48,10 +45,6 @@ import {
   filterLabelStyle,
   flagStyle,
   flagWrapStyle,
-  heroActionStyle,
-  heroMetaStyle,
-  heroStyle,
-  heroTitleStyle,
   iconButtonStyle,
   laborLabelStyle,
   laneCountStyle,
@@ -60,17 +53,13 @@ import {
   laneHeaderStyle,
   laneIconStyle,
   laneStyle,
-  metricCardStyle,
-  metricLabelStyle,
   miniLabelStyle,
-  mono,
   packageCardStyle,
   packageNameStyle,
   panelHeaderStyle,
   panelTitleStyle,
   phaseBadgeStyle,
   phaseFlowStyle,
-  phaseMetricStyle,
   railStatStyle,
   readinessStyle,
   registerHeaderStyle,
@@ -84,9 +73,6 @@ import {
   statusColumnHeaderStyle,
   statusColumnStyle,
   subLineStyle,
-  summaryGridStyle,
-  viewButtonStyle,
-  viewToggleStyle,
   watchItemStyle,
   watchMetaStyle,
   watchTitleStyle,
@@ -106,7 +92,6 @@ type EnrichedWorkPackage = WorkPackage & { _signals: WorkPackageSignals };
 // design-system primitives are still .jsx; cast at the boundary
 // (removable once the shared layer is typed).
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
-const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 const ProgressBar = ProgressBarRaw as unknown as ComponentType<AnyProps>;
 const StatusPill = StatusPillRaw as unknown as ComponentType<AnyProps>;
 const EmptyState = EmptyStateRaw as unknown as ComponentType<AnyProps>;
@@ -114,80 +99,21 @@ const EmptyState = EmptyStateRaw as unknown as ComponentType<AnyProps>;
 type WPHandler = (wp: WorkPackage) => void;
 type WPActionHandler = ((wp: WorkPackage) => void) | null;
 
-interface HeroProps {
-  projectName: string;
-  metrics: WorkPackageMetrics;
-  view: string;
-  onViewChange: (view: string) => void;
-  onExport: () => void;
-  onBulkAdd: () => void;
-  onCreate: () => void;
-  canCreate: boolean;
+export type RegisterSortDirection = "asc" | "desc";
+export interface RegisterSort {
+  key: string | null;
+  direction: RegisterSortDirection;
 }
 
-export function Hero({ projectName, metrics, view, onViewChange, onExport, onBulkAdd, onCreate, canCreate }: HeroProps) {
-  return (
-    <section className="wp-hero" style={heroStyle}>
-      <div style={{ minWidth: 0 }}>
-        <div style={eyebrowStyle}>Work Package Control</div>
-        <div style={heroTitleStyle}>Production Flow</div>
-        <div style={heroMetaStyle}>
-          <span>{projectName}</span>
-          <span>{metrics.totalCount} packages</span>
-          <span>{formatTons(metrics.totalTons)}</span>
-          <span>{metrics.progress}% weighted progress</span>
-        </div>
-      </div>
-
-      <div style={heroActionStyle}>
-        <div style={viewToggleStyle}>
-          {VIEW_OPTIONS.map((option) => {
-            const Icon = option.icon;
-            const active = view === option.id;
-            return (
-              <button key={option.id} type="button" onClick={() => onViewChange(option.id)} style={viewButtonStyle(active)}>
-                {Icon && <Icon size={13} />}
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <Button variant="secondary" icon="download" onClick={onExport}>CSV</Button>
-          <Button variant="outline" icon="upload" onClick={onBulkAdd} disabled={!canCreate}>Bulk Add</Button>
-          <Button variant="primary" icon="plus" onClick={onCreate} disabled={!canCreate}>New WP</Button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-interface SummaryStripProps {
-  metrics: WorkPackageMetrics;
-  phaseFilter: string;
-  onPhaseFilter: (phase: string) => void;
-}
-
-export function SummaryStrip({ metrics, phaseFilter, onPhaseFilter }: SummaryStripProps) {
-  return (
-    <section style={summaryGridStyle}>
-      <MetricCard icon={Package} label="Total Tons" value={formatTons(metrics.totalTons)} sub={`${metrics.totalCount} packages`} tone="var(--accent)" />
-      <MetricCard icon={Gauge} label="Labor Burn" value={`${metrics.laborBurn}%`} sub={`${formatHours(metrics.totalActualHours)} / ${formatHours(metrics.totalBudgetHours)}`} tone={metrics.laborBurn > 100 ? "var(--status-error)" : "var(--status-info)"} />
-      <MetricCard icon={AlertTriangle} label="Exceptions" value={metrics.highRisk.length} sub={`${metrics.mediumRisk.length} warnings`} tone={metrics.highRisk.length ? "var(--status-error)" : "var(--status-success)"} />
-      <MetricCard icon={ShipWheel} label="Ready To Ship" value={metrics.readyForShip.length} sub={`${metrics.fieldReady.length} field ready`} tone="var(--phase-delivery)" />
-      {metrics.phaseRollup.map((row) => (
-        <button key={row.phase} type="button" onClick={() => onPhaseFilter(phaseFilter === row.phase ? "all" : row.phase)} style={phaseMetricStyle(row.phase, phaseFilter === row.phase)}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-            <span style={metricLabelStyle}>{PHASE_META[row.phase].short}</span>
-            <span style={{ color: phaseColor(row.phase), ...mono, fontSize: 10, fontWeight: 800 }}>{row.count}</span>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <ProgressBar value={row.progress} color={phaseColor(row.phase)} height={5} sub={`${formatTons(row.tons)} - ${row.progress}%`} />
-          </div>
-        </button>
-      ))}
-    </section>
-  );
+/** Open a row from the keyboard the same way a click would. */
+function activateOnKey(handler: () => void) {
+  return (event: KeyboardEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handler();
+    }
+  };
 }
 
 interface ControlPanelProps {
@@ -225,7 +151,8 @@ export function ControlPanel({
         <input
           value={search}
           onChange={(event) => onSearch(event.target.value)}
-          placeholder="Search WP #, package, crew, status, notes..."
+          placeholder="Search WP #, package, crew, area, sequence, status, notes..."
+          aria-label="Search work packages"
           style={searchInputStyle}
         />
       </div>
@@ -248,12 +175,12 @@ export function ControlPanel({
         ))}
       </FilterGroup>
 
-      <FilterGroup label="Risk">
+      <FilterGroup label="Focus">
         {RISK_FILTERS.map((risk) => (
           <FilterButton
             key={risk.id}
             active={riskFilter === risk.id}
-            tone={risk.id === "high" ? "var(--status-error)" : risk.id === "medium" ? "var(--status-warning)" : risk.id === "clear" ? "var(--status-success)" : "var(--accent)"}
+            tone={risk.tone}
             onClick={() => onRiskFilter(risk.id)}
           >
             {risk.label}
@@ -275,20 +202,26 @@ interface ExceptionPanelProps {
   metrics: WorkPackageMetrics;
   onRiskFilter: (risk: string) => void;
   onStatusFilter: (status: string) => void;
-  onPhaseFilter: (phase: string) => void;
   onOpen: WPHandler;
 }
 
-export function ExceptionPanel({ metrics, onRiskFilter, onStatusFilter, onPhaseFilter, onOpen }: ExceptionPanelProps) {
+/**
+ * Exception rail. Every count routes to the Focus filter that produces exactly
+ * that set — "Drawing gaps" used to map to plain `high`, and "Ready for fab"
+ * to the Detailing phase filter, so the rail's numbers never matched the list.
+ */
+export function ExceptionPanel({ metrics, onRiskFilter, onStatusFilter, onOpen }: ExceptionPanelProps) {
   // metrics.highRisk / mediumRisk come straight from buildWorkPackageMetrics,
   // so every element carries `_signals` — narrow to the enriched shape.
   const watchList = [
     ...metrics.highRisk,
     ...metrics.mediumRisk.filter((wp) => !metrics.highRisk.some((h) => h.id === wp.id)),
   ].slice(0, 6) as EnrichedWorkPackage[];
+  const released = metrics.released?.length ?? 0;
+  const exceptions = metrics.exceptionReleases?.length ?? 0;
 
   return (
-    <aside style={sideRailStyle}>
+    <aside style={sideRailStyle} aria-label="Package exceptions">
       <div style={panelHeaderStyle}>
         <div>
           <div style={eyebrowStyle}>Next Attention</div>
@@ -305,13 +238,21 @@ export function ExceptionPanel({ metrics, onRiskFilter, onStatusFilter, onPhaseF
         <span>On hold</span>
         <strong>{metrics.onHold.length}</strong>
       </button>
-      <button type="button" onClick={() => onRiskFilter("high")} style={railStatStyle("var(--status-warning)")}>
+      <button type="button" onClick={() => onRiskFilter("overdue")} style={railStatStyle("var(--status-error)")}>
+        <span>Past plan date</span>
+        <strong>{metrics.overdue?.length ?? 0}</strong>
+      </button>
+      <button type="button" onClick={() => onRiskFilter("drawing_gaps")} style={railStatStyle("var(--status-warning)")}>
         <span>Drawing gaps</span>
         <strong>{metrics.drawingGaps.length}</strong>
       </button>
-      <button type="button" onClick={() => onPhaseFilter("Detailing")} style={railStatStyle("var(--status-success)")}>
+      <button type="button" onClick={() => onRiskFilter("ready_fab")} style={railStatStyle("var(--status-success)")}>
         <span>Ready for fab</span>
         <strong>{metrics.readyForFab.length}</strong>
+      </button>
+      <button type="button" onClick={() => onRiskFilter("released")} style={railStatStyle("var(--phase-fab)")}>
+        <span>Released</span>
+        <strong>{released}{exceptions ? ` · ${exceptions} exc` : ""}</strong>
       </button>
 
       <div style={{ borderTop: "1px solid var(--divider)", paddingTop: 12 }}>
@@ -356,7 +297,7 @@ export function PhaseFlowView({ rows, phaseRollup, onOpen, onEdit, onDelete, sel
         const rollup = phaseRollup.find((row) => row.phase === phase);
         const Icon = PHASE_META[phase].icon;
         return (
-          <section key={phase} style={laneStyle(phase)}>
+          <section key={phase} style={laneStyle(phase)} aria-label={`${PHASE_META[phase].label} lane`}>
             <div style={laneHeaderStyle}>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 <span style={laneIconStyle(phase)}><Icon size={15} /></span>
@@ -380,8 +321,8 @@ export function PhaseFlowView({ rows, phaseRollup, onOpen, onEdit, onDelete, sel
                   selected={selectedWPs.has(wp.id as string)}
                   onToggle={() => onToggleSelect(wp.id as string)}
                   onOpen={() => onOpen(wp)}
-                  onEdit={() => onEdit?.(wp)}
-                  onDelete={() => onDelete?.(wp)}
+                  onEdit={onEdit ? () => onEdit(wp) : null}
+                  onDelete={onDelete ? () => onDelete(wp) : null}
                 />
               ))}
               {!items.length && <div style={laneEmptyStyle}>No packages in this phase</div>}
@@ -398,9 +339,11 @@ interface StatusBoardViewProps {
   onOpen: WPHandler;
   onEdit: WPActionHandler;
   onDelete: WPActionHandler;
+  selectedWPs: Set<string>;
+  onToggleSelect: (id: string) => void;
 }
 
-export function StatusBoardView({ rows, onOpen, onEdit, onDelete }: StatusBoardViewProps) {
+export function StatusBoardView({ rows, onOpen, onEdit, onDelete, selectedWPs, onToggleSelect }: StatusBoardViewProps) {
   if (!rows.length) return <NoPackages />;
 
   return (
@@ -409,14 +352,22 @@ export function StatusBoardView({ rows, onOpen, onEdit, onDelete }: StatusBoardV
         const items = rows.filter((wp) => wp._signals.status === status);
         const tons = items.reduce((sum, wp) => sum + num(wp.tonnage), 0);
         return (
-          <section key={status} style={statusColumnStyle(status)}>
+          <section key={status} style={statusColumnStyle(status)} aria-label={`${status} column`}>
             <div style={statusColumnHeaderStyle}>
               <span>{status}</span>
               <strong>{items.length} / {formatTons(tons)}</strong>
             </div>
             <div style={{ display: "grid", gap: 9 }}>
               {items.map((wp) => (
-                <CompactPackageCard key={wp.id} wp={wp} onOpen={() => onOpen(wp)} onEdit={() => onEdit?.(wp)} onDelete={() => onDelete?.(wp)} />
+                <CompactPackageCard
+                  key={wp.id}
+                  wp={wp}
+                  selected={selectedWPs.has(wp.id as string)}
+                  onToggle={() => onToggleSelect(wp.id as string)}
+                  onOpen={() => onOpen(wp)}
+                  onEdit={onEdit ? () => onEdit(wp) : null}
+                  onDelete={onDelete ? () => onDelete(wp) : null}
+                />
               ))}
               {!items.length && <div style={laneEmptyStyle}>No packages</div>}
             </div>
@@ -434,26 +385,70 @@ interface RegisterViewProps {
   onOpen: WPHandler;
   onEdit: WPActionHandler;
   onDelete: WPActionHandler;
+  sort: RegisterSort;
+  onSort: (key: string) => void;
 }
 
-export function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit, onDelete }: RegisterViewProps) {
+const REGISTER_COLUMNS: Array<{ key: string | null; label: string }> = [
+  { key: "wp_number", label: "WP" },
+  { key: "name", label: "Package" },
+  { key: "phase", label: "Phase" },
+  { key: "status", label: "Status" },
+  { key: "release", label: "Release" },
+  { key: "progress", label: "Progress" },
+  { key: "readiness", label: "Readiness" },
+  { key: "labor", label: "Labor" },
+];
+
+export function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit, onDelete, sort, onSort }: RegisterViewProps) {
   if (!rows.length) return <NoPackages />;
 
   return (
     <section style={registerShellStyle}>
-      <div style={registerHeaderStyle}>
+      <div style={registerHeaderStyle} role="row">
         <span />
-        <span>WP</span>
-        <span>Package</span>
-        <span>Phase</span>
-        <span>Status</span>
-        <span>Progress</span>
-        <span>Readiness</span>
-        <span>Labor</span>
+        {REGISTER_COLUMNS.map((column) => {
+          const active = sort.key === column.key;
+          const ariaSort = active ? (sort.direction === "asc" ? "ascending" : "descending") : "none";
+          return (
+            <button
+              key={column.label}
+              type="button"
+              onClick={() => column.key && onSort(column.key)}
+              aria-sort={ariaSort}
+              title={`Sort by ${column.label.toLowerCase()}`}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                color: active ? "var(--accent)" : "inherit",
+                font: "inherit",
+                letterSpacing: "inherit",
+                textTransform: "inherit",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                justifyContent: "flex-start",
+              }}
+            >
+              {column.label}
+              {active && (sort.direction === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+            </button>
+          );
+        })}
         <span />
       </div>
       {rows.map((wp) => (
-        <div key={wp.id} onClick={() => onOpen(wp)} style={registerRowStyle(wp._signals.risk)}>
+        <div
+          key={wp.id}
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpen(wp)}
+          onKeyDown={activateOnKey(() => onOpen(wp))}
+          aria-label={`Open ${wp.wp_number || "work package"}`}
+          style={registerRowStyle(wp._signals.risk)}
+        >
           <input
             type="checkbox"
             checked={selectedWPs.has(wp.id as string)}
@@ -466,12 +461,16 @@ export function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit
             <span style={packageNameStyle}>{wp.name || "Unnamed package"}</span>
             <span style={subLineStyle}>{wp.crew || "No crew"} / {formatTons(wp.tonnage)}</span>
           </span>
-          <PhaseBadge phase={wp._signals.phase} />
+          <PhaseBadge phase={wp._signals.phase} mismatch={wp._signals.phaseMismatch} />
           <StatusPill label={wp._signals.status} />
+          <ReleasePill signals={wp._signals} />
           <ProgressBar value={wp._signals.progress} color={phaseColor(wp._signals.phase)} height={4} sub={`${wp._signals.progress}%`} />
           <Readiness value={wp._signals.readinessScore} />
           <span style={laborLabelStyle(wp._signals.hourBurn)}>{wp._signals.totalBudgetHours ? `${wp._signals.hourBurn}%` : "-"}</span>
-          <RowActions onEdit={(event) => { event.stopPropagation(); onEdit?.(wp); }} onDelete={(event) => { event.stopPropagation(); onDelete?.(wp); }} />
+          <RowActions
+            onEdit={onEdit ? (event) => { event.stopPropagation(); onEdit(wp); } : undefined}
+            onDelete={onDelete ? (event) => { event.stopPropagation(); onDelete(wp); } : undefined}
+          />
         </div>
       ))}
     </section>
@@ -483,14 +482,24 @@ interface WorkPackageCardProps {
   selected: boolean;
   onToggle: () => void;
   onOpen: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit: (() => void) | null;
+  onDelete: (() => void) | null;
 }
 
 function WorkPackageCard({ wp, selected, onToggle, onOpen, onEdit, onDelete }: WorkPackageCardProps) {
   const signals = wp._signals;
+  const drawingCaption = signals.released
+    ? `Released${signals.release?.releaseNumber ? ` · ${signals.release.releaseNumber}` : ""}`
+    : `${signals.drawing.fabReadyCount ?? signals.drawing.approvedCount}/${signals.drawing.linkedCount || 0} sheets fab-ready`;
   return (
-    <article onClick={onOpen} style={packageCardStyle(signals.risk, selected)}>
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={activateOnKey(onOpen)}
+      aria-label={`Open ${wp.wp_number || "work package"}`}
+      style={packageCardStyle(signals.risk, selected)}
+    >
       <div style={cardTopStyle}>
         <input
           type="checkbox"
@@ -501,13 +510,14 @@ function WorkPackageCard({ wp, selected, onToggle, onOpen, onEdit, onDelete }: W
         />
         <span style={wpNumberStyle}>{wp.wp_number || "WP"}</span>
         <div style={{ flex: 1 }} />
+        <ReleasePill signals={signals} compact />
         <StatusPill label={signals.status} size="xs" />
       </div>
       <div style={packageNameStyle}>{wp.name || "Unnamed package"}</div>
       <div style={cardMetaGridStyle}>
-        <Fact icon={Package} label="Tons" value={formatTons(wp.tonnage)} />
+        <Fact icon={Package} label="Tons" value={num(wp.tonnage) > 0 ? formatTons(wp.tonnage) : "—"} />
         <Fact icon={Users} label="Crew" value={wp.crew || "Open"} />
-        <Fact icon={CalendarDays} label="Plan" value={formatDateShort(wp.scheduled_end_date || wp.due_date)} />
+        <Fact icon={CalendarDays} label="Plan" value={wp.scheduled_end_date ? formatDateShort(wp.scheduled_end_date) : "—"} />
       </div>
       <ProgressBar value={signals.progress} color={phaseColor(signals.phase)} height={5} sub={`${signals.progress}% complete`} />
       <div style={flagWrapStyle}>
@@ -516,8 +526,11 @@ function WorkPackageCard({ wp, selected, onToggle, onOpen, onEdit, onDelete }: W
         {!signals.flags.length && <Flag flag={{ label: "No blockers", severity: "clear" }} />}
       </div>
       <div style={cardFooterStyle}>
-        <span style={subLineStyle}>{signals.drawing.approvedCount}/{signals.drawing.linkedCount || 0} drawings released</span>
-        <RowActions onEdit={(event) => { event.stopPropagation(); onEdit(); }} onDelete={(event) => { event.stopPropagation(); onDelete(); }} />
+        <span style={subLineStyle}>{drawingCaption}</span>
+        <RowActions
+          onEdit={onEdit ? (event) => { event.stopPropagation(); onEdit(); } : undefined}
+          onDelete={onDelete ? (event) => { event.stopPropagation(); onDelete(); } : undefined}
+        />
       </div>
     </article>
   );
@@ -525,53 +538,53 @@ function WorkPackageCard({ wp, selected, onToggle, onOpen, onEdit, onDelete }: W
 
 interface CompactPackageCardProps {
   wp: EnrichedWorkPackage;
+  selected: boolean;
+  onToggle: () => void;
   onOpen: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit: (() => void) | null;
+  onDelete: (() => void) | null;
 }
 
-function CompactPackageCard({ wp, onOpen, onEdit, onDelete }: CompactPackageCardProps) {
+function CompactPackageCard({ wp, selected, onToggle, onOpen, onEdit, onDelete }: CompactPackageCardProps) {
   const signals = wp._signals;
   return (
-    <article onClick={onOpen} style={compactCardStyle(signals.risk)}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={activateOnKey(onOpen)}
+      aria-label={`Open ${wp.wp_number || "work package"}`}
+      style={compactCardStyle(signals.risk)}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onClick={(event) => event.stopPropagation()}
+          onChange={onToggle}
+          aria-label={`Select ${wp.wp_number || "work package"}`}
+        />
         <span style={wpNumberStyle}>{wp.wp_number || "WP"}</span>
-        <PhaseBadge phase={signals.phase} />
+        <div style={{ flex: 1 }} />
+        <ReleasePill signals={signals} compact />
+        <PhaseBadge phase={signals.phase} mismatch={signals.phaseMismatch} />
       </div>
       <div style={packageNameStyle}>{wp.name || "Unnamed package"}</div>
       <ProgressBar value={signals.progress} color={phaseColor(signals.phase)} height={4} sub={`${formatTons(wp.tonnage)} - ${signals.progress}%`} />
       <div style={cardFooterStyle}>
         <span style={subLineStyle}>{signals.flags[0]?.label || wp.crew || "No blockers"}</span>
-        <RowActions onEdit={(event) => { event.stopPropagation(); onEdit(); }} onDelete={(event) => { event.stopPropagation(); onDelete(); }} />
+        <RowActions
+          onEdit={onEdit ? (event) => { event.stopPropagation(); onEdit(); } : undefined}
+          onDelete={onDelete ? (event) => { event.stopPropagation(); onDelete(); } : undefined}
+        />
       </div>
     </article>
   );
 }
 
-interface MetricCardProps {
-  icon: ComponentType<{ size?: number | string; color?: string }>;
-  label: string;
-  value: ReactNode;
-  sub: ReactNode;
-  tone: string;
-}
-
-function MetricCard({ icon: Icon, label, value, sub, tone }: MetricCardProps) {
-  return (
-    <div style={metricCardStyle(tone)}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-        <span style={metricLabelStyle}>{label}</span>
-        <Icon size={15} color={tone} />
-      </div>
-      <div style={{ ...mono, fontSize: 25, lineHeight: 1, fontWeight: 900, color: tone, marginTop: 10 }}>{value}</div>
-      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6 }}>{sub}</div>
-    </div>
-  );
-}
-
 function FilterGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div style={filterGroupStyle}>
+    <div style={filterGroupStyle} role="group" aria-label={`${label} filter`}>
       <span style={filterLabelStyle}>{label}</span>
       {children}
     </div>
@@ -587,7 +600,7 @@ interface FilterButtonProps {
 
 function FilterButton({ active, tone = "var(--accent)", onClick, children }: FilterButtonProps) {
   return (
-    <button type="button" onClick={onClick} style={filterButtonStyle(active, tone)}>
+    <button type="button" onClick={onClick} aria-pressed={active} style={filterButtonStyle(active, tone)}>
       {children}
     </button>
   );
@@ -611,14 +624,38 @@ function Fact({ icon: Icon, label, value }: FactProps) {
   );
 }
 
-function PhaseBadge({ phase }: { phase: string }) {
+function PhaseBadge({ phase, mismatch }: { phase: string; mismatch?: boolean }) {
   const Icon = PHASE_META[phase]?.icon || Package;
   return (
-    <span style={phaseBadgeStyle(phase)}>
+    <span
+      style={phaseBadgeStyle(phase)}
+      title={mismatch ? "Phase derived from piece status; the stored phase disagrees" : undefined}
+    >
       <Icon size={10} />
       {PHASE_META[phase]?.short || phase || "Phase"}
+      {mismatch ? "*" : ""}
     </span>
   );
+}
+
+/**
+ * What Fab Release says about the package. Blank when no live release row
+ * exists, so a package that was never released does not read as "pending".
+ */
+function ReleasePill({ signals, compact = false }: { signals: WorkPackageSignals; compact?: boolean }) {
+  const release = signals.release;
+  if (!release) return compact ? null : <span style={{ ...subLineStyle, fontSize: 9 }}>—</span>;
+  const exception = Boolean(release.isException);
+  const tone = !release.released
+    ? "var(--text-muted)"
+    : exception ? "var(--status-warning)" : "var(--status-success)";
+  const label = !release.released ? "Pending" : exception ? "Exception" : "Released";
+  const title = [
+    release.releaseNumber ? `Release ${release.releaseNumber}` : "Fab release",
+    release.releaseDate ? `on ${formatDateShort(release.releaseDate)}` : null,
+    exception ? "(exception release)" : null,
+  ].filter(Boolean).join(" ");
+  return <span style={flagStyle(tone)} title={title}>{label}</span>;
 }
 
 function Readiness({ value }: { value: number }) {
@@ -631,16 +668,20 @@ function Flag({ flag }: { flag: { label: string; severity: string } }) {
     ? "var(--status-error)"
     : flag.severity === "medium"
       ? "var(--status-warning)"
-      : "var(--status-success)";
+      : flag.severity === "low"
+        ? "var(--text-muted)"
+        : "var(--status-success)";
   return <span style={flagStyle(tone)}>{flag.label}</span>;
 }
 
 interface RowActionsProps {
-  onEdit?: (event: any) => void;
-  onDelete?: (event: any) => void;
+  onEdit?: (event: MouseEvent<HTMLButtonElement>) => void;
+  onDelete?: (event: MouseEvent<HTMLButtonElement>) => void;
 }
 
+/** Edit / Delete icons — rendered only for the actions the user may take. */
 function RowActions({ onEdit, onDelete }: RowActionsProps) {
+  if (!onEdit && !onDelete) return <span />;
   return (
     <span style={{ display: "inline-flex", gap: 5 }}>
       {onEdit && (
@@ -662,7 +703,7 @@ function NoPackages() {
     <EmptyState
       icon="wp"
       title="No work packages match this view"
-      body="Adjust the search, phase, status, or risk filters to bring packages back into view."
+      body="Adjust the search, phase, status, or focus filters to bring packages back into view."
     />
   );
 }

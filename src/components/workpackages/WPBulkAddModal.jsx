@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle } from "@/components/shared/PhoenixModal";
 
 /*
@@ -227,24 +227,41 @@ export default function WPBulkAddModal({
 }) {
   const [raw, setRaw] = useState("");
 
+  // Clear the paste buffer when the modal closes so the next open does not
+  // offer the previous batch again (a second "Add" would double-insert).
+  useEffect(() => {
+    if (!open) setRaw("");
+  }, [open]);
+
   const { rows, headerDetected } = useMemo(() => parseBlock(raw), [raw]);
 
   const existingWpNumbers = useMemo(
-    () => new Set(existingWPs.map((w) => (w.wp_number || "").trim()).filter(Boolean)),
+    () => new Set(existingWPs.map((w) => (w.wp_number || "").trim().toLowerCase()).filter(Boolean)),
     [existingWPs]
   );
 
-  const rowsWithDupFlags = useMemo(
-    () =>
-      rows.map((r) => ({
+  // Duplicate = already on the project, or repeated inside this paste. A
+  // duplicate WP number is now rejected by the database's unique index, so
+  // the row is blocked here instead of "flagged but allowed".
+  const rowsWithDupFlags = useMemo(() => {
+    const seen = new Map();
+    for (const r of rows) {
+      const key = r.wp_number.toLowerCase();
+      if (key) seen.set(key, (seen.get(key) || 0) + 1);
+    }
+    return rows.map((r) => {
+      const key = r.wp_number.toLowerCase();
+      const isDuplicate = Boolean(key && (existingWpNumbers.has(key) || seen.get(key) > 1));
+      return {
         ...r,
-        isDuplicate: r.wp_number && existingWpNumbers.has(r.wp_number),
-      })),
-    [rows, existingWpNumbers]
-  );
+        isDuplicate,
+        errors: isDuplicate ? { ...r.errors, wp_number: "Duplicate WP #" } : r.errors,
+      };
+    });
+  }, [rows, existingWpNumbers]);
 
   const validRows = rowsWithDupFlags.filter((r) => Object.keys(r.errors).length === 0);
-  const errorCount = rowsWithDupFlags.filter((r) => Object.keys(r.errors).length > 0).length;
+  const errorCount = rowsWithDupFlags.filter((r) => Object.keys(r.errors).length > 0 && !r.isDuplicate).length;
   const dupCount = rowsWithDupFlags.filter((r) => r.isDuplicate).length;
   const blankNumberCount = rowsWithDupFlags.filter((r) => !r.wp_number).length;
 
@@ -315,8 +332,8 @@ export default function WPBulkAddModal({
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>
             WP #, Name, Phase, Status, Tonnage, % Complete, Crew, Shop Hrs Budget, Shop Hrs Actual, Notes
           </span>
-          . Blank WP # values will be auto-numbered on save. Duplicates of existing WP numbers on this project
-          are flagged but allowed.
+          . Blank WP # values will be auto-numbered on save. A WP # that already exists on this project, or repeats
+          in the paste, is blocked — clear it to auto-number or fix it before adding.
         </div>
 
         {/* Paste textarea */}
@@ -368,7 +385,7 @@ export default function WPBulkAddModal({
               <Chip label={`${errorCount} WITH ERRORS`} color="var(--status-error)" />
             )}
             {dupCount > 0 && (
-              <Chip label={`${dupCount} DUPLICATE WP #`} color="var(--status-warning)" />
+              <Chip label={`${dupCount} DUPLICATE WP # (BLOCKED)`} color="var(--status-error)" />
             )}
             {blankNumberCount > 0 && (
               <Chip label={`${blankNumberCount} WILL AUTO-NUMBER`} color="var(--status-info)" />
@@ -381,7 +398,7 @@ export default function WPBulkAddModal({
         {rows.length > 0 && (
           <div
             style={{
-              border: "1px solid rgba(135,154,180,0.28)",
+              border: "1px solid var(--border-default)",
               borderRadius: 8,
               overflow: "auto",
               maxHeight: 320,
@@ -451,11 +468,11 @@ export default function WPBulkAddModal({
                     <tr
                       key={row.__index}
                       style={{
-                        background: hasErrors
-                          ? "rgb(41,19,24)"
-                          : row.isDuplicate
-                          ? "rgb(37,26,11)"
-                          : "rgb(10,15,23)",
+                        background: row.isDuplicate
+                          ? "color-mix(in srgb, var(--status-error) 12%, var(--bg-surface))"
+                          : hasErrors
+                          ? "color-mix(in srgb, var(--status-error) 8%, var(--bg-surface))"
+                          : "var(--bg-surface)",
                         borderBottom: "1px solid var(--divider)",
                       }}
                     >
@@ -476,14 +493,12 @@ export default function WPBulkAddModal({
                         return (
                           <td
                             key={col.key}
-                            title={err || (isDupCol ? "Duplicate of existing WP # on this project" : "")}
+                            title={isDupCol ? "Duplicate WP # — already on this project or repeated in the paste" : err || ""}
                             style={{
                               padding: "6px",
                               textAlign: col.numeric ? "right" : "left",
-                              color: err
+                              color: err || isDupCol
                                 ? "var(--status-error)"
-                                : isDupCol
-                                ? "var(--status-warning)"
                                 : "var(--text-primary)",
                               fontFamily: col.numeric || col.key === "wp_number"
                                 ? "var(--font-mono)"
@@ -549,7 +564,7 @@ const Chip = ({ label, color }) => (
       borderRadius: 4,
       border: `1px solid ${color}`,
       color,
-      background: `${color}14`,
+      background: `color-mix(in srgb, ${color} 10%, transparent)`,
       fontSize: 9,
       fontWeight: 700,
       letterSpacing: "0.08em",

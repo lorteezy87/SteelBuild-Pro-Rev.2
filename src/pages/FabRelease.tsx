@@ -83,7 +83,9 @@ export default function FabRelease() {
   const [view, setView] = useState("flow");
   const [stageFilter, setStageFilter] = useState("all");
   const [riskFilter, setRiskFilter] = useState("all");
-  const [search, setSearch] = useState("");
+  // `?search=WP-014` from the Work Package Control Center scopes the gate to
+  // that package on arrival.
+  const [search, setSearch] = useState(() => searchParams.get("search")?.trim() || "");
   const [seqFilter, setSeqFilter] = useState<unknown>(null);
   const [detailWP, setDetailWP] = useState<EnrichedWorkPackage | null>(null);
   const [editingWP, setEditingWP] = useState<Record<string, unknown> | null>(null);
