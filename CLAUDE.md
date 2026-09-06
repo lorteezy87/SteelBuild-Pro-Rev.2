@@ -32,6 +32,17 @@ Official record numbers (RFI/CO/submittal/…) come ONLY from the atomic DB RPC 
 ## MCP server
 `steelbuild-mcp-server` — 18 tools across portfolio/coordination/commercial/logistics domains. Authenticates via user JWT so RLS applies automatically. Don't bypass this with service-role calls in application code.
 
+## Deploy
+`steelbuild-pro.com` deploys ONLY via `.github/workflows/ci.yml`'s gated `deploy`
+job on a push to `main` (`vercel pull --environment=production` →
+`vercel build --prod` → `vercel deploy --prebuilt --prod`). Vercel's own git
+auto-deploy is off for `main` (`vercel.json` → `git.deploymentEnabled.main=false`).
+Because it's a prebuilt deploy, env vars are baked in during that build step —
+fixing one requires setting it in the Vercel `steelbuildpro-og` project *and*
+a fresh push/re-run on `main`; a dashboard "Redeploy" click re-serves the old
+bundle. Never push directly to `main` without explicit permission — a merge
+there deploys immediately; open a PR instead.
+
 ## Workflow rules
 - Employment/IP conflict with S&H Steel is unresolved — do not add billing, multi-tenant signup, or public marketing copy without being told this has cleared legal review.
 - Before touching Stripe/webhook code: idempotency is already implemented, don't remove it.
