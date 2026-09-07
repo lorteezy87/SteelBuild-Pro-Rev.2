@@ -110,8 +110,16 @@ export interface FabReleaseGateArgs {
   }> | null;
 }
 
-/** Normalize an RFI number for matching: "RFI #001" → "RFI001". */
-function normNum(value: string | number | null | undefined): string {
+/**
+ * Normalize an RFI number for matching: "RFI #001" → "RFI001".
+ *
+ * THE canonical RFI-number normalizer. Every surface that joins a drawing's
+ * `linked_rfi_ids` (a CSV of RFI NUMBERS) to `rfis.rfi_number` must use this one
+ * — hand-rolled variants have shipped that split on whitespace or kept the "#",
+ * both of which silently fail to match the canonical "RFI #001" the sheet editor
+ * asks detailers to type.
+ */
+export function normNum(value: string | number | null | undefined): string {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 

@@ -62,6 +62,7 @@ import { saveRevisionSummary, getLatestSummariesByProject } from "@/lib/revision
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { buildRfiPrefillFromSummary, createRfiAndLink } from "@/lib/rfiFromDelta";
 import { isRfiOpen } from "@/lib/entityPredicates";
+import { normNum } from "@/lib/fabReleaseGate";
 const RevisionDeepDiveModal = lazyWithRetry(() => import("@/components/drawings/RevisionImpactReportModal"));
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
@@ -338,6 +339,20 @@ export default function DrawingSubmittalHub() {
     return s;
   }, [rfis]);
 
+  // The SAME open RFIs keyed by normalized NUMBER. Sheet links live in
+  // drawings.linked_rfi_ids, which is a CSV of RFI numbers ("RFI #001"), not
+  // uuids — readiness needs the open set in both shapes or a sheet-linked open
+  // RFI silently fails to block the package.
+  const openRfiNumbers = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of (rfis as any[]) || []) {
+      if (!r || r.is_deleted || !isRfiOpen(r)) continue;
+      const key = normNum(r.rfi_number);
+      if (key) s.add(key);
+    }
+    return s;
+  }, [rfis]);
+
   // Per-package readiness read-model, keyed by package key.
   const readinessByKey = useMemo(() => {
     const m = new Map<string, any>();
@@ -361,10 +376,11 @@ export default function DrawingSubmittalHub() {
         project: activeProject,
         workPackage,
         openRfiIds,
+        openRfiNumbers,
       }));
     }
     return m;
-  }, [setPackages, wpById, openRfiIds, activeProject]);
+  }, [setPackages, wpById, openRfiIds, openRfiNumbers, activeProject]);
 
   // 3D model mapping rollup: element status buckets derived from the SAME
   // per-package readiness models above, so the (future) viewer coloring can
