@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => {
     bulkCreate: vi.fn(),
     link: vi.fn(),
     insertError: null as unknown,
+    liveElementIds: [] as string[],
+    selectPages: 0,
   };
   const from = vi.fn((table: string) => {
     const ops: Op[] = [];
@@ -23,10 +25,32 @@ const mocks = vi.hoisted(() => {
       if (isInsert && table === "model_registry") {
         return state.insertError ? { data: null, error: state.insertError } : { data: { id: "new-model" }, error: null };
       }
+      // Simulate the paged soft-delete against a live roster: a select returns
+      // one page of ids, and the matching `.in("id", ids)` update removes them,
+      // so the self-consuming loop terminates exactly as it does in Postgres.
+      if (table === "model_elements") {
+        const isSelect = ops.some(([op]) => op === "select");
+        const isUpdate = ops.some(([op]) => op === "update");
+        if (isSelect) {
+          const limitOp = ops.find(([op]) => op === "limit");
+          const limit = (limitOp?.[1] as number) ?? 1000;
+          state.selectPages += 1;
+          return { data: state.liveElementIds.slice(0, limit).map((id) => ({ id })), error: null };
+        }
+        if (isUpdate) {
+          const inOp = ops.find(([op]) => op === "in");
+          const ids = (inOp?.[2] as string[]) || [];
+          if (ids.length) {
+            const gone = new Set(ids);
+            state.liveElementIds = state.liveElementIds.filter((id) => !gone.has(id));
+          }
+          return { data: null, error: null };
+        }
+      }
       return { data: null, error: null };
     };
     const b: Record<string, unknown> = {};
-    for (const op of ["insert", "update", "select", "eq", "neq", "or", "is", "not", "order", "limit"]) {
+    for (const op of ["insert", "update", "select", "eq", "neq", "or", "is", "not", "order", "limit", "in"]) {
       b[op] = (...args: unknown[]) => { ops.push([op, ...args]); return b; };
     }
     b.single = async () => result();
@@ -61,6 +85,8 @@ describe("importIfcRoster", () => {
   beforeEach(() => {
     mocks.state.calls.length = 0;
     mocks.state.insertError = null;
+    mocks.state.liveElementIds = [];
+    mocks.state.selectPages = 0;
     mocks.state.bulkCreate.mockReset().mockImplementation(async (chunk: unknown[]) => chunk);
     mocks.state.link.mockReset().mockResolvedValue({ linked: 3, ambiguous: 0, unmatched: 1 });
     mocks.from.mockClear();
@@ -96,12 +122,85 @@ describe("importIfcRoster", () => {
     expect(hasOp(supersede, "eq", "status", "active")).toBe(true);
     expect(hasOp(supersede, "neq", "id", "new-model")).toBe(true);
 
+    // The retire step now PAGES: a select for one page of ids, scoped the same
+    // way the old single UPDATE was.
     expect(retire.table).toBe("model_elements");
-    expect((retire.ops[0][1] as Record<string, unknown>).is_deleted).toBe(true);
+    expect(opNames(retire)[0]).toBe("select");
     expect(hasOp(retire, "eq", "source", "ifc")).toBe(true);
+    expect(hasOp(retire, "eq", "is_deleted", false)).toBe(true);
     expect(hasOp(retire, "or", "model_id.is.null,model_id.neq.new-model")).toBe(true);
+    // Empty roster to retire → one probing select, no update.
     expect(mocks.state.calls).toHaveLength(3);
     expect(mocks.state.link).toHaveBeenCalledWith("p1");
+  });
+
+  it("retires a large previous roster one bounded page per statement", async () => {
+    // The bug: this was ONE update over the whole project. model_elements
+    // carries 11 indexes and `authenticated` runs statement_timeout=8s, so on a
+    // real roster (~28k rows) it died with "canceling statement due to
+    // statement timeout" — after the new roster was already live.
+    mocks.state.liveElementIds = Array.from({ length: 2300 }, (_, i) => `old-${i}`);
+
+    await importIfcRoster({ projectId: "p1", fileName: "job.ifc", rows: [] });
+
+    const elementCalls = mocks.state.calls.filter((c) => c.table === "model_elements");
+    const updates = elementCalls.filter((c) => opNames(c)[0] === "update");
+    // 2300 rows → pages of 1000, 1000, 300, then a final empty probe.
+    expect(updates).toHaveLength(3);
+    expect((updates[0].ops.find(([op]) => op === "in")?.[2] as string[])).toHaveLength(1000);
+    expect((updates[2].ops.find(([op]) => op === "in")?.[2] as string[])).toHaveLength(300);
+    // Every page is bounded — no statement is allowed to touch the whole roster.
+    for (const u of updates) {
+      const ids = u.ops.find(([op]) => op === "in")?.[2] as string[];
+      expect(ids.length).toBeLessThanOrEqual(1000);
+    }
+    // And it actually finished the job.
+    expect(mocks.state.liveElementIds).toHaveLength(0);
+  });
+
+  it("rolls back to the previous model when the RETIRE step fails", async () => {
+    // Regression: the retire step used to sit outside the try/catch, so a
+    // failure there left the new roster live AND the old one un-retired — two
+    // rosters at once — while telling the operator to retry, which stacked a
+    // third. One project reached 3 live rosters / 45,543 rows vs a true 13,992.
+    let failed = false;
+    const realFrom = mocks.from.getMockImplementation()!;
+    mocks.from.mockImplementation((table: string) => {
+      const b = realFrom(table) as Record<string, any>;
+      if (table === "model_registry" && !failed) {
+        const origUpdate = b.update;
+        b.update = (...args: unknown[]) => {
+          const patch = args[0] as Record<string, unknown>;
+          if (patch?.status === "superseded") {
+            failed = true;
+            const thrower: Record<string, any> = {};
+            for (const op of ["eq", "neq", "or", "in", "select", "limit"]) thrower[op] = () => thrower;
+            thrower.then = (_res: unknown, rej: (e: unknown) => unknown) =>
+              Promise.resolve().then(() => rej({ code: "57014", message: "canceling statement due to statement timeout" }));
+            return thrower;
+          }
+          return origUpdate(...args);
+        };
+      }
+      return b;
+    });
+
+    await expect(importIfcRoster({ projectId: "p1", fileName: "job.ifc", rows }))
+      .rejects.toMatchObject({ code: "57014" });
+
+    // The new model must be archived, not left active alongside the old one.
+    const archived = mocks.state.calls.find(
+      (c) => c.table === "model_registry" && (c.ops[0][1] as Record<string, unknown>)?.status === "archived",
+    );
+    expect(archived).toBeTruthy();
+    expect(hasOp(archived!, "eq", "id", "new-model")).toBe(true);
+    // …and anything it retired must be put back active.
+    const unretire = mocks.state.calls.find(
+      (c) => c.table === "model_registry" && (c.ops[0][1] as Record<string, unknown>)?.superseded_by === null,
+    );
+    expect(unretire).toBeTruthy();
+    expect(hasOp(unretire!, "eq", "superseded_by", "new-model")).toBe(true);
+    expect(mocks.state.link).not.toHaveBeenCalled();
   });
 
   it("discards the half-written model and keeps the old one active when a chunk fails", async () => {
@@ -112,9 +211,11 @@ describe("importIfcRoster", () => {
     await expect(importIfcRoster({ projectId: "p1", fileName: "job.ifc", rows }))
       .rejects.toThrow(/duplicate key/);
 
+    // Rollback now PAGES the discard, so the element call is a select probe.
     const tables = mocks.state.calls.map((c) => `${c.table}:${opNames(c)[0]}`);
-    expect(tables).toEqual(["model_registry:insert", "model_elements:update", "model_registry:update"]);
-    const [, dropElements, dropRegistry] = mocks.state.calls;
+    expect(tables).toEqual(["model_registry:insert", "model_elements:select", "model_registry:update", "model_registry:update", "model_elements:select"]);
+    const dropElements = mocks.state.calls[1];
+    const dropRegistry = mocks.state.calls[2];
     expect(hasOp(dropElements, "eq", "model_id", "new-model")).toBe(true);
     expect((dropRegistry.ops[0][1] as Record<string, unknown>).status).toBe("archived");
     expect(hasOp(dropRegistry, "eq", "id", "new-model")).toBe(true);
@@ -136,5 +237,6 @@ describe("importIfcRoster", () => {
     expect(out.created).toBe(0);
     expect(mocks.state.bulkCreate).not.toHaveBeenCalled();
     expect(mocks.state.calls.map((c) => c.table)).toEqual(["model_registry", "model_registry", "model_elements"]);
+    expect(opNames(mocks.state.calls[2])[0]).toBe("select");
   });
 });

@@ -19,17 +19,108 @@ import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
 
 const CHUNK = 500;
 
+/**
+ * Page size for soft-deletes. The `authenticated` role runs with
+ * statement_timeout=8s, and model_elements carries 11 indexes, so a single
+ * UPDATE over a whole project's roster (live rosters reach ~28k rows) cannot
+ * finish inside the budget — it dies with "canceling statement due to statement
+ * timeout". 1000 also matches PostgREST's db-max-rows, so the id page is one
+ * round trip. Each page is its own statement, so the work is unbounded in total
+ * but bounded per statement.
+ */
+const SOFT_DELETE_PAGE = 1000;
+
+/**
+ * Soft-delete every matching row, ONE PAGE PER STATEMENT.
+ *
+ * `applyFilter` narrows a `select("id")` builder; the loop is self-consuming
+ * because each page flips `is_deleted` to true and the filter always requires
+ * `is_deleted = false`, so no offset bookkeeping is needed.
+ *
+ * @param {(q: any) => any} applyFilter
+ * @param {string} now  ISO stamp — also the undo handle (see restoreSoftDeleted)
+ * @param {(done: number) => void} [onProgress]
+ * @returns {Promise<number>} rows soft-deleted
+ */
+async function softDeleteInPages(applyFilter, now, onProgress) {
+  let total = 0;
+  for (;;) {
+    const { data, error } = await applyFilter(
+      supabase.from("model_elements").select("id").eq("is_deleted", false),
+    ).limit(SOFT_DELETE_PAGE);
+    if (error) throw error;
+    const ids = (data || []).map((r) => r.id);
+    if (!ids.length) break;
+
+    const { error: updErr } = await supabase
+      .from("model_elements")
+      .update({ is_deleted: true, deleted_at: now })
+      .in("id", ids);
+    if (updErr) throw updErr;
+
+    total += ids.length;
+    onProgress?.(total);
+    if (ids.length < SOFT_DELETE_PAGE) break;
+  }
+  return total;
+}
+
+/**
+ * Undo the soft-deletes this run performed. `deleted_at` is stamped with the
+ * run's own `now`, so it identifies exactly the rows this import retired and
+ * nothing else. Paged for the same statement-timeout reason.
+ */
+async function restoreSoftDeleted(projectId, now) {
+  for (;;) {
+    const { data, error } = await supabase
+      .from("model_elements")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("is_deleted", true)
+      .eq("deleted_at", now)
+      .limit(SOFT_DELETE_PAGE);
+    if (error) throw error;
+    const ids = (data || []).map((r) => r.id);
+    if (!ids.length) break;
+    const { error: updErr } = await supabase
+      .from("model_elements")
+      .update({ is_deleted: false, deleted_at: null })
+      .in("id", ids);
+    if (updErr) throw updErr;
+    if (ids.length < SOFT_DELETE_PAGE) break;
+  }
+}
+
 /** Best-effort removal of a half-written model so the prior one stays active. */
 async function discardModel(projectId, modelId, now) {
-  await supabase
-    .from("model_elements")
-    .update({ is_deleted: true, deleted_at: now })
-    .eq("project_id", projectId)
-    .eq("model_id", modelId);
+  await softDeleteInPages(
+    (q) => q.eq("project_id", projectId).eq("model_id", modelId),
+    now,
+  );
   await supabase
     .from("model_registry")
     .update({ is_deleted: true, deleted_at: now, status: "archived", updated_at: now })
     .eq("id", modelId);
+}
+
+/**
+ * Put the project back the way it was before this run: discard the new model,
+ * un-supersede whatever it retired, and restore any rows this run soft-deleted.
+ *
+ * Without this, a failure in the retire phase left BOTH rosters live — the new
+ * one inserted and active, the old one never soft-deleted — while the error told
+ * the operator "the previous model is still active — retry the save", so the
+ * retry stacked a third roster on top. One project reached 3 live rosters and
+ * 45,543 rows against a true count of 13,992.
+ */
+async function rollbackImport(projectId, modelId, now) {
+  await discardModel(projectId, modelId, now);
+  await supabase
+    .from("model_registry")
+    .update({ status: "active", superseded_by: null, updated_at: now })
+    .eq("project_id", projectId)
+    .eq("superseded_by", modelId);
+  await restoreSoftDeleted(projectId, now);
 }
 
 /**
@@ -86,6 +177,11 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
 
   let created = 0;
   onProgress?.(0, records.length);
+  // Steps 2 AND 3 are both inside the guard. Retiring the old model used to sit
+  // OUTSIDE it, so a failure there (reliably, on any large roster — see
+  // SOFT_DELETE_PAGE) threw with the new roster already inserted and live and
+  // the old one never retired: two rosters live at once, and an error message
+  // inviting a retry that stacked a third.
   try {
     for (let i = 0; i < records.length; i += CHUNK) {
       const chunk = records.slice(i, i + CHUNK);
@@ -93,30 +189,30 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
       created += chunk.length;
       onProgress?.(created, records.length);
     }
+
+    // 3. Retire the previous IFC model + roster now that the replacement is whole.
+    const { error: supErr } = await supabase
+      .from("model_registry")
+      .update({ status: "superseded", superseded_by: modelId, updated_at: now })
+      .eq("project_id", projectId)
+      .eq("file_type", "IFC")
+      .eq("status", "active")
+      .neq("id", modelId);
+    if (supErr) throw supErr;
+
+    await softDeleteInPages(
+      (q) =>
+        q
+          .eq("project_id", projectId)
+          .eq("source", "ifc")
+          // Legacy IFC rows can carry a null model_id; `neq` alone would skip them.
+          .or(`model_id.is.null,model_id.neq.${modelId}`),
+      now,
+    );
   } catch (err) {
-    try { await discardModel(projectId, modelId, now); } catch { /* keep the original error */ }
+    try { await rollbackImport(projectId, modelId, now); } catch { /* keep the original error */ }
     throw err;
   }
-
-  // 3. Retire the previous IFC model + roster now that the replacement is whole.
-  const { error: supErr } = await supabase
-    .from("model_registry")
-    .update({ status: "superseded", superseded_by: modelId, updated_at: now })
-    .eq("project_id", projectId)
-    .eq("file_type", "IFC")
-    .eq("status", "active")
-    .neq("id", modelId);
-  if (supErr) throw supErr;
-
-  const { error: delErr } = await supabase
-    .from("model_elements")
-    .update({ is_deleted: true, deleted_at: now })
-    .eq("project_id", projectId)
-    .eq("source", "ifc")
-    .eq("is_deleted", false)
-    // Legacy IFC rows can carry a null model_id; `neq` alone would skip them.
-    .or(`model_id.is.null,model_id.neq.${modelId}`);
-  if (delErr) throw delErr;
 
   // Lot-aware mark → canonical piece link (RPC or client fallback if migration lag).
   let linkSummary = null;
@@ -146,11 +242,7 @@ export async function removeProjectModel(projectId) {
     .eq("is_deleted", false);
   if (regErr) throw regErr;
 
-  const { error: elErr } = await supabase
-    .from("model_elements")
-    .update({ is_deleted: true, deleted_at: now })
-    .eq("project_id", projectId)
-    .eq("source", "ifc")
-    .eq("is_deleted", false);
-  if (elErr) throw elErr;
+  // Paged — a whole-project roster is far too big for one statement under the
+  // 8s authenticated timeout.
+  await softDeleteInPages((q) => q.eq("project_id", projectId).eq("source", "ifc"), now);
 }

@@ -79,6 +79,54 @@ live, and data export works. A 2026-07-01 enterprise-readiness audit
 and `docs/runbooks/`. These are go-to-market, typing, and platform-maturity
 follow-ups._
 
+### Detailing Control Center — audit remainder (2026-09-07)
+
+From the `/DrawingSubmittalHub` truthfulness audit. Twelve findings were fixed in
+`0d88e7b7`, `e40711b8`, `3e0320de`, `df1d885e` (see the ARCHITECTURE.md decision
+log). These are what is left.
+
+- **Decide which drawing register ships.** `DrawingRegisterPanel` declares ten
+  props and forwards two — its own comment says *"Props retained for hub
+  call-site compatibility"*. Because `onRevisionUploaded` / `onOpenSummary` are
+  the only producers of `summaryCard`, the entire Revision Summary feature is
+  unreachable **app-wide**: `RevisionSummaryCard`, the AI deep-dive modal, and
+  `openRfiFromSummary → createRfiAndLink` can never render.
+  `drawing_revision_summaries` holds 2 rows and has stopped accumulating.
+  `drawingRegisterTable.tsx` (494 lines) and `drawingRegister.derive.ts` (+155
+  lines of passing tests) are imported only by their own test files, and a
+  `revision-summaries` query is fetched on every project load with zero
+  consumers. **Either** delete the dead register, the eight dead props,
+  `handleRevisionUploaded`, `currentRevByDrawingId` and that query, **or** add a
+  revision-upload affordance to `DrawingRegisterGridPanel` and forward the two
+  callbacks. This is a product call, not a bug fix.
+
+- **Register "RFIs" / "WPs" columns read a link model nothing writes.**
+  `drawing_register_view` counts via `drawing_links` subqueries, but the app
+  links RFIs through `drawings.linked_rfi_ids` (CSV of numbers) and work packages
+  through `work_packages.linked_drawing_ids`. Live: `drawing_links` has **0
+  rows** while **74 work packages** carry `linked_drawing_ids`, so every one of
+  those sheets renders a muted "0". Needs a **production view migration** to
+  union the two models — the schema already does the same
+  `unnest(string_to_array(...))` join in two other places — or the columns should
+  be dropped rather than render a zero that means "not tracked here".
+
+- **Lower-severity remainder (§15–§29 of the audit).** Verified but unfixed:
+  tab badge counts sets while the tab lists sheets; the hero chip reads "No
+  overdue sets" while overdue *unlinked submittals* exist; two tiles both labelled
+  "Needs Action" with different denominators; KPI strip renders definitive zeros
+  while still loading; "Detailing %" can never reach 100 (denominator includes two
+  post-fab erection states); R&R ranks above BFA in `DETAILING_STATE_ORDER` so a
+  rejected package clears the "Not approved" milestone; `revisionImpacted` /
+  `fullySuperseded` are structurally dead (`buildSetPackages` strips superseded
+  sheets before readiness sees them); working-day due chips use the calendar "d"
+  suffix; the register table is unvirtualized with an O(sets×rows) scan per
+  keystroke; the four inline write controls have no `can()` gate (RLS still
+  blocks, but viewers get enabled controls); matrix rows expand on mouse only;
+  vivid `--cmd-*` fill hues used as 9px text fail contrast on the light skin;
+  Radix Dialog is imported in two files (CLAUDE.md forbids it — the shared
+  `ui/dialog` primitive has 17 importers, so this is a repo-wide decision); and
+  "Run AI deep-dive →" renders unconditionally while its handler is flag-gated.
+
 ### Monetization / go-to-market
 
 - **Legal pages** — the self-serve signup needs ToS / privacy / a basic DPA to

@@ -696,6 +696,67 @@ public/             Static assets including web-ifc wasm (public/wasm/) + pdf wo
 
 ## Decision log (recent material decisions)
 
+### 2026-09-07 — Detailing Control Center truthfulness audit (12 fixes)
+
+A full audit of `/DrawingSubmittalHub` found that the dominant defect class on
+the surface was not crashes or bad writes but **confident, wrong display**: the
+page asserting things that were not true. Twelve findings were fixed across
+`0d88e7b7`, `e40711b8`, `3e0320de`, `df1d885e`. Four decisions worth recording,
+because each rejected the obvious fix:
+
+**1. The model roster stays lazy; truth comes from a HEAD count.** A perf commit
+(`639ffd463`) had gated the `model_elements` read to the 3D tab without updating
+four other consumers, so the Control Board announced "No model members yet —
+import a CSV from Tekla or SDS2" on projects with a full roster. The obvious fix
+— ungate the query — was rejected: the largest live roster is 27,750 rows and
+`fetchAllModelElements` pages at PostgREST's 1000-row ceiling, so an unconditional
+fetch would restore ~28 round-trips to every page view. Instead `countModelElements()`
+(one HEAD request, zero rows) answers "does a roster exist", the paged read stays
+on-demand, and the card has four states rather than inferring emptiness from an
+unloaded array. **General rule: never gate a displayed claim on a lazily-loaded
+collection.**
+
+**2. Two `linked_rfi_ids` columns are two different id spaces.**
+`drawings.linked_rfi_ids` is text (a CSV of RFI *numbers*);
+`submittals.linked_rfi_ids` is `uuid[]`; `drawing_sets` has no such column.
+`computeDetailingReadiness` pooled all three and intersected against a set of
+UUIDs, so a sheet-linked open RFI could never block its package — the readiness
+engine showed "Fab ready" while the Drawing Health Score on the same screen
+deducted for that same RFI. `normNum` is now exported from `fabReleaseGate.ts` as
+**the** canonical RFI-number normalizer; two private variants that split on
+whitespace and kept the `#` were deleted rather than a third being written.
+
+**3. `unknown` is a first-class downstream severity.** `computeRevisionImpact`
+treated a missing date as a not-reached date, so on any project that does not
+hand-key the three per-sheet fab/delivery dates every revision rendered as "Not
+downstream" / "caught pre-fab" — an all-clear asserted from absent data, and
+persisted to `drawing_revision_summaries`. Severity is now
+`critical > high > medium > unknown > low`, where `low` means dates *are*
+recorded and none reached. `unknown` counts as neither downstream (which would
+invent rework exposure) nor low (which would invent an all-clear); it is reported
+as `unknownDownstreamCount` and sorts above `low`.
+
+**4. Control enablement derives from the write validator.** Four inline editors
+on the Control Board rendered on conditions strictly weaker than what their
+mutations required, so on reachable package shapes every click failed with a
+toast. `format.ts` now exports `canWriteDueDate` / `canWriteOwner` /
+`canWriteDetailingState` / `canWriteReadinessFlags`, each mirroring its validator
+so the two cannot drift.
+
+Also: `isPackageReleasedForFab` was added rather than widening `isClosedPackage`
+(terminal-for-triage, shared with the triage queue and Register column, and it
+fires on Void submittals); the Approval Matrix now resolves its governing
+submittal with `pickMostRecentSubmittal` over usable statuses instead of the
+never-incremented `round_number`; and `EFFECTIVE_LIST_CAP = min(LIST_ROW_CAP,
+SERVER_MAX_ROWS)` makes the truncation detectors satisfiable — `LIST_ROW_CAP`
+deliberately unchanged so no request asks for fewer rows than before.
+
+Two findings were left open as product/ops decisions: which drawing register
+ships (`DrawingRegisterPanel` discards eight of ten props, making the Revision
+Summary feature unreachable app-wide), and the register's RFIs/WPs columns
+reading `drawing_links` (0 rows) instead of the link model the app actually
+writes — that one needs a view migration. Both are tracked in `TECH_DEBT.md`.
+
 ### 2026-07-25 — R&R is a first-class derived workflow stage (drawing approval lifecycle, Slice 1)
 
 R&R (Revise & Resubmit) / Rejected submittal outcomes previously derived to the
