@@ -1,0 +1,11 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	// Must match the Worker name shown in the Cloudflare dashboard
+	// (Workers & Pages > steelbuild-pro-rev-2), or Workers Builds will fail.
+	"name": "steelbuild-pro-rev-2",
+	"compatibility_date": "2026-09-06",
+	"assets": {
+		"directory": "./dist",
+		"not_found_handling": "single-page-application"
+	}
+}
