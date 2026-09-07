@@ -137,6 +137,10 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["model-elements", pid],
       ["model-elements"],
+      // HEAD-count key behind the Detailing Control Board's mapping card. It is
+      // what the card reads to know a roster EXISTS without paying to load it,
+      // so an import has to refresh it or the card keeps showing the old count.
+      ["model-elements-count", pid],
       // Production Status drawing-link map (slim projection — separate key so it
       // does not thrash the full-row model-elements cache used by Hub/3D).
       ["production-model-elements", pid],

@@ -69,6 +69,12 @@ export interface ControlBoardPanelProps {
   onCompareRevision?: (drawingId: string) => void;
   modelMapping?: any;
   modelElementRows?: any[];
+  /** Live member count from the HEAD-count query; null while it is still loading. */
+  modelRosterCount?: number | null;
+  modelRosterCountLoading?: boolean;
+  /** True while the full roster is being paged in on demand. */
+  modelRosterLoading?: boolean;
+  onLoadModelRoster?: () => void;
   onImportModelElements?: () => void;
 }
 
@@ -114,7 +120,9 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
     triage, kpis, isLoading, onOpenTab,
     onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness,
     sequenceReadiness, revisionImpact, isSaving,
-    onEscalate, onCompareRevision, modelMapping, modelElementRows, onImportModelElements,
+    onEscalate, onCompareRevision, modelMapping, modelElementRows,
+    modelRosterCount, modelRosterCountLoading, modelRosterLoading, onLoadModelRoster,
+    onImportModelElements,
   } = props;
 
   if (isLoading) return <LoadingSkeleton />;
@@ -265,7 +273,15 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
       {/* ── Analytical sub-sections (reused as-is; light via token cascade) ── */}
       <SequenceReadinessSection rows={sequenceReadiness} />
       {onImportModelElements && (
-        <ModelMappingSection summary={modelMapping} elements={modelElementRows} onImport={onImportModelElements} />
+        <ModelMappingSection
+          summary={modelMapping}
+          elements={modelElementRows}
+          rosterCount={modelRosterCount}
+          rosterCountLoading={modelRosterCountLoading}
+          rosterLoading={modelRosterLoading}
+          onLoadRoster={onLoadModelRoster}
+          onImport={onImportModelElements}
+        />
       )}
       <RevisionImpactSection rows={revisionImpact} onCompare={onCompareRevision} />
     </div>

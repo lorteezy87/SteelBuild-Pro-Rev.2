@@ -26,7 +26,7 @@ import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import { computeDetailingReadiness } from "@/lib/detailingReadiness";
 import { summarizeElementStatuses } from "@/services/modelElementStatus";
-import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
+import { countModelElements, fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -182,16 +182,31 @@ export default function DrawingSubmittalHub() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
-  // 3D model members (BIM integration Phase 0 — piece-mark mapping).
-  const { data: modelElements = [], isLoading: modelElementsLoading } = useQuery({
+  // ── 3D model members (BIM integration Phase 0 — piece-mark mapping) ──────
+  // Read in TWO parts, deliberately.
+  //
+  // (1) A HEAD count: one request, zero rows transferred, always enabled. This
+  // is what the Control Board's mapping card reads to know whether a roster
+  // exists. It previously inferred that from the roster array itself — which is
+  // gated to the 3D tab — so on a project with 27k imported members the card
+  // told the user "No model members yet, import a CSV from Tekla or SDS2".
+  const { data: modelElementCount = null, isPending: modelElementCountLoading } = useQuery({
+    queryKey: ["model-elements-count", projectId],
+    queryFn: () => countModelElements(projectId),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+
+  // (2) The full roster, which stays LAZY. Big models run 3k–28k+ elements and a
+  // single Supabase request is capped at 1000 rows server-side (db-max-rows), so
+  // fetchAllModelElements pages with .range() — ~28 round-trips on the largest
+  // live project. That cost is why it loads only where it is actually rendered:
+  // the 3D tab, or when the user opens the mapping card on the Control Board.
+  const [mappingRosterRequested, setMappingRosterRequested] = useState(false);
+  const { data: modelElements = [], isFetching: modelElementsLoading } = useQuery({
     queryKey: ["model-elements", projectId],
-    // Big models run 3k–12k+ elements. A single Supabase request is capped at
-    // 1000 rows server-side (db-max-rows), so `.limit(50000)` silently returned
-    // only the first 1000 — leaving most pieces with no color/click data and
-    // fab colors that "didn't stick" (the assigned pieces weren't in the 1000).
-    // fetchAllModelElements pages with .range() so the WHOLE roster loads.
     queryFn: () => fetchAllModelElements(projectId),
-    enabled: !!projectId && show3d && activeTab === "model3d",
+    enabled: !!projectId && ((show3d && activeTab === "model3d") || mappingRosterRequested),
     staleTime: 60_000,
   });
 
@@ -565,6 +580,10 @@ export default function DrawingSubmittalHub() {
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
             modelMapping={modelMappingSummary}
             modelElementRows={modelElements as any[]}
+            modelRosterCount={modelElementCount}
+            modelRosterCountLoading={modelElementCountLoading}
+            modelRosterLoading={modelElementsLoading}
+            onLoadModelRoster={() => setMappingRosterRequested(true)}
             onImportModelElements={() => setImportModelOpen(true)}
           />
           </>
@@ -607,6 +626,9 @@ export default function DrawingSubmittalHub() {
             rows={revisionImpactRows}
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
             isLoading={isLoading}
+            // Lets the "Pieces ≈" column distinguish "nothing affected" from
+            // "the roster wasn't loaded, so we didn't count".
+            rosterLoaded={modelElements.length > 0}
           />
         )}
         {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
@@ -655,7 +677,9 @@ export default function DrawingSubmittalHub() {
           projectId={projectId}
           projectName={projectName}
           drawings={drawings}
-          existingElements={modelElements}
+          // NO existingElements prop — the importer loads (and pages) the roster
+          // itself. Passing this page's copy fed it [] on the Control Board and
+          // every CSV row classified as "create", duplicating the whole roster.
           onClose={() => setImportModelOpen(false)}
         />
       )}

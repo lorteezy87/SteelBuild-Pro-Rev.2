@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
+import { countModelElements, fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 
 /**
  * Chainable Supabase-ish mock. The roster loader now does ONE head/count query
@@ -117,5 +117,37 @@ describe("fetchAllModelElements", () => {
       then(resolve, reject) { return Promise.resolve({ count: 10, error: null }).then(resolve, reject); },
     };
     await expect(fetchAllModelElements("p", { client: errClient, page: 1000 })).rejects.toThrow("page boom");
+  });
+});
+
+describe("countModelElements", () => {
+  it("returns the live count from a HEAD query without transferring rows", async () => {
+    const rows = Array.from({ length: 27750 }, (_, i) => ({ id: i }));
+    const client = mockClient(rows);
+    const n = await countModelElements("p", { client });
+    expect(n).toBe(27750);
+    // The whole point: a roster this size must cost ZERO row fetches. The
+    // Control Board reads this to know a roster exists; if it ever starts
+    // paging, opening the Detailing page pulls 28 round-trips of steel.
+    expect(client.rangeCalls).toEqual([]);
+    expect(client.headMode).toBe(true);
+  });
+
+  it("returns 0 for no project rather than throwing", async () => {
+    expect(await countModelElements(null)).toBe(0);
+    expect(await countModelElements(undefined)).toBe(0);
+  });
+
+  it("returns 0 (not null) when the project has no members", async () => {
+    const client = mockClient([]);
+    await expect(countModelElements("p", { client })).resolves.toBe(0);
+  });
+
+  it("throws on a count error so callers fail loud instead of showing 0 members", async () => {
+    const errClient = {
+      from() { return errClient; }, select() { return errClient; }, eq() { return errClient; },
+      then(resolve, reject) { return Promise.resolve({ count: null, error: new Error("count boom") }).then(resolve, reject); },
+    };
+    await expect(countModelElements("p", { client: errClient })).rejects.toThrow("count boom");
   });
 });
