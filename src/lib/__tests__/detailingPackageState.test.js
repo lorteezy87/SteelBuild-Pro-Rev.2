@@ -10,6 +10,7 @@ import {
   isPackageSuperseded,
   isPackageRR,
   compareDetailingStates,
+  isPackageReleasedForFab,
 } from "@/lib/detailingPackageState";
 
 // Submittal fixtures (status, ball_in_court) → derived stage via submittalStageMapping:
@@ -121,5 +122,33 @@ describe("compareDetailingStates", () => {
     expect(compareDetailingStates("In Detailing", "IFA")).toBeLessThan(0);
     expect(compareDetailingStates("Released", "Released for Erection")).toBeLessThan(0);
     expect(compareDetailingStates("OFA", "IFA")).toBeGreaterThan(0);
+  });
+});
+
+// ── Released-for-FAB vs closed-for-triage (§6) ───────────────────────────────
+// The Control Center's green "Released / sets to fab" tile counted
+// isClosedPackage, a terminal-for-TRIAGE predicate that also fires on a Void
+// submittal and on the deprecated set_approval_status flag — so it reported
+// packages as released to fab that the shop never received.
+describe("isPackageReleasedForFab", () => {
+  it("counts the real release states", () => {
+    expect(isPackageReleasedForFab({}, [{ status: "Released for Fabrication" }], [])).toBe(true);
+    expect(isPackageReleasedForFab({ detailing_state: "Partially Released" }, [], [])).toBe(true);
+    expect(isPackageReleasedForFab({ detailing_state: "Released for Erection" }, [], [])).toBe(true);
+  });
+
+  it("does NOT count a Void submittal as released to fab", () => {
+    expect(isPackageReleasedForFab({}, [{ status: "Void" }], [])).toBe(false);
+  });
+
+  it("does NOT count the deprecated set_approval_status='approved' flag", () => {
+    expect(isPackageReleasedForFab({ set_approval_status: "approved" }, [], [])).toBe(false);
+  });
+
+  it("does not count in-flight packages", () => {
+    expect(isPackageReleasedForFab({}, [{ status: "Submitted" }], [])).toBe(false);
+    expect(isPackageReleasedForFab({}, [{ status: "Approved" }], [])).toBe(false);
+    expect(isPackageReleasedForFab({ detailing_state: "In Detailing" }, [], [])).toBe(false);
+    expect(isPackageReleasedForFab({}, [], [])).toBe(false);
   });
 });

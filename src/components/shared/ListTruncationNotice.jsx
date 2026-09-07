@@ -1,12 +1,14 @@
 import React from "react";
 
-// Default row cap shown in the notice. Mirrors LIST_ROW_CAP in
-// src/api/supabaseClient.ts (the data-layer read cap), but is deliberately NOT
+// Default row cap shown in the notice. Mirrors EFFECTIVE_LIST_CAP in
+// src/api/supabaseClient.ts — min(requested limit, PostgREST max_rows) — but is NOT
 // imported from there: page tests mock "@/api/supabaseClient", and the mocked
 // named binding sits in a temporal dead zone that throws on access — even when
 // reached via a default parameter at render time. A unit test asserts this stays
-// in sync with LIST_ROW_CAP so the two can't silently drift.
-export const DEFAULT_LIST_CAP = 2000;
+// in sync with EFFECTIVE_LIST_CAP so the two can't silently drift.
+// It was 2000 (the REQUESTED limit) while the server never returns more than
+// 1000, so `count < cap` was unsatisfiable and the notice could never render.
+export const DEFAULT_LIST_CAP = 1000;
 
 /**
  * ListTruncationNotice — tells the user a capped list isn't showing everything.

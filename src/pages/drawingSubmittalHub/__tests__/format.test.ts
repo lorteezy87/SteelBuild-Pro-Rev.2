@@ -23,6 +23,11 @@ import {
   buildApprovalMatrixRows,
   summarizeApprovalMatrix,
   sheetNeedsAction,
+  canWriteDetailingState,
+  canWriteDueDate,
+  canWriteOwner,
+  canWriteReadinessFlags,
+  submittalRoundCount,
 } from "../format";
 
 // These guard the Arizona (MST, UTC-7, no DST) date-display bug: a date-only
@@ -407,7 +412,9 @@ describe("buildSetPackages (the set↔submittal join behind every matrix row)", 
 
   it("ignores a Void submittal for governing owner and due-date dispatch", () => {
     const pkgs = buildSetPackages(
-      [{ id: "d1", drawing_set_id: "s1", assigned_to: "Sheet owner" }] as any,
+      // `reviewer` is the ONLY owner column on drawings — no assigned_to, no
+      // ball_in_court. Fixtures must not teach a shape production can't produce.
+      [{ id: "d1", drawing_set_id: "s1", reviewer: "Sheet owner" }] as any,
       [{ id: "s1", set_name: "Main Steel" }] as any,
       [
         { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 9, ball_in_court: "Void owner" },
@@ -794,5 +801,118 @@ describe("buildApprovalMatrixRows — working-day due display", () => {
     const def = buildApprovalMatrixRows(sets, subs).find((r) => r.id === "s1");
     expect(on?.due.days).toBe(7);
     expect(def?.due).toEqual(on?.due); // default arg === explicit false
+  });
+});
+
+// ── Approval Matrix: round count + governing submittal ───────────────────────
+describe("submittalRoundCount", () => {
+  it("prefers total_rounds — the counter addSubmittalRound actually stamps", () => {
+    expect(submittalRoundCount({ total_rounds: 3, round_number: 1 })).toBe(3);
+  });
+
+  it("falls back to round_number when total_rounds is absent", () => {
+    expect(submittalRoundCount({ round_number: 2 })).toBe(2);
+  });
+
+  it("defaults to 1 for a submittal with neither", () => {
+    expect(submittalRoundCount({})).toBe(1);
+    expect(submittalRoundCount(null)).toBe(1);
+  });
+});
+
+describe("buildApprovalMatrixRows — governing submittal", () => {
+  const sets = [{ id: "s1", set_name: "Main Steel" }] as any;
+
+  it("does not let a never-submitted Draft govern over a live submittal", () => {
+    // round_number is pinned at 1 on both (nothing increments it), so the old
+    // comparator returned 0 and query order decided — and "-submitted_date"
+    // DESC/NULLS-FIRST puts the undated Draft first.
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "draft", drawing_set_ids: ["s1"], status: "Draft", round_number: 1, submitted_date: null },
+      { id: "live", drawing_set_ids: ["s1"], status: "Under Review", round_number: 1, ball_in_court: "EOR", submitted_date: "2026-01-05", required_date: "2026-01-20" },
+    ] as any);
+    expect(rows[0].latestSubmittal.id).toBe("live");
+    expect(rows[0].latestSubmittal.ball_in_court).toBe("EOR");
+  });
+
+  it("does not let a Void submittal govern and render a green Closed", () => {
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 9 },
+      { id: "live", drawing_set_ids: ["s1"], status: "Submitted", round_number: 1, submitted_date: "2026-01-05", required_date: "2000-01-01" },
+    ] as any);
+    expect(rows[0].latestSubmittal.id).toBe("live");
+    expect(rows[0].due.overdue).toBe(true);
+  });
+
+  it("still governs by the most recent submittal among usable ones", () => {
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "older", drawing_set_ids: ["s1"], status: "Submitted", submitted_date: "2026-01-01" },
+      { id: "newer", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-03-01" },
+    ] as any);
+    expect(rows[0].latestSubmittal.id).toBe("newer");
+  });
+
+  it("falls back to an unusable submittal rather than showing none linked", () => {
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 1 },
+    ] as any);
+    expect(rows[0].latestSubmittal?.id).toBe("void");
+  });
+});
+
+describe("buildApprovalMatrixRows — a returned review stops counting down", () => {
+  const sets = [{ id: "s1", set_name: "Main Steel" }] as any;
+
+  it("does not mark an Approved-as-Noted submittal late once it was returned", () => {
+    // required_date is never re-stamped after a verdict, so without this the row
+    // grew one day later every day, forever, with no way to clear it.
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "a", drawing_set_ids: ["s1"], status: "Approved as Noted", submitted_date: "2026-01-01", required_date: "2000-01-01", returned_date: "2000-01-05" },
+    ] as any);
+    expect(rows[0].due.overdue).toBe(false);
+    expect(rows[0].due.label).toBe("Closed");
+  });
+
+  it("still marks an outstanding (not yet returned) submittal late", () => {
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "b", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-01-01", required_date: "2000-01-01", returned_date: null },
+    ] as any);
+    expect(rows[0].due.overdue).toBe(true);
+  });
+});
+
+// ── Write-capability predicates (§10) ────────────────────────────────────────
+describe("canWrite* predicates mirror the write validators", () => {
+  it("canWriteDueDate is false for a package with no submittal and no sheets", () => {
+    expect(canWriteDueDate({ _submittalId: null, _sheetIds: [] } as any)).toBe(false);
+    expect(canWriteDueDate({ _submittalId: "sub1", _sheetIds: [] } as any)).toBe(true);
+    expect(canWriteDueDate({ _submittalId: null, _sheetIds: ["d1"] } as any)).toBe(true);
+  });
+
+  it("canWriteDueDate is false for closed work", () => {
+    expect(canWriteDueDate({ _submittalId: "sub1", _sheetIds: [], closed: true } as any)).toBe(false);
+  });
+
+  it("canWriteOwner mirrors the mutation's own dispatch, including _ownerScope", () => {
+    expect(canWriteOwner({ _submittalId: "sub1" } as any)).toBe(true);
+    expect(canWriteOwner({ _ownerScope: "First sheet owner", _firstSheetId: "d1" } as any)).toBe(true);
+    // The mutation throws for this shape, so the control must not be enabled.
+    expect(canWriteOwner({ _ownerScope: "No owner target", _firstSheetId: null } as any)).toBe(false);
+    expect(canWriteOwner({ _ownerScope: "First sheet owner", _firstSheetId: null } as any)).toBe(false);
+  });
+
+  it("canWriteDetailingState requires a drawing set and a pre-workflow state", () => {
+    expect(canWriteDetailingState({ _drawingSetId: "s1", detailingState: "In Detailing" })).toBe(true);
+    // No set row to write to — the old gate (_canDraft) allowed this.
+    expect(canWriteDetailingState({ _drawingSetId: null, detailingState: "In Detailing" })).toBe(false);
+    // Already in the formal workflow — the write rejects it.
+    expect(canWriteDetailingState({ _drawingSetId: "s1", detailingState: "OFS" })).toBe(false);
+    // A submittal governs the state.
+    expect(canWriteDetailingState({ _drawingSetId: "s1", _submittalId: "sub1", detailingState: "In Detailing" })).toBe(false);
+  });
+
+  it("canWriteReadinessFlags requires the drawing_set row the flags live on", () => {
+    expect(canWriteReadinessFlags({ _drawingSetId: "s1" })).toBe(true);
+    expect(canWriteReadinessFlags({ _drawingSetId: null })).toBe(false);
   });
 });

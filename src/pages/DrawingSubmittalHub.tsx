@@ -31,7 +31,7 @@ import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
-import { Box } from "lucide-react";
+import { Box, CalendarCog } from "lucide-react";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
@@ -481,7 +481,10 @@ export default function DrawingSubmittalHub() {
       if (item._submittalId) {
         await entities.Submittal.update(item._submittalId, { ball_in_court: owner });
       } else if (item._ownerScope === "First sheet owner" && item._firstSheetId) {
-        await entities.Drawing.update(item._firstSheetId, { assigned_to: owner } as any);
+        // `drawings` has no assigned_to (nor ball_in_court) column — only
+        // `reviewer`. The `as any` here was hiding a guaranteed PGRST204: this
+        // control could never succeed, it only ever produced a red toast.
+        await entities.Drawing.update(item._firstSheetId, { reviewer: owner });
       } else {
         throw new Error("No package-level owner field exists; assign the first sheet instead.");
       }
@@ -752,6 +755,21 @@ export default function DrawingSubmittalHub() {
         }}
         projectName={projectName}
         tabCounts={tabCounts}
+        // Lead Times is the ONLY writer of projects.metadata.detailing_lead_days,
+        // which drives the whole backward schedule (Submit by / Approval by / Fab
+        // release by) and the At-Risk badge. Its trigger was dropped in 307dafbfe
+        // when the CommandBar header was replaced by this shell, leaving every
+        // project silently pinned to DEFAULT_LEAD_DAYS with no way to change it.
+        actions={can("edit", "project") ? (
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            onClick={() => setLeadModalOpen(true)}
+            title="Set this project's detailing lead times (drives the backward schedule)"
+          >
+            <CalendarCog size={14} /> Lead Times
+          </button>
+        ) : undefined}
       >
         {activeTabPanel}
       </DetailingCommandShell>

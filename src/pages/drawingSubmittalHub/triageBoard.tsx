@@ -22,6 +22,10 @@ import { FAB_STATUS_META, FAB_STATUS_ORDER, summarizeFabStatus } from "@/lib/fab
 import {
   accent,
   border,
+  canWriteDetailingState,
+  canWriteDueDate,
+  canWriteOwner,
+  canWriteReadinessFlags,
   dueInfo,
   error,
   fmtDate,
@@ -177,17 +181,17 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                 <InlineOwnerControl
                   currentOwner={focusItem.owner}
                   onAssign={(owner) => onUpdateOwner(focusItem, owner)}
-                  disabled={isSaving}
+                  disabled={isSaving || !canWriteOwner(focusItem)}
                 />
                 <InlineDateControl
                   currentDate={focusItem.dueDate}
                   isOverdue={focusItem.due.overdue}
                   onSetDate={(date) => onUpdateDueDate(focusItem, date)}
-                  disabled={isSaving}
+                  disabled={isSaving || !canWriteDueDate(focusItem)}
                 />
               </div>
               {/* ── Detailing-state advance (drafting phase only) ─────── */}
-              {focusItem.kind === "Drawing Set" && focusItem._canDraft && (
+              {focusItem.kind === "Drawing Set" && canWriteDetailingState(focusItem) && (
                 <InlineDetailingControl
                   current={focusItem._detailingStateRaw}
                   onAdvance={(next) => onAdvanceDetailing(focusItem, next)}
@@ -199,7 +203,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                 <ReadinessPanel
                   readiness={focusItem._readiness}
                   onToggle={(field, value) => onToggleReadiness(focusItem, field, value)}
-                  disabled={isSaving}
+                  disabled={isSaving || !canWriteReadinessFlags(focusItem)}
                 />
               )}
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 18 }}>

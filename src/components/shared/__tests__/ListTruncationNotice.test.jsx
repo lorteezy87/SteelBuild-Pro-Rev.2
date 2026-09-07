@@ -7,14 +7,14 @@ import { describe, it, expect } from "vitest";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import ListTruncationNotice, { DEFAULT_LIST_CAP } from "@/components/shared/ListTruncationNotice";
-import { LIST_ROW_CAP } from "@/api/supabaseClient";
+import { EFFECTIVE_LIST_CAP } from "@/api/supabaseClient";
 
 describe("ListTruncationNotice", () => {
-  it("default cap stays in sync with the data-layer LIST_ROW_CAP", () => {
-    // The component keeps its own literal (it can't import LIST_ROW_CAP — see the
+  it("default cap stays in sync with the EFFECTIVE data-layer cap", () => {
+    // The component keeps its own literal (it can't import the constant — see the
     // component's note on the mocked-module temporal dead zone). Guard drift here,
     // where "@/api/supabaseClient" is the real, unmocked module.
-    expect(DEFAULT_LIST_CAP).toBe(LIST_ROW_CAP);
+    expect(DEFAULT_LIST_CAP).toBe(EFFECTIVE_LIST_CAP);
   });
 
   it("renders nothing below the cap", () => {
@@ -38,7 +38,9 @@ describe("ListTruncationNotice", () => {
   it("falls back to the default cap (no crash) when cap is undefined", () => {
     render(<ListTruncationNotice count={5000} cap={undefined} label="rows" />);
     expect(screen.getByRole("status")).toBeInTheDocument();
-    expect(screen.getAllByText(/2,000/).length).toBeGreaterThan(0);
+    // Derived, not a literal — this used to hard-code 2,000, the REQUESTED
+    // limit, while PostgREST never returns more than 1,000.
+    expect(screen.getAllByText(new RegExp(DEFAULT_LIST_CAP.toLocaleString())).length).toBeGreaterThan(0);
   });
 
   it("respects an explicit cap prop", () => {

@@ -59,6 +59,24 @@ export function isReleaseState(state) {
   return RELEASE_SET.has(state);
 }
 
+/** States at or past fabrication release: the terminal workflow stage plus the
+ *  two manual release states. */
+const FAB_RELEASED_SET = new Set(["Released", ...RELEASE_STATES]);
+
+/**
+ * True when a package has ACTUALLY been released for fabrication.
+ *
+ * Deliberately NOT `isClosedPackage`, which is a *terminal-for-triage*
+ * predicate: that one also fires on a Void submittal, on the deprecated
+ * `drawing_sets.set_approval_status === "approved"` flag, and on other dead
+ * ends — none of which mean the shop ever received the package. Using it to
+ * drive the Control Center's green "Released / sets to fab" tile reported
+ * packages as released to fab that were merely voided or legacy-approved.
+ */
+export function isPackageReleasedForFab(pkg, submittalsForSet, sheetsForSet = []) {
+  return FAB_RELEASED_SET.has(effectiveDetailingState(pkg, submittalsForSet, sheetsForSet));
+}
+
 /**
  * Does at least one non-deleted submittal carry a usable workflow signal?
  * Mirrors the `usable` filter inside derivedSetStage so "a submittal governs"

@@ -43,7 +43,13 @@ import {
   TriageMetric,
   EmptyState,
 } from "./primitives";
-import { error, warning, review, textMuted } from "./format";
+import {
+  canWriteDetailingState,
+  canWriteDueDate,
+  canWriteOwner,
+  canWriteReadinessFlags,
+  error, warning, review, textMuted,
+} from "./format";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import type { ComponentType } from "react";
 
@@ -154,22 +160,28 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
 
             {/* Inline owner + due-date editors (reused as-is). */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
+              {/* Each control is disabled when its OWN write could not succeed
+                  (canWrite* mirror the validators), so an enabled control always
+                  means a click that lands. */}
               <InlineOwnerControl
                 currentOwner={focus.owner}
                 onAssign={(owner: string) => onUpdateOwner(focus, owner)}
-                disabled={isSaving}
+                disabled={isSaving || !canWriteOwner(focus)}
                 label={focus._ownerScope || "Owner"}
               />
               <InlineDateControl
                 currentDate={focus.dueDate}
                 isOverdue={focus.due?.overdue}
                 onSetDate={(date: string) => onUpdateDueDate(focus, date)}
-                disabled={isSaving}
+                disabled={isSaving || !canWriteDueDate(focus)}
               />
             </div>
 
-            {/* Detailing-state advance — drafting phase only (reused as-is). */}
-            {focus.kind === "Drawing Set" && focus._canDraft && (
+            {/* Detailing-state advance — drafting phase only. Gated on the write
+                validator, not on _canDraft: the latter is satisfied by packages
+                with no drawing_set_id, or whose effective state has already
+                reached the formal workflow, both of which the write rejects. */}
+            {focus.kind === "Drawing Set" && canWriteDetailingState(focus) && (
               <InlineDetailingControl
                 current={focus._detailingStateRaw}
                 onAdvance={(next: string) => onAdvanceDetailing(focus, next)}
@@ -177,12 +189,15 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
               />
             )}
 
-            {/* Backward schedule + readiness — drawing sets (reused as-is). */}
+            {/* Backward schedule + readiness — drawing sets. The panel still
+                RENDERS for any package with a readiness model (the backward
+                dates are useful on their own); only the toggles are gated on
+                having a drawing_set row to write them to. */}
             {focus.kind === "Drawing Set" && focus._readiness && (
               <ReadinessPanel
                 readiness={focus._readiness}
                 onToggle={(field: "material_impacted" | "long_lead_impact", value: boolean) => onToggleReadiness(focus, field, value)}
-                disabled={isSaving}
+                disabled={isSaving || !canWriteReadinessFlags(focus)}
               />
             )}
 

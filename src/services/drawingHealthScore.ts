@@ -19,6 +19,7 @@ import { derivedSetStage, isRRStatus, pickMostRecentSubmittal } from "@/lib/subm
 import { selectChangedSheets } from "@/lib/revisionPackageReport";
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
 import { isRfiOpen } from "@/lib/entityPredicates";
+import { linkedRfiNumbers, normNum } from "@/lib/fabReleaseGate";
 
 export type Grade = "A" | "B" | "C" | "D" | "F";
 export type BandKey = "excellent" | "good" | "at_risk" | "critical";
@@ -95,19 +96,16 @@ function severityFor(deduction: number, weight: number): FactorSeverity {
   return "medium";
 }
 
-/** Normalize an RFI number for matching (strip dashes/spaces, lowercase). */
-function normRfi(s: unknown): string {
-  return String(s ?? "").replace(/[-\s]/g, "").toLowerCase();
-}
 
- 
 function countOpenRfis(sheets: any[], rfis: any[]): number {
   const linked = new Set<string>();
   for (const sheet of sheets || []) {
-    const raw = sheet?.linked_rfi_ids;
-    if (!raw) continue;
-    for (const part of String(raw).split(/[,\s]+/)) {
-      const n = normRfi(part);
+    // linkedRfiNumbers + normNum are the canonical pair (fabReleaseGate). The
+    // local normalizer this replaces split on whitespace and kept the "#", so
+    // "RFI #001" keyed as "rfi#001" and never matched an rfis.rfi_number — the
+    // health score silently counted zero open RFIs on every sheet-linked set.
+    for (const part of linkedRfiNumbers(sheet)) {
+      const n = normNum(part);
       if (n) linked.add(n);
     }
   }
@@ -115,7 +113,7 @@ function countOpenRfis(sheets: any[], rfis: any[]): number {
   let open = 0;
   for (const rfi of rfis || []) {
     if (!rfi || rfi.is_deleted) continue;
-    if (!linked.has(normRfi(rfi.rfi_number))) continue;
+    if (!linked.has(normNum(rfi.rfi_number))) continue;
     if (isRfiOpen(rfi)) open += 1;
   }
   return open;

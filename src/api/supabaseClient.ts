@@ -41,7 +41,7 @@ export { auth } from './client/auth';
 export { integrations } from './client/integrations';
 export { functions } from './client/functions';
 export { getSignedUrl, resolveFileUrl } from './client/storage';
-export { LIST_ROW_CAP } from './client/entityClient';
+export { LIST_ROW_CAP, SERVER_MAX_ROWS, EFFECTIVE_LIST_CAP } from './client/entityClient';
 
 // ─── Type re-exports (public type surface) ────────────────────────────────────
 export type {
