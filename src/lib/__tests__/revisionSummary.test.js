@@ -98,3 +98,69 @@ describe("buildRevisionSummary", () => {
     expect(flagged.highRisk[0].reason).toBe("long-lead impact");
   });
 });
+
+// ── Downstream state that is UNKNOWN, not clear ───────────────────────────────
+// The summary is PERSISTED to drawing_revision_summaries, so an all-clear
+// asserted from missing dates becomes a stored fact about real steel.
+describe("buildRevisionSummary — unverified downstream state", () => {
+  // Same set, but the changed sheet carries no fabrication/delivery/install date.
+  function unknownArgs(over = {}) {
+    return {
+      today: TODAY,
+      set: {
+        setId: "set1",
+        name: "Main Steel",
+        parent: { id: "set1", set_name: "Main Steel", linked_work_package_ids: ["wp1"] },
+        sheets: [{ id: "d1", sheet_number: "S1", drawing_set_id: "set1", linked_rfi_ids: null }],
+      },
+      revisions: [
+        { id: "r1b", drawing_id: "d1", is_current: true, supersedes_revision_id: "r1a", version_number: 2 },
+        { id: "r1a", drawing_id: "d1", is_current: false, version_number: 1 },
+      ],
+      rfis: [],
+      drawingSets: [{ id: "set1", set_name: "Main Steel", linked_work_package_ids: ["wp1"] }],
+      workPackages: [{ id: "wp1", wp_number: "WP-104", sequence_number: "2" }],
+      modelElements: [],
+      ...over,
+    };
+  }
+
+  it("never claims 'Changes upstream of fabrication' when no dates are recorded", () => {
+    const s = buildRevisionSummary(unknownArgs());
+    expect(s.sheetsChanged).toBe(1);
+    expect(s.impact.note).not.toBe("Changes upstream of fabrication");
+    expect(s.impact.note).toMatch(/unknown/i);
+    expect(s.impact.note).toMatch(/no fabrication or delivery dates recorded/i);
+  });
+
+  it("reports unverified sheets separately from high risk (neither invented nor hidden)", () => {
+    const s = buildRevisionSummary(unknownArgs());
+    // Not counted as downstream — that would fabricate rework exposure…
+    expect(s.highRiskCount).toBe(0);
+    expect(s.changedSheets[0].downstream).toBeNull();
+    // …but surfaced, so "0 high risk" can't be read as "0 at risk".
+    expect(s.unknownDownstreamCount).toBe(1);
+  });
+
+  it("does not push a duplicate RFI off an unverified sheet", () => {
+    const s = buildRevisionSummary(unknownArgs());
+    expect(s.likelyRfi.needed).toBe(false);
+  });
+
+  it("still counts a sheet with recorded, unreached dates as a genuine all-clear", () => {
+    const s = buildRevisionSummary(unknownArgs({
+      set: {
+        setId: "set1",
+        name: "Main Steel",
+        parent: { id: "set1", set_name: "Main Steel", linked_work_package_ids: ["wp1"] },
+        sheets: [{
+          id: "d1", sheet_number: "S1", drawing_set_id: "set1", linked_rfi_ids: null,
+          fabrication_finish_date: "2026-12-01", // in the future → recorded but not reached
+        }],
+      },
+    }));
+    expect(s.unknownDownstreamCount).toBe(0);
+    expect(s.highRiskCount).toBe(0);
+    expect(s.impact.note).toBe("Changes upstream of fabrication");
+  });
+});

@@ -16,8 +16,11 @@ import { todayLocalISO } from "@/lib/dateMath";
 
 // computeRevisionImpact severity → human downstream label + qualitative impact.
 // critical = in field > high = delivered > medium = fabricated > low = none yet.
-const SEV_LABEL = { critical: "in the field", high: "delivered", medium: "fabricated", low: null };
-const SEV_TO_IMPACT = { critical: "high", high: "medium", medium: "medium", low: "low" };
+// "unknown" = the sheet records no fabrication/delivery/install date at all, so
+// its downstream state cannot be determined. It is NOT "low" — this summary is
+// persisted to drawing_revision_summaries, so a guess here becomes a stored fact.
+const SEV_LABEL = { critical: "in the field", high: "delivered", medium: "fabricated", unknown: null, low: null };
+const SEV_TO_IMPACT = { critical: "high", high: "medium", medium: "medium", unknown: "low", low: "low" };
 const IMPACT_RANK = { none: 0, low: 1, medium: 2, high: 3 };
 const RANK_IMPACT = ["none", "low", "medium", "high"];
 
@@ -50,7 +53,11 @@ export function buildRevisionSummary({
   const impact = computeRevisionImpact({ revisions: setRevisions, drawingsById, today: ref });
   const rows = buildRevisionImpactRows(impact, { drawings: sheets, drawingSets, workPackages, rfis, modelElements });
 
-  const isDownstream = (r) => r.severity !== "low";
+  // Confirmed downstream only. "unknown" must not be counted as downstream (it
+  // would fabricate rework exposure) nor folded into "low" (it would fabricate
+  // an all-clear) — it is reported separately as unknownCount.
+  const isDownstream = (r) => r.severity !== "low" && r.severity !== "unknown";
+  const isUnknown = (r) => r.severity === "unknown";
 
   const changedSheets = rows.map((r) => ({
     drawingId: r.drawingId,
@@ -91,12 +98,19 @@ export function buildRevisionSummary({
   if (flagged && rows.length) level = RANK_IMPACT[Math.min(3, IMPACT_RANK[level] + 1)];
 
   const downstreamCount = rows.filter(isDownstream).length;
+  const unknownCount = rows.filter(isUnknown).length;
   const note = !rows.length
     ? "No material changes detected"
     : downstreamCount
     ? `${downstreamCount} sheet${downstreamCount === 1 ? "" : "s"} already downstream — rework likely${flagged ? ` (${flagReason})` : ""}`
     : flagged
     ? `Changes on a ${flagReason} set`
+    // Never claim "upstream of fabrication" for sheets with no downstream dates
+    // recorded — that is what we don't know, not what we found.
+    : unknownCount === rows.length
+    ? `Downstream status unknown for ${unknownCount === 1 ? "this sheet" : `all ${unknownCount} sheets`} — no fabrication or delivery dates recorded`
+    : unknownCount
+    ? `Changes upstream of fabrication (${unknownCount} sheet${unknownCount === 1 ? "" : "s"} unverified)`
     : "Changes upstream of fabrication";
 
   return {
@@ -107,6 +121,9 @@ export function buildRevisionSummary({
     changedSheets,
     highRisk,
     highRiskCount: highRisk.length,
+    // Sheets whose downstream state could not be determined. Reported alongside
+    // highRiskCount so "0 high risk" is never read as "0 at risk".
+    unknownDownstreamCount: unknownCount,
     affectedWorkPackages,
     likelyRfi,
     impact: { level, note },

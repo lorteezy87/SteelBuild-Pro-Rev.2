@@ -650,7 +650,13 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onComp
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {shown.map((r) => {
+            // Two very different states hide behind "nothing reached": the sheet
+            // carries downstream dates and none has landed (genuinely pre-fab),
+            // or it carries none at all (we simply don't know). Only the first
+            // earns "caught pre-fab".
             const noneReached = !r.fabricated && !r.delivered && !r.inField;
+            const caughtPreFab = noneReached && r.downstreamKnown === true;
+            const downstreamUnknown = noneReached && r.downstreamKnown !== true;
             const pillTone = r.severity === "critical" || r.severity === "high" ? "danger"
               : r.severity === "medium" ? "review" : "neutral";
             return (
@@ -672,7 +678,15 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onComp
                   {r.fabricated && <ReadyChip ok={false} label="Fabricated" bad />}
                   {r.delivered && <ReadyChip ok={false} label="Delivered" bad />}
                   {r.inField && <ReadyChip ok={false} label="In field" bad />}
-                  {noneReached && <span style={{ color: textMuted, fontFamily: mono, fontSize: 10 }}>caught pre-fab</span>}
+                  {caughtPreFab && <span style={{ color: textMuted, fontFamily: mono, fontSize: 10 }}>caught pre-fab</span>}
+                  {downstreamUnknown && (
+                    <span
+                      style={{ color: warning, fontFamily: mono, fontSize: 10 }}
+                      title="No fabrication, delivery, or install date is recorded on this sheet, so its downstream state can't be determined."
+                    >
+                      downstream unknown
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {onCompare && r.drawingId && (

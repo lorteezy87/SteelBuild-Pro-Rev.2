@@ -58,8 +58,8 @@ function rowCells(r: any, onCompareRevision?: (drawingId: string) => void, roste
     </span>,
     // Rev
     <span key="rev" style={{ color: "var(--cmd-text-muted)" }}>{r.revisionCode}</span>,
-    // Downstream
-    <Pill key="down" tone={dm.tone}>{dm.label}</Pill>,
+    // Downstream — the "Unknown" state carries why, so it can't read as an all-clear.
+    <span key="down" title={dm.title}><Pill tone={dm.tone}>{dm.label}</Pill></span>,
     // Linked Work Package
     <span key="wp" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, color: r.wpNames?.length ? "var(--cmd-text)" : "var(--cmd-text-muted)" }}>
       {r.wpNames?.length ? r.wpNames.join(", ") : "—"}
