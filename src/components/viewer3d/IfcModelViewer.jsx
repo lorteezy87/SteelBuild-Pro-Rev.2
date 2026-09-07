@@ -26,6 +26,9 @@ import {
   formatMeasureDistance,
 } from "@/lib/ifc/viewerMeasure";
 
+/** The 3D canvas colour. FIXED in both app themes — see VIEWER_HUD below. */
+export const VIEWER_CANVAS_BG = "#0d1117";
+
 const HIGHLIGHT = new THREE.Color("#f5d90a");
 const MEASURE_COLOR = 0xf5d90a;
 /** Pointer travel (px) beyond which a mouseup is an orbit drag, not a click. */
@@ -72,7 +75,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     let cancelled = false;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#0d1117");
+    scene.background = new THREE.Color(VIEWER_CANVAS_BG);
     // No scene fog — FogExp2 + ACES crushed large models to near-black after
     // the polish pass and looked like a failed load.
 
@@ -846,19 +849,19 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
       <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
       {status === "loading" && (
         <div style={overlay}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" }}>Loading model…</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: HUD_TEXT_DIM }}>Loading model…</div>
         </div>
       )}
       {status === "error" && (
         <div style={overlay}>
-          <div role="alert" style={{ maxWidth: 420, textAlign: "center", color: "var(--text-primary)", fontSize: 13 }}>
+          <div role="alert" style={{ maxWidth: 420, textAlign: "center", color: HUD_TEXT, fontSize: 13 }}>
             Couldn't load the model: {error}
           </div>
         </div>
       )}
       {status === "ready" && count === 0 && (
         <div style={overlay}>
-          <div role="alert" style={{ maxWidth: 440, textAlign: "center", color: "var(--text-primary)", fontSize: 13, lineHeight: 1.6 }}>
+          <div role="alert" style={{ maxWidth: 440, textAlign: "center", color: HUD_TEXT, fontSize: 13, lineHeight: 1.6 }}>
             No structural members to show — this IFC has no beams, columns, plates,
             or members. Re-export with structural members, then load again.
           </div>
@@ -899,11 +902,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
               ) : null}
             </div>
           )}
-          <div style={{
-            position: "absolute", left: 12, bottom: 10, right: 12,
-            fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", pointerEvents: "none",
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>
+          <div style={viewerStatusLine}>
             {measureMode
               ? `${count.toLocaleString()} parts · MEASURE · click two points (vertex/edge snap · nearest 1/16″) · Esc clears · toggle off to exit`
               : `${count.toLocaleString()} parts${filtered ? ` · ${visibility.isolated ? `isolating ${visibility.isolated.toLocaleString()}` : ""}${visibility.isolated && visibility.hidden ? " · " : ""}${visibility.hidden ? `${visibility.hidden.toLocaleString()} hidden` : ""} (U shows all)` : ""} · drag orbit · scroll zoom · click part · ctrl/shift add · alt whole mark · dbl-click fly · F fit · I isolate · H hide · Esc clear`}
@@ -916,6 +915,33 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
 
 export default IfcModelViewer;
 
+// ── Viewer HUD palette ──────────────────────────────────────────────────────
+// The 3D canvas is a deliberately SINGLE-THEME surface: `scene.background` is
+// hard-set to #0d1117 in BOTH app themes (see the renderer setup above). Every
+// overlay drawn on top of it must therefore use fixed light-on-dark values.
+//
+// Do NOT reach for --text-* / --border-* here. Those flip with the app theme,
+// so in light mode the hover tip rendered --text-primary (#020617, slate-950)
+// on this near-black canvas — a contrast ratio of about 1.06:1, i.e. the piece
+// mark was invisible exactly when a detailer hovered a piece to read it. The
+// backgrounds were already hardcoded dark, so only the foregrounds disagreed.
+//
+// These mirror the DARK theme's text tokens, which is the palette the canvas
+// actually is: HUD_TEXT on the canvas is ~16:1, HUD_TEXT_DIM ~7:1.
+const HUD_SURFACE = "rgba(13,17,23,0.9)";
+const HUD_TEXT = "#E8EBF2";       // = dark --text-primary
+const HUD_TEXT_DIM = "#A8B4C8";   // = dark --text-secondary
+const HUD_TEXT_FAINT = "#7B8BA2"; // = dark --text-muted
+const HUD_BORDER = "rgba(232,235,242,0.22)";
+
+/** Exported so a test can prove these stay legible on VIEWER_CANVAS_BG. */
+export const VIEWER_HUD = {
+  canvas: VIEWER_CANVAS_BG,
+  text: HUD_TEXT,
+  textDim: HUD_TEXT_DIM,
+  textFaint: HUD_TEXT_FAINT,
+};
+
 const overlay = {
   position: "absolute", inset: 0, display: "flex", alignItems: "center",
   justifyContent: "center", background: "rgba(13,17,23,0.6)",
@@ -923,16 +949,27 @@ const overlay = {
 
 const fitBtn = {
   position: "absolute", top: 10, right: 10, padding: "6px 12px", borderRadius: 8,
-  border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
-  color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
+  border: `1px solid ${HUD_BORDER}`, background: "rgba(13,17,23,0.72)",
+  color: HUD_TEXT_DIM, fontFamily: "var(--font-mono)", fontSize: 11,
   fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer", zIndex: 2,
 };
 
 const hoverTip = {
   position: "absolute", padding: "3px 8px", borderRadius: 6, zIndex: 3,
-  background: "rgba(13,17,23,0.9)", border: "1px solid var(--border-default)",
-  color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 11,
+  background: HUD_SURFACE, border: `1px solid ${HUD_BORDER}`,
+  color: HUD_TEXT, fontFamily: "var(--font-mono)", fontSize: 11,
   fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap", pointerEvents: "none",
+  // The tip sits directly over geometry, so lift it off the model.
+  boxShadow: "0 4px 14px rgba(0,0,0,0.55)",
+};
+
+// The status line has NO background of its own — it reads straight off the
+// canvas — so a theme-following color left it unreadable in light mode too.
+const viewerStatusLine = {
+  position: "absolute", left: 12, bottom: 10, right: 12,
+  fontFamily: "var(--font-mono)", fontSize: 10, color: HUD_TEXT_FAINT,
+  pointerEvents: "none", whiteSpace: "nowrap", overflow: "hidden",
+  textOverflow: "ellipsis", textShadow: "0 1px 3px rgba(0,0,0,0.85)",
 };
 
 const measureHud = {
