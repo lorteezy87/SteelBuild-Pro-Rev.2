@@ -22,6 +22,10 @@ import { FAB_STATUS_META, FAB_STATUS_ORDER, summarizeFabStatus } from "@/lib/fab
 import {
   accent,
   border,
+  canWriteDetailingState,
+  canWriteDueDate,
+  canWriteOwner,
+  canWriteReadinessFlags,
   dueInfo,
   error,
   fmtDate,
@@ -177,17 +181,17 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                 <InlineOwnerControl
                   currentOwner={focusItem.owner}
                   onAssign={(owner) => onUpdateOwner(focusItem, owner)}
-                  disabled={isSaving}
+                  disabled={isSaving || !canWriteOwner(focusItem)}
                 />
                 <InlineDateControl
                   currentDate={focusItem.dueDate}
                   isOverdue={focusItem.due.overdue}
                   onSetDate={(date) => onUpdateDueDate(focusItem, date)}
-                  disabled={isSaving}
+                  disabled={isSaving || !canWriteDueDate(focusItem)}
                 />
               </div>
               {/* ── Detailing-state advance (drafting phase only) ─────── */}
-              {focusItem.kind === "Drawing Set" && focusItem._canDraft && (
+              {focusItem.kind === "Drawing Set" && canWriteDetailingState(focusItem) && (
                 <InlineDetailingControl
                   current={focusItem._detailingStateRaw}
                   onAdvance={(next) => onAdvanceDetailing(focusItem, next)}
@@ -199,7 +203,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                 <ReadinessPanel
                   readiness={focusItem._readiness}
                   onToggle={(field, value) => onToggleReadiness(focusItem, field, value)}
-                  disabled={isSaving}
+                  disabled={isSaving || !canWriteReadinessFlags(focusItem)}
                 />
               )}
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
@@ -325,9 +329,30 @@ type OpenBucket =
   | { kind: "fab"; key: FabStatusKey }
   | null;
 
-export function ModelMappingSection({ summary, elements, onImport }: { summary?: ElementStatusSummary | null; elements?: any[]; onImport: () => void }) {
+export function ModelMappingSection({
+  summary, elements, onImport,
+  rosterCount = null, rosterCountLoading = false, rosterLoading = false, onLoadRoster,
+}: {
+  summary?: ElementStatusSummary | null;
+  elements?: any[];
+  onImport: () => void;
+  /** Live member count (HEAD count). null = not known yet. */
+  rosterCount?: number | null;
+  rosterCountLoading?: boolean;
+  rosterLoading?: boolean;
+  onLoadRoster?: () => void;
+}) {
   const total = summary?.total ?? 0;
   const [openBucket, setOpenBucket] = useState<OpenBucket>(null);
+
+  // What this card is allowed to claim depends on TWO facts, not one:
+  //   • does a roster exist?  → the cheap HEAD count (always available)
+  //   • is it loaded here?    → `total`, which needs the ~28k-row paged read
+  // Reading only the second is what made the card announce "no members yet" on
+  // projects with a full roster. Each state below says only what is known.
+  const rosterKnown = rosterCount !== null;
+  const rosterEmpty = rosterKnown && rosterCount === 0;
+  const rosterUnloaded = rosterKnown && (rosterCount ?? 0) > 0 && total === 0;
 
   // Members in the open bucket. Detailing buckets resolve via the summary's id
   // sets so the list always agrees with the chip counts (same engine, same
@@ -358,7 +383,10 @@ export function ModelMappingSection({ summary, elements, onImport }: { summary?:
       icon={Boxes}
       headerAction={
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {total > 0 && <span className="sbd-badge-info">{total} members</span>}
+          {/* Badge the COUNT, not the loaded array — it is true either way. */}
+          {rosterKnown && (rosterCount ?? 0) > 0 && (
+            <span className="sbd-badge-info">{(rosterCount ?? 0).toLocaleString()} members</span>
+          )}
           <button className="sbd-btn sbd-btn-ghost" onClick={onImport} style={{ fontSize: 12 }}>
             Import member CSV
           </button>
@@ -369,8 +397,32 @@ export function ModelMappingSection({ summary, elements, onImport }: { summary?:
         Steel members mapped to packages by piece mark — this drives the BIM viewer&apos;s status coloring.
       </p>
 
-      {total === 0 ? (
+      {rosterCountLoading || !rosterKnown ? (
+        <div style={{ fontFamily: mono, fontSize: 11, color: textMuted, padding: "6px 0" }}>
+          Checking for model members…
+        </div>
+      ) : rosterEmpty ? (
         <EmptyState text="No model members yet — export a member/assembly report (CSV) from Tekla or SDS2 and import it to map the physical steel to packages, sequences, and RFIs." />
+      ) : rosterUnloaded ? (
+        // A roster EXISTS but is not loaded on this tab. Say exactly that and
+        // offer to load it, rather than implying nothing has been imported.
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "4px 0" }}>
+          <span style={{ fontFamily: mono, fontSize: 11, color: textMuted }}>
+            {(rosterCount ?? 0).toLocaleString()} members imported · mapping not loaded
+          </span>
+          <button
+            type="button"
+            className="sbd-btn sbd-btn-ghost"
+            onClick={onLoadRoster}
+            disabled={rosterLoading || !onLoadRoster}
+            style={{ fontSize: 12 }}
+          >
+            {rosterLoading ? "Loading members…" : "Load mapping"}
+          </button>
+          <span style={{ fontFamily: mono, fontSize: 9, color: textMuted }}>
+            large rosters load on demand
+          </span>
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
@@ -602,7 +654,13 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onComp
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {shown.map((r) => {
+            // Two very different states hide behind "nothing reached": the sheet
+            // carries downstream dates and none has landed (genuinely pre-fab),
+            // or it carries none at all (we simply don't know). Only the first
+            // earns "caught pre-fab".
             const noneReached = !r.fabricated && !r.delivered && !r.inField;
+            const caughtPreFab = noneReached && r.downstreamKnown === true;
+            const downstreamUnknown = noneReached && r.downstreamKnown !== true;
             const pillTone = r.severity === "critical" || r.severity === "high" ? "danger"
               : r.severity === "medium" ? "review" : "neutral";
             return (
@@ -624,7 +682,15 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onComp
                   {r.fabricated && <ReadyChip ok={false} label="Fabricated" bad />}
                   {r.delivered && <ReadyChip ok={false} label="Delivered" bad />}
                   {r.inField && <ReadyChip ok={false} label="In field" bad />}
-                  {noneReached && <span style={{ color: textMuted, fontFamily: mono, fontSize: 10 }}>caught pre-fab</span>}
+                  {caughtPreFab && <span style={{ color: textMuted, fontFamily: mono, fontSize: 10 }}>caught pre-fab</span>}
+                  {downstreamUnknown && (
+                    <span
+                      style={{ color: warning, fontFamily: mono, fontSize: 10 }}
+                      title="No fabrication, delivery, or install date is recorded on this sheet, so its downstream state can't be determined."
+                    >
+                      downstream unknown
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {onCompare && r.drawingId && (

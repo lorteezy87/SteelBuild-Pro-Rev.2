@@ -26,12 +26,12 @@ import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import { computeDetailingReadiness } from "@/lib/detailingReadiness";
 import { summarizeElementStatuses } from "@/services/modelElementStatus";
-import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
+import { countModelElements, fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
-import { Box } from "lucide-react";
+import { Box, CalendarCog } from "lucide-react";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
@@ -62,6 +62,7 @@ import { saveRevisionSummary, getLatestSummariesByProject } from "@/lib/revision
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { buildRfiPrefillFromSummary, createRfiAndLink } from "@/lib/rfiFromDelta";
 import { isRfiOpen } from "@/lib/entityPredicates";
+import { normNum } from "@/lib/fabReleaseGate";
 const RevisionDeepDiveModal = lazyWithRetry(() => import("@/components/drawings/RevisionImpactReportModal"));
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
@@ -182,16 +183,31 @@ export default function DrawingSubmittalHub() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
-  // 3D model members (BIM integration Phase 0 — piece-mark mapping).
-  const { data: modelElements = [], isLoading: modelElementsLoading } = useQuery({
+  // ── 3D model members (BIM integration Phase 0 — piece-mark mapping) ──────
+  // Read in TWO parts, deliberately.
+  //
+  // (1) A HEAD count: one request, zero rows transferred, always enabled. This
+  // is what the Control Board's mapping card reads to know whether a roster
+  // exists. It previously inferred that from the roster array itself — which is
+  // gated to the 3D tab — so on a project with 27k imported members the card
+  // told the user "No model members yet, import a CSV from Tekla or SDS2".
+  const { data: modelElementCount = null, isPending: modelElementCountLoading } = useQuery({
+    queryKey: ["model-elements-count", projectId],
+    queryFn: () => countModelElements(projectId),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+
+  // (2) The full roster, which stays LAZY. Big models run 3k–28k+ elements and a
+  // single Supabase request is capped at 1000 rows server-side (db-max-rows), so
+  // fetchAllModelElements pages with .range() — ~28 round-trips on the largest
+  // live project. That cost is why it loads only where it is actually rendered:
+  // the 3D tab, or when the user opens the mapping card on the Control Board.
+  const [mappingRosterRequested, setMappingRosterRequested] = useState(false);
+  const { data: modelElements = [], isFetching: modelElementsLoading } = useQuery({
     queryKey: ["model-elements", projectId],
-    // Big models run 3k–12k+ elements. A single Supabase request is capped at
-    // 1000 rows server-side (db-max-rows), so `.limit(50000)` silently returned
-    // only the first 1000 — leaving most pieces with no color/click data and
-    // fab colors that "didn't stick" (the assigned pieces weren't in the 1000).
-    // fetchAllModelElements pages with .range() so the WHOLE roster loads.
     queryFn: () => fetchAllModelElements(projectId),
-    enabled: !!projectId && show3d && activeTab === "model3d",
+    enabled: !!projectId && ((show3d && activeTab === "model3d") || mappingRosterRequested),
     staleTime: 60_000,
   });
 
@@ -323,6 +339,20 @@ export default function DrawingSubmittalHub() {
     return s;
   }, [rfis]);
 
+  // The SAME open RFIs keyed by normalized NUMBER. Sheet links live in
+  // drawings.linked_rfi_ids, which is a CSV of RFI numbers ("RFI #001"), not
+  // uuids — readiness needs the open set in both shapes or a sheet-linked open
+  // RFI silently fails to block the package.
+  const openRfiNumbers = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of (rfis as any[]) || []) {
+      if (!r || r.is_deleted || !isRfiOpen(r)) continue;
+      const key = normNum(r.rfi_number);
+      if (key) s.add(key);
+    }
+    return s;
+  }, [rfis]);
+
   // Per-package readiness read-model, keyed by package key.
   const readinessByKey = useMemo(() => {
     const m = new Map<string, any>();
@@ -346,10 +376,11 @@ export default function DrawingSubmittalHub() {
         project: activeProject,
         workPackage,
         openRfiIds,
+        openRfiNumbers,
       }));
     }
     return m;
-  }, [setPackages, wpById, openRfiIds, activeProject]);
+  }, [setPackages, wpById, openRfiIds, openRfiNumbers, activeProject]);
 
   // 3D model mapping rollup: element status buckets derived from the SAME
   // per-package readiness models above, so the (future) viewer coloring can
@@ -450,7 +481,10 @@ export default function DrawingSubmittalHub() {
       if (item._submittalId) {
         await entities.Submittal.update(item._submittalId, { ball_in_court: owner });
       } else if (item._ownerScope === "First sheet owner" && item._firstSheetId) {
-        await entities.Drawing.update(item._firstSheetId, { assigned_to: owner } as any);
+        // `drawings` has no assigned_to (nor ball_in_court) column — only
+        // `reviewer`. The `as any` here was hiding a guaranteed PGRST204: this
+        // control could never succeed, it only ever produced a red toast.
+        await entities.Drawing.update(item._firstSheetId, { reviewer: owner });
       } else {
         throw new Error("No package-level owner field exists; assign the first sheet instead.");
       }
@@ -565,6 +599,10 @@ export default function DrawingSubmittalHub() {
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
             modelMapping={modelMappingSummary}
             modelElementRows={modelElements as any[]}
+            modelRosterCount={modelElementCount}
+            modelRosterCountLoading={modelElementCountLoading}
+            modelRosterLoading={modelElementsLoading}
+            onLoadModelRoster={() => setMappingRosterRequested(true)}
             onImportModelElements={() => setImportModelOpen(true)}
           />
           </>
@@ -607,6 +645,9 @@ export default function DrawingSubmittalHub() {
             rows={revisionImpactRows}
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
             isLoading={isLoading}
+            // Lets the "Pieces ≈" column distinguish "nothing affected" from
+            // "the roster wasn't loaded, so we didn't count".
+            rosterLoaded={modelElements.length > 0}
           />
         )}
         {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
@@ -655,7 +696,9 @@ export default function DrawingSubmittalHub() {
           projectId={projectId}
           projectName={projectName}
           drawings={drawings}
-          existingElements={modelElements}
+          // NO existingElements prop — the importer loads (and pages) the roster
+          // itself. Passing this page's copy fed it [] on the Control Board and
+          // every CSV row classified as "create", duplicating the whole roster.
           onClose={() => setImportModelOpen(false)}
         />
       )}
@@ -712,6 +755,21 @@ export default function DrawingSubmittalHub() {
         }}
         projectName={projectName}
         tabCounts={tabCounts}
+        // Lead Times is the ONLY writer of projects.metadata.detailing_lead_days,
+        // which drives the whole backward schedule (Submit by / Approval by / Fab
+        // release by) and the At-Risk badge. Its trigger was dropped in 307dafbfe
+        // when the CommandBar header was replaced by this shell, leaving every
+        // project silently pinned to DEFAULT_LEAD_DAYS with no way to change it.
+        actions={can("edit", "project") ? (
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            onClick={() => setLeadModalOpen(true)}
+            title="Set this project's detailing lead times (drives the backward schedule)"
+          >
+            <CalendarCog size={14} /> Lead Times
+          </button>
+        ) : undefined}
       >
         {activeTabPanel}
       </DetailingCommandShell>

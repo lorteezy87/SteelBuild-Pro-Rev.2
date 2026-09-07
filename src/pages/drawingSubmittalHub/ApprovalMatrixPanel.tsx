@@ -22,6 +22,7 @@ import {
   getSubmittalDueDate,
   isClosedSubmittal,
   summarizeApprovalMatrix,
+  submittalRoundCount,
 } from "./format";
 import type { DueInfo } from "./types";
 import { FilterBar, Pill } from "@/components/command";
@@ -180,8 +181,8 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
             <td><Pill tone={dueTone(due)}>{due.label}</Pill></td>
             <td>{CLOSED_SUBMITTAL_STATUSES.has(sub.status ?? "") ? "Closed" : (sub.ball_in_court || "—")}</td>
             <td style={{ textAlign: "center" }}>
-              {sub.round_number > 1
-                ? <Pill tone="warn">R{sub.round_number}</Pill>
+              {submittalRoundCount(sub) > 1
+                ? <Pill tone="warn">R{submittalRoundCount(sub)}</Pill>
                 : "1"}
             </td>
           </>
@@ -236,7 +237,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
                   <span style={{ color: "var(--cmd-gold)", fontWeight: 600 }}>{s.submittal_number}</span>
                   <Pill tone={statusTone(s.status)}>{s.status}</Pill>
                   <Pill tone={dueTone(childDue)}>{childDue.label}</Pill>
-                  <span style={{ color: "var(--cmd-text-muted)" }}>R{s.round_number || 1}</span>
+                  <span style={{ color: "var(--cmd-text-muted)" }}>R{submittalRoundCount(s)}</span>
                   <span style={{ color: "var(--cmd-text-muted)" }}>{CLOSED_SUBMITTAL_STATUSES.has(s.status ?? "") ? "Closed" : (s.ball_in_court || "—")}</span>
                   <span style={{ color: "var(--cmd-text-muted)" }}>{fmtDate(s.submitted_date)} → {fmtDate(getSubmittalDueDate(s))} → {fmtDate(s.returned_date)}</span>
                 </div>

@@ -10,20 +10,32 @@
  *  REV_DOWNSTREAM map + `severityTone` helper. */
 export interface DownstreamMeta {
   label: string;
-  tone: "danger" | "review" | "neutral";
+  tone: "danger" | "review" | "warn" | "neutral";
+  title?: string;
 }
 
 const DOWNSTREAM: Record<string, DownstreamMeta> = {
   critical: { label: "In field", tone: "danger" },
   high: { label: "Delivered", tone: "danger" },
   medium: { label: "Fabricated", tone: "review" },
+  // "Not downstream" is a POSITIVE claim and is only earned when the sheet
+  // actually carries downstream dates and none has been reached.
   low: { label: "Not downstream", tone: "neutral" },
+  // No fabrication / delivery / install date is recorded on the sheet, so the
+  // downstream state is genuinely unknown. Saying "Not downstream" here told
+  // the user this revision was caught pre-fab on steel that may already be
+  // erected — never present an absence of data as an all-clear.
+  unknown: {
+    label: "Unknown",
+    tone: "warn",
+    title: "No fabrication, delivery, or install date is recorded on this sheet, so its downstream state can't be determined. Set those dates on the sheet to track revision exposure.",
+  },
 };
 
-/** Resolve a row's severity to its downstream label + Pill tone. Unknown
- *  severities fall back to "low" for a stable triage display. */
+/** Resolve a row's severity to its downstream label + Pill tone. An
+ *  unrecognized severity falls back to "unknown" — never to an all-clear. */
 export function downstreamFor(severity: string | null | undefined): DownstreamMeta {
-  return DOWNSTREAM[severity ?? ""] || DOWNSTREAM.low;
+  return DOWNSTREAM[severity ?? ""] || DOWNSTREAM.unknown;
 }
 
 /** Filter the pre-enriched rows by the search query (sheet / set / WP names).

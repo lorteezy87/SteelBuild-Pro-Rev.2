@@ -33,6 +33,28 @@ async function mapPool(items, concurrency, mapper) {
   return results;
 }
 
+/**
+ * How many live model members this project has — ONE HEAD request, zero rows
+ * transferred.
+ *
+ * Callers that only need to know whether a roster EXISTS (and how big it is)
+ * must use this instead of loading the roster. Live rosters run to ~28k rows, so
+ * the full read stays lazy; a UI that infers "no members imported" from an
+ * unloaded roster tells the user something false.
+ *
+ * @returns {Promise<number>} live element count (0 when none)
+ */
+export async function countModelElements(projectId, { client = supabase } = {}) {
+  if (!projectId) return 0;
+  const { count, error } = await client
+    .from("model_elements")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .eq("is_deleted", false);
+  if (error) throw error;
+  return count || 0;
+}
+
 export async function fetchAllModelElements(
   projectId,
   { client = supabase, page = PAGE, concurrency = DEFAULT_CONCURRENCY, columns = "*" } = {},
@@ -40,12 +62,7 @@ export async function fetchAllModelElements(
   if (!projectId) return [];
 
   // One HEAD count so we know how many pages to fan out (no rows transferred).
-  const { count, error: countError } = await client
-    .from("model_elements")
-    .select("id", { count: "exact", head: true })
-    .eq("project_id", projectId)
-    .eq("is_deleted", false);
-  if (countError) throw countError;
+  const count = await countModelElements(projectId, { client });
   if (!count) return [];
 
   const fetchPage = async (i) => {

@@ -35,6 +35,7 @@ import {
   textMuted,
   textPrimary,
   warning,
+  submittalRoundCount,
 } from "./format";
 import type { DueInfo, Submittal } from "./types";
 import { DueChip, StatusChip, SummaryChip, Td, Th } from "./primitives";
@@ -238,15 +239,15 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
               <DueChip info={due} />
             </Td>
             <Td style={{ textAlign: "center" }}>
-              {sub.round_number > 1 && (
+              {submittalRoundCount(sub) > 1 && (
                 <span style={{
                   background: warning, color: "var(--cmd-pill-warn-fg)",
                   padding: "1px 6px", borderRadius: 3, fontSize: 10, fontWeight: 700,
                 }}>
-                  R{sub.round_number}
+                  R{submittalRoundCount(sub)}
                 </span>
               )}
-              {sub.round_number <= 1 && "1"}
+              {submittalRoundCount(sub) <= 1 && "1"}
             </Td>
             <Td>{CLOSED_SUBMITTAL_STATUSES.has(sub.status ?? "") ? "Closed" : (sub.ball_in_court || "—")}</Td>
             <Td>{fmtDate(sub.submitted_date)}</Td>
@@ -274,7 +275,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
             <Td style={{ color: accent }}>{s.submittal_number}</Td>
             <Td><StatusChip status={s.status} /></Td>
             <Td><DueChip info={dueInfoFor(getSubmittalDueDate(s), { closed: isClosedSubmittal(s), useWorkdays })} /></Td>
-            <Td style={{ textAlign: "center" }}>{s.round_number || 1}</Td>
+            <Td style={{ textAlign: "center" }}>{submittalRoundCount(s)}</Td>
             <Td>{CLOSED_SUBMITTAL_STATUSES.has(s.status ?? "") ? "Closed" : (s.ball_in_court || "—")}</Td>
             <Td>{fmtDate(s.submitted_date)}</Td>
             <Td>{fmtDate(getSubmittalDueDate(s))}</Td>

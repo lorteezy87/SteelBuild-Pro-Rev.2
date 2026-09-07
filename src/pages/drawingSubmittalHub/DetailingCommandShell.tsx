@@ -51,6 +51,8 @@ interface DetailingCommandShellProps {
   onTab: (key: string) => void;
   kpis: DetailingKpis;
   projectName?: string;
+  /** Header actions rendered in the hero (e.g. Lead Times). Optional. */
+  actions?: ReactNode;
   /** Tab-count badge values, keyed by tab key. */
   tabCounts: Record<string, number>;
   /** The active tab panel rendered by the hub (unchanged). */
@@ -66,6 +68,7 @@ export function DetailingCommandShell({
   kpis,
   projectName,
   tabCounts,
+  actions,
   children,
 }: DetailingCommandShellProps) {
   useCommandSkin();
@@ -169,7 +172,9 @@ export function DetailingCommandShell({
         chips={chips}
         stats={heroStats}
         photoSrc={photoFor("DrawingSubmittalHub") ?? undefined}
-      />
+      >
+        {actions}
+      </PageHero>
 
       {/* KPI strip */}
       <KpiStrip cells={kpiCells} />

@@ -15,9 +15,10 @@
 import React, { useRef, useState } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { X, Upload, FileText, CheckCircle2, Boxes } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
+import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseModelElementsCsv } from "@/lib/importModelElements";
 
@@ -36,13 +37,35 @@ export default function ModelElementImportModal({
   projectId,
   projectName,
   drawings = [],
-  existingElements = [],
   onClose,
   onImported,
 }) {
   const qc = useQueryClient();
   const trapRef = useFocusTrap(open);
   const fileInput = useRef(null);
+
+  // The importer OWNS this read — it must never take the roster as a prop.
+  // parseModelElementsCsv builds its GUID/piece-mark dedupe indexes solely from
+  // `existingElements`, so an empty or truncated array silently classifies every
+  // row as "create" and `bulkCreate` (a plain insert, no upsert) duplicates the
+  // whole roster. That is exactly what happened while the Hub passed its own
+  // `modelElements`, which is gated to the 3D tab and therefore [] on the
+  // Control Board where this modal is opened from.
+  //
+  // fetchAllModelElements PAGES the read: a single request is capped at 1000
+  // rows server-side, and live rosters run to ~28k, so a capped read would
+  // re-create every piece past the first page. Same query key + projection as
+  // TeklaEpmImportModal and the 3D tab, so the cache stays consistent.
+  const {
+    data: existingElements = [],
+    isPending: rosterLoading,
+    isError: rosterFailed,
+    error: rosterError,
+  } = useQuery({
+    queryKey: ["model-elements", projectId],
+    queryFn: () => fetchAllModelElements(projectId),
+    enabled: !!open && !!projectId,
+  });
 
   const [step, setStep]         = useState("upload"); // upload | parsing | preview | committing | done
   const [file, setFile]         = useState(null);
@@ -74,6 +97,19 @@ export default function ModelElementImportModal({
 
   const runParse = async () => {
     if (!file) return;
+    // Fail closed rather than dedupe against a partial roster — classifying an
+    // existing piece as "create" duplicates it on commit, with no undo.
+    if (rosterFailed) {
+      setErr(
+        "Could not load this project's existing members, so new-vs-update can't be determined. "
+        + `Close and retry. (${rosterError?.message || "unknown error"})`,
+      );
+      return;
+    }
+    if (rosterLoading) {
+      setErr("Still loading this project's existing members — try again in a moment.");
+      return;
+    }
     setStep("parsing"); setErr(null);
     try {
       const text = await file.text();
@@ -218,6 +254,14 @@ export default function ModelElementImportModal({
                 Members are matched to project sheets only on an exact sheet-number match — anything
                 ambiguous is flagged for you, never guessed.
               </p>
+              {/* The dedupe basis, stated plainly — this is what decides new vs update. */}
+              <div style={{ ...mono, fontSize: 10, color: rosterFailed ? "var(--status-error)" : "var(--text-muted)" }}>
+                {rosterFailed
+                  ? "COULD NOT LOAD EXISTING MEMBERS — IMPORT DISABLED (RE-IMPORTING WOULD DUPLICATE THEM)"
+                  : rosterLoading
+                    ? "LOADING THIS PROJECT'S EXISTING MEMBERS…"
+                    : `MATCHING AGAINST ${existingElements.length.toLocaleString()} EXISTING MEMBER${existingElements.length === 1 ? "" : "S"} — BY IFC GUID, THEN PIECE MARK`}
+              </div>
               <div
                 onClick={() => fileInput.current?.click()}
                 onDragOver={(e) => e.preventDefault()}
@@ -246,10 +290,14 @@ export default function ModelElementImportModal({
                 <button className="sbd-btn sbd-btn-ghost" onClick={onClose}>Cancel</button>
                 <button
                   className="sbd-btn sbd-btn-primary"
-                  disabled={!file || step === "parsing"}
+                  disabled={!file || step === "parsing" || rosterLoading || rosterFailed}
                   onClick={runParse}
                 >
-                  {step === "parsing" ? "Parsing…" : "Review members"}
+                  {step === "parsing"
+                    ? "Parsing…"
+                    : rosterLoading
+                      ? "Loading existing members…"
+                      : "Review members"}
                 </button>
               </div>
             </div>
