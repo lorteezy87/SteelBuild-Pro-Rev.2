@@ -149,6 +149,8 @@ interface MatrixRowProps {
 
 function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, useWorkdays = false }: MatrixRowProps) {
   const [expanded, setExpanded] = useState(false);
+  // Ties the disclosure button to the detail row it reveals.
+  const detailId = `matrix-detail-${drawingSet.id}`;
   const rowRail = sub ? getStatusColor(sub.status) : "var(--cmd-warn)";
   const hasHistory = allSubmittals.length > 1 || (sub && (roundsBySubmittal[sub.id]?.length ?? 0) > 0);
   const approverNotes = evaluateApproverNotes(sub);
@@ -161,8 +163,26 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
         style={{ borderLeft: `3px solid ${rowRail}`, cursor: "pointer" }}
       >
         <td style={{ fontWeight: 600 }}>
-          <span style={{ marginRight: 6, fontSize: 10, opacity: 0.6 }}>{expanded ? "▾" : "▸"}</span>
-          {drawingSet.set_name || "—"}
+          {/* A REAL button owns the disclosure, so the row's dates and any
+              unanswered approver notes are reachable by keyboard. The <tr>
+              keeps its click handler for mouse convenience, but must not take
+              role="button" — that would break the table's row semantics for a
+              screen reader. stopPropagation so the button doesn't toggle twice. */}
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-controls={detailId}
+            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            title={expanded ? "Hide submittal detail" : "Show submittal detail"}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: "transparent", border: "none", padding: 0,
+              font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left",
+            }}
+          >
+            <span aria-hidden="true" style={{ fontSize: 10, opacity: 0.6 }}>{expanded ? "▾" : "▸"}</span>
+            {drawingSet.set_name || "—"}
+          </button>
         </td>
         <td style={{ color: "var(--cmd-gold)", fontWeight: 800 }}>{formatDrawingSetNumber(drawingSet)}</td>
         {sub ? (
@@ -187,14 +207,14 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
             </td>
           </>
         ) : (
-          <td style={{ color: "var(--cmd-warn)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }} colSpan={5}>
+          <td style={{ color: "var(--cmd-warn-text)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }} colSpan={5}>
             No submittal linked
           </td>
         )}
       </tr>
 
       {expanded && (
-        <tr style={{ background: "var(--cmd-row-hover)" }}>
+        <tr id={detailId} style={{ background: "var(--cmd-row-hover)" }}>
           <td colSpan={7} style={{ padding: "10px 16px 12px 28px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 18px", fontSize: 12, color: "var(--cmd-text-muted)", marginBottom: hasHistory ? 10 : 0 }}>
               <span>Discipline: <strong style={{ color: "var(--cmd-text)" }}>{drawingSet.discipline || "—"}</strong></span>
@@ -202,7 +222,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
               {sub && (
                 <>
                   <span>Submitted: <strong style={{ color: "var(--cmd-text)" }}>{fmtDate(sub.submitted_date)}</strong></span>
-                  <span>Required: <strong style={{ color: due?.overdue ? "var(--cmd-danger)" : "var(--cmd-text)" }}>{fmtDate(getSubmittalDueDate(sub))}</strong></span>
+                  <span>Required: <strong style={{ color: due?.overdue ? "var(--cmd-danger-text)" : "var(--cmd-text)" }}>{fmtDate(getSubmittalDueDate(sub))}</strong></span>
                   <span>Returned: <strong style={{ color: "var(--cmd-text)" }}>{fmtDate(sub.returned_date)}</strong></span>
                 </>
               )}
@@ -218,7 +238,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
                   background: "color-mix(in srgb, var(--cmd-warn) 10%, transparent)",
                 }}
               >
-                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--cmd-warn)", marginBottom: 6 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--cmd-warn-text)", marginBottom: 6 }}>
                   {INCOMPLETE_EOR_AOR_LABEL}
                 </div>
                 <ul style={{ margin: 0, paddingLeft: 16, color: "var(--cmd-text)", fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>

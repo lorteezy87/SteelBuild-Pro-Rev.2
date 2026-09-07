@@ -153,13 +153,16 @@ export function workdayDueInfo(input: any, closed = false, today?: string): DueI
     return { label: "No date", days: null, overdue: false, dueSoon: false, tone: textMuted, sort: 99998 };
   }
   if (days < 0) {
-    return { label: `${Math.abs(days)}d late`, days, overdue: true, dueSoon: false, tone: error, sort: days };
+    // "wd" — the same convention submittalRiskAging.ts uses. Sharing the
+    // calendar "d" made "3d left" mean three BUSINESS days with the flag on and
+    // three calendar days with it off, from identical text.
+    return { label: `${Math.abs(days)}wd late`, days, overdue: true, dueSoon: false, tone: error, sort: days };
   }
   if (days === 0) {
     return { label: "Due today", days, overdue: false, dueSoon: true, tone: warning, sort: 0 };
   }
   if (days <= 5) {
-    return { label: `${days}d left`, days, overdue: false, dueSoon: true, tone: warning, sort: days };
+    return { label: `${days}wd left`, days, overdue: false, dueSoon: true, tone: warning, sort: days };
   }
   return { label: fmtDate(input), days, overdue: false, dueSoon: false, tone: textMuted, sort: days };
 }
@@ -426,6 +429,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
         name: getSetDisplayName({ parent, legacyName }),
         parent,
         sheets: [],
+        supersededSheets: [],
         submittals: [],
       };
       packages.set(key, pkg);
@@ -438,14 +442,20 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
   }
 
   for (const drawing of drawings || []) {
-    if (!drawing || drawing.is_deleted || drawing.is_superseded) continue;
+    if (!drawing || drawing.is_deleted) continue;
     const parent = drawing.drawing_set_id ? parentsById.get(drawing.drawing_set_id) : null;
     const pkg = ensurePackage({
       setId: drawing.drawing_set_id || null,
       legacyName: drawing.drawing_set_name,
       parent,
     });
-    pkg.sheets.push(drawing);
+    // Superseded sheets are kept in a SEPARATE bucket, never in `sheets`:
+    // dropping them entirely made computeDetailingReadiness's revisionImpacted
+    // and fullySuperseded structurally unreachable (it only ever saw live
+    // sheets), so the "Rev impacted" chip could not render and the
+    // `&& !revisionImpacted` term in fabricationReady was a no-op.
+    if (drawing.is_superseded) pkg.supersededSheets.push(drawing);
+    else pkg.sheets.push(drawing);
   }
 
   for (const submittal of submittals || []) {

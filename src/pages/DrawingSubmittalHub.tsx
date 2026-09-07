@@ -149,7 +149,7 @@ export default function DrawingSubmittalHub() {
   } = useSubmittals(projectId);
 
   // Drawing sets (for matrix)
-  const { data: drawingSets = [] } = useQuery({
+  const { data: drawingSets = [], isPending: drawingSetsLoading } = useQuery({
     queryKey: ["drawing-sets", projectId],
     queryFn: () => entities.DrawingSet.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -170,7 +170,7 @@ export default function DrawingSubmittalHub() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
-  const { data: drawingRevisions = [] } = useQuery({
+  const { data: drawingRevisions = [], isPending: revisionsLoading } = useQuery({
     queryKey: ["drawing-revisions", projectId],
     queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -373,6 +373,7 @@ export default function DrawingSubmittalHub() {
         pkg: pkg.parent,
         submittals: pkg.submittals,
         sheets: pkg.sheets,
+        supersededSheets: pkg.supersededSheets,
         project: activeProject,
         workPackage,
         openRfiIds,
@@ -437,6 +438,14 @@ export default function DrawingSubmittalHub() {
   // modal itself disables whichever kind the user can't create.
   const canEscalate = can("create", "rfi") || can("create", "change_order");
 
+  // Inline Control-Board edits touch drawing_sets / drawings / submittals, whose
+  // RLS UPDATE policies all floor at project role "field". Without this gate a
+  // project VIEWER saw fully enabled owner / due-date / state / readiness
+  // controls and only learned they could not use them from an RLS rejection
+  // toast. The entity overrides make can("edit", …) mirror the DB exactly.
+  const canEditDetailing =
+    can("edit", "drawing_set") || can("edit", "drawing") || can("edit", "submittal");
+
   // Sequence-aware readiness rollup (group packages by erection sequence).
   const sequenceReadiness = useMemo(() => buildSequenceReadiness(readinessByKey), [readinessByKey]);
 
@@ -456,13 +465,16 @@ export default function DrawingSubmittalHub() {
     [submittals, setPackages, readinessByKey, workdayDues],
   );
 
+  // A tab badge must count the ROWS that tab lists. The Drawing Register tab
+  // renders sheets (DrawingRegisterGridPanel), so badging it with the set count
+  // read "Drawing Register 11" above 148 rows.
   const tabCounts = useMemo(() => ({
     overview: triage.openItems.length,
     process: setPackages.length + triage.unlinkedSubmittalItems.length,
-    drawings: drawingKpis.totalSets,
+    drawings: drawingKpis.totalSheets,
     submittals: kpis.total,
     matrix: drawingSets.filter((set) => !set?.is_deleted).length,
-  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSets, kpis.total, drawingSets]);
+  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSheets, kpis.total, drawingSets]);
 
   // ── Inline quick-action mutations (Next Decision card) ────────────────
   const invalidateHub = async () => {
@@ -588,10 +600,10 @@ export default function DrawingSubmittalHub() {
             drawingKpis={drawingKpis}
             isLoading={isLoading}
             onOpenTab={setActiveTab}
-            onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
-            onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
-            onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
-            onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
+            onUpdateOwner={canEditDetailing ? (item: any, owner: string) => updateOwnerMut.mutate({ item, owner }) : undefined}
+            onUpdateDueDate={canEditDetailing ? (item: any, date: string) => updateDueDateMut.mutate({ item, date }) : undefined}
+            onAdvanceDetailing={canEditDetailing ? (item: any, next: string) => updateDetailingStateMut.mutate({ item, next }) : undefined}
+            onToggleReadiness={canEditDetailing ? (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => updateReadinessFlagMut.mutate({ item, field, value }) : undefined}
             sequenceReadiness={sequenceReadiness}
             revisionImpact={revisionImpact}
             isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
@@ -636,7 +648,9 @@ export default function DrawingSubmittalHub() {
             drawingSets={drawingSets}
             submittals={submittals as unknown as HubSubmittal[]}
             roundsBySubmittal={roundsBySubmittal}
-            isLoading={isLoading}
+            // drawingSets has its own query, so the matrix could render
+            // "No drawing sets yet." while that key was still cold.
+            isLoading={isLoading || drawingSetsLoading}
             useWorkdays={workdayDues}
           />
         )}
@@ -644,7 +658,8 @@ export default function DrawingSubmittalHub() {
           <RevisionImpactPanel
             rows={revisionImpactRows}
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
-            isLoading={isLoading}
+            // Rows derive from drawingRevisions, which loads separately.
+            isLoading={isLoading || revisionsLoading}
             // Lets the "Pieces ≈" column distinguish "nothing affected" from
             // "the roster wasn't loaded, so we didn't count".
             rosterLoaded={modelElements.length > 0}
@@ -755,6 +770,7 @@ export default function DrawingSubmittalHub() {
         }}
         projectName={projectName}
         tabCounts={tabCounts}
+        isLoading={isLoading}
         // Lead Times is the ONLY writer of projects.metadata.detailing_lead_days,
         // which drives the whole backward schedule (Submit by / Approval by / Fab
         // release by) and the At-Risk badge. Its trigger was dropped in 307dafbfe

@@ -750,7 +750,9 @@ describe("buildTriage — working-day due display (submittal_workday_dues)", () 
     const t = buildTriage([], [submittalGovernedPkg()], new Map(), true);
     const item = t.setItems.find((i) => i.id === "set-pkg-s");
     expect(item?.due.days).toBe(5); // Mon→Mon = 5 working days (weekend dropped)
-    expect(item?.due.label).toBe("5d left");
+    // "wd", not "d" — the same text under the calendar-day path means 5 CALENDAR
+    // days, so the suffix is what distinguishes them on screen.
+    expect(item?.due.label).toBe("5wd left");
     expect(item?.due.dueSoon).toBe(true);
   });
 
@@ -914,5 +916,43 @@ describe("canWrite* predicates mirror the write validators", () => {
   it("canWriteReadinessFlags requires the drawing_set row the flags live on", () => {
     expect(canWriteReadinessFlags({ _drawingSetId: "s1" })).toBe(true);
     expect(canWriteReadinessFlags({ _drawingSetId: null })).toBe(false);
+  });
+});
+
+// ── Counters must match what their label and their list say (§15–§18) ────────
+describe("triage counters vs. the queues beneath them", () => {
+  // Two overdue items of DIFFERENT kinds: one drawing set, one unlinked submittal.
+  const pastDue = "2000-01-01";
+  const pkgs = () => buildSetPackages(
+    [{ id: "d1", drawing_set_id: "s1", due_date: pastDue }] as any,
+    [{ id: "s1", set_name: "Main Steel" }] as any,
+    [] as any,
+  );
+  const unlinkedOverdue = [
+    { id: "u1", submittal_number: "SUB-9", status: "Submitted", required_date: pastDue, drawing_set_ids: [] },
+  ] as any;
+
+  it("partitions overdue into two disjoint counts that sum to the queue length", () => {
+    const t = buildTriage(unlinkedOverdue, pkgs(), new Map());
+    expect(t.overdueDrawingSets).toBe(1);
+    expect(t.overdueUnlinkedSubmittals).toBe(1);
+    // The hero chip and the Overdue tile must use the SUM — using only the
+    // drawing-set half flew a green "No overdue sets" past a late submittal.
+    expect(t.overdueDrawingSets + t.overdueUnlinkedSubmittals).toBe(t.overdue.length);
+  });
+
+  it("exposes unscoped dueSoon / noDate totals for the unscoped tiles", () => {
+    // "Due This Week" and "Missing Dates" label nothing, and the queues under
+    // them list both kinds, so they must not read the set-scoped counts.
+    const t = buildTriage(unlinkedOverdue, pkgs(), new Map());
+    expect(t.dueSoon.length).toBeGreaterThanOrEqual(t.dueSoonDrawingSets);
+    expect(t.noDate.length).toBeGreaterThanOrEqual(t.noDateDrawingSets);
+  });
+
+  it("counts an unlinked overdue submittal even with no overdue drawing sets", () => {
+    const t = buildTriage(unlinkedOverdue, [], new Map());
+    expect(t.overdueDrawingSets).toBe(0);
+    expect(t.overdueUnlinkedSubmittals).toBe(1);
+    expect(t.overdue.length).toBe(1); // the all-clear must not fire here
   });
 });

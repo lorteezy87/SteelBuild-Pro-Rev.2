@@ -64,10 +64,11 @@ export interface ControlBoardPanelProps {
   drawingKpis: any;
   isLoading: boolean;
   onOpenTab: (key: string) => void;
-  onUpdateOwner: (item: any, owner: string) => void;
-  onUpdateDueDate: (item: any, date: string) => void;
-  onAdvanceDetailing: (item: any, next: string) => void;
-  onToggleReadiness: (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
+  /** Absent = the viewer lacks the project role these writes need (RLS: field+). */
+  onUpdateOwner?: (item: any, owner: string) => void;
+  onUpdateDueDate?: (item: any, date: string) => void;
+  onAdvanceDetailing?: (item: any, next: string) => void;
+  onToggleReadiness?: (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
   sequenceReadiness: any[];
   revisionImpact: any[];
   isSaving: boolean;
@@ -165,15 +166,15 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
                   means a click that lands. */}
               <InlineOwnerControl
                 currentOwner={focus.owner}
-                onAssign={(owner: string) => onUpdateOwner(focus, owner)}
-                disabled={isSaving || !canWriteOwner(focus)}
+                onAssign={(owner: string) => onUpdateOwner?.(focus, owner)}
+                disabled={isSaving || !onUpdateOwner || !canWriteOwner(focus)}
                 label={focus._ownerScope || "Owner"}
               />
               <InlineDateControl
                 currentDate={focus.dueDate}
                 isOverdue={focus.due?.overdue}
-                onSetDate={(date: string) => onUpdateDueDate(focus, date)}
-                disabled={isSaving || !canWriteDueDate(focus)}
+                onSetDate={(date: string) => onUpdateDueDate?.(focus, date)}
+                disabled={isSaving || !onUpdateDueDate || !canWriteDueDate(focus)}
               />
             </div>
 
@@ -181,10 +182,10 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
                 validator, not on _canDraft: the latter is satisfied by packages
                 with no drawing_set_id, or whose effective state has already
                 reached the formal workflow, both of which the write rejects. */}
-            {focus.kind === "Drawing Set" && canWriteDetailingState(focus) && (
+            {focus.kind === "Drawing Set" && onAdvanceDetailing && canWriteDetailingState(focus) && (
               <InlineDetailingControl
                 current={focus._detailingStateRaw}
-                onAdvance={(next: string) => onAdvanceDetailing(focus, next)}
+                onAdvance={(next: string) => onAdvanceDetailing?.(focus, next)}
                 disabled={isSaving}
               />
             )}
@@ -196,8 +197,8 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
             {focus.kind === "Drawing Set" && focus._readiness && (
               <ReadinessPanel
                 readiness={focus._readiness}
-                onToggle={(field: "material_impacted" | "long_lead_impact", value: boolean) => onToggleReadiness(focus, field, value)}
-                disabled={isSaving || !canWriteReadinessFlags(focus)}
+                onToggle={(field: "material_impacted" | "long_lead_impact", value: boolean) => onToggleReadiness?.(focus, field, value)}
+                disabled={isSaving || !onToggleReadiness || !canWriteReadinessFlags(focus)}
               />
             )}
 
@@ -247,9 +248,12 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
       {/* ── Metric row (reused TriageMetric primitive) ──────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
         <TriageMetric icon={AlertTriangle} label="Overdue Sets" value={triage.overdueDrawingSets} color={error} sub={`${triage.overdueUnlinkedSubmittals} unlinked subs`} />
-        <TriageMetric icon={Clock3} label="Due This Week" value={triage.dueSoonDrawingSets} color={warning} sub="Next 7 days" />
+        {/* These two counted drawing sets ONLY while the queues directly below
+            them list drawing sets AND unlinked submittals — tile said 2, list
+            showed 6. Their labels are unscoped, so the value must be too. */}
+        <TriageMetric icon={Clock3} label="Due This Week" value={triage.dueSoon.length} color={warning} sub="Next 7 days" />
         <TriageMetric icon={ShieldCheck} label="Needs Action" value={triage.needsAction.length} color={review} sub="Rejected / resubmit" />
-        <TriageMetric icon={CalendarClock} label="Missing Dates" value={triage.noDateDrawingSets} color={textMuted} sub="Needs cleanup" />
+        <TriageMetric icon={CalendarClock} label="Missing Dates" value={triage.noDate.length} color={textMuted} sub="Needs cleanup" />
         <TriageMetric icon={ClipboardList} label="Pending Review" value={kpis.pending} color={warning} sub={`${kpis.total} total submittals`} />
       </div>
 

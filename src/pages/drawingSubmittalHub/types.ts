@@ -61,6 +61,12 @@ export interface SetPackage {
   name: string;
   parent: DrawingSet | null;
   sheets: Drawing[];
+  /**
+   * Superseded sheets, kept OUT of `sheets` so counts, due dates and the
+   * due-date write targets are unchanged — but carried so readiness can tell
+   * "a revision is working through this package" from "nothing to report".
+   */
+  supersededSheets: Drawing[];
   submittals: Submittal[];
 }
 
