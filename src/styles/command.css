@@ -20,6 +20,8 @@
   --cmd-good-text: #067647;
   --cmd-warn-text: #93540b;
   --cmd-danger-text: #b42318;
+  --cmd-info-text: #175cd3;
+  --cmd-review-text: #6927da;
   --cmd-info: #2e90e0;
   --cmd-review: #8b5cf6;
   --cmd-chip-bg: #e9edf2;
@@ -182,6 +184,8 @@ html.steelbuild-dark [data-skin="command"],
   --cmd-good-text: #6ee7b7;
   --cmd-warn-text: #fcd34d;
   --cmd-danger-text: #fca5a5;
+  --cmd-info-text: #93c5fd;
+  --cmd-review-text: #c4b5fd;
   --cmd-chip-bg: var(--sbd-bg-panel-hi, #21262D);
   --cmd-chip-good-bg: rgba(52, 211, 153, 0.16);
   --cmd-chip-warn-bg: rgba(224, 176, 48, 0.16);

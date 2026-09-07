@@ -36,6 +36,21 @@ const ORDER_INDEX = (state) => {
   return i === -1 ? 0 : i;
 };
 
+/**
+ * Progress rank for RISK purposes only — display ordering is unchanged.
+ *
+ * DETAILING_STATE_ORDER places "R&R" AFTER "BFA", because that is where a
+ * returned disposition is received. Correct for the pipeline display, wrong for
+ * "has this package cleared approval?": R&R means the EOR REJECTED it. Ranking
+ * it above BFA let a rejected package satisfy the "Not approved" milestone, so
+ * a set the EOR had sent back read "On track" past its approval date — and even
+ * scored higher (58%) than an approved one (50%).
+ *
+ * R&R ranks as OFA: it was submitted and went out for approval, but approval
+ * was not obtained.
+ */
+const RISK_RANK = (state) => (state === "R&R" ? ORDER_INDEX("OFA") : ORDER_INDEX(state));
+
 /** Local YYYY-MM-DD `n` days before `dateStr` (null on invalid input). */
 function minusDays(dateStr, n) {
   const base = toLocalMidnight(dateStr);
@@ -116,7 +131,7 @@ const RISK_MILESTONES = [
 export function computeScheduleRisk({ backwardDates, effectiveState, today } = {}) {
   const dates = backwardDates || {};
   const ref = today || todayLocalISO();
-  const stateIdx = ORDER_INDEX(effectiveState);
+  const stateIdx = RISK_RANK(effectiveState);
 
   const missed = [];
   const reasons = [];
@@ -127,7 +142,7 @@ export function computeScheduleRisk({ backwardDates, effectiveState, today } = {
     if (!requiredBy) continue;                 // no sequence date → TBD, not a risk
     const late = daysBetween(requiredBy, ref); // > 0 when ref is past requiredBy
     if (late <= 0) continue;                   // not yet due
-    if (stateIdx >= ORDER_INDEX(m.requires)) continue; // milestone already met
+    if (stateIdx >= RISK_RANK(m.requires)) continue; // milestone already met
     missed.push(m.key);
     reasons.push(`${m.label} (${late}d past ${requiredBy})`);
     if (late > daysLate) daysLate = late;

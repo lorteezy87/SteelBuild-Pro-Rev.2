@@ -121,6 +121,41 @@ describe("computeDetailingReadiness", () => {
     }).rfiBlocked).toBe(false);
   });
 
+  // ── Superseded sheets arrive in their own bucket (§22) ──────────────────
+  // buildSetPackages keeps superseded sheets OUT of `sheets`, so counts, dues
+  // and the due-date write targets are unaffected — which made both of these
+  // signals permanently false when they were derived from `sheets` alone.
+  it("flags revisionImpacted from the supersededSheets bucket", () => {
+    const r = computeDetailingReadiness({
+      pkg: {}, submittals: [SUB_RELEASED],
+      sheets: [{ id: "live" }],
+      supersededSheets: [{ id: "old", is_superseded: true }],
+    });
+    expect(r.revisionImpacted).toBe(true);
+    expect(r.fullySuperseded).toBe(false);
+    // The `&& !revisionImpacted` term in fabricationReady was a no-op before.
+    expect(r.fabricationReady).toBe(false);
+  });
+
+  it("reports fullySuperseded when every sheet is in the superseded bucket", () => {
+    const r = computeDetailingReadiness({
+      pkg: {}, submittals: [SUB_RELEASED],
+      sheets: [],
+      supersededSheets: [{ id: "old", is_superseded: true }],
+    });
+    expect(r.fullySuperseded).toBe(true);
+    expect(r.revisionImpacted).toBe(false); // dead, not "impacted"
+  });
+
+  it("reports neither when nothing is superseded", () => {
+    const r = computeDetailingReadiness({
+      pkg: {}, submittals: [SUB_RELEASED], sheets: [{ id: "live" }], supersededSheets: [],
+    });
+    expect(r.revisionImpacted).toBe(false);
+    expect(r.fullySuperseded).toBe(false);
+    expect(r.fabricationReady).toBe(true);
+  });
+
   it("a partial supersede flags revisionImpacted (and blocks fab readiness)", () => {
     const r = computeDetailingReadiness({
       pkg: {}, submittals: [SUB_RELEASED],
@@ -181,15 +216,31 @@ describe("computeSequenceReadiness", () => {
     const rows = computeSequenceReadiness(entries);
     expect(rows.map((r) => r.sequence)).toEqual(["1", "2", "Unsequenced"]);
 
+    // "Detailing %" is normalized against "Released" (index 10 — the point at
+    // which DETAILING is done), NOT the full 13-state order. Dividing by the
+    // order length meant a fully released package showed 83% and only the
+    // post-fab ERECTION states could reach 100.
     const s1 = rows[0];
     expect(s1.packageCount).toBe(2);
-    expect(s1.detailingPct).toBe(50);   // (100% + 0%) / 2
+    // "Released for Erection" is past detailing-complete → clamped to 100%,
+    // averaged with "Not Started" at 0%.
+    expect(s1.detailingPct).toBe(50);
     expect(s1.fabReadyCount).toBe(1);
     expect(s1.erectionReadyCount).toBe(1);
     expect(s1.atRiskCount).toBe(1);
 
-    expect(rows[1].detailingPct).toBe(83);   // "Released" = index 10 of 12 (R&R spliced after BFA, 2026-07-25)
-    expect(rows[2].detailingPct).toBe(33);   // "IFA" = index 4 of 12
+    expect(rows[1].detailingPct).toBe(100); // "Released" IS detailing-complete
+    expect(rows[2].detailingPct).toBe(40);  // "IFA" = index 4 of 10
+  });
+
+  it("never reports a released package as partially detailed", () => {
+    // The reported symptom: "Seq 3 — Detailing 83%" sitting next to "Fab 4/4".
+    for (const state of ["Released", "Partially Released", "Released for Erection"]) {
+      const [row] = computeSequenceReadiness([
+        { sequenceNumber: "9", effectiveState: state, fabricationReady: true },
+      ]);
+      expect(row.detailingPct, state).toBe(100);
+    }
   });
 
   it("returns [] for no entries", () => {

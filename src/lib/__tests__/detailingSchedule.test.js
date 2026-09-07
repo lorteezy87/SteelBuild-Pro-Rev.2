@@ -83,3 +83,42 @@ describe("computeScheduleRisk", () => {
     expect(r.missed).toEqual([]);
   });
 });
+
+// ── R&R must not satisfy the approval milestone (§21) ────────────────────────
+// DETAILING_STATE_ORDER puts "R&R" AFTER "BFA" because that is where a returned
+// disposition is received. For risk that is backwards: R&R means the EOR
+// REJECTED the package, so ranking it above BFA let a rejected set clear the
+// "Not approved" milestone and report On track past its approval date.
+describe("computeScheduleRisk — R&R is not approval", () => {
+  const dates = computeBackwardDates("2026-06-10");
+
+  it("flags a package the EOR sent back as at risk past its approval date", () => {
+    const r = computeScheduleRisk({
+      backwardDates: dates,
+      effectiveState: "R&R",
+      today: "2026-06-01", // past submitBy and approvalNeededBy
+    });
+    expect(r.atRisk).toBe(true);
+    expect(r.missed).toContain("approvalNeededBy");
+  });
+
+  it("does NOT flag an approved (BFA) package for the same milestone", () => {
+    const r = computeScheduleRisk({
+      backwardDates: dates,
+      effectiveState: "BFA",
+      today: "2026-06-01",
+    });
+    expect(r.missed).not.toContain("approvalNeededBy");
+  });
+
+  it("still credits R&R for having been submitted", () => {
+    // It went out for approval — only the approval itself is unmet.
+    const r = computeScheduleRisk({
+      backwardDates: dates,
+      effectiveState: "R&R",
+      today: "2026-06-01",
+    });
+    expect(r.missed).not.toContain("submitBy");
+    expect(r.missed).not.toContain("detailingStart");
+  });
+});

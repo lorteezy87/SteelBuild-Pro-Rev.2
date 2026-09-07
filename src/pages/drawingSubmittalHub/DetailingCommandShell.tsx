@@ -51,6 +51,8 @@ interface DetailingCommandShellProps {
   onTab: (key: string) => void;
   kpis: DetailingKpis;
   projectName?: string;
+  /** True while the underlying queries are still resolving. */
+  isLoading?: boolean;
   /** Header actions rendered in the hero (e.g. Lead Times). Optional. */
   actions?: ReactNode;
   /** Tab-count badge values, keyed by tab key. */
@@ -69,19 +71,43 @@ export function DetailingCommandShell({
   projectName,
   tabCounts,
   actions,
+  isLoading,
   children,
 }: DetailingCommandShellProps) {
   useCommandSkin();
 
+  // While the queries are in flight every count is 0, and rendering those as
+  // finished numbers made the band assert "Nothing overdue" / "Released 0" on
+  // every cold load — reliably, when navigating in from Drawings, because the
+  // hub's own ["drawing-sets"] key is cold while ["drawings"] is already warm.
+  // An em dash says "not known yet"; a 0 says "we checked, there are none".
+  const pending = Boolean(isLoading);
+  const num = (v: number): ReactNode => (pending ? "—" : v);
+  const tone = (t: KpiTone): KpiTone => (pending ? "neutral" : t);
+
+  // Every overdue item on the board, both kinds. buildTriage partitions its
+  // `overdue` bucket into these two disjoint counts.
+  const totalOverdue = kpis.overdueDrawingSets + kpis.overdueUnlinkedSubmittals;
+
   // ── Hero chips from real fleet metrics ────────────────────────────────
-  const chips: HeroChip[] = [
+  const chips: HeroChip[] = pending ? [{ label: "Loading…" }] : [
     { label: `${kpis.totalSets} Sets` },
     ...(kpis.openItems > 0
       ? [{ label: `${kpis.openItems} Open`, tone: "info" as const }]
       : []),
-    ...(kpis.overdue > 0
-      ? [{ label: `${kpis.overdue} Overdue Set${kpis.overdue === 1 ? "" : "s"}`, tone: "danger" as const }]
-      : [{ label: "No overdue sets", tone: "good" as const }]),
+    // The all-clear must account for BOTH overdue kinds. `kpis.overdue` counts
+    // drawing sets only, so a project with four late unlinked submittals and no
+    // late sets flew a green "No overdue sets" chip.
+    ...(totalOverdue > 0
+      ? [{
+          label: kpis.overdueUnlinkedSubmittals > 0 && kpis.overdueDrawingSets > 0
+            ? `${kpis.overdueDrawingSets} Overdue Set${kpis.overdueDrawingSets === 1 ? "" : "s"} · ${kpis.overdueUnlinkedSubmittals} Overdue Submittal${kpis.overdueUnlinkedSubmittals === 1 ? "" : "s"}`
+            : kpis.overdueUnlinkedSubmittals > 0
+              ? `${kpis.overdueUnlinkedSubmittals} Overdue Submittal${kpis.overdueUnlinkedSubmittals === 1 ? "" : "s"}`
+              : `${kpis.overdueDrawingSets} Overdue Set${kpis.overdueDrawingSets === 1 ? "" : "s"}`,
+          tone: "danger" as const,
+        }]
+      : [{ label: "Nothing overdue", tone: "good" as const }]),
     ...(kpis.atRisk > 0
       ? [{ label: `${kpis.atRisk} At Risk`, tone: "warn" as const }]
       : []),
@@ -89,7 +115,7 @@ export function DetailingCommandShell({
 
   // ── Hero stats (right-hand stat cards) ────────────────────────────────
   // Real values only — OMIT fleet score when no data (fleetAverageScore null).
-  const heroStats = [
+  const heroStats = pending ? [{ value: "—", label: "Fab Ready" }] : [
     ...(kpis.fleetAverageScore !== null
       ? [{ value: `${kpis.fleetAverageScore}`, label: "Fleet Score" }]
       : []),
@@ -106,58 +132,65 @@ export function DetailingCommandShell({
   const kpiCells: KpiCellDef[] = [
     {
       label: "Drawing Sets",
-      value: kpis.totalSets,
-      sublabel: `${kpis.totalSheets} active sheets`,
+      value: num(kpis.totalSets),
+      sublabel: pending ? "loading…" : `${kpis.totalSheets} active sheets`,
       tone: "neutral",
       Icon: FileStack,
     },
     {
       label: "Released",
-      value: kpis.released,
+      value: num(kpis.released),
       sublabel: "sets to fab",
-      tone: "good",
+      tone: tone("good"),
       Icon: CheckCircle,
     },
     {
       label: "In Review",
-      value: kpis.inReview,
-      tone: kpis.inReview > 0 ? "info" : "neutral",
+      value: num(kpis.inReview),
+      tone: tone(kpis.inReview > 0 ? "info" : "neutral"),
       Icon: Gauge,
     },
     {
       label: "Submittals",
-      value: kpis.submittalsTotal,
-      sublabel: `${kpis.submittalsPending} pending`,
+      value: num(kpis.submittalsTotal),
+      sublabel: pending ? "loading…" : `${kpis.submittalsPending} pending`,
       tone: "neutral",
       Icon: ClipboardList,
     },
     {
-      label: "Needs Action",
-      value: kpis.needsAction,
+      // Scoped in the label: this counts rejected/returned SUBMITTAL rows, while
+      // the Control Board's own "Needs Action" tile counts triage items. Two
+      // different denominators under one name read as a contradiction (3 vs 2).
+      label: "Submittals Needing Action",
+      value: num(kpis.needsAction),
       sublabel: "rejected / returned",
-      tone: (kpis.needsAction > 0 ? "warn" : "neutral") as KpiTone,
+      tone: tone(kpis.needsAction > 0 ? "warn" : "neutral"),
       Icon: AlertTriangle,
     },
     {
-      label: "Overdue Sets",
-      value: kpis.overdue,
+      // Counts BOTH overdue kinds, with the split in the sublabel. It used to
+      // show the drawing-set count under a sublabel that named both ("3 sets ·
+      // 2 unlinked" beside a value of 3), so the tile under-reported the work.
+      label: "Overdue",
+      value: num(totalOverdue),
       sublabel: (() => {
+        if (pending) return "loading…";
         if (kpis.overdueDrawingSets > 0 && kpis.overdueUnlinkedSubmittals > 0)
-          return `${kpis.overdueDrawingSets} sets · ${kpis.overdueUnlinkedSubmittals} unlinked`;
+          return `${kpis.overdueDrawingSets} sets · ${kpis.overdueUnlinkedSubmittals} unlinked subs`;
         if (kpis.overdueUnlinkedSubmittals > 0)
           return `${kpis.overdueUnlinkedSubmittals} unlinked subs`;
         if (kpis.overdueDrawingSets > 0)
           return `${kpis.overdueDrawingSets} drawing sets`;
-        return "drawing packages";
+        return "sets + unlinked submittals";
       })(),
-      tone: (kpis.overdue > 0 ? "danger" : "neutral") as KpiTone,
+      tone: tone(totalOverdue > 0 ? "danger" : "neutral"),
       Icon: CalendarClock,
     },
     {
       label: "At Risk",
-      value: kpis.atRisk,
+      value: num(kpis.atRisk),
       sublabel: "schedule risk",
-      tone: (kpis.atRisk > 0 ? "warn" : "neutral") as KpiTone,
+      tone: tone(kpis.atRisk > 0 ? "warn" : "neutral"),
     },
   ];
 

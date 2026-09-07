@@ -141,10 +141,20 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
   };
 
   const setNames = useMemo(() => listDrawingSetNames(data), [data]);
-  const hasUnassigned = useMemo(
-    () => data.some((r) => !(r.drawing_set_name || "").trim()),
-    [data],
-  );
+  // Sheet counts per set, computed ONCE per data change. The <option> list used
+  // to run `data.filter(…)` per set inside the render, i.e. O(sets × rows) on
+  // every keystroke in the search box — 148 sets × 148 rows on a big register.
+  const setCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    let unassigned = 0;
+    for (const r of data) {
+      const name = (r.drawing_set_name || "").trim();
+      if (!name) { unassigned += 1; continue; }
+      counts.set(r.drawing_set_name || "", (counts.get(r.drawing_set_name || "") || 0) + 1);
+    }
+    return { counts, unassigned };
+  }, [data]);
+  const hasUnassigned = setCounts.unassigned > 0;
 
   const rows = useMemo(
     () => filterRegisterRows(data, query, statusFilter, setFilter),
@@ -324,15 +334,12 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
             aria-label="Filter by drawing set"
           >
             <option value="all">All sets ({data.length})</option>
-            {setNames.map((name) => {
-              const n = data.filter((r) => (r.drawing_set_name || "") === name).length;
-              return (
-                <option key={name} value={name}>{name} ({n})</option>
-              );
-            })}
+            {setNames.map((name) => (
+              <option key={name} value={name}>{name} ({setCounts.counts.get(name) || 0})</option>
+            ))}
             {hasUnassigned && (
               <option value={SET_FILTER_NONE}>
-                Unassigned ({data.filter((r) => !(r.drawing_set_name || "").trim()).length})
+                Unassigned ({setCounts.unassigned})
               </option>
             )}
           </select>

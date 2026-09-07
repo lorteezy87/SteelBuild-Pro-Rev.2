@@ -66,7 +66,7 @@ function rowCells(r: any, onCompareRevision?: (drawingId: string) => void, roste
     </span>,
     // RFIs (open/all)
     r.rfiCount ? (
-      <span key="rfi" style={{ fontSize: 11, color: r.openRfiCount ? "var(--cmd-warn)" : "var(--cmd-text-muted)" }}>
+      <span key="rfi" style={{ fontSize: 11, color: r.openRfiCount ? "var(--cmd-warn-text)" : "var(--cmd-text-muted)" }}>
         {r.openRfiCount}<span style={{ color: "var(--cmd-text-muted)" }}> / {r.rfiCount}</span>
       </span>
     ) : <span key="rfi" style={{ color: "var(--cmd-text-muted)" }}>—</span>,
@@ -227,7 +227,7 @@ export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLo
       )}
 
       <div style={{ fontSize: 9, color: "var(--cmd-text-muted)", lineHeight: 1.5 }}>
-        Downstream severity: <span style={{ color: "var(--cmd-danger)" }}>in field</span> &gt; <span style={{ color: "var(--cmd-warn)" }}>delivered</span> &gt; <span style={{ color: "var(--cmd-review)" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
+        Downstream severity: <span style={{ color: "var(--cmd-danger-text)" }}>in field</span> &gt; <span style={{ color: "var(--cmd-warn-text)" }}>delivered</span> &gt; <span style={{ color: "var(--cmd-review-text)" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
       </div>
     </section>
   );
