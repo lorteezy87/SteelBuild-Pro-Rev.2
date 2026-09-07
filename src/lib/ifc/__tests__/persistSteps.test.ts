@@ -26,7 +26,13 @@ describe("describePersistFailure", () => {
     expect(describePersistFailure("extract", err)).toBe("Couldn't read the piece list from the IFC: boom");
     expect(describePersistFailure("compress", err)).toBe("Couldn't compress the IFC for upload: boom");
     expect(describePersistFailure("upload", err)).toBe("Couldn't upload the model to storage: boom");
-    expect(describePersistFailure("register", err)).toMatch(/^Model uploaded, but the piece roster didn't save: boom\. The previous model is still active/);
+    // Must NOT promise the previous model is still active — the import rolls
+    // back, but a rollback can fail too, and that wording sent operators into a
+    // retry loop that stacked extra rosters on the project.
+    const register = describePersistFailure("register", err);
+    expect(register).toMatch(/^Model uploaded, but the piece roster didn't save: boom\./);
+    expect(register).not.toMatch(/previous model is still active/);
+    expect(register).toMatch(/check the 3D tab before retrying/);
   });
 
   it("reads PostgREST-style error objects and plain strings", () => {

@@ -60,7 +60,11 @@ export function describePersistFailure(step: PersistStep, err: unknown): string 
     case "upload":
       return `Couldn't upload the model to storage: ${detail}`;
     case "register":
-      return `Model uploaded, but the piece roster didn't save: ${detail}. The previous model is still active — retry the save.`;
+      // Deliberately does NOT say "the previous model is still active". The
+      // import rolls itself back on failure, but a rollback can itself fail
+      // (the same timeout that broke the save), and the old wording sent
+      // operators into a retry loop that stacked a third roster on the project.
+      return `Model uploaded, but the piece roster didn't save: ${detail}. The project's model list was left unchanged — check the 3D tab before retrying, and if the piece count looks doubled, tell an admin rather than saving again.`;
     default:
       return `Couldn't save the model: ${detail}`;
   }
