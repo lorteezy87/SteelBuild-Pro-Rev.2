@@ -185,9 +185,21 @@ Already done in code (nothing to do): `vercel.json`, `.vercelignore`, `scripts/v
 Remaining:
 
 1. Disconnect the Netlify site (step 2b) and delete it once you are sure nothing points at it.
-2. Remove the `VERCEL_*` repo secrets — they authenticate to a closed account.
-3. Re-provision **staging** if you want it back. `deploy-staging` deployed to a second Vercel project and went with the account; the `staging-e2e-readonly` / `staging-e2e-mutations` jobs survive and now hang off `ci`, staying inert until `STAGING_BASE_URL` points at something. Rebuilding it on Cloudflare means a second Worker (or a Wrangler environment) plus the separate staging Supabase project described in `staging-setup.md`.
-4. **Update the customer-facing hosting disclosures** — see below.
+2. **Uninstall the Vercel GitHub App** (repo/org → Settings → GitHub Apps → Vercel → Configure → remove this repository).
+
+   Deleting `vercel.json` did **not** stop Vercel from touching this repo. The GitHub App is installed independently of repo contents, so it still posts a commit status on every push, and for the closed account those statuses are permanent failures:
+
+   ```
+   Vercel – steelbuildpro-og        failure   "Account is blocked."
+   Vercel – steelbuild-pro-staging  failure   "Account is blocked."
+   ```
+
+   Every pull request from here on will show two red checks that no code change can fix, which is exactly how a team learns to ignore red checks. Uninstall it.
+
+   Note a third project, `Vercel – steel-build-pro-rev-2` (team `steel-build-pro`), is on a *different, working* Vercel account and still deploys successfully. Decide what that one is for before removing it — it is not part of the closed account.
+3. Remove the `VERCEL_*` repo secrets — they authenticate to a closed account.
+4. Re-provision **staging** if you want it back. `deploy-staging` deployed to a second Vercel project and went with the account; the `staging-e2e-readonly` / `staging-e2e-mutations` jobs survive and now hang off `ci`, staying inert until `STAGING_BASE_URL` points at something. Rebuilding it on Cloudflare means a second Worker (or a Wrangler environment) plus the separate staging Supabase project described in `staging-setup.md`.
+5. **Update the customer-facing hosting disclosures** — see below.
 
 ---
 
