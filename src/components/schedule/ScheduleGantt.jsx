@@ -52,6 +52,7 @@ import { useTaskBarDrag } from "./useTaskBarDrag";
 import { useTaskRowDnD } from "./useTaskRowDnD";
 import {
   computeCycleTaskIdsKey,
+  selectShiftedSyncTasks,
   computeSuccessorCountById,
   computeVisibleTaskIds,
   buildTaskPositions,
@@ -416,26 +417,46 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   } = scheduleStats;
 
   // ── Baseline stats & handler ─────────────────────────────────────────
+  //
+  // Two populations, deliberately distinct (audit §1.5):
+  //   allTasks     — phase-filtered + tree-rolled. What is ON SCREEN. Correct
+  //                  for anything DESCRIBING the current view.
+  //   projectTasks — every task on the project, un-rolled. Correct for the two
+  //                  WRITE actions below, which are project-wide operations that
+  //                  must not silently do less than their dialog claims.
+  // These handlers used to run on allTasks, so with a phase filter active
+  // "Set baseline for 60 tasks" baselined only the visible phase.
+  const projectTasks = rawTasks;
+
+  // Stays VIEW-scoped on purpose: it only gates the baseline toggle and the
+  // legend, both of which describe what is currently rendered. A project that
+  // has baselines elsewhere but none in this phase has nothing to overlay here.
   const baselineTaskCount = useMemo(
     () => allTasks.filter((t) => getTaskBaseline(t) !== null).length,
     [allTasks]
   );
 
   const handleSetBaseline = async () => {
-    if (!onSave) return;
-    const tasksWithDates = allTasks.filter((t) => effStart(t) || effEnd(t));
+    if (!onSave || saving) return;
+    const tasksWithDates = projectTasks.filter((t) => effStart(t) || effEnd(t));
     if (tasksWithDates.length === 0) {
       toast.info("No tasks with dates to baseline.");
       return;
     }
     const confirmed = window.confirm(
-      `Set baseline for ${tasksWithDates.length} task${tasksWithDates.length === 1 ? "" : "s"}?\n\n` +
-      "This will snapshot the current effective dates as the planned schedule. " +
-      "Existing baseline data will be overwritten."
+      `Set baseline for all ${tasksWithDates.length} dated task${tasksWithDates.length === 1 ? "" : "s"} on this project?\n\n` +
+      "This covers the whole project, not just the phase you are viewing. " +
+      "It snapshots each task's current effective dates as the planned schedule " +
+      "and overwrites any baseline already stored."
     );
     if (!confirmed) return;
     setSaving(true);
     try {
+      // Summary rows ARE baselined, unlike the sync path above. The two write
+      // different columns: this writes `metadata` (nothing derives it), while
+      // sync writes start_date/end_date, which the DB rollup trigger owns for a
+      // summary. Recording a parent's planned span is useful; overwriting its
+      // derived dates is not.
       const updates = tasksWithDates.map((task) => {
         const metadata = getTaskMetadata(task);
         const newMetadata = {
@@ -465,13 +486,12 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   // actually shifted are touched; cycle members (whose effective dates fall
   // back to stored) and tasks without a computed start/end are skipped, so we
   // never invent a date on a TBD task.
+  // Pure + unit-tested: see scheduleGanttDerive.selectShiftedSyncTasks. Takes
+  // the WHOLE project (not the filtered rows) and skips summary rows, whose
+  // dates the DB rollup trigger owns.
   const shiftedSyncTasks = useMemo(
-    () =>
-      allTasks.filter((t) => {
-        const eff = effectiveDates[t.id];
-        return eff?.shifted && !eff.cycle && effStart(t) && effEnd(t);
-      }),
-    [allTasks, effectiveDates]
+    () => selectShiftedSyncTasks(projectTasks, effectiveDates),
+    [projectTasks, effectiveDates]
   );
 
   const handleSyncScheduledDates = async () => {
@@ -482,10 +502,13 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       return;
     }
     const confirmed = window.confirm(
-      `Update scheduled dates for ${n} task${n === 1 ? "" : "s"}?\n\n` +
+      `Update scheduled dates for ${n} task${n === 1 ? "" : "s"} across this project?\n\n` +
       "Dependency logic has pushed these tasks past their saved dates, so the Gantt " +
       "shows later dates than what's stored. This writes the computed start/end back " +
-      "to each task so the saved schedule matches the Gantt. Baselines are not changed."
+      "to each task so the saved schedule matches the Gantt.\n\n" +
+      "This covers the whole project, not just the phase you are viewing. " +
+      "Summary rows are skipped — their dates roll up from their children. " +
+      "Baselines are not changed."
     );
     if (!confirmed) return;
     setSaving(true);
@@ -815,14 +838,19 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         {onSave && (
           <button
             onClick={handleSetBaseline}
-            title="Snapshot current schedule dates as the baseline for variance tracking"
+            /* Without this, a double-click fires the whole project-wide write
+               set twice concurrently. The sync button beside it already
+               guarded; this one did not. */
+            disabled={saving}
+            title="Snapshot every dated task on this project as the baseline for variance tracking"
             style={{
               padding: "4px 10px", borderRadius: 4,
               border: "1px solid var(--divider)",
               background: "transparent",
               color: "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-              cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
+              cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.5 : 1,
+              letterSpacing: "0.06em", textTransform: "uppercase",
             }}
           >
             Set Baseline

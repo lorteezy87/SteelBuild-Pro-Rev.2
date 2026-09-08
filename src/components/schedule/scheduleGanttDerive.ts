@@ -76,6 +76,43 @@ export const GANTT_VIRTUAL_OVERSCAN = 320;
  * Returns a sorted, "|"-joined id list so a caller can use it as a memo/effect
  * dependency without re-firing on every render.
  */
+/**
+ * The tasks "Update Scheduled Dates" may write.
+ *
+ * Eligible = the cascade actually moved it, it is not in a dependency cycle,
+ * it has both an effective start and end, and it is NOT a summary row.
+ *
+ * Two rules matter here and both were bugs (audit §1.5):
+ *
+ *  - Population. Callers must pass the WHOLE project, not the phase-filtered
+ *    rows. This is a project-wide write; running it over the visible subset
+ *    silently did less than its confirm dialog claimed.
+ *  - Summary rows. Their start/end are derived by the DB rollup trigger from
+ *    their children. Writing one directly is NOT reverted — the trigger
+ *    recomputes the row's PARENT, not the row itself — so a synced summary date
+ *    persists as a wrong value until some child happens to move.
+ *
+ * Cycle members are skipped because their effective dates fall back to stored,
+ * and a task with no computed window is skipped so we never invent a date on a
+ * TBD task.
+ */
+export function selectShiftedSyncTasks<T extends TaskLike>(
+  projectTasks: T[] | null | undefined,
+  effectiveDates: Record<string, { start?: string | null; end?: string | null; shifted?: boolean; cycle?: boolean } | undefined> | null | undefined,
+): T[] {
+  if (!Array.isArray(projectTasks) || projectTasks.length === 0) return [];
+  const eff = effectiveDates || {};
+  return projectTasks.filter((task) => {
+    if (!task || !task.id) return false;
+    if (isSummaryScheduleTask(task)) return false;
+    const e = eff[String(task.id)];
+    if (!e || !e.shifted || e.cycle) return false;
+    const start = e.start ?? (task as Record<string, unknown>).start_date;
+    const end = e.end ?? (task as Record<string, unknown>).end_date;
+    return Boolean(start) && Boolean(end);
+  });
+}
+
 export function computeCycleTaskIdsKey(
   effectiveDates: Record<string, { cycle?: boolean } | undefined> | null | undefined,
   visibleTasks: TaskLike[] | null | undefined,
