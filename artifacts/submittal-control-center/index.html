@@ -350,6 +350,18 @@ table.log select:focus,table.log input[type=date]:focus{border-color:var(--focus
 }
 .icon-x:hover{color:var(--st-crit); border-color:var(--st-crit)}
 
+/* ---------- in-page dialog (native confirm/prompt are blocked in the artifact frame) ---------- */
+#modal .scrim{z-index:70}
+.dialog{
+  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:71;
+  width:min(430px,92vw); background:var(--surface); border:1px solid var(--line-2);
+  border-radius:8px; box-shadow:var(--shadow-2); padding:18px 18px 15px;
+}
+.dialog h3{font-size:18px; letter-spacing:.01em; margin-bottom:7px}
+.dialog p{margin:0 0 14px; font-size:13px; color:var(--ink-2); line-height:1.5}
+.dialog .dlg-input{margin-bottom:14px}
+.dlg-foot{display:flex; gap:8px; justify-content:flex-end}
+
 /* ---------- toast ---------- */
 .toasts{position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:90; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
 .toast{
@@ -387,6 +399,7 @@ table.log select:focus,table.log input[type=date]:focus{border-color:var(--focus
 </main>
 
 <div id="overlay"></div>
+<div id="modal"></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
@@ -463,6 +476,44 @@ const projOf   = id => state.projects.find(p => p.id === id) || null;
 const pkgOf    = id => state.packages.find(p => p.id === id) || null;
 const initials = n => (String(n||"").trim().split(/\s+/).slice(0,2).map(w => w[0]).join("") || "—").toUpperCase();
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+/* The artifact frame is sandboxed without allow-modals, so window.confirm /
+   window.prompt silently return without showing anything — every destructive
+   action and the name entry has to run through an in-page dialog instead. */
+let dlgResolve = null;
+function closeDialog(v){
+  const m = document.getElementById("modal");
+  if (m) m.innerHTML = "";
+  const r = dlgResolve; dlgResolve = null;
+  if (r) r(v);
+}
+function openDialog(o){
+  return new Promise(res => {
+    closeDialog(null);
+    dlgResolve = res;
+    document.getElementById("modal").innerHTML =
+      '<div class="scrim" data-mact="cancel"></div>' +
+      '<div class="dialog" role="dialog" aria-modal="true" aria-label="' + attr(o.title) + '">' +
+        "<h3>" + esc(o.title) + "</h3>" +
+        (o.body ? "<p>" + esc(o.body) + "</p>" : "") +
+        (o.input ? '<div class="dlg-input"><input type="text" id="dlg-input" value="' + attr(o.value || "") +
+          '" placeholder="' + attr(o.placeholder || "") + '" maxlength="40"></div>' : "") +
+        '<div class="dlg-foot">' +
+          '<button class="btn" data-mact="cancel">Cancel</button>' +
+          '<button class="btn ' + (o.danger ? "danger" : "primary") + '" data-mact="ok">' + esc(o.ok || "OK") + "</button>" +
+        "</div></div>";
+    setTimeout(() => {
+      const el = o.input
+        ? document.getElementById("dlg-input")
+        : document.querySelector('#modal [data-mact="ok"]');
+      if (el){ el.focus(); if (o.input && el.select) el.select(); }
+    }, 30);
+  });
+}
+function dialogOk(){
+  const inp = document.getElementById("dlg-input");
+  closeDialog(inp ? inp.value.trim() : true);
+}
 
 function toast(msg, bad){
   const el = document.createElement("div");
@@ -587,7 +638,10 @@ async function createPackage(projectId){
 async function deletePackage(id){
   const p = pkgOf(id); if (!p) return;
   if (!state.db) return toast("Not connected to the shared store.", true);
-  if (!confirm("Delete " + (p.num || "this package") + " — " + (p.title || "") + "?\nThis removes it for everyone.")) return;
+  const go = await openDialog({ title:"Delete " + (p.num || "this package") + "?",
+    body:(p.title || "Untitled package") + " and its links, attachments and history are removed for everyone.",
+    ok:"Delete package", danger:true });
+  if (!go) return;
   try {
     for (const f of (p.files || [])) { try { await state.db.doc("files/" + f.id).delete(); } catch(_){} }
     await state.db.doc("packages/" + id).delete();
@@ -598,7 +652,10 @@ async function deleteProject(id){
   const pr = projOf(id); if (!pr) return;
   if (!state.db) return toast("Not connected to the shared store.", true);
   const kids = state.packages.filter(p => p.projectId === id);
-  if (!confirm("Delete " + (pr.name || "this project") + " and its " + kids.length + " package(s)?\nThis removes them for everyone.")) return;
+  const go = await openDialog({ title:"Delete " + (pr.name || "this project") + "?",
+    body:"The project and its " + kids.length + " package" + (kids.length === 1 ? "" : "s") + " are removed for everyone.",
+    ok:"Delete project", danger:true });
+  if (!go) return;
   try {
     for (const p of kids){
       for (const f of (p.files || [])) { try { await state.db.doc("files/" + f.id).delete(); } catch(_){} }
@@ -611,8 +668,13 @@ async function deleteProject(id){
 }
 async function removeSampleData(){
   if (!state.db) return toast("Not connected to the shared store.", true);
-  if (!confirm("Remove the sample project and all of its packages?")) return;
-  const ids = state.projects.filter(p => p.demo).map(p => p.id);
+  const demo = state.projects.filter(p => p.demo);
+  const n = state.packages.filter(p => demo.some(d => d.id === p.projectId)).length;
+  const go = await openDialog({ title:"Remove sample data?",
+    body:"Deletes the " + demo.length + " demo job" + (demo.length === 1 ? "" : "s") + " and their " + n +
+      " packages. Your own projects are untouched.", ok:"Remove sample data", danger:true });
+  if (!go) return;
+  const ids = demo.map(p => p.id);
   for (const id of ids){
     for (const p of state.packages.filter(x => x.projectId === id)){
       for (const f of (p.files || [])) { try { await state.db.doc("files/" + f.id).delete(); } catch(_){} }
@@ -621,6 +683,7 @@ async function removeSampleData(){
     try { await state.db.doc("projects/" + id).delete(); } catch(_){}
   }
   toast("Sample data removed.");
+  render();
 }
 
 /* --- revision cycle: close the current submission and open the next rev --- */
@@ -1267,9 +1330,16 @@ document.addEventListener("change", e => {
   if (el.tagName === "SELECT" || el.type === "date" || el.type === "checkbox") fieldWrite(el.dataset.fk, el);
 });
 document.addEventListener("keydown", e => {
+  if (dlgResolve){
+    if (e.key === "Escape"){ e.preventDefault(); closeDialog(null); }
+    else if (e.key === "Enter" && e.target && e.target.id === "dlg-input"){ e.preventDefault(); dialogOk(); }
+    return;
+  }
   if (e.key === "Escape" && state.openPkg){ state.openPkg = null; render(); }
 });
 document.addEventListener("click", e => {
+  const m = e.target.closest && e.target.closest("[data-mact]");
+  if (m){ if (m.dataset.mact === "ok") dialogOk(); else closeDialog(null); return; }
   const tab = e.target.closest && e.target.closest(".tab");
   if (tab){ state.view = tab.dataset.view; render(); return; }
   const el = e.target.closest && e.target.closest("[data-act]");
@@ -1322,10 +1392,12 @@ document.getElementById("theme-btn").addEventListener("click", () => {
   if (next) localStorage.setItem(THEME_KEY, next); else localStorage.removeItem(THEME_KEY);
   applyTheme();
 });
-document.getElementById("whochip").addEventListener("click", () => {
-  const v = prompt("Your name — it stamps the edits you make so the team can see who moved a package.", state.who || "");
+document.getElementById("whochip").addEventListener("click", async () => {
+  const v = await openDialog({ title:"Who's editing?",
+    body:"Your name stamps the changes you make, so the team can see who moved a package. Stored on this device only.",
+    input:true, value:state.who, placeholder:"Nick Lorenz", ok:"Save" });
   if (v == null) return;
-  state.who = v.trim().slice(0, 40);
+  state.who = String(v).slice(0, 40);
   try { localStorage.setItem(WHO_KEY, state.who); } catch(_){}
   render();
 });
