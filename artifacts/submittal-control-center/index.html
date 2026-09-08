@@ -136,8 +136,19 @@ label.fld > span{font:600 10.5px/1 var(--font-body); letter-spacing:.09em; text-
   border-bottom:1px solid var(--line); box-shadow:var(--shadow-1);
 }
 .mast-row{
-  max-width:1560px; margin:0 auto; padding:0 20px; height:54px;
-  display:flex; align-items:center; gap:14px;
+  max-width:1560px; margin:0 auto; padding:0 20px; min-height:56px;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+}
+.mast-tools{display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:9px 0}
+.mast-tools select{width:auto; min-width:152px; max-width:240px; padding:6px 22px 6px 8px; font-size:12.5px}
+.btn.ghost{font-weight:500}
+.mast-tools .btn.ghost{padding:7px 9px}
+@media (max-width:1180px){ .mark .sub{display:none} }
+@media (max-width:860px){
+  .mast-row{padding:0 14px}
+  .mast-spacer{display:none}
+  .mast-tools{width:100%; padding:0 0 10px}
+  .mast-tools select{flex:1}
 }
 .mark{display:flex; align-items:baseline; gap:9px; margin-right:2px}
 .mark .beam{
@@ -145,9 +156,9 @@ label.fld > span{font:600 10.5px/1 var(--font-body); letter-spacing:.09em; text-
   background:var(--accent);
   clip-path:polygon(0 0,100% 0,100% 26%,63% 26%,63% 74%,100% 74%,100% 100%,0 100%,0 74%,37% 74%,37% 26%,0 26%);
 }
-.mark .name{font-family:var(--font-display); font-weight:700; font-size:19px; letter-spacing:.03em; text-transform:uppercase}
+.mark .name{font-family:var(--font-display); font-weight:700; font-size:18px; letter-spacing:.03em; text-transform:uppercase; white-space:nowrap}
 .mark .sub{font:600 10px/1 var(--font-body); letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
-.tabs{display:flex; gap:2px; margin-left:6px}
+.tabs{display:flex; gap:2px; margin-left:2px}
 .tab{
   cursor:pointer; border:0; background:transparent; color:var(--muted);
   font:600 12.5px/1 var(--font-body); padding:8px 11px; border-radius:5px;
@@ -158,20 +169,24 @@ label.fld > span{font:600 10.5px/1 var(--font-body); letter-spacing:.09em; text-
 .whochip{
   display:inline-flex; align-items:center; gap:7px; cursor:pointer;
   border:1px solid var(--line-2); background:var(--raised); border-radius:20px;
-  padding:4px 10px 4px 5px; font:600 12px/1 var(--font-body); color:var(--ink-2);
+  padding:3px 10px 3px 4px; font:600 12px/1 var(--font-body); color:var(--ink-2);
 }
+.whochip.bare{padding:3px; border-color:transparent; background:transparent}
+.whochip.plain{padding:6px 11px}
+.whochip.bare:hover{border-color:var(--line-2)}
 .whochip:hover{border-color:var(--faint)}
 .whochip .ini{
   width:21px; height:21px; border-radius:50%; background:var(--accent); color:var(--on-accent);
   display:grid; place-items:center; font:700 9.5px/1 var(--font-body); letter-spacing:.02em;
 }
-.conn{display:inline-flex; align-items:center; gap:6px; font:500 11.5px/1 var(--font-body); color:var(--muted)}
+.conn{display:inline-flex; align-items:center; gap:6px; font:500 11.5px/1 var(--font-body); color:var(--muted); padding:0 2px}
 .conn .led{width:7px; height:7px; border-radius:50%; background:var(--st-good); flex:none}
 .conn.off .led{background:var(--faint)}
 .conn.bad .led{background:var(--st-crit)}
 
 /* ---------- shell ---------- */
-.wrap{max-width:1560px; margin:0 auto; padding:20px 20px 72px}
+.wrap{max-width:1560px; margin:0 auto; padding:16px 20px 72px}
+@media (max-width:860px){ .wrap{padding:14px 14px 60px} }
 .banner{
   display:flex; gap:10px; align-items:flex-start;
   border:1px solid var(--st-warn); background:var(--t-amber-bg); color:var(--t-amber-ink);
@@ -180,15 +195,15 @@ label.fld > span{font:600 10.5px/1 var(--font-body); letter-spacing:.09em; text-
 .banner.info{border-color:var(--line-2); background:var(--sunken); color:var(--ink-2)}
 .banner b{font-weight:700}
 
-.section{margin-bottom:26px}
+.section{margin-bottom:22px}
 .section-head{display:flex; align-items:baseline; gap:12px; margin-bottom:10px; flex-wrap:wrap}
 .section-head h2{font-size:17px; text-transform:uppercase; letter-spacing:.045em}
 .section-head .hint{font-size:12px; color:var(--muted)}
 
 /* ---------- KPI strip ---------- */
 .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:7px; overflow:hidden}
-.kpi{background:var(--surface); padding:13px 14px 12px; display:flex; flex-direction:column; gap:3px; min-width:0}
-.kpi .v{font-family:var(--font-display); font-weight:700; font-size:30px; line-height:1; font-variant-numeric:tabular-nums; letter-spacing:.01em}
+.kpi{background:var(--surface); padding:11px 13px 10px; display:flex; flex-direction:column; gap:2px; min-width:0}
+.kpi .v{font-family:var(--font-display); font-weight:700; font-size:27px; line-height:1.05; font-variant-numeric:tabular-nums; letter-spacing:.01em}
 .kpi .u{font-family:var(--font-body); font-weight:600; font-size:12px; color:var(--muted); margin-left:3px}
 .kpi .l{font:600 10.5px/1.3 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--muted)}
 .kpi .s{font-size:11.5px; color:var(--faint); line-height:1.3}
@@ -256,7 +271,7 @@ label.fld > span{font:600 10.5px/1 var(--font-body); letter-spacing:.09em; text-
 .empty-note{padding:22px 14px; text-align:center; color:var(--muted); font-size:12.5px}
 
 /* ---------- filters ---------- */
-.filters{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px}
+.filters{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px}
 .filters select,.filters input[type=text]{width:auto; min-width:132px; padding:6px 8px; font-size:12.5px}
 .filters select{padding-right:22px}
 .filters .grow{flex:1; min-width:180px}
@@ -269,7 +284,7 @@ label.fld > span{font:600 10.5px/1 var(--font-body); letter-spacing:.09em; text-
 .table-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:7px; background:var(--surface)}
 table.log{border-collapse:separate; border-spacing:0; width:100%; min-width:1560px}
 table.log th{
-  position:sticky; top:54px; z-index:10; background:var(--surface);
+  position:sticky; top:var(--mast-h,56px); z-index:10; background:var(--surface);
   font:600 10px/1.2 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
   text-align:left; padding:9px 10px; border-bottom:1px solid var(--line-2); white-space:nowrap;
 }
@@ -292,6 +307,7 @@ table.log select,table.log input[type=date]{
   background:transparent; border:1px solid transparent; border-radius:4px; padding:4px 6px; font-size:12px; width:100%;
 }
 table.log select{padding-right:20px; width:100%}
+table.log td.c-proj{min-width:178px}
 table.log td.c-status{min-width:146px}
 table.log td.c-code{min-width:86px}
 table.log td.c-bic{min-width:116px}
@@ -350,6 +366,14 @@ table.log select:focus,table.log input[type=date]:focus{border-color:var(--focus
 }
 .icon-x:hover{color:var(--st-crit); border-color:var(--st-crit)}
 
+.start{display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 14px; align-items:start}
+.start .n{
+  font-family:var(--font-mono); font-weight:600; font-size:11px; color:var(--accent-2);
+  background:var(--accent-tint); border-radius:4px; padding:4px 7px; line-height:1;
+}
+.start b{display:block; font:600 13px/1.4 var(--font-body)}
+.start span.d{display:block; font-size:12.5px; color:var(--muted); line-height:1.5}
+
 /* ---------- in-page dialog (native confirm/prompt are blocked in the artifact frame) ---------- */
 #modal .scrim{z-index:70}
 .dialog{
@@ -384,13 +408,11 @@ table.log select:focus,table.log input[type=date]:focus{border-color:var(--focus
     </div>
     <nav class="tabs" aria-label="Views">
       <button class="tab" id="tab-portfolio" data-view="portfolio" aria-current="true">Portfolio</button>
-      <button class="tab" id="tab-log" data-view="log" aria-current="false">Submittal log</button>
+      <button class="tab" id="tab-log" data-view="log" aria-current="false">Log</button>
       <button class="tab" id="tab-projects" data-view="projects" aria-current="false">Projects</button>
     </nav>
     <div class="mast-spacer"></div>
-    <span class="conn off" id="conn"><span class="led"></span><span id="conn-text">Connecting</span></span>
-    <button class="whochip" id="whochip" title="Your edits are stamped with this name"><span class="ini" id="who-ini">—</span><span id="who-name">Set your name</span></button>
-    <button class="btn ghost" id="theme-btn" title="Light / dark theme">◐ System</button>
+    <div class="mast-tools" id="mast-tools"></div>
   </div>
 </header>
 
@@ -473,6 +495,10 @@ const kb = n => n >= 1024*1024 ? (n/1048576).toFixed(1) + " MB" : Math.max(1, Ma
 const statusOf = k => STATUSES.find(s => s.k === k) || STATUSES[0];
 const codeOf   = k => CODES.find(c => c.k === (k || "")) || CODES[0];
 const projOf   = id => state.projects.find(p => p.id === id) || null;
+const sortedProjects = () => state.projects.slice().sort((a, b) =>
+  ((a.sortIndex || 0) - (b.sortIndex || 0)) || String(a.name || "").localeCompare(String(b.name || "")));
+const projectOpts = () => sortedProjects().map(p => ({ v:p.id, t:p.name || "Untitled project" }));
+function themeMode(){ try { return localStorage.getItem(THEME_KEY) || "system"; } catch(_){ return "system"; } }
 const pkgOf    = id => state.packages.find(p => p.id === id) || null;
 const initials = n => (String(n||"").trim().split(/\s+/).slice(0,2).map(w => w[0]).join("") || "—").toUpperCase();
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
@@ -498,13 +524,16 @@ function openDialog(o){
         (o.body ? "<p>" + esc(o.body) + "</p>" : "") +
         (o.input ? '<div class="dlg-input"><input type="text" id="dlg-input" value="' + attr(o.value || "") +
           '" placeholder="' + attr(o.placeholder || "") + '" maxlength="40"></div>' : "") +
+        (o.select ? '<div class="dlg-input"><select id="dlg-select">' + o.select.map(x =>
+          '<option value="' + attr(x.v) + '"' + (String(x.v) === String(o.value || "") ? " selected" : "") + ">" +
+          esc(x.t) + "</option>").join("") + "</select></div>" : "") +
         '<div class="dlg-foot">' +
           '<button class="btn" data-mact="cancel">Cancel</button>' +
           '<button class="btn ' + (o.danger ? "danger" : "primary") + '" data-mact="ok">' + esc(o.ok || "OK") + "</button>" +
         "</div></div>";
     setTimeout(() => {
-      const el = o.input
-        ? document.getElementById("dlg-input")
+      const el = o.input ? document.getElementById("dlg-input")
+        : o.select ? document.getElementById("dlg-select")
         : document.querySelector('#modal [data-mact="ok"]');
       if (el){ el.focus(); if (o.input && el.select) el.select(); }
     }, 30);
@@ -512,7 +541,9 @@ function openDialog(o){
 }
 function dialogOk(){
   const inp = document.getElementById("dlg-input");
-  closeDialog(inp ? inp.value.trim() : true);
+  if (inp) return closeDialog(inp.value.trim());
+  const sel = document.getElementById("dlg-select");
+  closeDialog(sel ? sel.value : true);
 }
 
 function toast(msg, bad){
@@ -620,9 +651,16 @@ async function createProject(){
 }
 async function createPackage(projectId){
   if (!state.db) return toast("Not connected to the shared store yet.", true);
-  if (!projectId || projectId === "all"){
-    if (state.projects.length === 1) projectId = state.projects[0].id;
-    else return toast("Pick a single project first, then add the package.", true);
+  const ps = sortedProjects();
+  if (!ps.length) return toast("Add a project first \u2014 a package has to belong to a job.", true);
+  if (ps.length === 1) projectId = ps[0].id;
+  else {
+    const pick = await openDialog({ title:"New package \u2014 which job?",
+      body:"Pick the job this drawing set belongs to. You can change it later from the Job column or inside the package.",
+      select:projectOpts(),
+      value:(projectId && projectId !== "all") ? projectId : ps[0].id, ok:"Add package" });
+    if (!pick) return;
+    projectId = pick;
   }
   const id = uid();
   const body = stamp({ projectId, num:suggestNum(projectId), title:"Untitled package",
@@ -631,7 +669,11 @@ async function createPackage(projectId){
     links:[], files:[], history:[], createdAt:new Date().toISOString() });
   try {
     await state.db.doc("packages/" + id).set(body);
-    state.openPkg = id; render();
+    state.openPkg = id;
+    if (state.fProject !== "all" && state.fProject !== projectId) state.fProject = projectId;
+    render();
+    const pr = projOf(projectId);
+    toast(body.num + " added to " + (pr ? (pr.name || "the job") : "the job") + ".");
     setTimeout(() => { const el = document.querySelector('[data-fk="pkg:' + id + ':title"]'); if (el){ el.focus(); el.select && el.select(); } }, 60);
   } catch(e){ writeFailed(e); }
 }
@@ -926,7 +968,7 @@ function actionPanel(list){
 }
 
 function projectCards(){
-  const projs = state.projects.slice().sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0));
+  const projs = sortedProjects();
   if (!projs.length) return '<div class="panel"><div class="empty-note">No projects yet. Add one to start logging submittals.</div></div>';
   return '<div class="pcards">' + projs.map(pr => {
     const pk = state.packages.filter(p => p.projectId === pr.id && isLive(p));
@@ -938,7 +980,7 @@ function projectCards(){
         (over ? '<span class="pill red"><span class="dot"></span>' + over + " overdue</span>" : "") + "</span>" +
       '<span class="meta">' + (pr.number ? "<span>Job " + esc(pr.number) + "</span>" : "") +
         (pr.gc ? "<span>GC " + esc(pr.gc) + "</span>" : "") +
-        "<span>" + pk.length + " packages</span><span>" + sheets + " sheets</span>" +
+        "<span>" + pk.length + " package" + (pk.length === 1 ? "" : "s") + "</span><span>" + sheets + " sheets</span>" +
         "<span>" + (Number(pr.reviewDays) || 14) + "-day review</span></span>" +
       '<span class="stack">' + counts.map(c => c.n ? '<i style="flex:' + c.n + ';background:var(' + c.l.cssvar + ')"></i>' : "").join("") + "</span>" +
       '<span class="stack-key">' + counts.map(c =>
@@ -949,7 +991,8 @@ function projectCards(){
 
 function portfolioHtml(){
   const list = scopedPackages();
-  return banners() + scopeBar() +
+  if (!state.packages.length) return banners() + startHereHtml();
+  return banners() +
     '<section class="section">' + kpiStrip(list) + "</section>" +
     '<section class="section grid-2">' + agingPanel(list) + actionPanel(list) + "</section>" +
     '<section class="section"><div class="section-head"><h2>Projects</h2>' +
@@ -958,16 +1001,17 @@ function portfolioHtml(){
 }
 
 /* ============================ render: log ============================ */
-function scopeBar(){
-  const opts = [{ v:"all", t:"All projects" }].concat(state.projects.slice()
-    .sort((a,b) => (a.sortIndex||0)-(b.sortIndex||0)).map(p => ({ v:p.id, t:p.name || "Untitled project" })));
-  return '<div class="filters">' +
-    selectHtml("flt:project", state.fProject, opts) +
+function mastTools(){
+  const bad = state.conn !== "on";
+  return (bad ? '<span class="conn ' + (state.conn === "bad" ? "bad" : "off") + '"><span class="led"></span>' +
+      esc(state.conn === "bad" ? "Sync error" : state.conn === "off" ? "Not connected" : "Connecting\u2026") + "</span>" : "") +
+    selectHtml("flt:project", state.fProject, [{ v:"all", t:"All projects" }].concat(projectOpts())) +
     '<button class="btn primary" data-act="newpkg">+ Package</button>' +
-    '<button class="btn" data-act="newproj">+ Project</button>' +
-    '<span style="flex:1"></span>' +
-    '<button class="btn" data-act="export">Export CSV</button>' +
-    "</div>";
+    '<button class="btn ghost" data-act="theme" title="Colour theme — click to change">' +
+      esc({ system:"Auto", light:"Light", dark:"Dark" }[themeMode()] || "Auto") + "</button>" +
+    (state.who
+      ? '<button class="whochip bare" data-act="who" title="Your edits are stamped ' + attr(state.who) + '"><span class="ini">' + esc(initials(state.who)) + "</span></button>"
+      : '<button class="whochip plain" data-act="who" title="Stamp your edits with your name">Set name</button>');
 }
 function logHtml(){
   const rows = filteredRows();
@@ -996,7 +1040,8 @@ function logHtml(){
       const auto = dueIsAuto(p);
       const dueCls = isOverdue(p) ? " over" : (isDueSoon(p) ? " due-soon" : "");
       body += "<tr>" +
-        '<td class="c-num"><span class="num" style="font-weight:600">' + esc(p.num || "—") + "</span></td>" +
+        '<td class="c-num"><span class="num" style="font-weight:600">' + esc(p.num || "\u2014") + "</span></td>" +
+        '<td class="c-proj">' + selectHtml("pkg:" + p.id + ":projectId", p.projectId, projectOpts()) + "</td>" +
         '<td class="c-title"><button class="rowlink" data-act="openpkg" data-id="' + attr(p.id) + '">' + esc(p.title || "Untitled package") + "</button></td>" +
         "<td>" + esc(p.type || "") + "</td>" +
         '<td><span class="num">' + esc(p.seq || "—") + "</span></td>" +
@@ -1005,7 +1050,6 @@ function logHtml(){
         '<td class="c-status">' + selectHtml("pkg:" + p.id + ":status", p.status, statusOpts) + "</td>" +
         '<td class="c-code" title="' + attr(codeOf(p.code).label) + '">' + selectHtml("pkg:" + p.id + ":code", p.code || "", codeOptsShort) + "</td>" +
         '<td class="c-bic">' + selectHtml("pkg:" + p.id + ":bic", p.bic || "", bicOpts) + "</td>" +
-        "<td>" + esc(p.reviewer || "—") + "</td>" +
         '<td><input type="date" class="' + (p.submitted ? "" : "blank") + '" data-fk="pkg:' + attr(p.id) + ':submitted" value="' + attr(p.submitted || "") + '"' + (state.canWrite ? "" : " disabled") + "></td>" +
         '<td><span class="days' + dueCls + '" title="' + (auto ? "Auto: submitted + " + reviewDays(p) + " review days" : "Override entered in the package") + '">' +
           (due ? fmtDate(due) + (auto ? '<sup style="color:var(--faint);font-weight:400">auto</sup>' : "") : "—") + "</span></td>" +
@@ -1017,7 +1061,7 @@ function logHtml(){
         "</tr>";
     });
   }
-  return banners() + scopeBar() +
+  return banners() +
     '<div class="filters">' +
       '<input type="text" class="grow" data-fk="flt:q" placeholder="Search number, package, sequence, reviewer, holds…" value="' + attr(state.q) + '">' +
       selectHtml("flt:status", state.fStatus, stOpts) +
@@ -1025,20 +1069,41 @@ function logHtml(){
       selectHtml("flt:flag", state.fFlag, flagOpts) + bucketChip +
       (filtered ? '<button class="chipclear" data-act="clearfilters">Clear filters</button>' : "") +
       '<span style="flex:1"></span><span class="eyebrow">' + rows.length + " of " + scopedPackages().length + " packages</span>" +
+      '<button class="btn sm" data-act="export">Export CSV</button>' +
     "</div>" +
     '<div class="table-wrap"><table class="log"><thead><tr>' +
-      ["Sub #","Package / drawing set","Type","Seq / area","Sht","Rev","Status","Code",
-       "Ball in court","Reviewer","Submitted","Due back","Returned","Days","Fab","Drawings"]
+      ["Sub #","Job","Package / drawing set","Type","Seq / area","Sht","Rev","Status","Code",
+       "Ball in court","Submitted","Due back","Returned","Days","Fab","Drawings"]
       .map(h => "<th>" + esc(h) + "</th>").join("") +
     "</tr></thead><tbody>" + body + "</tbody></table></div>" +
-    '<p style="font-size:11.5px;color:var(--muted);margin:10px 2px 0">Status, return code, ball-in-court and dates edit right in the grid and save for everyone. ' +
+    '<p style="font-size:11.5px;color:var(--muted);margin:10px 2px 0">Job, status, return code, ball-in-court and dates edit right in the grid and save for everyone \u2014 use the Job cell to move a package to the right project. ' +
     'Open a row for drawing-set links, attachments, holds and revision history. Scroll the grid sideways for returned dates, days out, fab release and drawing links. ' +
     'A due date marked <sup>auto</sup> is derived from the job’s contract review days; enter an override in the package.</p>';
 }
 
+function startHereHtml(){
+  const hasProj = state.projects.length > 0;
+  const steps = [
+    ["1", "Add the job", "Name, job number, GC and the contract review days out of the spec \u2014 that number drives every due-back date."],
+    ["2", "Add a package per drawing set", "One row per submittal, not per sheet: sequence or area, sheet count, and a link to wherever the set lives."],
+    ["3", "Log the submittal", "The date submitted starts the clock. Due back derives from the job\u2019s review days unless you override it."]
+  ];
+  return '<section class="panel section"><div class="panel-head"><h3>Start here</h3>' +
+    '<span class="hint">' + (hasProj ? state.projects.length + " job" + (state.projects.length === 1 ? "" : "s") + " set up \u00b7 no packages yet" : "empty tracker") + "</span></div>" +
+    '<div class="panel-body"><div class="start">' +
+      steps.map(x => '<span class="n">' + x[0] + '</span><span><b>' + esc(x[1]) + '</b><span class="d">' + esc(x[2]) + "</span></span>").join("") +
+    "</div>" +
+    '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">' +
+      (hasProj
+        ? '<button class="btn primary" data-act="newpkg">+ Package</button><button class="btn" data-act="view-projects">Edit jobs</button>'
+        : '<button class="btn primary" data-act="newproj">+ Project</button>') +
+    "</div></div></section>" +
+    (hasProj ? '<section class="section"><div class="section-head"><h2>Projects</h2></div>' + projectCards() + "</section>" : "");
+}
+
 /* ============================ render: projects ============================ */
 function projectsHtml(){
-  const projs = state.projects.slice().sort((a,b) => (a.sortIndex||0)-(b.sortIndex||0));
+  const projs = sortedProjects();
   return banners() +
     '<div class="filters"><button class="btn primary" data-act="newproj">+ Project</button>' +
     '<span style="flex:1"></span><span class="eyebrow">' + projs.length + " project" + (projs.length===1?"":"s") + "</span></div>" +
@@ -1105,7 +1170,7 @@ function drawerHtml(){
   if (p.returned && d != null) clock = "Turnaround " + d + " days (" + fmtDate(p.submitted) + " → " + fmtDate(p.returned) + ").";
   else if (d != null) clock = "Out " + d + " days" + (due ? (isOverdue(p) ? " — " + Math.abs(daysToDue(p)) + " days past due " + fmtDate(due)
     : ", due back " + fmtDate(due) + " (" + daysToDue(p) + " days)") : ".");
-  const projOpts = state.projects.slice().sort((a,b)=>(a.sortIndex||0)-(b.sortIndex||0)).map(x => ({ v:x.id, t:x.name || "Untitled project" }));
+  const projOpts = projectOpts();
   const links = p.links || [], files = p.files || [], hist = p.history || [];
 
   return '<div class="scrim" data-act="closedrawer"></div>' +
@@ -1242,12 +1307,7 @@ function render(){
   const dbEl = document.querySelector(".drawer-body"); const dby = dbEl ? dbEl.scrollTop : 0;
 
   document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-current", String(t.dataset.view === state.view)));
-  const conn = document.getElementById("conn");
-  conn.className = "conn" + (state.conn === "on" ? "" : state.conn === "bad" ? " bad" : " off");
-  document.getElementById("conn-text").textContent =
-    state.conn === "on" ? "Live" : state.conn === "bad" ? "Sync error" : state.conn === "off" ? "Not connected" : "Connecting";
-  document.getElementById("who-ini").textContent = state.who ? initials(state.who) : "—";
-  document.getElementById("who-name").textContent = state.who || "Set your name";
+  document.getElementById("mast-tools").innerHTML = mastTools();
 
   document.getElementById("view").innerHTML =
     state.view === "log" ? logHtml() : state.view === "projects" ? projectsHtml() : portfolioHtml();
@@ -1257,6 +1317,8 @@ function render(){
   const tw2 = document.querySelector(".table-wrap"); if (tw2) tw2.scrollLeft = twx;
   const db2 = document.querySelector(".drawer-body"); if (db2) db2.scrollTop = dby;
   restoreFocus(foc);
+  const mh = document.querySelector(".masthead");
+  if (mh) document.documentElement.style.setProperty("--mast-h", mh.offsetHeight + "px");
   rendering = false;
 }
 
@@ -1360,6 +1422,24 @@ document.addEventListener("click", e => {
   if (a === "rmfile"){ removeFile(id, el.dataset.fid); return; }
   if (a === "dlfile"){ downloadFile(el.dataset.fid, el.dataset.name); return; }
   if (a === "nextrev"){ startNextRev(id); return; }
+  if (a === "view-projects"){ state.view = "projects"; render(); return; }
+  if (a === "theme"){
+    const cur = themeMode();
+    const next = cur === "system" ? "light" : cur === "light" ? "dark" : "";
+    try { if (next) localStorage.setItem(THEME_KEY, next); else localStorage.removeItem(THEME_KEY); } catch(_){}
+    applyTheme(); render(); return;
+  }
+  if (a === "who"){
+    openDialog({ title:"Who's editing?",
+      body:"Your name stamps the changes you make, so the team can see who moved a package. Stored on this device only.",
+      input:true, value:state.who, placeholder:"Nick Lortz", ok:"Save" }).then(v => {
+        if (v == null) return;
+        state.who = String(v).slice(0, 40);
+        try { localStorage.setItem(WHO_KEY, state.who); } catch(_){}
+        render();
+      });
+    return;
+  }
   if (a === "showflag"){ state.view = "log"; state.fFlag = "flagged"; state.fBucket = null; render(); return; }
   if (a === "clearbucket"){ state.fBucket = null; render(); return; }
   if (a === "clearfilters"){ state.fStatus = "all"; state.fBic = "all"; state.fFlag = "all"; state.q = ""; state.fBucket = null; render(); return; }
@@ -1386,28 +1466,11 @@ document.addEventListener("click", e => {
   }
 });
 
-document.getElementById("theme-btn").addEventListener("click", () => {
-  const cur = localStorage.getItem(THEME_KEY);
-  const next = cur === "light" ? "dark" : cur === "dark" ? "" : "light";
-  if (next) localStorage.setItem(THEME_KEY, next); else localStorage.removeItem(THEME_KEY);
-  applyTheme();
-});
-document.getElementById("whochip").addEventListener("click", async () => {
-  const v = await openDialog({ title:"Who's editing?",
-    body:"Your name stamps the changes you make, so the team can see who moved a package. Stored on this device only.",
-    input:true, value:state.who, placeholder:"Nick Lorenz", ok:"Save" });
-  if (v == null) return;
-  state.who = String(v).slice(0, 40);
-  try { localStorage.setItem(WHO_KEY, state.who); } catch(_){}
-  render();
-});
 function applyTheme(){
   let t = null;
   try { t = localStorage.getItem(THEME_KEY); } catch(_){}
   const root = document.documentElement;
   if (t === "light" || t === "dark") root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
-  const b = document.getElementById("theme-btn");
-  if (b) b.textContent = "\u25D0 " + (t === "light" ? "Light" : t === "dark" ? "Dark" : "System");
 }
 
 /* ============================ boot ============================ */
