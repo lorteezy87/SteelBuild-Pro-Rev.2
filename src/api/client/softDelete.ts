@@ -55,7 +55,7 @@ export const PROJECT_SCOPED_TABLES = new Set<string>([
   'activities', 'uploaded_files', 'scope_items', 'alerts', 'project_closeout',
   'project_handoff_items', 'mitigation_logs', 'mitigation_actions',
   'drawing_activity', 'drawing_revisions', 'drawing_zones', 'drawing_links',
-  'drawing_signoffs', 'task_dependencies', 'submittals', 'submittal_rounds',
+  'drawing_signoffs', 'drawing_holds', 'task_dependencies', 'submittals', 'submittal_rounds',
   'submittal_sheet_responses', 'submittal_comment_dispositions',
   'submittal_activity', 'submittal_components', 'comments',
   'budget_hour_items', 'risks',

@@ -6,12 +6,14 @@ import { DrawingRegisterGridPanel } from "./DrawingRegisterGridPanel";
 import { TransmittalLogPanel } from "./TransmittalLogPanel";
 import { ReviewQueuePanel } from "./ReviewQueuePanel";
 import { ImpactBoardPanel } from "./ImpactBoardPanel";
+import { HoldsPanel } from "./HoldsPanel";
 
 const VIEWS = [
   { key: "register", label: "Register" },
   { key: "reviews", label: "Reviews" },
   { key: "impacts", label: "Impacts" },
   { key: "transmittals", label: "Transmittals" },
+  { key: "holds", label: "Holds" },
 ] as const;
 
 type ViewKey = (typeof VIEWS)[number]["key"];
@@ -25,6 +27,7 @@ export function DocControlPanel({ projectId }: { projectId: string | null }) {
       {view === "reviews" && <ReviewQueuePanel projectId={projectId} />}
       {view === "impacts" && <ImpactBoardPanel projectId={projectId} />}
       {view === "transmittals" && <TransmittalLogPanel projectId={projectId} />}
+      {view === "holds" && <HoldsPanel projectId={projectId} />}
     </>
   );
 

@@ -67,6 +67,8 @@ const ENTITY_OVERRIDES: Record<string, AppRole> = {
   "rfi:edit":             "field",
   "drawing:create":       "pm",
   "drawing:delete":       "pm",
+  // drawing_holds RLS floor: user_has_project_role_at_least(project_id, 'field').
+  "drawing:hold":         "field",
   "change_order:approve": "pm",
   "change_order:void":    "admin",
   // budget_hour_items RLS: INSERT/UPDATE/DELETE = user_has_project_role_at_least(project_id,'pm').
