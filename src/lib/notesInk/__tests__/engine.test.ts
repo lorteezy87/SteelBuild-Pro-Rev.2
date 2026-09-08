@@ -5,11 +5,15 @@ import {
   deserializeInk,
   emptyInk,
   eraseStrokesAt,
+  isLikelyPalm,
   isPencilDoubleTap,
+  isTapStroke,
   parseInk,
   pointFromPointer,
   pushStroke,
   shouldKeepPoint,
+  smoothPressure,
+  speedFactor,
   strokeWidth,
   undoStroke,
 } from "../engine";
@@ -108,6 +112,118 @@ describe("palm rejection + double tap", () => {
     expect(isPencilDoubleTap({ t: 100, x: 10, y: 10 }, { t: 280, x: 14, y: 11 })).toBe(true);
     expect(isPencilDoubleTap({ t: 100, x: 10, y: 10 }, { t: 900, x: 14, y: 11 })).toBe(false);
     expect(isPencilDoubleTap({ t: 100, x: 10, y: 10 }, { t: 200, x: 80, y: 80 })).toBe(false);
+  });
+
+  it("never lets a touch interrupt a live pen stroke — even with palm rejection OFF", () => {
+    // The palm landing mid-word. There is no reading where this should draw.
+    expect(
+      acceptPointer({
+        pointerType: "touch",
+        penSeenAt: null,
+        now: 0,
+        palmReject: false,
+        activeStrokePointerType: "pen",
+      }),
+    ).toBe(false);
+  });
+
+  it("blocks the palm that lands BEFORE the first pen contact", () => {
+    // penSeenAt is null on the very first stroke, so the old recency window
+    // accepted this — the palm drew before the pencil ever touched down.
+    expect(
+      acceptPointer({
+        pointerType: "touch",
+        penSeenAt: null,
+        now: 0,
+        palmReject: true,
+        width: 42,
+        height: 50,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps rejecting the palm after a long pause once a pencil is known", () => {
+    // Old behaviour: touch became drawable again 4s after the last pen event,
+    // so pausing to think re-enabled palm drawing mid-page.
+    expect(
+      acceptPointer({
+        pointerType: "touch",
+        penSeenAt: 1000,
+        now: 60_000,
+        palmReject: true,
+        penCapable: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("still lets a finger draw on a device that has never seen a pencil", () => {
+    expect(
+      acceptPointer({ pointerType: "touch", penSeenAt: null, now: 0, palmReject: true, width: 12 }),
+    ).toBe(true);
+  });
+
+  it("keeps the mouse drawing on desktop regardless", () => {
+    expect(
+      acceptPointer({ pointerType: "mouse", penSeenAt: 1, now: 10, palmReject: true, penCapable: true }),
+    ).toBe(true);
+  });
+
+  it("isLikelyPalm keys off contact size, and never fires for pen", () => {
+    expect(isLikelyPalm({ pointerType: "touch", width: 40, height: 30 })).toBe(true);
+    expect(isLikelyPalm({ pointerType: "touch", width: 10, height: 10 })).toBe(false);
+    expect(isLikelyPalm({ pointerType: "pen", width: 99, height: 99 })).toBe(false);
+    // Safari does not always populate geometry — absent values must not reject.
+    expect(isLikelyPalm({ pointerType: "touch" })).toBe(false);
+  });
+});
+
+describe("isTapStroke — guards the double-tap gesture", () => {
+  const at = (x: number, y: number, t: number) => ({
+    ...pointFromPointer({ clientX: x, clientY: y, pressure: 0.5, timeStamp: t }, { left: 0, top: 0 }),
+  });
+
+  it("accepts a real tap", () => {
+    expect(isTapStroke({ points: [at(10, 10, 0), at(11, 10, 40)] })).toBe(true);
+  });
+
+  it("rejects the stem of an 'i' — the case that used to toggle the eraser", () => {
+    expect(isTapStroke({ points: [at(10, 10, 0), at(10, 40, 120)] })).toBe(false);
+  });
+
+  it("rejects a slow press-and-hold", () => {
+    expect(isTapStroke({ points: [at(10, 10, 0), at(10, 11, 900)] })).toBe(false);
+  });
+
+  it("rejects an empty stroke", () => {
+    expect(isTapStroke({ points: [] })).toBe(false);
+  });
+});
+
+describe("pressure + speed shaping", () => {
+  it("smoothPressure eases toward the new value instead of jumping", () => {
+    expect(smoothPressure(null, 0.9)).toBeCloseTo(0.9);
+    const eased = smoothPressure(0.2, 1);
+    expect(eased).toBeGreaterThan(0.2);
+    expect(eased).toBeLessThan(1);
+  });
+
+  it("smoothPressure stays in range for junk input", () => {
+    expect(smoothPressure(0.5, Number.NaN)).toBeGreaterThanOrEqual(0);
+    expect(smoothPressure(0.5, 5)).toBeLessThanOrEqual(1);
+  });
+
+  it("a fast stroke tapers thinner than a slow one, but never vanishes", () => {
+    const a = pt(0, 0);
+    const slow = { ...pt(2, 0), t: a.t + 100 };
+    const fast = { ...pt(200, 0), t: a.t + 8 };
+    expect(strokeWidth(fast, "pen", 3, a)).toBeLessThan(strokeWidth(slow, "pen", 3, a));
+    expect(strokeWidth(fast, "pen", 3, a)).toBeGreaterThan(0);
+  });
+
+  it("width is unchanged when there is no previous point or no time delta", () => {
+    const base = strokeWidth(pt(5, 5), "pen", 3);
+    expect(strokeWidth(pt(5, 5), "pen", 3, null)).toBeCloseTo(base);
+    expect(speedFactor(pt(0, 0), pt(9, 9))).toBe(1); // identical timestamps
   });
 });
 

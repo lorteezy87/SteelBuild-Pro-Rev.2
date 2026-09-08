@@ -22,6 +22,7 @@ import {
   deserializeInk,
   emptyInk,
   isPencilDoubleTap,
+  isTapStroke,
   serializeInk,
   undoStroke,
 } from "@/lib/notesInk/engine";
@@ -77,6 +78,7 @@ export default function Notes() {
   const [penLive, setPenLive] = useState(false);
   const redo = useRef([]);
   const penSeenAt = useRef(null);
+  const penCapable = useRef(false);
   const lastPenTap = useRef(null);
   const themeInk = useMemo(() => {
     if (typeof window === "undefined") return "#1A1C1E";
@@ -119,6 +121,16 @@ export default function Notes() {
     updateActive({ ink });
   };
 
+  /**
+   * Any new ink invalidates the redo stack. Without this, drawing after an undo
+   * left the popped stroke queued, so a later redo re-appended it out of order
+   * and on top of unrelated work.
+   */
+  const commitInk = (ink) => {
+    redo.current = [];
+    updateActive({ ink });
+  };
+
   const undoInk = () => {
     if (!active?.ink) return;
     const { next, popped } = undoStroke(active.ink);
@@ -135,27 +147,55 @@ export default function Notes() {
 
   const markPen = () => {
     penSeenAt.current = Date.now();
+    // Sticky: once this device has shown us a Pencil, fingers are for
+    // scrolling, not drawing — for the rest of the session.
+    if (!penCapable.current) penCapable.current = true;
     if (!penLive) setPenLive(true);
   };
 
   const acceptEvent = (e) => {
-    if (e.pointerType === "pen") {
-      const tap = { t: e.timeStamp || Date.now(), x: e.clientX, y: e.clientY };
-      if (e.type === "pointerdown" && isPencilDoubleTap(lastPenTap.current, tap)) {
-        lastPenTap.current = null;
-        setTool((t) => (t === "eraser" ? "pen" : "eraser"));
-        setMode("ink");
-        return false;
-      }
-      if (e.type === "pointerdown") lastPenTap.current = tap;
-      markPen();
-    }
+    if (e.pointerType === "pen") markPen();
     return acceptPointer({
       pointerType: e.pointerType,
       penSeenAt: penSeenAt.current,
       now: Date.now(),
       palmReject,
+      penCapable: penCapable.current,
+      width: e.width,
+      height: e.height,
     });
+  };
+
+  /**
+   * Double-tap-to-erase, evaluated on COMPLETED strokes.
+   *
+   * Web Safari does not expose the Pencil's hardware double-tap, so this is a
+   * screen gesture. Judging it on pointerdown (the old approach) meant any two
+   * quick contacts close together toggled the eraser — dotting an `i`, a colon,
+   * hatching — and it swallowed the stroke as well. Requiring two genuine tap
+   * strokes makes it unambiguous, and the two stray dots are removed so the
+   * gesture leaves no ink.
+   */
+  const onStrokeCommit = (stroke) => {
+    if (stroke.tool === "eraser" || !isTapStroke(stroke)) {
+      lastPenTap.current = null;
+      return;
+    }
+    const last = stroke.points[stroke.points.length - 1];
+    const tap = { t: last.t, x: last.x, y: last.y };
+    if (isPencilDoubleTap(lastPenTap.current, tap)) {
+      lastPenTap.current = null;
+      setTool((t) => (t === "eraser" ? "pen" : "eraser"));
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === activeId
+            ? { ...n, ink: { ...n.ink, strokes: n.ink.strokes.slice(0, -2) }, updatedAt: new Date().toISOString() }
+            : n,
+        ),
+      );
+      return;
+    }
+    lastPenTap.current = tap;
   };
 
   const exportPng = () => {
@@ -458,15 +498,14 @@ export default function Notes() {
               />
               <InkCanvas
                 doc={active.ink || emptyInk()}
-                onChange={(ink) => {
-                  redo.current = [];
-                  setInk(ink);
-                }}
+                onChange={commitInk}
                 tool={tool}
                 color={color}
                 size={size}
                 mode={mode === "ink" ? "ink" : "text"}
                 acceptEvent={acceptEvent}
+                onStrokeCommit={onStrokeCommit}
+                allowTouchScroll={palmReject}
                 onPenSeen={markPen}
                 themeInk={themeInk}
               />
