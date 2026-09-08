@@ -306,8 +306,20 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     px, spanPx, todayPx, showToday, isCurrentWeek,
   } = useGanttLayout({ zoom, today, allTasks, deliveries, effStart, effEnd });
 
+  // Two populations, deliberately distinct (audit §1.5):
+  //   allTasks     — phase-filtered + tree-rolled. What is ON SCREEN. Correct
+  //                  for anything DESCRIBING the current view.
+  //   projectTasks — every task on the project, un-rolled. Correct for the
+  //                  project-wide WRITE actions (baseline, date sync), which
+  //                  must not silently do less than their dialog claims, and
+  //                  for the drag's landing prediction, which has to see every
+  //                  predecessor — not just the ones in the current phase.
+  // Declared HERE, above its first consumer, so it is never in the temporal
+  // dead zone for a hook argument below.
+  const projectTasks = rawTasks;
+
   // Bar drag-to-reschedule (move / resize-start / resize-end) — useTaskBarDrag.
-  const { taskDrag, startTaskBarDrag } = useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppressTaskClickRef, setTooltip });
+  const { taskDrag, startTaskBarDrag } = useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppressTaskClickRef, setTooltip, projectTasks });
 
   // ── Weather-risk overlay ───────────────────────────────────────────
   // Only attach risks to field-sensitive phases (Installation, Delivery).
@@ -417,17 +429,6 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   } = scheduleStats;
 
   // ── Baseline stats & handler ─────────────────────────────────────────
-  //
-  // Two populations, deliberately distinct (audit §1.5):
-  //   allTasks     — phase-filtered + tree-rolled. What is ON SCREEN. Correct
-  //                  for anything DESCRIBING the current view.
-  //   projectTasks — every task on the project, un-rolled. Correct for the two
-  //                  WRITE actions below, which are project-wide operations that
-  //                  must not silently do less than their dialog claims.
-  // These handlers used to run on allTasks, so with a phase filter active
-  // "Set baseline for 60 tasks" baselined only the visible phase.
-  const projectTasks = rawTasks;
-
   // Stays VIEW-scoped on purpose: it only gates the baseline toggle and the
   // legend, both of which describe what is currently rendered. A project that
   // has baselines elsewhere but none in this phase has nothing to overlay here.
