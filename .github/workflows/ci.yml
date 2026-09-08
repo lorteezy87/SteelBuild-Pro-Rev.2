@@ -11,6 +11,12 @@
 #                turned OFF (vercel.json `git.deploymentEnabled.main=false`), so a
 #                red lint/typecheck/test/build can no longer reach
 #                steelbuild-pro.com — only a green push to main deploys.
+#   - deploy-cloudflare: the same commit, published to Cloudflare Workers.
+#                Runs alongside `deploy` (not after it) so the two hosts serve
+#                identical output during the Vercel→Cloudflare migration and a
+#                Cloudflare failure can never block the deploy that still
+#                serves steelbuild-pro.com. Opt-in via the CLOUDFLARE_ENABLED
+#                repo variable. See docs/runbooks/cloudflare-migration.md.
 #   - e2e-smoke: Playwright smoke AFTER deploy, NON-BLOCKING (it is not in
 #                `deploy.needs`, so it can never gate or roll back prod). Opt-in
 #                via the E2E_ENABLED repo variable. See e2e/README.md.
@@ -265,6 +271,125 @@ jobs:
             echo "attempt $i: HTTP $code"; sleep 10
           done
           echo "::error::production health check failed after deploy"; exit 1
+
+  # ── Gated CLOUDFLARE WORKERS deploy (migration off Vercel) ───────────────
+  # Ships the SAME commit to Cloudflare Workers that the `deploy` job above
+  # ships to Vercel, so both hosts serve identical output during the migration
+  # and the eventual cutover is a DNS change, not a leap. Reuses the same `ci`
+  # gate (no drift) and runs INDEPENDENTLY of `deploy` — a Cloudflare failure
+  # must never stop the Vercel deploy that still serves steelbuild-pro.com.
+  #
+  # INERT until you opt in: runs only when the `CLOUDFLARE_ENABLED` repo
+  # VARIABLE is "true" (a variable, not a secret — `secrets.*` is unreliable in
+  # a job-level `if`, same pattern as deploy-staging / e2e-smoke).
+  #
+  # Unlike Vercel there is no `vercel pull` to fetch build-time env, so the
+  # VITE_* values come from repo secrets. They are browser-safe by design (the
+  # Supabase URL + publishable anon key ship in the bundle; see src/lib/env.ts)
+  # — no service key is ever a VITE_* var.
+  #
+  # Setup + cutover steps: docs/runbooks/cloudflare-migration.md
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Workers
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Serialize Cloudflare deploys and never cancel one mid-flight (mirrors
+    # prod). Its own group — it must not queue behind the Vercel deploy.
+    concurrency:
+      group: cloudflare-production-deploy
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify deploy configuration
+        # FAIL CLOSED. The `ci` job builds with deliberate placeholder Supabase
+        # values; if those ever leaked into this job's env the build would
+        # succeed and publish an app that cannot reach the database — a green
+        # deploy of a dead site. Refuse to build instead.
+        run: |
+          set -e
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY secrets are not set"
+            exit 1
+          fi
+          case "$VITE_SUPABASE_URL" in
+            *ci-placeholder*)
+              echo "::error::VITE_SUPABASE_URL is the CI placeholder — refusing to deploy"
+              exit 1
+              ;;
+          esac
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets are not set"
+            exit 1
+          fi
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Build (production)
+        # Plain `npm run build` — the Vercel CLI's build wrapper is not
+        # involved, so vercel.json's headers/rewrites do NOT apply here. Their
+        # Cloudflare equivalents live in public/_headers (copied into dist/ by
+        # Vite) and wrangler.jsonc; scripts/__tests__/deployHeaders.test.ts
+        # fails CI if the two drift apart.
+        #
+        # Vercel Skew Protection is a Vercel-only feature: VERCEL_* env vars are
+        # absent here, so vite.config.js leaves renderBuiltUrl unset and emits
+        # plain /assets/ paths. See the runbook for what replaces it.
+        run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Same Sentry release stamp as the Vercel deploy, so one commit maps
+          # to one release regardless of which host served the session.
+          VITE_APP_VERSION: ${{ github.sha }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+      - name: Confirm _headers reached the build output
+        # public/_headers is a plain file Vite copies verbatim. If it ever stops
+        # landing in dist/, the deploy silently loses every security header and
+        # the immutable asset caching — exactly the kind of failure nobody
+        # notices for months. Check it before publishing, not after.
+        run: |
+          set -e
+          test -f dist/_headers || { echo "::error::dist/_headers missing — headers would be dropped"; exit 1; }
+          test -f dist/wasm/web-ifc.wasm || { echo "::error::dist/wasm/web-ifc.wasm missing — IFC viewer would render nothing"; exit 1; }
+
+      - name: Deploy to Cloudflare Workers
+        # Uses the pinned wrangler from devDependencies (not @latest) so the
+        # deploy tool version is reviewed like any other dependency bump.
+        run: npx wrangler deploy
+
+      - name: Post-deploy health check
+        # Only runs once CLOUDFLARE_BASE_URL is configured; until then the job
+        # stays green while DNS/custom-domain setup is still in progress
+        # (mirrors deploy-staging). Point it at the workers.dev URL first, then
+        # at the custom domain after cutover.
+        if: ${{ vars.CLOUDFLARE_BASE_URL != '' }}
+        run: |
+          set -e
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sL -o /dev/null -w '%{http_code}' "${{ vars.CLOUDFLARE_BASE_URL }}")
+            if [ "$code" = "200" ]; then echo "cloudflare healthy ($code)"; exit 0; fi
+            echo "attempt $i: HTTP $code"; sleep 10
+          done
+          echo "::error::Cloudflare health check failed after deploy"; exit 1
 
   # ── Gated STAGING deploy (H3) ────────────────────────────────────────────
   # Deploys the `staging` branch to a SEPARATE Vercel project wired to a separate

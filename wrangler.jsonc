@@ -4,6 +4,39 @@
 	// (Workers & Pages > steelbuild-pro-rev-2), or Workers Builds will fail.
 	"name": "steelbuild-pro-rev-2",
 	"compatibility_date": "2026-09-06",
+
+	// Workers Logs. Vercel's runtime logs do not follow us across the
+	// migration, and a static-asset Worker with no observability gives us no
+	// way to answer "is it serving?" beyond the CI health check. Sampling is
+	// left at the default (100%) — this Worker serves assets only, so the log
+	// volume is a request count, not application logging.
+	"observability": {
+		"enabled": true
+	},
+
+	// Pure static-asset Worker: no "main", so there is no Worker script and no
+	// ASSETS binding (the binding is only valid alongside "main"). Everything
+	// Vercel did in `vercel.json` is expressed either here or in
+	// `public/_headers`, which Vite copies verbatim into ./dist at build time.
+	//
+	// not_found_handling "single-page-application" replaces the vercel.json
+	// `rewrites` block, but it is NOT an exact equivalent, and the difference
+	// is worth knowing before you debug it at 6am.
+	//
+	// vercel.json excludes /assets/ and /wasm/ from its SPA rewrite so a
+	// missing hashed chunk returns a real 404. Cloudflare has no per-path
+	// escape hatch here: measured against `wrangler dev`, EVERY unmatched
+	// path returns 200 + index.html, whatever the Sec-Fetch-Mode. So a request
+	// for a chunk that no longer exists gets HTML instead of a 404.
+	//
+	// Accepted, because the blast radius is one dead URL: chunk filenames are
+	// content-hashed, so the stale name is never requested again after
+	// src/lib/lazyRetry.ts catches the module-parse failure and does its
+	// one-shot reload. If that ever stops being true, the fix is
+	// `assets.run_worker_first: ["/assets/*"]` plus a Worker script that
+	// 404s the misses — note that adding a Worker script stops public/_headers
+	// applying to those paths, so the immutable caching would have to move
+	// into the script too.
 	"assets": {
 		"directory": "./dist",
 		"not_found_handling": "single-page-application"
