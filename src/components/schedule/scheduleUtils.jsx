@@ -1,5 +1,6 @@
 // Schedule utility functions for data mapping and calculations
 import { GANTT_GRADIENT, GANTT_PHASE_HEX, GANTT_ROW_ALT_VAR, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
+import { todayLocalISO } from "@/lib/dateMath";
 
 export function mapWorkPackagesToTasks(workPackages) {
   return workPackages.map((wp, idx) => ({
@@ -10,8 +11,8 @@ export function mapWorkPackagesToTasks(workPackages) {
     task_name: wp.name,
     task_type: wp.phase === 'Erection' ? 'Install' : 'Fabrication',
     phase: wp.phase,
-    start_date: wp.released_date || new Date().toISOString().split('T')[0],
-    end_date: wp.released_date || new Date().toISOString().split('T')[0],
+    start_date: wp.released_date || todayLocalISO(),
+    end_date: wp.released_date || todayLocalISO(),
     duration: 1,
     percent_complete: wp.percent_complete || 0,
     status: wp.status,
@@ -52,8 +53,8 @@ export function mapSubmittalsToTasks(drawings) {
     task_name: `${dwg.sheet_number || ''} ${dwg.title || ''}`.trim(),
     task_type: 'Submittal',
     phase: 'Detailing',
-    start_date: dwg.submitted_date || dwg.issue_date || new Date().toISOString().split('T')[0],
-    end_date: dwg.due_date || dwg.return_date || new Date().toISOString().split('T')[0],
+    start_date: dwg.submitted_date || dwg.issue_date || todayLocalISO(),
+    end_date: dwg.due_date || dwg.return_date || todayLocalISO(),
     duration: dwg.due_date && dwg.submitted_date ? Math.max(1, Math.ceil((new Date(dwg.due_date) - new Date(dwg.submitted_date)) / 86400000)) : 1,
     percent_complete: dwg.stage === 'Released' ? 100 : 0,
     status: dwg.stage || 'Not Started',

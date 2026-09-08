@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { todayUtcMidnightFromLocal } from "@/lib/dateMath";
 
 // Schedule audit fix (bug class 5): the previous implementation
 // constructed week boundaries in local time but compared against task
@@ -27,10 +28,9 @@ function parseTaskDate(s) {
 }
 
 export default function LookaheadPlanner({ tasks }) {
-  const todayUtc = useMemo(() => {
-    const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  }, []);
+  // LOCAL calendar date on a UTC-midnight anchor. Reading getUTCDate() here
+  // slid the whole 6-week window forward from 5 PM local onward (§2.5).
+  const todayUtc = useMemo(() => todayUtcMidnightFromLocal(), []);
 
   const weeks = useMemo(() => {
     // Anchor week 1 at the Monday on/before todayUtc. getUTCDay(): Sun=0..Sat=6.

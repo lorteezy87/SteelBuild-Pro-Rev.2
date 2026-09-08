@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { todayLocalISO } from "@/lib/dateMath";
 import { Button } from '@/components/ui/button';
 import { PHASES } from '../../utils/phases';
 import DateOrTbdInput from './DateOrTbdInput';
@@ -8,8 +9,8 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
     task_name: '',
     task_type: 'Task',
     phase: 'Fabrication',
-    start_date: prefilledDate || new Date().toISOString().split('T')[0],
-    end_date: prefilledDate || new Date().toISOString().split('T')[0],
+    start_date: prefilledDate || todayLocalISO(),
+    end_date: prefilledDate || todayLocalISO(),
     status: 'Not Started',
     priority: 'Normal',
     resource_names: '',
@@ -23,8 +24,8 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
         task_name: '',
         task_type: 'Task',
         phase: 'Fabrication',
-        start_date: prefilledDate || new Date().toISOString().split('T')[0],
-        end_date: prefilledDate || new Date().toISOString().split('T')[0],
+        start_date: prefilledDate || todayLocalISO(),
+        end_date: prefilledDate || todayLocalISO(),
         status: 'Not Started',
         priority: 'Normal',
         resource_names: '',

@@ -5,6 +5,7 @@
  * state, mutation objects, and handlers.
  */
 import { Suspense } from "react";
+import { todayLocalISO } from "@/lib/dateMath";
 import type { ComponentType, PropsWithChildren } from "react";
 import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
@@ -352,7 +353,7 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
             }
             isSaving={createTaskMut.isPending}
             projectName={selectedProject?.name || ""}
-            prefilledDate={new Date().toISOString().split("T")[0]}
+            prefilledDate={todayLocalISO()}
             existingTasks={enrichedTasks}
           />
         </Suspense>

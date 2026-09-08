@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { todayLocalISO } from "@/lib/dateMath";
 import { PHASES } from "../../utils/phases";
 import DateOrTbdInput from "./DateOrTbdInput";
 import { addDaysIso } from "../../services/scheduleCascade";
@@ -7,7 +8,9 @@ const TASK_TYPES = ["Task", "Fabrication", "Delivery", "Install", "Submittal", "
 const STATUSES   = ["Not Started", "In Progress", "Complete", "On Hold", "Cancelled"];
 const PRIORITIES = ["Low", "Normal", "High", "Critical"];
 
-const today = () => new Date().toISOString().split("T")[0];
+// Local, not UTC: a task added at 6 PM in Arizona was defaulting to
+// tomorrow (§2.5).
+const today = () => todayLocalISO();
 
 /** Add `days` calendar days to a YYYY-MM-DD string. Returns YYYY-MM-DD. */
 function addDays(dateStr, days) {

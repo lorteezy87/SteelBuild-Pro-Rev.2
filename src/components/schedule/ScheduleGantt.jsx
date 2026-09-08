@@ -41,6 +41,7 @@ import {
   isSummaryScheduleTask,
 } from "./scheduleGanttHelpers";
 import { buildBaselineRows, createBaseline } from "@/services/scheduleBaselines";
+import { todayLocalISO, todayUtcMidnightFromLocal } from "@/lib/dateMath";
 import {
   WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
   buildWeatherRiskByTask,
@@ -115,14 +116,14 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const rightBody = useRef(null);
   const containerRef = useRef(null);
 
-  // Normalize "today" to UTC midnight so all date math (overdue checks, today
-  // line, scroll-to-today) compares apples to apples with task dates that are
-  // stored as YYYY-MM-DD and parsed at T00:00:00Z. Without this, a 4pm local
-  // load drifts every comparison by hours and can flip overdue/upcoming.
-  const today = useMemo(() => {
-    const d = new Date();
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  }, []);
+  // "Today" as the user's LOCAL calendar date, anchored at UTC midnight so all
+  // date math (overdue checks, today line, scroll-to-today) compares apples to
+  // apples with task dates stored as YYYY-MM-DD and parsed at T00:00:00Z.
+  //
+  // This used to read getUTCDate() — the UTC calendar date — which in Arizona
+  // (UTC-7) is already tomorrow from 5 PM local onward, so the today line
+  // jumped a day early and overdue flipped with it (audit §2.5).
+  const today = useMemo(() => todayUtcMidnightFromLocal(), []);
 
   const startInlineEdit = (task, e) => {
     e.stopPropagation();
@@ -460,7 +461,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       "It snapshots the dates as entered, not the cascaded dates the bars show.\n\n" +
       "Baselines are never overwritten — this is added alongside any already taken.\n" +
       "Examples: \"Baseline 0 — contract\", \"Rev 2 — CO 14 time extension\".",
-      `Baseline ${new Date().toISOString().slice(0, 10)}`,
+      `Baseline ${todayLocalISO()}`,
     );
     if (name === null) return; // cancelled
     if (!name.trim()) {
