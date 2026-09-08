@@ -1675,6 +1675,82 @@ export type Database = {
           },
         ]
       }
+      drawing_holds: {
+        Row: {
+          created_at: string
+          drawing_id: string
+          id: string
+          is_active: boolean
+          placed_at: string
+          placed_by_id: string | null
+          placed_by_name: string | null
+          prior_release_status: string | null
+          project_id: string
+          reason: string
+          release_notes: string | null
+          released_at: string | null
+          released_by_id: string | null
+          released_by_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          drawing_id: string
+          id?: string
+          is_active?: boolean
+          placed_at?: string
+          placed_by_id?: string | null
+          placed_by_name?: string | null
+          prior_release_status?: string | null
+          project_id: string
+          reason: string
+          release_notes?: string | null
+          released_at?: string | null
+          released_by_id?: string | null
+          released_by_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          drawing_id?: string
+          id?: string
+          is_active?: boolean
+          placed_at?: string
+          placed_by_id?: string | null
+          placed_by_name?: string | null
+          prior_release_status?: string | null
+          project_id?: string
+          reason?: string
+          release_notes?: string | null
+          released_at?: string | null
+          released_by_id?: string | null
+          released_by_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drawing_holds_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "drawing_holds_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawing_holds_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drawing_impacts: {
         Row: {
           assigned_to: string | null

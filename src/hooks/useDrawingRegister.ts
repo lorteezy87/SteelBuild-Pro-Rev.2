@@ -26,6 +26,11 @@ export interface DrawingRegisterRow {
   rfi_count: number | null;
   work_package_count: number | null;
   last_activity: string | null;
+  // Always present from the live view (migration 20260908045525); optional
+  // here only so existing fixtures that spread a partial row keep compiling.
+  active_hold_id?: string | null;
+  active_hold_reason?: string | null;
+  active_hold_placed_at?: string | null;
 }
 
 export function useDrawingRegister(projectId: string | null) {

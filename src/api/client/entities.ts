@@ -95,6 +95,9 @@ export const entities = {
   // approved-as-noted, revise-and-resubmit, etc.). Voided rows stay in the
   // table; UI filters them with is_voided=false in listSignoffs.
   DrawingSignoff:        createEntityClient('drawing_signoffs'),
+  // Sheet-level Holds & Blockers (SteelBuild Sheets parity): reason required,
+  // full placed/released audit trail. See migration 20260908045525.
+  DrawingHold:           createEntityClient('drawing_holds'),
   ScheduleTask:          (() => {
     // Schedule audit fix (bug class 3): keep status and percent_complete in
     // lock-step on every create/update so no future code path can land a row
