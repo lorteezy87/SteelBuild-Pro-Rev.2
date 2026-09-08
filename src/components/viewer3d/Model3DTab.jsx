@@ -24,6 +24,7 @@ import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
 import {
   assertStorageObjectSize, describeEmptyRoster, describePersistFailure, describePersistProgress, formatMb,
+  persistLeftPartialWrite,
 } from "@/lib/ifc/persistSteps";
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
@@ -294,8 +295,18 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     } catch (err) {
       const message = describePersistFailure(step, err);
       console.error(`[Model3DTab] save failed at step "${step}":`, err);
-      setRoster({ step: "error", message });
+      // What the banner may claim about the project comes from the import's
+      // VERIFIED rollback outcome, via the same helper the message uses, so the
+      // two can never contradict each other the way they did in the incident.
+      const partial = persistLeftPartialWrite(step, err);
+      setRoster({ step: "error", message, partial });
       toast.error(message);
+      // The message talks about this project's piece count, so the tab must
+      // stop serving its pre-save read of model_registry / the roster.
+      if (step === "register") {
+        qc.invalidateQueries({ queryKey: ["project-model", projectId] });
+        await invalidatePieceControlQueries(qc, projectId, "import").catch(() => { /* offline: the message already says so */ });
+      }
     }
   };
 
@@ -520,6 +531,19 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
               <span style={{ ...mono, fontSize: 12, color: "var(--text-primary)" }}>
                 {describePersistProgress(roster)}
               </span>
+            ) : roster.step === "error" && roster.partial ? (
+              // "Previewing — not saved yet" would be a second false claim here:
+              // the roster write started and its undo is unconfirmed. Saving is
+              // still offered — a completed save replaces every earlier roster.
+              <>
+                <span style={{ fontSize: 12.5, color: "var(--status-error)" }}>
+                  Save didn't finish — this attempt may have left rows behind
+                </span>
+                <button className="sbd-btn sbd-btn-primary" style={{ padding: "6px 16px" }}
+                  onClick={() => modelFile && buffer && persistModel(modelFile, buffer)}>
+                  Save again
+                </button>
+              </>
             ) : (
               <>
                 <span style={{ fontSize: 12.5, color: "var(--text-primary)" }}>Previewing — not saved yet</span>
