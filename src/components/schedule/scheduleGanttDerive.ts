@@ -60,6 +60,36 @@ export const GANTT_ROW_H = 40;
 export const GANTT_SUM_H = 36;
 export const GANTT_VIRTUAL_OVERSCAN = 320;
 
+/**
+ * Stable key for the set of cycle-affected tasks the user can actually SEE.
+ *
+ * The cascade map is computed over the WHOLE project (so cross-phase links
+ * resolve), but the Gantt renders a phase-filtered subset. Keying the cycle
+ * toast off the raw map would announce loops on rows that aren't on screen —
+ * and under a filter the user has no way to reach them. Intersecting with the
+ * rendered rows keeps the warning actionable.
+ *
+ * A cycle that only PARTLY intersects the filter still warns: the member on
+ * screen is the one silently sitting on stored dates, which is exactly the
+ * confusion the toast exists to explain.
+ *
+ * Returns a sorted, "|"-joined id list so a caller can use it as a memo/effect
+ * dependency without re-firing on every render.
+ */
+export function computeCycleTaskIdsKey(
+  effectiveDates: Record<string, { cycle?: boolean } | undefined> | null | undefined,
+  visibleTasks: TaskLike[] | null | undefined,
+): string {
+  if (!effectiveDates || !Array.isArray(visibleTasks) || visibleTasks.length === 0) return "";
+  const ids: string[] = [];
+  for (const task of visibleTasks) {
+    const id = task?.id;
+    if (!id) continue;
+    if (effectiveDates[String(id)]?.cycle) ids.push(String(id));
+  }
+  return [...new Set(ids)].sort().join("|");
+}
+
 export function computeSuccessorCountById(allTasks: TaskLike[]): Record<string, number> {
   const out: Record<string, number> = {};
   allTasks.forEach((task) => {

@@ -1,7 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { risksForTaskWindow } from "@/lib/weatherRisk";
-import { computeEffectiveDates } from "@/services/scheduleCascade";
 import {
   GANTT_BASELINE_VAR,
   GANTT_BG_VAR,
@@ -39,6 +38,7 @@ import {
   addDaysUTC,
   getTaskMetadata, getTaskBaseline, hasBaselineDrift, isCriticalTask,
   pluralize, taskOwner, isUnassignedTask, hasLogicGapTask,
+  isSummaryScheduleTask,
 } from "./scheduleGanttHelpers";
 import {
   WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
@@ -51,6 +51,7 @@ import { useGanttLayout } from "./useGanttLayout";
 import { useTaskBarDrag } from "./useTaskBarDrag";
 import { useTaskRowDnD } from "./useTaskRowDnD";
 import {
+  computeCycleTaskIdsKey,
   computeSuccessorCountById,
   computeVisibleTaskIds,
   buildTaskPositions,
@@ -67,7 +68,12 @@ import { GanttLeftPanelRows, GanttTimelineRows } from "./GanttTaskRows";
 const HEAD_H  = 40;
 const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
-export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null }) {
+// Stable identity for the `effectiveDates` fallback. An inline `{}` default
+// would be a fresh object every render and would invalidate every memo below
+// that lists `effectiveDates` as a dependency.
+const NO_EFFECTIVE_DATES = Object.freeze({});
+
+export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, effectiveDates = NO_EFFECTIVE_DATES, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
@@ -117,6 +123,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
 
   const startInlineEdit = (task, e) => {
     e.stopPropagation();
+    // A summary row's start/end are derived from its children by the DB rollup
+    // trigger, so anything typed here is overwritten on the next child write.
+    // ScheduleTaskList already refuses this; the Gantt row did not.
+    if (isSummaryScheduleTask(task)) return;
     setEditingId(task.id);
     setEditDraft({
       task_name: task.task_name || "",
@@ -238,32 +248,45 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     getScrollEl: () => leftRef.current,
   });
 
-  // ── Effective dates: cascade through dependencies so a late predecessor
-  // automatically shifts its successors forward in the gantt view. The
-  // underlying task.start_date / task.end_date in the DB are NEVER mutated;
-  // this only affects how the bars are positioned visually.
+  // ── Effective dates ─────────────────────────────────────────────────
+  // `effectiveDates` arrives as a PROP, computed once in Schedule.tsx over the
+  // WHOLE project. It is deliberately not recomputed here.
   //
-  // Delegates to the shared `computeEffectiveDates` utility (see
-  // `src/services/scheduleCascade.js`) so every schedule consumer — the
-  // Gantt, Task List, 6-Week Lookahead, ICS export — agrees on where each
-  // task sits on the calendar once predecessor links are followed. The
-  // utility supports FS / SS / FF / SF + lag; for the legacy "id only"
-  // dep shape it defaults to FS + 1 day to preserve the regression-test
-  // bar set by the previous inline cascade.
-  const effectiveDates = useMemo(() => computeEffectiveDates(allTasks), [allTasks]);
+  // This component previously ran `computeEffectiveDates(allTasks)` — but
+  // `allTasks` is phase-FILTERED, and scheduleCascade skips any link whose
+  // predecessor is absent from the array it was handed. So filtering the Gantt
+  // to one phase dropped every cross-phase predecessor and silently reverted
+  // its successors to un-cascaded stored dates, with no indicator. Two thirds
+  // of real predecessor links cross a phase boundary (Detailing -> Approval ->
+  // Fab -> Delivery -> Erection is the normal shape of a steel job), so the
+  // filter was changing the dates on screen rather than just narrowing them.
+  // See docs/audits/SCHEDULE_MODULE_AUDIT_2026-09-08.md §1.1.
+  //
+  // The filter now narrows DISPLAY only. Stored dates are still never mutated.
+  if (import.meta.env.DEV && rawTasks.length > 0 && Object.keys(effectiveDates).length === 0) {
+    // Failing open here would render the entire project un-cascaded — exactly
+    // the silence this wiring exists to remove — so make it loud in dev.
+    console.error(
+      "[ScheduleGantt] `effectiveDates` prop is empty while tasks are present. " +
+      "Every bar will render at its stored date and cascaded rows will be wrong. " +
+      "Check that ScheduleBody is passing effectiveDatesMap.",
+    );
+  }
 
   // ── Cycle observability ─────────────────────────────────────────────
-  // The cascade flags every task in a predecessor cycle with `cycle:
-  // true`. We surface a single toast when cycles are present so a user
-  // looking at the Gantt knows their schedule has a circular dependency
-  // they need to break — without it, the cycle members silently fall
-  // back to their stored dates and the user just sees "the cascade
-  // didn't shift this row" with no explanation. We dedupe by the set of
-  // cycle-affected task IDs so the toast doesn't fire on every render.
-  const cycleTaskIdsKey = useMemo(() => {
-    const ids = Object.keys(effectiveDates).filter((id) => effectiveDates[id]?.cycle);
-    return ids.sort().join("|");
-  }, [effectiveDates]);
+  // The cascade flags every task in a predecessor cycle with `cycle: true`.
+  // One toast per distinct cycle set tells the user their schedule has a loop;
+  // without it the members silently fall back to stored dates and the row just
+  // looks like "the cascade didn't shift this".
+  //
+  // Scoped to the RENDERED rows: the map now covers the whole project, and
+  // naming loops on rows the user cannot see (and cannot reach under a filter)
+  // would be noise. A partly-visible cycle still warns — the member on screen
+  // is the one sitting on stored dates.
+  const cycleTaskIdsKey = useMemo(
+    () => computeCycleTaskIdsKey(effectiveDates, allTasks),
+    [effectiveDates, allTasks],
+  );
   useEffect(() => {
     if (!cycleTaskIdsKey) return;
     const count = cycleTaskIdsKey.split("|").filter(Boolean).length;
@@ -612,13 +635,20 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     }
 
     return list;
-  }, [visibleGrouped, collapsed, collapsedTasks, showDeliveries, deliveries, collapsedDeliveries]);
+    // `effectiveDates` is a real dependency: the phase-band start/end above are
+    // derived through effStart/effEnd. It used to be recomputed from `allTasks`
+    // (already a dep via visibleGrouped) so it never needed listing; now that it
+    // arrives as a prop it can change on its own.
+  }, [visibleGrouped, collapsed, collapsedTasks, showDeliveries, deliveries, collapsedDeliveries, effectiveDates]);
 
   const taskPositions = useMemo(() => buildTaskPositions(rows, GANTT_ROW_H, GANTT_SUM_H), [rows]);
 
   const depArrows = useMemo(
     () => buildDepArrows({ rows, taskPositions, taskById, effStart, effEnd, px }),
-    [rows, taskPositions, taskById],
+    // effStart/effEnd read `effectiveDates`; as a prop it can change without
+    // `rows` changing, which would leave the arrows pointing at stale endpoints.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, taskPositions, taskById, effectiveDates],
   );
 
   const rowLayout = useMemo(() => buildRowLayout(rows, GANTT_ROW_H, GANTT_SUM_H), [rows]);
