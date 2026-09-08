@@ -14,7 +14,15 @@ import { selectShiftedSyncTasks } from "../scheduleGanttDerive";
 
 const GANTT_SRC = readFileSync(new URL("../ScheduleGantt.jsx", import.meta.url), "utf8");
 
-const EFF = {
+/**
+ * Explicitly typed: `start: null` / `end: null` on the TBD fixture would widen to
+ * `any` and trip the repo's noImplicitAny gate (scripts/noimplicitany-typecheck.mjs),
+ * which is stricter than a plain `tsc -p tsconfig.json`.
+ */
+const EFF: Record<
+  string,
+  { start: string | null; end: string | null; shifted: boolean; cycle: boolean }
+> = {
   "fab-1": { start: "2026-03-07", end: "2026-03-14", shifted: true, cycle: false },
   "fab-2": { start: "2026-04-01", end: "2026-04-05", shifted: false, cycle: false },
   "loop-1": { start: "2026-03-01", end: "2026-03-02", shifted: true, cycle: true },
