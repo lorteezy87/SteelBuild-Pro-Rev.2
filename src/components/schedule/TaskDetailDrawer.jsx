@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useTaskLinkOptions } from '@/hooks/useTaskLinkOptions';
 import { calculateTaskDuration, computeAutoScheduledDates } from './scheduleUtils';
+import { SCHEDULE_STATUSES, SCHEDULE_TASK_TYPES, SCHEDULE_PRIORITIES } from '@/lib/schedule/taskStatus';
 import { PHASES } from '../../utils/phases';
 import {
   getStageDates,
@@ -107,15 +108,20 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
   // When the user edits duration, keep start_date fixed and shift end_date.
   const handleDurationChange = (newDays) => {
     const days = parseInt(newDays, 10);
-    if (!Number.isFinite(days) || days < 1) return;
+    if (!Number.isFinite(days)) return; // mid-typing, or the field was cleared
     if (!formData.start_date) {
       toast.error('Set a start date first', { position: 'top-right', duration: 2000 });
       return;
     }
+    // 0 lands the task on a single date instead of being ignored (§4.3). A
+    // milestone is a point in time, which P6 and MS Project call 0 days and the
+    // inclusive convention calls 1 — same date either way. Silently discarding
+    // the keystroke made the field look broken to anyone entering a milestone.
+    const inclusiveDays = days <= 0 ? 1 : days;
     // finishFromDuration is start + (days - 1): day 1 IS the start date, under
     // the inclusive convention (§2.4). It does the arithmetic in UTC, so a
     // non-zero local offset cannot shift the finish by a day.
-    const endStr = finishFromDuration(formData.start_date, days);
+    const endStr = finishFromDuration(formData.start_date, inclusiveDays);
     if (!endStr) return; // unparseable start_date — leave dates untouched
     setFormData({ ...formData, end_date: endStr });
   };
@@ -355,14 +361,14 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 {/* Left column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <FormField label="Task Name" value={formData.task_name} onChange={(v) => setFormData({ ...formData, task_name: v })} />
-                  <FormField label="Task Type" type="select" value={formData.task_type} onChange={(v) => setFormData({ ...formData, task_type: v })} options={['Fabrication', 'Delivery', 'Install', 'Submittal', 'RFI', 'Milestone', 'Task']} />
+                  <FormField label="Task Type" type="select" value={formData.task_type} onChange={(v) => setFormData({ ...formData, task_type: v })} options={SCHEDULE_TASK_TYPES} />
                   <FormField label="Phase" type="select" value={formData.phase} onChange={(v) => setFormData({ ...formData, phase: v })} options={PHASES} />
-                  <FormField label="Status" type="select" value={formData.status} onChange={(v) => setFormData({ ...formData, status: v })} options={['Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold']} />
+                  <FormField label="Status" type="select" value={formData.status} onChange={(v) => setFormData({ ...formData, status: v })} options={SCHEDULE_STATUSES} />
                 </div>
 
                 {/* Right column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={['Critical', 'High', 'Normal', 'Low']} />
+                  <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={SCHEDULE_PRIORITIES} />
                   <FormField label="Assigned To / Resources" value={formData.resource_names || formData.assigned_to || ''} onChange={(v) => setFormData({ ...formData, resource_names: v, assigned_to: v })} />
                   <FormField label="% Complete" type="slider" value={formData.percent_complete || 0} onChange={(v) => setFormData({ ...formData, percent_complete: v })} />
                   <FormField label="WBS Code" value={formData.wbs_code || ''} onChange={(v) => setFormData({ ...formData, wbs_code: v })} />
@@ -451,13 +457,13 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                       <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Duration (days)</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         value={duration}
                         onChange={(e) => handleDurationChange(e.target.value)}
                         readOnly={isSummary}
                         disabled={isSummary}
                         placeholder="—"
-                        title={isSummary ? 'Derived from children — not editable' : 'Edit duration to auto-shift the end date'}
+                        title={isSummary ? 'Derived from children — not editable' : 'Inclusive days: Mon → Fri is 5, a same-day task is 1. Enter 0 for a milestone.'}
                         style={{
                           ...drawerControlStyle,
                           width: '100%',

@@ -101,11 +101,17 @@ function durationDays(task) {
   return Math.max(0, Math.round((e - s) / 86400000));
 }
 
-function displayPct(task) {
-  if (!task) return 0;
+/**
+ * Percent complete, or null when unknown. Mirrors percentCompleteOrNull in
+ * components/schedule/scheduleTaskUtils — this module is a standalone jsPDF
+ * renderer and deliberately carries no React-side imports.
+ */
+function percentCompleteOrNull(task) {
+  if (!task) return null;
   if (task.status === "Complete") return 100;
+  if (task.percent_complete === null || task.percent_complete === undefined) return null;
   const v = Number(task.percent_complete);
-  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : null;
 }
 
 function taskName(task) {
@@ -283,7 +289,7 @@ function drawTaskRow(pdf, row, x, y, alt) {
     start: fmtDate(task.start_date),
     finish: fmtDate(task.end_date),
     status: task.status || "Not Started",
-    pct: `${displayPct(task)}`,
+    pct: percentCompleteOrNull(task) === null ? "—" : `${percentCompleteOrNull(task)}`,
   };
 
   let cursor = x;
@@ -321,7 +327,8 @@ function drawTaskBar(pdf, task, timelineX, y, weekW, weekStartIndex, weekCount, 
   pdf.setFillColor(...C_BAR_TRACK);
   pdf.rect(barX, barY, barW, barH, "F");
 
-  const pct = displayPct(task) / 100;
+  // Bar width only — an unknown percent draws as an empty track.
+  const pct = (percentCompleteOrNull(task) ?? 0) / 100;
   const [r, g, b] = statusRgb(task.status || "Not Started");
   if (pct > 0) {
     pdf.setFillColor(r, g, b);

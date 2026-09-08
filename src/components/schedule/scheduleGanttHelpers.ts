@@ -8,7 +8,7 @@
 // unit-test in isolation. Bodies are byte-identical to the originals; this is a
 // mechanical extraction, not a behavior change.
 import { parseDateUTC, toDateOnly } from "./scheduleDateUtils";
-import { displayPct, isMilestoneTask } from "./scheduleTaskUtils";
+import { percentCompleteOrNull, isMilestoneTask } from "./scheduleTaskUtils";
 import { parseDeps } from "./scheduleDependencies";
 import { isSummaryTask as isSummaryTaskCanonical } from "@/lib/schedule/summaryTasks";
 import { resolveTaskBaseline } from "@/services/scheduleBaselines";
@@ -208,7 +208,11 @@ export function isStalledTask(
 ): boolean {
   if (!task || task.status === "Complete" || String(task.status || "").toLowerCase().includes("complete")) return false;
   const start = parseStart(task);
-  return Boolean(start && start < today && displayPct(task) === 0);
+  // Strictly 0, never unknown. This used to read displayPct, which maps a null
+  // percent to 0 — so a task reopened from Complete (percent deliberately
+  // cleared to "unknown") would be reported as stalled the moment it reopened,
+  // having shown 100% a click earlier (§4.3).
+  return Boolean(start && start < today && percentCompleteOrNull(task) === 0);
 }
 
 export function isOpenScheduleTask(task: ScheduleTaskLike | null | undefined): boolean {

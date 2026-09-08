@@ -29,7 +29,7 @@ import { parseDeps } from "./scheduleDependencies";
 import {
   PHASES,
   normalizePhase,
-  displayPct,
+  percentCompleteOrNull,
   isMilestoneTask,
   sanitizeTaskName,
   statusColor,
@@ -142,7 +142,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       // Seed the editor with the same value the UI shows — Complete tasks
       // round to 100 even if percent_complete is stale, otherwise the user
       // sees a confusing "100% Complete" row that snaps back to 0 on edit.
-      percent_complete: displayPct(task),
+      // null (unknown) is preserved as null rather than flattened to 0: this
+      // draft is sent verbatim on save, so seeding 0 would silently write
+      // "no progress" onto a task nobody had measured (§4.3).
+      percent_complete: percentCompleteOrNull(task),
     });
   };
 
@@ -657,12 +660,17 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         insertDeliveryRows();
       }
 
-      // Phase % uses displayPct so Complete tasks always count as 100% even
-      // when their percent_complete field is stale.
+      // Complete tasks always count as 100% even when their percent_complete
+      // column is stale; tasks whose progress is UNKNOWN are left out of the
+      // mean rather than averaged in as 0 (§4.3). Falls back to 0 only as a bar
+      // width when nothing in the phase has a known percent.
       const phaseProgressTasks = tasks.filter((task) => !task._hasChildren);
       const progressBasis = phaseProgressTasks.length ? phaseProgressTasks : tasks;
-      const avgPct = progressBasis.length > 0
-        ? progressBasis.reduce((sum, t) => sum + displayPct(t), 0) / progressBasis.length
+      const knownPcts = progressBasis
+        .map((t) => percentCompleteOrNull(t))
+        .filter((pct) => pct !== null);
+      const avgPct = knownPcts.length > 0
+        ? knownPcts.reduce((sum, pct) => sum + pct, 0) / knownPcts.length
         : 0;
 
       // Phase summary bar spans from the earliest *effective* start to the
@@ -1411,7 +1419,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             );
           })()}
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isOverdue(tooltip.task) ? GANTT_STATUS_HEX.delayed : "var(--text-secondary)" }}>
-            {displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
+            {percentCompleteOrNull(tooltip.task) === null
+              ? "Progress not recorded"
+              : `${percentCompleteOrNull(tooltip.task)}% complete`}{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${GANTT_GRID_VAR}` }}>
             <div>

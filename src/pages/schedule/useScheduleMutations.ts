@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { batchProcess } from "@/utils/batchProcess";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
-import { invalidateEntity } from "@/services/cacheRegistry";
+import { invalidateEntity, getQueryKey } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { reparentTasks } from "@/lib/schedule/reparentTasks";
 import {
@@ -14,11 +14,13 @@ import {
 } from "@/lib/schedule/predecessorCleanup";
 import { deriveActualsPatch, hasActualsPatch } from "@/lib/schedule/actuals";
 import { taskDurationDays, finishFromDuration } from "@/lib/schedule/duration";
+import { withReconciledPercent } from "@/lib/schedule/taskStatus";
+import { withMilestoneFlags } from "@/lib/schedule/taskFields";
 import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./wbs";
 import { parseMsProjectXml } from "./mppImport";
 import { commitImportedScheduleTasks } from "./commitImportedTasks";
 import { filterEditableTasks } from "./scheduleTaskHelpers";
-import { buildScheduleResourceAssignPatch } from "./scheduleAssignmentHelpers";
+import { buildScheduleResourceAssignPatch, withAssignmentPair } from "./scheduleAssignmentHelpers";
 import type { ScheduleTask } from "./types";
 import { assertScheduleDateRange } from "./scheduleDateValidation";
 
@@ -34,7 +36,6 @@ export interface UseScheduleMutationsParams {
   setSelectedTask: Dispatch<SetStateAction<ScheduleTask | null>>;
   setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
   setShowDrawer: Dispatch<SetStateAction<boolean>>;
-  setShowAddTask: Dispatch<SetStateAction<boolean>>;
   setShowBulkAdd: Dispatch<SetStateAction<boolean>>;
   setShowBulkResource: Dispatch<SetStateAction<boolean>>;
   setShowBulkDates: Dispatch<SetStateAction<boolean>>;
@@ -63,7 +64,6 @@ export function useScheduleMutations({
   setSelectedTask,
   setSelectedIds,
   setShowDrawer,
-  setShowAddTask,
   setShowBulkAdd,
   setShowBulkResource,
   setShowBulkDates,
@@ -79,34 +79,136 @@ export function useScheduleMutations({
   setExportingPdf,
   fileInputRef,
 }: UseScheduleMutationsParams) {
+  /**
+   * The exact row patch a task update will write — the one place that answers
+   * "what does saving this task actually change".
+   *
+   * Audit §4.2. There were four entry points into a task update: this mutation,
+   * the Gantt's inline row editor, the Task List's inline editor, and the bar
+   * drag. The last three each inlined their own `entities.ScheduleTask.update`,
+   * so they skipped the actuals stamping below, the `toUserErrorMessage`
+   * mapping, and the mutation's pending state. Marking a task Complete from the
+   * Task List therefore recorded no `actual_finish_date` while doing the same
+   * thing in the drawer did — the §1.4 audit trail had a hole shaped like the
+   * two surfaces people actually use.
+   *
+   * They now all route through this mutation. Building the payload in a named
+   * function rather than inside `mutationFn` lets `onMutate` apply the SAME
+   * fields optimistically; if the two derivations could differ, the bar would
+   * jump on click and then correct itself when the server answered.
+   */
+  const buildTaskUpdate = (data: ScheduleTask) => {
+    // Stamp actuals only on a real status TRANSITION, compared against the
+    // stored row. Deriving from `data.status` alone would re-stamp on every
+    // unrelated save of an already-Complete task.
+    const previous = data?.id ? scheduleTasks.find((t) => t.id === data.id) : undefined;
+    const merged: Record<string, any> = { ...data };
+    if (previous && data?.status && data.status !== previous.status) {
+      const actuals = deriveActualsPatch({ task: previous, nextStatus: data.status });
+      for (const [key, value] of Object.entries(actuals)) {
+        // A date the user typed in the drawer wins, including an explicit
+        // null — clearing a wrong actual must not be undone by the stamp.
+        if (!(key in merged) || merged[key] === undefined) merged[key] = value;
+      }
+    }
+    // Sanitize AFTER merging so assertScheduleDateRange validates the payload
+    // that is actually sent, actuals included.
+    const { id, fields } = sanitizeScheduleTaskUpdatePayload(merged as ScheduleTask);
+
+    // Then the three couplings no caller should have to remember:
+    //   1. status <-> percent_complete, which the database enforces and which
+    //      every path except the bulk toolbar violated (see taskStatus.ts).
+    //   2. the milestone columns, so a task cannot be half a milestone.
+    //   3. the assignment pair, so editing one field is not invisible because
+    //      a reader prefers the other.
+    const reconciled = withAssignmentPair(
+      withMilestoneFlags(withReconciledPercent(fields, previous)),
+    );
+    return { id, fields: reconciled, previous };
+  };
+
+  /**
+   * Put a save back the way it was.
+   *
+   * Reverts exactly the columns the save wrote, to the values the row held
+   * before it. That set is what makes the revert safe against the status /
+   * percent_complete constraint without re-deriving anything: the previous row
+   * satisfied the constraint (it came out of the database), so restoring every
+   * column that changed restores precisely that row.
+   */
+  const undoTaskUpdate = async (
+    id: string,
+    fields: Record<string, any>,
+    previous: ScheduleTask | undefined,
+  ) => {
+    const revert: Record<string, any> = {};
+    for (const key of Object.keys(fields)) {
+      const prior = previous ? (previous as Record<string, any>)[key] : undefined;
+      revert[key] = prior === undefined ? null : prior;
+    }
+    try {
+      await entities.ScheduleTask.update(id, revert);
+      invalidateEntity(qc, "schedule_task", projectId);
+      toast.success("Change reverted");
+    } catch (err: unknown) {
+      toast.error(toUserErrorMessage(err, "Could not undo that change"));
+    }
+  };
+
+  const scheduleTasksKey = getQueryKey("schedule_task", projectId) as unknown[];
+
   const updateTaskMut = useMutation({
     mutationFn: (data: ScheduleTask) => {
-      // Stamp actuals only on a real status TRANSITION, compared against the
-      // stored row. Deriving from `data.status` alone would re-stamp on every
-      // unrelated save of an already-Complete task.
-      const previous = data?.id ? scheduleTasks.find((t) => t.id === data.id) : undefined;
-      const merged: Record<string, any> = { ...data };
-      if (previous && data?.status && data.status !== previous.status) {
-        const actuals = deriveActualsPatch({ task: previous, nextStatus: data.status });
-        for (const [key, value] of Object.entries(actuals)) {
-          // A date the user typed in the drawer wins, including an explicit
-          // null — clearing a wrong actual must not be undone by the stamp.
-          if (!(key in merged) || merged[key] === undefined) merged[key] = value;
-        }
-      }
-      // Sanitize AFTER merging so assertScheduleDateRange validates the payload
-      // that is actually sent, actuals included.
-      const { id, fields } = sanitizeScheduleTaskUpdatePayload(merged as ScheduleTask);
+      const { id, fields } = buildTaskUpdate(data);
       if (!id) throw new Error("Cannot update a task without an id");
       return entities.ScheduleTask.update(id, fields);
     },
-    onSuccess: () => {
-      invalidateEntity(qc, "schedule_task", projectId);
+    // Paint the change immediately and let the refetch in onSettled confirm it.
+    // Every edit used to round-trip before the bar moved (§4.2).
+    onMutate: async (data: ScheduleTask) => {
+      let patch: ReturnType<typeof buildTaskUpdate>;
+      try {
+        patch = buildTaskUpdate(data);
+      } catch {
+        // sanitize throws on an inverted date window. Skip the optimistic paint
+        // and let mutationFn throw the same error into onError, so the user
+        // gets one message instead of a bar that moves and snaps back.
+        return undefined;
+      }
+      if (!patch.id) return undefined;
+
+      await qc.cancelQueries({ queryKey: scheduleTasksKey });
+      const snapshot = qc.getQueryData(scheduleTasksKey);
+      qc.setQueryData(scheduleTasksKey, (rows: any) =>
+        Array.isArray(rows)
+          ? rows.map((row: any) => (row?.id === patch.id ? { ...row, ...patch.fields } : row))
+          : rows,
+      );
+      return { snapshot, id: patch.id, fields: patch.fields, previous: patch.previous };
+    },
+    onError: (err: unknown, _data: ScheduleTask, ctx: any) => {
+      // Put the list back before reporting. A failed save must not leave the
+      // Gantt showing dates the database rejected.
+      if (ctx && ctx.snapshot !== undefined) qc.setQueryData(scheduleTasksKey, ctx.snapshot);
+      toast.error(`Update failed: ${toUserErrorMessage(err)}`);
+    },
+    onSuccess: (_res: unknown, _data: ScheduleTask, ctx: any) => {
       setShowDrawer(false);
       setSelectedTask(null);
-      toast.success("Task updated");
+      if (ctx?.id && ctx.fields) {
+        toast.success("Task updated", {
+          action: {
+            label: "Undo",
+            onClick: () => { void undoTaskUpdate(ctx.id, ctx.fields, ctx.previous); },
+          },
+        });
+      } else {
+        toast.success("Task updated");
+      }
     },
-    onError: (err: unknown) => toast.error(`Update failed: ${toUserErrorMessage(err)}`),
+    // Refetch on both paths: success confirms the optimistic patch, failure
+    // replaces the rolled-back snapshot with what the server actually holds.
+    onSettled: () => { invalidateEntity(qc, "schedule_task", projectId); },
   });
 
   const reparentMut = useMutation({
@@ -133,11 +235,19 @@ export function useScheduleMutations({
       const scoped = withProjectId(data as Record<string, unknown>, projectId);
       assertScheduleDateRange(scoped as ScheduleTask);
       const wbs = (scoped.wbs_code as string | undefined) || generateWBS(scoped.phase as string | undefined, scheduleTasks);
-      return entities.ScheduleTask.create({ ...scoped, wbs_code: wbs } as any);
+      // The same three couplings as an update. A task created as Complete used
+      // to be sent with percent_complete 0 and rejected outright; one created
+      // as a Milestone set only task_type and stayed invisible to the calendar
+      // and reports, which read is_milestone.
+      const ready = withAssignmentPair(
+        withMilestoneFlags(withReconciledPercent(scoped, null)),
+      );
+      return entities.ScheduleTask.create({ ...ready, wbs_code: wbs } as any);
     },
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
-      setShowAddTask(false);
+      // The modal closes itself. "Save & Add Next" keeps it open for the next
+      // task, and closing from here would fight that.
       toast.success("Task created");
     },
     onError: (err: unknown) => toast.error(`Create failed: ${toUserErrorMessage(err)}`),
@@ -391,9 +501,20 @@ export function useScheduleMutations({
     onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk duration update failed")),
   });
 
+  /**
+   * Bulk add — a sequential loop, because each row's WBS code depends on the
+   * ones before it.
+   *
+   * It has no rollback (§4.2), so the failure report has to be exact. It used
+   * to say only "Bulk add failed", leaving the user to guess whether any rows
+   * had been written; they had. Now the message names how many were created and
+   * which row stopped it, and the list is invalidated on the failure path too —
+   * the partially created tasks are real and must appear.
+   */
   const handleBulkAdd = async (rows: any[]) => {
     if (!projectId) return;
     setBulkSaving(true);
+    let created = 0;
     try {
       rows.forEach((row) => assertScheduleDateRange(row));
       // Build a running snapshot of tasks so each new WBS is unique
@@ -401,15 +522,26 @@ export function useScheduleMutations({
       for (const row of rows) {
         const scoped = withProjectId(row as Record<string, unknown>, projectId);
         const wbs = (scoped.wbs_code as string | undefined) || generateWBS(scoped.phase as string | undefined, snapshot);
-        const task = { ...scoped, wbs_code: wbs };
-        await entities.ScheduleTask.create(task);
+        // The same couplings the single-task create applies — a bulk row is
+        // not a lesser task.
+        const ready = withAssignmentPair(
+          withMilestoneFlags(withReconciledPercent(scoped, null)),
+        );
+        const task = { ...ready, wbs_code: wbs };
+        await entities.ScheduleTask.create(task as any);
         snapshot.push(task as ScheduleTask);
+        created += 1;
       }
       invalidateEntity(qc, "schedule_task", projectId);
       setShowBulkAdd(false);
       toast.success(`Created ${rows.length} task${rows.length !== 1 ? "s" : ""}`);
     } catch (err: unknown) {
-      toast.error(`Bulk add failed: ${toUserErrorMessage(err)}`);
+      // Rows already written stay written; say so rather than implying none did.
+      invalidateEntity(qc, "schedule_task", projectId);
+      const detail = created > 0
+        ? ` ${created} of ${rows.length} task${created !== 1 ? "s were" : " was"} created before row ${created + 1} failed; they are on the schedule.`
+        : "";
+      toast.error(`Bulk add failed: ${toUserErrorMessage(err)}.${detail}`);
     } finally {
       setBulkSaving(false);
     }

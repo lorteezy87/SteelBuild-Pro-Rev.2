@@ -8,6 +8,7 @@
 // drift on what "displayed %" or "milestone" means across views.
 import { derivePhase } from "../../utils/phases";
 import { GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "../../lib/ganttTheme";
+import { isMilestoneTask as isMilestoneTaskCanonical } from "../../lib/schedule/taskFields";
 
 // ── Phase definition — ordered 1-7 ──────────────────────────────────────
 export const PHASES = [
@@ -30,35 +31,51 @@ export function normalizePhase(task) {
 export const PHASE_BY_KEY = Object.fromEntries(PHASES.map(p => [p.key, p]));
 
 // ── Display helpers ──────────────────────────────────────────────────────
-// Tasks marked Complete should always read as 100% in the UI even if the
-// underlying percent_complete field is stale or 0 (common data-entry gap).
-export function displayPct(task) {
-  if (!task) return 0;
+//
+// Two readers, because "how complete is this task" has an answer the UI can be
+// missing. `percent_complete` is nullable, and reopening a finished task now
+// sets it back to null on purpose — the work is no longer done and nothing in
+// that transition says how much of it remains (see reconcileStatusPercent).
+//
+//   percentCompleteOrNull → null when unknown. Use it for any CLAIM: a printed
+//                           figure, an average, a "this task is stalled" test.
+//   displayPct            → 0 when unknown. Use it only where the number is a
+//                           GEOMETRY: a progress-bar width, a fill fraction.
+//
+// Rendering unknown as an affirmative 0% is the pattern CLAUDE.md bans, and it
+// is not hypothetical here: a task reopened from Complete would otherwise print
+// "0%" and land in the stalled filter one click after showing 100%.
+
+/**
+ * Percent complete, or null when it is genuinely unknown.
+ *
+ * A task marked Complete always reads 100 even if the stored column is stale or
+ * zero — a common data-entry gap, and the status is the stronger signal.
+ */
+export function percentCompleteOrNull(task) {
+  if (!task) return null;
   if (task.status === "Complete") return 100;
+  if (task.percent_complete === null || task.percent_complete === undefined) return null;
   const v = Number(task.percent_complete);
-  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : null;
 }
 
-// Only treat a task as a milestone if the user explicitly flagged it, using
-// the SAME signals the rest of the app writes/reads. Auto-detection
-// (duration === 0 or same start/end) was deliberately removed because
-// AddTaskModal defaults both dates to today, which falsely flagged every new
-// task.
-//
-// Canonical signals (must match the writers):
-//   - task_type === "Milestone"  → AddTaskModal's milestone option
-//   - is_milestone === true       → calendar/reports/PCC/margin consumers
-//   - milestone === true          → legacy / MS-Project XML import column
-// Previously this only checked `milestone`, which is set ONLY by the MPP
-// importer — so the Milestone Tracker was always empty for normally-authored
-// schedules.
-export function isMilestoneTask(task) {
-  if (!task) return false;
-  if (task.task_type === "Milestone") return true;
-  if (task.is_milestone === true) return true;
-  if (task.milestone === true) return true;
-  return false;
+/**
+ * Percent complete for drawing, where a missing value has to be some width.
+ *
+ * Do not use this to state a percentage or to average one — it cannot tell an
+ * unknown from a real zero. Use {@link percentCompleteOrNull} for that.
+ */
+export function displayPct(task) {
+  return percentCompleteOrNull(task) ?? 0;
 }
+
+// Milestone lives in lib/schedule/taskFields alongside the writer that keeps
+// its three columns in sync — a reader and a writer that can drift are how
+// task_type='Milestone' rows ended up invisible to the calendar and reports,
+// which read `is_milestone`. Re-exported here so existing importers of this
+// module keep working against the one definition.
+export const isMilestoneTask = isMilestoneTaskCanonical;
 
 // Resource names sometimes get pasted into the task name field by mistake
 // (e.g. "Stair #2Jagdish"). If the trailing chunk of the task name matches a
