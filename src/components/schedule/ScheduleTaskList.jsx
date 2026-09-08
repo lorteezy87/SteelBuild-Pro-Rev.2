@@ -3,6 +3,11 @@ import { PHASES, PHASE_COLORS, PHASE_NUMBER, derivePhase } from "../../utils/pha
 import { formatDateShort } from "../shared/formatters";
 import DateOrTbdInput from "./DateOrTbdInput";
 import { buildTreeOrder } from "./scheduleTree";
+import {
+  computeFinishVariance,
+  formatVariance,
+  describeVariance,
+} from "@/lib/schedule/actuals";
 
 const PRIORITY_COLORS = {
   Critical: "var(--status-error)",
@@ -19,6 +24,26 @@ const STATUS_COLORS = {
   "On Hold": "var(--status-info)",
 };
 
+/**
+ * Finish variance is computed against the CURRENT plan until baselines exist —
+ * see computeFinishVariance's baselineFinish argument. Kept as a named helper
+ * so the column and its tooltip can never read from different sources.
+ */
+const varianceFor = (task) => computeFinishVariance(task);
+
+/**
+ * "unknown" is deliberately muted, not green: no actual finish recorded reads
+ * as absence of data, never as a task that landed on plan (§1.4).
+ */
+const VARIANCE_COLORS = {
+  unknown: "var(--text-muted)",
+  "no-plan": "var(--text-muted)",
+  "on-time": "var(--status-success)",
+  early: "var(--status-success)",
+  late: "var(--status-error)",
+};
+const varianceColor = (v) => VARIANCE_COLORS[v?.state] || "var(--text-muted)";
+
 const STATUSES = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold", "Cancelled"];
 const PRIORITIES = ["Critical", "High", "Normal", "Low"];
 const TASK_LIST_COLUMNS = [
@@ -30,6 +55,7 @@ const TASK_LIST_COLUMNS = [
   { key: "assigned-to", label: "Assigned To" },
   { key: "priority", label: "Priority" },
   { key: "status", label: "Status" },
+  { key: "variance", label: "Var" },
   { key: "actions", label: "" },
 ];
 
@@ -206,7 +232,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
     outline: "none",
   };
 
-  const GRID = "28px 70px 2fr 90px 90px 1fr 80px 90px 130px";
+  const GRID = "28px 70px 2fr 90px 90px 1fr 80px 90px 62px 130px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -484,6 +510,18 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                           </span>
                         </div>
                       )}
+                    </div>
+
+                    {/* Finish variance — actual vs planned (§1.4 / §7.1).
+                        "—" here means no actual finish was recorded, which is
+                        NOT the same as finishing on time; the title spells out
+                        which of the two it is so the dash can't be misread. */}
+                    <div title={describeVariance(varianceFor(task))} style={{
+                      fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                      letterSpacing: "0.04em", color: varianceColor(varianceFor(task)),
+                      alignSelf: "center",
+                    }}>
+                      {formatVariance(varianceFor(task))}
                     </div>
 
                     {/* Actions */}

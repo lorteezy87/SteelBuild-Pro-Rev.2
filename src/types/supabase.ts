@@ -6258,6 +6258,8 @@ export type Database = {
       }
       schedule_tasks: {
         Row: {
+          actual_finish_date: string | null
+          actual_start_date: string | null
           assigned_to: string | null
           blockers: Json | null
           created_at: string | null
@@ -6293,6 +6295,8 @@ export type Database = {
           wbs_code: string | null
         }
         Insert: {
+          actual_finish_date?: string | null
+          actual_start_date?: string | null
           assigned_to?: string | null
           blockers?: Json | null
           created_at?: string | null
@@ -6328,6 +6332,8 @@ export type Database = {
           wbs_code?: string | null
         }
         Update: {
+          actual_finish_date?: string | null
+          actual_start_date?: string | null
           assigned_to?: string | null
           blockers?: Json | null
           created_at?: string | null
