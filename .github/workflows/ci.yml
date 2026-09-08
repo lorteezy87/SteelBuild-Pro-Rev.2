@@ -5,27 +5,41 @@
 #                + Vitest unit suite + production Vite build. Runs on EVERY push
 #                and pull request to any branch, so contributors get green/red
 #                feedback before merge.
-#   - deploy:    production deploy to Vercel via the Vercel CLI (prebuilt output).
-#                GATED on `ci` and ONLY on a push to main. This GitHub Action is
-#                the SOLE production deploy path: Vercel's own git auto-deploy is
-#                turned OFF (vercel.json `git.deploymentEnabled.main=false`), so a
-#                red lint/typecheck/test/build can no longer reach
-#                steelbuild-pro.com — only a green push to main deploys.
-#   - deploy-cloudflare: the same commit, published to Cloudflare Workers.
-#                Runs alongside `deploy` (not after it) so the two hosts serve
-#                identical output during the Vercel→Cloudflare migration and a
-#                Cloudflare failure can never block the deploy that still
-#                serves steelbuild-pro.com. Opt-in via the CLOUDFLARE_ENABLED
-#                repo variable. See docs/runbooks/cloudflare-migration.md.
+#   - deploy-cloudflare: THE production deploy — `wrangler deploy` to the
+#                Cloudflare Worker. GATED on `ci` and ONLY on a push to main, so
+#                a red lint/typecheck/test/build cannot reach
+#                steelbuild-pro.com. That gate only holds while this is the SOLE
+#                publisher, so Cloudflare's own Workers Builds git integration
+#                (which deploys on push, ungated) must stay disconnected.
+#                Opt-in via the CLOUDFLARE_ENABLED repo variable — while it is
+#                unset, pushes to main deploy NOWHERE.
+#                See docs/runbooks/cloudflare-migration.md.
+#   - preview-cloudflare: per-PR preview URL via `wrangler versions upload`,
+#                which uploads a version WITHOUT promoting it to the live
+#                deployment. Replaces the previews Workers Builds used to post.
 #   - e2e-smoke: Playwright smoke AFTER deploy, NON-BLOCKING (it is not in
-#                `deploy.needs`, so it can never gate or roll back prod). Opt-in
-#                via the E2E_ENABLED repo variable. See e2e/README.md.
-#   - staging-e2e-readonly: authenticated read-only Playwright smoke after the
-#                staging deploy, opt-in via STAGING_E2E_ENABLED. Its credentials
-#                and Supabase target are staging-specific and cannot target prod.
+#                `deploy-cloudflare.needs`, so it can never gate or roll back
+#                prod). Opt-in via E2E_ENABLED. See e2e/README.md.
+#   - staging-e2e-readonly / staging-e2e-mutations: authenticated Playwright
+#                runs against a staging environment, opt-in via STAGING_E2E_*
+#                and STAGING_BASE_URL. Their credentials and Supabase target are
+#                staging-specific and cannot target prod.
 #   - dependency-audit: `npm audit` over production deps, ADVISORY (not in
-#                `deploy.needs`, so a newly disclosed CVE alarms the run without
-#                blocking the release train).
+#                `deploy-cloudflare.needs`, so a newly disclosed CVE alarms the
+#                run without blocking the release train).
+#
+# REMOVED (2026-09): the `deploy` and `deploy-staging` jobs, which shipped to
+# Vercel. That account is closed, so both could only ever fail.
+#
+# `deploy-staging` took the staging ENVIRONMENT with it. The two staging E2E
+# jobs survive on `needs: ci`, but they carry the staging-branch/push condition
+# in their OWN `if:` — do not remove it. They previously inherited that gate by
+# depending on `deploy-staging` (GitHub skips a job whose `needs` were skipped);
+# repointing them at `ci` without restating it made them run on every pull
+# request, where they failed against a staging environment that no longer
+# exists. Beyond the dead Vercel project, the staging SUPABASE project no longer
+# resolves either (`getaddrinfo ENOTFOUND`), so staging needs rebuilding from
+# scratch — see docs/runbooks/cloudflare-migration.md step 8.
 #
 # What does NOT run here:
 #   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
@@ -57,8 +71,9 @@ concurrency:
   # environment stale. (M8, H3)
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/staging' }}
 
-# Least-privilege default for the ambient GITHUB_TOKEN (M12/H6). The deploy job
-# authenticates to Vercel with its own VERCEL_* secrets, not GITHUB_TOKEN.
+# Least-privilege default for the ambient GITHUB_TOKEN (M12/H6). The deploy and
+# preview jobs authenticate to Cloudflare with their own CLOUDFLARE_* secrets,
+# not GITHUB_TOKEN.
 permissions:
   contents: read
 
@@ -67,10 +82,12 @@ jobs:
     name: Lint + Typecheck + Test + Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # CI placeholders for Vite/Vitest. Real values live in Vercel project env
-    # for production builds; CI only needs non-empty values so src/lib/supabase.ts
-    # passes its import-time guard. No test should hit this URL — anything that
-    # touches the network is expected to mock the supabase client.
+    # CI placeholders for Vite/Vitest. Real values come from the
+    # VITE_SUPABASE_* repo secrets in the deploy/preview jobs; CI only needs
+    # non-empty values so src/lib/supabase.ts passes its import-time guard. No
+    # test should hit this URL — anything that touches the network is expected
+    # to mock the supabase client. Those jobs REFUSE to build if they ever see
+    # these placeholder values, so this cannot leak into a deploy.
     env:
       VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
       VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
@@ -102,7 +119,7 @@ jobs:
 
       - name: Typecheck (TypeScript)
         # Blocking: guards Supabase table names, hook contracts,
-        # and TS/TSX integration points before Vercel receives a deploy.
+        # and TS/TSX integration points before anything is published.
         run: npm run typecheck
 
       - name: Typecheck (JavaScript via jsconfig)
@@ -139,8 +156,8 @@ jobs:
         # (node --max-old-space-size=4096 ...vite build) because the large
         # BIM/PDF/three vendor chunks OOM Rollup at Node's default heap. That
         # limit now lives in package.json so it applies everywhere the build
-        # runs — CI here, Vercel production (vercel.json runs `npm run build`),
-        # and local. This NODE_OPTIONS is kept as a redundant safety net only.
+        # runs — CI here, the Cloudflare deploy/preview jobs, and local. This
+        # NODE_OPTIONS is kept as a redundant safety net only.
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
@@ -202,101 +219,38 @@ jobs:
           fi
           npm run supabase:drift
 
-  # ── Gated production deploy ──────────────────────────────────────────────
-  # Deploys to Vercel ONLY after the `ci` job above passes, on a push to main —
-  # so a red lint / typecheck / test / build can no longer reach
-  # steelbuild-pro.com. Paired with vercel.json `git.deploymentEnabled.main=false`
-  # (Vercel's own git auto-deploy is turned off) so this Action is the SOLE
-  # production deploy path. `vercel pull` fetches the real production env
-  # (VITE_SUPABASE_*) before building, then we ship the prebuilt output.
-  deploy:
-    name: Deploy to Vercel (production)
-    needs: ci
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # Serialize production deploys and never cancel one mid-flight — an
-    # interrupted `vercel deploy` wastes minutes and can leave a half-deploy. (M8)
-    concurrency:
-      group: production-deploy
-      cancel-in-progress: false
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          cache: "npm"
-
-      - name: Install Vercel CLI
-        run: npm i -g vercel@latest
-
-      - name: Pull Vercel project + production env
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build (production)
-        run: vercel build --prod --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          # Stamp the commit as the Sentry release so instrument.js and the vite
-          # plugin share one release name, and upload source maps when the token
-          # is set (the plugin no-ops if SENTRY_AUTH_TOKEN is empty). (M9/H8)
-          VITE_APP_VERSION: ${{ github.sha }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-
-      - name: Deploy prebuilt output (production)
-        # --meta stamps the commit onto the Vercel deployment record so an
-        # on-call engineer can answer "which commit is live?" (M9).
-        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --meta githubCommitSha=${{ github.sha }} --meta githubCommitRef=${{ github.ref_name }} --meta githubRunId=${{ github.run_id }}
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
-      - name: Post-deploy health check
-        # Fail the run loudly if the just-deployed app doesn't serve 200 (M10).
-        # -L follows the apex->canonical 308 redirect (bare / returns 308, the
-        # final page is 200). Retries absorb CDN propagation; prod stays on the
-        # last good build if this is red (deploy already promoted at this point).
-        run: |
-          set -e
-          for i in 1 2 3 4 5 6; do
-            code=$(curl -sL -o /dev/null -w '%{http_code}' https://steelbuild-pro.com/)
-            if [ "$code" = "200" ]; then echo "healthy ($code)"; exit 0; fi
-            echo "attempt $i: HTTP $code"; sleep 10
-          done
-          echo "::error::production health check failed after deploy"; exit 1
-
-  # ── Gated CLOUDFLARE WORKERS deploy (migration off Vercel) ───────────────
-  # Ships the SAME commit to Cloudflare Workers that the `deploy` job above
-  # ships to Vercel, so both hosts serve identical output during the migration
-  # and the eventual cutover is a DNS change, not a leap. Reuses the same `ci`
-  # gate (no drift) and runs INDEPENDENTLY of `deploy` — a Cloudflare failure
-  # must never stop the Vercel deploy that still serves steelbuild-pro.com.
+  # ── Gated PRODUCTION deploy → Cloudflare Workers ─────────────────────────
+  # THE production deploy path. The Vercel `deploy` / `deploy-staging` jobs
+  # that used to live here are gone: that account is closed, so those jobs
+  # could only ever fail.
+  #
+  # Gated on `ci`, so a red lint / typecheck / test / build cannot reach
+  # steelbuild-pro.com. That gate is only real if this stays the SOLE
+  # publisher — Cloudflare's own Workers Builds git integration deploys on
+  # push with no gate at all, so it must be disconnected in the dashboard.
+  # See step 2 of docs/runbooks/cloudflare-migration.md.
   #
   # INERT until you opt in: runs only when the `CLOUDFLARE_ENABLED` repo
   # VARIABLE is "true" (a variable, not a secret — `secrets.*` is unreliable in
-  # a job-level `if`, same pattern as deploy-staging / e2e-smoke).
+  # a job-level `if`, same pattern as e2e-smoke). NOTE the consequence: while
+  # it is unset, pushing to main deploys NOWHERE. That is deliberate — better
+  # than half-deploying before the secrets below exist — but it does mean the
+  # variable is what turns production deploys back on.
   #
-  # Unlike Vercel there is no `vercel pull` to fetch build-time env, so the
-  # VITE_* values come from repo secrets. They are browser-safe by design (the
+  # There is no `vercel pull` equivalent to fetch build-time env, so the VITE_*
+  # values come from repo secrets. They are browser-safe by design (the
   # Supabase URL + publishable anon key ship in the bundle; see src/lib/env.ts)
   # — no service key is ever a VITE_* var.
   #
   # Setup + cutover steps: docs/runbooks/cloudflare-migration.md
   deploy-cloudflare:
-    name: Deploy to Cloudflare Workers
+    name: Deploy to Cloudflare Workers (production)
     needs: ci
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Serialize Cloudflare deploys and never cancel one mid-flight (mirrors
-    # prod). Its own group — it must not queue behind the Vercel deploy.
+    # Serialize production deploys and never cancel one mid-flight — an
+    # interrupted deploy wastes minutes and can leave a half-published Worker.
     concurrency:
       group: cloudflare-production-deploy
       cancel-in-progress: false
@@ -342,22 +296,19 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Build (production)
-        # Plain `npm run build` — the Vercel CLI's build wrapper is not
-        # involved, so vercel.json's headers/rewrites do NOT apply here. Their
-        # Cloudflare equivalents live in public/_headers (copied into dist/ by
-        # Vite) and wrangler.jsonc; scripts/__tests__/deployHeaders.test.ts
-        # fails CI if the two drift apart.
-        #
-        # Vercel Skew Protection is a Vercel-only feature: VERCEL_* env vars are
-        # absent here, so vite.config.js leaves renderBuiltUrl unset and emits
-        # plain /assets/ paths. See the runbook for what replaces it.
+        # Plain `npm run build`. Response headers and SPA routing are NOT part
+        # of the bundle — they come from public/_headers (which Vite copies
+        # verbatim into dist/) and wrangler.jsonc. deployHeaders.test.ts is the
+        # only thing asserting those headers still exist, so it runs in `ci`
+        # above before anything reaches here.
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          # Same Sentry release stamp as the Vercel deploy, so one commit maps
-          # to one release regardless of which host served the session.
+          # Stamp the commit as the Sentry release so instrument.js and the
+          # vite plugin share one release name, and upload source maps when the
+          # token is set (the plugin no-ops if SENTRY_AUTH_TOKEN is empty).
           VITE_APP_VERSION: ${{ github.sha }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
@@ -391,28 +342,39 @@ jobs:
           done
           echo "::error::Cloudflare health check failed after deploy"; exit 1
 
-  # ── Gated STAGING deploy (H3) ────────────────────────────────────────────
-  # Deploys the `staging` branch to a SEPARATE Vercel project wired to a separate
-  # staging Supabase project, so schema/edge/RLS changes and DR restores can be
-  # rehearsed off-prod. Reuses the SAME `ci` gate job as production (no drift).
+  # ── PR preview → Cloudflare version preview URL ──────────────────────────
+  # Gives back the per-PR preview URLs that Cloudflare's Workers Builds git
+  # integration used to post. Workers Builds is disconnected (it publishes on
+  # push with NO `ci` gate — see the production job above); this job restores
+  # the preview without restoring the un-gated publish.
   #
-  # INERT until you opt in: it only runs when the `STAGING_ENABLED` repo VARIABLE
-  # is "true" (a variable, not a secret — `secrets.*` is unreliable in a job-level
-  # `if`, same pattern as e2e-smoke). Until then this job is skipped, never red.
-  # Provisioning + secret names are in docs/runbooks/staging-setup.md.
-  deploy-staging:
-    name: Deploy to Vercel (staging)
+  # `wrangler versions upload` uploads a new Worker VERSION and prints a
+  # preview URL for it WITHOUT promoting it to the live deployment, so a PR
+  # preview can never become production. Only `wrangler deploy` promotes.
+  #
+  # The preview builds against the SAME Supabase project as production (there
+  # is one), so treat a preview URL as a real client: RLS and auth are what
+  # protect the data, exactly as on the live site. Preview URLs are public —
+  # public/_headers marks them noindex, and Cloudflare Access is the real fix.
+  preview-cloudflare:
+    name: Cloudflare preview (PR)
     needs: ci
-    if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
+    # Same-repo PRs only. Secrets are not exposed to forked-PR workflows, so a
+    # fork would trip the config check below instead of building something
+    # broken; skipping outright is clearer.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Serialize staging deploys and never cancel one mid-flight (mirrors prod).
+    # One preview per PR; a new push supersedes the old upload.
     concurrency:
-      group: staging-deploy
-      cancel-in-progress: false
+      group: cloudflare-preview-${{ github.ref }}
+      cancel-in-progress: true
     env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -423,40 +385,49 @@ jobs:
           node-version: "24"
           cache: "npm"
 
-      - name: Install Vercel CLI
-        run: npm i -g vercel@latest
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Pull Vercel project + staging env
-        # Pulls the STAGING Vercel project's env (its VITE_SUPABASE_* point at the
-        # staging Supabase project — never at prod).
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
-
-      - name: Build (staging)
-        run: vercel build --prod --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
-          VITE_APP_VERSION: ${{ github.sha }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-
-      - name: Deploy prebuilt output (staging)
-        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --meta githubCommitSha=${{ github.sha }} --meta githubCommitRef=${{ github.ref_name }} --meta githubRunId=${{ github.run_id }}
-        env:
-          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
-
-      - name: Post-deploy health check (staging)
-        # Only runs when STAGING_BASE_URL is configured; otherwise skipped so the
-        # job stays green while you finish DNS/domain setup.
-        if: ${{ vars.STAGING_BASE_URL != '' }}
+      - name: Verify deploy configuration
+        # Same fail-closed check as the production job: never build a preview
+        # against the CI placeholder Supabase values, or reviewers sign off on
+        # an app that cannot reach the database.
         run: |
           set -e
-          for i in 1 2 3 4 5 6; do
-            code=$(curl -sL -o /dev/null -w '%{http_code}' "${{ vars.STAGING_BASE_URL }}")
-            if [ "$code" = "200" ]; then echo "staging healthy ($code)"; exit 0; fi
-            echo "attempt $i: HTTP $code"; sleep 10
-          done
-          echo "::error::staging health check failed after deploy"; exit 1
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY secrets are not set"
+            exit 1
+          fi
+          case "$VITE_SUPABASE_URL" in
+            *ci-placeholder*)
+              echo "::error::VITE_SUPABASE_URL is the CI placeholder — refusing to build a preview"
+              exit 1
+              ;;
+          esac
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Build
+        run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_APP_VERSION: ${{ github.sha }}
+          # No SENTRY_AUTH_TOKEN: previews must not upload source maps or claim
+          # a Sentry release. Only the production deploy does that.
+
+      - name: Confirm _headers reached the build output
+        run: |
+          set -e
+          test -f dist/_headers || { echo "::error::dist/_headers missing — headers would be dropped"; exit 1; }
+          test -f dist/wasm/web-ifc.wasm || { echo "::error::dist/wasm/web-ifc.wasm missing — IFC viewer would render nothing"; exit 1; }
+
+      - name: Upload preview version
+        # Uses the pinned wrangler from devDependencies, not @latest, so the
+        # deploy tool version is reviewed like any other dependency bump.
+        run: npx wrangler versions upload
 
   # ── Authenticated STAGING smoke (read-only, post-deploy) ─────────────────
   # Runs only the browser navigation specs; no mutation-aware spec is selected.
@@ -465,8 +436,21 @@ jobs:
   # hostname or a Supabase URL that is not the documented staging project.
   staging-e2e-readonly:
     name: E2E smoke (staging, read-only)
-    needs: deploy-staging
-    if: ${{ vars.STAGING_E2E_ENABLED == 'true' && vars.STAGING_BASE_URL != '' }}
+    needs: ci
+    # The branch/event condition is LOAD-BEARING, not decoration. This job used
+    # to be `needs: deploy-staging`, and that job carried
+    # `github.ref == refs/heads/staging && github.event_name == push`; because
+    # GitHub skips a job whose `needs` were skipped, this one never ran on a
+    # pull request. When deploy-staging was deleted with the Vercel account,
+    # moving to `needs: ci` silently dropped that gate and this started running
+    # on every PR — against a staging environment that no longer exists
+    # (`getaddrinfo ENOTFOUND` on the staging Supabase project). Keep the
+    # condition explicit here so the gate does not depend on another job.
+    if: >-
+      github.ref == 'refs/heads/staging' &&
+      github.event_name == 'push' &&
+      vars.STAGING_E2E_ENABLED == 'true' &&
+      vars.STAGING_BASE_URL != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -510,8 +494,14 @@ jobs:
   # They are staging-only and are never selected by staging-e2e-readonly.
   staging-e2e-mutations:
     name: E2E gates (staging, disposable mutations)
-    needs: deploy-staging
-    if: ${{ vars.STAGING_E2E_MUTATIONS_ENABLED == 'true' && vars.STAGING_BASE_URL != '' }}
+    needs: ci
+    # Same load-bearing branch/event gate as staging-e2e-readonly above — see
+    # the comment there for why dropping it broke pull requests.
+    if: >-
+      github.ref == 'refs/heads/staging' &&
+      github.event_name == 'push' &&
+      vars.STAGING_E2E_MUTATIONS_ENABLED == 'true' &&
+      vars.STAGING_BASE_URL != ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -581,7 +571,7 @@ jobs:
   # gate spec WRITES to fab_release_log, so point it at a TEST org only.
   e2e-smoke:
     name: E2E smoke (post-deploy, non-blocking)
-    needs: deploy
+    needs: deploy-cloudflare
     if: ${{ vars.E2E_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15

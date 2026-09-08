@@ -9,9 +9,8 @@
  *
  * Anti-stale contract (the team fingerprints every build and is strict about
  * never serving a stale deploy — see src/main.jsx `__SBP_BUILD__` and the
- * `immutable` Cache-Control on /assets/, declared per host in vercel.json and
- * public/_headers and kept in lockstep by
- * scripts/__tests__/deployHeaders.test.ts):
+ * `immutable` Cache-Control on /assets/, declared in public/_headers and
+ * asserted by scripts/__tests__/deployHeaders.test.ts):
  *   • Navigations (HTML) are NETWORK-FIRST — a fresh deploy is always fetched
  *     when online; the cached shell is only a no-signal fallback. The SW can
  *     never pin users to an old index.html.

@@ -8,32 +8,33 @@
  *      it was registered on — on a preview that shell is auth-walled junk that
  *      then outlives the deployment in the user's browser).
  *
- * Both used to hard-code the Vercel rule inline, twice. Cloudflare adds a
- * second family of preview hostnames, so the predicate lives here once, is
- * pure, and is unit-tested.
+ * Both used to hard-code a Vercel-only rule inline, twice. It lives here once,
+ * pure and unit-tested, because the set of preview host families changes as
+ * hosting does — it already has.
  *
  * Host families:
- *   • *.vercel.app      — preview, EXCEPT the steelbuild-pro.vercel.app alias,
- *                         which Vercel points at the current production
- *                         deployment. That alias is a real production origin.
  *   • *.workers.dev     — ALWAYS preview. Cloudflare production is served from
  *                         the custom domain (steelbuild-pro.com); the
- *                         workers.dev subdomain and per-version preview URLs
- *                         are only ever used for review. There is no
- *                         workers.dev equivalent of the Vercel production
- *                         alias, so no exception belongs here.
+ *                         workers.dev subdomain and the per-version preview
+ *                         URLs are only ever used for review.
+ *   • *.netlify.app     — preview ONLY when the label carries Netlify's `--`
+ *                         separator: `deploy-preview-309--site.netlify.app`
+ *                         (pull requests) and `branch-name--site.netlify.app`
+ *                         (branch deploys). The bare `site.netlify.app` is
+ *                         Netlify's production URL for the site, so it is NOT
+ *                         a preview.
  *
- * Anything else — the custom domains, localhost, a Capacitor webview — is not
- * a preview and is left alone by this predicate. Callers handle localhost
- * separately because the two gates disagree about it: the manifest is wanted
- * in local dev, a service worker is not (it fights Vite HMR).
+ * Vercel is deliberately absent: that account is gone and its config has been
+ * removed from the repo, so a *.vercel.app origin can no longer be served.
+ *
+ * Anything else — the custom domain, localhost, a Capacitor webview — is not a
+ * preview and is left alone. Callers handle localhost separately because the
+ * two gates disagree about it: the manifest is wanted in local dev, a service
+ * worker is not (it fights Vite HMR).
  */
 
-/** The one *.vercel.app host that is production, not a preview. */
-const VERCEL_PRODUCTION_ALIAS = "steelbuild-pro.vercel.app";
-
 /**
- * True when `hostname` belongs to a preview deployment on either host.
+ * True when `hostname` belongs to a preview deployment.
  * Case-insensitive: hostnames are case-insensitive per RFC 4343, and
  * `window.location.hostname` is already lowercased by the browser, but a
  * caller passing a raw header value should not get a wrong answer.
@@ -43,7 +44,14 @@ export function isPreviewDeployHost(hostname: string | null | undefined): boolea
   const host = hostname.toLowerCase();
 
   if (host.endsWith(".workers.dev")) return true;
-  if (host.endsWith(".vercel.app")) return host !== VERCEL_PRODUCTION_ALIAS;
+
+  // `deploy-preview-309--site.netlify.app` / `my-branch--site.netlify.app`.
+  // Netlify only ever puts `--` in the leftmost label, and never in the bare
+  // production hostname, so that separator is the whole test.
+  if (host.endsWith(".netlify.app")) {
+    const label = host.slice(0, -".netlify.app".length);
+    return label.includes("--");
+  }
 
   return false;
 }
