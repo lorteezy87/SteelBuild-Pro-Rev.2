@@ -11,6 +11,7 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import { useScheduleBaselines } from "@/hooks/useScheduleBaselines";
+import { computeFloat } from "@/services/scheduleFloat";
 import { computePhaseWbs } from "./schedule/wbs";
 import { computeBulkParentOptions } from "./schedule/scheduleTaskHelpers";
 import { normalizeSchedulePhase } from "./schedule/schedulePageHelpers";
@@ -183,6 +184,16 @@ export default function Schedule() {
     [enrichedTasks]
   );
 
+  // Backward pass over the SAME graph and the SAME forward-pass result, so
+  // float and critical path can never describe a different schedule from the
+  // bars (§2.2). Computed once here for the whole project, like the cascade —
+  // deriving it from the Gantt's phase-filtered rows would drop every
+  // cross-phase predecessor and invent float that does not exist.
+  const floatMap = useMemo(
+    () => computeFloat(enrichedTasks, effectiveDatesMap),
+    [enrichedTasks, effectiveDatesMap]
+  );
+
   const tasksWithEffective = useMemo(
     () => applyEffectiveDates(enrichedTasks, effectiveDatesMap),
     [enrichedTasks, effectiveDatesMap]
@@ -271,6 +282,7 @@ export default function Schedule() {
     submittals,
     weatherRisk,
     effectiveDatesMap,
+    floatMap,
     scheduleBaselines,
     selectedProject,
     projectId,

@@ -6,6 +6,7 @@
  * (no React) - takes the tasks array, returns the brief view-model.
  */
 import { applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
+import { computeFloat } from "@/services/scheduleFloat";
 import { PHASES } from "@/utils/phases";
 import { formatDateShort } from "@/components/shared/formatters";
 import { formatLocalDate } from "@/utils/dates";
@@ -237,7 +238,20 @@ export function buildBrief(storedTasks) {
   // but the cascade cannot move such a row either — it has no computable
   // duration — so for those rows effective and stored are equal by construction.
   const effectiveDates = computeEffectiveDates(storedTasks);
-  const tasks = applyEffectiveDates(storedTasks, effectiveDates);
+  // Backward pass over the SAME graph the forward pass just walked, so the
+  // brief's critical-path claims describe the bars the Gantt actually draws
+  // rather than a checkbox (§2.2). Stamped per task so every helper below —
+  // and the prose they generate — reads one answer.
+  const floats = computeFloat(storedTasks, effectiveDates);
+  const tasks = applyEffectiveDates(storedTasks, effectiveDates).map((task) => {
+    const f = task?.id ? floats[task.id] : null;
+    return f && f.totalFloat !== null
+      ? { ...task, _float: f, _is_critical_calculated: f.isCritical }
+      // No float (no dates, or a cycle): leave it unstamped so isCriticalTask
+      // falls back to the manual flag rather than silently reporting "not
+      // critical" for a task the calculation simply could not reach.
+      : task;
+  });
   const parentIds = new Set(tasks.map((task) => task?.parent_task_id).filter(Boolean));
 
   const openTasks = [];

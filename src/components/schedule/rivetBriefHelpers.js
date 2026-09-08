@@ -87,7 +87,21 @@ export function taskMetadata(task) {
   return {};
 }
 
+/**
+ * Is this task on the critical path?
+ *
+ * Prefers the CALCULATED answer, which buildBrief stamps onto every task as
+ * `_is_critical_calculated` from the backward pass (services/scheduleFloat),
+ * and falls back to the manual flags only where float could not be computed —
+ * no dates, or a predecessor cycle.
+ *
+ * This matters more here than anywhere else in the module: the brief writes
+ * PROSE off it — "directly impacting the critical path", "+Nd pressure on the
+ * critical path" — which read as analysis while being a box someone ticked,
+ * possibly months ago, possibly before the dates moved (§2.2).
+ */
 export function isCriticalTask(task) {
+  if (typeof task?._is_critical_calculated === "boolean") return task._is_critical_calculated;
   const metadata = taskMetadata(task);
   return Boolean(metadata.is_critical || metadata.critical_path || task?.is_critical || task?.critical_path);
 }

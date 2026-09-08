@@ -143,7 +143,15 @@ export function hasBaselineDrift(
   return baseline.start !== effStartDate || baseline.end !== effEndDate;
 }
 
-export function isCriticalTask(task: ScheduleTaskLike | null | undefined): boolean {
+/**
+ * Was this task MANUALLY flagged as critical?
+ *
+ * Three flags ORed together, which is all "critical path" meant before §2.2 —
+ * a box someone ticked, possibly months ago, possibly before the dates moved.
+ * §7.3 keeps it as an override because a PM may know something the logic does
+ * not, but it is no longer the answer on its own.
+ */
+export function isManuallyFlaggedCritical(task: ScheduleTaskLike | null | undefined): boolean {
   const metadata = getTaskMetadata(task);
   return Boolean(
     metadata.is_critical ||
@@ -152,6 +160,28 @@ export function isCriticalTask(task: ScheduleTaskLike | null | undefined): boole
     task?.is_critical_path ||
     task?.critical_path
   );
+}
+
+/**
+ * Is this task on the critical path?
+ *
+ * Prefers the CALCULATED answer (total float <= 0 from the backward pass in
+ * services/scheduleFloat) and falls back to the manual flag only where no float
+ * has been computed for the task — a caller that has not been given a float map,
+ * or a task the calculation could not reach (no dates, or inside a predecessor
+ * cycle). Falling back rather than returning false keeps a hand-marked task
+ * visible instead of silently dropping it off the filter.
+ *
+ * `floats` is optional so every existing call site keeps compiling; passing it
+ * is what upgrades a call from the checkbox to the calculation.
+ */
+export function isCriticalTask(
+  task: ScheduleTaskLike | null | undefined,
+  floats?: Record<string, { isCritical: boolean; totalFloat: number | null }> | null,
+): boolean {
+  const computed = task?.id ? floats?.[String(task.id)] : undefined;
+  if (computed && computed.totalFloat !== null) return computed.isCritical;
+  return isManuallyFlaggedCritical(task);
 }
 
 export function taskSearchHaystack(task: ScheduleTaskLike | null | undefined, phaseLabel = ""): string {

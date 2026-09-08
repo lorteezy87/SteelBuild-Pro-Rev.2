@@ -26,6 +26,7 @@ import ViewTabs from "./ViewTabs";
 import BulkParentModal from "./BulkParentModal";
 import type { ScheduleTask } from "./types";
 import type { UseScheduleBaselinesResult } from "@/hooks/useScheduleBaselines";
+import type { TaskFloat } from "@/services/scheduleFloat";
 import type { ScheduleModals } from "./useScheduleModals";
 import type { TaskSelection } from "./useTaskSelection";
 
@@ -72,6 +73,7 @@ interface ScheduleBodyProps {
   weatherRisk: any;
   effectiveDatesMap: any;
   scheduleBaselines: UseScheduleBaselinesResult;
+  floatMap: Record<string, TaskFloat>;
   selectedProject: any;
   projectId: string | null | undefined;
   qc: any;
@@ -135,6 +137,7 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
     weatherRisk,
     effectiveDatesMap,
   scheduleBaselines,
+  floatMap,
     selectedProject,
     projectId,
     qc,
@@ -246,6 +249,7 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
                 projectId={projectId}
                 baselineMap={scheduleBaselines.baselineMap}
                 onBaselineChange={scheduleBaselines.refetch}
+                floatMap={floatMap}
                 expandedTask={expandedTask}
                 setExpandedTask={setExpandedTask}
                 onTaskClick={(task: ScheduleTask) => { setSelectedTask(task); setShowDrawer(true); }}
