@@ -12,16 +12,23 @@ import { computeDragLanding, describeLanding } from "../scheduleGanttDerive";
  * the post-write rows, so it cannot drift from applyLink's semantics.
  */
 
-// Predecessor finishes 03-14. FS + 1 day ⇒ anything linked to it floors at 03-15.
-const PRED = { id: "pred", task_name: "Approve shop drawings", start_date: "2026-03-01", end_date: "2026-03-14" };
+// Predecessor finishes Wed 2026-03-11. FS + 1 WORKING day ⇒ anything linked to
+// it floors at Thu 03-12.
+//
+// Anchored on weekdays deliberately. Since §2.1 the cascade will not start work
+// on a weekend, so a fixture whose floor lands on a Saturday would make every
+// number below a statement about the working calendar rather than about drag
+// landing, which is what this file is for. workingCalendar.test.ts covers the
+// weekend arithmetic on its own.
+const PRED = { id: "pred", task_name: "Approve shop drawings", start_date: "2026-03-02", end_date: "2026-03-11" };
 const link = JSON.stringify([{ id: "pred", type: "FS", lag_days: 1 }]);
 
-/** Task stored 03-10 → 03-15, held by PRED, so it RENDERS at 03-15 → 03-20. */
+/** Task stored 03-05 → 03-10 (5-day span), held by PRED, so it RENDERS 03-12 → 03-17. */
 const HELD = {
   id: "fab",
   task_name: "Fabricate beams",
-  start_date: "2026-03-10",
-  end_date: "2026-03-15",
+  start_date: "2026-03-05",
+  end_date: "2026-03-10",
   dependencies: link,
 };
 
@@ -34,13 +41,13 @@ describe("computeDragLanding — held rows", () => {
       taskId: "fab",
       mode: "move",
       projectTasks: PROJECT,
-      renderedStart: "2026-03-15",
-      renderedEnd: "2026-03-20",
-      nextStart: "2026-03-06",
-      nextEnd: "2026-03-11",
+      renderedStart: "2026-03-12",
+      renderedEnd: "2026-03-17",
+      nextStart: "2026-03-03",
+      nextEnd: "2026-03-08",
     })!;
 
-    expect(landing.landedStart).toBe("2026-03-15");
+    expect(landing.landedStart).toBe("2026-03-12");
     expect(landing.movedDaysStart).toBe(0);
     expect(landing.landsOffTarget).toBe(true);
     expect(landing.heldAtLanding).toBe(true);
@@ -51,18 +58,18 @@ describe("computeDragLanding — held rows", () => {
     // `>`, so a row whose stored start already equals the floor reports
     // shifted:false while being completely pinned. Any guard keyed on `shifted`
     // misses it — and this is the state "Update Scheduled Dates" produces.
-    const pinned = { ...HELD, start_date: "2026-03-15", end_date: "2026-03-20" };
+    const pinned = { ...HELD, start_date: "2026-03-12", end_date: "2026-03-17" };
     const landing = computeDragLanding({
       taskId: "fab",
       mode: "move",
       projectTasks: [PRED, pinned],
-      renderedStart: "2026-03-15",
-      renderedEnd: "2026-03-20",
-      nextStart: "2026-03-12", // dragged 3 days earlier
-      nextEnd: "2026-03-17",
+      renderedStart: "2026-03-12",
+      renderedEnd: "2026-03-17",
+      nextStart: "2026-03-09", // dragged 3 days earlier
+      nextEnd: "2026-03-14",
     })!;
 
-    expect(landing.landedStart).toBe("2026-03-15"); // did not move
+    expect(landing.landedStart).toBe("2026-03-12"); // did not move
     expect(landing.landsOffTarget).toBe(true);
     expect(landing.heldAtLanding).toBe(true);
   });
@@ -75,8 +82,8 @@ describe("computeDragLanding — held rows", () => {
       taskId: "fab",
       mode: "move",
       projectTasks: PROJECT,
-      renderedStart: "2026-03-15",
-      renderedEnd: "2026-03-20",
+      renderedStart: "2026-03-12",
+      renderedEnd: "2026-03-17",
       nextStart: "2026-03-19",
       nextEnd: "2026-03-24",
     })!;
@@ -108,15 +115,15 @@ describe("computeDragLanding — held rows", () => {
       taskId: "fab",
       mode: "resize-start",
       projectTasks: PROJECT,
-      renderedStart: "2026-03-15",
-      renderedEnd: "2026-03-20",
-      nextStart: "2026-03-07",
-      nextEnd: "2026-03-15",
+      renderedStart: "2026-03-12",
+      renderedEnd: "2026-03-17",
+      nextStart: "2026-03-04",
+      nextEnd: "2026-03-12",
     })!;
 
     expect(landing.axis).toBe("start");
-    expect(landing.landedStart).toBe("2026-03-15");
-    expect(landing.landedEnd).not.toBe("2026-03-20"); // the finish moved too
+    expect(landing.landedStart).toBe("2026-03-12");
+    expect(landing.landedEnd).not.toBe("2026-03-17"); // the finish moved too
     expect(landing.landsOffTarget).toBe(true);
   });
 
@@ -126,10 +133,10 @@ describe("computeDragLanding — held rows", () => {
         taskId: "fab",
         mode: "move",
         projectTasks: [],
-        renderedStart: "2026-03-15",
-        renderedEnd: "2026-03-20",
-        nextStart: "2026-03-06",
-        nextEnd: "2026-03-11",
+        renderedStart: "2026-03-12",
+        renderedEnd: "2026-03-17",
+        nextStart: "2026-03-03",
+        nextEnd: "2026-03-08",
       }),
     ).toBeNull();
   });
@@ -138,8 +145,8 @@ describe("computeDragLanding — held rows", () => {
 describe("describeLanding — the copy must be true", () => {
   const base = {
     axis: "both" as const,
-    renderedStart: "2026-03-15",
-    renderedEnd: "2026-03-20",
+    renderedStart: "2026-03-12",
+    renderedEnd: "2026-03-17",
     droppedStart: "2026-03-06",
     droppedEnd: "2026-03-11",
     landedStart: "2026-03-15",

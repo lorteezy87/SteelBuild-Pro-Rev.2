@@ -42,7 +42,9 @@ function calendarRows(tasks: Record<string, unknown>[]) {
 describe("Project Calendar rows", () => {
   it("places a cascaded task on its effective date, not its stored one", () => {
     const fab = calendarRows(TASKS).find((t) => t.id === "fab")!;
-    expect(fab.start_date).toBe("2026-03-07"); // det ends 03-06, FS + 1
+    // det ends Fri 03-06; FS+1 is Mon 03-09, not Sat 03-07 (§2.1 — the
+    // cascade no longer starts work on a weekend).
+    expect(fab.start_date).toBe("2026-03-09");
     expect(fab._stored_start_date).toBe("2026-03-02");
   });
 
@@ -78,7 +80,7 @@ describe("calendar events built from those rows", () => {
   });
 
   it("the cascaded pill sits on the effective date", () => {
-    expect(events.find((e) => e.entityId === "fab")!.start).toBe("2026-03-07");
+    expect(events.find((e) => e.entityId === "fab")!.start).toBe("2026-03-09");
   });
 
   it("marks a cascaded pill as derived rather than entered", () => {

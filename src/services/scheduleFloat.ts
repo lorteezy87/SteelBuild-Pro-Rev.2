@@ -34,9 +34,11 @@
  * Critical — total float <= 0. Near-critical — 0 < total float <= 5 days, which
  * is where steel jobs actually get hurt.
  *
- * Float is in CALENDAR days, matching the cascade. A working-day calendar is a
- * separate concern (§2.1/§7.4); until it lands, a 2-day float spanning a
- * weekend is 2 calendar days, not 2 shifts.
+ * Float is measured in CALENDAR days — a 2-day float spanning a weekend is 2
+ * calendar days, not 2 shifts. But LAG is counted in working days, mirroring
+ * applyLink exactly: the forward and backward passes have to agree about what a
+ * lag means or float drifts from the bars by however many weekends a link
+ * spans.
  */
 
 import {
@@ -46,6 +48,8 @@ import {
   toDateOnly,
 } from "./scheduleCascade";
 import type { EffectiveDate } from "./scheduleCascade";
+import { addWorkingDays, DEFAULT_CALENDAR } from "@/lib/schedule/workingCalendar";
+import type { WorkingCalendar } from "@/lib/schedule/workingCalendar";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -97,11 +101,12 @@ const UNKNOWN: TaskFloat = Object.freeze({
 export function computeFloat(
   tasks: Task[] | null | undefined,
   effectiveDates?: Record<string, EffectiveDate> | null,
+  calendar: WorkingCalendar = DEFAULT_CALENDAR,
 ): Record<string, TaskFloat> {
   const out: Record<string, TaskFloat> = Object.create(null);
   if (!Array.isArray(tasks) || tasks.length === 0) return out;
 
-  const eff = effectiveDates ?? computeEffectiveDates(tasks);
+  const eff = effectiveDates ?? computeEffectiveDates(tasks, calendar);
   const byId: Record<string, Task> = Object.create(null);
   for (const t of tasks) if (t?.id) byId[t.id] = t;
 
@@ -173,14 +178,14 @@ export function computeFloat(
 
       // Inverse of applyLink, case for case.
       if (succ.type === "FS") {
-        cap = succLs === null ? null : addDaysIso(succLs, -succ.lag);
+        cap = succLs === null ? null : addWorkingDays(succLs, -succ.lag, calendar);
       } else if (succ.type === "SS") {
-        const capStart = succLs === null ? null : addDaysIso(succLs, -succ.lag);
+        const capStart = succLs === null ? null : addWorkingDays(succLs, -succ.lag, calendar);
         cap = capStart === null || myDur === null ? null : addDaysIso(capStart, myDur);
       } else if (succ.type === "FF") {
-        cap = addDaysIso(succLf, -succ.lag);
+        cap = addWorkingDays(succLf, -succ.lag, calendar);
       } else if (succ.type === "SF") {
-        const capStart = addDaysIso(succLf, -succ.lag);
+        const capStart = addWorkingDays(succLf, -succ.lag, calendar);
         cap = capStart === null || myDur === null ? null : addDaysIso(capStart, myDur);
       }
 
@@ -223,13 +228,13 @@ export function computeFloat(
       let slack: number | null = null;
 
       if (succ.type === "FS") {
-        slack = diffDays(addDaysIso(earlyFinish, succ.lag), succEs);
+        slack = diffDays(addWorkingDays(earlyFinish, succ.lag, calendar), succEs);
       } else if (succ.type === "SS") {
-        slack = diffDays(addDaysIso(es(id), succ.lag), succEs);
+        slack = diffDays(addWorkingDays(es(id), succ.lag, calendar), succEs);
       } else if (succ.type === "FF") {
-        slack = diffDays(addDaysIso(earlyFinish, succ.lag), succEf);
+        slack = diffDays(addWorkingDays(earlyFinish, succ.lag, calendar), succEf);
       } else if (succ.type === "SF") {
-        slack = diffDays(addDaysIso(es(id), succ.lag), succEf);
+        slack = diffDays(addWorkingDays(es(id), succ.lag, calendar), succEf);
       }
 
       if (slack === null) continue;

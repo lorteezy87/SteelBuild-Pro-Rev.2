@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { makeCalendar, ALL_DAYS } from "@/lib/schedule/workingCalendar";
 import {
   computeFloat,
   criticalTaskIds,
@@ -17,7 +18,17 @@ import {
  * These tests pin the CPM arithmetic against hand-worked examples. The backward
  * relations are the algebraic inverse of applyLink's forward ones, so if anyone
  * changes one without the other, the numbers below stop matching.
+ *
+ * Most run on a SEVEN-DAY calendar so the arithmetic is legible: on the default
+ * Mon–Fri calendar every fixture spanning a weekend gains float from the
+ * weekend rather than from its logic, which is correct behaviour but makes a
+ * hand-worked CPM example impossible to read. The interaction between float and
+ * the working calendar has its own describe block at the end.
  */
+
+/** Seven-day: this module's math without weekend interference. */
+const CAL7 = makeCalendar({ work_days: [...ALL_DAYS] });
+const floatOf = (tasks: Record<string, unknown>[]) => computeFloat(tasks, null, CAL7);
 
 const link = (id: string, type = "FS", lag_days = 0) => ({ id, type, lag_days });
 const deps = (...links: ReturnType<typeof link>[]) => JSON.stringify(links);
@@ -34,7 +45,7 @@ describe("a simple chain", () => {
   ];
 
   it("every task on a single chain is critical with zero float", () => {
-    const f = computeFloat(chain);
+    const f = floatOf(chain);
     expect(f.A.totalFloat).toBe(0);
     expect(f.B.totalFloat).toBe(0);
     expect(f.C.totalFloat).toBe(0);
@@ -43,7 +54,7 @@ describe("a simple chain", () => {
   });
 
   it("reports the whole chain as the critical path", () => {
-    expect([...criticalTaskIds(computeFloat(chain))].sort()).toEqual(["A", "B", "C"]);
+    expect([...criticalTaskIds(floatOf(chain))].sort()).toEqual(["A", "B", "C"]);
   });
 });
 
@@ -65,7 +76,7 @@ describe("a parallel branch carries float", () => {
   ];
 
   it("puts the long branch on the critical path and gives the short one float", () => {
-    const f = computeFloat(diamond);
+    const f = floatOf(diamond);
     expect(f.C.totalFloat).toBe(0);
     expect(f.C.isCritical).toBe(true);
     expect(f.B.totalFloat).toBe(6);
@@ -73,7 +84,7 @@ describe("a parallel branch carries float", () => {
   });
 
   it("the feeding and closing tasks are both critical", () => {
-    const f = computeFloat(diamond);
+    const f = floatOf(diamond);
     expect(f.A.isCritical).toBe(true);
     expect(f.D.isCritical).toBe(true);
   });
@@ -81,7 +92,7 @@ describe("a parallel branch carries float", () => {
   it("free float on the short branch is its slack to its OWN successor", () => {
     // B finishes 03-07, D starts 03-13 → 6 days before D is affected. Here it
     // equals total float; they diverge only in longer parallel chains.
-    expect(computeFloat(diamond).B.freeFloat).toBe(6);
+    expect(floatOf(diamond).B.freeFloat).toBe(6);
   });
 });
 
@@ -102,11 +113,11 @@ describe("free float vs total float", () => {
   ];
 
   it("total float measures slip against the project", () => {
-    expect(computeFloat(nested).A.totalFloat).toBe(6);
+    expect(floatOf(nested).A.totalFloat).toBe(6);
   });
 
   it("free float measures slip against the immediate successor", () => {
-    const f = computeFloat(nested);
+    const f = floatOf(nested);
     expect(f.A.freeFloat).toBe(0);
     expect(f.A.freeFloat).toBeLessThan(f.A.totalFloat!);
   });
@@ -114,7 +125,7 @@ describe("free float vs total float", () => {
   it("never publishes a free float greater than total float", () => {
     // Two derivations of the same slack; a contradiction here would be worse
     // than either number being slightly off.
-    for (const v of Object.values(computeFloat(nested))) {
+    for (const v of Object.values(floatOf(nested))) {
       if (v.totalFloat !== null && v.freeFloat !== null) {
         expect(v.freeFloat).toBeLessThanOrEqual(v.totalFloat);
       }
@@ -129,7 +140,7 @@ describe("lag is respected", () => {
       { id: "A", start_date: "2026-03-02", end_date: "2026-03-05" },
       { id: "B", start_date: "2026-03-08", end_date: "2026-03-10", dependencies: deps(link("A", "FS", 3)) },
     ];
-    const f = computeFloat(withLag);
+    const f = floatOf(withLag);
     expect(f.A.totalFloat).toBe(0);
     expect(f.B.totalFloat).toBe(0);
   });
@@ -141,7 +152,7 @@ describe("link types other than FS", () => {
       { id: "A", start_date: "2026-03-02", end_date: "2026-03-12" },
       { id: "B", start_date: "2026-03-04", end_date: "2026-03-06", dependencies: deps(link("A", "SS", 2)) },
     ];
-    const f = computeFloat(ss);
+    const f = floatOf(ss);
     // A is the long pole and drives the project finish.
     expect(f.A.isCritical).toBe(true);
     // B starts 2 days after A and finishes well before the project does.
@@ -153,7 +164,7 @@ describe("link types other than FS", () => {
       { id: "A", start_date: "2026-03-02", end_date: "2026-03-06" },
       { id: "B", start_date: "2026-03-02", end_date: "2026-03-08", dependencies: deps(link("A", "FF", 2)) },
     ];
-    const f = computeFloat(ff);
+    const f = floatOf(ff);
     expect(f.A.totalFloat).toBe(0);
     expect(f.B.totalFloat).toBe(0);
   });
@@ -177,7 +188,7 @@ describe("what it refuses to guess", () => {
       { id: "X", start_date: "2026-03-02", end_date: "2026-03-04", dependencies: deps(link("Y")) },
       { id: "Y", start_date: "2026-03-04", end_date: "2026-03-06", dependencies: deps(link("X")) },
     ];
-    const f = computeFloat(loop);
+    const f = floatOf(loop);
     expect(f.X.cycle).toBe(true);
     expect(f.X.totalFloat).toBeNull();
     expect(f.X.isCritical).toBe(false);
@@ -190,7 +201,7 @@ describe("what it refuses to guess", () => {
     const orphaned = [
       { id: "A", start_date: "2026-03-02", end_date: "2026-03-05", dependencies: deps(link("GONE")) },
     ];
-    const f = computeFloat(orphaned);
+    const f = floatOf(orphaned);
     expect(f.A.cycle).toBe(false);
     expect(f.A.totalFloat).toBe(0);
   });
@@ -214,7 +225,7 @@ describe("near-critical", () => {
       { id: "LONG", start_date: "2026-03-02", end_date: "2026-03-07" },
       { id: "END", start_date: "2026-03-07", end_date: "2026-03-09", dependencies: deps(link("A"), link("LONG")) },
     ];
-    const f = computeFloat(near);
+    const f = floatOf(near);
     expect(f.A.totalFloat).toBe(3);
     expect(f.A.isNearCritical).toBe(true);
     expect(f.A.isCritical).toBe(false);
@@ -227,7 +238,7 @@ describe("near-critical", () => {
       { id: "LONG", start_date: "2026-03-02", end_date: "2026-04-02" },
       { id: "END", start_date: "2026-04-02", end_date: "2026-04-03", dependencies: deps(link("A"), link("LONG")) },
     ];
-    const f = computeFloat(slack);
+    const f = floatOf(slack);
     expect(f.A.totalFloat).toBeGreaterThan(NEAR_CRITICAL_DAYS);
     expect(f.A.isNearCritical).toBe(false);
   });
@@ -255,5 +266,50 @@ describe("formatFloat", () => {
     expect(formatFloat({ totalFloat: 0 } as never)).toBe("0d");
     expect(formatFloat({ totalFloat: null } as never)).toBe("—");
     expect(formatFloat(null)).toBe("—");
+  });
+});
+
+describe("float and the working calendar", () => {
+  /**
+   * A → B, FS+0. A finishes Friday 2026-03-06.
+   *
+   * On a seven-day calendar B can start Saturday. On Mon–Fri it cannot start
+   * until Monday, so the same logic produces a later project finish — and A
+   * gains the weekend as float against it.
+   */
+  const chain = [
+    { id: "A", start_date: "2026-03-02", end_date: "2026-03-06" },
+    {
+      id: "B", start_date: "2026-03-06", end_date: "2026-03-10",
+      dependencies: JSON.stringify([{ id: "A", type: "FS", lag_days: 0 }]),
+    },
+  ];
+
+  it("FS+0 off a Friday finish is unaffected — the end is exclusive", () => {
+    // Worth pinning because it is the case that looks like it should move and
+    // does not: `end` is the day AFTER the last worked day, so FS+0 lets the
+    // successor start on that same date, and Friday is a working day.
+    expect(floatOf(chain).A.totalFloat).toBe(computeFloat(chain).A.totalFloat);
+  });
+
+  it("FS+1 off a Friday finish starts Monday, not Saturday", () => {
+    // THE §2.1 defect, as a float-level fact. A ends Friday 03-06; B is FS+1.
+    // On a seven-day calendar B is pulled to Saturday 03-07. On Mon–Fri it
+    // cannot start before Monday 03-09, so the project finishes two days later
+    // and the backward pass has to agree — a lag counted in calendar days here
+    // would place B's late start on the Saturday nobody works.
+    const lagged = [
+      { id: "A", start_date: "2026-03-02", end_date: "2026-03-06" },
+      {
+        id: "B", start_date: "2026-03-06", end_date: "2026-03-08",
+        dependencies: JSON.stringify([{ id: "A", type: "FS", lag_days: 1 }]),
+      },
+    ];
+    expect(floatOf(lagged).B.lateStart).toBe("2026-03-07");   // Saturday
+    expect(computeFloat(lagged).B.lateStart).toBe("2026-03-09"); // Monday
+    // Both chains are fully driven, so B carries no float on either calendar —
+    // the weekend moved the dates, not the slack.
+    expect(floatOf(lagged).B.totalFloat).toBe(0);
+    expect(computeFloat(lagged).B.totalFloat).toBe(0);
   });
 });

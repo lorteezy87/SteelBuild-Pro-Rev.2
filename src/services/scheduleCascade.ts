@@ -1,4 +1,6 @@
 import { buildGateMap, type GateOptions } from "./scheduleGatekeeper";
+import { addWorkingDays, DEFAULT_CALENDAR } from "@/lib/schedule/workingCalendar";
+import type { WorkingCalendar } from "@/lib/schedule/workingCalendar";
 
 // Module-scoped set of cycle keys that have already been warned about.
 // Persists across calls to computeEffectiveDates so the same cycle
@@ -221,7 +223,19 @@ interface LinkResult {
  *   FF  successor.end    >= predecessor.end   + lag
  *   SF  successor.end    >= predecessor.start + lag
  *
- * Duration is preserved on every shift.
+ * Duration is preserved on every shift — the task's CALENDAR span does not
+ * change when a predecessor pushes it.
+ *
+ * Lag is counted in WORKING days on the project's calendar, and a start driven
+ * by a predecessor is snapped forward off a non-working day (§2.1). FS+1 off a
+ * Friday finish used to start the successor on Saturday; 32 tasks in production
+ * start on a weekend because of it. A seven-day calendar makes both of those
+ * no-ops, so a shop that genuinely works every day is unaffected.
+ *
+ * Only the DRIVEN edge is snapped. FF and SF drive the finish, so the start is
+ * still derived from it by subtracting the span — snapping that start too would
+ * silently change the task's length to satisfy a constraint that was about its
+ * finish.
  */
 function applyLink(
   currentStart: string,
@@ -229,6 +243,7 @@ function applyLink(
   dur: number,
   predResolved: { start: string | null; end: string | null },
   link: DependencyLink,
+  cal: WorkingCalendar,
 ): LinkResult {
   const { type } = link;
   const lag = link.lag_days ?? 0;
@@ -236,26 +251,26 @@ function applyLink(
   let candEnd = currentEnd;
 
   if (type === "FS") {
-    const minStart = addDaysIso(predResolved.end, lag);
+    const minStart = addWorkingDays(predResolved.end, lag, cal);
     if (minStart && minStart > candStart) {
       candStart = minStart;
       candEnd = addDaysIso(candStart, dur) || candEnd;
     }
   } else if (type === "SS") {
-    const minStart = addDaysIso(predResolved.start, lag);
+    const minStart = addWorkingDays(predResolved.start, lag, cal);
     if (minStart && minStart > candStart) {
       candStart = minStart;
       candEnd = addDaysIso(candStart, dur) || candEnd;
     }
   } else if (type === "FF") {
-    const minEnd = addDaysIso(predResolved.end, lag);
+    const minEnd = addWorkingDays(predResolved.end, lag, cal);
     if (minEnd && minEnd > candEnd) {
       candEnd = minEnd;
       // pull start back to preserve duration
       candStart = addDaysIso(candEnd, -dur) || candStart;
     }
   } else if (type === "SF") {
-    const minEnd = addDaysIso(predResolved.start, lag);
+    const minEnd = addWorkingDays(predResolved.start, lag, cal);
     if (minEnd && minEnd > candEnd) {
       candEnd = minEnd;
       candStart = addDaysIso(candEnd, -dur) || candStart;
@@ -285,7 +300,10 @@ function applyLink(
  * Stable / deterministic — given the same input array (same task order)
  * the output is identical, so React `useMemo` consumers get cache hits.
  */
-export function computeEffectiveDates(tasks: ScheduleTask[]): Record<string, EffectiveDate> {
+export function computeEffectiveDates(
+  tasks: ScheduleTask[],
+  calendar: WorkingCalendar = DEFAULT_CALENDAR,
+): Record<string, EffectiveDate> {
   const out: Record<string, EffectiveDate> = {};
   if (!Array.isArray(tasks) || tasks.length === 0) return out;
 
@@ -366,7 +384,7 @@ export function computeEffectiveDates(tasks: ScheduleTask[]): Record<string, Eff
     for (const link of links) {
       const predResolved = resolve(link.id, visiting);
       if (!predResolved || !predResolved.start || !predResolved.end) continue;
-      const next = applyLink(curStart, curEnd, dur, predResolved, link);
+      const next = applyLink(curStart, curEnd, dur, predResolved, link, calendar);
       if (next.drove) {
         curStart = next.start;
         curEnd = next.end;
