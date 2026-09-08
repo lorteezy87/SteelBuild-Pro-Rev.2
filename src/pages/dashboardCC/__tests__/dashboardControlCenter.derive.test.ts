@@ -3,12 +3,28 @@
  * Mirrors the RFI derive test pattern: no React, no network, no mocks.
  */
 import { describe, it, expect } from "vitest";
+import { todayLocalISO } from "@/lib/dateMath";
 import { buildDashboardSummary } from "../dashboardControlCenter.derive";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-const TODAY = new Date().toISOString().slice(0, 10);
-const YESTERDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+// Fixture dates MUST be local-calendar, not UTC. The derive layer's overdue
+// checks (isPast, and the RFI / action-item due comparisons) resolve "today"
+// from the LOCAL calendar date. Deriving these from toISOString() made
+// YESTERDAY resolve to the *current* local day whenever the local and UTC
+// dates disagree — i.e. every evening west of UTC — so "yesterday" was not
+// past and the late/overdue assertions silently flipped. That failed locally
+// after ~17:00 in UTC-7 while CI (which runs in UTC) stayed green.
+function localIsoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days); // calendar arithmetic; rolls month/year, DST-safe
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+const TODAY = todayLocalISO();
+const YESTERDAY = localIsoDaysAgo(1);
 
 function makeRfi(overrides: Record<string, unknown> = {}) {
   return {
@@ -39,7 +55,7 @@ describe("buildDashboardSummary", () => {
       project: { id: "p1", health_status: "On Track" },
       rfis: [{ project_id: "p1", status: "Open", date_required: YESTERDAY }],
       scheduleTasks: [],
-      todayIso: new Date().toISOString().slice(0, 10),
+      todayIso: TODAY,
       rfiEvidenceLoaded: true,
       scheduleEvidenceLoaded: true,
     });
