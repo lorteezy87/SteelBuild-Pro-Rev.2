@@ -81,11 +81,23 @@ Variables (same page → **Variables**):
 | `CLOUDFLARE_ENABLED` | `true` | Turns the deploy job on. Leave unset to keep it inert. |
 | `CLOUDFLARE_BASE_URL` | workers.dev URL now, `https://steelbuild-pro.com` after step 7 | Turns the post-deploy health check on |
 
-### 2. Confirm Workers Builds is DISCONNECTED — do this before step 1
+### 2. Disconnect Workers Builds — CONFIRMED CONNECTED, do this before step 1
 
-Cloudflare's own git integration (Workers & Pages → the Worker → Settings → **Builds**) auto-deploys on every push to the connected branch. If it is connected, it **bypasses the CI gate entirely** — a red lint/typecheck/test push would reach Cloudflare anyway. That is the exact hole `vercel.json`'s `git.deploymentEnabled.main = false` was added to close on the Vercel side.
+Cloudflare's own git integration (Workers & Pages → the Worker → Settings → **Builds**) auto-deploys on every push to the connected branch. It **bypasses the CI gate entirely** — a red lint/typecheck/test push reaches Cloudflare anyway. That is the exact hole `vercel.json`'s `git.deploymentEnabled.main = false` was added to close on the Vercel side.
 
-The Worker was created 2026-09-06 via the dashboard, so assume it is connected until you have looked. Disconnect it. `deploy-cloudflare` must be the sole path, same as `deploy` is for Vercel.
+**This is not hypothetical.** A `Workers Builds: steelbuild-pro-rev-2` check run appears on pull requests in this repo, so the integration is live and building today. Every push to `main` since the Worker was created on 2026-09-06 has deployed to it without passing `ci`.
+
+Disconnect it. `deploy-cloudflare` must be the sole path, exactly as `deploy` is for Vercel. Until it is disconnected, turning on `CLOUDFLARE_ENABLED` gives you **two** publishers racing to the same Worker — one gated, one not.
+
+### 2b. Decide what happens to Netlify
+
+A **Netlify** site (`steelbuild-pro`) is also connected to this repo and builds on push — it posts `Header rules`, `Redirect rules` and `Pages changed` check runs on pull requests. There is no `netlify.toml` in the repo, so it is configured entirely in the Netlify dashboard and is invisible to anyone reading this codebase.
+
+That makes **three** git-connected hosting integrations plus the CI-gated Actions deploy. Before migrating, establish:
+
+1. Does the Netlify site serve any production traffic, or only previews?
+2. If it is dormant, disconnect it — it builds every push and its config lives nowhere in version control.
+3. Note that Netlify uses the **same `_headers` format** as Cloudflare, so `public/_headers` is now being consumed by Netlify builds too. That is harmless (identical headers) but it means the file is load-bearing for two hosts, not one.
 
 ### 3. Turn it on and let it shadow
 
