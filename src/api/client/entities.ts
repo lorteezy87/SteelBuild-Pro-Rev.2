@@ -239,6 +239,10 @@ export const entities = {
   // table, so an .update() here fails at the database rather than silently
   // rewriting history. Correcting a baseline means retracting and re-setting.
   ScheduleBaseline:      createEntityClient('schedule_baselines'),
+  // Append-only change log written by the record_planner_action_event
+  // trigger. Read-only from the client by design: the table has a SELECT
+  // policy and no INSERT policy, so the trail cannot be forged or suppressed.
+  PlannerActionEvent:    createEntityClient('planner_action_events'),
   ScheduleBaselineTask:  createEntityClient('schedule_baseline_tasks'),
   Submittal:             createEntityClient('submittals'),
   SubmittalRound:        createEntityClient('submittal_rounds'),

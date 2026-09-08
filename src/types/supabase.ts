@@ -6256,6 +6256,50 @@ export type Database = {
           },
         ]
       }
+      planner_action_events: {
+        Row: {
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          entity_id: string | null
+          entity_type: string
+          event_type: string
+          id: string
+          occurred_at: string
+          project_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          entity_id?: string | null
+          entity_type: string
+          event_type: string
+          id?: string
+          occurred_at?: string
+          project_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          entity_id?: string | null
+          entity_type?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planner_action_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schedule_baseline_tasks: {
         Row: {
           baseline_duration: number | null

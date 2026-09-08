@@ -20,7 +20,10 @@ proven with a throwaway vitest probe against the real modules.
 
 | Signal | Count | Share |
 |---|---|---|
-| Audit-log rows for `schedule_task` (of 909 app-wide) | **0** | **0%** |
+| `activities` rows for the schedule (of 914 app-wide) | 245 | 27% |
+| …of those recording a **date-bearing** change | **0** | **0%** |
+| `planner_action_events` rows for `schedule_task` | 616 | — |
+| …of those that **moved a start or finish date** | 86 | 14% |
 | Predecessor links that **cross a phase boundary** | **92 of 137** | **67%** |
 | Predecessor links pointing at a **deleted task** | **26 of 137** | **19%** |
 | Rows where `duration` **disagrees** with `end_date - start_date` | **216 of 419** | **52%** |
@@ -92,10 +95,15 @@ call sites app-wide. The ~20 other surfaces that read `schedule_tasks` —
 `FieldPlan`, `FieldToday`, `PortfolioHub`, `RFIs`, `Submittals`,
 `ProjectCalendar` and every `pages/reports/*` page — all render stored dates.
 
-### 1.3 Zero audit trail on the schedule — P1
+### 1.3 The audit trail exists — nothing could read it — P1
 
-**0 of 909 activity rows in production are `schedule_task`.** Every other module
-logs; the schedule logs nothing.
+> **Corrected 2026-09-08 (batch 2).** This read "Zero audit trail on the
+> schedule — 0 of 909 activity rows are `schedule_task`". That count was
+> measured against the wrong string: `logActivity` writes the entity LABEL
+> (`'ScheduleTask'`), not the key. There are **245** such rows. The conclusion
+> survived — all 245 are reparents and cross-link edits, so no date-bearing
+> write reached `activities` — but the premise was wrong in a way that changes
+> the fix, so it is restated below.
 
 `logActivity` is called from exactly two places in the module:
 
@@ -103,13 +111,34 @@ logs; the schedule logs nothing.
 - `TaskDetailDrawer.jsx:92` — and only when RFI/CO/action-item cross-links
   change. **Date, duration and status edits from the drawer are not logged.**
 
-Not logged at all: Gantt inline edit, bar drag-to-reschedule, Set Baseline,
+Not logged *there*: Gantt inline edit, bar drag-to-reschedule, Set Baseline,
 Update Scheduled Dates, all five bulk toolbars, create, delete, bulk delete,
 CSV import, MPP import.
 
-A schedule you intend to defend in a delay claim needs "who moved this date,
-when, from what, and why" on every date-bearing write. Right now nothing is
-recoverable.
+**But they are logged elsewhere.** `record_planner_action_event` has written
+every `schedule_tasks` INSERT and UPDATE to `planner_action_events` since
+2026-08-05, with `before_state` / `after_state` and `actor_user_id`: 410 updates
+(86 of which moved a start or finish date), 206 creates, across 257 distinct
+tasks. Being a *database* trigger it covers every write path — the Gantt drag,
+the bulk toolbars, CSV/MPP import, the MCP server, direct SQL. And because
+`planner_action_events` has a SELECT policy and **no INSERT policy**, its only
+writer is that SECURITY DEFINER function: the trail cannot be forged or
+suppressed from a client.
+
+So the fix is *not* to add `logActivity` to every write path. That builds a
+second, weaker, app-side trail beside a stronger one — narrower coverage, and
+forgeable. The real gaps were:
+
+1. **DELETE was not covered at all** — a deleted task simply vanished, which is
+   the single most important event to be able to explain in a delay claim.
+2. `duration`, `dependencies`, `wbs_code`, `phase` and `parent_task_id` were
+   missing from the snapshot, so "the logic changed" and "the durations were
+   compressed" were both invisible.
+3. **Nothing could read it back.** The drawer's HISTORY tab rendered the literal
+   string "No history yet" over a complete trail.
+
+All three are closed in batch 2 (`20260908150000_schedule_change_log_completeness.sql`,
+`src/services/scheduleChangeLog.ts`, `src/components/schedule/TaskHistoryTab.jsx`).
 
 ### 1.4 There is nowhere to record what actually happened — P1
 
@@ -646,7 +675,9 @@ as the evidence trail. Progress stops being a guess.
 
 **Batch 2 — make it defensible (P1)**
 
-6. `logActivity` on every date-bearing write, with old → new. (§1.3)
+6. ~~`logActivity` on every date-bearing write~~ — superseded: extend
+   `record_planner_action_event` to cover DELETE and the fields it missed,
+   and surface the trail that already exists. (§1.3, §7.6)
 7. `actual_start_date` / `actual_finish_date` + status prompts. (§1.4)
 8. Predecessor cleanup on delete + a one-off repair of the 26 orphans. (§1.6)
 9. `schedule_baselines` tables; migrate the 19 metadata baselines. (§1.5, §7.2)

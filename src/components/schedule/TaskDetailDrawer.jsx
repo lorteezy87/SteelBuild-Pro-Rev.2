@@ -19,6 +19,7 @@ import DateOrTbdInput from './DateOrTbdInput';
 import { validReparentTargets } from '@/lib/schedule/hierarchy';
 import { isSummaryTask, buildParentIdSet } from '@/lib/schedule/summaryTasks';
 import { computeFinishVariance, describeVariance } from '@/lib/schedule/actuals';
+import TaskHistoryTab from './TaskHistoryTab';
 import { asIdArray, sameIdSet, parseDeps } from './taskDetailDerive';
 import {
   SearchableTaskPicker,
@@ -752,9 +753,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
           )}
 
           {activeTab === 'history' && (
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, textAlign: 'center', padding: '40px 0' }}>
-              No history yet
-            </div>
+            <TaskHistoryTab taskId={task?.id} projectId={task?.project_id} />
           )}
         </div>
 
