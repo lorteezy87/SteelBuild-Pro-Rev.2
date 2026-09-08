@@ -505,6 +505,7 @@ export function GanttTimelineRows(props: any) {
   saving,
   startTaskBarDrag,
   showBaseline,
+  baselineMap,
   showSubmittals,
   submittals,
   setTooltip,
@@ -651,7 +652,7 @@ export function GanttTimelineRows(props: any) {
       >
         {/* Baseline ghost bar — rendered behind the current bar */}
         {showBaseline && !task._hasChildren && (() => {
-          const baseline = getTaskBaseline(task);
+          const baseline = getTaskBaseline(task, baselineMap);
           if (!baseline) return null;
           const taskStart = displayStart;
           const taskEnd = displayEnd;

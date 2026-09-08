@@ -11,6 +11,8 @@ import { parseDateUTC, toDateOnly } from "./scheduleDateUtils";
 import { displayPct, isMilestoneTask } from "./scheduleTaskUtils";
 import { parseDeps } from "./scheduleDependencies";
 import { isSummaryTask as isSummaryTaskCanonical } from "@/lib/schedule/summaryTasks";
+import { resolveTaskBaseline } from "@/services/scheduleBaselines";
+import type { BaselineRow } from "@/services/scheduleBaselines";
 
 type ScheduleTaskLike = {
   id?: string;
@@ -111,20 +113,32 @@ export function getTaskMetadata(task: ScheduleTaskLike | null | undefined): Reco
   return {};
 }
 
-export function getTaskBaseline(task: ScheduleTaskLike | null | undefined): { start: unknown; end: unknown } | null {
-  const metadata = getTaskMetadata(task);
-  const bs = metadata.baseline_start || null;
-  const be = metadata.baseline_end || null;
-  if (!bs && !be) return null;
-  return { start: bs, end: be };
+/**
+ * Baseline dates for a task: the `schedule_baselines` table first, the legacy
+ * `metadata.baseline_*` keys second.
+ *
+ * `baselineMap` is optional so every existing call site keeps working while the
+ * map is threaded down from Schedule.tsx. Passing nothing is the metadata-only
+ * behaviour this function has always had — see resolveTaskBaseline for why the
+ * fallback exists at all (migrations here are pushed by hand, so a deploy can
+ * land before the table is populated).
+ */
+export function getTaskBaseline(
+  task: ScheduleTaskLike | null | undefined,
+  baselineMap?: Record<string, BaselineRow> | null,
+): { start: unknown; end: unknown } | null {
+  const resolved = resolveTaskBaseline((task ?? {}) as never, baselineMap);
+  if (!resolved) return null;
+  return { start: resolved.start, end: resolved.finish };
 }
 
 export function hasBaselineDrift(
   task: ScheduleTaskLike | null | undefined,
   effStartDate: unknown,
   effEndDate: unknown,
+  baselineMap?: Record<string, BaselineRow> | null,
 ): boolean {
-  const baseline = getTaskBaseline(task);
+  const baseline = getTaskBaseline(task, baselineMap);
   if (!baseline) return false;
   return baseline.start !== effStartDate || baseline.end !== effEndDate;
 }

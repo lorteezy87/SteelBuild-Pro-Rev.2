@@ -85,8 +85,30 @@ describe("selectShiftedSyncTasks", () => {
 
 describe("wiring — the two project-wide writes do not read the filtered rows", () => {
   it("baseline is taken over projectTasks, not allTasks", () => {
-    expect(GANTT_SRC).toMatch(/const tasksWithDates = projectTasks\.filter/);
-    expect(GANTT_SRC).not.toMatch(/const tasksWithDates = allTasks\.filter/);
+    // The snapshot moved from an inline metadata write to
+    // services/scheduleBaselines.buildBaselineRows, but the invariant this
+    // guard exists for is unchanged: it must be handed the UNFILTERED project
+    // list. Assert the call, not the old local variable it used to build.
+    expect(GANTT_SRC).toMatch(/buildBaselineRows\(projectTasks\)/);
+    expect(GANTT_SRC).not.toMatch(/buildBaselineRows\(allTasks\)/);
+    expect(GANTT_SRC).toMatch(/tasks: projectTasks,/);
+  });
+
+  it("the baseline write no longer touches metadata", () => {
+    // §1.5: baseline_start / baseline_end / baseline_set_at on metadata gave it
+    // no author, no reason, no history and exactly one baseline ever. Writing
+    // both places would resurrect the overwrite-only shape alongside the table.
+    expect(GANTT_SRC).not.toMatch(/baseline_set_at/);
+    expect(GANTT_SRC).not.toMatch(/baseline_start:/);
+  });
+
+  it("snapshots stored dates, never the cascaded ones the Gantt draws", () => {
+    // effStart/effEnd are the CASCADED dates. Baselining those bakes today's
+    // predecessor positions into the contract schedule.
+    const handler = GANTT_SRC.slice(GANTT_SRC.indexOf("const handleSetBaseline"));
+    const body = handler.slice(0, handler.indexOf("const shiftedSyncTasks"));
+    expect(body).not.toMatch(/effStart\(/);
+    expect(body).not.toMatch(/effEnd\(/);
   });
 
   it("the sync set is taken over projectTasks", () => {
@@ -114,6 +136,22 @@ describe("wiring — the two project-wide writes do not read the filtered rows",
   });
 
   it("both confirm dialogs state the project-wide scope", () => {
-    expect(GANTT_SRC).toContain("This covers the whole project, not just the phase you are viewing.");
+    // Counted, not just present: a single occurrence would let one dialog lose
+    // the sentence while the other kept the test green.
+    const occurrences = GANTT_SRC.split("This covers the whole project, not just the phase you are viewing.").length - 1;
+    expect(occurrences).toBe(2);
+  });
+
+  it("the baseline dialog says it snapshots entered dates, not the bars", () => {
+    // The bars show CASCADED dates. A user who is not told the difference will
+    // reasonably assume the baseline matches what they are looking at.
+    expect(GANTT_SRC).toContain("snapshots the dates as entered, not the cascaded dates the bars show");
+  });
+
+  it("the baseline dialog says baselines are never overwritten", () => {
+    // The old dialog said the opposite — "existing baseline data will be
+    // overwritten" — which was true then and is the behaviour §7.2 removes.
+    expect(GANTT_SRC).toContain("Baselines are never overwritten");
+    expect(GANTT_SRC).not.toContain("overwrites any baseline already stored");
   });
 });

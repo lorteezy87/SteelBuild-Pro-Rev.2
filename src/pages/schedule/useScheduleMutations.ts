@@ -9,6 +9,11 @@ import { addDaysIso } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { reparentTasks } from "@/lib/schedule/reparentTasks";
+import {
+  stripPredecessorLinks,
+  describePredecessorCleanup,
+} from "@/lib/schedule/predecessorCleanup";
+import { deriveActualsPatch, hasActualsPatch } from "@/lib/schedule/actuals";
 import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./wbs";
 import { parseMsProjectXml } from "./mppImport";
 import { commitImportedScheduleTasks } from "./commitImportedTasks";
@@ -76,7 +81,22 @@ export function useScheduleMutations({
 }: UseScheduleMutationsParams) {
   const updateTaskMut = useMutation({
     mutationFn: (data: ScheduleTask) => {
-      const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
+      // Stamp actuals only on a real status TRANSITION, compared against the
+      // stored row. Deriving from `data.status` alone would re-stamp on every
+      // unrelated save of an already-Complete task.
+      const previous = data?.id ? scheduleTasks.find((t) => t.id === data.id) : undefined;
+      const merged: Record<string, any> = { ...data };
+      if (previous && data?.status && data.status !== previous.status) {
+        const actuals = deriveActualsPatch({ task: previous, nextStatus: data.status });
+        for (const [key, value] of Object.entries(actuals)) {
+          // A date the user typed in the drawer wins, including an explicit
+          // null — clearing a wrong actual must not be undone by the stamp.
+          if (!(key in merged) || merged[key] === undefined) merged[key] = value;
+        }
+      }
+      // Sanitize AFTER merging so assertScheduleDateRange validates the payload
+      // that is actually sent, actuals included.
+      const { id, fields } = sanitizeScheduleTaskUpdatePayload(merged as ScheduleTask);
       if (!id) throw new Error("Cannot update a task without an id");
       return entities.ScheduleTask.update(id, fields);
     },
@@ -123,9 +143,34 @@ export function useScheduleMutations({
     onError: (err: unknown) => toast.error(`Create failed: ${toUserErrorMessage(err)}`),
   });
 
+  /**
+   * Remove predecessor links pointing at tasks that were just deleted.
+   *
+   * `dependencies` is TEXT-holding-JSON with no foreign key, so Postgres cannot
+   * cascade; without this the link survives its predecessor and silently stops
+   * constraining the successor (§1.6 — 19% of production links were orphaned).
+   *
+   * Runs AFTER the delete on purpose. Stripping first would remove real
+   * sequencing logic from surviving tasks if the delete then failed; running
+   * second means the worst case is the status quo — an orphan we report rather
+   * than hide. Scans `scheduleTasks` (the whole project, unfiltered), never the
+   * phase-filtered rows.
+   */
+  const cleanupPredecessorsFor = async (deletedIds: string[]) => {
+    const patches = stripPredecessorLinks(scheduleTasks, deletedIds);
+    if (patches.length === 0) return { patches, failed: 0 };
+    const results = await batchProcess(patches, (patch: any) =>
+      entities.ScheduleTask.update(patch.id, { dependencies: patch.dependencies }),
+    );
+    return { patches, failed: results.failed.length };
+  };
+
   const deleteTaskMut = useMutation({
-    mutationFn: (id: string) => entities.ScheduleTask.delete(id),
-    onSuccess: () => {
+    mutationFn: async (id: string) => {
+      await entities.ScheduleTask.delete(id);
+      return cleanupPredecessorsFor([id]);
+    },
+    onSuccess: (cleanup) => {
       invalidateEntity(qc, "schedule_task", projectId);
       setShowDrawer(false);
       setSelectedTask(null);
@@ -135,32 +180,56 @@ export function useScheduleMutations({
         if (selectedTask?.id) next.delete(selectedTask.id);
         return next;
       });
-      toast.success("Task deleted");
+      if (cleanup.failed > 0) {
+        // The delete succeeded; only the link cleanup didn't. Saying "Delete
+        // failed" would be false, and saying nothing leaves a dangling link the
+        // PM has no way to know about.
+        toast.warning(
+          `Task deleted, but ${cleanup.failed} successor${cleanup.failed === 1 ? "" : "s"} still reference it. Re-open those tasks to clear the link.`,
+        );
+      } else {
+        const cleaned = describePredecessorCleanup(cleanup.patches);
+        toast.success(cleaned ? `Task deleted. ${cleaned}.` : "Task deleted");
+      }
     },
     onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      const results = await batchProcess(
-        ids,
-        (id: any) => entities.ScheduleTask.update(id, {
+      // Stamp actuals per task, not once for the batch: the patch depends on
+      // what each task has already recorded. A task already carrying a finish
+      // date keeps it — re-marking a batch Complete must not overwrite the day
+      // work actually finished with the day someone tidied up the board.
+      const byId = new Map(scheduleTasks.map((t) => [t.id, t]));
+      let stamped = 0;
+
+      const results = await batchProcess(ids, (id: any) => {
+        const actuals = deriveActualsPatch({ task: byId.get(id), nextStatus: status });
+        if (hasActualsPatch(actuals)) stamped += 1;
+        return entities.ScheduleTask.update(id, {
           status,
           percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
-        }),
-      );
+          ...actuals,
+        });
+      });
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
       }
-      return results;
+      return { ...results, stamped };
     },
     onSuccess: (results, variables) => {
       invalidateEntity(qc, "schedule_task", projectId);
       setSelectedIds(new Set());
+      // Name the side effect. Silently writing a date onto a task is exactly the
+      // kind of invisible write this batch exists to stop.
+      const stampedMsg = results.stamped > 0
+        ? ` Recorded actual dates on ${results.stamped}.`
+        : "";
       if (results.failed.length > 0) {
-        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
+        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed.${stampedMsg}`);
       } else {
-        toast.success(`Updated ${variables.ids.length} tasks`);
+        toast.success(`Updated ${variables.ids.length} tasks.${stampedMsg}`);
       }
     },
     onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk update failed")),
@@ -172,7 +241,11 @@ export function useScheduleMutations({
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
-      return results;
+      // Clean up links only for the rows that actually went away. Using `ids`
+      // here would strip links to tasks whose delete failed and are still live.
+      const deleted = results.succeeded.map((s: any) => String(s.item));
+      const cleanup = await cleanupPredecessorsFor(deleted);
+      return { ...results, cleanup };
     },
     onSuccess: (results, ids) => {
       invalidateEntity(qc, "schedule_task", projectId);
@@ -181,10 +254,16 @@ export function useScheduleMutations({
         setSelectedTask(null);
         setShowDrawer(false);
       }
+      const cleaned = describePredecessorCleanup(results.cleanup.patches);
+      const cleanedMsg = cleaned ? ` ${cleaned}.` : "";
       if (results.failed.length > 0) {
-        toast.warning(`${results.succeeded.length} deleted, ${results.failed.length} failed`);
+        toast.warning(`${results.succeeded.length} deleted, ${results.failed.length} failed.${cleanedMsg}`);
+      } else if (results.cleanup.failed > 0) {
+        toast.warning(
+          `Tasks deleted, but ${results.cleanup.failed} successor${results.cleanup.failed === 1 ? "" : "s"} still reference them. Re-open those tasks to clear the link.`,
+        );
       } else {
-        toast.success("Tasks deleted");
+        toast.success(cleaned ? `Tasks deleted.${cleanedMsg}` : "Tasks deleted");
       }
     },
     onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),

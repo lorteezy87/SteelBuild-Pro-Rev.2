@@ -36,10 +36,11 @@ import {
 } from "./scheduleTaskUtils";
 import {
   addDaysUTC,
-  getTaskMetadata, getTaskBaseline, hasBaselineDrift, isCriticalTask,
+  getTaskBaseline, hasBaselineDrift, isCriticalTask,
   pluralize, taskOwner, isUnassignedTask, hasLogicGapTask,
   isSummaryScheduleTask,
 } from "./scheduleGanttHelpers";
+import { buildBaselineRows, createBaseline } from "@/services/scheduleBaselines";
 import {
   WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
   buildWeatherRiskByTask,
@@ -73,8 +74,9 @@ const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, trans
 // would be a fresh object every render and would invalidate every memo below
 // that lists `effectiveDates` as a dependency.
 const NO_EFFECTIVE_DATES = Object.freeze({});
+const NO_BASELINE_MAP = Object.freeze({});
 
-export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, effectiveDates = NO_EFFECTIVE_DATES, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null }) {
+export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, effectiveDates = NO_EFFECTIVE_DATES, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null, projectId = null, baselineMap = NO_BASELINE_MAP, onBaselineChange }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
@@ -433,45 +435,66 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   // legend, both of which describe what is currently rendered. A project that
   // has baselines elsewhere but none in this phase has nothing to overlay here.
   const baselineTaskCount = useMemo(
-    () => allTasks.filter((t) => getTaskBaseline(t) !== null).length,
-    [allTasks]
+    () => allTasks.filter((t) => getTaskBaseline(t, baselineMap) !== null).length,
+    [allTasks, baselineMap]
   );
 
   const handleSetBaseline = async () => {
-    if (!onSave || saving) return;
-    const tasksWithDates = projectTasks.filter((t) => effStart(t) || effEnd(t));
-    if (tasksWithDates.length === 0) {
+    if (saving) return;
+    if (!projectId) {
+      toast.error("Select a project before taking a baseline.");
+      return;
+    }
+    // Rows are built from STORED dates, so count on the same basis the snapshot
+    // will use — counting dated-by-effective would promise rows that
+    // buildBaselineRows then skips.
+    const rows = buildBaselineRows(projectTasks);
+    if (rows.length === 0) {
       toast.info("No tasks with dates to baseline.");
       return;
     }
-    const confirmed = window.confirm(
-      `Set baseline for all ${tasksWithDates.length} dated task${tasksWithDates.length === 1 ? "" : "s"} on this project?\n\n` +
+
+    const name = window.prompt(
+      `Name this baseline — ${rows.length} dated task${rows.length === 1 ? "" : "s"}.\n\n` +
       "This covers the whole project, not just the phase you are viewing. " +
-      "It snapshots each task's current effective dates as the planned schedule " +
-      "and overwrites any baseline already stored."
+      "It snapshots the dates as entered, not the cascaded dates the bars show.\n\n" +
+      "Baselines are never overwritten — this is added alongside any already taken.\n" +
+      "Examples: \"Baseline 0 — contract\", \"Rev 2 — CO 14 time extension\".",
+      `Baseline ${new Date().toISOString().slice(0, 10)}`,
     );
-    if (!confirmed) return;
+    if (name === null) return; // cancelled
+    if (!name.trim()) {
+      toast.error("A baseline needs a name.");
+      return;
+    }
+
+    const reason = window.prompt(
+      "Why is this baseline being taken? (optional, but this is the field that " +
+      "answers \"who changed the contract schedule and on what authority\")",
+      "",
+    );
+    if (reason === null) return; // cancelled at the second step
+
     setSaving(true);
     try {
-      // Summary rows ARE baselined, unlike the sync path above. The two write
-      // different columns: this writes `metadata` (nothing derives it), while
-      // sync writes start_date/end_date, which the DB rollup trigger owns for a
-      // summary. Recording a parent's planned span is useful; overwriting its
-      // derived dates is not.
-      const updates = tasksWithDates.map((task) => {
-        const metadata = getTaskMetadata(task);
-        const newMetadata = {
-          ...metadata,
-          baseline_start: effStart(task) || null,
-          baseline_end: effEnd(task) || null,
-          baseline_set_at: new Date().toISOString(),
-        };
-        return onSave({ id: task.id, metadata: newMetadata });
+      const { baseline, rowsWritten, rowsFailed } = await createBaseline({
+        projectId,
+        name,
+        reason,
+        // The WHOLE project, never the phase-filtered rows — §1.5 shipped a
+        // version that baselined one phase while the dialog counted the job.
+        tasks: projectTasks,
       });
-      for (let i = 0; i < updates.length; i += 10) {
-        await Promise.all(updates.slice(i, i + 10));
+
+      if (rowsFailed > 0) {
+        // A baseline missing rows is worse than no baseline if nobody knows.
+        toast.warning(
+          `Baseline "${baseline.name}" saved with ${rowsWritten} of ${rowsWritten + rowsFailed} tasks — ${rowsFailed} failed. Retract and retake it rather than relying on a partial snapshot.`,
+        );
+      } else {
+        toast.success(`Baseline "${baseline.name}" set for ${rowsWritten} tasks`);
       }
-      toast.success(`Baseline set for ${tasksWithDates.length} tasks`);
+      onBaselineChange?.();
     } catch (err) {
       toast.error("Failed to set baseline: " + (err?.message || "unknown error"));
     } finally {
@@ -1250,6 +1273,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               saving={saving}
               startTaskBarDrag={startTaskBarDrag}
               showBaseline={showBaseline}
+              baselineMap={baselineMap}
               showSubmittals={showSubmittals}
               submittals={submittals}
               setTooltip={setTooltip}
@@ -1342,7 +1366,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 No owner
               </span>
             )}
-            {hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task)) && (
+            {hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task), baselineMap) && (
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: GANTT_BASELINE_VAR, background: `color-mix(in srgb, ${GANTT_BASELINE_VAR} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${GANTT_BASELINE_VAR} 40%, transparent)`, borderRadius: 999, padding: "2px 6px" }}>
                 Baseline drift
               </span>
@@ -1361,9 +1385,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             Effective {fmtDate(effStart(tooltip.task))} to {fmtDate(effEnd(tooltip.task))} / {calcDuration(effStart(tooltip.task), effEnd(tooltip.task)) || 0}d
           </div>
           {(() => {
-            const bl = getTaskBaseline(tooltip.task);
+            const bl = getTaskBaseline(tooltip.task, baselineMap);
             if (!bl) return null;
-            const drifted = hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task));
+            const drifted = hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task), baselineMap);
             return (
               <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: drifted ? "var(--status-warning)" : "var(--text-muted)", marginBottom: 2 }}>
                 Baseline {fmtDate(bl.start)} to {fmtDate(bl.end)}{drifted ? " (drifted)" : ""}

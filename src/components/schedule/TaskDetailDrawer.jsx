@@ -18,6 +18,8 @@ import { logActivity } from '@/services/auditLogger';
 import DateOrTbdInput from './DateOrTbdInput';
 import { validReparentTargets } from '@/lib/schedule/hierarchy';
 import { isSummaryTask, buildParentIdSet } from '@/lib/schedule/summaryTasks';
+import { computeFinishVariance, describeVariance } from '@/lib/schedule/actuals';
+import TaskHistoryTab from './TaskHistoryTab';
 import { asIdArray, sameIdSet, parseDeps } from './taskDetailDerive';
 import {
   SearchableTaskPicker,
@@ -479,6 +481,58 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 </div>
               )}
 
+              {/* Actuals — what actually happened, kept strictly apart from the
+                  plan above (§1.4). These are never derived from start_date /
+                  end_date: a plan is a promise, an actual is a fact, and
+                  copying one into the other manufactures evidence of an on-time
+                  finish nobody recorded. Blank means "not recorded", which is
+                  why the variance line says so in words rather than showing a
+                  bare dash that reads like "on time". */}
+              {!isSummary && (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 8,
+                  padding: '10px 12px',
+                  background: drawerPanel,
+                  border: `1px solid ${drawerMutedBorder}`,
+                  borderRadius: 8,
+                }}>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em',
+                    textTransform: 'uppercase', color: drawerMutedText,
+                  }}>
+                    Actuals
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                    gap: 12,
+                  }}>
+                    <div>
+                      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Actual Start</label>
+                      <DateOrTbdInput
+                        value={formData.actual_start_date}
+                        onChange={(v) => setFormData({ ...formData, actual_start_date: v })}
+                        inputStyle={{ width: '100%', ...drawerControlStyle }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Actual Finish</label>
+                      <DateOrTbdInput
+                        value={formData.actual_finish_date}
+                        onChange={(v) => setFormData({ ...formData, actual_finish_date: v })}
+                        inputStyle={{ width: '100%', ...drawerControlStyle }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: 11, lineHeight: 1.4,
+                    color: drawerMutedText,
+                  }}>
+                    {describeVariance(computeFinishVariance(formData))}
+                  </div>
+                </div>
+              )}
+
               {/* Schedule flags — keeps the dashboard's Critical Path
                   panel and Milestones panel in sync. Both ride on
                   metadata so we don't need a schema migration. */}
@@ -699,9 +753,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
           )}
 
           {activeTab === 'history' && (
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, textAlign: 'center', padding: '40px 0' }}>
-              No history yet
-            </div>
+            <TaskHistoryTab taskId={task?.id} projectId={task?.project_id} />
           )}
         </div>
 
