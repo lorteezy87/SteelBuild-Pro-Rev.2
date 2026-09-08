@@ -198,7 +198,13 @@ Remaining:
 
    Note a third project, `Vercel – steel-build-pro-rev-2` (team `steel-build-pro`), is on a *different, working* Vercel account and still deploys successfully. Decide what that one is for before removing it — it is not part of the closed account.
 3. Remove the `VERCEL_*` repo secrets — they authenticate to a closed account.
-4. Re-provision **staging** if you want it back. `deploy-staging` deployed to a second Vercel project and went with the account; the `staging-e2e-readonly` / `staging-e2e-mutations` jobs survive and now hang off `ci`, staying inert until `STAGING_BASE_URL` points at something. Rebuilding it on Cloudflare means a second Worker (or a Wrangler environment) plus the separate staging Supabase project described in `staging-setup.md`.
+4. Re-provision **staging** if you want it back — it is gone at both layers, not just the hosting one:
+   - The Vercel staging project went with the closed account.
+   - The staging **Supabase** project is gone too. CI proved it: the staging E2E job failed with `getaddrinfo ENOTFOUND abbeavtbifuddtrifvae.supabase.co`, so `STAGING_BASE_URL` and the staging Supabase secrets both point at things that no longer exist.
+
+   The `staging-e2e-readonly` / `staging-e2e-mutations` jobs survive on `needs: ci` and carry a staging-branch/push condition in their own `if:` — **keep that condition.** They used to inherit it from `deploy-staging`, and repointing them at `ci` without restating it made them run on every pull request against the dead environment.
+
+   Rebuilding means a second Worker (or a Wrangler environment) *and* a fresh staging Supabase project, then updating `STAGING_BASE_URL`, `E2E_EXPECTED_SUPABASE_REF` and the staging E2E secrets. See `staging-setup.md`.
 5. **Update the customer-facing hosting disclosures** — see below.
 
 ---

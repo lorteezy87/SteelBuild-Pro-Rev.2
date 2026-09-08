@@ -29,10 +29,17 @@
 #                run without blocking the release train).
 #
 # REMOVED (2026-09): the `deploy` and `deploy-staging` jobs, which shipped to
-# Vercel. That account is closed, so both could only ever fail. `deploy-staging`
-# took the staging ENVIRONMENT with it — the two staging E2E jobs survive and
-# now hang off `ci`, staying inert until STAGING_BASE_URL points at a staging
-# environment provisioned on Cloudflare.
+# Vercel. That account is closed, so both could only ever fail.
+#
+# `deploy-staging` took the staging ENVIRONMENT with it. The two staging E2E
+# jobs survive on `needs: ci`, but they carry the staging-branch/push condition
+# in their OWN `if:` — do not remove it. They previously inherited that gate by
+# depending on `deploy-staging` (GitHub skips a job whose `needs` were skipped);
+# repointing them at `ci` without restating it made them run on every pull
+# request, where they failed against a staging environment that no longer
+# exists. Beyond the dead Vercel project, the staging SUPABASE project no longer
+# resolves either (`getaddrinfo ENOTFOUND`), so staging needs rebuilding from
+# scratch — see docs/runbooks/cloudflare-migration.md step 8.
 #
 # What does NOT run here:
 #   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
@@ -430,7 +437,20 @@ jobs:
   staging-e2e-readonly:
     name: E2E smoke (staging, read-only)
     needs: ci
-    if: ${{ vars.STAGING_E2E_ENABLED == 'true' && vars.STAGING_BASE_URL != '' }}
+    # The branch/event condition is LOAD-BEARING, not decoration. This job used
+    # to be `needs: deploy-staging`, and that job carried
+    # `github.ref == refs/heads/staging && github.event_name == push`; because
+    # GitHub skips a job whose `needs` were skipped, this one never ran on a
+    # pull request. When deploy-staging was deleted with the Vercel account,
+    # moving to `needs: ci` silently dropped that gate and this started running
+    # on every PR — against a staging environment that no longer exists
+    # (`getaddrinfo ENOTFOUND` on the staging Supabase project). Keep the
+    # condition explicit here so the gate does not depend on another job.
+    if: >-
+      github.ref == 'refs/heads/staging' &&
+      github.event_name == 'push' &&
+      vars.STAGING_E2E_ENABLED == 'true' &&
+      vars.STAGING_BASE_URL != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -475,7 +495,13 @@ jobs:
   staging-e2e-mutations:
     name: E2E gates (staging, disposable mutations)
     needs: ci
-    if: ${{ vars.STAGING_E2E_MUTATIONS_ENABLED == 'true' && vars.STAGING_BASE_URL != '' }}
+    # Same load-bearing branch/event gate as staging-e2e-readonly above — see
+    # the comment there for why dropping it broke pull requests.
+    if: >-
+      github.ref == 'refs/heads/staging' &&
+      github.event_name == 'push' &&
+      vars.STAGING_E2E_MUTATIONS_ENABLED == 'true' &&
+      vars.STAGING_BASE_URL != ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
