@@ -7,6 +7,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 type Op = [string, ...unknown[]];
 interface Call { table: string; ops: Op[] }
+// A type alias, not an interface: the filter predicate below indexes a row by
+// column name, and only an alias gets the implicit index signature that allows it.
+type ElementRow = { id: string; model_id: string | null; is_deleted: boolean; deleted_at: string | null };
 
 const mocks = vi.hoisted(() => {
   const state = {
@@ -17,7 +20,7 @@ const mocks = vi.hoisted(() => {
     // A real row store, so the paged soft-delete / restore filters are exercised
     // rather than assumed: an id-only stub cannot show that the restore step
     // un-deletes the rows the discard step just removed.
-    elements: [] as Array<{ id: string; model_id: string | null; is_deleted: boolean; deleted_at: string | null }>,
+    elements: [] as ElementRow[],
     selectPages: 0,
     // Set to a PostgREST error to simulate the connection dying: postgrest-js
     // does not reject on a network failure, it RESOLVES with { error }.
@@ -177,7 +180,7 @@ describe("importIfcRoster", () => {
     // carries 11 indexes and `authenticated` runs statement_timeout=8s, so on a
     // real roster (~28k rows) it died with "canceling statement due to
     // statement timeout" — after the new roster was already live.
-    mocks.state.elements = Array.from({ length: 2300 }, (_, i) => ({
+    mocks.state.elements = Array.from({ length: 2300 }, (_, i): ElementRow => ({
       id: `old-${i}`, model_id: "old-model", is_deleted: false, deleted_at: null,
     }));
 
@@ -274,7 +277,7 @@ describe("importIfcRoster", () => {
     // `deleted_at = now` with no model scope — so the rollback un-deleted the
     // partial roster it had just removed, leaving the old roster AND a partial
     // new one live. On a perfectly healthy connection, reported as a success.
-    mocks.state.elements = Array.from({ length: 1200 }, (_, i) => ({
+    mocks.state.elements = Array.from({ length: 1200 }, (_, i): ElementRow => ({
       id: `old-${i}`, model_id: "old-model", is_deleted: false, deleted_at: null,
     }));
     mocks.state.bulkCreate
@@ -313,8 +316,8 @@ describe("importIfcRoster", () => {
     // AND drop the new model's rows — the restore is scoped by model_id, so it
     // must still pick up the old rows (and legacy rows with a null model_id).
     mocks.state.elements = [
-      ...Array.from({ length: 300 }, (_, i) => ({ id: `old-${i}`, model_id: "old-model", is_deleted: false, deleted_at: null })),
-      ...Array.from({ length: 20 }, (_, i) => ({ id: `legacy-${i}`, model_id: null, is_deleted: false, deleted_at: null })),
+      ...Array.from({ length: 300 }, (_, i): ElementRow => ({ id: `old-${i}`, model_id: "old-model", is_deleted: false, deleted_at: null })),
+      ...Array.from({ length: 20 }, (_, i): ElementRow => ({ id: `legacy-${i}`, model_id: null, is_deleted: false, deleted_at: null })),
     ];
     let failed = false;
     const realFrom = mocks.from.getMockImplementation()!;
