@@ -291,7 +291,6 @@ export default function Schedule() {
     scheduleBaselines,
     selectedProject,
     projectId,
-    qc,
     bulkParentOptions,
     view,
     setView,

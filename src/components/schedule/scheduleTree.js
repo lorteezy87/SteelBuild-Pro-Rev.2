@@ -1,7 +1,7 @@
 import { parseDateUTC, toDateOnly } from "./scheduleDateUtils";
 import { taskDurationDays } from "@/lib/schedule/duration";
 import { weightedPercentComplete } from "@/lib/schedule/rollup";
-import { displayPct } from "./scheduleTaskUtils";
+import { percentCompleteOrNull } from "./scheduleTaskUtils";
 
 // Tree-sorting: parent/child hierarchy within each phase.
 //
@@ -74,8 +74,10 @@ export function buildTreeOrder(tasks, options = {}) {
     //   child B  "Erect 60 days" 60 days,  0%   ┘ weighted truth  →  2%
     //
     // 50% is the number a PM reads off the screen and repeats to an owner.
-    const rolledPct = weightedPercentComplete(directChildren, displayPct, taskDurationDays)
-      ?? displayPct(task);
+    // percentCompleteOrNull, not displayPct: a child whose progress is unknown
+    // is skipped by the roll-up rather than averaged in as 0 (§4.3).
+    const rolledPct = weightedPercentComplete(directChildren, percentCompleteOrNull, taskDurationDays)
+      ?? percentCompleteOrNull(task);
     // The summary's span, inclusive: min start → max end is 4 days apart but
     // spans 5 (§2.4). Falls back to the stored column when children are undated.
     const rolledDuration = minStart && maxEnd

@@ -86,9 +86,29 @@ describe("the write paths that stamp actuals", () => {
     expect(body).toContain("Recorded actual dates on");
   });
 
-  it("the drawer save stamps only on a real status transition", () => {
+  // The stamping logic moved out of updateTaskMut's mutationFn and into
+  // buildTaskUpdate when the four write paths were collapsed onto one mutation
+  // (§4.2) — onMutate has to derive the SAME payload to paint it optimistically,
+  // and two copies of this merge would eventually disagree. These assertions are
+  // unchanged in substance; they just read the function that now owns it.
+  const buildBody = () => {
+    const start = MUT_SRC.indexOf("const buildTaskUpdate");
+    const end = MUT_SRC.indexOf("const undoTaskUpdate");
+    expect(start, "buildTaskUpdate exists").toBeGreaterThan(-1);
+    expect(end, "undoTaskUpdate follows it").toBeGreaterThan(start);
+    return MUT_SRC.slice(start, end);
+  };
+
+  it("the single write path is the one that stamps", () => {
+    // Guards against buildTaskUpdate becoming dead code that still satisfies
+    // the assertions below while the mutation writes some other payload.
     const upd = MUT_SRC.slice(MUT_SRC.indexOf("const updateTaskMut"));
     const body = upd.slice(0, upd.indexOf("const reparentMut"));
+    expect(body).toContain("buildTaskUpdate(data)");
+  });
+
+  it("the drawer save stamps only on a real status transition", () => {
+    const body = buildBody();
     // Comparing against the STORED row is what makes this a transition rather
     // than "every save of an already-Complete task re-stamps today".
     expect(body).toMatch(/scheduleTasks\.find\(\(t\) => t\.id === data\.id\)/);
@@ -96,16 +116,14 @@ describe("the write paths that stamp actuals", () => {
   });
 
   it("a date typed in the drawer wins over the derived stamp", () => {
-    const upd = MUT_SRC.slice(MUT_SRC.indexOf("const updateTaskMut"));
-    const body = upd.slice(0, upd.indexOf("const reparentMut"));
+    const body = buildBody();
     // `key in merged` rather than a truthiness check, so an explicit null —
     // the user clearing a wrong actual — is respected instead of re-stamped.
     expect(body).toMatch(/!\(key in merged\)/);
   });
 
   it("sanitize runs AFTER the merge, so actuals are validated too", () => {
-    const upd = MUT_SRC.slice(MUT_SRC.indexOf("const updateTaskMut"));
-    const body = upd.slice(0, upd.indexOf("const reparentMut"));
+    const body = buildBody();
     expect(body.indexOf("deriveActualsPatch")).toBeLessThan(
       body.indexOf("sanitizeScheduleTaskUpdatePayload"),
     );

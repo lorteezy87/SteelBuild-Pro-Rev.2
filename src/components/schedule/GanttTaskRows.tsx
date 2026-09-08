@@ -10,7 +10,7 @@ import {
 import { fmtDate, calcDuration } from "./scheduleDateUtils";
 import { parseDeps, formatPredecessorLabels } from "./scheduleDependencies";
 import {
-  displayPct,
+  percentCompleteOrNull,
   isMilestoneTask,
   sanitizeTaskName,
   statusColor,
@@ -216,6 +216,10 @@ export function GanttLeftPanelRows(props: any) {
     const leftHovered = hoveredRowId === task.id;
     const parentRowBg = task._hasChildren ? tint(GANTT_STATUS_HEX.inProgress, 4) : "transparent";
     const critical = isCriticalTask(task, floatMap);
+    // "—" for unknown, never "0%". A task reopened from Complete has a
+    // deliberately cleared percent, and printing 0% would assert that none of
+    // the work was ever done (§4.3).
+    const pctComplete = percentCompleteOrNull(task);
     const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
     return (
       <div key={`task-${task.id}`}
@@ -481,7 +485,7 @@ export function GanttLeftPanelRows(props: any) {
             <button onClick={cancelEdit} style={{ background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", cursor: "pointer" }}>✕</button>
           </div>
         ) : (
-          <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{displayPct(task)}%</span>
+          <span className="sbd-num" title={pctComplete === null ? "Progress not recorded" : undefined} style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: pctComplete === null ? "var(--text-muted)" : statusColor(task.status), textAlign: "right" }}>{pctComplete === null ? "—" : `${pctComplete}%`}</span>
         )}
       </div>
     );
