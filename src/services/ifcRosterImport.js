@@ -12,10 +12,17 @@
  * retire the old model, then insert — is why a project ended up with only
  * `superseded` registry rows after one bad save.) CSV-sourced model_elements
  * are left untouched (only source='ifc' rows are replaced).
+ *
+ * The rollback is best-effort — it runs over the same connection that just
+ * failed — so on failure the thrown error is stamped with
+ * ROSTER_ROLLBACK_FIELD: "clean" when every rollback statement verifiably
+ * succeeded, "dirty" when it did not. Callers MUST branch on it before telling
+ * anyone the project was left unchanged.
  */
 import { supabase } from "@/lib/supabase";
 import { entities } from "@/api/supabaseClient";
 import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
+import { ROSTER_ROLLBACK_FIELD } from "@/lib/ifc/persistSteps";
 
 const CHUNK = 500;
 
@@ -69,16 +76,24 @@ async function softDeleteInPages(applyFilter, now, onProgress) {
  * Undo the soft-deletes this run performed. `deleted_at` is stamped with the
  * run's own `now`, so it identifies exactly the rows this import retired and
  * nothing else. Paged for the same statement-timeout reason.
+ *
+ * `excludeModelId` is not optional in practice: the rollback ALSO soft-deletes
+ * the new model's own rows with that same `now`, so an unscoped restore
+ * un-deletes the half-written roster it is there to remove — leaving the old
+ * roster and a partial new one both live, i.e. the doubled piece count, off a
+ * rollback that reported success on a perfectly healthy connection.
  */
-async function restoreSoftDeleted(projectId, now) {
+async function restoreSoftDeleted(projectId, now, excludeModelId) {
   for (;;) {
-    const { data, error } = await supabase
+    let q = supabase
       .from("model_elements")
       .select("id")
       .eq("project_id", projectId)
       .eq("is_deleted", true)
-      .eq("deleted_at", now)
-      .limit(SOFT_DELETE_PAGE);
+      .eq("deleted_at", now);
+    // Legacy IFC rows can carry a null model_id, so `neq` alone would drop them.
+    if (excludeModelId) q = q.or(`model_id.is.null,model_id.neq.${excludeModelId}`);
+    const { data, error } = await q.limit(SOFT_DELETE_PAGE);
     if (error) throw error;
     const ids = (data || []).map((r) => r.id);
     if (!ids.length) break;
@@ -91,36 +106,66 @@ async function restoreSoftDeleted(projectId, now) {
   }
 }
 
-/** Best-effort removal of a half-written model so the prior one stays active. */
-async function discardModel(projectId, modelId, now) {
-  await softDeleteInPages(
-    (q) => q.eq("project_id", projectId).eq("model_id", modelId),
-    now,
-  );
-  await supabase
-    .from("model_registry")
-    .update({ is_deleted: true, deleted_at: now, status: "archived", updated_at: now })
-    .eq("id", modelId);
-}
-
 /**
- * Put the project back the way it was before this run: discard the new model,
- * un-supersede whatever it retired, and restore any rows this run soft-deleted.
+ * Put the project back the way it was before this run, and SAY WHETHER IT
+ * WORKED.
  *
  * Without this, a failure in the retire phase left BOTH rosters live — the new
  * one inserted and active, the old one never soft-deleted — while the error told
  * the operator "the previous model is still active — retry the save", so the
  * retry stacked a third roster on top. One project reached 3 live rosters and
  * 45,543 rows against a true count of 13,992.
+ *
+ * Three rules, each one a bug this used to have:
+ *  • Every statement checks its `{ error }`. supabase-js does not throw on a
+ *    failed statement — postgrest-js turns even a dead connection into a
+ *    RESOLVED `{ error: { message: "TypeError: Failed to fetch" } }` — so an
+ *    unchecked `.update()` reports a repair that never happened.
+ *  • Stages run cheapest-and-most-decisive first, and every stage is attempted
+ *    even after an earlier one fails. A rollback runs over the connection that
+ *    just died, so the two small registry PATCHes that decide which model the
+ *    project serves must not sit behind two unbounded paged passes.
+ *  • The restore is scoped away from this run's own rows (see
+ *    restoreSoftDeleted).
+ *
+ * @returns {Promise<boolean>} true only when EVERY stage verifiably succeeded
  */
 async function rollbackImport(projectId, modelId, now) {
-  await discardModel(projectId, modelId, now);
-  await supabase
-    .from("model_registry")
-    .update({ status: "active", superseded_by: null, updated_at: now })
-    .eq("project_id", projectId)
-    .eq("superseded_by", modelId);
-  await restoreSoftDeleted(projectId, now);
+  const stages = [
+    // 1. Stop serving the half-written model.
+    async () => {
+      const { error } = await supabase
+        .from("model_registry")
+        .update({ is_deleted: true, deleted_at: now, status: "archived", updated_at: now })
+        .eq("id", modelId);
+      if (error) throw error;
+    },
+    // 2. Put the model this run retired back in charge.
+    async () => {
+      const { error } = await supabase
+        .from("model_registry")
+        .update({ status: "active", superseded_by: null, updated_at: now })
+        .eq("project_id", projectId)
+        .eq("superseded_by", modelId);
+      if (error) throw error;
+    },
+    // 3. Un-retire the previous roster BEFORE dropping this run's rows: real
+    //    pieces missing from the 3D view is a worse end-state than extra ones.
+    () => restoreSoftDeleted(projectId, now, modelId),
+    // 4. Drop what this run wrote.
+    () => softDeleteInPages((q) => q.eq("project_id", projectId).eq("model_id", modelId), now),
+  ];
+
+  let clean = true;
+  for (const stage of stages) {
+    try {
+      await stage();
+    } catch (err) {
+      clean = false;
+      console.error(`[importIfcRoster] rollback stage failed for model ${modelId}:`, err);
+    }
+  }
+  return clean;
 }
 
 /**
@@ -210,7 +255,26 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
       now,
     );
   } catch (err) {
-    try { await rollbackImport(projectId, modelId, now); } catch { /* keep the original error */ }
+    // Roll back, then say WHICH of the two outcomes happened — the operator's
+    // next move is opposite in each. Swallowing the rollback's own failure (what
+    // this used to do) is how a dead connection produced "the project's model
+    // list was left unchanged" over a project that was, right then, carrying the
+    // old roster plus a partial new one.
+    let rollback = "dirty";
+    try {
+      rollback = (await rollbackImport(projectId, modelId, now)) ? "clean" : "dirty";
+    } catch (rollbackErr) {
+      console.error(`[importIfcRoster] rollback threw for model ${modelId}:`, rollbackErr);
+    }
+    if (rollback === "dirty") {
+      console.error(
+        `[importIfcRoster] rollback did NOT complete for project ${projectId} / model ${modelId} — ` +
+        `the project may hold leftover rows from this attempt (deleted_at handle ${now}).`,
+      );
+    }
+    // Stamped on the original error object so its shape (PostgREST code/message,
+    // SupabaseOperationError) survives for callers and Sentry.
+    if (err && typeof err === "object") err[ROSTER_ROLLBACK_FIELD] = rollback;
     throw err;
   }
 
