@@ -37,8 +37,8 @@ For the running list of known issues, see [`TECH_DEBT.md`](./TECH_DEBT.md).
                   │  — via Edge Functions  │
                   └────────────────────────┘
 
-         Hosting: Vercel (CI-gated deploy job) → steelbuild-pro.com
-                  Cloudflare Workers (same gate, shadow deploy) — migrating
+         Hosting: Cloudflare Workers (CI-gated deploy job) → steelbuild-pro.com
+                  migration in progress — see docs/runbooks/cloudflare-migration.md
 ```
 
 There is no separate backend service. The app is a SPA that talks
@@ -527,28 +527,33 @@ Concurrency group cancels redundant runs on rapid iteration.
 
 ### Deployment
 
-Production deploys are **CI-gated** (since 2026-06-19). Vercel's own git
-auto-deploy is OFF (`vercel.json` `git.deploymentEnabled.main:false`); the
-`deploy` job in `.github/workflows/ci.yml` is the sole path. Workflow:
+Production deploys are **CI-gated** (since 2026-06-19). The `deploy-cloudflare`
+job in `.github/workflows/ci.yml` is the sole path. Workflow:
 
 1. Develop on a `claude/<slug>` feature branch (or directly on `main`)
 2. Push to `main` → the `ci` job runs (lint + 4 typechecks + Vitest + build)
-3. **Only if `ci` is green** does the `deploy` job publish to Vercel
-   (`vercel pull/build/deploy --prebuilt --prod`). A red run leaves prod on the
-   last good build.
+3. **Only if `ci` is green** does `deploy-cloudflare` publish
+   (`wrangler deploy`). A red run leaves prod on the last good version.
 4. Verify on the live URL
 
-**Cloudflare migration (in progress).** A second gated job, `deploy-cloudflare`,
-publishes the same commit to Cloudflare Workers static assets
-(`wrangler deploy`). It shares the `ci` gate and runs *independently* of
-`deploy` — it is not in `deploy.needs`, so a Cloudflare failure can never block
-the deploy that serves steelbuild-pro.com. It is inert until the
-`CLOUDFLARE_ENABLED` repo variable is `true`.
+That gate only holds while this job is the sole publisher. Cloudflare's own
+Workers Builds git integration deploys on push with NO gate, so it must stay
+disconnected — the same hole `vercel.json`'s `git.deploymentEnabled` closed
+before. Pull requests get a preview via `preview-cloudflare`
+(`wrangler versions upload`), which uploads a version without promoting it.
 
-Vercel's `vercel.json` headers/rewrites have Cloudflare counterparts in
-`public/_headers` (copied into `dist/` by Vite) and `wrangler.jsonc`;
-`scripts/__tests__/deployHeaders.test.ts` fails CI if the two drift. Cutover,
-verification, compliance and rollback steps:
+Rollback is `wrangler rollback <version-id>`, not a redeploy.
+
+**Cloudflare migration (in progress).** The Vercel account is closed, so the
+`deploy` and `deploy-staging` jobs, `vercel.json`, `.vercelignore` and the Skew
+Protection helper have all been removed — they could only ever fail.
+`deploy-cloudflare` is inert until the `CLOUDFLARE_ENABLED` repo variable is
+`true`, so **until that is set, a push to main deploys nowhere.**
+
+Response headers and SPA routing now live in `public/_headers` (copied into
+`dist/` by Vite) and `wrangler.jsonc`. `_headers` is the only definition of
+those headers, so `scripts/__tests__/deployHeaders.test.ts` asserts them
+directly. Cutover, verification, compliance and rollback steps:
 `docs/runbooks/cloudflare-migration.md`.
 
 Remaining gap: no branch-protection required check (repo plan), so red/unreviewed
@@ -561,9 +566,12 @@ Single-region, all-US vendor chain (an accepted risk at this stage):
 
 - **Database + Auth + Storage:** Supabase (Postgres 17) on AWS **us-east-1**,
   single region. Daily backups; PITR is an owner dashboard toggle.
-- **Hosting / CDN:** Vercel (US) — see `docs/runbooks/cloudflare-migration.md`;
-  the Cloudflare cutover changes this line and the customer-facing subprocessor
-  disclosures, and must not land before they do. **Payments:** Stripe (US). **Monitoring:**
+- **Hosting / CDN:** in transition — the Vercel account is closed and Cloudflare
+  is not yet serving the domain. This line and the customer-facing subprocessor
+  disclosures (Subprocessors/Privacy/Security pages) must be corrected together
+  once Cloudflare serves; note Cloudflare's network is global by default, so the
+  all-US claim below needs restating. See `docs/runbooks/cloudflare-migration.md`.
+  **Payments:** Stripe (US). **Monitoring:**
   Sentry (US). **AI:** US-based model providers via `llm-proxy`.
 - No customer data is stored outside the US; there is no EU-residency option.
 

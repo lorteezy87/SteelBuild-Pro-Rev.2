@@ -1,20 +1,27 @@
 # Cloudflare Workers static-assets response headers.
 #
-# PORT OF vercel.json "headers" — these two files must stay in lockstep for as
-# long as the app dual-ships to Vercel and Cloudflare. vercel.json is the
-# origin of this content; if you change a header there, change it here too
-# (docs/runbooks/cloudflare-migration.md tracks the cutover that retires it).
+# THIS FILE IS THE ONLY PLACE the deployed app's response headers are defined.
+# These rules were ported from vercel.json, which has been deleted along with
+# the rest of the dead Vercel setup — there is no second copy to cross-check
+# against, so a header deleted here is simply gone from production with no
+# other signal. scripts/__tests__/deployHeaders.test.ts asserts the ones that
+# matter and records why each is here.
 #
 # Workers serves static assets with a default of
 #   Cache-Control: public, max-age=0, must-revalidate
 # so WITHOUT this file every hashed /assets/ bundle revalidates on every load
-# and every security header from vercel.json is simply absent. Syntax:
+# and the app ships with no security headers at all. Syntax:
 # https://developers.cloudflare.com/workers/static-assets/headers/
+#
+# Netlify reads the same `_headers` format. While the Netlify site is still
+# connected it picks this file up too, which is harmless (identical rules) but
+# worth knowing if you are debugging headers on a Netlify preview.
 
 # ── Security headers (every response) ────────────────────────────────────────
-# CSP is Report-Only here exactly as on Vercel — it reports violations to
-# Sentry without enforcing. Do not promote it to enforcing in this file alone;
-# flip both hosts together or the two deployments diverge on a P0 path.
+# CSP stays Report-Only: it reports violations to Sentry without enforcing.
+# Promoting it to an enforcing Content-Security-Policy is a separate, reviewed
+# change — a missed source breaks Stripe, Supabase realtime or the 3D viewer at
+# runtime with no build-time signal.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
@@ -31,8 +38,9 @@
   Cache-Control: public, max-age=31536000, immutable
 
 # ── web-ifc WebAssembly: deliberately NO rule here ───────────────────────────
-# vercel.json pins Content-Type: application/wasm on /wasm/. Do NOT port that
-# rule — on Cloudflare it makes things worse, verified against `wrangler dev`:
+# The old vercel.json pinned Content-Type: application/wasm on /wasm/. Do NOT
+# add that rule back — on Cloudflare it makes things worse, verified against
+# `wrangler dev`:
 #
 #   • Wrangler already derives application/wasm from the .wasm extension when
 #     it uploads the asset, so a REAL /wasm/web-ifc.wasm is correctly typed
@@ -48,9 +56,9 @@
 # prevents. Leave it out.
 
 # ── Preview URLs must never be indexed ───────────────────────────────────────
-# Vercel preview deployments were auth-walled by the platform; Cloudflare
-# *.workers.dev preview URLs are PUBLIC by default. The app still gates data
-# behind Supabase auth, but the shell should not be crawlable. Cloudflare
-# Access is the real fix — see the runbook. This is the cheap backstop.
+# Cloudflare *.workers.dev preview URLs are PUBLIC by default (the Vercel
+# previews these replaced were auth-walled by the platform). The app still
+# gates data behind Supabase auth, but the shell should not be crawlable.
+# Cloudflare Access is the real fix — see the runbook. This is the backstop.
 https://:version.:subdomain.workers.dev/*
   X-Robots-Tag: noindex

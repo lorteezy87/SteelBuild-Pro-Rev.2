@@ -4,7 +4,6 @@ import path from 'path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'url'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
-import { vercelSkewAssetUrl } from './scripts/vercel-skew-protection.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -30,14 +29,14 @@ function copyWebIfcWasm() {
   }
 }
 
-// Sentry source-map upload runs ONLY when SENTRY_AUTH_TOKEN is present (set as a
-// Vercel build env var for production). Local + CI builds have no token, so the
-// plugin is skipped entirely and the build is unaffected. org/project come from
-// the SENTRY_ORG / SENTRY_PROJECT env vars (set alongside the token). The token
-// is NEVER hardcoded — it is read from the environment at build time only.
+// Sentry source-map upload runs ONLY when SENTRY_AUTH_TOKEN is present (set as
+// a repo secret and passed to the deploy job in .github/workflows/ci.yml).
+// Local builds have no token, so the plugin is skipped entirely and the build
+// is unaffected. org/project come from the SENTRY_ORG / SENTRY_PROJECT env vars
+// (set alongside the token). The token is NEVER hardcoded — it is read from the
+// environment at build time only.
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const enableSentrySourceMaps = Boolean(sentryAuthToken)
-const enableVercelSkewProtection = Boolean(vercelSkewAssetUrl('assets/probe.js'))
 
 function vendorChunk(id) {
   const n = id.replace(/\\/g, '/')
@@ -134,15 +133,12 @@ export default defineConfig({
         })]
       : []),
   ],
-  ...(enableVercelSkewProtection
-    ? {
-        experimental: {
-          renderBuiltUrl(filename) {
-            return vercelSkewAssetUrl(filename)
-          },
-        },
-      }
-    : {}),
+  // NOTE: there is no asset-URL pinning here any more. Vercel Skew Protection
+  // used to rewrite emitted asset URLs to carry a deployment id, so a tab open
+  // across a deploy could still fetch its matching lazy chunks. Cloudflare has
+  // no equivalent, and the Vercel account is gone, so the mechanism went with
+  // it. src/lib/lazyRetry.ts is what covers this now: it catches the
+  // stale-chunk import failure and does one reload onto the fresh index.html.
   build: {
     // Emit hidden source maps (no sourceMappingURL comment, so they're not
     // referenced by the served bundle) only when we're going to upload them to

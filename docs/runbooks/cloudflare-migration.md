@@ -1,33 +1,36 @@
 # Vercel → Cloudflare Workers — Migration Runbook
 
 **SteelBuild Pro — hosting migration**
-Purpose: move the web frontend from Vercel to Cloudflare Workers static assets **without a downtime window and without a flag day**, by running both hosts off the same commit until the DNS flip.
+Purpose: make Cloudflare Workers the production host for the web frontend, and retire everything else.
 
-> The **code half is shipped**. `.github/workflows/ci.yml` has a guarded `deploy-cloudflare` job that publishes the same commit as the Vercel `deploy` job. It is **inert** until you complete the owner steps below and set `CLOUDFLARE_ENABLED=true`.
+> **The Vercel account is closed.** This is not a dual-run migration with a Vercel fallback — there is no Vercel to fall back to. The `deploy` and `deploy-staging` jobs have been deleted from `ci.yml`, along with `vercel.json`, `.vercelignore` and the Skew Protection helper, because they could only ever fail.
+
+> **Consequence, stated plainly:** until you complete the owner steps below and set `CLOUDFLARE_ENABLED=true`, **a push to `main` deploys nowhere.** That is deliberate — publishing before the secrets exist would ship an app that cannot reach Supabase — but it does mean nothing ships until you flip it.
 
 Refs:
-- Cloudflare Worker: `steelbuild-pro-rev-2` · Vercel project: `steelbuildpro-og` · Repo: `lorteezy87/SteelBuild-Pro-Rev.2`
+- Cloudflare Worker: `steelbuild-pro-rev-2` · Repo: `lorteezy87/SteelBuild-Pro-Rev.2`
 - Production domain: `steelbuild-pro.com` · Supabase (unchanged): `kjrwqagyeswwoxpjkcko`
+- Also connected and to be retired: the Netlify site `steelbuild-pro` (step 2b)
 
 ---
 
-## Architecture during the migration
+## Target architecture
 
 ```
-                                   ┌── deploy ───────────▶ Vercel  ──▶ steelbuild-pro.com   (LIVE)
- main ──CI gate (lint/type/test/build)──┤
-                                   └── deploy-cloudflare ─▶ Workers ──▶ *.workers.dev       (shadow)
+ main ──CI gate (lint/type/test/build)── deploy-cloudflare ──▶ Workers ──▶ steelbuild-pro.com
+
+ PR   ──CI gate ─────────────────────── preview-cloudflare ──▶ versioned preview URL
 ```
 
-- **One gate, two publishes.** Both deploy jobs `needs: ci`, so neither can ship a red build.
-- **Independent.** `deploy-cloudflare` is not in `deploy.needs`. A Cloudflare failure can never stop or roll back the deploy that still serves customers.
+- **One gate, one publisher.** `deploy-cloudflare` needs `ci`, so a red lint/typecheck/test/build cannot reach production. This holds **only** while it is the sole publisher — see step 2.
+- **Previews cannot become production.** `preview-cloudflare` runs `wrangler versions upload`, which uploads a version without promoting it. Only `wrangler deploy` promotes.
 - **Nothing else moves.** Supabase (DB, auth, storage, edge functions), Stripe, and Sentry are untouched. This migration is the static frontend only.
 
 ---
 
-## What had to be ported (already done in code)
+## What was ported (already done in code)
 
-| Vercel mechanism | Cloudflare equivalent | Where |
+| Old Vercel mechanism | Now | Where |
 |---|---|---|
 | `vercel.json` `headers` — 6 security headers + CSP-Report-Only | `_headers` file, copied into `dist/` by Vite | `public/_headers` |
 | `/assets/(.*)` immutable `Cache-Control` | same, via `_headers` | `public/_headers` |
@@ -37,8 +40,10 @@ Refs:
 | `vercel pull` for build-time env | `VITE_SUPABASE_*` repo secrets | `ci.yml` |
 | Auth-walled preview deployments | `X-Robots-Tag: noindex` + Cloudflare Access | `public/_headers`, step 6 |
 | Vercel runtime logs | Workers Logs (`observability.enabled`) | `wrangler.jsonc` |
+| Vercel Skew Protection | nothing — removed with the account; `lazyRetry` covers it | see "Known differences" |
+| `.vercel.app` preview-host gating | `.workers.dev` + Netlify `--` preview hosts | `src/lib/deployHost.ts` |
 
-**Drift guard:** `scripts/__tests__/deployHeaders.test.ts` fails CI if `public/_headers` and `vercel.json` stop agreeing. Delete it at step 8, when `vercel.json` goes.
+**`public/_headers` is now the only definition of the app's response headers.** There is no second file to cross-check it against, so `scripts/__tests__/deployHeaders.test.ts` asserts each header directly and records why it exists. A header deleted from `_headers` is gone from production with no other signal — that test is the signal.
 
 ### Two things that did not port cleanly
 
@@ -87,25 +92,30 @@ Cloudflare's own git integration (Workers & Pages → the Worker → Settings �
 
 **This is not hypothetical.** A `Workers Builds: steelbuild-pro-rev-2` check run appears on pull requests in this repo, so the integration is live and building today. Every push to `main` since the Worker was created on 2026-09-06 has deployed to it without passing `ci`.
 
-Disconnect it. `deploy-cloudflare` must be the sole path, exactly as `deploy` is for Vercel. Until it is disconnected, turning on `CLOUDFLARE_ENABLED` gives you **two** publishers racing to the same Worker — one gated, one not.
+Disconnect it. `deploy-cloudflare` must be the sole publisher. Until it is disconnected, turning on `CLOUDFLARE_ENABLED` gives you **two** publishers racing the same Worker — one gated, one not, and the ungated one wins whenever it finishes last.
 
-### 2b. Decide what happens to Netlify
+Note there are **two** connected Workers, `steelbuild-pro-rev-2` and `nickl`; both build from this repo. Check both.
+
+Disconnecting costs you the per-PR preview URLs Workers Builds posted — `preview-cloudflare` in `ci.yml` replaces them with `wrangler versions upload`, which produces the same kind of versioned preview URL but only after `ci` is green.
+
+### 2b. Retire Netlify
 
 A **Netlify** site (`steelbuild-pro`) is also connected to this repo and builds on push — it posts `Header rules`, `Redirect rules` and `Pages changed` check runs on pull requests. There is no `netlify.toml` in the repo, so it is configured entirely in the Netlify dashboard and is invisible to anyone reading this codebase.
 
-That makes **three** git-connected hosting integrations plus the CI-gated Actions deploy. Before migrating, establish:
+The plan is to retire it once Cloudflare is serving. Until then:
 
-1. Does the Netlify site serve any production traffic, or only previews?
-2. If it is dormant, disconnect it — it builds every push and its config lives nowhere in version control.
-3. Note that Netlify uses the **same `_headers` format** as Cloudflare, so `public/_headers` is now being consumed by Netlify builds too. That is harmless (identical headers) but it means the file is load-bearing for two hosts, not one.
+1. **Establish what it currently serves** before disconnecting anything — if it is answering for `steelbuild-pro.com` today, disconnecting it is the outage, not the cutover.
+2. Netlify reads the **same `_headers` format**, so `public/_headers` now applies there too. Harmless (identical rules), and worth knowing when debugging.
+3. Netlify needs a `_redirects` file (or dashboard rules) for SPA deep links; this repo has none. If Netlify is serving production and deep links work, the rules are in its dashboard — confirm before assuming the repo tells the whole story.
+4. Disconnect it at step 8, after Cloudflare has been serving cleanly.
 
-### 3. Turn it on and let it shadow
+### 3. Turn it on and verify off-domain
 
-Set `CLOUDFLARE_ENABLED=true`, push to `main`, confirm the job runs green, and set `CLOUDFLARE_BASE_URL` to the workers.dev URL.
+Set `CLOUDFLARE_ENABLED=true`, push to `main`, confirm `deploy-cloudflare` runs green, and set `CLOUDFLARE_BASE_URL` to the workers.dev URL.
 
-Then **leave it running for at least a week of normal deploys.** Cost of waiting: nothing. Cost of not waiting: you find the header/MIME/routing problems on the production domain.
+**Verify on the workers.dev URL before touching DNS** (steps 4–5). With Vercel gone there is no second host to fall back to, so the workers.dev URL is the only place left to find a problem cheaply. Spend the time here.
 
-### 4. Verify the shadow deployment
+### 4. Verify the deployment off-domain
 
 Against the workers.dev URL, not the live domain:
 
@@ -166,60 +176,78 @@ The fab-release gate spec is a P0 path (CLAUDE.md) — it must be green here bef
 4. Set `CLOUDFLARE_BASE_URL=https://steelbuild-pro.com` so the deploy health check covers the real domain.
 5. Update `E2E_BASE_URL` / `playwright.config.ts` if the default base URL needs to change (it does not — the domain is the same).
 
-**Do not delete the Vercel project.** Keep it deployable for at least two weeks after the flip.
+**Keep Netlify deployable until Cloudflare has served cleanly for at least a week.** It is the only rollback target left — see Rollback below.
 
-### 8. Decommission (only after a quiet two weeks)
+### 8. Decommission (only after a quiet week on Cloudflare)
 
-1. Delete `vercel.json`, `.vercelignore`, `scripts/vercel-skew-protection.mjs` + its test, and the `renderBuiltUrl` block in `vite.config.js`.
-2. Delete the `deploy` and `deploy-staging` Vercel jobs from `ci.yml` (port `deploy-staging` to Cloudflare first if staging is in use).
-3. Delete `scripts/__tests__/deployHeaders.test.ts` — with `vercel.json` gone there is nothing to mirror.
-4. Simplify `src/lib/deployHost.ts` to the `workers.dev` rule and drop the Vercel branch + its tests.
-5. Remove the `VERCEL_*` repo secrets.
-6. **Update the customer-facing hosting disclosures** — see below.
+Already done in code (nothing to do): `vercel.json`, `.vercelignore`, `scripts/vercel-skew-protection.mjs` + its test, the `renderBuiltUrl` block in `vite.config.js`, and the `deploy` / `deploy-staging` jobs are all removed.
+
+Remaining:
+
+1. Disconnect the Netlify site (step 2b) and delete it once you are sure nothing points at it.
+2. Remove the `VERCEL_*` repo secrets — they authenticate to a closed account.
+3. Re-provision **staging** if you want it back. `deploy-staging` deployed to a second Vercel project and went with the account; the `staging-e2e-readonly` / `staging-e2e-mutations` jobs survive and now hang off `ci`, staying inert until `STAGING_BASE_URL` points at something. Rebuilding it on Cloudflare means a second Worker (or a Wrangler environment) plus the separate staging Supabase project described in `staging-setup.md`.
+4. **Update the customer-facing hosting disclosures** — see below.
 
 ---
 
 ## Compliance: the hosting subprocessor changes
 
-Four places name Vercel as the hosting provider to customers. They are accurate today and become false at step 7, so they change **on cutover day**, not before:
+Four places tell customers that Vercel hosts this app:
 
 - `src/pages/Subprocessors.jsx` — Vercel is a listed subprocessor
 - `src/pages/Privacy.jsx` — hosting/delivery, and the data-residency section
 - `src/pages/Security.jsx` — hosting, and the data-residency section
 - `ARCHITECTURE.md` — "Hosting / CDN: Vercel (US)"
 
-Two things to check before the flip, both outside this repo:
+**These were left unchanged on purpose, and they need a decision — possibly before cutover, not after.** The original plan was to update them on cutover day, on the assumption that Vercel was serving until then. With the Vercel account closed that assumption is gone: whatever is actually answering for `steelbuild-pro.com` today, these pages are describing a host that can no longer deploy. Writing "Cloudflare" into a privacy policy before Cloudflare actually serves would just swap one inaccurate claim for another, so nothing was changed blind.
 
-1. **Subprocessor change notice.** If any customer contract or the posted subprocessor policy commits to advance notice of a subprocessor change, that clock starts before cutover, not after.
-2. **Data residency.** The all-US vendor chain in `ARCHITECTURE.md` is a stated commitment. Cloudflare's network is global by default — traffic is served from the nearest edge, and static assets are cached there. Confirm what "all-US" now means, or restate it. Do not quietly let the claim go stale.
+Settle it as part of step 3:
+
+1. **Confirm what serves production today** (Netlify, per step 2b, or something else). That is the name that is currently correct.
+2. **Subprocessor change notice.** If any customer contract or the posted subprocessor policy commits to advance notice of a subprocessor change, that clock starts *before* cutover. Two changes may need disclosing here, not one — Vercel → whatever is serving now, and → Cloudflare.
+3. **Data residency.** The all-US vendor chain in `ARCHITECTURE.md` is a stated commitment. Cloudflare's network is global by default — traffic is served from the nearest edge and static assets are cached there. Confirm what "all-US" means once Cloudflare serves, or restate it. Do not let the claim go stale quietly.
+
+Update all four in one commit once production is genuinely on Cloudflare.
 
 ---
 
 ## Known differences to accept
 
-**1. No Skew Protection.** Vercel can pin asset URLs to a deployment ID so an old open tab still loads its lazy chunks after a new deploy (`scripts/vercel-skew-protection.mjs`, active only when `VERCEL_SKEW_PROTECTION_ENABLED=1` on the project). Cloudflare has no equivalent.
+**1. No Skew Protection.** Vercel could pin asset URLs to a deployment ID so a tab open across a deploy still loaded its lazy chunks. Cloudflare has no equivalent, and the helper that did it has been deleted along with the account.
 
-Impact: a user with a tab open across a deploy who then navigates to a not-yet-loaded lazy route gets one chunk-load failure. `src/lib/lazyRetry.ts` already catches exactly that and does a one-shot reload, so the user sees a reload, not an error. Acceptable — but if the project has skew protection enabled today, this is a real (small) regression, not a no-op.
+Impact: a user with a tab open across a deploy who then navigates to a not-yet-loaded lazy route gets one chunk-load failure. `src/lib/lazyRetry.ts` catches exactly that and does a one-shot reload, so they see a reload, not an error. Acceptable — but if the Vercel project had skew protection switched on, this is a real (small) regression, not a no-op.
 
-**2. Rollback is a different verb.** Vercel promotes a previous deployment. Cloudflare uses versions:
+**2. Rollback is a different verb.** Vercel promoted a previous deployment. Cloudflare uses versions:
 
 ```bash
 npx wrangler deployments list
 npx wrangler rollback [<version-id>]
 ```
 
-Add this to `docs/runbooks/rollback.md` at cutover.
+This is now the **primary** rollback for a bad release, not a footnote — see Rollback below. Add it to `docs/runbooks/rollback.md` at cutover.
 
-**3. Build environment.** Cloudflare deploys prebuilt output from the GitHub runner — the build happens in Actions, not on Cloudflare. Anything that relied on Vercel build env vars (`VERCEL_*`) is simply absent. Only the skew-protection path read those.
+**3. Build environment.** Cloudflare deploys prebuilt output from the GitHub runner — the build happens in Actions, not on Cloudflare. Anything that relied on `VERCEL_*` build env vars is simply absent; only the skew-protection path read those.
+
+**4. No second host.** Every previous version of this plan assumed a healthy Vercel to fall back to. There isn't one. Treat step 3's off-domain verification as load-bearing rather than a formality.
 
 ---
 
 ## Rollback
 
-**Before DNS (steps 1–6):** nothing to roll back. Vercel is still serving. Set `CLOUDFLARE_ENABLED=false`.
+**A bad release (Cloudflare is serving, the new version is broken)** — this is the common case and it is fast:
 
-**After DNS (step 7):** point `steelbuild-pro.com` back at Vercel.
+```bash
+npx wrangler deployments list      # find the last good version
+npx wrangler rollback <version-id>
+```
+
+No DNS involved, no other host involved. This is why the version history matters more than it did on Vercel.
+
+**Before DNS (steps 1–6):** nothing to roll back — production is wherever it is today, untouched. Set `CLOUDFLARE_ENABLED=false` to stop publishing.
+
+**After DNS (step 7), if Cloudflare itself is the problem** rather than a specific version: point `steelbuild-pro.com` back at whatever served before the cutover (per step 2b, most likely the Netlify site).
 - If nameservers are still at the old registrar/DNS host: revert the A/CNAME records. Minutes at a 300s TTL.
-- If nameservers have moved to Cloudflare: change the record in Cloudflare to point back at Vercel and set it to **DNS only** (grey cloud). Faster than moving nameservers back.
+- If nameservers have moved to Cloudflare: change the record in Cloudflare to point back and set it to **DNS only** (grey cloud). Faster than moving nameservers back.
 
-Either way the Vercel project must still be deployable — which is why step 8 waits two weeks.
+That target must still be deployable — which is why step 8 keeps Netlify alive for a week after the flip. **Vercel is not a rollback option.** The account is closed.

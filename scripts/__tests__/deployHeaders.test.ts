@@ -1,15 +1,17 @@
 /**
- * Drift guard: public/_headers (Cloudflare) must carry the same response
- * headers as vercel.json (Vercel).
+ * public/_headers is the ONLY place the deployed app's response headers are
+ * defined. There is no second host to cross-check against any more: vercel.json
+ * used to carry these rules and this test used to assert the two agreed, but
+ * the Vercel account is gone and that file with it.
  *
- * The app dual-ships to both hosts during the Cloudflare migration. A security
- * header or cache directive added to one file and forgotten in the other means
- * production behaves differently depending on which deployment a user lands
- * on — and the gap is invisible until someone curls both. This test makes the
- * two files fail CI together instead.
+ * So this file is no longer a drift guard — it is the contract. If a header
+ * silently disappears from `_headers`, nothing else in the repo notices and the
+ * only symptom is a production response missing a security header months later.
+ * Each assertion below records WHY the header is there, so a future edit that
+ * removes one has to argue with a specific reason rather than a bare string.
  *
- * Retire this test at cutover, when vercel.json is deleted (see
- * docs/runbooks/cloudflare-migration.md).
+ * Cloudflare `_headers` reference:
+ * https://developers.cloudflare.com/workers/static-assets/headers/
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -47,59 +49,72 @@ function parseCloudflareHeaders(text: string): Record<string, HeaderMap> {
   return blocks;
 }
 
-/** Pull the header set Vercel applies for a given `source` pattern. */
-function vercelHeadersFor(source: string): HeaderMap {
-  const config = JSON.parse(readFileSync(resolve(repoRoot, "vercel.json"), "utf8"));
-  const entry = config.headers.find((h: { source: string }) => h.source === source);
-  if (!entry) throw new Error(`vercel.json has no headers entry for source "${source}"`);
-  return Object.fromEntries(
-    entry.headers.map((h: { key: string; value: string }) => [h.key, h.value]),
-  );
-}
-
 const cloudflare = parseCloudflareHeaders(
   readFileSync(resolve(repoRoot, "public", "_headers"), "utf8"),
 );
 
-describe("public/_headers mirrors vercel.json", () => {
-  it("applies the same security headers to every response", () => {
-    // Vercel's catch-all source is the regex `/(.*)`; Cloudflare's is `/*`.
-    expect(cloudflare["/*"]).toEqual(vercelHeadersFor("/(.*)"));
+describe("public/_headers", () => {
+  it("sends the security headers on every response", () => {
+    const h = cloudflare["/*"];
+    expect(h, "the catch-all `/*` block is missing entirely").toBeDefined();
+
+    expect(h["X-Content-Type-Options"]).toBe("nosniff");
+    expect(h["X-Frame-Options"]).toBe("DENY");
+    expect(h["Referrer-Policy"]).toBe("strict-origin-when-cross-origin");
+    expect(h["Strict-Transport-Security"]).toContain("max-age=");
+    // The app asks for none of these; denying them keeps a compromised
+    // dependency from prompting a field user for a microphone or USB device.
+    expect(h["Permissions-Policy"]).toContain("microphone=()");
   });
 
-  it("applies the same immutable caching to hashed build output", () => {
-    expect(cloudflare["/assets/*"]).toEqual(vercelHeadersFor("/assets/(.*)"));
+  it("keeps the CSP in Report-Only until someone deliberately enforces it", () => {
+    const h = cloudflare["/*"];
+    // Promoting this to an enforcing `Content-Security-Policy` is a real
+    // change with a real blast radius — a missed source breaks Stripe, Supabase
+    // realtime, or the 3D viewer at runtime with no build-time signal. It
+    // should be its own reviewed change, not a side effect of a header edit.
+    expect(h).toHaveProperty("Content-Security-Policy-Report-Only");
+    expect(h).not.toHaveProperty("Content-Security-Policy");
+
+    const csp = h["Content-Security-Policy-Report-Only"];
+    // Sources the app genuinely needs; dropping any of these breaks a feature.
+    expect(csp, "Supabase REST/auth/storage").toContain("https://*.supabase.co");
+    expect(csp, "Supabase realtime websockets").toContain("wss://*.supabase.co");
+    expect(csp, "Stripe billing").toContain("https://js.stripe.com");
+    // web-ifc compiles WebAssembly at runtime; without this the 3D viewer dies.
+    expect(csp, "web-ifc WebAssembly").toContain("'wasm-unsafe-eval'");
+    // Violations are only useful if they are actually reported somewhere.
+    expect(csp, "violation reporting endpoint").toContain("report-uri");
   });
 
-  it("still carries the headers the app depends on at runtime", () => {
-    // Spelled out rather than derived, so deleting a header from BOTH files
-    // (which would keep the mirror tests green) still fails here.
-    const globalHeaders = cloudflare["/*"];
-    expect(globalHeaders["X-Content-Type-Options"]).toBe("nosniff");
-    expect(globalHeaders["X-Frame-Options"]).toBe("DENY");
-    expect(globalHeaders["Strict-Transport-Security"]).toContain("max-age=");
-    // CSP stays REPORT-ONLY on both hosts. Promoting it to enforcing is a
-    // deliberate, separately-tested change — not something a header edit does
-    // by accident.
-    expect(globalHeaders).toHaveProperty("Content-Security-Policy-Report-Only");
-    expect(globalHeaders).not.toHaveProperty("Content-Security-Policy");
+  it("caches hashed build output immutably", () => {
+    // Workers defaults static assets to `max-age=0, must-revalidate`. Without
+    // this rule every bundle revalidates on every load, and public/sw.js's
+    // cache-first branch for hashed assets is built on the assumption that
+    // these URLs can never change content.
+    expect(cloudflare["/assets/*"]?.["Cache-Control"]).toContain("immutable");
+  });
 
-    // public/sw.js serves hashed assets cache-first on the strength of this.
-    expect(cloudflare["/assets/*"]["Cache-Control"]).toContain("immutable");
-
-    // REGRESSION GUARD. vercel.json pins Content-Type: application/wasm on
-    // /wasm/, and porting that rule to Cloudflare is the obvious-looking move.
-    // Do not. Verified against `wrangler dev`: Wrangler already derives
-    // application/wasm from the file extension, and a path rule ALSO applies
-    // to the SPA fallback — so a missing /wasm/ path returns 200 with
-    // index.html in the body labelled application/wasm, which fails
-    // instantiateStreaming with a compile error instead of a clean 404.
-    // public/_headers explains this at length; keep the two in agreement.
+  it("does NOT pin a Content-Type on /wasm/", () => {
+    // REGRESSION GUARD — this rule looks obviously correct and is not.
+    // Verified against `wrangler dev`: Wrangler already derives
+    // application/wasm from the file extension, so the real web-ifc.wasm is
+    // typed correctly with no rule. But a path rule ALSO applies to the SPA
+    // fallback, so with the rule in place a request for a /wasm/ path that
+    // does not exist returned 200 with index.html in the body labelled
+    // application/wasm — instantiateStreaming then fails on a confusing
+    // compile error instead of a clean 404.
+    //
+    // The IFC viewer renders zero geometry with no error on a bad WASM
+    // response, so this rule causes the exact failure it appears to prevent.
     expect(Object.keys(cloudflare)).not.toContain("/wasm/*");
+  });
 
-    // Cloudflare preview URLs are public, unlike Vercel's auth-walled ones.
-    expect(cloudflare["https://:version.:subdomain.workers.dev/*"]["X-Robots-Tag"]).toBe(
-      "noindex",
-    );
+  it("keeps workers.dev preview URLs out of search results", () => {
+    // Cloudflare preview URLs are public. This is a backstop, not access
+    // control — Cloudflare Access is the real answer (see the runbook).
+    expect(
+      cloudflare["https://:version.:subdomain.workers.dev/*"]?.["X-Robots-Tag"],
+    ).toBe("noindex");
   });
 });
