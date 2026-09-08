@@ -5,6 +5,23 @@
 	"name": "steelbuild-pro-rev-2",
 	"compatibility_date": "2026-09-06",
 
+	// Both of these MUST stay explicit now that "routes" exists below.
+	//
+	// Wrangler's default is: if a Worker has routes and `workers_dev` is not
+	// set, the workers.dev subdomain is DISABLED — and disabling it also
+	// disables Preview URLs. Adding the custom-domain routes therefore silently
+	// switched off both, which broke the deploy immediately: the post-deploy
+	// health check probes the workers.dev URL and got six straight 404s, and
+	// the preview-cloudflare job's `wrangler versions upload` depends on Preview
+	// URLs existing. The custom domains themselves attached fine — the outage
+	// was entirely this default.
+	//
+	// Keeping workers.dev alive is also worth it on its own: it is the one URL
+	// that answers independently of DNS, which is exactly what you want when
+	// you are trying to work out whether a domain problem is DNS or the app.
+	"workers_dev": true,
+	"preview_urls": true,
+
 	// Workers Logs. Vercel's runtime logs do not follow us across the
 	// migration, and a static-asset Worker with no observability gives us no
 	// way to answer "is it serving?" beyond the CI health check. Sampling is
@@ -13,6 +30,34 @@
 	"observability": {
 		"enabled": true
 	},
+
+	// Custom Domains — the hostnames this Worker serves, in version control.
+	//
+	// These were originally attached by hand in the dashboard, which is how the
+	// domain sat broken through a dozen green deploys: `wrangler deploy`
+	// published fine, CI's health check pointed at the workers.dev URL, and
+	// nothing anywhere asserted that steelbuild-pro.com resolved to this Worker.
+	// It didn't — the A records still pointed at Vercel (76.76.21.21), which
+	// answered DEPLOYMENT_NOT_FOUND because that project was gone. Declaring the
+	// hostnames here makes `wrangler deploy` create and re-assert them on every
+	// deploy, so the binding can't silently drift again.
+	//
+	// custom_domain (NOT a plain route): the Worker IS the origin. Cloudflare
+	// owns the DNS record and the certificate. That is also why it refuses to
+	// attach to a hostname that already has an A/CNAME record — the pre-existing
+	// Vercel A records had to be deleted first, and Cloudflare then recreated
+	// them as managed records pointing here.
+	//
+	// Both apex and www are listed: a Custom Domain matches the hostname
+	// EXACTLY, so a Worker on the apex does not answer www (and vice versa).
+	// If you later prefer www → apex as a 301 instead of serving both, drop the
+	// www entry here and replace it with a redirect rule plus a proxied
+	// placeholder record (A 192.0.2.0) — the redirect needs a proxied record to
+	// exist for Cloudflare to act on.
+	"routes": [
+		{ "pattern": "steelbuild-pro.com", "custom_domain": true },
+		{ "pattern": "www.steelbuild-pro.com", "custom_domain": true }
+	],
 
 	// Pure static-asset Worker: no "main", so there is no Worker script and no
 	// ASSETS binding (the binding is only valid alongside "main"). Everything
