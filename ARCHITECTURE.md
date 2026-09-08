@@ -38,6 +38,7 @@ For the running list of known issues, see [`TECH_DEBT.md`](./TECH_DEBT.md).
                   └────────────────────────┘
 
          Hosting: Vercel (CI-gated deploy job) → steelbuild-pro.com
+                  Cloudflare Workers (same gate, shadow deploy) — migrating
 ```
 
 There is no separate backend service. The app is a SPA that talks
@@ -537,6 +538,19 @@ auto-deploy is OFF (`vercel.json` `git.deploymentEnabled.main:false`); the
    last good build.
 4. Verify on the live URL
 
+**Cloudflare migration (in progress).** A second gated job, `deploy-cloudflare`,
+publishes the same commit to Cloudflare Workers static assets
+(`wrangler deploy`). It shares the `ci` gate and runs *independently* of
+`deploy` — it is not in `deploy.needs`, so a Cloudflare failure can never block
+the deploy that serves steelbuild-pro.com. It is inert until the
+`CLOUDFLARE_ENABLED` repo variable is `true`.
+
+Vercel's `vercel.json` headers/rewrites have Cloudflare counterparts in
+`public/_headers` (copied into `dist/` by Vite) and `wrangler.jsonc`;
+`scripts/__tests__/deployHeaders.test.ts` fails CI if the two drift. Cutover,
+verification, compliance and rollback steps:
+`docs/runbooks/cloudflare-migration.md`.
+
 Remaining gap: no branch-protection required check (repo plan), so red/unreviewed
 commits can still land on `main` (they just can't deploy). `CLAUDE.md` documents
 the git-safety rules + agent deploy sequence.
@@ -547,7 +561,9 @@ Single-region, all-US vendor chain (an accepted risk at this stage):
 
 - **Database + Auth + Storage:** Supabase (Postgres 17) on AWS **us-east-1**,
   single region. Daily backups; PITR is an owner dashboard toggle.
-- **Hosting / CDN:** Vercel (US). **Payments:** Stripe (US). **Monitoring:**
+- **Hosting / CDN:** Vercel (US) — see `docs/runbooks/cloudflare-migration.md`;
+  the Cloudflare cutover changes this line and the customer-facing subprocessor
+  disclosures, and must not land before they do. **Payments:** Stripe (US). **Monitoring:**
   Sentry (US). **AI:** US-based model providers via `llm-proxy`.
 - No customer data is stored outside the US; there is no EU-residency option.
 

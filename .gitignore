@@ -93,3 +93,8 @@ ios/capacitor-cordova-ios-plugins/
 DerivedData/
 # @capacitor/assets source art (optional; generated icon sets are committed)
 /assets/
+
+# Wrangler local state — `wrangler dev` writes a local workerd cache/state dir
+# here, and .dev.vars* holds local Worker secrets. Neither is ever committed.
+.wrangler/
+.dev.vars*

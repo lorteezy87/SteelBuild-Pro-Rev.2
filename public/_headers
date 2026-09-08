@@ -1,0 +1,56 @@
+# Cloudflare Workers static-assets response headers.
+#
+# PORT OF vercel.json "headers" — these two files must stay in lockstep for as
+# long as the app dual-ships to Vercel and Cloudflare. vercel.json is the
+# origin of this content; if you change a header there, change it here too
+# (docs/runbooks/cloudflare-migration.md tracks the cutover that retires it).
+#
+# Workers serves static assets with a default of
+#   Cache-Control: public, max-age=0, must-revalidate
+# so WITHOUT this file every hashed /assets/ bundle revalidates on every load
+# and every security header from vercel.json is simply absent. Syntax:
+# https://developers.cloudflare.com/workers/static-assets/headers/
+
+# ── Security headers (every response) ────────────────────────────────────────
+# CSP is Report-Only here exactly as on Vercel — it reports violations to
+# Sentry without enforcing. Do not promote it to enforcing in this file alone;
+# flip both hosts together or the two deployments diverge on a P0 path.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: microphone=(), usb=(), serial=(), bluetooth=(), midi=()
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io https://api.stripe.com https://geocoding-api.open-meteo.com https://api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://o4511458803253248.ingest.us.sentry.io/api/4511458819375104/security/?sentry_key=6709c2092ebda9743a803919a79c7b46
+
+# ── Hashed build output ──────────────────────────────────────────────────────
+# Vite fingerprints everything under /assets/, so it is immutable by
+# construction. public/sw.js depends on this: its hashed-asset branch is
+# cache-first precisely because these URLs can never change content.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── web-ifc WebAssembly: deliberately NO rule here ───────────────────────────
+# vercel.json pins Content-Type: application/wasm on /wasm/. Do NOT port that
+# rule — on Cloudflare it makes things worse, verified against `wrangler dev`:
+#
+#   • Wrangler already derives application/wasm from the .wasm extension when
+#     it uploads the asset, so a REAL /wasm/web-ifc.wasm is correctly typed
+#     with no rule at all.
+#   • A path-pattern rule also applies to the SPA fallback. With "/wasm/*  ->
+#     Content-Type: application/wasm", a request for a /wasm/ path that does
+#     NOT exist returned 200 with index.html in the body labelled
+#     application/wasm — WebAssembly.instantiateStreaming then fails on a
+#     confusing compile error instead of a clean 404.
+#
+# The IFC viewer renders zero geometry with no error on a wrong MIME type, so
+# the failure this rule would cause is exactly the one it looks like it
+# prevents. Leave it out.
+
+# ── Preview URLs must never be indexed ───────────────────────────────────────
+# Vercel preview deployments were auth-walled by the platform; Cloudflare
+# *.workers.dev preview URLs are PUBLIC by default. The app still gates data
+# behind Supabase auth, but the shell should not be crawlable. Cloudflare
+# Access is the real fix — see the runbook. This is the cheap backstop.
+https://:version.:subdomain.workers.dev/*
+  X-Robots-Tag: noindex
