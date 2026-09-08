@@ -5,6 +5,23 @@
 	"name": "steelbuild-pro-rev-2",
 	"compatibility_date": "2026-09-06",
 
+	// Both of these MUST stay explicit now that "routes" exists below.
+	//
+	// Wrangler's default is: if a Worker has routes and `workers_dev` is not
+	// set, the workers.dev subdomain is DISABLED — and disabling it also
+	// disables Preview URLs. Adding the custom-domain routes therefore silently
+	// switched off both, which broke the deploy immediately: the post-deploy
+	// health check probes the workers.dev URL and got six straight 404s, and
+	// the preview-cloudflare job's `wrangler versions upload` depends on Preview
+	// URLs existing. The custom domains themselves attached fine — the outage
+	// was entirely this default.
+	//
+	// Keeping workers.dev alive is also worth it on its own: it is the one URL
+	// that answers independently of DNS, which is exactly what you want when
+	// you are trying to work out whether a domain problem is DNS or the app.
+	"workers_dev": true,
+	"preview_urls": true,
+
 	// Workers Logs. Vercel's runtime logs do not follow us across the
 	// migration, and a static-asset Worker with no observability gives us no
 	// way to answer "is it serving?" beyond the CI health check. Sampling is
