@@ -177,8 +177,15 @@ export function reconcileStatusPercent(
 ): number | null | undefined {
   if (!isScheduleStatus(status)) return undefined;
 
-  const stored = Number(storedPercent);
-  const hasStored = Number.isFinite(stored);
+  // null and undefined are checked before Number(), because Number(null) is 0 —
+  // which would make "nobody has recorded progress" indistinguishable from "0%
+  // done" in the In Progress branch below, the exact conflation this module
+  // exists to remove.
+  const hasStored =
+    storedPercent !== null &&
+    storedPercent !== undefined &&
+    Number.isFinite(Number(storedPercent));
+  const stored = hasStored ? Number(storedPercent) : Number.NaN;
 
   switch (status) {
     case "Complete":

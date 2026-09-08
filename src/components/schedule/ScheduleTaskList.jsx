@@ -3,6 +3,8 @@ import { PHASES, PHASE_COLORS, PHASE_NUMBER, derivePhase } from "../../utils/pha
 import { formatDateShort } from "../shared/formatters";
 import DateOrTbdInput from "./DateOrTbdInput";
 import { buildTreeOrder } from "./scheduleTree";
+import { taskOwner } from "./scheduleGanttHelpers";
+import { SCHEDULE_STATUSES, SCHEDULE_PRIORITIES } from "@/lib/schedule/taskStatus";
 import {
   computeFinishVariance,
   formatVariance,
@@ -44,8 +46,11 @@ const VARIANCE_COLORS = {
 };
 const varianceColor = (v) => VARIANCE_COLORS[v?.state] || "var(--text-muted)";
 
-const STATUSES = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold", "Cancelled"];
-const PRIORITIES = ["Critical", "High", "Normal", "Low"];
+// One vocabulary, shared with every other schedule surface and matching
+// chk_schedule_tasks_status. This list used to carry "Cancelled", which the
+// constraint rejects — choosing it failed the save (§4.1).
+const STATUSES = SCHEDULE_STATUSES;
+const PRIORITIES = SCHEDULE_PRIORITIES;
 const TASK_LIST_COLUMNS = [
   { key: "select", label: "" },
   { key: "wbs", label: "WBS" },
@@ -147,7 +152,10 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
       task_name:   task.task_name   || "",
       start_date:  task._stored_start_date ?? task.start_date ?? "",
       end_date:    task._stored_end_date   ?? task.end_date   ?? "",
-      assigned_to: task.assigned_to || "",
+      // taskOwner, not assigned_to: the column below shows the same value,
+      // and seeding the narrower field left the input blank on any row whose
+      // owner is held in resource_names (§4.3).
+      assigned_to: taskOwner(task),
       priority:    task.priority    || "Normal",
       status:      task.status      || "Not Started",
     });
@@ -252,10 +260,10 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
         </select>
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={selectStyle}>
           <option value="all">Status: All</option>
-          <option value="Not Started">Not Started</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Complete">Complete</option>
-          <option value="Delayed">Delayed</option>
+          {/* Generated, so the filter can never offer fewer statuses than the
+              editor writes — it used to omit "On Hold" entirely, making those
+              tasks unfilterable. */}
+          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         {editingId && (
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.08em" }}>
@@ -468,8 +476,12 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                           style={INLINE_INPUT}
                         />
                       ) : (
-                        <span style={{ fontSize: 11, color: task.assigned_to ? "var(--text-secondary)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-                          {task.assigned_to || <em style={{ fontStyle: "italic", opacity: 0.5 }}>Unassigned</em>}
+                        <span style={{ fontSize: 11, color: taskOwner(task) ? "var(--text-secondary)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                          {/* taskOwner reads resource_names first, the same as
+                              the Gantt and the Rivet brief. Reading assigned_to
+                              alone printed "Unassigned" on the 164 production
+                              rows whose owner lives in the other column. */}
+                          {taskOwner(task) || <em style={{ fontStyle: "italic", opacity: 0.5 }}>Unassigned</em>}
                         </span>
                       )}
                     </div>

@@ -321,8 +321,11 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
           <AddTaskModal
             open={showAddTask}
             onClose={() => setShowAddTask(false)}
+            // mutateAsync, not mutate: the modal awaits the result so "Save &
+            // Add Next" can clear the form only when the task really landed,
+            // and can leave it exactly as typed when it did not.
             onSubmit={(data: ScheduleTask) =>
-              createTaskMut.mutate({
+              createTaskMut.mutateAsync({
                 ...data,
                 project_id: projectId,
                 percent_complete: 0,

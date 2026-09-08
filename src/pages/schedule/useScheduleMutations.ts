@@ -36,7 +36,6 @@ export interface UseScheduleMutationsParams {
   setSelectedTask: Dispatch<SetStateAction<ScheduleTask | null>>;
   setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
   setShowDrawer: Dispatch<SetStateAction<boolean>>;
-  setShowAddTask: Dispatch<SetStateAction<boolean>>;
   setShowBulkAdd: Dispatch<SetStateAction<boolean>>;
   setShowBulkResource: Dispatch<SetStateAction<boolean>>;
   setShowBulkDates: Dispatch<SetStateAction<boolean>>;
@@ -65,7 +64,6 @@ export function useScheduleMutations({
   setSelectedTask,
   setSelectedIds,
   setShowDrawer,
-  setShowAddTask,
   setShowBulkAdd,
   setShowBulkResource,
   setShowBulkDates,
@@ -248,7 +246,8 @@ export function useScheduleMutations({
     },
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
-      setShowAddTask(false);
+      // The modal closes itself. "Save & Add Next" keeps it open for the next
+      // task, and closing from here would fight that.
       toast.success("Task created");
     },
     onError: (err: unknown) => toast.error(`Create failed: ${toUserErrorMessage(err)}`),

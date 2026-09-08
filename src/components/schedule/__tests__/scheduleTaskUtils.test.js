@@ -5,6 +5,7 @@ import {
   PHASE_KEY_MAP,
   normalizePhase,
   displayPct,
+  percentCompleteOrNull,
   isMilestoneTask,
   sanitizeTaskName,
   STATUS_COLOR,
@@ -56,6 +57,51 @@ describe("displayPct", () => {
   it("returns 0 for null / undefined task or non-numeric pct", () => {
     expect(displayPct(null)).toBe(0);
     expect(displayPct({ percent_complete: "wat" })).toBe(0);
+  });
+});
+
+/**
+ * §4.3 — "how complete is this task" has an answer the UI can be missing, and
+ * the two readers exist so a bar width and a printed figure can disagree about
+ * what to do with it.
+ *
+ * Reachable since reopening a Complete task started clearing percent_complete:
+ * displayPct's 0 would have printed "0%" and put the task in the stalled
+ * filter one click after it showed 100%.
+ */
+describe("percentCompleteOrNull", () => {
+  it("returns null when nothing has been recorded", () => {
+    expect(percentCompleteOrNull({ percent_complete: null })).toBeNull();
+    expect(percentCompleteOrNull({})).toBeNull();
+    expect(percentCompleteOrNull(null)).toBeNull();
+    expect(percentCompleteOrNull({ percent_complete: "wat" })).toBeNull();
+  });
+
+  it("keeps a real zero distinct from an unrecorded one", () => {
+    expect(percentCompleteOrNull({ percent_complete: 0 })).toBe(0);
+  });
+
+  it("still reads a Complete task as 100 whatever the column says", () => {
+    expect(percentCompleteOrNull({ status: "Complete", percent_complete: 0 })).toBe(100);
+    expect(percentCompleteOrNull({ status: "Complete", percent_complete: null })).toBe(100);
+  });
+
+  it("clamps like displayPct does", () => {
+    expect(percentCompleteOrNull({ percent_complete: 150 })).toBe(100);
+    expect(percentCompleteOrNull({ percent_complete: -10 })).toBe(0);
+  });
+
+  it("displayPct is exactly this, with unknown flattened to a drawable 0", () => {
+    const rows = [
+      { percent_complete: 0 },
+      { percent_complete: 42 },
+      { percent_complete: null },
+      { status: "Complete", percent_complete: 3 },
+      {},
+    ];
+    for (const row of rows) {
+      expect(displayPct(row)).toBe(percentCompleteOrNull(row) ?? 0);
+    }
   });
 });
 

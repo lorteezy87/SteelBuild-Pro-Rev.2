@@ -1,11 +1,12 @@
 import React from 'react';
 
-export default function DateOrTbdInput({ value, onChange, inputStyle = {}, compact = false, onKeyDown, disabled = false, "data-row": dataRow, "data-col": dataCol }) {
+export default function DateOrTbdInput({ id, value, onChange, inputStyle = {}, compact = false, onKeyDown, disabled = false, "data-row": dataRow, "data-col": dataCol }) {
   const hasValue = !!value;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 5 : 6, width: '100%' }}>
       <input
+        id={id}
         type="date"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}

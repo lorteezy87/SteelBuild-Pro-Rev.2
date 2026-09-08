@@ -15,6 +15,7 @@ import {
   sanitizeTaskName,
   statusColor,
 } from "./scheduleTaskUtils";
+import { SCHEDULE_STATUSES } from "@/lib/schedule/taskStatus";
 import {
   StatusChip,
   SummaryBar,
@@ -427,7 +428,7 @@ export function GanttLeftPanelRows(props: any) {
             matches its red border-left strip. */}
         {isEditing ? (
           <select value={editDraft.status} onChange={e => setEditDraft((d: any) => ({ ...d, status: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px" }}>
-            {["Not Started","In Progress","Complete","Delayed","On Hold"].map(s => <option key={s} value={s}>{s}</option>)}
+            {SCHEDULE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         ) : (
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", overflow: "hidden" }}>

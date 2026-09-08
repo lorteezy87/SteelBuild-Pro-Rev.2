@@ -241,7 +241,6 @@ export default function Schedule() {
     setSelectedTask,
     setSelectedIds,
     setShowDrawer,
-    setShowAddTask,
     setShowBulkAdd,
     setShowBulkResource,
     setShowBulkDates,
