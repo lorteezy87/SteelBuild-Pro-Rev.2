@@ -60,6 +60,73 @@ export const GANTT_ROW_H = 40;
 export const GANTT_SUM_H = 36;
 export const GANTT_VIRTUAL_OVERSCAN = 320;
 
+/**
+ * Stable key for the set of cycle-affected tasks the user can actually SEE.
+ *
+ * The cascade map is computed over the WHOLE project (so cross-phase links
+ * resolve), but the Gantt renders a phase-filtered subset. Keying the cycle
+ * toast off the raw map would announce loops on rows that aren't on screen —
+ * and under a filter the user has no way to reach them. Intersecting with the
+ * rendered rows keeps the warning actionable.
+ *
+ * A cycle that only PARTLY intersects the filter still warns: the member on
+ * screen is the one silently sitting on stored dates, which is exactly the
+ * confusion the toast exists to explain.
+ *
+ * Returns a sorted, "|"-joined id list so a caller can use it as a memo/effect
+ * dependency without re-firing on every render.
+ */
+/**
+ * The tasks "Update Scheduled Dates" may write.
+ *
+ * Eligible = the cascade actually moved it, it is not in a dependency cycle,
+ * it has both an effective start and end, and it is NOT a summary row.
+ *
+ * Two rules matter here and both were bugs (audit §1.5):
+ *
+ *  - Population. Callers must pass the WHOLE project, not the phase-filtered
+ *    rows. This is a project-wide write; running it over the visible subset
+ *    silently did less than its confirm dialog claimed.
+ *  - Summary rows. Their start/end are derived by the DB rollup trigger from
+ *    their children. Writing one directly is NOT reverted — the trigger
+ *    recomputes the row's PARENT, not the row itself — so a synced summary date
+ *    persists as a wrong value until some child happens to move.
+ *
+ * Cycle members are skipped because their effective dates fall back to stored,
+ * and a task with no computed window is skipped so we never invent a date on a
+ * TBD task.
+ */
+export function selectShiftedSyncTasks<T extends TaskLike>(
+  projectTasks: T[] | null | undefined,
+  effectiveDates: Record<string, { start?: string | null; end?: string | null; shifted?: boolean; cycle?: boolean } | undefined> | null | undefined,
+): T[] {
+  if (!Array.isArray(projectTasks) || projectTasks.length === 0) return [];
+  const eff = effectiveDates || {};
+  return projectTasks.filter((task) => {
+    if (!task || !task.id) return false;
+    if (isSummaryScheduleTask(task)) return false;
+    const e = eff[String(task.id)];
+    if (!e || !e.shifted || e.cycle) return false;
+    const start = e.start ?? (task as Record<string, unknown>).start_date;
+    const end = e.end ?? (task as Record<string, unknown>).end_date;
+    return Boolean(start) && Boolean(end);
+  });
+}
+
+export function computeCycleTaskIdsKey(
+  effectiveDates: Record<string, { cycle?: boolean } | undefined> | null | undefined,
+  visibleTasks: TaskLike[] | null | undefined,
+): string {
+  if (!effectiveDates || !Array.isArray(visibleTasks) || visibleTasks.length === 0) return "";
+  const ids: string[] = [];
+  for (const task of visibleTasks) {
+    const id = task?.id;
+    if (!id) continue;
+    if (effectiveDates[String(id)]?.cycle) ids.push(String(id));
+  }
+  return [...new Set(ids)].sort().join("|");
+}
+
 export function computeSuccessorCountById(allTasks: TaskLike[]): Record<string, number> {
   const out: Record<string, number> = {};
   allTasks.forEach((task) => {

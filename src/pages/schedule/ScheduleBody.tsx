@@ -231,6 +231,11 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
                 tasks={enrichedTasks}
                 submittals={submittals}
                 weatherRisk={weatherRisk}
+                // Full-scope cascade, computed once in Schedule.tsx over EVERY
+                // task. The Gantt must not recompute it from its phase-filtered
+                // rows — that drops cross-phase predecessors and silently shows
+                // un-cascaded dates (audit §1.1).
+                effectiveDates={effectiveDatesMap}
                 expandedTask={expandedTask}
                 setExpandedTask={setExpandedTask}
                 onTaskClick={(task: ScheduleTask) => { setSelectedTask(task); setShowDrawer(true); }}

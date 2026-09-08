@@ -382,7 +382,11 @@ export function GanttLeftPanelRows(props: any) {
             table still has a `duration` column, but it is no longer
             a source of truth for display. */}
         <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>
-          {calcDuration(task.start_date, task.end_date)}
+          {/* Derived from the DISPLAYED dates, not the stored ones. START and
+              FINISH in this same row render effStart/effEnd, so computing DUR
+              from task.start_date/end_date put a contradictory number next to
+              them for any cascaded row. */}
+          {calcDuration(dispStart, dispEnd)}
         </span>
         {/* Start */}
         {isEditing ? (

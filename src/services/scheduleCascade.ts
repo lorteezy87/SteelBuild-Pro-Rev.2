@@ -483,14 +483,32 @@ export function applyEffectiveDates(
     if (!t || !t.id) return t;
     const e = eff[t.id];
     if (!e || !e.start || !e.end) return t;
+    // Idempotent: a row that has already been overlaid keeps its ORIGINAL
+    // stored dates. Without the `??`, a second pass (a consumer that overlays
+    // and then hands the rows to another overlaying helper) would record the
+    // *effective* dates as the stored ones and the pre-cascade truth would be
+    // lost — the same clobber class as scheduleTree's rollupSummary.
+    // See docs/audits/SCHEDULE_MODULE_AUDIT_2026-09-08.md §2.7.
+    const storedStart = t._stored_start_date ?? t.start_date;
+    const storedEnd = t._stored_end_date ?? t.end_date;
+
+    // "Shifted" is measured against that ORIGINAL stored date, not against
+    // `e.shifted`. On a re-overlay the row's start_date already equals
+    // `predecessor.end + lag`, and applyLink drives on a strict `>`, so the
+    // cascade reports shifted:false for a task that is in fact fully held by
+    // its predecessor. Deriving it here keeps `_shifted` / `_shifted_by` a
+    // fixed point across passes, and keeps their meaning exact: how far this
+    // task sits from where somebody actually typed it.
+    const shiftedBy = Math.max(0, diffDays(storedStart, e.start));
+
     return {
       ...t,
-      _stored_start_date: t.start_date,
-      _stored_end_date: t.end_date,
+      _stored_start_date: storedStart,
+      _stored_end_date: storedEnd,
       start_date: e.start,
       end_date: e.end,
-      _shifted: !!e.shifted,
-      _shifted_by: e.shiftedBy || 0,
+      _shifted: shiftedBy > 0,
+      _shifted_by: shiftedBy,
       _cycle: !!e.cycle,
     };
   });

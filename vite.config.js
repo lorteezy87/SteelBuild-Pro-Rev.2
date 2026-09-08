@@ -178,6 +178,17 @@ export default defineConfig({
     env: {
       VITE_SUPABASE_URL: 'https://ci-placeholder.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'ci-placeholder-anon-key',
+      // Pin the runner's timezone. Schedule dates are date-only strings parsed
+      // at UTC midnight, and several suites assert week/day bucket membership;
+      // under a non-zero UTC offset those buckets shift and the assertions turn
+      // machine-dependent (green in CI and on this container, both UTC, red on
+      // an Arizona dev box). CI and the container are already UTC, so this
+      // changes no current result — it stops the suite from silently depending
+      // on where it runs.
+      // NOTE for the working-day/local-date work (audit §2.5): tests that must
+      // prove local-vs-UTC behaviour have to set TZ per-file rather than rely
+      // on this default, which deliberately hides that difference.
+      TZ: 'UTC',
     },
     setupFiles: ['./vitest.setup.js', './src/setupTests.ts'],
     // Use the worker_threads pool. Threads are terminated forcibly at teardown,

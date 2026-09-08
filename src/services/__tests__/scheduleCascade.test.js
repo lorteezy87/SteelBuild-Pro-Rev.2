@@ -365,6 +365,48 @@ describe("applyEffectiveDates — wrapper", () => {
     expect(tasks[1].start_date).toBe("2026-04-20");
     expect(tasks[1]._stored_start_date).toBeUndefined();
   });
+
+  it("is idempotent — a second overlay keeps the ORIGINAL stored dates", () => {
+    // Regression: `_stored_*` used to be assigned unconditionally, so overlaying
+    // an already-overlaid row recorded the EFFECTIVE date as the stored one and
+    // the pre-cascade truth was lost. Consumers that overlay and then hand the
+    // rows to another overlaying helper (or that re-render through a second
+    // pass) would then show, and could persist, a cascaded date as if the user
+    // had typed it. Same clobber class as scheduleTree's rollupSummary.
+    const tasks = [
+      { id: "A", start_date: "2026-04-25", end_date: "2026-05-01" },
+      {
+        id: "B",
+        start_date: "2026-04-20",
+        end_date: "2026-04-23",
+        dependencies: '["A"]',
+      },
+    ];
+
+    const once = applyEffectiveDates(tasks);
+    const twice = applyEffectiveDates(once);
+    const thrice = applyEffectiveDates(twice);
+
+    for (const pass of [once, twice, thrice]) {
+      const b = pass.find((t) => t.id === "B");
+      expect(b._stored_start_date).toBe("2026-04-20");
+      expect(b._stored_end_date).toBe("2026-04-23");
+      // The effective placement is a fixed point: re-applying never walks it on.
+      expect(b.start_date).toBe("2026-05-02");
+      expect(b._shifted).toBe(true);
+      expect(b._shifted_by).toBe(12);
+    }
+  });
+
+  it("keeps a row's own stored dates when it was overlaid with no shift", () => {
+    // An unshifted row is still overlaid (start/end resolve), so it also carries
+    // `_stored_*`. Re-overlaying must not turn those into the effective values.
+    const tasks = [{ id: "A", start_date: "2026-04-25", end_date: "2026-05-01" }];
+    const b = applyEffectiveDates(applyEffectiveDates(tasks)).find((t) => t.id === "A");
+    expect(b._stored_start_date).toBe("2026-04-25");
+    expect(b._stored_end_date).toBe("2026-05-01");
+    expect(b._shifted).toBe(false);
+  });
 });
 
 describe("LINK_TYPES export", () => {
