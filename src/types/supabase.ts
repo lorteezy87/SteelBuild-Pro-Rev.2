@@ -6256,6 +6256,107 @@ export type Database = {
           },
         ]
       }
+      schedule_baseline_tasks: {
+        Row: {
+          baseline_duration: number | null
+          baseline_finish: string | null
+          baseline_id: string
+          baseline_start: string | null
+          id: string
+          is_summary: boolean
+          phase: string | null
+          project_id: string
+          task_id: string
+          task_name: string | null
+          wbs_code: string | null
+        }
+        Insert: {
+          baseline_duration?: number | null
+          baseline_finish?: string | null
+          baseline_id: string
+          baseline_start?: string | null
+          id?: string
+          is_summary?: boolean
+          phase?: string | null
+          project_id: string
+          task_id: string
+          task_name?: string | null
+          wbs_code?: string | null
+        }
+        Update: {
+          baseline_duration?: number | null
+          baseline_finish?: string | null
+          baseline_id?: string
+          baseline_start?: string | null
+          id?: string
+          is_summary?: boolean
+          phase?: string | null
+          project_id?: string
+          task_id?: string
+          task_name?: string | null
+          wbs_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_baseline_tasks_baseline_id_fkey"
+            columns: ["baseline_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_baselines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_baseline_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_baselines: {
+        Row: {
+          id: string
+          is_original: boolean
+          name: string
+          project_id: string
+          reason: string | null
+          set_at: string
+          set_by: string | null
+          set_by_name: string | null
+          task_count: number
+        }
+        Insert: {
+          id?: string
+          is_original?: boolean
+          name: string
+          project_id: string
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          set_by_name?: string | null
+          task_count?: number
+        }
+        Update: {
+          id?: string
+          is_original?: boolean
+          name?: string
+          project_id?: string
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          set_by_name?: string | null
+          task_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_baselines_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schedule_tasks: {
         Row: {
           actual_finish_date: string | null

@@ -24,6 +24,7 @@ import PhaseKpiTiles from "./PhaseKpiTiles";
 import ViewTabs from "./ViewTabs";
 import BulkParentModal from "./BulkParentModal";
 import type { ScheduleTask } from "./types";
+import type { UseScheduleBaselinesResult } from "@/hooks/useScheduleBaselines";
 import type { ScheduleModals } from "./useScheduleModals";
 import type { TaskSelection } from "./useTaskSelection";
 
@@ -69,6 +70,7 @@ interface ScheduleBodyProps {
   submittals: any[];
   weatherRisk: any;
   effectiveDatesMap: any;
+  scheduleBaselines: UseScheduleBaselinesResult;
   selectedProject: any;
   projectId: string | null | undefined;
   qc: any;
@@ -131,6 +133,7 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
     submittals,
     weatherRisk,
     effectiveDatesMap,
+  scheduleBaselines,
     selectedProject,
     projectId,
     qc,
@@ -236,6 +239,12 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
                 // rows — that drops cross-phase predecessors and silently shows
                 // un-cascaded dates (audit §1.1).
                 effectiveDates={effectiveDatesMap}
+                // Baselines are project-scoped, so they are fetched in
+                // Schedule.tsx and passed down — deriving them from the
+                // Gantt's phase-filtered rows is the §1.1/§1.5 mistake.
+                projectId={projectId}
+                baselineMap={scheduleBaselines.baselineMap}
+                onBaselineChange={scheduleBaselines.refetch}
                 expandedTask={expandedTask}
                 setExpandedTask={setExpandedTask}
                 onTaskClick={(task: ScheduleTask) => { setSelectedTask(task); setShowDrawer(true); }}

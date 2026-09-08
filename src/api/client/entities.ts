@@ -112,7 +112,11 @@ export const entities = {
       const hasStatus = Object.prototype.hasOwnProperty.call(out, 'status');
       const hasPct    = Object.prototype.hasOwnProperty.call(out, 'percent_complete');
 
-      for (const field of ['start_date', 'end_date']) {
+      // DateOrTbdInput emits '' when a date is cleared, and Postgres rejects ''
+      // for a `date` column. The actuals columns go through the same input, so
+      // they need the same coercion — without it, clearing a wrongly-stamped
+      // actual finish fails with a raw type error.
+      for (const field of ['start_date', 'end_date', 'actual_start_date', 'actual_finish_date']) {
         if (Object.prototype.hasOwnProperty.call(out, field) && out[field] === '') {
           out[field] = null;
         }
@@ -231,6 +235,11 @@ export const entities = {
     };
   })(),
   TaskDependency:        createEntityClient('task_dependencies'),
+  // Baselines are append-only by RLS — there is no UPDATE policy on either
+  // table, so an .update() here fails at the database rather than silently
+  // rewriting history. Correcting a baseline means retracting and re-setting.
+  ScheduleBaseline:      createEntityClient('schedule_baselines'),
+  ScheduleBaselineTask:  createEntityClient('schedule_baseline_tasks'),
   Submittal:             createEntityClient('submittals'),
   SubmittalRound:        createEntityClient('submittal_rounds'),
   // Phase 4 submittal-logic: per-drawing-type (Shop/Erection/Part) received +

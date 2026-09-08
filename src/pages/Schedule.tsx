@@ -10,6 +10,7 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
+import { useScheduleBaselines } from "@/hooks/useScheduleBaselines";
 import { computePhaseWbs } from "./schedule/wbs";
 import { computeBulkParentOptions } from "./schedule/scheduleTaskHelpers";
 import { normalizeSchedulePhase } from "./schedule/schedulePageHelpers";
@@ -85,6 +86,7 @@ export default function Schedule() {
   // consumer here is already null-safe. Normalize once at the boundary so downstream
   // call sites stay clean. Removable once the hook is typed.
   const { scheduleTasks: scheduleTasksRaw, isLoading: scheduleTasksLoading } = useScheduleTasks(projectId);
+  const scheduleBaselines = useScheduleBaselines(projectId);
   const scheduleTasks = scheduleTasksRaw as unknown as ScheduleTask[];
   useAutoOpenEdit(scheduleTasks, (task) => {
     setSelectedTask(task);
@@ -269,6 +271,7 @@ export default function Schedule() {
     submittals,
     weatherRisk,
     effectiveDatesMap,
+    scheduleBaselines,
     selectedProject,
     projectId,
     qc,
