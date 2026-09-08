@@ -240,8 +240,12 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
                 setExpandedTask={setExpandedTask}
                 onTaskClick={(task: ScheduleTask) => { setSelectedTask(task); setShowDrawer(true); }}
                 onSave={async (data: ScheduleTask) => {
-                  const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                   try {
+                    // Inside the try on purpose: sanitize runs assertScheduleDateRange,
+                    // which throws on an inverted window ("Finish date cannot be before
+                    // the start date"). Called above the try, that throw escaped this
+                    // catch entirely and the save failed with NO feedback at all.
+                    const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                     if (!id) throw new Error("Cannot update a task without an id");
                     await entities.ScheduleTask.update(id, fields);
                     invalidateEntity(qc, "schedule_task", projectId);
@@ -289,8 +293,10 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
               }}
               onDelete={(task: ScheduleTask) => setDeleteTarget(task)}
               onSave={async (data: ScheduleTask) => {
-                const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                 try {
+                  // Inside the try — see the Gantt's onSave above. A validation throw
+                  // from sanitize used to bypass this catch and fail silently.
+                  const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                   if (!id) throw new Error("Cannot update a task without an id");
                   await entities.ScheduleTask.update(id, fields);
                   invalidateEntity(qc, "schedule_task", projectId);

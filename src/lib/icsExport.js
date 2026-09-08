@@ -201,6 +201,11 @@ export function scheduleTaskToEvent(task, projectNumber = "") {
     task.phase ? `Phase: ${task.phase}` : "",
     task.crew_name ? `Crew: ${task.crew_name}` : "",
     task.status ? `Status: ${task.status}` : "",
+    // Provenance for a cascaded row. Once exported, an .ics entry has no other
+    // way to say that this date was derived rather than entered.
+    task._shifted
+      ? `Cascaded from predecessors — entered as ${task._stored_start_date || "?"} (+${task._shifted_by || 0}d)`
+      : "",
     task.notes || "",
   ].filter(Boolean).join("\n");
   return {

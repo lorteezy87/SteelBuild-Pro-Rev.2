@@ -44,6 +44,8 @@ type DepArrow = {
 import { parseDateUTC } from "./scheduleDateUtils";
 import { isMilestoneTask } from "./scheduleTaskUtils";
 import { parseDeps } from "./scheduleDependencies";
+import { computeEffectiveDates } from "@/services/scheduleCascade";
+import { fmtDate } from "./scheduleDateUtils";
 import {
   findFirstRowAtOrAfter,
   findFirstRowAfter,
@@ -111,6 +113,144 @@ export function selectShiftedSyncTasks<T extends TaskLike>(
     const end = e.end ?? (task as Record<string, unknown>).end_date;
     return Boolean(start) && Boolean(end);
   });
+}
+
+export interface DragLanding {
+  /** Which edge the gesture aimed at. "both" for a move. */
+  axis: "start" | "end" | "both";
+  /** Where the bar was drawn when the gesture began (effective dates). */
+  renderedStart: string | null;
+  renderedEnd: string | null;
+  /** What the user was aiming at, per edge. */
+  droppedStart: string | null;
+  droppedEnd: string | null;
+  /** Where the bar will actually be drawn after the write cascades. */
+  landedStart: string | null;
+  landedEnd: string | null;
+  /** Days each edge actually moved on screen (may be 0, or negative). */
+  movedDaysStart: number;
+  movedDaysEnd: number;
+  /** True when either edge will not land where it was dropped. */
+  landsOffTarget: boolean;
+  /**
+   * True when a predecessor is STILL constraining the row at its landing
+   * position — i.e. the landed date differs from what was written, so
+   * something is holding it there NOW.
+   */
+  heldAtLanding: boolean;
+}
+
+function daysBetween(a: string | null, b: string | null): number {
+  if (!a || !b) return 0;
+  const ms = Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`);
+  return Number.isFinite(ms) ? Math.round(ms / 86400000) : 0;
+}
+
+/**
+ * Predict where a dragged bar will actually be drawn once the write cascades.
+ *
+ * The Gantt draws EFFECTIVE dates but a drag writes STORED ones. When a
+ * predecessor holds the row, the write lands at stored+N, the cascade re-derives
+ * the same floor, and the bar returns to where it started — historically a
+ * completely silent no-op (audit §2.6).
+ *
+ * Method: swap the dragged row's dates for the literal payload about to be
+ * saved, re-run the REAL cascade over that array, and read the row back. The
+ * constraint is never re-derived locally, so this cannot drift from applyLink's
+ * semantics (FS/SS/FF/SF, signed lag, cycles) the way a hand-rolled floor would.
+ *
+ * `projectTasks` must be ONE SNAPSHOT taken when the gesture began. Reading a
+ * live ref at drop time would compare a start-of-gesture rendered position
+ * against an end-of-gesture task set, which realtime invalidation and
+ * FieldToday's optimistic writes can both change mid-drag.
+ *
+ * Both edges are always reported. A resize-start under an FS floor changes the
+ * row's duration, so the cascade recomputes the END from the new duration — the
+ * finish can move even when only the start was dragged.
+ */
+export function computeDragLanding(opts: {
+  taskId: string;
+  mode: string;
+  projectTasks: TaskLike[];
+  renderedStart: string | null;
+  renderedEnd: string | null;
+  nextStart: string;
+  nextEnd: string;
+}): DragLanding | null {
+  const { taskId, mode, projectTasks, renderedStart, renderedEnd, nextStart, nextEnd } = opts;
+  if (!taskId || !Array.isArray(projectTasks) || projectTasks.length === 0) return null;
+
+  const after = projectTasks.map((t) =>
+    t && String(t.id) === String(taskId)
+      ? { ...t, start_date: nextStart, end_date: nextEnd }
+      : t,
+  );
+
+  const eff = computeEffectiveDates(after as Record<string, unknown>[]);
+  const landed = eff[String(taskId)];
+  if (!landed) return null;
+
+  const landedStart = landed.start ?? null;
+  const landedEnd = landed.end ?? null;
+
+  const axis: DragLanding["axis"] =
+    mode === "resize-start" ? "start" : mode === "resize-end" ? "end" : "both";
+
+  // "Held" means the cascade moved the row off the dates just written — so
+  // something is constraining it at its landing position right now. A row that
+  // was pushed earlier but now sits exactly on what the user saved is NOT held,
+  // and must not be described as one.
+  const heldAtLanding = landedStart !== nextStart || landedEnd !== nextEnd;
+
+  const droppedStart = axis === "end" ? renderedStart : nextStart;
+  const droppedEnd = axis === "start" ? renderedEnd : nextEnd;
+
+  return {
+    axis,
+    renderedStart,
+    renderedEnd,
+    droppedStart,
+    droppedEnd,
+    landedStart,
+    landedEnd,
+    movedDaysStart: daysBetween(renderedStart, landedStart),
+    movedDaysEnd: daysBetween(renderedEnd, landedEnd),
+    landsOffTarget:
+      (axis !== "end" && landedStart !== droppedStart) ||
+      (axis !== "start" && landedEnd !== droppedEnd),
+    heldAtLanding,
+  };
+}
+
+/**
+ * Plain-language explanation of a drag whose bar did not land where it was
+ * dropped. Only called when `landsOffTarget`.
+ *
+ * The branch on `heldAtLanding` is the whole point. A row that WAS pushed
+ * forward by a predecessor and now sits exactly on the dates the user saved is
+ * not held by anything — telling them "a predecessor holds this at X" would
+ * name the date they themselves just chose and recommend a remedy that does
+ * nothing. That false case is the dominant one for a forward drag past the
+ * constraint, so it gets its own wording.
+ *
+ * Both edges are always stated: a resize-start under an FS floor changes the
+ * duration, so the cascade recomputes the finish and the far edge can move even
+ * though only the near one was dragged. A bare "didn't move" would be false.
+ */
+export function describeLanding(landing: DragLanding): string {
+  const window = `${fmtDate(landing.landedStart)} → ${fmtDate(landing.landedEnd)}`;
+
+  if (landing.heldAtLanding) {
+    return (
+      `saved, but a predecessor still holds this task — the bar now runs ${window}. ` +
+      `Change the link or its lag on the Dependencies tab, or move the predecessor.`
+    );
+  }
+
+  return (
+    `saved. The bar was sitting ahead of its stored dates because a predecessor ` +
+    `had pushed it; it now runs ${window}, on the dates you saved.`
+  );
 }
 
 export function computeCycleTaskIdsKey(

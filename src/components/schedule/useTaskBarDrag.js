@@ -10,16 +10,25 @@
 // suppressTaskClickRef (so a drag doesn't also fire the row click), setTooltip
 // (cleared on drag start), and PX_PER_DAY (the px↔day scale from useGanttLayout).
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { parseDateUTC, toDateOnly } from "./scheduleDateUtils";
 import { addDaysUTC, isActionableScheduleTask } from "./scheduleGanttHelpers";
 import { sanitizeTaskName } from "./scheduleTaskUtils";
+import { computeDragLanding, describeLanding } from "./scheduleGanttDerive";
 
 const TASK_DRAG_THRESHOLD_PX = 4;
 
-export function useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppressTaskClickRef, setTooltip }) {
+export function useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppressTaskClickRef, setTooltip, projectTasks = [] }) {
   const [taskDrag, setTaskDrag] = useState(null);
   const taskDragRef = useRef(null);
   const dragBodyStyleRef = useRef(null);
+  // Latest rows, read ONCE per gesture (in startTaskBarDrag) rather than at
+  // drop. Reading it at drop would compare a start-of-gesture rendered position
+  // against an end-of-gesture task set — and both realtime invalidation
+  // (useScheduleTasks) and FieldToday's optimistic setQueryData can replace
+  // that array mid-drag.
+  const projectTasksRef = useRef(projectTasks);
+  projectTasksRef.current = projectTasks;
 
   const updateTaskDrag = (nextOrUpdater) => {
     setTaskDrag((prev) => {
@@ -70,6 +79,8 @@ export function useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppress
       storedEnd,
       displayStart,
       displayEnd,
+      // One snapshot per gesture — see projectTasksRef.
+      projectTasks: projectTasksRef.current,
       daysDelta: 0,
       hasMoved: false,
     });
@@ -102,13 +113,31 @@ export function useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppress
       if (hasMoved) suppressTaskClickRef.current = true;
     };
 
-    const onUp = async () => {
-      const current = taskDragRef.current;
+    const teardown = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("pointercancel", onCancel);
       restoreTaskDragBodyStyle();
       updateTaskDrag(null);
+    };
+
+    // Split from pointerup. Both used to run onUp, so a cancelled gesture
+    // COMMITTED a reschedule. Nothing calls setPointerCapture on these targets,
+    // so pointercancel can be the only terminal event for a real gesture —
+    // discarding it silently would just trade a wrong write for a silent one.
+    const onCancel = () => {
+      const current = taskDragRef.current;
+      teardown();
+      if (current?.hasMoved && current.daysDelta !== 0) {
+        toast.info(`${current.taskName}: drag cancelled — nothing was saved`, {
+          id: `drag-cancel-${current.taskId}`,
+        });
+      }
+    };
+
+    const onUp = async () => {
+      const current = taskDragRef.current;
+      teardown();
       if (!current?.hasMoved || current.daysDelta === 0 || !onSave) return;
 
       // move → shift both ends; resize-start → start only; resize-end → end only.
@@ -120,6 +149,23 @@ export function useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppress
       ));
       if (!nextStart || !nextEnd) return;
 
+      // Predict BEFORE the write, from the gesture's own snapshot. Fails open:
+      // an explanation is never allowed to break a save.
+      let landing = null;
+      try {
+        landing = computeDragLanding({
+          taskId: current.taskId,
+          mode: current.mode,
+          projectTasks: current.projectTasks || [],
+          renderedStart: toDateOnly(current.displayStart),
+          renderedEnd: toDateOnly(current.displayEnd),
+          nextStart,
+          nextEnd,
+        });
+      } catch (err) {
+        console.warn("[useTaskBarDrag] landing prediction failed:", err?.message);
+      }
+
       setSaving(true);
       try {
         await onSave({
@@ -127,8 +173,16 @@ export function useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppress
           start_date: nextStart,
           end_date: nextEnd,
         });
+        // Only after the save RESOLVES — a rejected save must not be explained
+        // as if it had succeeded. ScheduleBody's catch owns the failure toast.
+        if (landing?.landsOffTarget) {
+          toast.info(`${current.taskName}: ${describeLanding(landing)}`, {
+            id: `drag-landing-${current.taskId}`,
+            duration: 8000,
+          });
+        }
       } catch {
-        // The parent onSave path owns the visible failure toast.
+        // ScheduleBody's onSave surfaces the failure.
       } finally {
         setSaving(false);
       }
@@ -136,11 +190,11 @@ export function useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppress
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("pointercancel", onCancel);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("pointercancel", onCancel);
       restoreTaskDragBodyStyle();
     };
     // Rebind only when a new row begins dragging or the current zoom changes.
