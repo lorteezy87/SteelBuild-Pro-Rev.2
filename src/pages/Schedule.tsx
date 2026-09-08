@@ -12,6 +12,7 @@ import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import { useScheduleBaselines } from "@/hooks/useScheduleBaselines";
 import { computeFloat } from "@/services/scheduleFloat";
+import { useProjectCalendar } from "@/hooks/useProjectCalendar";
 import { computePhaseWbs } from "./schedule/wbs";
 import { computeBulkParentOptions } from "./schedule/scheduleTaskHelpers";
 import { normalizeSchedulePhase } from "./schedule/schedulePageHelpers";
@@ -88,6 +89,10 @@ export default function Schedule() {
   // call sites stay clean. Removable once the hook is typed.
   const { scheduleTasks: scheduleTasksRaw, isLoading: scheduleTasksLoading } = useScheduleTasks(projectId);
   const scheduleBaselines = useScheduleBaselines(projectId);
+  // Mon–Fri unless the project configures otherwise (§2.1). Drives lag and
+  // successor starts in both the forward and backward passes — they have to
+  // be handed the SAME calendar or float drifts from the bars.
+  const { calendar: workingCalendar } = useProjectCalendar(projectId);
   const scheduleTasks = scheduleTasksRaw as unknown as ScheduleTask[];
   useAutoOpenEdit(scheduleTasks, (task) => {
     setSelectedTask(task);
@@ -180,8 +185,8 @@ export default function Schedule() {
   // overlaid array is simpler and removes the prior bug where those views
   // showed dates that didn't match the Gantt bars.
   const effectiveDatesMap = useMemo(
-    () => computeEffectiveDates(enrichedTasks),
-    [enrichedTasks]
+    () => computeEffectiveDates(enrichedTasks, workingCalendar),
+    [enrichedTasks, workingCalendar]
   );
 
   // Backward pass over the SAME graph and the SAME forward-pass result, so
@@ -190,8 +195,8 @@ export default function Schedule() {
   // deriving it from the Gantt's phase-filtered rows would drop every
   // cross-phase predecessor and invent float that does not exist.
   const floatMap = useMemo(
-    () => computeFloat(enrichedTasks, effectiveDatesMap),
-    [enrichedTasks, effectiveDatesMap]
+    () => computeFloat(enrichedTasks, effectiveDatesMap, workingCalendar),
+    [enrichedTasks, effectiveDatesMap, workingCalendar]
   );
 
   const tasksWithEffective = useMemo(

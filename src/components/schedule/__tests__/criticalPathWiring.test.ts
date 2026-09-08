@@ -69,7 +69,15 @@ describe("the surfaces that claim 'critical' consume the calculation", () => {
   it("float is computed once for the WHOLE project, beside the cascade", () => {
     // Deriving it from the Gantt's phase-filtered rows would drop every
     // cross-phase predecessor and invent float that does not exist (§1.1).
-    expect(SCHEDULE_SRC).toMatch(/computeFloat\(enrichedTasks, effectiveDatesMap\)/);
+    expect(SCHEDULE_SRC).toMatch(/computeFloat\(enrichedTasks, effectiveDatesMap, workingCalendar\)/);
+  });
+
+  it("both passes are handed the SAME working calendar", () => {
+    // The forward pass snaps successor starts off weekends and counts lag in
+    // working days; the backward pass has to use the same calendar or float
+    // drifts from the bars by however many weekends a link spans (§2.1).
+    expect(SCHEDULE_SRC).toMatch(/computeEffectiveDates\(enrichedTasks, workingCalendar\)/);
+    expect(SCHEDULE_SRC).toMatch(/useProjectCalendar\(projectId\)/);
   });
 
   it("the Gantt tooltip, badges and phase counts pass floatMap", () => {
