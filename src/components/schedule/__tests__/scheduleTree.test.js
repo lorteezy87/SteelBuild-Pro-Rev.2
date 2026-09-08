@@ -75,8 +75,15 @@ describe("buildTreeOrder", () => {
     expect(summary._isRolledUpSummary).toBe(true);
     expect(summary.start_date).toBe("2026-01-01");
     expect(summary.end_date).toBe("2026-01-20");
-    expect(summary.duration).toBe(19);
-    expect(summary.percent_complete).toBe(75);
+    // Jan 1 → Jan 20 inclusive is 20 days, not 19 (§2.4).
+    expect(summary.duration).toBe(20);
+    // Duration-WEIGHTED, not the plain mean of 75 (§2.3):
+    //   child-a  Jan 1–5   =  5 days @ 100%
+    //   child-b  Jan 10–20 = 11 days @  50%
+    //   (100×5 + 50×11) / 16 = 65.6 → 66
+    // The old unweighted mean gave the 5-day child the same say as the 11-day
+    // one, which is the bug that let a job read 50% done on one closed punch item.
+    expect(summary.percent_complete).toBe(66);
     expect(summary._stored_start_date).toBe("2026-01-15");
     expect(summary._summaryTaskCount).toBe(2);
   });

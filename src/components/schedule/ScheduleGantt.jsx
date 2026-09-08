@@ -41,6 +41,8 @@ import {
   isSummaryScheduleTask,
 } from "./scheduleGanttHelpers";
 import { buildBaselineRows, createBaseline } from "@/services/scheduleBaselines";
+import { todayLocalISO, todayUtcMidnightFromLocal } from "@/lib/dateMath";
+import { formatFloat, describeFloat } from "@/services/scheduleFloat";
 import {
   WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
   buildWeatherRiskByTask,
@@ -75,8 +77,9 @@ const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, trans
 // that lists `effectiveDates` as a dependency.
 const NO_EFFECTIVE_DATES = Object.freeze({});
 const NO_BASELINE_MAP = Object.freeze({});
+const NO_FLOAT_MAP = Object.freeze({});
 
-export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, effectiveDates = NO_EFFECTIVE_DATES, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null, projectId = null, baselineMap = NO_BASELINE_MAP, onBaselineChange }) {
+export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, effectiveDates = NO_EFFECTIVE_DATES, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null, projectId = null, baselineMap = NO_BASELINE_MAP, onBaselineChange, floatMap = NO_FLOAT_MAP }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
@@ -115,14 +118,14 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const rightBody = useRef(null);
   const containerRef = useRef(null);
 
-  // Normalize "today" to UTC midnight so all date math (overdue checks, today
-  // line, scroll-to-today) compares apples to apples with task dates that are
-  // stored as YYYY-MM-DD and parsed at T00:00:00Z. Without this, a 4pm local
-  // load drifts every comparison by hours and can flip overdue/upcoming.
-  const today = useMemo(() => {
-    const d = new Date();
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  }, []);
+  // "Today" as the user's LOCAL calendar date, anchored at UTC midnight so all
+  // date math (overdue checks, today line, scroll-to-today) compares apples to
+  // apples with task dates stored as YYYY-MM-DD and parsed at T00:00:00Z.
+  //
+  // This used to read getUTCDate() — the UTC calendar date — which in Arizona
+  // (UTC-7) is already tomorrow from 5 PM local onward, so the today line
+  // jumped a day early and overdue flipped with it (audit §2.5).
+  const today = useMemo(() => todayUtcMidnightFromLocal(), []);
 
   const startInlineEdit = (task, e) => {
     e.stopPropagation();
@@ -460,7 +463,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       "It snapshots the dates as entered, not the cascaded dates the bars show.\n\n" +
       "Baselines are never overwritten — this is added alongside any already taken.\n" +
       "Examples: \"Baseline 0 — contract\", \"Rev 2 — CO 14 time extension\".",
-      `Baseline ${new Date().toISOString().slice(0, 10)}`,
+      `Baseline ${todayLocalISO()}`,
     );
     if (name === null) return; // cancelled
     if (!name.trim()) {
@@ -575,6 +578,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       isOverdue,
       effStart,
       effEnd,
+      floatMap,
     }),
     [
       allTasks,
@@ -1142,6 +1146,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             effStart={effStart}
             effEnd={effEnd}
             isOverdue={isOverdue}
+            floatMap={floatMap}
           />
           {virtualBottomPadding > 0 && <div aria-hidden="true" style={{ height: virtualBottomPadding, flexShrink: 0 }} />}
         </div>
@@ -1274,6 +1279,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               startTaskBarDrag={startTaskBarDrag}
               showBaseline={showBaseline}
               baselineMap={baselineMap}
+              floatMap={floatMap}
               showSubmittals={showSubmittals}
               submittals={submittals}
               setTooltip={setTooltip}
@@ -1341,7 +1347,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             </div>
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
-            {isCriticalTask(tooltip.task) && (
+            {isCriticalTask(tooltip.task, floatMap) && (
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", border: "1px solid var(--status-warning)", borderRadius: 999, padding: "2px 6px" }}>
                 Critical
               </span>
@@ -1382,7 +1388,17 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             {fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}
           </div>
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 2 }}>
-            Effective {fmtDate(effStart(tooltip.task))} to {fmtDate(effEnd(tooltip.task))} / {calcDuration(effStart(tooltip.task), effEnd(tooltip.task)) || 0}d
+            Effective {fmtDate(effStart(tooltip.task))} to {fmtDate(effEnd(tooltip.task))} / {calcDuration(effStart(tooltip.task), effEnd(tooltip.task))}
+          </div>
+          {/* Calculated float, not the checkbox (§2.2). describeFloat spells out
+              WHY a cell is blank — "no dates" and "in a predecessor cycle" are
+              different from "zero float", and only one of them means critical. */}
+          <div
+            className="sbd-num"
+            title={describeFloat(floatMap[tooltip.task?.id])}
+            style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 2 }}
+          >
+            Float {formatFloat(floatMap[tooltip.task?.id])}
           </div>
           {(() => {
             const bl = getTaskBaseline(tooltip.task, baselineMap);

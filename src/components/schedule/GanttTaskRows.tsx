@@ -89,6 +89,7 @@ export function GanttLeftPanelRows(props: any) {
   effStart,
   effEnd,
   isOverdue,
+  floatMap,
   } = props;
   return virtualRows.map(({ row, index: i }: any) => {
     if (row.type === "summary") {
@@ -99,7 +100,7 @@ export function GanttLeftPanelRows(props: any) {
       // shows up on its own row. Counting the parent too would
       // double-count and inflate the phase's overdue badge.
       const phaseOverdue = tasks.filter((t: any) => !isSummaryScheduleTask(t) && isOverdue(t)).length;
-      const phaseCritical = tasks.filter(isCriticalTask).length;
+      const phaseCritical = tasks.filter((t: any) => isCriticalTask(t, floatMap)).length;
       const phaseTbd = tasks.filter((t: any) => !effStart(t) || !effEnd(t)).length;
       const phaseMeta = [
         `${pluralize(tasks.length, "task")}`,
@@ -214,7 +215,7 @@ export function GanttLeftPanelRows(props: any) {
     const isSummaryRow = isSummaryScheduleTask(task);
     const leftHovered = hoveredRowId === task.id;
     const parentRowBg = task._hasChildren ? tint(GANTT_STATUS_HEX.inProgress, 4) : "transparent";
-    const critical = isCriticalTask(task);
+    const critical = isCriticalTask(task, floatMap);
     const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
     return (
       <div key={`task-${task.id}`}
@@ -506,6 +507,7 @@ export function GanttTimelineRows(props: any) {
   startTaskBarDrag,
   showBaseline,
   baselineMap,
+  floatMap,
   showSubmittals,
   submittals,
   setTooltip,
@@ -580,7 +582,7 @@ export function GanttTimelineRows(props: any) {
     top += ROW_H;
     const { task } = row;
     const overdue = isOverdue(task);
-    const critical = isCriticalTask(task);
+    const critical = isCriticalTask(task, floatMap);
     const hovered = hoveredRowId === task.id;
     const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
     const parentBg = task._hasChildren ? tint(GANTT_STATUS_HEX.inProgress, 4) : "transparent";

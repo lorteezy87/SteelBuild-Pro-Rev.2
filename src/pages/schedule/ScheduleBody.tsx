@@ -5,6 +5,7 @@
  * state, mutation objects, and handlers.
  */
 import { Suspense } from "react";
+import { todayLocalISO } from "@/lib/dateMath";
 import type { ComponentType, PropsWithChildren } from "react";
 import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ import ViewTabs from "./ViewTabs";
 import BulkParentModal from "./BulkParentModal";
 import type { ScheduleTask } from "./types";
 import type { UseScheduleBaselinesResult } from "@/hooks/useScheduleBaselines";
+import type { TaskFloat } from "@/services/scheduleFloat";
 import type { ScheduleModals } from "./useScheduleModals";
 import type { TaskSelection } from "./useTaskSelection";
 
@@ -71,6 +73,7 @@ interface ScheduleBodyProps {
   weatherRisk: any;
   effectiveDatesMap: any;
   scheduleBaselines: UseScheduleBaselinesResult;
+  floatMap: Record<string, TaskFloat>;
   selectedProject: any;
   projectId: string | null | undefined;
   qc: any;
@@ -134,6 +137,7 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
     weatherRisk,
     effectiveDatesMap,
   scheduleBaselines,
+  floatMap,
     selectedProject,
     projectId,
     qc,
@@ -245,6 +249,7 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
                 projectId={projectId}
                 baselineMap={scheduleBaselines.baselineMap}
                 onBaselineChange={scheduleBaselines.refetch}
+                floatMap={floatMap}
                 expandedTask={expandedTask}
                 setExpandedTask={setExpandedTask}
                 onTaskClick={(task: ScheduleTask) => { setSelectedTask(task); setShowDrawer(true); }}
@@ -352,7 +357,7 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
             }
             isSaving={createTaskMut.isPending}
             projectName={selectedProject?.name || ""}
-            prefilledDate={new Date().toISOString().split("T")[0]}
+            prefilledDate={todayLocalISO()}
             existingTasks={enrichedTasks}
           />
         </Suspense>

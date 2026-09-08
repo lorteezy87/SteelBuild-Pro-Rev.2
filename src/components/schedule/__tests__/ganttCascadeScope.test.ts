@@ -56,7 +56,8 @@ const PROJECT = [
 describe("cascade scope — why the Gantt must not recompute from filtered rows", () => {
   it("full-scope cascade holds the successor behind its cross-phase predecessor", () => {
     const eff = computeEffectiveDates(PROJECT);
-    expect(eff["fab-1"].start).toBe("2026-03-07"); // det-1 ends 03-06, FS + 1
+    // det-1 ends Fri 03-06; FS+1 is Mon 03-09, not Sat 03-07 (§2.1).
+    expect(eff["fab-1"].start).toBe("2026-03-09");
     expect(eff["fab-1"].shifted).toBe(true);
   });
 

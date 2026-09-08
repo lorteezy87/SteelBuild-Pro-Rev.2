@@ -122,10 +122,12 @@ describe("computeEffectiveDates — FS+1 regression bar", () => {
       cycle: false,
     });
     expect(eff.B).toEqual({
-      start: "2026-05-02", // day after A ends
-      end: "2026-05-05", // duration (3 days) preserved
+      // 05-02 is a SATURDAY. Since §2.1 a driven start snaps to the next
+      // working day, so "the day after A ends" is Monday 05-04.
+      start: "2026-05-04",
+      end: "2026-05-07", // duration (3 days) preserved across the snap
       shifted: true,
-      shiftedBy: 12, // 2026-04-20 → 2026-05-02
+      shiftedBy: 14, // 2026-04-20 → 2026-05-04
       cycle: false,
     });
   });
@@ -216,8 +218,9 @@ describe("computeEffectiveDates — link-type semantics", () => {
 
   it("SS — successor.start >= predecessor.start + lag", () => {
     const eff = computeEffectiveDates(buildPair("SS", 0));
-    expect(eff.B.start).toBe("2026-05-10"); // A starts 5/10, lag 0
-    expect(eff.B.end).toBe("2026-05-12");
+    // A starts Sunday 05-10 with lag 0; the successor snaps to Monday 05-11.
+    expect(eff.B.start).toBe("2026-05-11");
+    expect(eff.B.end).toBe("2026-05-13");
   });
 
   it("SS with positive lag", () => {
@@ -233,8 +236,13 @@ describe("computeEffectiveDates — link-type semantics", () => {
 
   it("SF — successor.end >= predecessor.start + lag", () => {
     const eff = computeEffectiveDates(buildPair("SF", 0));
-    expect(eff.B.end).toBe("2026-05-10");
-    expect(eff.B.start).toBe("2026-05-08");
+    // SF drives the FINISH; 05-10 is a Sunday, so it lands Monday 05-11.
+    expect(eff.B.end).toBe("2026-05-11");
+    // The derived edge is deliberately NOT snapped: SF constrains the FINISH,
+    // and snapping the start it implies would change the task's length to
+    // satisfy a rule that was never about its start. 05-09 is a Saturday,
+    // and that is the honest consequence of a finish-driven link.
+    expect(eff.B.start).toBe("2026-05-09");
   });
 
   it("negative lag — fast-tracking on FS lets B start before A ends", () => {
@@ -345,10 +353,10 @@ describe("applyEffectiveDates — wrapper", () => {
     ];
     const result = applyEffectiveDates(tasks);
     const b = result.find((t) => t.id === "B");
-    expect(b.start_date).toBe("2026-05-02");
+    expect(b.start_date).toBe("2026-05-04"); // Sat 05-02 → Mon (§2.1)
     expect(b._stored_start_date).toBe("2026-04-20");
     expect(b._shifted).toBe(true);
-    expect(b._shifted_by).toBe(12);
+    expect(b._shifted_by).toBe(14);
   });
 
   it("returns shallow copies — original tasks untouched", () => {
@@ -392,9 +400,9 @@ describe("applyEffectiveDates — wrapper", () => {
       expect(b._stored_start_date).toBe("2026-04-20");
       expect(b._stored_end_date).toBe("2026-04-23");
       // The effective placement is a fixed point: re-applying never walks it on.
-      expect(b.start_date).toBe("2026-05-02");
+      expect(b.start_date).toBe("2026-05-04"); // Sat 05-02 → Mon (§2.1)
       expect(b._shifted).toBe(true);
-      expect(b._shifted_by).toBe(12);
+      expect(b._shifted_by).toBe(14);
     }
   });
 

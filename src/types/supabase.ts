@@ -6332,6 +6332,41 @@ export type Database = {
           },
         ]
       }
+      project_calendars: {
+        Row: {
+          created_at: string
+          holidays: string[]
+          project_id: string
+          shift_label: string | null
+          updated_at: string
+          work_days: number[]
+        }
+        Insert: {
+          created_at?: string
+          holidays?: string[]
+          project_id: string
+          shift_label?: string | null
+          updated_at?: string
+          work_days?: number[]
+        }
+        Update: {
+          created_at?: string
+          holidays?: string[]
+          project_id?: string
+          shift_label?: string | null
+          updated_at?: string
+          work_days?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_calendars_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planner_action_events: {
         Row: {
           actor_user_id: string | null

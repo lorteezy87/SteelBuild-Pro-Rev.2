@@ -16,6 +16,8 @@
 // gantt build a timeline spanning *thousands* of years worth of weeks —
 // hundreds of thousands of DOM nodes, browser freeze. We reject any year
 // outside [1900, 2200] so one bad row can't nuke the view.
+import { durationFromDates } from "@/lib/schedule/duration";
+
 export const MIN_YEAR = 1900;
 export const MAX_YEAR = 2200;
 
@@ -47,10 +49,15 @@ export function fmtDate(d) {
   return dt.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "UTC" });
 }
 
+/**
+ * Duration display string, e.g. "5d". "TBD" when either date is missing or the
+ * finish precedes the start.
+ *
+ * INCLUSIVE days (Mon → Fri = 5d, same-day = 1d) — see lib/schedule/duration.ts
+ * for why, and note this used to be exclusive while the task drawer was
+ * inclusive-floored-at-1, so the two disagreed about the same row (§2.4).
+ */
 export function calcDuration(start, end) {
-  const s = parseDateUTC(start);
-  const e = parseDateUTC(end);
-  if (!s || !e) return "TBD";
-  const days = Math.round((e - s) / 86400000);
-  return days >= 0 ? `${days}d` : "TBD";
+  const days = durationFromDates(start, end);
+  return days === null ? "TBD" : `${days}d`;
 }

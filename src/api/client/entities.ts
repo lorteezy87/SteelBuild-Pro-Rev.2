@@ -246,6 +246,10 @@ export const entities = {
   // trigger. Read-only from the client by design: the table has a SELECT
   // policy and no INSERT policy, so the trail cannot be forged or suppressed.
   PlannerActionEvent:    createEntityClient('planner_action_events'),
+  // Optional per-project working calendar. No row = Mon–Fri, no holidays
+  // (src/lib/schedule/workingCalendar.ts DEFAULT_CALENDAR), so a project
+  // without one still gets weekend-aware scheduling.
+  ProjectCalendar:       createEntityClient('project_calendars'),
   ScheduleBaselineTask:  createEntityClient('schedule_baseline_tasks'),
   Submittal:             createEntityClient('submittals'),
   SubmittalRound:        createEntityClient('submittal_rounds'),

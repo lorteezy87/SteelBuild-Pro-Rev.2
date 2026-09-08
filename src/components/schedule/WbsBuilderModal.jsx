@@ -20,6 +20,7 @@
  */
 
 import React, { useMemo, useState, useRef } from "react";
+import { todayLocalISO } from "@/lib/dateMath";
 import { X, Sparkles, Play, Check, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -94,7 +95,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
 
   const [step, setStep]           = useState("input"); // "input" | "preview" | "saving" | "done"
   const [scopeText, setScopeText] = useState("");
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => todayLocalISO());
   const [removed, setRemoved]     = useState(new Set()); // wbs_codes user toggled off
   const [savedCount, setSavedCount] = useState(0);
   const [err, setErr]             = useState(null);

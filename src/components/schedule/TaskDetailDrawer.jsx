@@ -9,7 +9,6 @@ import {
   usesStageDates,
 } from '../../lib/stageDates';
 import {
-  addDaysIso,
   serializeDependencies,
   LINK_TYPES,
 } from '../../services/scheduleCascade';
@@ -19,6 +18,7 @@ import DateOrTbdInput from './DateOrTbdInput';
 import { validReparentTargets } from '@/lib/schedule/hierarchy';
 import { isSummaryTask, buildParentIdSet } from '@/lib/schedule/summaryTasks';
 import { computeFinishVariance, describeVariance } from '@/lib/schedule/actuals';
+import { finishFromDuration } from '@/lib/schedule/duration';
 import TaskHistoryTab from './TaskHistoryTab';
 import { asIdArray, sameIdSet, parseDeps } from './taskDetailDerive';
 import {
@@ -112,10 +112,10 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
       toast.error('Set a start date first', { position: 'top-right', duration: 2000 });
       return;
     }
-    // UTC-safe: new Date(str+'T00:00:00') (local) + toISOString() (UTC) shifts
-    // end_date by a day under a non-zero UTC offset. addDaysIso does the
-    // arithmetic in UTC — timezone-independent. (days is already guarded ≥1.)
-    const endStr = addDaysIso(formData.start_date, days);
+    // finishFromDuration is start + (days - 1): day 1 IS the start date, under
+    // the inclusive convention (§2.4). It does the arithmetic in UTC, so a
+    // non-zero local offset cannot shift the finish by a day.
+    const endStr = finishFromDuration(formData.start_date, days);
     if (!endStr) return; // unparseable start_date — leave dates untouched
     setFormData({ ...formData, end_date: endStr });
   };

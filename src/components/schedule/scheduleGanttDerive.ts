@@ -24,6 +24,9 @@ type FilterOpts = {
   isOverdue: (task: TaskLike) => boolean;
   effStart: (task: TaskLike) => string | null | undefined;
   effEnd: (task: TaskLike) => string | null | undefined;
+  /** Calculated float, so the CRITICAL quick filter selects the real
+   *  critical path rather than whatever was ticked (§2.2). */
+  floatMap?: Record<string, { isCritical: boolean; totalFloat: number | null }> | null;
 };
 
 type LayoutRow =
@@ -291,6 +294,7 @@ export function computeVisibleTaskIds(opts: FilterOpts): Set<string> | null {
     isOverdue,
     effStart,
     effEnd,
+    floatMap,
   } = opts;
   if (!hasActiveRowFilter) return null;
 
@@ -310,7 +314,7 @@ export function computeVisibleTaskIds(opts: FilterOpts): Set<string> | null {
       if (quickFilter !== "all" && isSummaryScheduleTask(task)) return false;
       if (quickFilter === "all") return true;
       if (quickFilter === "lookahead") return isLookaheadTask(task, today, effStart, effEnd);
-      if (quickFilter === "critical") return isCriticalTask(task);
+      if (quickFilter === "critical") return isCriticalTask(task, floatMap);
       if (quickFilter === "delayed") return String(task.status || "").toLowerCase().includes("delay");
       if (quickFilter === "stalled") return isStalledTask(task, today, (item: any) => parseDateUTC(effStart(item)));
       if (quickFilter === "overdue") return isOverdue(task);
