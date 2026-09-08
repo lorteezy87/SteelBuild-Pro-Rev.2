@@ -1,4 +1,6 @@
 import { parseDateUTC, toDateOnly } from "./scheduleDateUtils";
+import { taskDurationDays } from "@/lib/schedule/duration";
+import { weightedPercentComplete } from "@/lib/schedule/rollup";
 import { displayPct } from "./scheduleTaskUtils";
 
 // Tree-sorting: parent/child hierarchy within each phase.
@@ -65,10 +67,19 @@ export function buildTreeOrder(tasks, options = {}) {
     const minStart = starts.length ? new Date(Math.min(...starts.map((date) => date.getTime()))) : null;
     const maxEnd = ends.length ? new Date(Math.max(...ends.map((date) => date.getTime()))) : null;
     const summaryTaskCount = directChildren.reduce((sum, child) => sum + 1 + (Number(child._summaryTaskCount) || 0), 0);
-    const pctTotal = directChildren.reduce((sum, child) => sum + displayPct(child), 0);
-    const rolledPct = directChildren.length ? Math.round(pctTotal / directChildren.length) : displayPct(task);
+    // Duration-WEIGHTED, not a plain mean (§2.3). The unweighted version gave
+    // a 1-day punch item the same say as a 60-day erection sequence:
+    //
+    //   child A  "Punch 1 pc"     1 day, 100%   ┐ unweighted mean → 50%
+    //   child B  "Erect 60 days" 60 days,  0%   ┘ weighted truth  →  2%
+    //
+    // 50% is the number a PM reads off the screen and repeats to an owner.
+    const rolledPct = weightedPercentComplete(directChildren, displayPct, taskDurationDays)
+      ?? displayPct(task);
+    // The summary's span, inclusive: min start → max end is 4 days apart but
+    // spans 5 (§2.4). Falls back to the stored column when children are undated.
     const rolledDuration = minStart && maxEnd
-      ? Math.max(0, Math.round((maxEnd - minStart) / 86400000))
+      ? Math.max(1, Math.round((maxEnd - minStart) / 86400000) + 1)
       : task.duration;
 
     return {

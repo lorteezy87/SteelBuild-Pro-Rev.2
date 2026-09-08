@@ -1,5 +1,6 @@
 // Schedule utility functions for data mapping and calculations
 import { GANTT_GRADIENT, GANTT_PHASE_HEX, GANTT_ROW_ALT_VAR, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
+import { durationFromDates } from "@/lib/schedule/duration";
 import { todayLocalISO } from "@/lib/dateMath";
 
 export function mapWorkPackagesToTasks(workPackages) {
@@ -65,12 +66,16 @@ export function mapSubmittalsToTasks(drawings) {
   }));
 }
 
+/**
+ * Inclusive duration in days for the drawer's editable field.
+ *
+ * Falls back to 1 rather than null because this feeds a number input that has
+ * to render something; callers wanting the honest unknown use taskDurationDays.
+ * Previously this was exclusive-floored-at-1 while the Gantt was plain
+ * exclusive, so a same-day task read 1 here and 0d there (§2.4).
+ */
 export function calculateTaskDuration(startDate, endDate) {
-  if (!startDate || !endDate) return 1;
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const diff = end - start;
-  return Math.max(1, Math.ceil(diff / 86400000));
+  return durationFromDates(startDate, endDate) ?? 1;
 }
 
 export function getDateRangeForTasks(tasks) {

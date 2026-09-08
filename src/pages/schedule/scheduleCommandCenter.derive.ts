@@ -18,6 +18,8 @@ import {
 import { isMilestoneTask, displayPct } from "@/components/schedule/scheduleTaskUtils";
 import { parseDateUTC } from "@/components/schedule/scheduleDateUtils";
 import { excludeSummaryTasks } from "@/lib/schedule/summaryTasks";
+import { taskDurationDays } from "@/lib/schedule/duration";
+import { weightedPercentComplete, weightedCoverage } from "@/lib/schedule/rollup";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -68,8 +70,18 @@ export interface ScheduleSummary {
   overdue: number;
   /** Count of tasks starting/ending within the 14-day lookahead window. */
   inLookahead: number;
-  /** Mean displayPct across all actionable tasks, 0-100 rounded. */
+  /**
+   * Duration-weighted mean displayPct across all actionable tasks, 0-100
+   * rounded. Weighted, not a plain mean — see lib/schedule/rollup.ts (§2.3).
+   */
   pctComplete: number;
+  /**
+   * How many actionable tasks actually carry a duration to weight by.
+   * A weighted percentage over 2 of 400 tasks is technically correct and
+   * practically meaningless; this lets the UI qualify it instead of presenting
+   * it as firm.
+   */
+  pctCompleteCoverage: { weighted: number; total: number };
   /** Count of tasks with no start_date AND no end_date (truly TBD). */
   tbd: number;
   /** Count of milestone tasks. */
@@ -167,12 +179,13 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
     return end !== null && end < today;
   });
 
-  // --- pctComplete: mean displayPct over all actionable tasks ---
-  const pctComplete = actionable.length === 0
-    ? 0
-    : Math.round(
-        actionable.reduce((sum, t) => sum + displayPct(t), 0) / actionable.length
-      );
+  // --- pctComplete: DURATION-WEIGHTED over all actionable tasks (§2.3) ---
+  // This is the headline number in the hero and the KPI strip — the one a PM
+  // reads off the screen and repeats to an owner. As a plain mean, a one-day
+  // punch item counted the same as a sixty-day erection sequence, so a job with
+  // one small task closed out and everything else untouched showed 50%.
+  const pctComplete = weightedPercentComplete(actionable, displayPct, taskDurationDays) ?? 0;
+  const pctCompleteCoverage = weightedCoverage(actionable, taskDurationDays);
 
   // --- atRisk: open actionable with Critical priority OR non-empty blockers ---
   const atRisk = open.filter((t) =>
@@ -211,6 +224,7 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
     overdue: overdueList.length,
     inLookahead: lookaheadAll.length,
     pctComplete,
+    pctCompleteCoverage,
     tbd: tasks.filter((t) => !t.start_date && !t.end_date).length,
     milestones: milestoneAll.length,
     lookaheadQueue,

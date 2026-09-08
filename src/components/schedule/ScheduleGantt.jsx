@@ -1383,7 +1383,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             {fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}
           </div>
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 2 }}>
-            Effective {fmtDate(effStart(tooltip.task))} to {fmtDate(effEnd(tooltip.task))} / {calcDuration(effStart(tooltip.task), effEnd(tooltip.task)) || 0}d
+            Effective {fmtDate(effStart(tooltip.task))} to {fmtDate(effEnd(tooltip.task))} / {calcDuration(effStart(tooltip.task), effEnd(tooltip.task))}
           </div>
           {(() => {
             const bl = getTaskBaseline(tooltip.task, baselineMap);

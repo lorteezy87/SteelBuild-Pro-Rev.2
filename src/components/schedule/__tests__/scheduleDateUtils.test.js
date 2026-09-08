@@ -66,12 +66,16 @@ describe("fmtDate", () => {
 });
 
 describe("calcDuration", () => {
-  it("returns days as `Nd`", () => {
-    expect(calcDuration("2026-04-01", "2026-04-08")).toBe("7d");
+  // INCLUSIVE days since §2.4 — see lib/schedule/duration.ts. These numbers
+  // each went up by one when the convention changed: Apr 1 → Apr 8 is 8 days of
+  // work, not 7, and a same-day task is 1 day, not 0. Exclusive counting is
+  // what made the Gantt read "0d" on a row the drawer showed as 1.
+  it("returns days as `Nd`, counting both endpoints", () => {
+    expect(calcDuration("2026-04-01", "2026-04-08")).toBe("8d");
   });
 
-  it("zero duration is `0d`", () => {
-    expect(calcDuration("2026-04-01", "2026-04-01")).toBe("0d");
+  it("a same-day task is `1d`, not `0d`", () => {
+    expect(calcDuration("2026-04-01", "2026-04-01")).toBe("1d");
   });
 
   it("returns TBD for invalid / negative ranges", () => {

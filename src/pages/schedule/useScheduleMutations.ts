@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { batchProcess } from "@/utils/batchProcess";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
-import { addDaysIso } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { reparentTasks } from "@/lib/schedule/reparentTasks";
@@ -14,6 +13,7 @@ import {
   describePredecessorCleanup,
 } from "@/lib/schedule/predecessorCleanup";
 import { deriveActualsPatch, hasActualsPatch } from "@/lib/schedule/actuals";
+import { taskDurationDays, finishFromDuration } from "@/lib/schedule/duration";
 import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./wbs";
 import { parseMsProjectXml } from "./mppImport";
 import { commitImportedScheduleTasks } from "./commitImportedTasks";
@@ -348,18 +348,21 @@ export function useScheduleMutations({
       const results = await batchProcess(
         editable,
         (task: any) => {
-          const current = parseInt(task.duration, 10) || 0;
+          // Read the DERIVED duration, not the stored column. Bulk Duration used
+          // to read `task.duration` — stale on 199 of 338 dated rows — and then
+          // rewrite end_date from it, moving a finish date using a number the UI
+          // had never shown the user (§2.4).
+          const current = taskDurationDays(task) ?? 0;
           let newDur;
           if (mode === "set") newDur = days;
           else if (mode === "add") newDur = current + days;
-          else newDur = Math.max(0, current - days);
+          else newDur = Math.max(1, current - days);
 
           const fields: Record<string, any> = { duration: newDur };
           if (task.start_date) {
-            // UTC-safe: adding days via new Date(str+"T00:00:00") (local) then
-            // .toISOString() (UTC) shifts end_date by a day under a non-zero UTC
-            // offset. addDaysIso does the arithmetic in UTC — timezone-independent.
-            const end = addDaysIso(task.start_date, newDur);
+            // start + (newDur - 1): day 1 is the start date. Using addDaysIso
+            // directly here would add a day to every task on every bulk edit.
+            const end = finishFromDuration(task.start_date, newDur);
             if (end) fields.end_date = end;
           }
           return entities.ScheduleTask.update(task.id, fields);

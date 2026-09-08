@@ -1,5 +1,8 @@
 import React, { useMemo } from "react";
 import { todayUtcMidnightFromLocal } from "@/lib/dateMath";
+import { taskDurationDays } from "@/lib/schedule/duration";
+import { weightedPercentComplete } from "@/lib/schedule/rollup";
+import { displayPct } from "./scheduleTaskUtils";
 
 // Schedule audit fix (bug class 5): the previous implementation
 // constructed week boundaries in local time but compared against task
@@ -66,10 +69,10 @@ export default function LookaheadPlanner({ tasks }) {
       {weeks.map((week) => {
         const weekTasks = getTasksForWeek(week.start, week.end);
         const complete = weekTasks.filter((t) => t.status === "Complete").length;
-        const progress =
-          weekTasks.length > 0
-            ? Math.round((complete / weekTasks.length) * 100)
-            : 0;
+        // Duration-weighted, not a head count (§2.3). By count, a week holding
+        // one finished punch item and one untouched 60-day erection sequence
+        // read 50% done.
+        const progress = weightedPercentComplete(weekTasks, displayPct, taskDurationDays) ?? 0;
 
         return (
           <div
