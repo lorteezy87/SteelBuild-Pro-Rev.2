@@ -2,6 +2,7 @@
  * Pure decision / payload helpers for the RFIs overdue→Alert background pass.
  * Keep entities / React Query / toast / setState out of this module.
  */
+import { RFI_CLOSED_STATUSES } from "@/lib/entityPredicates";
 
 export type RfiOverdueAlertCandidate = {
   id: string;
@@ -34,7 +35,12 @@ export type RfiOverdueAlertPlanItem = {
   };
 };
 
-const CLOSED_STATUSES = new Set(["Answered", "Closed"]);
+/**
+ * Terminal statuses. Imported rather than redeclared: the local set here used
+ * to be {Answered, Closed}, which omitted **Void** — so a voided RFI with a
+ * past due date kept generating overdue alerts that no one could action.
+ */
+const CLOSED_STATUSES = RFI_CLOSED_STATUSES;
 const MS_PER_DAY = 86400000;
 
 /** Start-of-day Date used by the overdue window (local midnight). */

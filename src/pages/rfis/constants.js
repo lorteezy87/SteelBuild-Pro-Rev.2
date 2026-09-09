@@ -23,9 +23,18 @@ export const PRIORITY_CFG = {
   Low:      { color: "var(--text-muted)",     bg: "var(--hover-bg)"      },
 };
 
+/**
+ * Legacy status palette for the older ListView / DetailPanel surfaces.
+ *
+ * `rfiStatus.ts` is the canonical model — prefer `rfiStatusView()` in new code.
+ * Void is included here because both call sites resolve with
+ * `STATUS_CFG[status] || STATUS_CFG.Open`, so its absence made a **voided RFI
+ * render as an amber "Open" pill** — the exact opposite of its meaning.
+ */
 export const STATUS_CFG = {
   Open:                  { color: "var(--status-warning)", bg: "var(--warning-muted)" },
   "Under Review":        { color: "var(--status-info)",    bg: "var(--info-muted)"    },
+  Void:                  { color: "var(--text-disabled)",  bg: "var(--hover-bg)"      },
   // "Incomplete Response" — GC replied but the response doesn't fully address
   // the question; another round is required. Treated as still-open (not in
   // ["Answered","Closed"]). Uses the danger palette to flag "needs another
@@ -35,7 +44,10 @@ export const STATUS_CFG = {
   Closed:                { color: "var(--text-muted)",     bg: "var(--hover-bg)"      },
 };
 
-export const statusColumns = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
+// Board columns. Void is included so a voided RFI still lands somewhere —
+// without a column it was dropped from the board entirely while remaining in
+// the total count.
+export const statusColumns = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed", "Void"];
 
 // RFI numbers arrive from several paths: app-created values use "RFI 001",
 // older imports may store "001", and vendor logs often use "RFI-001".
