@@ -657,12 +657,58 @@
   background: var(--hover-bg);
 }
 
+/* ── Open vs closed ────────────────────────────────────────────────────────
+   The register's primary read is "what is still live?". Open rows carry a
+   coloured left edge (urgency, set per row via --rfi-accent) and full-contrast
+   text; closed rows drop the edge and recede. Previously nothing at row level
+   distinguished them AND every status pill resolved to the same grey, so
+   telling open from closed meant reading each pill one at a time. */
+.rfi-record-row.is-open {
+  box-shadow: inset 3px 0 0 var(--rfi-accent, var(--status-warning));
+}
+
+/* Overdue and Critical outrank the status colour. rfiAccentColor already
+   encodes this, so the inline accent normally matches; these rules keep the
+   result correct if a row is ever rendered without one. */
 .rfi-record-row.is-overdue {
   box-shadow: inset 3px 0 0 var(--danger);
 }
 
 .rfi-record-row.is-critical:not(.is-overdue) {
   box-shadow: inset 3px 0 0 var(--status-review);
+}
+
+/* Settled work recedes: no edge, dimmed supporting text. Deliberately stops
+   above 0.6 opacity — this is de-emphasis, not hiding, since closed RFIs are
+   still read when reconstructing history. Hover restores full contrast. */
+.rfi-record-row.is-closed {
+  box-shadow: none;
+}
+
+.rfi-record-row.is-closed .rfi-row-number,
+.rfi-record-row.is-closed .rfi-row-title-text {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.rfi-record-row.is-closed .rfi-row-age,
+.rfi-record-row.is-closed .rfi-row-meta,
+.rfi-record-row.is-closed .rfi-row-due,
+.rfi-record-row.is-closed .rfi-row-impact-cell {
+  opacity: 0.62;
+}
+
+.rfi-record-row.is-closed:hover .rfi-row-age,
+.rfi-record-row.is-closed:hover .rfi-row-meta,
+.rfi-record-row.is-closed:hover .rfi-row-due,
+.rfi-record-row.is-closed:hover .rfi-row-impact-cell {
+  opacity: 1;
+}
+
+/* A closed RFI has no live due date — red here implies action that is no
+   longer required. */
+.rfi-record-row.is-closed .rfi-row-date.is-late {
+  color: var(--text-muted);
 }
 
 .rfi-row-check {

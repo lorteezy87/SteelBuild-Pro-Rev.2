@@ -119,7 +119,24 @@ describe("buildRfiCounts", () => {
     const c = buildRfiCounts(rfis);
     expect(c).toEqual({
       all: 6, open: 2, review: 1, incomplete: 1, answered: 1, closed: 1, critical: 1, overdue: 1,
+      // Void gained a bucket, and liveOpen/liveClosed roll the per-status
+      // counts up to the open-vs-closed split the register groups on.
+      void: 0, liveOpen: 4, liveClosed: 2,
     });
+  });
+
+  it("keeps the per-status buckets reconciling against the total", () => {
+    const rfis = [
+      { status: "Open" },
+      { status: "Under Review" },
+      { status: "Incomplete Response" },
+      { status: "Answered" },
+      { status: "Closed" },
+      { status: "Void" },
+    ];
+    const c = buildRfiCounts(rfis);
+    expect(c.open + c.review + c.incomplete + c.answered + c.closed + c.void).toBe(c.all);
+    expect(c.liveOpen + c.liveClosed).toBe(c.all);
   });
 });
 
