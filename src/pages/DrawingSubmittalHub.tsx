@@ -79,6 +79,10 @@ const DocControlPanel = lazyWithRetry(() =>
     default: m.DocControlPanel,
   })),
 ) as unknown as ComponentType<AnyProps>;
+// 2026 hub layout: surface the existing canonical workflows as first-level tabs.
+const HoldsPanel = lazyWithRetry(() => import("@/components/drawings/register/HoldsPanel").then(m => ({ default: m.HoldsPanel })));
+const TransmittalLogPanel = lazyWithRetry(() => import("@/components/drawings/register/TransmittalLogPanel").then(m => ({ default: m.TransmittalLogPanel })));
+const DetailingValidationPanel = lazyWithRetry(() => import("@/pages/drawingSubmittalHub/DetailingValidationPanel"));
 // Overlay compare carries pdfjs — keep it off the hub's route chunk.
 const RevisionCompareModalLazy = lazyWithRetry(
   () => import("@/components/drawings/RevisionCompareModal"),
@@ -665,6 +669,9 @@ export default function DrawingSubmittalHub() {
             rosterLoaded={modelElements.length > 0}
           />
         )}
+        {activeTab === "holds" && <HoldsPanel key={projectId} projectId={projectId || null} />}
+        {activeTab === "transmittals" && <TransmittalLogPanel key={projectId} projectId={projectId || null} />}
+        {activeTab === "validation" && <DetailingValidationPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
         {activeTab === "model3d" && (
           <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} />

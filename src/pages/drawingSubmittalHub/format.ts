@@ -1,4 +1,4 @@
-import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldCheck, Workflow } from "lucide-react";
+import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldCheck, ShieldAlert, Send, ListChecks, Workflow } from "lucide-react";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { DRAFTING_STATES, effectiveDetailingState, hasGoverningSubmittal, isPackageReleasedForFab, isPackageRR } from "@/lib/detailingPackageState";
@@ -31,8 +31,11 @@ export const TABS = [
   { key: "process", label: "Process Board", icon: Layers3 },
   { key: "drawings", label: "Drawing Register", icon: FileStack },
   { key: "submittals", label: "Submittal Register", icon: ClipboardList },
+  { key: "transmittals", label: "Transmittals", icon: Send },
   { key: "matrix", label: "Approval Matrix", icon: Workflow },
   { key: "revimpact", label: "Revision Impact", icon: GitCompareArrows },
+  { key: "holds", label: "Holds & Blockers", icon: ShieldAlert },
+  { key: "validation", label: "Validation", icon: ListChecks },
   { key: "doccontrol", label: "Doc Control", icon: ShieldCheck },
 ];
 
