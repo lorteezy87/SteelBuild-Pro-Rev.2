@@ -5,14 +5,13 @@ import type { TransmittalRow } from "@/hooks/useTransmittals";
 import {
   MATRIX_FILTERS,
   buildLastTransmittalBySet,
-  createSubmittalForSetSearch,
+  createSubmittalForSetHref,
   enrichApprovalMatrixRows,
-  hubTabSearch,
   matchesMatrixFilter,
   parseMatrixFilter,
-  submittalSearch,
+  submittalHref,
   summarizeMatrixCoverage,
-  transmittalSearch,
+  transmittalHref,
 } from "../approvalMatrix.derive";
 import { buildApprovalMatrixRows, buildSetPackages, summarizeApprovalMatrix } from "../format";
 
@@ -254,10 +253,9 @@ describe("parseMatrixFilter", () => {
 });
 
 describe("hub deep links", () => {
-  it("stay inside the hub as ?hub_tab= links the receiving tab consumes", () => {
-    expect(hubTabSearch("holds")).toBe("?hub_tab=holds");
-    expect(submittalSearch("sub-1")).toBe("?hub_tab=submittals&recordId=sub-1");
-    expect(createSubmittalForSetSearch("set 1")).toBe("?hub_tab=submittals&targetSetId=set+1");
-    expect(transmittalSearch("t-1")).toBe("?hub_tab=transmittals&transmittal=t-1");
+  it("are absolute in-hub ?hub_tab= links the receiving tab consumes", () => {
+    expect(submittalHref("sub-1")).toBe("/DrawingSubmittalHub?hub_tab=submittals&recordId=sub-1");
+    expect(createSubmittalForSetHref("set 1")).toBe("/DrawingSubmittalHub?hub_tab=submittals&targetSetId=set+1");
+    expect(transmittalHref("t-1")).toBe("/DrawingSubmittalHub?hub_tab=transmittals&transmittal=t-1");
   });
 });

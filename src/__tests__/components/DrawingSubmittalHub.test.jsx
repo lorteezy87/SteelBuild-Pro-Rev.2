@@ -54,6 +54,11 @@ vi.mock("@/hooks/useFeatureFlag", () => ({ useFlag: () => false, useFeatureFlag:
 vi.mock("@/components/shared/useAppSecurity", () => ({
   useAppSecurity: () => ({ user: { email: "test@example.com", id: "test-user-id" } }),
 }));
+// HoldsPanel (the holds tab) reads the signed-in user for hold attribution.
+vi.mock("@/lib/AuthContext", async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuth: () => ({ user: { email: "test@example.com", id: "test-user-id" } }),
+}));
 vi.mock("@/services/permissions", () => ({
   usePermissions: () => ({
     can: () => true,
@@ -97,6 +102,7 @@ function LocationProbe() {
   const navigate = useNavigate();
   return (
     <div>
+      <output data-testid="pathname">{location.pathname}</output>
       <output data-testid="search">{location.search}</output>
       <output data-testid="nav-type">{navigationType}</output>
       <button type="button" onClick={() => navigate(-1)}>probe-back</button>
@@ -218,6 +224,56 @@ describe("DrawingSubmittalHub — tab history", () => {
 
     await user.click(await screen.findByRole("tab", { name: /Control Board/ }));
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=overview");
+  });
+
+  it("drops the sub-view and the matrix filter on every switch, even into the matrix, and keeps unrelated params", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=overview&hub_view=sets&matrix_filter=hold&keep=1"] });
+
+    await user.click(await screen.findByRole("tab", { name: /Approval Matrix/ }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=matrix&keep=1");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
+  });
+});
+
+// Every ?hub_tab= key but model3d (its body is flag-gated, and the flag is off
+// here). Pinned rather than imported, so a key that stops resolving fails loudly.
+const NON_3D_KEYS = ["overview", "process", "drawings", "submittals", "transmittals", "matrix", "revimpact", "holds", "validation", "doccontrol"];
+
+// The hub's own tab strip; some panels (Holds) render a tablist of their own.
+async function selectedTab() {
+  const tablist = await screen.findByRole("tablist", { name: "Detailing Control Center tabs" });
+  return within(tablist).getByRole("tab", { selected: true });
+}
+
+describe("DrawingSubmittalHub — ?hub_tab= links", () => {
+  it.each(NON_3D_KEYS)("?hub_tab=%s opens its tab and leaves the URL alone", async (key) => {
+    renderHub({ entries: [`/DrawingSubmittalHub?hub_tab=${key}`] });
+    expect(await selectedTab()).toHaveAttribute("id", `dcc-tab-${key}`);
+    expect(screen.getByTestId("search").textContent).toBe(`?hub_tab=${key}`);
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
+  });
+
+  it("drops an unknown ?hub_tab= before mounting, without adding a history entry", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/Dashboard", "/DrawingSubmittalHub?hub_tab=bogus"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    expect(screen.getByTestId("pathname").textContent).toBe("/DrawingSubmittalHub");
+    expect(screen.getByTestId("search").textContent).toBe("");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+
+    // The bogus entry was replaced, not stacked on: Back leaves the hub.
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/Dashboard");
+  });
+
+  it("keeps a ?hub_tab=model3d link while the 3D flag is off, showing the Control Board", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=model3d");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
   });
 });
 

@@ -13,7 +13,7 @@
 import { Suspense, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
@@ -39,6 +39,7 @@ import { useFlag } from "@/hooks/useFeatureFlag";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import { DetailingCommandShell, DetailingNoProject } from "./drawingSubmittalHub/DetailingCommandShell";
+import { DEFAULT_HUB_TAB, canonicalHubSearch, nextTabSearch, parseHubTab } from "./drawingSubmittalHub/hubLinks";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
@@ -108,18 +109,31 @@ const ModelElementImportModal = ModelElementImportModalRaw as unknown as Compone
 // Tabs whose count is a warning, not a row tally (header badge's twin).
 const ALERT_TABS = ["holds"] as const;
 const NO_HOLDS: DrawingHoldRow[] = [];
-// One-shot record/create params, each aimed at a specific tab (Submittals:
-// recordId, targetSetId, prefilled*; Transmittals: transmittal).
-const HUB_RECORD_PARAMS = ["recordId", "targetSetId", "prefilledStatus", "prefilledBallInCourt", "transmittal"] as const;
 
 /**
- * Route entry. With no project every query below is disabled, so the shell
- * used to sit on "—" and "Loading…" forever; now it says so plainly. Keyed
- * on the project so a switch remounts the hub — open drafts (escalation, RFI
- * from a summary, revision compare, lead times) never carry across projects.
+ * Route entry. An unknown (or aliased) ?hub_tab= is corrected first, before
+ * project gating and before any panel mounts, so no embedded page's effect
+ * ever runs on the stale URL. It's a replace, so Back never returns to it.
+ *
+ * With no project every query below is disabled, so the shell used to sit on
+ * "—" and "Loading…" forever; now it says so plainly. Keyed on the project so
+ * a switch remounts the hub — open drafts (escalation, RFI from a summary,
+ * revision compare, lead times) never carry across projects.
  */
 export default function DrawingSubmittalHub() {
+  const location = useLocation();
   const projectCtx = useProjectContext() as any;
+  const canonicalSearch = canonicalHubSearch(location.search);
+  if (canonicalSearch !== null) {
+    const { aliasedFrom } = parseHubTab(new URLSearchParams(location.search).get("hub_tab"));
+    return (
+      <Navigate
+        replace
+        to={{ pathname: location.pathname, search: canonicalSearch, hash: location.hash }}
+        state={{ hubAliasedFrom: aliasedFrom }}
+      />
+    );
+  }
   const projectId = projectCtx.activeProject?.id as string | undefined;
   if (!projectId) return projectCtx.loading ? <LoadingSkeleton /> : <DetailingNoProject />;
   return <DetailingControlCenter key={projectId} />;
@@ -159,30 +173,25 @@ function DetailingControlCenter() {
     [show3d],
   );
 
-  // Tab state from URL (persistent across navigation)
-  const tabParam = searchParams.get("hub_tab") || "overview";
-  const activeTab = tabs.find((t) => t.key === tabParam) ? tabParam : "overview";
+  // Tab state from URL (persistent across navigation). The route entry has
+  // already corrected unknown keys. A key this session doesn't show — model3d
+  // with the flag off, or while flags load — opens the Control Board and the
+  // URL is left alone.
+  const urlTab = parseHubTab(searchParams.get("hub_tab")).tab;
+  const activeTab = tabs.some((t) => t.key === urlTab) ? urlTab : DEFAULT_HUB_TAB;
   // Tab changes PUSH a history entry (the 2026 hub keeps its tab in the path
   // for the same reason), so Back returns to the previous tab instead of
-  // leaving the hub. ?hub_tab= stays the format, so old bookmarks and the
-  // Validation panel's ?hub_tab=holds link keep working. The matrix's quick
-  // filter is tab-scoped and doesn't follow the user to another tab.
+  // leaving the hub. ?hub_tab= stays the format, so old bookmarks keep
+  // working. nextTabSearch drops the tab-scoped params: a lazy tab's
+  // unconsumed record param must not fire later on some other visit, and the
+  // sub-view and the matrix's quick filter don't follow the user. It drops
+  // ?projectId= / ?project= too. ProjectScopedRoute has already synced them,
+  // and a pushed entry that re-pinned the project would make Back, after a
+  // project switch, quietly switch the app back.
   const setActiveTab = (key: string) => {
-    if (key === activeTab) return;
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("hub_tab", key);
-      if (key !== "matrix") next.delete("matrix_filter");
-      // A ?projectId= / ?project= deep link has done its job once
-      // ProjectScopedRoute synced the project. Pushed entries must not re-pin
-      // it, or Back after a project switch would quietly switch the app back.
-      next.delete("projectId");
-      next.delete("project");
-      // A lazy tab that hadn't consumed its record param yet must not fire it
-      // later, on some other visit.
-      for (const param of HUB_RECORD_PARAMS) next.delete(param);
-      return next;
-    });
+    const { tab } = parseHubTab(key);
+    if (tab === activeTab) return;
+    setSearchParams((prev) => nextTabSearch(prev, tab));
   };
 
   // ── Data for KPI strip & matrix ────────────────────────────────────────

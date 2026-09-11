@@ -39,16 +39,16 @@ import {
   submittalRoundCount,
 } from "./format";
 import {
-  createSubmittalForSetSearch,
+  createSubmittalForSetHref,
   enrichApprovalMatrixRows,
-  hubTabSearch,
   matchesMatrixFilter,
   parseMatrixFilter,
-  submittalSearch,
+  submittalHref,
   summarizeMatrixCoverage,
-  transmittalSearch,
+  transmittalHref,
 } from "./approvalMatrix.derive";
 import type { EnrichedMatrixRow, MatrixFilter, MatrixTransmittal } from "./approvalMatrix.derive";
+import { hubHref } from "./hubLinks";
 import type { DueInfo, SetPackage } from "./types";
 import { FilterBar, Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
@@ -346,7 +346,7 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
               : <UnknownValue glyph="?" label="Holds couldn't be loaded" />
           ) : row.onHold > 0 ? (
             <Link
-              to={hubTabSearch("holds")}
+              to={hubHref("holds")}
               onClick={stopRowToggle}
               aria-label={`${row.onHold} sheet${row.onHold === 1 ? "" : "s"} on hold in ${setLabel} — open Holds & Blockers`}
               style={{ textDecoration: "none" }}
@@ -358,7 +358,7 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
         <td style={{ whiteSpace: "nowrap" }}>
           {sub ? (
             <>
-              <Link to={submittalSearch(sub.id)} onClick={stopRowToggle} style={linkStyle} title="Open this submittal">
+              <Link to={submittalHref(sub.id)} onClick={stopRowToggle} style={linkStyle} title="Open this submittal">
                 {sub.submittal_number || "Unnumbered"}
               </Link>
               {otherSubmittals.length > 0 && (
@@ -369,7 +369,7 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
             </>
           ) : canCreateSubmittal ? (
             <Link
-              to={createSubmittalForSetSearch(row.id)}
+              to={createSubmittalForSetHref(row.id)}
               onClick={stopRowToggle}
               className="cmd-chip-btn"
               style={{ textDecoration: "none", display: "inline-block" }}
@@ -463,7 +463,7 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
               return (
                 <div key={s.id} style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center", marginBottom: 6, fontSize: 12 }}>
                   <span style={muted}>↳</span>
-                  <Link to={submittalSearch(s.id)} style={linkStyle}>{s.submittal_number || "Unnumbered"}</Link>
+                  <Link to={submittalHref(s.id)} style={linkStyle}>{s.submittal_number || "Unnumbered"}</Link>
                   <Pill tone={statusTone(s.status)}>{s.status}</Pill>
                   <Pill tone={dueTone(childDue)}>{childDue.label}</Pill>
                   <span style={muted}>R{submittalRoundCount(s)}</span>
@@ -502,7 +502,7 @@ function LastTransmittalCell({ transmittal, loading }: { transmittal: MatrixTran
   return (
     <span style={{ display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
       <Link
-        to={transmittalSearch(transmittal.id)}
+        to={transmittalHref(transmittal.id)}
         onClick={stopRowToggle}
         style={linkStyle}
         title={`Open transmittal ${transmittal.number}${transmittal.party ? ` · ${transmittal.party}` : ""}`}
