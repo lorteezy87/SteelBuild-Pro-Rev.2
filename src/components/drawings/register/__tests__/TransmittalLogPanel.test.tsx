@@ -121,6 +121,15 @@ function renderPanel(initialEntries: string[] = ["/"]) {
   );
 }
 
+// jsdom does no layout, so it has no scrollIntoView; record who asked.
+const scrolledTo: string[] = [];
+beforeEach(() => {
+  scrolledTo.length = 0;
+  Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+    scrolledTo.push(this.id);
+  };
+});
+
 describe("TransmittalLogPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -165,6 +174,8 @@ describe("TransmittalLogPanel", () => {
 
     expect(await screen.findByText("Second batch")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close T-002" })).toHaveAttribute("aria-expanded", "true");
+    // Scrolls to the details row React committed — not before it exists.
+    await waitFor(() => expect(scrolledTo).toEqual(["transmittal-transmittal-2-details"]));
     expect(screen.queryByText("Issued for coordination")).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("location-search")).toHaveTextContent("?hub_tab=transmittals"));
     expect(screen.getByTestId("location-search")).not.toHaveTextContent("transmittal=");
@@ -176,6 +187,7 @@ describe("TransmittalLogPanel", () => {
 
     await waitFor(() => expect(screen.getByTestId("location-search")).toHaveTextContent("?hub_tab=transmittals"));
     expect(screen.getByRole("button", { name: "View T-001" })).toHaveAttribute("aria-expanded", "false");
+    expect(scrolledTo).toEqual([]);
   });
 
   it("edits header fields and reconciles attached revisions", async () => {

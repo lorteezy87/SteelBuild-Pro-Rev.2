@@ -11,6 +11,7 @@ vi.mock("@/components/submittals/CycleTimeCard", () => ({ default: (): null => n
 vi.mock("@/components/submittals/AgingReportTable", () => ({ default: (): null => null }));
 
 import { ApprovalMatrixPanel } from "../ApprovalMatrixPanel";
+import type { HoldsStatus } from "../ApprovalMatrixPanel";
 import { buildSetPackages } from "../format";
 
 afterEach(cleanup);
@@ -24,7 +25,7 @@ const DRAWINGS = [
   { id: "d2", drawing_set_id: "s1", stage: "IFA" },
   { id: "d3", drawing_set_id: "s2", stage: "OFA" },
 ];
-const SUBMITTALS = [{
+const SUBMITTALS: any[] = [{
   id: "sub-1",
   drawing_set_ids: ["s1"],
   status: "Under Review",
@@ -53,17 +54,25 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname + location.search}</output>;
 }
 
-function mount({ entry = "/DrawingSubmittalHub?hub_tab=matrix", canCreate = true, transmittalsLoading = false } = {}) {
-  const setPackages = buildSetPackages(DRAWINGS as any, SETS as any, SUBMITTALS as any);
+function mount({
+  entry = "/DrawingSubmittalHub?hub_tab=matrix",
+  canCreate = true,
+  transmittalsLoading = false,
+  holdsStatus = "ready" as HoldsStatus,
+  submittals = SUBMITTALS,
+} = {}) {
+  const setPackages = buildSetPackages(DRAWINGS as any, SETS as any, submittals as any);
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <ApprovalMatrixPanel
         drawingSets={SETS}
-        submittals={SUBMITTALS}
+        submittals={submittals}
         roundsBySubmittal={{}}
         isLoading={false}
         setPackages={setPackages}
-        holds={HOLDS}
+        // The hub hands over its [] default until the holds query answers.
+        holds={holdsStatus === "ready" ? HOLDS : []}
+        holdsStatus={holdsStatus}
         transmittals={TRANSMITTALS}
         transmittalsLoading={transmittalsLoading}
         canCreateSubmittal={canCreate}
@@ -97,12 +106,13 @@ describe("ApprovalMatrixPanel — 2026 columns on Rev.2 logic", () => {
 
   it("offers '+ Create submittal', pre-linked to the set, only to users who can create", () => {
     mount();
-    expect(within(row("s2")).getByRole("link", { name: "Create a submittal for Anchor Bolts" }))
+    // The accessible name starts with the visible label (WCAG 2.5.3 Label in Name).
+    expect(within(row("s2")).getByRole("link", { name: "Create submittal for Anchor Bolts" }))
       .toHaveAttribute("href", "/DrawingSubmittalHub?hub_tab=submittals&targetSetId=s2");
     cleanup();
 
     mount({ canCreate: false });
-    expect(within(row("s2")).queryByRole("link", { name: /Create a submittal/ })).not.toBeInTheDocument();
+    expect(within(row("s2")).queryByRole("link", { name: /Create submittal/ })).not.toBeInTheDocument();
     expect(within(row("s2")).getByText("No submittal")).toBeInTheDocument();
   });
 
@@ -110,8 +120,15 @@ describe("ApprovalMatrixPanel — 2026 columns on Rev.2 logic", () => {
     mount();
     const bolts = within(row("s2"));
     expect(bolts.getByRole("link", { name: /1 sheet on hold in Anchor Bolts/ })).toHaveAttribute("href", "/DrawingSubmittalHub?hub_tab=holds");
-    expect(bolts.getByText("from sheets")).toBeInTheDocument();
+    expect(bolts.getByText("from sheets")).toHaveAttribute("title", "No submittal governs this set yet, so its sheets' stage is shown.");
     expect(within(row("s1")).queryByText("from sheets")).not.toBeInTheDocument();
+  });
+
+  it("explains a sheet-derived stage correctly when the governing submittal is Void", () => {
+    mount({ submittals: [...SUBMITTALS, { id: "void-1", drawing_set_ids: ["s2"], status: "Void", submittal_number: "SUB-009" }] });
+    const bolts = within(row("s2"));
+    expect(bolts.getByRole("link", { name: "SUB-009" })).toBeInTheDocument();
+    expect(bolts.getByText("from sheets").getAttribute("title")).toMatch(/governing submittal \(Void\) has no workflow stage/);
   });
 
   it("doesn't expand the row when a cell link is followed", () => {
@@ -121,9 +138,9 @@ describe("ApprovalMatrixPanel — 2026 columns on Rev.2 logic", () => {
     expect(screen.getByTestId("location")).toHaveTextContent("hub_tab=submittals&recordId=sub-1");
   });
 
-  it("shows a placeholder, not a dash, while the transmittal log loads", () => {
+  it("announces the transmittal placeholder to screen readers while the log loads", () => {
     mount({ transmittalsLoading: true });
-    expect(within(row("s1")).getByLabelText("Loading transmittals")).toBeInTheDocument();
+    expect(within(row("s1")).getByText("Loading transmittals")).toHaveClass("sr-only");
   });
 });
 
@@ -155,5 +172,32 @@ describe("ApprovalMatrixPanel — click-through, linkable filters", () => {
   it("won't switch on a pill with nothing behind it", () => {
     mount();
     expect(screen.getByRole("button", { name: /Approved/ })).toBeDisabled();
+  });
+});
+
+describe("ApprovalMatrixPanel — holds not known yet", () => {
+  it("says holds are loading instead of showing none", () => {
+    mount({ holdsStatus: "loading" });
+    const bolts = within(row("s2"));
+    expect(bolts.getByText("Loading holds")).toBeInTheDocument();
+    expect(bolts.queryByRole("link", { name: /on hold/ })).not.toBeInTheDocument();
+    const pill = screen.getByRole("button", { name: /On Hold/ });
+    expect(pill).toHaveTextContent("…");
+    expect(pill).toBeEnabled(); // unknown is not zero
+  });
+
+  it("keeps a linked hold filter honest while holds load", () => {
+    mount({ entry: "/DrawingSubmittalHub?hub_tab=matrix&matrix_filter=hold", holdsStatus: "loading" });
+    expect(screen.getByText("Checking holds…")).toBeInTheDocument();
+    expect(screen.queryByText(/No drawing sets match this filter/)).not.toBeInTheDocument();
+  });
+
+  it("says so when holds couldn't be loaded", () => {
+    mount({ entry: "/DrawingSubmittalHub?hub_tab=matrix&matrix_filter=hold", holdsStatus: "error" });
+    expect(screen.getByText(/Holds couldn't be loaded, so this filter can't be applied/)).toBeInTheDocument();
+    cleanup();
+
+    mount({ holdsStatus: "error" });
+    expect(within(row("s2")).getByText("Holds couldn't be loaded")).toBeInTheDocument();
   });
 });

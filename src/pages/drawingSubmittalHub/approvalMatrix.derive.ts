@@ -18,7 +18,7 @@ import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 import type { TransmittalRow } from "@/hooks/useTransmittals";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 import { submittalStatusToStage } from "@/lib/submittalStageMapping";
-import { matrixStatusBucket } from "./format";
+import { matrixStatusBucket, toDateInputValue } from "./format";
 import type { SetPackage } from "./types";
 
 /** The subset of a buildApprovalMatrixRows row this module reads. */
@@ -125,7 +125,13 @@ export function buildLastTransmittalBySet(
         party: party ?? null,
         date: date ?? null,
       },
-      day: String(date || transmittal.created_at || "").slice(0, 10),
+      // An entered date is a calendar day (stored at midnight UTC — slice it,
+      // don't shift it). created_at is a real UTC instant, so it becomes the
+      // LOCAL day it happened on; slicing it filed evening entries under
+      // tomorrow, ahead of transmittals actually dated tomorrow.
+      day: date
+        ? String(date).slice(0, 10)
+        : transmittal.created_at ? toDateInputValue(new Date(transmittal.created_at)) : "",
       createdAt: String(transmittal.created_at || ""),
       number: String(transmittal.transmittal_number || ""),
     };

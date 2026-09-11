@@ -105,6 +105,9 @@ const ModelElementImportModal = ModelElementImportModalRaw as unknown as Compone
 
 // Tabs whose count is a warning, not a row tally (header badge's twin).
 const ALERT_TABS = ["holds"] as const;
+// One-shot record/create params, each aimed at a specific tab (Submittals:
+// recordId, targetSetId, prefilled*; Transmittals: transmittal).
+const HUB_RECORD_PARAMS = ["recordId", "targetSetId", "prefilledStatus", "prefilledBallInCourt", "transmittal"] as const;
 
 /**
  * Route entry. With no project every query below is disabled, so the shell
@@ -167,6 +170,14 @@ function DetailingControlCenter() {
       const next = new URLSearchParams(prev);
       next.set("hub_tab", key);
       if (key !== "matrix") next.delete("matrix_filter");
+      // A ?projectId= / ?project= deep link has done its job once
+      // ProjectScopedRoute synced the project. Pushed entries must not re-pin
+      // it, or Back after a project switch would quietly switch the app back.
+      next.delete("projectId");
+      next.delete("project");
+      // A lazy tab that hadn't consumed its record param yet must not fire it
+      // later, on some other visit.
+      for (const param of HUB_RECORD_PARAMS) next.delete(param);
       return next;
     });
   };
@@ -188,7 +199,7 @@ function DetailingControlCenter() {
 
   // Holds: one query feeds the header badge, the Holds tab count and the
   // matrix's On Hold column — the same key HoldsPanel reads, so all agree.
-  const { data: holds = [], isSuccess: holdsLoaded } = useDrawingHolds(projectId ?? null);
+  const { data: holds = [], isSuccess: holdsLoaded, isError: holdsFailed } = useDrawingHolds(projectId ?? null);
   const activeHolds = holdsLoaded ? activeHoldCount(holds) : null;
   // The matrix's Last Transmittal column. It's a three-table read, so it
   // loads only while the matrix is open (same key as the Transmittals tab).
@@ -695,6 +706,7 @@ function DetailingControlCenter() {
             useWorkdays={workdayDues}
             setPackages={setPackages}
             holds={holds}
+            holdsStatus={holdsLoaded ? "ready" : holdsFailed ? "error" : "loading"}
             transmittals={transmittals}
             transmittalsLoading={transmittalsPending}
             canCreateSubmittal={can("create", "submittal")}

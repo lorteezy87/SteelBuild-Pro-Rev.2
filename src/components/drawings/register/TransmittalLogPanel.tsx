@@ -5,7 +5,7 @@
  * revision snapshots, update the header/attachment set when permitted, and
  * soft-delete the header while retaining its items for history.
  */
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -279,15 +279,21 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
   // ?transmittal=<id> deep link (the Approval Matrix's Last-transmittal
   // column): open that transmittal's details once the log has loaded. The
   // hook strips the param, so a refresh or tab switch can't re-open it.
+  const pendingScrollRef = useRef<string | null>(null);
   useAutoOpenEdit(transmittals, (transmittal) => {
     resetEditor();
     setConfirmingDelete(false);
     setDeleteConfirmation("");
     setActiveId(transmittal.id);
-    requestAnimationFrame(() => {
-      document.getElementById(`transmittal-${transmittal.id}-details`)?.scrollIntoView?.({ block: "nearest" });
-    });
+    pendingScrollRef.current = transmittal.id;
   }, { enabled: !isLoading, param: "transmittal" });
+  // Scroll once React has committed the opened details row. A
+  // requestAnimationFrame from the opener could run before the row exists.
+  useEffect(() => {
+    if (!activeId || pendingScrollRef.current !== activeId) return;
+    pendingScrollRef.current = null;
+    document.getElementById(`transmittal-${activeId}-details`)?.scrollIntoView?.({ block: "nearest" });
+  }, [activeId]);
 
   const startEdit = (transmittal: TransmittalRow) => {
     setCreateOpen(false);

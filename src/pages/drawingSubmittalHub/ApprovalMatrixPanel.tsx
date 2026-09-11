@@ -62,6 +62,8 @@ const StageChip = StageChipRaw as unknown as ComponentType<AnyProps>;
 
 /** URL param holding the active quick filter. The hub drops it on tab change. */
 export const MATRIX_FILTER_PARAM = "matrix_filter";
+/** Whether the holds list is known yet — "no rows" is not "no holds". */
+export type HoldsStatus = "ready" | "loading" | "error";
 const COLUMN_COUNT = 10;
 // Stable defaults: a fresh [] per render would re-run the row enrichment memo.
 const NO_PACKAGES: SetPackage[] = [];
@@ -77,6 +79,11 @@ interface ApprovalMatrixPanelProps {
   setPackages?: SetPackage[];
   /** Project holds from the hub's shared useDrawingHolds query. */
   holds?: DrawingHoldRow[];
+  /**
+   * Until holds are known the On Hold column, pill and filter say so instead
+   * of claiming "none" — the header badge waits the same way.
+   */
+  holdsStatus?: HoldsStatus;
   /** Transmittal log (loaded only while this tab is open). */
   transmittals?: TransmittalRow[];
   transmittalsLoading?: boolean;
@@ -129,6 +136,7 @@ export function ApprovalMatrixPanel({
   useWorkdays = false,
   setPackages = NO_PACKAGES,
   holds = NO_HOLDS,
+  holdsStatus = "ready",
   transmittals,
   transmittalsLoading = false,
   canCreateSubmittal = false,
@@ -164,7 +172,8 @@ export function ApprovalMatrixPanel({
 
   if (isLoading) return <LoadingSkeleton />;
 
-  const pills: Array<{ key: MatrixFilter; icon: ComponentType<{ size?: number | string }>; label: string; value: number; tone: PillTone; title?: string }> = [
+  const holdsKnown = holdsStatus === "ready";
+  const pills: Array<{ key: MatrixFilter; icon: ComponentType<{ size?: number | string }>; label: string; value: number | null; tone: PillTone; title?: string }> = [
     { key: "overdue", icon: AlertTriangle, label: "Overdue", value: summary.overdue, tone: "danger" },
     { key: "pending", icon: ClipboardList, label: "Pending", value: summary.pending, tone: "warn" },
     { key: "action", icon: AlertTriangle, label: "Needs Action", value: summary.rejected, tone: "review" },
@@ -174,9 +183,11 @@ export function ApprovalMatrixPanel({
       key: "hold",
       icon: ShieldAlert,
       label: "On Hold",
-      value: coverage.setsOnHold,
-      tone: coverage.setsOnHold ? "warn" : "neutral",
-      title: `${coverage.sheetsOnHold} sheet${coverage.sheetsOnHold === 1 ? "" : "s"} on active hold across ${coverage.setsOnHold} set${coverage.setsOnHold === 1 ? "" : "s"}`,
+      value: holdsKnown ? coverage.setsOnHold : null,
+      tone: holdsKnown && coverage.setsOnHold ? "warn" : "neutral",
+      title: holdsKnown
+        ? `${coverage.sheetsOnHold} sheet${coverage.sheetsOnHold === 1 ? "" : "s"} on active hold across ${coverage.setsOnHold} set${coverage.setsOnHold === 1 ? "" : "s"}`
+        : holdsStatus === "loading" ? "Checking holds…" : "Holds couldn't be loaded",
     },
     { key: "approved", icon: ShieldCheck, label: "Approved", value: summary.approved, tone: "good" },
   ];
@@ -220,7 +231,7 @@ export function ApprovalMatrixPanel({
               <th style={{ textAlign: "center" }}>Sheets</th>
               <th style={{ textAlign: "center" }}>On Hold</th>
               <th>Submittal</th>
-              <th title="Stage comes from the governing submittal. A set no submittal governs yet shows its sheets' stage, marked “from sheets” — the Process Board's rule.">
+              <th title="Stage comes from the governing submittal. When none governs — or it has no workflow stage, like Void — the sheets' stage shows, marked “from sheets”: the Process Board's rule.">
                 Stage · Status
               </th>
               <th>Due</th>
@@ -233,7 +244,11 @@ export function ApprovalMatrixPanel({
             {visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={COLUMN_COUNT} className="cmd-table__empty">
-                  {filter ? (
+                  {filter === "hold" && !holdsKnown ? (
+                    holdsStatus === "loading"
+                      ? "Checking holds…"
+                      : "Holds couldn't be loaded, so this filter can't be applied right now."
+                  ) : filter ? (
                     <>
                       No drawing sets match this filter.{" "}
                       <button type="button" className="cmd-btn cmd-btn--ghost" onClick={() => setFilter(null)}>
@@ -252,6 +267,7 @@ export function ApprovalMatrixPanel({
                   useWorkdays={useWorkdays}
                   canCreateSubmittal={canCreateSubmittal}
                   transmittalsLoading={transmittalsLoading}
+                  holdsStatus={holdsStatus}
                 />
               ))
             )}
@@ -273,9 +289,10 @@ interface MatrixRowProps {
   useWorkdays?: boolean;
   canCreateSubmittal: boolean;
   transmittalsLoading: boolean;
+  holdsStatus: HoldsStatus;
 }
 
-function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmittal, transmittalsLoading }: MatrixRowProps) {
+function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmittal, transmittalsLoading, holdsStatus }: MatrixRowProps) {
   const [expanded, setExpanded] = useState(false);
   const sub = row.latestSubmittal ?? null;
   const due: DueInfo = row.due;
@@ -323,7 +340,11 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
           {row.sheetCount ?? <span style={muted}>—</span>}
         </td>
         <td style={{ textAlign: "center" }}>
-          {row.onHold > 0 ? (
+          {holdsStatus !== "ready" ? (
+            holdsStatus === "loading"
+              ? <UnknownValue glyph="…" label="Loading holds" />
+              : <UnknownValue glyph="?" label="Holds couldn't be loaded" />
+          ) : row.onHold > 0 ? (
             <Link
               to={hubTabSearch("holds")}
               onClick={stopRowToggle}
@@ -352,7 +373,7 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
               onClick={stopRowToggle}
               className="cmd-chip-btn"
               style={{ textDecoration: "none", display: "inline-block" }}
-              aria-label={`Create a submittal for ${setLabel}`}
+              aria-label={`Create submittal for ${setLabel}`}
             >
               + Create submittal
             </Link>
@@ -366,7 +387,12 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
             <StageChip stage={row.stage} />
             {row.stageSource === "sheets" && (
-              <span style={{ ...muted, fontSize: 11 }} title="No submittal governs this set yet, so its sheets' stage is shown.">
+              <span
+                style={{ ...muted, fontSize: 11 }}
+                title={sub
+                  ? `Its governing submittal (${sub.status || "no status"}) has no workflow stage, so the sheets' stage is shown.`
+                  : "No submittal governs this set yet, so its sheets' stage is shown."}
+              >
                 from sheets
               </span>
             )}
@@ -457,8 +483,21 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
   );
 }
 
+/**
+ * A value that isn't known yet (or failed to load): a visible glyph plus a
+ * screen-reader phrase. Never a dash — a dash reads as "none".
+ */
+function UnknownValue({ glyph, label }: { glyph: string; label: string }) {
+  return (
+    <span style={muted} title={label}>
+      <span aria-hidden="true">{glyph}</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 function LastTransmittalCell({ transmittal, loading }: { transmittal: MatrixTransmittal | null; loading: boolean }): ReactNode {
-  if (loading) return <span style={muted} aria-label="Loading transmittals">…</span>;
+  if (loading) return <UnknownValue glyph="…" label="Loading transmittals" />;
   if (!transmittal) return <span style={muted}>—</span>;
   return (
     <span style={{ display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
@@ -531,7 +570,8 @@ function FilterPill({
 }: {
   icon: ComponentType<{ size?: number | string }>;
   label: string;
-  value: number;
+  /** null = not known yet; the pill shows "…" and stays switchable. */
+  value: number | null;
   tone: PillTone;
   title?: string;
   active: boolean;
@@ -560,7 +600,7 @@ function FilterPill({
     >
       <Icon size={12} />
       <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: 10 }}>{label}</span>
-      <span style={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+      <span style={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{value ?? "…"}</span>
     </button>
   );
 }
