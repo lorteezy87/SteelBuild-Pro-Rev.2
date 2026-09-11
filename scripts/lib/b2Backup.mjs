@@ -106,6 +106,18 @@ export async function readB2Inventory({ account, key, bucketName, fetcher = fetc
   return { storedBytes, versions, bucketName };
 }
 
+function manifestBucket(item) {
+  const original = new Map(item.mapping.map(f => [f.path, f.sourcePath]));
+  return { bucket: item.bucket, current: item.current, objects: item.files.length,
+    bytes: item.files.reduce((sum, f) => sum + f.Size, 0),
+    files: item.files.map(f => ({ path: f.Path, sourcePath: original.get(f.Path), bytes: f.Size, sha1: f.sha1 })) };
+}
+export function assertManifestFits(buckets) {
+  // Count the actual pretty-printed file records, including original source keys.
+  // Half the reserve remains for timestamps, identity, budget, probes and envelope.
+  if (Buffer.byteLength(JSON.stringify(buckets, null, 2)) > RESERVE_BYTES / 2) throw new Error('File manifest exceeds the reserved storage allowance');
+}
+
 const COPY_FLAGS = ['--fast-list', '--transfers', '4', '--checkers', '8', '--retries', '1', '--low-level-retries', '1', '--stats', '30s', '--stats-log-level', 'NOTICE', '--stats-one-line'];
 const SAFE_B2_FLAGS = ['--b2-hard-delete=false', '--b2-disable-checksum=false'];
 export async function runIncrementalBackup({ plan, stageRoot, execute, inventory, stageSource }) {
@@ -146,7 +158,7 @@ export async function runIncrementalBackup({ plan, stageRoot, execute, inventory
   const budget = calculateBudget({ ...(await inventory()), source: allSource, current: allCurrent });
   console.log(`Storage projection: ${budget.storedBytes} retained + ${budget.transferBytes} new + ${budget.reserveBytes} reserve = ${budget.projectedBytes} / ${budget.budgetBytes} bytes`);
   if (!budget.allowed) throw new Error('Backup paused: projected versions exceed the 9 GB storage budget; no backup files were changed');
-  if (Buffer.byteLength(JSON.stringify(allSource)) > RESERVE_BYTES / 2) throw new Error('File manifest exceeds the reserved storage allowance');
+  assertManifestFits(staged.map(manifestBucket));
   const buckets = [];
   for (const item of staged) {
     await run(['sync', item.local, item.current, '--checksum', ...SAFE_B2_FLAGS, ...COPY_FLAGS]);
@@ -159,7 +171,7 @@ export async function runIncrementalBackup({ plan, stageRoot, execute, inventory
       await run(['copyto', `${item.current}/${sample.Path}`, `${restored}/${sample.Path}`, '--b2-version-at', restoreAt, ...COPY_FLAGS]);
       await run(['check', item.local, restored, '--one-way', '--include', `/${sample.Path.replace(/([*?\[\]{}\\])/g, '\\$1')}`]);
     }
-    buckets.push({ bucket: item.bucket, current: item.current, restoreAt, objects: item.files.length, bytes: item.files.reduce((sum, f) => sum + f.Size, 0), files: item.files.map(f => ({ path: f.Path, sourcePath: item.mapping.find(m => m.path === f.Path).sourcePath, bytes: f.Size, sha1: f.sha1 })), restoreSample: sample?.Path ?? null });
+    buckets.push({ ...manifestBucket(item), restoreAt, restoreSample: sample?.Path ?? null });
   }
   return { schemaVersion: 2, status: 'verified', method: 'b2-native-versions', budget, buckets };
 }

@@ -105,3 +105,9 @@ it('preserves real objects whose keys end in slash or collide with a directory',
 it('rejects source keys in the reserved backup namespace', () => {
   expect(() => planSourcePaths([file('__steelbuild_object_keys__/x', 1)])).toThrow('reserved');
 });
+
+import { assertManifestFits } from '../lib/b2Backup.mjs';
+it('reserves space for long original object keys before any destination writes', () => {
+  const files = Array.from({ length: 9500 }, (_, i) => ({ path: `__steelbuild_object_keys__/${i.toString().padStart(64, '0')}`, sourcePath: `${i}/${'x'.repeat(980)}/`, bytes: 1, sha1: 'a'.repeat(40) }));
+  expect(() => assertManifestFits([{ bucket: 'email-attachments', files }])).toThrow('manifest');
+});
