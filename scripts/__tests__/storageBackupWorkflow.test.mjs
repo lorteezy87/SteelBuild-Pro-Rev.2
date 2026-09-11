@@ -63,12 +63,12 @@ describe("Storage backup workflow", () => {
     expect(backupStep.run).toBe("node scripts/storage-backup.mjs");
   });
 
-  it("uses the production environment and prevents feature-branch backup jobs", async () => {
+  it("uses the production environment and permits branch backup jobs only by explicit manual dispatch", async () => {
     const workflow = load(await readFile(workflowUrl, "utf8"));
     const backupJob = workflow.jobs.backup;
 
     expect(backupJob.environment).toBe("storage-backup-production");
-    expect(backupJob.if).toBe("github.ref == 'refs/heads/main'");
+    expect(backupJob.if).toBe("github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'");
     const uploadStep = backupJob.steps.find(({ uses }) => uses?.startsWith("actions/upload-artifact@"));
     expect(uploadStep?.with?.path).toBe("${{ runner.temp }}/storage-backup-manifest.json");
   });

@@ -1,19 +1,22 @@
+import { randomUUID } from "node:crypto";
+import { setTimeout as pause } from "node:timers/promises";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
   createRcloneChildEnvironment,
   createStorageBackupPlan,
   decodeOffsiteRcloneConfig,
-  executeStorageBackupPlan,
   formatStorageBackupTimestamp,
   validateStorageBackupEnvironment,
 } from "./lib/storageBackup.mjs";
 
+import { parseB2Config, readB2Inventory, runIncrementalBackup, BUDGET_BYTES } from "./lib/b2Backup.mjs";
+
 function createRcloneExecutor({ configPath, environment }) {
   return (args, { captureOutput, label }) => new Promise((resolveCommand, rejectCommand) => {
-    const child = spawn("rclone", [...args, "--config", configPath], {
+    const child = spawn("rclone", [...args, "--config", configPath, "--retries", "1", "--low-level-retries", "1"], {
       env: environment,
       shell: false,
       stdio: captureOutput ? ["ignore", "pipe", "pipe"] : "inherit",
@@ -46,6 +49,9 @@ function createRcloneExecutor({ configPath, environment }) {
 async function main() {
   const config = validateStorageBackupEnvironment(process.env);
   const timestamp = formatStorageBackupTimestamp();
+  const b2 = parseB2Config(decodeOffsiteRcloneConfig(process.env.OFFSITE_RCLONE_CONFIG_B64));
+  const bucketName = config.destinationRoot.slice("offsite:".length).split("/")[0];
+  const inventory = () => readB2Inventory({ ...b2, bucketName });
   const plan = createStorageBackupPlan({
     destinationRoot: config.destinationRoot,
     timestamp,
@@ -69,12 +75,31 @@ async function main() {
       configPath: rcloneConfigPath,
       environment: childEnvironment,
     });
-    const manifest = await executeStorageBackupPlan({
-      plan,
-      timestamp,
-      source: config.source,
-      execute,
-    });
+    for (const item of plan) await mkdir(join(tempDirectory, "stage", item.bucket), { recursive: true });
+    const manifest = await runIncrementalBackup({ plan, stageRoot: join(tempDirectory, "stage"), execute, inventory });
+    // Exercise recovery after BOTH overwrite and deletion, using synthetic bytes only.
+    const probePath = join(tempDirectory, "recovery-probe.txt");
+    const restoredProbe = join(tempDirectory, "recovered-probe.txt");
+    const probeRemote = `${config.destinationRoot}/restore-probes/${randomUUID()}.txt`;
+    const probeOptions = { captureOutput: false, label: "historical restore probe" };
+    const original = `SteelBuild backup recovery ${timestamp} version one`;
+    await writeFile(probePath, original);
+    await execute(["copyto", probePath, probeRemote, "--b2-hard-delete=false", "--retries", "1"], probeOptions);
+    const probeRestoreAt = new Date().toISOString();
+    await pause(1100);
+    await writeFile(probePath, `${original} changed`);
+    await execute(["copyto", probePath, probeRemote, "--ignore-times", "--b2-hard-delete=false", "--retries", "1"], probeOptions);
+    await execute(["deletefile", probeRemote, "--b2-hard-delete=false"], probeOptions);
+    await execute(["copyto", probeRemote, restoredProbe, "--b2-version-at", probeRestoreAt], probeOptions);
+    if (await readFile(restoredProbe, "utf8") !== original) throw new Error("Historical restore probe failed");
+    manifest.historicalRestoreProbe = { status: "verified", restoreAt: probeRestoreAt, remote: probeRemote };
+    manifest.backupTimestamp = timestamp;
+    manifest.completedAt = new Date().toISOString();
+    manifest.source = config.source;
+    const finalInventory = await inventory();
+    manifest.retainedBytesBeforeManifest = finalInventory.storedBytes;
+    const manifestBytes = Buffer.byteLength(JSON.stringify(manifest, null, 2)) + 1;
+    if (finalInventory.storedBytes + manifestBytes > BUDGET_BYTES) throw new Error("Final inventory exceeds 9 GB budget");
 
     await mkdir(dirname(manifestPath), { recursive: true });
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
@@ -99,5 +124,6 @@ async function main() {
 
 main().catch((error) => {
   console.error(`Storage backup failed: ${error.message}`);
+  if (process.env.GITHUB_ACTIONS === "true") console.error("::error::Storage backup failed; no new verified recovery point was published. Check the backup log.");
   process.exitCode = 1;
 });
