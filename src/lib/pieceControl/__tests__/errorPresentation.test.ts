@@ -43,4 +43,15 @@ describe("presentPieceControlError", () => {
       ),
     ).toMatch(/link_model_elements_to_pieces/);
   });
+
+  it("maps the Postgres 22P05 NUL rejection (Sentry JAVASCRIPT-REACT-2C) to re-save guidance", () => {
+    const backslash = String.fromCharCode(92);
+    const sentryMessage =
+      `unsupported Unicode escape sequence — ${backslash}u0000 cannot be converted to text. — 22P05`;
+    expect(
+      presentPieceControlError(new Error(sentryMessage), "The import could not be staged."),
+    ).toBe(
+      "This data contains a null character the database can't store. If it came from a file, re-save it as CSV UTF-8 and import it again.",
+    );
+  });
 });

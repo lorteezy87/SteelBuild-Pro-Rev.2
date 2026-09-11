@@ -49,6 +49,10 @@ export function presentPieceControlError(
   if (/Piece import batch must be approved before apply/i.test(message)) {
     return "Approve this import batch before applying it.";
   }
+  // Postgres 22P05: U+0000 in a json/jsonb/text value (Sentry JAVASCRIPT-REACT-2C).
+  if (/unsupported Unicode escape sequence|22P05/i.test(message)) {
+    return "This data contains a null character the database can't store. If it came from a file, re-save it as CSV UTF-8 and import it again.";
+  }
   if (/Not authorized|permission denied|42501/i.test(message)) {
     return "You do not have permission to complete this Piece Register action.";
   }

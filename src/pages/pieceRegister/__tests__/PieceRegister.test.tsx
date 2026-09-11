@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { File as NodeFile } from "node:buffer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -17,6 +18,7 @@ import {
   fetchPieceImportBatches,
   fetchPieceImportRows,
   fetchPieceRegister,
+  stagePieceImportBatch,
   type PieceRegisterRow,
 } from "@/lib/pieceControl/repository";
 import PieceRegister from "../../PieceRegister";
@@ -1805,4 +1807,72 @@ describe("Piece Register command shell", () => {
       screen.getByRole("button", { name: "Apply, assign WP, and link drawings" }),
     ).toBeEnabled();
   });
+
+  // Sentry JAVASCRIPT-REACT-2C: a UTF-16 export decoded as UTF-8 staged
+  // p_i_e_c_e_m_a_r_k keys and U+0000 into jsonb p_rows (Postgres 22P05).
+  it("stages a UTF-16LE CSV without a BOM as its real rows", async () => {
+    vi.mocked(stagePieceImportBatch).mockResolvedValue({ batch_id: "batch-9" });
+    const csv = "piece_mark,quantity,profile\r\nB1,2,W12X26\r\nC2,1,W10X33\r\n";
+    const jsonNulEscape = `${String.fromCharCode(92)}u0000`;
+    renderPieceRegister();
+    fireEvent.click(screen.getByRole("button", { name: "Imports" }));
+
+    fireEvent.change(screen.getByLabelText("File"), {
+      target: { files: [importFileFromBytes(utf16le(csv), "tekla-export.csv")] },
+    });
+
+    expect(await screen.findByText("2 rows ready to stage")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stage for review" }));
+
+    await waitFor(() => expect(stagePieceImportBatch).toHaveBeenCalledTimes(1));
+    const [projectId, sourceType, sourceName, rows] =
+      vi.mocked(stagePieceImportBatch).mock.calls[0];
+    expect([projectId, sourceType, sourceName]).toEqual([
+      "project-1",
+      "csv",
+      "tekla-export.csv",
+    ]);
+    expect(rows).toEqual([
+      { piece_mark: "B1", quantity: "2", profile: "W12X26" },
+      { piece_mark: "C2", quantity: "1", profile: "W10X33" },
+    ]);
+    expect(JSON.stringify(rows)).not.toContain(jsonNulEscape);
+  });
+
+  it("tells the user when null characters were removed from an import file", async () => {
+    const encoder = new TextEncoder();
+    const bytes = new Uint8Array([
+      ...encoder.encode("piece_mark,quantity,profile\r\nB1"),
+      0,
+      ...encoder.encode(",2,W12X26\r\nC2,1,W10X33\r\n"),
+      0, 0, 0, 0,
+    ]);
+    renderPieceRegister();
+    fireEvent.click(screen.getByRole("button", { name: "Imports" }));
+
+    fireEvent.change(screen.getByLabelText("File"), {
+      target: { files: [importFileFromBytes(bytes, "pieces.csv")] },
+    });
+
+    const notice = await screen.findByText(
+      "Removed 5 null characters from pieces.csv. Check the staged rows before applying.",
+    );
+    expect(notice).toHaveAttribute("role", "status");
+    expect(screen.getByText("2 rows ready to stage")).toBeInTheDocument();
+  });
 });
+
+function utf16le(text: string): Uint8Array {
+  const bytes = new Uint8Array(text.length * 2);
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    bytes[2 * index] = unit & 0xff;
+    bytes[2 * index + 1] = unit >> 8;
+  }
+  return bytes;
+}
+
+// jsdom 25's File has no arrayBuffer()/text(); Node's File is a spec Blob.
+function importFileFromBytes(bytes: Uint8Array, name: string): File {
+  return new NodeFile([bytes], name) as unknown as File;
+}

@@ -283,6 +283,7 @@ export default function PieceRegister() {
   const [sourceType, setSourceType] = useState<PieceImportSourceType>("csv");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importRows, setImportRows] = useState<ImportPayload[]>([]);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [applyConfirmed, setApplyConfirmed] = useState(false);
   const [importTargetWorkPackageId, setImportTargetWorkPackageId] = useState("");
@@ -853,6 +854,7 @@ export default function PieceRegister() {
       setSelectedBatchId(String(summary.batch_id));
       setImportFile(null);
       setImportRows([]);
+      setImportNotice(null);
       await invalidate();
       toast.success("Import staged for review");
     },
@@ -1074,11 +1076,17 @@ export default function PieceRegister() {
   const handleFile = async (file: File | null) => {
     setImportFile(file);
     setImportRows([]);
+    setImportNotice(null);
     if (!file) return;
     try {
-      const rows = await readPieceImportFile(file, sourceType);
+      const { rows, nulsRemoved } = await readPieceImportFile(file, sourceType);
       if (rows.length === 0) throw new Error("No import rows were found");
       setImportRows(rows);
+      if (nulsRemoved > 0) {
+        setImportNotice(
+          `Removed ${nulsRemoved} null character${nulsRemoved === 1 ? "" : "s"} from ${file.name}. Check the staged rows before applying.`,
+        );
+      }
     } catch (error) {
       setImportFile(null);
       toast.error(error instanceof Error ? error.message : "Unable to read import file");
@@ -1581,6 +1589,7 @@ export default function PieceRegister() {
             setSourceType={setSourceType}
             importFile={importFile}
             importRows={importRows}
+            importNotice={importNotice}
             handleFile={handleFile}
             stagePending={stageMutation.isPending}
             onStage={() => stageMutation.mutate()}
