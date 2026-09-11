@@ -34,6 +34,16 @@ const MAX_STRIPPED_NULS = 16;
 const MAX_NUL_RATIO = 0.01;
 // Built at runtime: no literal NUL in the source, and no regex (no-control-regex).
 const NUL = String.fromCharCode(0);
+/**
+ * Signatures of binary containers users pick by mistake. A real-size .xlsx
+ * carries too few NULs for the ratio check to catch, so its zip bytes would
+ * decode, lose their NULs, and stage as garbage rows.
+ */
+const BINARY_SIGNATURES: readonly (readonly number[])[] = [
+  [0x50, 0x4b, 0x03, 0x04], // zip: .xlsx, .docx
+  [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1], // OLE: legacy .xls
+  [0x25, 0x50, 0x44, 0x46, 0x2d], // %PDF-
+];
 
 function startsWith(bytes: Uint8Array, prefix: readonly number[]): boolean {
   return (
@@ -79,10 +89,24 @@ export function decodeTextBytes(input: ArrayBuffer | Uint8Array): DecodedText {
       `This file is saved as UTF-32 text, which can't be imported. ${RESAVE_HINT}`,
     );
   }
+  if (BINARY_SIGNATURES.some((signature) => startsWith(bytes, signature))) {
+    throw new TextDecodingError(
+      `This file doesn't look like a text export. ${RESAVE_HINT}`,
+    );
+  }
   const encoding = detectEncoding(bytes);
+  // A UTF-16 file can end on one stray byte (a 0x00 terminator, or a LF some
+  // tool appended). Decoding the half code unit yields U+FFFD — a phantom row
+  // or a corrupted last field — so drop it, counting a dropped 0x00 as a NUL.
+  let payload = bytes;
+  let droppedNul = 0;
+  if (encoding !== "utf-8" && bytes.length % 2 === 1) {
+    droppedNul = bytes[bytes.length - 1] === 0 ? 1 : 0;
+    payload = bytes.subarray(0, bytes.length - 1);
+  }
   // TextDecoder drops a leading BOM that matches its encoding. Non-fatal on
   // purpose: legacy Windows-1252 CSVs keep importing (as U+FFFD) like today.
-  const decoded = new TextDecoder(encoding).decode(bytes);
+  const decoded = new TextDecoder(encoding).decode(payload);
 
   let end = decoded.length;
   while (end > 0 && decoded.charCodeAt(end - 1) === 0) end -= 1; // NUL padding
@@ -94,7 +118,7 @@ export function decodeTextBytes(input: ArrayBuffer | Uint8Array): DecodedText {
     );
   }
   const text = embedded > 0 ? body.split(NUL).join("") : body;
-  return { text, encoding, nulsRemoved: decoded.length - text.length };
+  return { text, encoding, nulsRemoved: decoded.length - text.length + droppedNul };
 }
 
 export async function readFileText(file: Blob): Promise<DecodedText> {

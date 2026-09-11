@@ -134,3 +134,33 @@ describe("stripNulDeep", () => {
     expect(removed).toBe(0);
   });
 });
+
+describe("decodeTextBytes — review follow-ups", () => {
+  it("drops a stray final byte on odd-length UTF-16 instead of decoding U+FFFD", () => {
+    for (const bom of [true, false]) {
+      const base = utf16(CSV, "le", bom);
+      const trailingNul = decodeTextBytes(new Uint8Array([...base, 0x00]));
+      expect(trailingNul.encoding).toBe("utf-16le");
+      expect(trailingNul.text).toBe(CSV);
+      expect(trailingNul.nulsRemoved).toBe(1);
+
+      const trailingLf = decodeTextBytes(new Uint8Array([...base, 0x0a]));
+      expect(trailingLf.text).toBe(CSV);
+      expect(trailingLf.text).not.toContain("\uFFFD");
+      expect(trailingLf.nulsRemoved).toBe(0);
+    }
+  });
+
+  it("rejects zip, OLE and PDF containers by signature, however few NULs they carry", () => {
+    const signatures = [
+      [0x50, 0x4b, 0x03, 0x04],
+      [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1],
+      [0x25, 0x50, 0x44, 0x46, 0x2d],
+    ];
+    for (const signature of signatures) {
+      // No NULs at all: only the signature can give it away.
+      const bytes = new Uint8Array([...signature, ...new TextEncoder().encode("x".repeat(5000))]);
+      expect(() => decodeTextBytes(bytes)).toThrow(/doesn't look like a text export.*CSV UTF-8/);
+    }
+  });
+});

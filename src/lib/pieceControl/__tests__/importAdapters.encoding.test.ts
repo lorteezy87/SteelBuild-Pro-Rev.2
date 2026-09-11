@@ -192,3 +192,18 @@ describe("readPieceImportFile text encodings", () => {
     expect(rows[0].piece_mark).toBe("B1");
   });
 });
+
+describe("readPieceImportFile — real-size workbooks", () => {
+  it("rejects a 1,200-row .xlsx picked under the CSV source instead of staging zip bytes", async () => {
+    // Big enough that its NUL density falls under the ratio check: only the
+    // zip signature stops it.
+    const sheetRows = [
+      ["piece_mark", "quantity", "profile"],
+      ...Array.from({ length: 1200 }, (_, i) => [`B${i + 1}`, 1, "W12X26"]),
+    ];
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(sheetRows), "Pieces");
+    const bytes = new Uint8Array(XLSX.write(book, { type: "array", bookType: "xlsx" }) as ArrayBuffer);
+    await expect(readPieceImportFile(file(bytes, "pieces.xlsx"), "csv")).rejects.toThrow(/CSV UTF-8/);
+  });
+});
