@@ -17,7 +17,8 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ELEMENT_STATUS_META, normalizePieceMark } from "@/services/modelElementStatus";
-import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, buildMarkByGuid, buildStatusByMark, buildSeqByMark, buildFabByMark, buildCanonicalPieceByGuid, colorFnFor } from "@/lib/ifc/viewerColoring";
+import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, buildMarkByGuid, buildStatusByMark, buildSeqByMark, buildFabByMark, colorFnFor } from "@/lib/ifc/viewerColoring";
+import { buildCanonicalViewerLinks } from "@/lib/ifc/canonicalViewerLinks";
 import { buildRowsByGuid, buildFabLegend, findGuidsByMark, summarizeSelection, describeSelection } from "@/lib/ifc/viewerSelection";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
@@ -37,6 +38,8 @@ import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
 import { createPageUrl } from "@/utils";
 import Model3dSyncPanel from "@/components/viewer3d/Model3dSyncPanel";
 import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
+
+import "./viewerControls.css";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
 
@@ -90,7 +93,11 @@ const sectionHead = {
 
 const hintStyle = { color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 };
 
-export default function Model3DTab({ modelMapping, modelElementRows, projectId, rosterLoading }) {
+export default function Model3DTab(props) {
+  return <ProjectModel3DTab key={props.projectId || "no-project"} {...props} />;
+}
+
+function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLoading, rosterError }) {
   const qc = useQueryClient();
   useCanonicalReportingRealtime(projectId);
   const viewerRef = useRef(null);
@@ -101,6 +108,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   const [picked, setPicked] = useState(null);
   const [selectedGuids, setSelectedGuids] = useState([]);
   const [loadErr, setLoadErr] = useState(null);
+  const [colorStats, setColorStats] = useState(null);
   const [colorMode, setColorMode] = useState(() => {
     try { return localStorage.getItem("sbp:viewer-colormode") || "fab"; } catch { return "fab"; }
   });
@@ -134,12 +142,12 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     });
   };
 
-  const { data: storedModel } = useQuery({
+  const { data: storedModel, error: storedModelError } = useQuery({
     queryKey: ["project-model", projectId],
     enabled: !!projectId,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("model_registry")
         .select("id, file_name, file_url, coordinate_system")
         .eq("project_id", projectId)
@@ -150,19 +158,27 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         .order("upload_date", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (error) throw error;
       return data || null;
     },
   });
 
-  const { data: canonicalPieces = [] } = useQuery({
+  const { data: canonicalPieces = [], isPending: piecesLoading, error: piecesError, refetch: refetchPieces } = useQuery({
     queryKey: pieceControlKeys.canonicalPieces3d(projectId),
     enabled: !!projectId,
+    // Live model_elements events refresh linked changes. Poll the slim piece
+    // projection too: some deployments don't publish pieces, and a new split
+    // lot can change mark ambiguity without touching an existing model row.
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     // Paged: this is the join the Fab color mode paints from, and a bare
     // select silently dropped every lot past row 1000 on big jobs.
     queryFn: () =>
       fetchAllProjectRowsPaged(supabase, "pieces", projectId, {
-        select: "id,piece_mark,lot_code,lifecycle_status,on_hold,on_hold_reason,is_container,is_deleted,deleted_at,work_package_id",
+        select: "id,parent_piece_id,piece_mark,lot_code,lifecycle_status,on_hold,on_hold_reason,is_container,is_deleted,deleted_at,work_package_id",
         build: (query) => query.eq("is_deleted", false).is("deleted_at", null),
+        onTruncated: () => { throw new Error("Piece evidence exceeded the paging limit."); },
       }),
   });
 
@@ -196,10 +212,13 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   useEffect(() => { setMarkFallback(false); }, [projectId]);
   const fabByGuid = useMemo(() => buildFabByGuid(modelElementRows), [modelElementRows]);
   const hasRoster = (modelElementRows?.length || 0) > 0;
-  const canonicalPieceByGuid = useMemo(
-    () => buildCanonicalPieceByGuid(modelElementRows, canonicalPieces),
+  const { direct: canonicalPieceByGuid, display: canonicalDisplayByGuid, blockedGuids } = useMemo(
+    () => buildCanonicalViewerLinks(modelElementRows || [], canonicalPieces),
     [modelElementRows, canonicalPieces],
   );
+  const evidenceError = piecesError || rosterError;
+  const evidencePending = (projectId && piecesLoading) || rosterLoading;
+  const fabUnavailable = !!evidenceError || !!evidencePending;
   const rowsByGuid = useMemo(() => buildRowsByGuid(modelElementRows), [modelElementRows]);
 
   const markByGuid = useMemo(() => buildMarkByGuid(modelElementRows), [modelElementRows]);
@@ -208,21 +227,21 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   const fabByMark = useMemo(() => buildFabByMark(modelElementRows), [modelElementRows]);
 
   const colorFor = useMemo(
-    () => colorFnFor(colorMode, {
+    () => colorFnFor(colorMode === "fab" && fabUnavailable ? "model" : colorMode, {
       statusByGuid, seqByGuid, fabByGuid,
       markByGuid, statusByMark, seqByMark, fabByMark,
-      canonicalPieceByGuid,
+      canonicalPieceByGuid: canonicalDisplayByGuid, blockedGuids,
       perPieceFab: !markFallback,
     }),
-    [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, canonicalPieceByGuid, markFallback],
+    [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, canonicalDisplayByGuid, blockedGuids, markFallback, fabUnavailable],
   );
 
   // Hover label / alt-click "whole mark": the roster's assembly mark by GUID.
   const labelFor = useCallback((guid) => markByGuid.get(guid) || null, [markByGuid]);
 
   const fabLegend = useMemo(
-    () => buildFabLegend({ rows: modelElementRows, canonicalPieceByGuid, fabByGuid }),
-    [modelElementRows, canonicalPieceByGuid, fabByGuid],
+    () => buildFabLegend({ rows: modelElementRows, canonicalPieceByGuid: canonicalDisplayByGuid, blockedGuids, fabByGuid, fabByMark, markByGuid, perPieceFab: !markFallback }),
+    [modelElementRows, canonicalDisplayByGuid, blockedGuids, fabByGuid, fabByMark, markByGuid, markFallback],
   );
 
   const selection = useMemo(
@@ -233,7 +252,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   const resetViewerState = () => {
     setSelectedGuids([]); setPicked(null); setIsolatedKey(null);
     setFindQuery(""); setFindResult(null); setClipEnabled(false); setClipPct(100);
-    setMeasureMode(false); setMeasureResult(null);
+    setMeasureMode(false); setMeasureResult(null); setColorStats(null);
   };
 
   const persistModel = async (file, buf) => {
@@ -344,8 +363,10 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   };
 
   const canonicalLogistics = useMutation({
-    mutationFn: ({ action, pieceIds }) =>
-      transitionPieceLots(action, projectId, pieceIds, { source: "3d_viewer" }),
+    mutationFn: ({ action, pieceIds }) => {
+      if (fabUnavailable) throw new Error("Refresh piece and roster status before recording logistics.");
+      return transitionPieceLots(action, projectId, pieceIds, { source: "3d_viewer" });
+    },
     onSuccess: async (_, variables) => {
       await invalidatePieceControlQueries(qc, projectId, "logistics");
       const n = variables.pieceIds.length;
@@ -442,9 +463,9 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
             </label>
           </>
         )}
-        {loadErr && (
+        {(loadErr || storedModelError) && (
           <div role="alert" style={{ color: "var(--status-error)", fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}>
-            {loadErr}
+            {loadErr || "Saved model lookup failed. Retry by reopening the 3D tab."}
             <label style={{ ...linkBtn, cursor: "pointer" }}>
               Load a file instead
               <input type="file" accept=".ifc" hidden onChange={pickFile} />
@@ -460,9 +481,10 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   return (
     <div
       ref={containerRef}
+      className="model-3d-shell"
       style={{ display: "flex", height: isFullscreen ? "100vh" : "min(72vh, 720px)", minHeight: 420, border: isFullscreen ? "none" : "1px solid var(--border-default)", borderRadius: isFullscreen ? 0 : 10, overflow: "hidden", background: "var(--bg-surface)" }}
     >
-      <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+      <div className="model-3d-canvas" style={{ flex: 1, minWidth: 0, position: "relative" }}>
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
           <IfcModelViewer
             ref={viewerRef}
@@ -471,6 +493,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
             labelFor={labelFor}
             onPick={setPicked}
             onSelect={setSelectedGuids}
+            onColorStats={setColorStats}
             measureMode={measureMode}
             onMeasure={setMeasureResult}
           />
@@ -557,7 +580,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         )}
       </div>
 
-      <aside style={{ width: 290, flexShrink: 0, borderLeft: "1px solid var(--border-default)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <aside className="model-3d-sidebar" style={{ width: 290, flexShrink: 0, borderLeft: "1px solid var(--border-default)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
           <div style={{ ...sectionHead, marginBottom: 0 }}>Model</div>
           <div style={{ fontSize: 12, color: "var(--text-primary)", marginTop: 2, wordBreak: "break-all" }}>{fileName}</div>
@@ -681,8 +704,16 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
               Switch to Fab to paint linked lots by Piece Control lifecycle.
             </div>
           )}
+          {colorMode === "fab" && (
+            <div style={{ ...hintStyle, marginTop: 8 }} role={evidenceError ? "alert" : "status"}>
+              {evidenceError ? <>Status unavailable — piece or roster refresh failed. <button type="button" style={linkBtn} onClick={() => { void refetchPieces(); void qc.invalidateQueries({ queryKey: pieceControlKeys.modelElements(projectId) }); }}>Retry status</button></>
+                : evidencePending ? "Loading piece and roster status…"
+                : colorStats ? `${colorStats.colored.toLocaleString()} of ${colorStats.total.toLocaleString()} rendered parts colored. Uncolored parts need status or roster-link review.` : "Loading model coverage…"}
+              {!fabUnavailable && canonicalDisplayByGuid.size > canonicalPieceByGuid.size && <div>Matching-mark colors are inferred from one linked lot. Logistics requires an explicit part link.</div>}
+            </div>
+          )}
           <div style={{ marginTop: 10 }}>
-            <Legend
+            {!(colorMode === "fab" && fabUnavailable) && <Legend
               mode={colorMode}
               statusLegend={legend}
               fabLegend={fabLegend}
@@ -692,7 +723,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
               onIsolate={isolateBucket}
               markFallback={markFallback}
               onMarkFallback={setMarkFallback}
-            />
+            />}
           </div>
           {projectId && hasRoster && (
             <Model3dSyncPanel projectId={projectId} modelElementRows={modelElementRows} />
@@ -739,7 +770,9 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         {projectId && (
           <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
             <div style={sectionHead}>Piece Control</div>
-            {!hasRoster ? (
+            {fabUnavailable ? (
+              <div style={hintStyle}>Piece Control unavailable until piece and roster status loads successfully.</div>
+            ) : !hasRoster ? (
               <div style={hintStyle}>Save the model to import its piece roster, then link marks to the Piece Register.</div>
             ) : selection.count === 0 ? (
               <div style={hintStyle}>

@@ -1,0 +1,13 @@
+/* The canvas stays dark in both app themes. Its host controls need the same
+   readable palette as the viewer HUD; the adjacent inspector follows the app. */
+.model-3d-canvas {
+  --text-primary: #e8ebf2;
+  --text-secondary: #a8b4c8;
+  --text-muted: #7b8ba2;
+  --border-default: rgba(232,235,242,0.22);
+}
+@media (max-width: 700px) {
+  .model-3d-shell { flex-direction: column; height: auto !important; overflow: auto !important; }
+  .model-3d-canvas { flex: none !important; height: 440px; }
+  .model-3d-sidebar { width: 100% !important; max-height: 440px; border-left: none !important; border-top: 1px solid var(--border-default); }
+}

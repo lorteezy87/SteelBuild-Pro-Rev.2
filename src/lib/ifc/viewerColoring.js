@@ -8,6 +8,7 @@
  * color (see loadIfcGeometry.recolor).
  */
 import { ELEMENT_STATUS_META, normalizePieceMark } from "@/services/modelElementStatus";
+import { buildCanonicalViewerLinks } from "@/lib/ifc/canonicalViewerLinks";
 import { FAB_STATUS_META } from "@/lib/fabStatus";
 
 export const TYPE_PALETTE = { beam: "#3b82f6", column: "#f97316", plate: "#22c55e", member: "#a855f7", other: "#94a3b8" };
@@ -15,6 +16,7 @@ export const SEQ_PALETTE = ["#3b82f6", "#f97316", "#22c55e", "#a855f7", "#eab308
 // One palette for both the canonical Piece Control lifecycle and the legacy
 // per-part fab_status, so a linked lot and an unlinked part at the same stage
 // paint the same color (the legend used to disagree with the model).
+/** @type {Record<string, string>} */
 export const CANONICAL_PIECE_COLORS = {
   hold: "#dc2626",
   ...Object.fromEntries(Object.entries(FAB_STATUS_META).map(([k, v]) => [k, v.color])),
@@ -27,18 +29,7 @@ export function canonicalPieceColor(piece) {
 }
 
 export function buildCanonicalPieceByGuid(modelElements, pieces) {
-  const pieceById = new Map(
-    (pieces || [])
-      .filter((piece) => piece && !piece.is_deleted && !piece.deleted_at && !piece.is_container)
-      .map((piece) => [piece.id, piece]),
-  );
-  const map = new Map();
-  for (const element of modelElements || []) {
-    if (!element?.element_guid || !element.piece_id || element.is_deleted) continue;
-    const piece = pieceById.get(element.piece_id);
-    if (piece) map.set(element.element_guid, piece);
-  }
-  return map;
+  return buildCanonicalViewerLinks(modelElements || [], pieces || []).direct;
 }
 
 /** Stable categorical color for a sequence/phase label. */
@@ -142,6 +133,18 @@ export function buildStatusByMark(modelMapping) {
   return map;
 }
 
+/** Shared by the paint function and legend/isolation; stale explicit links stay unknown.
+ * @param {string} guid
+ * @param {{canonicalPieceByGuid?: Map<string, import('./viewerSelection').ViewerCanonicalPiece> | null, blockedGuids?: Set<string>, fabByGuid?: Map<string,string> | null, fabByMark?: Map<string,string>, markByGuid?: Map<string,string>, perPieceFab?: boolean}} options
+ */
+export function fabStatusForGuid(guid, { canonicalPieceByGuid, blockedGuids, fabByGuid, fabByMark, markByGuid, perPieceFab = true } = {}) {
+  if (!guid || blockedGuids?.has(guid)) return null;
+  const piece = canonicalPieceByGuid?.get(guid);
+  if (piece) return piece.on_hold ? "hold" : piece.lifecycle_status;
+  const individual = fabByGuid?.get(guid);
+  return individual || (!perPieceFab ? fabByMark?.get(markByGuid?.get(guid)) : null) || null;
+}
+
 /**
  * The color function the viewer paints with for a given mode. Returns a hex
  * string or null; null tells the viewer to use the part's native IFC color.
@@ -173,6 +176,7 @@ export function colorFnFor(
     seqByMark,
     fabByMark,
     canonicalPieceByGuid,
+    blockedGuids,
     perPieceFab = true,
   } = {},
 ) {
@@ -193,17 +197,8 @@ export function colorFnFor(
   if (colorMode === "fab") {
     return (info) => {
       if (!info.guid) return null;
-      const canonicalPiece = canonicalPieceByGuid?.get(info.guid);
-      if (canonicalPiece) return canonicalPieceColor(canonicalPiece);
-      const individual = fabByGuid?.get(info.guid);
-      if (individual) return FAB_STATUS_META[individual]?.color ?? null;
-      // No individual status. Per-piece mode (default) stops here — a piece with
-      // no GUID status stays neutral and can't inherit a same-mark sibling's
-      // color. Whole-assembly mode falls back to the mark so flipping a mark
-      // (or a CSV-roster status) colors every part.
-      if (perPieceFab) return null;
-      const fab = fabByMark?.get(markOf(info));
-      return FAB_STATUS_META[fab]?.color ?? null;
+      const status = fabStatusForGuid(info.guid, { canonicalPieceByGuid, blockedGuids, fabByGuid, fabByMark, markByGuid, perPieceFab });
+      return CANONICAL_PIECE_COLORS[status] ?? null;
     };
   }
   return () => null; // "model" → native colors

@@ -19,6 +19,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { createPickGesture, framingDistance, wheelPixels } from "@/lib/ifc/viewerInteraction";
 import { loadIfcGeometry } from "@/lib/ifc/loadIfcGeometry";
 import {
   snapMeasurePoint,
@@ -31,8 +32,6 @@ export const VIEWER_CANVAS_BG = "#0d1117";
 
 const HIGHLIGHT = new THREE.Color("#f5d90a");
 const MEASURE_COLOR = 0xf5d90a;
-/** Pointer travel (px) beyond which a mouseup is an orbit drag, not a click. */
-const CLICK_SLOP_PX = 5;
 /** Opacity for parts outside the isolated set (kept as context, not pickable). */
 const GHOST_OPACITY = 0.07;
 
@@ -50,6 +49,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
   const mountRef = useRef(null);
   const apiRef = useRef(null);
   const selectedRef = useRef(new Map());
+  const selectionRevision = useRef(0);
   const measureRef = useRef({ a: null, b: null, group: null });
   const measureModeRef = useRef(measureMode);
   const onMeasureRef = useRef(onMeasure);
@@ -164,9 +164,11 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
       const near = Math.max(dist * 0.0015, r * 0.00005, 0.01);
       const far = Math.max(dist + r * 12, r * 40, near * 100, 100);
       if (near >= far) return;
-      camera.near = near;
-      camera.far = far;
-      camera.updateProjectionMatrix();
+      if (Math.abs(camera.near - near) / near > 0.05 || Math.abs(camera.far - far) / far > 0.05) {
+        camera.near = near;
+        camera.far = far;
+        camera.updateProjectionMatrix();
+      }
     };
 
     const tick = () => {
@@ -189,6 +191,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     // camera and target forward so zoom never "runs out of gas".
     const walkDir = new THREE.Vector3();
     const onWheelCapture = (e) => {
+      if (e.target !== renderer.domElement) return;
       const rad = apiRef.current?.modelRadius || 10;
       const dist = camera.position.distanceTo(controls.target);
       const zoomingIn = e.deltaY < 0;
@@ -200,12 +203,13 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
       const len = walkDir.length();
       if (len < 1e-8) return;
       walkDir.multiplyScalar(1 / len);
-      const step = Math.max(dist * 0.12, rad * 0.002, 0.04);
+      const scale = Math.min(Math.abs(wheelPixels(e.deltaY, e.deltaMode, mount.clientHeight)) / 100, 4);
+      const step = Math.max(dist * 0.12, rad * 0.002, 0.04) * scale;
       camera.position.addScaledVector(walkDir, step);
       controls.target.addScaledVector(walkDir, step);
       controls.update();
     };
-    renderer.domElement.addEventListener("wheel", onWheelCapture, {
+    mount.addEventListener("wheel", onWheelCapture, {
       capture: true,
       passive: false,
     });
@@ -217,7 +221,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
 
     apiRef.current = {
       scene, camera, renderer, controls, model: null, raf: 0, ro, flyTo,
-      focusDist: 1, measureGroup, modelRadius: 1,
+      measureGroup, modelRadius: 1,
       meshesByGuid: new Map(), isolated: null, hidden: new Set(), clipPlane: null,
       bounds: null,
     };
@@ -270,7 +274,6 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
           api.modelRadius = r;
           controls.minDistance = Math.max(r * 0.0008, 0.02);
           controls.maxDistance = Math.max(r * 80, 50);
-          api.focusDist = r * 0.18;
 
           // Soft ground disc under the model (cheap depth cue, no shadow map).
           const groundGeo = new THREE.CircleGeometry(r * 2.4, 64);
@@ -335,7 +338,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     return () => {
       cancelled = true;
       cancelAnimationFrame(apiRef.current?.raf || raf);
-      renderer.domElement.removeEventListener("wheel", onWheelCapture, { capture: true });
+      mount.removeEventListener("wheel", onWheelCapture, { capture: true });
       ro.disconnect();
       controls.dispose();
       apiRef.current?.grid?.geometry?.dispose();
@@ -451,6 +454,8 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
   }
 
   function emitSelection() {
+    selectionRevision.current += 1;
+    onPickRef.current?.(null);
     const sel = selectedRef.current;
     const guids = [...new Set([...sel.values()].map((m) => m.userData?.guid).filter(Boolean))];
     onSelectRef.current?.(guids);
@@ -458,6 +463,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
   }
 
   function clearSelectionInternal({ emit = true } = {}) {
+    selectionRevision.current += 1;
     const sel = selectedRef.current;
     for (const mesh of sel.values()) setMeshHighlight(mesh, false);
     sel.clear();
@@ -476,20 +482,27 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     for (const guid of guids || []) {
       for (const mesh of api.meshesByGuid.get(guid) || []) {
         if (api.hidden.has(guid) || (api.isolated && !api.isolated.has(guid))) continue;
-        sel.set(mesh.userData.expressID, mesh);
+        sel.set(mesh.uuid, mesh);
         setMeshHighlight(mesh, true);
         if (!firstMesh) firstMesh = mesh;
       }
     }
     const out = emitSelection();
     if (out.length === 1 && firstMesh) {
-      api.model.pickInfo(firstMesh.userData.expressID).then((info) => {
-        if (apiRef.current && selectedRef.current.size) onPickRef.current?.(info);
-      });
+      showPickedMesh(api, firstMesh);
     } else {
       onPickRef.current?.(null);
     }
     return out;
+  }
+
+  function showPickedMesh(api, mesh) {
+    const revision = selectionRevision.current;
+    api.model.pickInfo(mesh.userData.expressID).then((info) => {
+      if (apiRef.current === api && selectionRevision.current === revision && selectedRef.current.has(mesh.uuid)) {
+        onPickRef.current?.(info);
+      }
+    }).catch(() => { /* Properties may be unavailable; keep synchronous roster identity. */ });
   }
 
   /** Re-apply isolation / hidden state to every mesh (idempotent). */
@@ -649,25 +662,22 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
       return null;
     };
 
-    // Distinguish an orbit drag from a click: OrbitControls' mouseup fires a
-    // synthetic click, which used to clear the selection every time you rotated.
-    let down = null;
+    const gesture = createPickGesture();
+    let pointerHeld = false;
+    let lastTapWasPick = false;
     const onPointerDown = (ev) => {
-      down = { x: ev.clientX, y: ev.clientY, button: ev.button };
-      // Take keyboard focus so F / I / H / U / Esc work right after a click.
+      gesture.down(ev);
+      pointerHeld = true;
       try { ev.currentTarget?.focus?.({ preventScroll: true }); } catch { /* ignore */ }
     };
-    const wasDrag = (ev) => {
-      if (!down) return true;
-      const dx = ev.clientX - down.x;
-      const dy = ev.clientY - down.y;
-      return Math.hypot(dx, dy) > CLICK_SLOP_PX;
-    };
-
-    const onClick = (ev) => {
-      const dragged = wasDrag(ev);
-      down = null;
-      if (dragged) return;
+    const onGestureMove = (ev) => gesture.move(ev);
+    const onPointerCancel = (ev) => { gesture.cancel(ev); pointerHeld = false; lastTapWasPick = false; };
+    const onPointerUp = (ev) => {
+      pointerHeld = false;
+      lastTapWasPick = gesture.up(ev);
+      if (!lastTapWasPick) return;
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      if (ev.clientX < rect.left || ev.clientX > rect.right || ev.clientY < rect.top || ev.clientY > rect.bottom) return;
       const ctx2 = apiRef.current;
       const model = ctx2?.model;
       if (!model) return;
@@ -719,7 +729,8 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
       // Alt-click selects every part of the same assembly mark (when the host
       // can resolve one) — the fast way to grab a whole beam with its clips.
       const sameMark = ev.altKey && guid && labelForRef.current?.(guid);
-      let targetMeshes = [mesh];
+      let targetMeshes = (guid ? ctx2.meshesByGuid.get(guid) : model.group.children.filter(m => m.userData?.expressID === expressID)) || [mesh];
+      targetMeshes = targetMeshes.filter(pickable);
       if (sameMark) {
         targetMeshes = [];
         for (const [g, list] of ctx2.meshesByGuid) {
@@ -727,28 +738,32 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
         }
       }
 
-      if (additive && sel.has(expressID)) {
-        for (const m of targetMeshes) { setMeshHighlight(m, false); sel.delete(m.userData.expressID); }
+      if (additive && sel.has(mesh.uuid)) {
+        for (const m of targetMeshes) { setMeshHighlight(m, false); sel.delete(m.uuid); }
       } else {
         if (!additive) clearSelectionInternal({ emit: false });
-        for (const m of targetMeshes) { sel.set(m.userData.expressID, m); setMeshHighlight(m, true); }
+        for (const m of targetMeshes) { sel.set(m.uuid, m); setMeshHighlight(m, true); }
       }
 
       emitSelection();
-      if (sel.has(expressID)) model.pickInfo(expressID).then((info) => onPickRef.current?.(info));
+      if (sel.has(mesh.uuid)) showPickedMesh(ctx2, mesh);
       else onPickRef.current?.(null);
     };
 
     const onDblClick = (ev) => {
-      if (measureModeRef.current) return;
+      if (measureModeRef.current || !lastTapWasPick || ev.button !== 0) return;
       const ctx2 = apiRef.current;
       const model = ctx2?.model;
       if (!model) return;
       const hit = hitMesh(ev);
       if (!hit) return;
-      const p = hit.point;
+      const guid = hit.object.userData?.guid;
+      const box = guid ? boundsForGuids([guid]) : new THREE.Box3().setFromObject(hit.object);
+      if (!box || box.isEmpty()) return;
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      const p = sphere.center;
       const dir = ctx2.camera.position.clone().sub(ctx2.controls.target).normalize();
-      const toPos = p.clone().addScaledVector(dir, ctx2.focusDist || 1);
+      const toPos = p.clone().addScaledVector(dir, Math.max(ctx2.controls.minDistance * 1.1, framingDistance(sphere.radius, ctx2.camera.fov, ctx2.camera.aspect)));
       ctx2.flyTo(p.clone(), toPos);
     };
 
@@ -759,7 +774,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     let lastHoverGuid = null;
     const onPointerMove = (ev) => {
       if (!labelForRef.current) return;
-      if (down && wasDrag(ev)) { // orbiting — drop the label
+      if (pointerHeld) { // orbiting — drop the label
         if (lastHoverGuid) { lastHoverGuid = null; setHover(null); }
         return;
       }
@@ -773,7 +788,8 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
         const hit = hitMesh(ev2);
         const guid = hit?.object?.userData?.guid || null;
         if (guid === lastHoverGuid && guid) {
-          setHover((h) => (h ? { ...h, x: ev2.clientX, y: ev2.clientY } : h));
+          const rect = apiRef.current.renderer.domElement.getBoundingClientRect();
+          setHover((h) => (h ? { ...h, x: ev2.clientX - rect.left, y: ev2.clientY - rect.top } : h));
           return;
         }
         lastHoverGuid = guid;
@@ -825,7 +841,9 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
 
     const el = ctx.renderer.domElement;
     el.addEventListener("pointerdown", onPointerDown);
-    el.addEventListener("click", onClick);
+    window.addEventListener("pointermove", onGestureMove, true);
+    window.addEventListener("pointerup", onPointerUp, true);
+    window.addEventListener("pointercancel", onPointerCancel, true);
     el.addEventListener("dblclick", onDblClick);
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerleave", onPointerLeave);
@@ -833,7 +851,9 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     return () => {
       if (hoverRaf) cancelAnimationFrame(hoverRaf);
       el.removeEventListener("pointerdown", onPointerDown);
-      el.removeEventListener("click", onClick);
+      window.removeEventListener("pointermove", onGestureMove, true);
+      window.removeEventListener("pointerup", onPointerUp, true);
+      window.removeEventListener("pointercancel", onPointerCancel, true);
       el.removeEventListener("dblclick", onDblClick);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerleave", onPointerLeave);
