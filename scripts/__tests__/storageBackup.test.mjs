@@ -263,3 +263,9 @@ it("ignores inherited destination overrides so accounting and transfers use the 
   expect(result.RCLONE_CONFIG_OFFSITE_KEY).toBeUndefined();
   expect(result.rclone_config_offsite_account).toBeUndefined();
 });
+
+it("accepts wrapped Base64 copied from a terminal", () => {
+  const config = "[offsite]\ntype = b2\naccount = id\nkey = secret\n";
+  const wrapped = Buffer.from(config).toString("base64").match(/.{1,16}/g).join("\n");
+  expect(decodeOffsiteRcloneConfig(wrapped)).toBe(config);
+});

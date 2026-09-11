@@ -69,7 +69,7 @@ export function createStorageBackupPlan({ destinationRoot, timestamp }) {
 }
 
 export function decodeOffsiteRcloneConfig(encodedConfig) {
-  const normalizedConfig = encodedConfig?.trim() ?? "";
+  const normalizedConfig = encodedConfig?.replace(/\s/g, "") ?? "";
   if (
     !normalizedConfig
     || normalizedConfig.length % 4 !== 0
