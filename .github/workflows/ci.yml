@@ -147,6 +147,12 @@ jobs:
       - name: Run Vitest tests
         run: npm test
 
+      - name: Install Chromium for foundation acceptance
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify shell recovery (desktop and mobile, no backend)
+        run: npm run test:e2e:foundation
+
       - name: Verify database helper search paths
         run: |
           npm ci --prefix supabase/tests/function-search-path --ignore-scripts
