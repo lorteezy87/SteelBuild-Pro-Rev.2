@@ -93,3 +93,15 @@ describe('incremental execution', () => {
     } })).rejects.toThrow('checksum mismatch');
   });
 });
+
+import { planSourcePaths } from '../lib/b2Backup.mjs';
+it('preserves real objects whose keys end in slash or collide with a directory', () => {
+  const plan = planSourcePaths([file('folder/', 21), file('folder/child.txt', 11), file('prefix', 4), file('prefix/child', 5)]);
+  expect(plan.filter(p => p.special)).toHaveLength(2);
+  expect(plan.find(p => p.sourcePath === 'folder/').path).toMatch(/^__steelbuild_object_keys__\/[a-f0-9]{64}$/);
+  expect(plan.find(p => p.sourcePath === 'folder/child.txt').path).toBe('folder/child.txt');
+  expect(new Set(plan.map(p => p.path)).size).toBe(4);
+});
+it('rejects source keys in the reserved backup namespace', () => {
+  expect(() => planSourcePaths([file('__steelbuild_object_keys__/x', 1)])).toThrow('reserved');
+});

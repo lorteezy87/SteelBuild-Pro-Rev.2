@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 // Native inventory avoids rclone's synthetic version filenames and counts the entire bucket.
 export const BUDGET_BYTES = 9_000_000_000;
 export const RESERVE_BYTES = 10_000_000;
@@ -35,6 +36,16 @@ export function indexFiles(files, requireHash = true) {
   }
   return map;
 }
+export function planSourcePaths(files) {
+  const entries = [...indexFiles(files, false).values()];
+  const names = entries.map(f => f.Path);
+  if (names.some(n => n === '__steelbuild_object_keys__' || n.startsWith('__steelbuild_object_keys__/'))) throw new Error('Source uses reserved backup namespace');
+  return entries.map(f => {
+    const special = f.Path.endsWith('/') || names.some(n => n !== f.Path && n.startsWith(`${f.Path}/`));
+    return { sourcePath: f.Path, path: special ? `__steelbuild_object_keys__/${createHash('sha256').update(f.Path).digest('hex')}` : f.Path, bytes: f.Size, special };
+  });
+}
+
 export function calculateBudget({ storedBytes, source, current, reserveBytes = RESERVE_BYTES }) {
   const sourceFiles = indexFiles(source);
   const currentFiles = indexFiles(current, false);
@@ -97,7 +108,7 @@ export async function readB2Inventory({ account, key, bucketName, fetcher = fetc
 
 const COPY_FLAGS = ['--fast-list', '--transfers', '4', '--checkers', '8', '--retries', '1', '--low-level-retries', '1', '--stats', '30s', '--stats-log-level', 'NOTICE', '--stats-one-line'];
 const SAFE_B2_FLAGS = ['--b2-hard-delete=false', '--b2-disable-checksum=false'];
-export async function runIncrementalBackup({ plan, stageRoot, execute, inventory }) {
+export async function runIncrementalBackup({ plan, stageRoot, execute, inventory, stageSource }) {
   if (plan.length !== 3 || ['app-files', 'email-attachments', 'sheets-files'].some(b => !plan.some(p => p.bucket === b))) throw new Error('Backup must cover all three required buckets');
   const json = async args => JSON.parse(await execute(args, { captureOutput: true, label: args[0] }));
   const run = args => execute(args, { captureOutput: false, label: args[0] });
@@ -116,15 +127,21 @@ export async function runIncrementalBackup({ plan, stageRoot, execute, inventory
   for (const item of plan) {
     const local = `${stageRoot}/${item.bucket}`;
     console.log(`Staging ${item.bucket}`);
-    await run(['copy', item.source, local, '--metadata', '--max-transfer', String(BUDGET_BYTES), '--cutoff-mode', 'hard', ...COPY_FLAGS]);
+    const mapping = planSourcePaths(await json(['lsjson', item.source, '--recursive', '--files-only']));
+    if (stageSource) await stageSource({ item, local, mapping, run, flags: COPY_FLAGS });
+    else {
+      if (mapping.some(f => f.special)) throw new Error('Special object keys require an exact-key downloader');
+      await run(['copy', item.source, local, '--metadata', '--max-transfer', String(BUDGET_BYTES), '--cutoff-mode', 'hard', ...COPY_FLAGS]);
+    }
     const files = await json(['lsjson', local, '--recursive', '--files-only', '--hash', '--hash-type', 'SHA-1']);
-    indexFiles(files);
+    const stagedFiles = indexFiles(files);
+    if (mapping.length !== stagedFiles.size || mapping.some(f => stagedFiles.get(f.path)?.Size !== f.bytes)) throw new Error('Staged inventory differs from source; backup stopped');
     const current = await json(['lsjson', item.current, '--recursive', '--files-only', '--hash', '--hash-type', 'SHA-1']);
     // Unknown destination checksums cannot safely guide checksum sync or its byte projection.
     indexFiles(current);
     allSource.push(...files.map(f => ({ ...f, Path: `${item.bucket}/${f.Path}` })));
     allCurrent.push(...current.map(f => ({ ...f, Path: `${item.bucket}/${f.Path}` })));
-    staged.push({ ...item, local, files: [...indexFiles(files).values()] });
+    staged.push({ ...item, local, files: [...stagedFiles.values()], mapping });
   }
   const budget = calculateBudget({ ...(await inventory()), source: allSource, current: allCurrent });
   console.log(`Storage projection: ${budget.storedBytes} retained + ${budget.transferBytes} new + ${budget.reserveBytes} reserve = ${budget.projectedBytes} / ${budget.budgetBytes} bytes`);
@@ -142,7 +159,7 @@ export async function runIncrementalBackup({ plan, stageRoot, execute, inventory
       await run(['copyto', `${item.current}/${sample.Path}`, `${restored}/${sample.Path}`, '--b2-version-at', restoreAt, ...COPY_FLAGS]);
       await run(['check', item.local, restored, '--one-way', '--include', `/${sample.Path.replace(/([*?\[\]{}\\])/g, '\\$1')}`]);
     }
-    buckets.push({ bucket: item.bucket, current: item.current, restoreAt, objects: item.files.length, bytes: item.files.reduce((sum, f) => sum + f.Size, 0), files: item.files.map(f => ({ path: f.Path, bytes: f.Size, sha1: f.sha1 })), restoreSample: sample?.Path ?? null });
+    buckets.push({ bucket: item.bucket, current: item.current, restoreAt, objects: item.files.length, bytes: item.files.reduce((sum, f) => sum + f.Size, 0), files: item.files.map(f => ({ path: f.Path, sourcePath: item.mapping.find(m => m.path === f.Path).sourcePath, bytes: f.Size, sha1: f.sha1 })), restoreSample: sample?.Path ?? null });
   }
   return { schemaVersion: 2, status: 'verified', method: 'b2-native-versions', budget, buckets };
 }

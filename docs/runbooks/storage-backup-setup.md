@@ -29,6 +29,8 @@ Use a private B2 bucket and a bucket-restricted read/write application key witho
 
 The default budget is **9,000,000,000 bytes** for this bucket. Before destination writes the job reads all native B2 versions, across every prefix in the bucket. It rejects incomplete pagination, unavailable inventory, or unfinished multipart uploads. Unfinished uploads must be inspected by an operator; nothing is automatically purged.
 
+The GitHub-hosted runner must provide AWS CLI (`aws --version` is checked before downloads). Ordinary objects are copied with rclone. Real objects ending in `/`, or sharing a name with a directory, are downloaded by exact S3 key with `aws s3api get-object` into a reserved `__steelbuild_object_keys__/SHA256(key)` path. The manifest retains both the stored `path` and exact original `sourcePath`; nothing is renamed in Supabase. A source using the reserved namespace fails closed.
+
 It stages the three source buckets in the runner's temporary directory, calculates SHA-1 checksums, and compares them with the destination. The projection is retained bytes + changed/new file bytes + a 10 MB manifest/probe reserve. Deletions never subtract retained bytes. Over-budget runs fail before syncing and appear as failed GitHub Actions runs. Enable GitHub Actions failure notifications to receive alerts. Old verified manifests remain usable; no new successful backup is claimed.
 
 This is a conservative client-side storage guard, **not an account billing cap**. Other B2 buckets, simultaneous external writers, provider accounting, request fees, and source egress are outside this calculation. At the measured 6.4 GB source size, staging downloads about 6.4 GB per daily run (roughly 192 GB over 30 days), plus failed-run retries. Check the Supabase project's remaining egress allowance. Only new/changed content is uploaded to B2. The job removes its local staging directory on completion/failure; an `always()` workflow step cleans up on cancellation.
@@ -53,7 +55,7 @@ rclone copy offsite:YOUR-BUCKET/steelbuild-pro-storage/current/email-attachments
 rclone copy offsite:YOUR-BUCKET/steelbuild-pro-storage/current/sheets-files ./restore/sheets-files --b2-version-at 'RESTORE_AT_FROM_SHEETS_FILES'
 ```
 
-Compare every restored file's SHA-1, size, and path with the manifest before any production restoration. `--b2-version-at` resolves actual object history and avoids selecting synthetic version filenames. Do not run `rclone cleanup`, `cleanup-hidden`, `purge`, or enable `--b2-hard-delete`: those remove recovery history.
+Compare every restored file's SHA-1, size, and stored `path` with the manifest before any production restoration. When restoring to object storage, upload each file using its exact `sourcePath` as the object key. A key ending in `/` contains real file bytes and cannot be represented by an ordinary local filename; keep its reserved local path until uploading by exact key. `--b2-version-at` resolves actual object history and avoids selecting synthetic version filenames. Do not run `rclone cleanup`, `cleanup-hidden`, `purge`, or enable `--b2-hard-delete`: those remove recovery history.
 
 ## Activation
 

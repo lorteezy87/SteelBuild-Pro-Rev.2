@@ -1,6 +1,7 @@
+import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { setTimeout as pause } from "node:timers/promises";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -76,7 +77,27 @@ async function main() {
       environment: childEnvironment,
     });
     for (const item of plan) await mkdir(join(tempDirectory, "stage", item.bucket), { recursive: true });
-    const manifest = await runIncrementalBackup({ plan, stageRoot: join(tempDirectory, "stage"), execute, inventory });
+    const awsEnvironment = {
+      PATH: process.env.PATH,
+      AWS_ACCESS_KEY_ID: process.env.SUPABASE_S3_ACCESS_KEY_ID,
+      AWS_SECRET_ACCESS_KEY: process.env.SUPABASE_S3_SECRET_ACCESS_KEY,
+      AWS_DEFAULT_REGION: process.env.SUPABASE_S3_REGION,
+      AWS_EC2_METADATA_DISABLED: "true",
+      AWS_MAX_ATTEMPTS: "1",
+    };
+    await promisify(execFile)("aws", ["--version"], { env: awsEnvironment });
+    const stageSource = async ({ item, local, mapping, run, flags }) => {
+      const normal = mapping.filter(f => !f.special);
+      const listPath = join(tempDirectory, `${item.bucket}-files.txt`);
+      await writeFile(listPath, normal.map(f => f.sourcePath).join("\n") + "\n");
+      if (normal.length) await run(["copy", item.source, local, "--files-from-raw", listPath, "--metadata", "--max-transfer", String(BUDGET_BYTES), "--cutoff-mode", "hard", ...flags]);
+      for (const object of mapping.filter(f => f.special)) {
+        const target = join(local, object.path);
+        await mkdir(dirname(target), { recursive: true });
+        await promisify(execFile)("aws", ["s3api", "get-object", "--endpoint-url", process.env.SUPABASE_S3_ENDPOINT, "--bucket", item.bucket, "--key", object.sourcePath, "--no-cli-pager", target], { env: awsEnvironment, timeout: 120000 });
+      }
+    };
+    const manifest = await runIncrementalBackup({ plan, stageRoot: join(tempDirectory, "stage"), execute, inventory, stageSource });
     // Exercise recovery after BOTH overwrite and deletion, using synthetic bytes only.
     const probePath = join(tempDirectory, "recovery-probe.txt");
     const restoredProbe = join(tempDirectory, "recovered-probe.txt");
