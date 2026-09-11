@@ -192,25 +192,8 @@ describe("buildLastTransmittalBySet (items → revision → sheet → set)", () 
     expect(last.get("s1")).toMatchObject({ id: "undated", date: null });
   });
 
-  it("files an undated transmittal under the LOCAL day it was logged, not the UTC day", () => {
-    // Logged 18:30 local on Aug 2. West of UTC that instant is already Aug 3
-    // in UTC; slicing it used to tie it with — and, on created_at, beat — a
-    // transmittal actually dated Aug 3. Built from local parts so the
-    // expectation holds in every time zone.
-    const eveningLocal = new Date(2026, 7, 2, 18, 30).toISOString();
-    const last = buildLastTransmittalBySet([
-      transmittal({ id: "dated", transmittal_number: "T-001", date_sent: "2026-08-03", created_at: "2026-08-01T15:00:00Z", drawingIds: ["d1"] }),
-      transmittal({ id: "undated", transmittal_number: "T-002", date_sent: null, created_at: eveningLocal, drawingIds: ["d1"] }),
-    ], packages);
-    expect(last.get("s1")?.id).toBe("dated");
-  });
-
-  it("does not shift an entered date stored as a midnight-UTC timestamp", () => {
-    const last = buildLastTransmittalBySet([
-      transmittal({ id: "a", date_sent: "2026-08-03T00:00:00+00:00", drawingIds: ["d1"] }),
-    ], packages);
-    expect(last.get("s1")?.date).toBe("2026-08-03T00:00:00+00:00");
-  });
+  // Local-vs-UTC day keys are pinned in approvalMatrix.derive.localday.test.ts:
+  // this suite runs under TZ=UTC, which hides exactly that difference.
 });
 
 describe("matchesMatrixFilter — every pill's count equals the rows its filter shows", () => {

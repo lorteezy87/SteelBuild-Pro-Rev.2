@@ -18,6 +18,7 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
 import { activeHoldCount, useDrawingHolds } from "@/hooks/useDrawingHolds";
+import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 import { useTransmittals } from "@/hooks/useTransmittals";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
@@ -56,6 +57,7 @@ import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
 import RevisionImpactPanel from "./drawingSubmittalHub/RevisionImpactPanel";
 import { ApprovalMatrixPanel } from "./drawingSubmittalHub/ApprovalMatrixPanel";
+import type { HoldsStatus } from "./drawingSubmittalHub/ApprovalMatrixPanel";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
@@ -105,6 +107,7 @@ const ModelElementImportModal = ModelElementImportModalRaw as unknown as Compone
 
 // Tabs whose count is a warning, not a row tally (header badge's twin).
 const ALERT_TABS = ["holds"] as const;
+const NO_HOLDS: DrawingHoldRow[] = [];
 // One-shot record/create params, each aimed at a specific tab (Submittals:
 // recordId, targetSetId, prefilled*; Transmittals: transmittal).
 const HUB_RECORD_PARAMS = ["recordId", "targetSetId", "prefilledStatus", "prefilledBallInCourt", "transmittal"] as const;
@@ -199,8 +202,14 @@ function DetailingControlCenter() {
 
   // Holds: one query feeds the header badge, the Holds tab count and the
   // matrix's On Hold column — the same key HoldsPanel reads, so all agree.
-  const { data: holds = [], isSuccess: holdsLoaded, isError: holdsFailed } = useDrawingHolds(projectId ?? null);
-  const activeHolds = holdsLoaded ? activeHoldCount(holds) : null;
+  // "Known" means we HAVE rows. A failed background refetch keeps its cached
+  // rows (TanStack v5: status "error" with data), and those last-known values
+  // stay on screen — flipping cells to "?" while the hold filter still matched
+  // the same cached rows contradicted itself.
+  const holdsQuery = useDrawingHolds(projectId ?? null);
+  const holds = holdsQuery.data ?? NO_HOLDS;
+  const holdsStatus: HoldsStatus = holdsQuery.data !== undefined ? "ready" : holdsQuery.isError ? "error" : "loading";
+  const activeHolds = holdsStatus === "ready" ? activeHoldCount(holds) : null;
   // The matrix's Last Transmittal column. It's a three-table read, so it
   // loads only while the matrix is open (same key as the Transmittals tab).
   const { data: transmittals, isPending: transmittalsPending } = useTransmittals(projectId ?? null, {
@@ -706,7 +715,7 @@ function DetailingControlCenter() {
             useWorkdays={workdayDues}
             setPackages={setPackages}
             holds={holds}
-            holdsStatus={holdsLoaded ? "ready" : holdsFailed ? "error" : "loading"}
+            holdsStatus={holdsStatus}
             transmittals={transmittals}
             transmittalsLoading={transmittalsPending}
             canCreateSubmittal={can("create", "submittal")}

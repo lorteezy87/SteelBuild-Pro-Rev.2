@@ -64,12 +64,20 @@ vi.mock("@/services/permissions", () => ({
 }));
 
 // Holds drive the header badge + Holds tab count; keep the real helpers.
-const holdsState = vi.hoisted(() => ({ rows: [] }));
+// data undefined = never loaded; isError WITH data = a failed background
+// refetch that kept its cached rows (TanStack v5).
+const holdsState = vi.hoisted(() => ({ data: [], isError: false }));
 vi.mock("@/hooks/useDrawingHolds", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    useDrawingHolds: () => ({ data: holdsState.rows, isSuccess: true, isError: false, isLoading: false, error: null }),
+    useDrawingHolds: () => ({
+      data: holdsState.data,
+      isSuccess: holdsState.data !== undefined && !holdsState.isError,
+      isError: holdsState.isError,
+      isLoading: holdsState.data === undefined && !holdsState.isError,
+      error: holdsState.isError ? new Error("holds failed") : null,
+    }),
   };
 });
 
@@ -79,7 +87,8 @@ import { ProjectContext } from "@/components/shared/ProjectContext";
 const TEST_PROJECT = { id: "test-project-id", name: "Test Project" };
 
 afterEach(() => {
-  holdsState.rows = [];
+  holdsState.data = [];
+  holdsState.isError = false;
 });
 
 function LocationProbe() {
@@ -197,7 +206,7 @@ describe("DrawingSubmittalHub — tab history", () => {
 
   it("drops the matrix quick filter and any project deep-link param when changing tabs", async () => {
     const user = userEvent.setup();
-    renderHub({ entries: ["/DrawingSubmittalHub?projectId=test-project-id&hub_tab=matrix&matrix_filter=hold"] });
+    renderHub({ entries: ["/DrawingSubmittalHub?projectId=test-project-id&project=test-project-id&hub_tab=matrix&matrix_filter=hold"] });
 
     await user.click(await screen.findByRole("tab", { name: /Holds & Blockers/ }));
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=holds");
@@ -205,7 +214,7 @@ describe("DrawingSubmittalHub — tab history", () => {
 
   it("drops unconsumed record and create params so they can't fire on a later visit", async () => {
     const user = userEvent.setup();
-    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=matrix&targetSetId=s2&recordId=r1&prefilledStatus=IFA&transmittal=t1"] });
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=matrix&targetSetId=s2&recordId=r1&prefilledStatus=IFA&prefilledBallInCourt=EOR&transmittal=t1"] });
 
     await user.click(await screen.findByRole("tab", { name: /Control Board/ }));
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=overview");
@@ -214,7 +223,7 @@ describe("DrawingSubmittalHub — tab history", () => {
 
 describe("DrawingSubmittalHub — holds", () => {
   it("counts only ACTIVE holds in the Holds tab and the header badge", async () => {
-    holdsState.rows = [
+    holdsState.data = [
       { id: "h1", drawing_id: "d1", is_active: true, placed_at: "2026-09-01T00:00:00Z" },
       { id: "h2", drawing_id: "d2", is_active: true, placed_at: "2026-09-02T00:00:00Z" },
       { id: "h3", drawing_id: "d3", is_active: false, placed_at: "2026-08-01T00:00:00Z" },
@@ -224,6 +233,21 @@ describe("DrawingSubmittalHub — holds", () => {
     const holdsTab = await screen.findByRole("tab", { name: /Holds & Blockers/ });
     expect(within(holdsTab).getByText("2")).toBeInTheDocument();
     expect(await screen.findByText("2 Sheets On Hold")).toBeInTheDocument();
+  });
+
+  it("keeps the last-known holds on screen when a background refetch fails", async () => {
+    holdsState.data = [{ id: "h1", drawing_id: "d1", is_active: true, placed_at: "2026-09-01T00:00:00Z" }];
+    holdsState.isError = true;
+    renderHub();
+    expect(await screen.findByText("1 Sheet On Hold")).toBeInTheDocument();
+  });
+
+  it("claims nothing about holds when they never loaded", async () => {
+    holdsState.data = undefined;
+    holdsState.isError = true;
+    renderHub();
+    expect(await screen.findByText("Nothing overdue")).toBeInTheDocument(); // band has rendered
+    expect(screen.queryByText(/On Hold$|No holds/)).not.toBeInTheDocument();
   });
 
   it("shows the project number and name in the header", async () => {

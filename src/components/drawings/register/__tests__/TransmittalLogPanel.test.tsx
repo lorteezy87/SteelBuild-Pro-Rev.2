@@ -169,16 +169,26 @@ describe("TransmittalLogPanel", () => {
 
   it("opens the transmittal a ?transmittal= deep link names, then strips the param", async () => {
     can.mockImplementation((action: string) => action === "view");
-    transmittals = [transmittalRow(), transmittalRow({ id: "transmittal-2", transmittal_number: "T-002", notes: "Second batch" })];
-    renderPanel(["/DrawingSubmittalHub?hub_tab=transmittals&transmittal=transmittal-2"]);
+    // Animation frames fire immediately — before React commits the opened
+    // row — so a scroll scheduled on a frame would find nothing. The scroll
+    // has to wait for the committed row.
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    try {
+      transmittals = [transmittalRow(), transmittalRow({ id: "transmittal-2", transmittal_number: "T-002", notes: "Second batch" })];
+      renderPanel(["/DrawingSubmittalHub?hub_tab=transmittals&transmittal=transmittal-2"]);
 
-    expect(await screen.findByText("Second batch")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Close T-002" })).toHaveAttribute("aria-expanded", "true");
-    // Scrolls to the details row React committed — not before it exists.
-    await waitFor(() => expect(scrolledTo).toEqual(["transmittal-transmittal-2-details"]));
-    expect(screen.queryByText("Issued for coordination")).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByTestId("location-search")).toHaveTextContent("?hub_tab=transmittals"));
-    expect(screen.getByTestId("location-search")).not.toHaveTextContent("transmittal=");
+      expect(await screen.findByText("Second batch")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Close T-002" })).toHaveAttribute("aria-expanded", "true");
+      await waitFor(() => expect(scrolledTo).toEqual(["transmittal-transmittal-2-details"]));
+      expect(screen.queryByText("Issued for coordination")).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.getByTestId("location-search")).toHaveTextContent("?hub_tab=transmittals"));
+      expect(screen.getByTestId("location-search")).not.toHaveTextContent("transmittal=");
+    } finally {
+      raf.mockRestore();
+    }
   });
 
   it("ignores a stale ?transmittal= id without opening anything", async () => {
