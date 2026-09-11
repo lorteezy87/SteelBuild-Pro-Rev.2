@@ -102,7 +102,7 @@ export async function loadIfcGeometry(buffer, opts = {}) {
       mesh.applyMatrix4(m4);
       mesh.userData = { expressID, guid };
       group.add(mesh);
-      materials.push({ mat, guid, ifcHex, ifcType });
+      materials.push({ mat, guid, expressID, ifcHex, ifcType });
 
       geom.delete();
     }
@@ -113,16 +113,18 @@ export async function loadIfcGeometry(buffer, opts = {}) {
   const recolor = (colorFor) => {
     // Returns coverage stats so the host can report how many rendered members
     // actually resolved to a color (diagnostic for roster↔geometry mismatches).
-    let colored = 0;
+    const coloredElements = new Set();
+    const totalElements = new Set();
     let sampleColored = null;
     let sampleUncolored = null;
-    for (const { mat, guid, ifcHex, ifcType } of materials) {
+    for (const { mat, guid, expressID, ifcHex, ifcType } of materials) {
       const c = colorFor?.({ guid, ifcHex, ifcType });
       mat.color.set(c || ifcHex || defaultColor);
-      if (c) { colored += 1; if (!sampleColored) sampleColored = guid; }
+      totalElements.add(expressID);
+      if (c) { coloredElements.add(expressID); if (!sampleColored) sampleColored = guid; }
       else if (!sampleUncolored) sampleUncolored = guid;
     }
-    return { colored, total: materials.length, sampleColored, sampleUncolored };
+    return { colored: coloredElements.size, total: totalElements.size, sampleColored, sampleUncolored };
   };
 
   // On-click detail: read the part's marks/sequence from the "Part Properties"
@@ -169,5 +171,5 @@ export async function loadIfcGeometry(buffer, opts = {}) {
     try { api.CloseModel(modelID); } catch { /* ignore */ }
   };
 
-  return { group, dispose, count: group.children.length, pickInfo, recolor, handle };
+  return { group, dispose, count: new Set(group.children.map(mesh => mesh.userData.expressID)).size, pickInfo, recolor, handle };
 }

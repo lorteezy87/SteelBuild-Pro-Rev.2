@@ -208,7 +208,7 @@ export default function DrawingSubmittalHub() {
   // live project. That cost is why it loads only where it is actually rendered:
   // the 3D tab, or when the user opens the mapping card on the Control Board.
   const [mappingRosterRequested, setMappingRosterRequested] = useState(false);
-  const { data: modelElements = [], isFetching: modelElementsLoading } = useQuery({
+  const { data: modelElements = [], isFetching: modelElementsLoading, error: modelElementsError } = useQuery({
     queryKey: ["model-elements", projectId],
     queryFn: () => fetchAllModelElements(projectId),
     enabled: !!projectId && ((show3d && activeTab === "model3d") || mappingRosterRequested),
@@ -674,7 +674,7 @@ export default function DrawingSubmittalHub() {
         {activeTab === "validation" && <DetailingValidationPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
         {activeTab === "model3d" && (
-          <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} />
+          <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} rosterError={modelElementsError} />
         )}
       </Suspense>
     </ErrorBoundary>
