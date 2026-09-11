@@ -13,7 +13,7 @@
 import { Suspense, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { Navigate, useLocation, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
@@ -39,7 +39,8 @@ import { useFlag } from "@/hooks/useFeatureFlag";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import { DetailingCommandShell, DetailingNoProject } from "./drawingSubmittalHub/DetailingCommandShell";
-import { DEFAULT_HUB_TAB, canonicalHubSearch, nextTabSearch, parseHubTab } from "./drawingSubmittalHub/hubLinks";
+import { DEFAULT_HUB_TAB, canonicalHubSearch, hubHref, nextTabSearch, parseHubTab } from "./drawingSubmittalHub/hubLinks";
+import { DocControlMovedNotice } from "./drawingSubmittalHub/DocControlMovedNotice";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
@@ -56,7 +57,7 @@ import type { Drawing as HubDrawing, DrawingRevision as HubDrawingRevision, Draw
 import { FleetHealthStrip, LeadTimesModal } from "./drawingSubmittalHub/components";
 import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
-import RevisionImpactPanel from "./drawingSubmittalHub/RevisionImpactPanel";
+import RevisionImpactViews from "./drawingSubmittalHub/RevisionImpactViews";
 import { ApprovalMatrixPanel } from "./drawingSubmittalHub/ApprovalMatrixPanel";
 import type { HoldsStatus } from "./drawingSubmittalHub/ApprovalMatrixPanel";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
@@ -78,11 +79,6 @@ const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
 // boundary below, so deferring the import is behavior-preserving.
 const ProcessBoardPanel = lazyWithRetry(
   () => import("@/components/submittals/ProcessBoardPanel"),
-) as unknown as ComponentType<AnyProps>;
-const DocControlPanel = lazyWithRetry(() =>
-  import("@/components/drawings/register/DocControlPanel").then((m) => ({
-    default: m.DocControlPanel,
-  })),
 ) as unknown as ComponentType<AnyProps>;
 // 2026 hub layout: surface the existing canonical workflows as first-level tabs.
 const HoldsPanel = lazyWithRetry(() => import("@/components/drawings/register/HoldsPanel").then(m => ({ default: m.HoldsPanel })));
@@ -143,6 +139,15 @@ function DetailingControlCenter() {
   const projectCtx = useProjectContext() as any;
   const activeProject = projectCtx.activeProject as any;
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  // A ?hub_tab=doccontrol link arrives through the route wrapper's redirect,
+  // which marks the entry (state.hubAliasedFrom). The Drawing Register then
+  // says, once, where Doc Control's views went. Read at mount: a view toggle
+  // rewrites the entry without that state, and the notice should survive it.
+  const [docControlNotice, setDocControlNotice] = useState(
+    () => (location.state as { hubAliasedFrom?: unknown } | null)?.hubAliasedFrom === "doccontrol",
+  );
   const [leadModalOpen, setLeadModalOpen] = useState(false);
   // Contextual escalation (Critical Work Queue / Next Decision → draft RFI / PCO)
   const [escalateItem, setEscalateItem] = useState<any | null>(null);
@@ -179,6 +184,10 @@ function DetailingControlCenter() {
   // URL is left alone.
   const urlTab = parseHubTab(searchParams.get("hub_tab")).tab;
   const activeTab = tabs.some((t) => t.key === urlTab) ? urlTab : DEFAULT_HUB_TAB;
+  // Leaving the Drawing Register, by any route (tab click, Back), ends the
+  // one-time notice. Adjusted during render rather than in an effect, so it
+  // can't flash back on a later visit to the tab.
+  if (docControlNotice && activeTab !== "drawings") setDocControlNotice(false);
   // Tab changes PUSH a history entry (the 2026 hub keeps its tab in the path
   // for the same reason), so Back returns to the previous tab instead of
   // leaving the hub. ?hub_tab= stays the format, so old bookmarks keep
@@ -290,7 +299,7 @@ function DetailingControlCenter() {
 
   // Authoritative per-drawing current revision (§20-21): drawing_id → {code,
   // version} from drawing_revisions WHERE is_current=true. The Drawing Register's
-  // "Rev" column reads THIS (matching Doc Control) instead of the deprecated,
+  // "Rev" column reads THIS (matching the sheet register) instead of the deprecated,
   // drift-prone drawings.revision_number string.
   const currentRevByDrawingId = useMemo(
     () => buildCurrentRevisionMap(drawingRevisions as unknown as HubDrawingRevision[]),
@@ -663,7 +672,9 @@ function DetailingControlCenter() {
       <Suspense fallback={<LoadingSkeleton />}>
         {activeTab === "overview" && (
           <>
-          <FleetHealthStrip fleet={fleetHealth} onOpenRegister={() => setActiveTab("drawings")} />
+          {/* Needs-attention chips open Sets & revisions, where the Health
+              column is. A push, so Back returns to the board. */}
+          <FleetHealthStrip fleet={fleetHealth} onOpenRegister={() => navigate(hubHref("drawings", { hub_view: "sets" }))} />
           <ControlBoardPanel
             triage={triage}
             kpis={kpis}
@@ -699,6 +710,8 @@ function DetailingControlCenter() {
           />
         )}
         {activeTab === "drawings" && (
+          <>
+          {docControlNotice && <DocControlMovedNotice onDismiss={() => setDocControlNotice(false)} />}
           <DrawingRegisterPanel
             setPackages={setPackages}
             projectId={projectId}
@@ -711,6 +724,7 @@ function DetailingControlCenter() {
             onRevisionUploaded={handleRevisionUploaded}
             onOpenSummary={setSummaryCard}
           />
+          </>
         )}
         {activeTab === "submittals" && <SubmittalsPage embedded />}
         {activeTab === "matrix" && (
@@ -731,7 +745,8 @@ function DetailingControlCenter() {
           />
         )}
         {activeTab === "revimpact" && (
-          <RevisionImpactPanel
+          <RevisionImpactViews
+            projectId={projectId || null}
             rows={revisionImpactRows}
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
             // Rows derive from drawingRevisions, which loads separately.
@@ -744,7 +759,6 @@ function DetailingControlCenter() {
         {activeTab === "holds" && <HoldsPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "transmittals" && <TransmittalLogPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "validation" && <DetailingValidationPanel key={projectId} projectId={projectId || null} />}
-        {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
         {activeTab === "model3d" && (
           <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} rosterError={modelElementsError} />
         )}

@@ -8,10 +8,14 @@ import {
   HUB_TAB_ALIASES,
   HUB_TAB_KEYS,
   HUB_TAB_SCOPED_PARAMS,
+  HUB_VIEWS,
   canonicalHubSearch,
+  defaultHubView,
   hubHref,
+  hubViewSearch,
   nextTabSearch,
   parseHubTab,
+  parseHubView,
 } from "../hubLinks";
 import type { HubTabAliases } from "../hubLinks";
 
@@ -30,12 +34,18 @@ const HISTORIC_KEYS = [
   "doccontrol",
   "model3d",
 ];
+// Keys retired into an alias. Doc Control: owner decision, 2026-09-11.
+const RETIRED_KEYS = ["doccontrol"];
+const LIVE_KEYS = HISTORIC_KEYS.filter((key) => !RETIRED_KEYS.includes(key));
 
-// A stand-in alias table. None ship yet, but the redirect path must work, and
-// an alias must win over a same-named key (that's how a key gets retired).
+// A stand-in alias table, so the alias path is tested apart from the shipped
+// one. `matrix` shadows a live key: an alias must win over a same-named key,
+// which is how a key gets retired.
 const ALIASES: HubTabAliases = {
   oldregister: { tab: "drawings", view: "sets" },
-  doccontrol: { tab: "drawings" },
+  oldsheets: { tab: "drawings", view: "sheets" },
+  oldhub: { tab: "drawings" },
+  matrix: { tab: "holds" },
 };
 
 describe("hub route and tab keys", () => {
@@ -44,19 +54,34 @@ describe("hub route and tab keys", () => {
     expect(HUB_PATH).toBe(createPageUrl("DrawingSubmittalHub"));
   });
 
-  it("keeps all 11 historic keys, model3d included", () => {
-    expect([...HUB_TAB_KEYS]).toEqual(HISTORIC_KEYS);
+  it("keeps all 11 historic keys resolving: live ones as tabs, retired ones as aliases", () => {
+    expect([...HUB_TAB_KEYS]).toEqual(LIVE_KEYS);
+    expect(Object.keys(HUB_TAB_ALIASES)).toEqual(RETIRED_KEYS);
+    for (const key of HISTORIC_KEYS) {
+      const parsed = parseHubTab(key);
+      expect(parsed.known).toBe(true);
+      expect(HUB_TAB_KEYS).toContain(parsed.tab);
+    }
     expect(DEFAULT_HUB_TAB).toBe("overview");
   });
 
-  it("knows every tab the hub renders", () => {
-    for (const tab of TABS) expect(HUB_TAB_KEYS).toContain(tab.key);
+  it("retires Doc Control to the Drawing Register's sheet view", () => {
+    expect(HUB_TAB_ALIASES.doccontrol).toEqual({ tab: "drawings", view: "sheets" });
   });
 
-  it("only aliases to real keys that aren't aliases themselves, so a redirect can't chain or loop", () => {
+  it("knows every tab the hub renders, and renders no retired key", () => {
+    for (const tab of TABS) {
+      expect(HUB_TAB_KEYS).toContain(tab.key);
+      expect(Object.prototype.hasOwnProperty.call(HUB_TAB_ALIASES, tab.key)).toBe(false);
+    }
+  });
+
+  it("only aliases to real keys that aren't aliases themselves, and to real views, so a redirect can't chain or loop", () => {
+    const views: Readonly<Record<string, readonly string[]>> = HUB_VIEWS;
     for (const alias of Object.values(HUB_TAB_ALIASES)) {
       expect(HUB_TAB_KEYS).toContain(alias.tab);
       expect(Object.prototype.hasOwnProperty.call(HUB_TAB_ALIASES, alias.tab)).toBe(false);
+      if (alias.view) expect(views[alias.tab]).toContain(alias.view);
     }
   });
 
@@ -75,8 +100,12 @@ describe("hub route and tab keys", () => {
 });
 
 describe("parseHubTab", () => {
-  it.each(HISTORIC_KEYS)("%s parses to itself", (key) => {
+  it.each(LIVE_KEYS)("%s parses to itself", (key) => {
     expect(parseHubTab(key)).toEqual({ tab: key, known: true, aliasedFrom: null, view: null });
+  });
+
+  it("parses doccontrol to the Drawing Register's sheet view, marked as aliased", () => {
+    expect(parseHubTab("doccontrol")).toEqual({ tab: "drawings", known: true, aliasedFrom: "doccontrol", view: "sheets" });
   });
 
   it.each(["bogus", "register", "board", "Matrix", " matrix", "constructor", "toString", "__proto__"])(
@@ -92,7 +121,8 @@ describe("parseHubTab", () => {
 
   it("resolves an alias to its target and view, ahead of a same-named key", () => {
     expect(parseHubTab("oldregister", ALIASES)).toEqual({ tab: "drawings", known: true, aliasedFrom: "oldregister", view: "sets" });
-    expect(parseHubTab("doccontrol", ALIASES)).toEqual({ tab: "drawings", known: true, aliasedFrom: "doccontrol", view: null });
+    expect(parseHubTab("oldhub", ALIASES)).toEqual({ tab: "drawings", known: true, aliasedFrom: "oldhub", view: null });
+    expect(parseHubTab("matrix", ALIASES)).toEqual({ tab: "holds", known: true, aliasedFrom: "matrix", view: null });
     expect(parseHubTab("constructor", ALIASES).known).toBe(false);
   });
 });
@@ -137,14 +167,55 @@ describe("nextTabSearch", () => {
     expect(nextTabSearch("?hub_tab=drawings&hub_view=sets&matrix_filter=hold", "matrix").toString()).toBe("hub_tab=matrix");
   });
 
+  it("clears the sub-view when moving between two tabs that have them", () => {
+    expect(nextTabSearch("?hub_tab=drawings&hub_view=reviews", "revimpact").toString()).toBe("hub_tab=revimpact");
+  });
+
   it("spells out the Control Board, and adds hub_tab to a bare URL", () => {
     expect(nextTabSearch("hub_tab=matrix", "overview").toString()).toBe("hub_tab=overview");
     expect(nextTabSearch("", "holds").toString()).toBe("hub_tab=holds");
   });
 });
 
+describe("hub sub-views (hub_view)", () => {
+  it("lists each tab's views, default first", () => {
+    expect(HUB_VIEWS).toEqual({ drawings: ["sheets", "sets", "reviews"], revimpact: ["computed", "log"] });
+    expect(defaultHubView("drawings")).toBe("sheets");
+    expect(defaultHubView("revimpact")).toBe("computed");
+    expect(defaultHubView("holds")).toBeNull();
+  });
+
+  it("parses a known view, and anything else as the tab's default", () => {
+    expect(parseHubView("drawings", "sets")).toBe("sets");
+    expect(parseHubView("drawings", "reviews")).toBe("reviews");
+    expect(parseHubView("drawings", "x")).toBe("sheets");
+    expect(parseHubView("drawings", null)).toBe("sheets");
+    expect(parseHubView("drawings", "log")).toBe("sheets");
+    expect(parseHubView("revimpact", "log")).toBe("log");
+    expect(parseHubView("revimpact", "sets")).toBe("computed");
+    expect(parseHubView("revimpact", "toString")).toBe("computed");
+  });
+
+  it("writes a view as hub_view and the default as no param, keeping everything else", () => {
+    expect(hubViewSearch("hub_tab=drawings&keep=1", "drawings", "reviews").toString()).toBe("hub_tab=drawings&keep=1&hub_view=reviews");
+    expect(hubViewSearch("hub_tab=drawings&hub_view=reviews", "drawings", "sets").toString()).toBe("hub_tab=drawings&hub_view=sets");
+    expect(hubViewSearch("hub_tab=drawings&hub_view=sets&keep=1", "drawings", "sheets").toString()).toBe("hub_tab=drawings&keep=1");
+    expect(hubViewSearch("hub_tab=revimpact&hub_view=log", "revimpact", "computed").toString()).toBe("hub_tab=revimpact");
+  });
+
+  it("doesn't touch its input", () => {
+    const prev = new URLSearchParams("hub_tab=drawings&hub_view=sets");
+    hubViewSearch(prev, "drawings", "sheets");
+    expect(prev.get("hub_view")).toBe("sets");
+  });
+
+  it("links the Control Board's needs-attention chips to Sets & revisions", () => {
+    expect(hubHref("drawings", { hub_view: "sets" })).toBe("/DrawingSubmittalHub?hub_tab=drawings&hub_view=sets");
+  });
+});
+
 describe("canonicalHubSearch", () => {
-  it.each(HISTORIC_KEYS)("leaves ?hub_tab=%s alone", (key) => {
+  it.each(LIVE_KEYS)("leaves ?hub_tab=%s alone", (key) => {
     expect(canonicalHubSearch(`?hub_tab=${key}`)).toBeNull();
     expect(canonicalHubSearch(`hub_tab=${key}&projectId=P&recordId=r`)).toBeNull();
   });
@@ -161,16 +232,33 @@ describe("canonicalHubSearch", () => {
     expect(canonicalHubSearch(new URLSearchParams("hub_tab=register&foo=1"))).toBe("?foo=1");
   });
 
-  it("rewrites an alias to its target, and view, keeping the rest", () => {
+  it("rewrites ?hub_tab=doccontrol to the Drawing Register's sheet view, keeping the rest", () => {
+    expect(canonicalHubSearch("?hub_tab=doccontrol")).toBe("?hub_tab=drawings");
+    expect(canonicalHubSearch("?projectId=P&hub_tab=doccontrol&x=1")).toBe("?projectId=P&hub_tab=drawings&x=1");
+    // Doc Control never used hub_view; a stray one must not pick another view.
+    expect(canonicalHubSearch("?hub_tab=doccontrol&hub_view=reviews")).toBe("?hub_tab=drawings");
+  });
+
+  it("rewrites an alias to its target and view, keeping the rest", () => {
     expect(canonicalHubSearch("?hub_tab=oldregister&foo=1", ALIASES)).toBe("?hub_tab=drawings&foo=1&hub_view=sets");
-    expect(canonicalHubSearch("?hub_tab=doccontrol", ALIASES)).toBe("?hub_tab=drawings");
+    expect(canonicalHubSearch("?hub_tab=oldhub", ALIASES)).toBe("?hub_tab=drawings");
+    // An alias without a view leaves hub_view to the target tab.
+    expect(canonicalHubSearch("?hub_tab=oldhub&hub_view=sets", ALIASES)).toBe("?hub_tab=drawings&hub_view=sets");
+    // The target's default view is written as no hub_view.
+    expect(canonicalHubSearch("?hub_tab=oldsheets&hub_view=reviews", ALIASES)).toBe("?hub_tab=drawings");
+    expect(canonicalHubSearch("?hub_tab=matrix", ALIASES)).toBe("?hub_tab=holds");
   });
 
   it("is stable: a corrected search needs no second correction", () => {
-    for (const search of ["?hub_tab=bogus&x=1", "?hub_tab=a&hub_tab=b", "?hub_tab=oldregister", "?hub_tab=doccontrol&hub_tab=zzz"]) {
+    for (const search of ["?hub_tab=bogus&x=1", "?hub_tab=a&hub_tab=b", "?hub_tab=oldregister", "?hub_tab=oldsheets&hub_view=log", "?hub_tab=oldhub&hub_tab=zzz"]) {
       const fixed = canonicalHubSearch(search, ALIASES);
       expect(fixed).not.toBeNull();
       expect(canonicalHubSearch(fixed ?? "", ALIASES)).toBeNull();
+    }
+    for (const search of ["?hub_tab=doccontrol", "?hub_tab=doccontrol&hub_view=sets&x=1", "?hub_tab=doccontrol&hub_tab=zzz"]) {
+      const fixed = canonicalHubSearch(search);
+      expect(fixed).not.toBeNull();
+      expect(canonicalHubSearch(fixed ?? "")).toBeNull();
     }
   });
 });

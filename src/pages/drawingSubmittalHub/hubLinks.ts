@@ -21,10 +21,12 @@
 export const HUB_PATH = "/DrawingSubmittalHub";
 
 /**
- * Every ?hub_tab= key the hub has shipped. Bookmarks and inbound links use all
- * of them, so each must keep resolving. model3d is always a member: the
- * viewer_3d flag reads false until the flags query lands, so gating the key on
- * it would rewrite live 3D links while flags load. The flag gates the body only.
+ * The live ?hub_tab= keys. Every key the hub has ever shipped must keep
+ * resolving (bookmarks and inbound links use them all), so a retired key moves
+ * from here to HUB_TAB_ALIASES rather than disappearing. model3d is always a
+ * member: the viewer_3d flag reads false until the flags query lands, so gating
+ * the key on it would rewrite live 3D links while flags load. The flag gates
+ * the body only.
  */
 export const HUB_TAB_KEYS = [
   "overview",
@@ -36,7 +38,6 @@ export const HUB_TAB_KEYS = [
   "revimpact",
   "holds",
   "validation",
-  "doccontrol",
   "model3d",
 ] as const;
 export type HubTabKey = (typeof HUB_TAB_KEYS)[number];
@@ -46,7 +47,8 @@ export const DEFAULT_HUB_TAB: HubTabKey = "overview";
 
 /**
  * A retired key and where it lives now. `view` is the target tab's sub-view
- * (hub_view) the old key used to show, when that isn't the tab's default.
+ * (hub_view) the old key showed. The tab's default view is written as no
+ * hub_view at all, and it overrides any hub_view the old URL carried.
  */
 export interface HubTabAlias {
   tab: HubTabKey;
@@ -54,8 +56,60 @@ export interface HubTabAlias {
 }
 export type HubTabAliases = Readonly<Record<string, HubTabAlias>>;
 
-/** Retired keys → their new home. None yet; nothing emits 2026's spellings. */
-export const HUB_TAB_ALIASES: HubTabAliases = Object.freeze({});
+/**
+ * Retired keys → their new home. The route wrapper redirects them (replace)
+ * and passes state.hubAliasedFrom, so the new home can say what moved.
+ *   doccontrol: its default Register view was the same sheet grid Drawing
+ *   Register opens on. Its Reviews view is Drawing Register › Reviews, its
+ *   Impacts view Revision Impact › Impact log; Transmittals and Holds were
+ *   already tabs of their own.
+ */
+export const HUB_TAB_ALIASES: HubTabAliases = Object.freeze({
+  doccontrol: Object.freeze({ tab: "drawings", view: "sheets" }),
+});
+
+/**
+ * Tab sub-views, carried in ?hub_view=. The first is the default and is
+ * written as no param. A view is tab-scoped: tab switches clear it, and a
+ * view toggle rewrites the current entry (replace), never adding history.
+ */
+export const HUB_VIEWS = {
+  drawings: ["sheets", "sets", "reviews"],
+  revimpact: ["computed", "log"],
+} as const satisfies Partial<Record<HubTabKey, readonly string[]>>;
+export type HubViewTab = keyof typeof HUB_VIEWS;
+export type HubView<T extends HubViewTab> = (typeof HUB_VIEWS)[T][number];
+
+function hasViews(tab: string): tab is HubViewTab {
+  return Object.prototype.hasOwnProperty.call(HUB_VIEWS, tab);
+}
+
+/** The tab's default sub-view, or null for a tab without sub-views. */
+export function defaultHubView(tab: HubTabKey): string | null {
+  return hasViews(tab) ? HUB_VIEWS[tab][0] : null;
+}
+
+/** ?hub_view= value → one of the tab's views; anything else is its default. */
+export function parseHubView<T extends HubViewTab>(tab: T, raw: string | null | undefined): HubView<T> {
+  const views: readonly HubView<T>[] = HUB_VIEWS[tab];
+  const match = views.find((view) => view === raw);
+  return match ?? views[0];
+}
+
+/**
+ * The search a view toggle writes: `prev` with hub_view set, or removed for
+ * the tab's default view. Nothing else changes.
+ */
+export function hubViewSearch<T extends HubViewTab>(
+  prev: URLSearchParams | string,
+  tab: T,
+  view: HubView<T>,
+): URLSearchParams {
+  const next = new URLSearchParams(prev);
+  if (view === HUB_VIEWS[tab][0]) next.delete("hub_view");
+  else next.set("hub_view", view);
+  return next;
+}
 
 /**
  * Params aimed at one tab: record/create deep links (Submittals reads
@@ -149,9 +203,10 @@ export function nextTabSearch(prev: URLSearchParams | string, tab: HubTabKey): U
 /**
  * The corrected search ("" or "?…") for a URL whose hub_tab is unknown (the
  * param is dropped, so the Control Board opens) or an alias (rewritten to its
- * target, plus the alias's view). null when the URL is already canonical,
- * which includes every HUB_TAB_KEYS member, model3d too, so the redirect can't
- * loop. Only hub_tab (and hub_view, for a view alias) changes.
+ * target, plus the alias's view: set, or removed when it's the target's
+ * default). null when the URL is already canonical, which includes every
+ * HUB_TAB_KEYS member, model3d too, so the redirect can't loop. Only hub_tab
+ * (and hub_view, for a view alias) changes.
  */
 export function canonicalHubSearch(
   search: URLSearchParams | string,
@@ -162,7 +217,10 @@ export function canonicalHubSearch(
   if (parsed.known && !parsed.aliasedFrom) return null;
   if (parsed.aliasedFrom) {
     params.set("hub_tab", parsed.tab);
-    if (parsed.view) params.set("hub_view", parsed.view);
+    if (parsed.view) {
+      if (parsed.view === defaultHubView(parsed.tab)) params.delete("hub_view");
+      else params.set("hub_view", parsed.view);
+    }
   } else {
     params.delete("hub_tab");
   }

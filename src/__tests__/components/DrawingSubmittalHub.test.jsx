@@ -86,6 +86,19 @@ vi.mock("@/hooks/useDrawingHolds", async (importOriginal) => {
   };
 });
 
+// The real Fleet Health strip renders only for scored sets, and the entity
+// mock returns none. A stub exposes its one callback, so the needs-attention
+// chip's destination is testable.
+vi.mock("@/pages/drawingSubmittalHub/components", async (importOriginal) => {
+  const actual = await importOriginal();
+  const { createElement } = await import("react");
+  return {
+    ...actual,
+    FleetHealthStrip: ({ onOpenRegister }) =>
+      createElement("button", { type: "button", onClick: onOpenRegister }, "fleet-needs-attention"),
+  };
+});
+
 import DrawingSubmittalHub from "@/pages/DrawingSubmittalHub";
 import { ProjectContext } from "@/components/shared/ProjectContext";
 
@@ -236,9 +249,10 @@ describe("DrawingSubmittalHub — tab history", () => {
   });
 });
 
-// Every ?hub_tab= key but model3d (its body is flag-gated, and the flag is off
-// here). Pinned rather than imported, so a key that stops resolving fails loudly.
-const NON_3D_KEYS = ["overview", "process", "drawings", "submittals", "transmittals", "matrix", "revimpact", "holds", "validation", "doccontrol"];
+// Every live ?hub_tab= key but model3d (its body is flag-gated, and the flag is
+// off here). Pinned rather than imported, so a key that stops resolving fails
+// loudly. doccontrol was retired into an alias; its redirect is tested below.
+const NON_3D_KEYS = ["overview", "process", "drawings", "submittals", "transmittals", "matrix", "revimpact", "holds", "validation"];
 
 // The hub's own tab strip; some panels (Holds) render a tablist of their own.
 async function selectedTab() {
@@ -274,6 +288,121 @@ describe("DrawingSubmittalHub — ?hub_tab= links", () => {
     expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=model3d");
     expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
+  });
+});
+
+const SHEET_GRID_FILTER = /Filter sheet, title, discipline, set/i;
+const MOVED_NOTICE = { name: "Doc Control has moved" };
+
+describe("DrawingSubmittalHub — Doc Control retired", () => {
+  it("has no Doc Control tab", async () => {
+    renderHub();
+    const tablist = await screen.findByRole("tablist", { name: "Detailing Control Center tabs" });
+    expect(within(tablist).getByRole("tab", { name: /Drawing Register/ })).toBeInTheDocument();
+    expect(within(tablist).queryByRole("tab", { name: /Doc Control/ })).not.toBeInTheDocument();
+  });
+
+  it("sends a ?hub_tab=doccontrol bookmark to the Drawing Register's sheets, in place, with a notice", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/Dashboard", "/DrawingSubmittalHub?hub_tab=doccontrol"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-drawings");
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=drawings");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+    expect(await screen.findByPlaceholderText(SHEET_GRID_FILTER)).toBeInTheDocument();
+    expect(screen.getByRole("heading", MOVED_NOTICE)).toBeInTheDocument();
+    expect(screen.getByText(/Drawing Register › Reviews/)).toBeInTheDocument();
+    expect(screen.getByText(/Revision Impact › Impact log/)).toBeInTheDocument();
+
+    // Replaced, not stacked: Back leaves the hub.
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/Dashboard");
+  });
+
+  it("keeps the notice while the new views are tried, until it's dismissed", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=doccontrol"] });
+    expect(await screen.findByRole("heading", MOVED_NOTICE)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Reviews" }));
+    expect(await screen.findByRole("heading", { name: "Review Queue" }, { timeout: 8000 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", MOVED_NOTICE)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Dismiss the Doc Control notice/ }));
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+  });
+
+  it("shows the notice once: leaving the tab ends it, and Back doesn't bring it back", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=doccontrol"] });
+    expect(await screen.findByRole("heading", MOVED_NOTICE)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /Holds & Blockers/ }));
+    await user.click(screen.getByRole("tab", { name: /Drawing Register/ }));
+    expect(await screen.findByPlaceholderText(SHEET_GRID_FILTER)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+
+    // Back twice returns to the arrival entry, which still carries the alias state.
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-drawings");
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+  });
+
+  it("shows no notice on an ordinary Drawing Register visit, or after an unknown-key redirect", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=drawings"] });
+    expect(await screen.findByPlaceholderText(SHEET_GRID_FILTER)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+    cleanup();
+
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=bogus"] });
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+  });
+});
+
+describe("DrawingSubmittalHub — tab sub-views (?hub_view=)", () => {
+  it("?hub_tab=drawings&hub_view=reviews opens the Review Queue", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=drawings&hub_view=reviews"] });
+    expect(await screen.findByRole("heading", { name: "Review Queue" }, { timeout: 8000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reviews" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("?hub_tab=revimpact&hub_view=log opens the manual impact log", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=revimpact&hub_view=log"] });
+    expect(await screen.findByRole("heading", { name: "Impact Board" }, { timeout: 8000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Impact log" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/Manually logged drawing impacts/)).toBeInTheDocument();
+  });
+
+  it("switches views without adding history entries", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/Dashboard", "/DrawingSubmittalHub?hub_tab=drawings"] });
+
+    await user.click(await screen.findByRole("button", { name: "Reviews" }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=drawings&hub_view=reviews");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+
+    await user.click(screen.getByRole("button", { name: "Sheets" }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=drawings");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/Dashboard");
+  });
+
+  it("opens Sets & revisions from a needs-attention chip, and Back returns to the Control Board", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/DrawingSubmittalHub"] });
+
+    await user.click(await screen.findByRole("button", { name: "fleet-needs-attention" }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=drawings&hub_view=sets");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-drawings");
+    expect(screen.getByRole("button", { name: "Sets & revisions" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
   });
 });
 
