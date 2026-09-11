@@ -295,7 +295,10 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
             them list drawing sets AND unlinked submittals — tile said 2, list
             showed 6. Their labels are unscoped, so the value must be too. */}
         <TriageMetric icon={Clock3} label="Due This Week" value={triage.dueSoon.length} color={warning} sub="Next 7 days" />
-        <TriageMetric icon={ShieldCheck} label="Needs Action" value={triage.needsAction.length} color={review} sub="Rejected / resubmit" />
+        {/* Scoped like the KPI strip's "Submittals Needing Action" above the
+            board: this tile counts triage items, that one submittal rows.
+            One unscoped name for both read as a contradiction. */}
+        <TriageMetric icon={ShieldCheck} label="Items Needing Action" value={triage.needsAction.length} color={review} sub="Rejected / resubmit" />
         <TriageMetric icon={CalendarClock} label="Missing Dates" value={triage.noDate.length} color={textMuted} sub="Needs cleanup" />
         <TriageMetric icon={ClipboardList} label="Pending Review" value={kpis.pending} color={warning} sub={`${kpis.total} total submittals`} />
       </div>

@@ -164,7 +164,6 @@ function DetailingControlCenter() {
   const { can } = usePermissions();
   const projectId = activeProject?.id as string | undefined;
   const projectName = activeProject?.name || activeProject?.project_number || "";
-  const projectLabel = [activeProject?.project_number, activeProject?.name].filter(Boolean).join(" · ");
 
   // The 3D model viewer is flag-gated until verified against real models in prod.
   const show3d = useFlag("viewer_3d");
@@ -866,7 +865,10 @@ function DetailingControlCenter() {
           openItems: triage.openItems.length,
           fleetAverageScore: fleetHealth.count > 0 ? fleetHealth.averageScore : null,
         }}
-        projectName={projectLabel}
+        // The header's eyebrow shows the number per the user's Show Project
+        // Numbers preference.
+        projectName={activeProject?.name}
+        projectNumber={activeProject?.project_number}
         tabCounts={tabCounts}
         alertTabs={ALERT_TABS}
         activeHolds={activeHolds}

@@ -153,6 +153,14 @@ describe("ControlBoardPanel: in the hub (onOpenHref)", () => {
   });
 });
 
+describe("ControlBoardPanel: metric tiles", () => {
+  it("scopes the triage tile as 'Items Needing Action', apart from the KPI strip's 'Submittals Needing Action'", () => {
+    renderBoard(triageFor([LINKED_SUBMITTAL, UNLINKED_SUBMITTAL]));
+    expect(screen.getByText("Items Needing Action")).toBeInTheDocument();
+    expect(screen.queryByText("Needs Action")).not.toBeInTheDocument();
+  });
+});
+
 describe("ControlBoardPanel: without onOpenHref", () => {
   it("rows and Open Work fall back to onOpenTab(routeTab)", () => {
     const { onOpenTab } = renderBoard(triageFor([LINKED_SUBMITTAL, UNLINKED_SUBMITTAL]), { inHub: false });

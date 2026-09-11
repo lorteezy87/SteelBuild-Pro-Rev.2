@@ -442,6 +442,55 @@ describe("DrawingSubmittalHub — holds", () => {
   });
 });
 
+// Owner decision 2 (2026-09-11): 2026's compact header, with the KPI strip
+// moved into the Control Board tab.
+const STATUS_LINE = /sets · .+ open · .+ overdue · .+ at risk · Fab Ready/;
+
+describe("DrawingSubmittalHub — compact header", () => {
+  it("shows the KPI strip on the Control Board, beside the board's own scoped tile", async () => {
+    renderHub();
+    expect(await screen.findByText("Submittals Needing Action")).toBeInTheDocument();
+    expect(await screen.findByText("Items Needing Action")).toBeInTheDocument();
+    expect(screen.queryByText("Needs Action")).not.toBeInTheDocument();
+    expect(screen.queryByText(STATUS_LINE)).not.toBeInTheDocument();
+  });
+
+  it("shows the status line instead of the KPI strip on other tabs", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=holds"] });
+    expect(await screen.findByText(STATUS_LINE)).toBeInTheDocument();
+    expect(screen.queryByText("Submittals Needing Action")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["overview", () => screen.findByText("Items Needing Action", {}, { timeout: 8000 })],
+    ["submittals", () => screen.findByPlaceholderText("Search # / title / spec section", {}, { timeout: 8000 })],
+    ["holds", () => screen.findByRole("heading", { name: "Holds & Blockers" }, { timeout: 8000 })],
+    ["validation", () => screen.findByRole("heading", { name: "Drawing and piece validation" }, { timeout: 8000 })],
+  ])("has exactly one h1 on ?hub_tab=%s once its panel has loaded", async (key, panelLoaded) => {
+    renderHub({ entries: [`/DrawingSubmittalHub?hub_tab=${key}`] });
+    await panelLoaded();
+    const h1s = screen.getAllByRole("heading", { level: 1 });
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0]).toHaveTextContent("Detailing Control Center");
+  });
+
+  it("opens Holds & Blockers from the header's holds badge, as a new history entry", async () => {
+    const user = userEvent.setup();
+    holdsState.rows = [{ id: "h1", drawing_id: "d1", is_active: true, placed_at: "2026-09-01T00:00:00Z" }];
+    renderHub();
+
+    await user.click(await screen.findByRole("button", { name: "1 Sheet On Hold" }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=holds");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-holds");
+  });
+
+  it("names the project in the eyebrow without a project number the project doesn't have", async () => {
+    renderHub();
+    expect(await screen.findByText("Test Project")).toHaveClass("detailing-cc__eyebrow");
+  });
+});
+
 // Control Board and Process Board clicks land on these URLs (owner decision 3).
 describe("DrawingSubmittalHub — record deep links", () => {
   it("opens ?hub_tab=submittals&recordId= on the Submittal Register, which consumes recordId and keeps hub_tab", async () => {

@@ -355,6 +355,96 @@ html.steelbuild-dark [data-skin="command"],
   border: 1px solid var(--cmd-border);
   box-shadow: inset 0 1px 0 rgba(30, 41, 59, 0.04), 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
 }
+
+/* ===========================================================================
+   Detailing Control Center — compact command header (2026 layout)
+   ---------------------------------------------------------------------------
+   Owner decision 2 (2026-09-11): the DCC trades the photo hero for 2026's
+   compact header (DetailingCommandHeader.tsx), with the tab strip as its
+   bottom row. DCC-local: PageHero and .cmd-hero still serve every other
+   Control Center.
+
+   Sticky from 769px up. main#main-content is the app's scroll container
+   (Layout.jsx), so the header pins to its top. z-index 10 sits above the
+   panels' sticky theads (z-index 1-2) and below the topbar (z-index 100,
+   outside main). The background is the opaque page token, and the header
+   bleeds over .detailing-cc's 16px padding, so nothing shows beside it once
+   it's stuck. Never put overflow:hidden on .detailing-cc: it would become
+   the sticky scroller and the header would stop pinning.
+   =========================================================================== */
+[data-skin="command"] .detailing-cc__header {
+  margin: -16px -16px 0;
+  padding: 14px 16px 0;
+  background: var(--cmd-bg);
+  color: var(--cmd-text);
+}
+[data-skin="command"] .detailing-cc__header--bare { padding-bottom: 14px; box-shadow: inset 0 -1px 0 var(--cmd-border); }
+@media (min-width: 769px) {
+  [data-skin="command"] .detailing-cc__header { position: sticky; top: 0; z-index: 10; }
+}
+[data-skin="command"] .detailing-cc__header-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+[data-skin="command"] .detailing-cc__heading { flex: 1 1 320px; min-width: 0; }
+[data-skin="command"] .detailing-cc__eyebrow { margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cmd-text-muted); }
+[data-skin="command"] .detailing-cc__title-row { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+[data-skin="command"] .detailing-cc__title { margin: 0; font-size: 24px; font-weight: 700; line-height: 1.15; color: var(--cmd-text); }
+[data-skin="command"] .detailing-cc__holds { display: inline-flex; align-items: center; gap: 5px; border: 0; font: inherit; font-size: 12px; font-weight: 600; line-height: 1.4; cursor: pointer; }
+[data-skin="command"] .detailing-cc__holds:hover { box-shadow: inset 0 0 0 1px currentColor; }
+[data-skin="command"] .detailing-cc__holds:focus-visible { outline: 2px solid var(--cmd-gold); outline-offset: 2px; }
+[data-skin="command"] .detailing-cc__subtitle { margin: 4px 0 0; max-width: 90ch; font-size: 13px; color: var(--cmd-text-muted); }
+[data-skin="command"] .detailing-cc__status { margin: 6px 0 0; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--cmd-text); }
+[data-skin="command"] .detailing-cc__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Tab strip, the header's bottom row: one line that scrolls sideways instead
+   of wrapping. The divider is an inset shadow, not a border, so the active
+   tab's underline paints over it inside the scroll box, where a border would
+   be clipped. position:relative makes the strip its tabs' offsetParent for
+   scroll-into-view. */
+[data-skin="command"] .detailing-cc__tabs {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 4px;
+  margin: 10px -16px 0;
+  padding: 0 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  box-shadow: inset 0 -1px 0 var(--cmd-border);
+}
+[data-skin="command"] .detailing-cc__tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  margin-right: 22px;
+  padding: 11px 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--cmd-text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms;
+}
+[data-skin="command"] .detailing-cc__tab.is-active { border-bottom-color: var(--cmd-gold); color: var(--cmd-text); }
+/* Inset, so the ring stays inside the strip's scroll clip. */
+[data-skin="command"] .detailing-cc__tab:focus-visible { outline: 2px solid var(--cmd-gold); outline-offset: -2px; }
+[data-skin="command"] .detailing-cc__tab-count { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--cmd-text-muted); }
+[data-skin="command"] .detailing-cc__tab.is-active .detailing-cc__tab-count { color: var(--cmd-gold); }
+[data-skin="command"] .detailing-cc__tab .detailing-cc__tab-count.is-alert { color: var(--cmd-warn-text); }
+
+/* The KPI strip left the header; it now opens the Control Board's panel. */
+[data-skin="command"] .detailing-cc__panel > .cmd-kpi-strip { margin-bottom: 14px; }
+
+/* No-project state. */
+[data-skin="command"] .detailing-cc__empty { padding: 40px 24px; border: 1px dashed var(--cmd-border); border-radius: 6px; background: var(--cmd-surface); text-align: center; }
+[data-skin="command"] .detailing-cc__empty-title { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--cmd-text); }
+[data-skin="command"] .detailing-cc__empty-body { font-size: 13px; color: var(--cmd-text-muted); }
+
 [data-keyboard-hints="off"] kbd {
   display: none !important;
 }
