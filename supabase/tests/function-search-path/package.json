@@ -1,0 +1,7 @@
+{
+  "name": "steelbuild-function-search-path-verification",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node verify.mjs" },
+  "devDependencies": { "@electric-sql/pglite": "0.5.8" }
+}

@@ -147,6 +147,11 @@ jobs:
       - name: Run Vitest tests
         run: npm test
 
+      - name: Verify database helper search paths
+        run: |
+          npm ci --prefix supabase/tests/function-search-path --ignore-scripts
+          npm test --prefix supabase/tests/function-search-path
+
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure
