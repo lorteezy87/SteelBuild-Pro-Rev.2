@@ -77,6 +77,19 @@ function renderGrid() {
 }
 
 describe("DrawingRegisterGridPanel — release affordance", () => {
+  it("does not present incomplete legacy RFI and WP link counts as totals", () => {
+    registerRows = [makeRow({ rfi_count: 0, work_package_count: 0 })];
+    renderGrid();
+    expect(screen.queryByRole("columnheader", { name: "RFIs" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "WPs" })).not.toBeInTheDocument();
+  });
+
+  it("shows unavailable impact evidence as unknown rather than zero", () => {
+    registerRows = [makeRow({ open_impact_count: null, pending_review_count: null })];
+    renderGrid();
+    expect(screen.getAllByLabelText("Count unavailable")).toHaveLength(2);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     ensureCurrentRevision.mockResolvedValue({ id: "rev-new", is_current: true });

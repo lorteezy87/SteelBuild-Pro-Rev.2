@@ -1,4 +1,4 @@
-const REQUIRED_BUCKETS = ["app-files", "email-attachments"];
+const REQUIRED_BUCKETS = ["app-files", "email-attachments", "sheets-files"];
 const REQUIRED_ENV_KEYS = [
   "OFFSITE_RCLONE_CONFIG_B64",
   "OFFSITE_ROOT",

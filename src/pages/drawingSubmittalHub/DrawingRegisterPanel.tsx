@@ -1,13 +1,15 @@
 /**
  * DrawingRegisterPanel — Drawing Register tab in the Detailing Control Center.
  *
- * Renders the clean sheet-level register (same as Doc Control) for visual
- * parity with the requested clean table. Full set/sheet editor remains on
- * the standalone Drawings page.
+ * Defaults to the sheet register. The set view exposes the existing revision
+ * upload and summary workflow without discarding the hub callbacks.
  */
 import { DrawingRegisterGridPanel } from "@/components/drawings/register/DrawingRegisterGridPanel";
+import { lazy, Suspense, useState } from "react";
 
-/** Props retained for hub call-site compatibility. */
+const DrawingRegisterTable = lazy(() => import("./drawingRegisterTable").then(module => ({ default: module.DrawingRegisterTable })));
+
+/** Shared evidence and callbacks for the sheet and set views. */
 export interface DrawingRegisterPanelProps {
   setPackages?: any[];
   projectId?: string;
@@ -23,5 +25,15 @@ export interface DrawingRegisterPanelProps {
 
 export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
   const projectId = props.projectId ?? props.activeProject?.id ?? null;
-  return <DrawingRegisterGridPanel projectId={projectId} />;
+  const [view, setView] = useState<"sheets" | "sets">("sheets");
+  return <>
+    <div className="cmd-filterbar" role="group" aria-label="Drawing register view">
+      <button type="button" className="cmd-btn" aria-pressed={view === "sheets"} onClick={() => setView("sheets")}>Sheets</button>
+      <button type="button" className="cmd-btn" aria-pressed={view === "sets"} onClick={() => setView("sets")}>Sets &amp; revisions</button>
+    </div>
+    {view === "sheets" ? <DrawingRegisterGridPanel projectId={projectId} /> :
+      <Suspense fallback={<p role="status">Loading drawing sets…</p>}>
+        <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []} />
+      </Suspense>}
+  </>;
 }

@@ -12,7 +12,7 @@ import {
 } from "../lib/storageBackup.mjs";
 
 describe("Storage backup planner", () => {
-  it("covers both required buckets with current and timestamped destinations", () => {
+  it("covers all required buckets with current and timestamped destinations", () => {
     const plan = createStorageBackupPlan({
       destinationRoot: "offsite:steelbuild-pro-storage/",
       timestamp: "20260723T003000Z",
@@ -30,6 +30,12 @@ describe("Storage backup planner", () => {
         source: "supabase:email-attachments",
         snapshot: "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/email-attachments",
         current: "offsite:steelbuild-pro-storage/current/email-attachments",
+      },
+      {
+        bucket: "sheets-files",
+        source: "supabase:sheets-files",
+        snapshot: "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/sheets-files",
+        current: "offsite:steelbuild-pro-storage/current/sheets-files",
       },
     ]);
   });
@@ -353,7 +359,7 @@ describe("Storage backup execution", () => {
     })).rejects.toThrow("validated Supabase source identity");
   });
 
-  it("returns a verified manifest only after both required buckets pass", async () => {
+  it("returns a verified manifest only after all required buckets pass", async () => {
     const timestamp = "20260723T003000Z";
     const plan = createStorageBackupPlan({
       destinationRoot: "offsite:steelbuild-pro-storage",
@@ -364,6 +370,9 @@ describe("Storage backup execution", () => {
       "supabase:app-files": { count: 2, bytes: 300 },
       "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/app-files": { count: 2, bytes: 300 },
       "offsite:steelbuild-pro-storage/current/app-files": { count: 2, bytes: 300 },
+      "supabase:sheets-files": { count: 1, bytes: 100 },
+      "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/sheets-files": { count: 1, bytes: 100 },
+      "offsite:steelbuild-pro-storage/current/sheets-files": { count: 1, bytes: 100 },
       "supabase:email-attachments": { count: 0, bytes: 0 },
       "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/email-attachments": { count: 0, bytes: 0 },
       "offsite:steelbuild-pro-storage/current/email-attachments": { count: 0, bytes: 0 },
@@ -384,8 +393,8 @@ describe("Storage backup execution", () => {
       execute,
     });
 
-    expect(calls.filter(([command]) => command === "check")).toHaveLength(4);
-    expect(calls.filter(([command]) => command === "size")).toHaveLength(6);
+    expect(calls.filter(([command]) => command === "check")).toHaveLength(6);
+    expect(calls.filter(([command]) => command === "size")).toHaveLength(9);
     expect(manifest).toEqual({
       schemaVersion: 1,
       status: "verified",
@@ -409,6 +418,13 @@ describe("Storage backup execution", () => {
           bytes: 0,
           snapshot: "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/email-attachments",
           current: "offsite:steelbuild-pro-storage/current/email-attachments",
+        },
+        {
+          bucket: "sheets-files",
+          objects: 1,
+          bytes: 100,
+          snapshot: "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/sheets-files",
+          current: "offsite:steelbuild-pro-storage/current/sheets-files",
         },
       ],
     });

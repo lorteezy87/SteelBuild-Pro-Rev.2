@@ -195,6 +195,10 @@ jobs:
       - name: Audit production dependencies (moderate+, waivers reviewed in-repo)
         run: node scripts/audit-gate.mjs
 
+      - name: Audit all dependencies (high+, including build and native tooling)
+        if: ${{ !cancelled() }}
+        run: npm audit --audit-level=high
+
   # ── Supabase migration + edge-function drift (opt-in) ────────────────────
   # H4/H5: catches repo vs remote drift for migrations and edge functions, and
   # fails when deprecated orphan functions are still deployed. Opt-in via repo

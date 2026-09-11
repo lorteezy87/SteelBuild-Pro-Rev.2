@@ -4,7 +4,7 @@
 Date: 2026-07-22
 Finding: [H25]
 
-This runbook activates the implemented backup workflow for the Supabase Storage buckets `app-files` and `email-attachments`. The implementation is code-verified, but H25 remains open until a successful backup and staging restore are recorded.
+This runbook activates the implemented backup workflow for the Supabase Storage buckets `app-files`, `email-attachments`, and `sheets-files`. The implementation is code-verified, but H25 remains open until a successful backup and staging restore are recorded.
 
 ## 1. Control design
 
@@ -14,7 +14,7 @@ The nightly workflow runs at 08:17 UTC and can also be started manually. For eac
 - `current/<bucket>` — a mirror for the fastest latest-state restore; and
 - `manifests/<UTC timestamp>.json` — object counts, byte totals, and exact destination paths after verification.
 
-A run fails unless both buckets pass `rclone check --size-only` against the snapshot and current mirror and their object counts and byte totals match the source. An empty bucket is valid only when all three locations report zero objects and zero bytes.
+A run fails unless all required buckets pass `rclone check --size-only` against the snapshot and current mirror and their object counts and byte totals match the source. An empty bucket is valid only when all three locations report zero objects and zero bytes.
 
 ## 2. Owner setup
 
@@ -48,10 +48,10 @@ A run fails unless both buckets pass `rclone check --size-only` against the snap
 
 1. Open GitHub Actions → **Storage backup** → **Run workflow** from the default branch.
 2. Confirm the job installed rclone only after the pinned SHA-256 checksum passed.
-3. Confirm the log reports `Verified app-files` and `Verified email-attachments` without displaying credentials.
-4. Download the `storage-backup-manifest-<run id>` artifact and confirm `status` is `verified`, `source.projectRef` matches the intended production project, both buckets are present, and the counts are plausible.
+3. Confirm the log reports `Verified app-files`, `Verified email-attachments`, and `Verified sheets-files` without displaying credentials.
+4. Download the `storage-backup-manifest-<run id>` artifact and confirm `status` is `verified`, `source.projectRef` matches the intended production project, all three buckets are present, and the counts are plausible.
 5. Confirm the same manifest exists under `manifests/<timestamp>.json` at the offsite destination.
-6. Confirm snapshot objects exist beneath both timestamped bucket paths and the `current` paths.
+6. Confirm snapshot objects exist beneath all three timestamped bucket paths and the `current` paths.
 7. Record the workflow URL, manifest timestamp, counts, bytes, and reviewer in the H25 evidence record. Do not close H25 yet; complete the restore rehearsal.
 
 ## 4. Restore rehearsal
@@ -59,23 +59,25 @@ A run fails unless both buckets pass `rclone check --size-only` against the snap
 Rehearse only into the staging Supabase project. Never overwrite production to test recovery.
 
 1. Choose a successful manifest timestamp and start the RTO clock.
-2. In staging, create private `app-files` and `email-attachments` buckets with the same file-size and MIME restrictions as production.
+2. In staging, create private `app-files`, `email-attachments`, and `sheets-files` buckets with the same file-size and MIME restrictions as production.
 3. Create a temporary rclone configuration with:
    - the existing read-only-capable `[offsite]` destination remote; and
    - a `[staging]` S3 remote pointed at the staging Supabase Storage S3 endpoint using dedicated staging keys.
-4. Preview both restores:
+4. Preview all three restores:
 
    ```powershell
    rclone copy "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/app-files" "staging:app-files" --metadata --dry-run
    rclone copy "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/email-attachments" "staging:email-attachments" --metadata --dry-run
+   rclone copy "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/sheets-files" "staging:sheets-files" --metadata --dry-run
    ```
 
-5. Review the dry-run, remove `--dry-run`, and run both copies.
+5. Review the dry-run, remove `--dry-run`, and run all three copies.
 6. Verify exact object paths and sizes:
 
    ```powershell
    rclone check "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/app-files" "staging:app-files" --size-only
    rclone check "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/email-attachments" "staging:email-attachments" --size-only
+   rclone check "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/sheets-files" "staging:sheets-files" --size-only
    ```
 
 7. Complete every applicable post-restore check in `backup-dr.md` Section 3.C, including opening real signed drawing and attachment URLs from staging.
@@ -89,3 +91,13 @@ Rehearse only into the staging Supabase project. Never overwrite production to t
 - Review lifecycle cost and retention quarterly. Do not shorten retention without an owner-approved recovery requirement.
 - Rotate credentials at least annually and immediately on suspected exposure.
 - H25 can be marked complete only while recent green manifests, working failure notifications, and a successful restore rehearsal are retained as evidence.
+
+## 2026-09-11 verification and free-tier sizing
+
+The live inventory contains 2,308 app-files objects (4,104,525,808 bytes), 1,268 email attachments (1,528,563,423 bytes), and 435 sheets-files objects (765,836,244 bytes). These are Storage metadata totals; a real backup must still perform its copy and verification. The sheets-files bucket is now included in the required backup plan.
+
+Together they hold about 6.40 GB. The current snapshot-plus-mirror design needs about 12.8 GB on its first complete run and about 230 GB for 35 unchanged full daily snapshots plus the mirror, before destination version retention. This design will not fit a 10 GB free tier. No lifecycle pruning is performed by this script.
+
+Backblaze B2 offers the first 10 GB free; Cloudflare R2 Standard offers 10 GB-month plus request allowances. A free-tier deployment needs a separately reviewed incremental/deduplicated backup design and a capacity budget for retained changes. Do not silently shorten recovery retention or remove verification to force this full-copy job into the free allowance.
+
+References: https://www.backblaze.com/cloud-storage/pricing and https://developers.cloudflare.com/r2/pricing/ (checked 2026-09-11).

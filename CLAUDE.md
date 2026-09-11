@@ -47,7 +47,7 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 `steelbuild-mcp-server` — 18 tools across portfolio/coordination/commercial/logistics domains. Authenticates via user JWT so RLS applies automatically. Don't bypass this with service-role calls in application code.
 
 ## Branches — PRs target `main`
-`main` is the integration branch; open every PR against it. GitHub's default branch pointer (`origin/HEAD`) still points at `codex/base44-deploy-nick`, which has diverged and does **not** contain the recent merged work (#297–#302) — targeting it produces a ~3,900-commit diff instead of your change. Ignore the "main branch for PRs" hint if it names anything other than `main`, and check `git rev-list --count origin/main..HEAD` before opening a PR.
+`main` is the integration and GitHub default branch (verified 2026-09-11). Open PRs against `main`. Check the live default branch and `git rev-list --count origin/main..HEAD` before opening a PR; older notes naming `codex/base44-deploy-nick` are stale.
 
 ## Workflow rules
 - Employment/IP conflict with S&H Steel is unresolved — do not add billing, multi-tenant signup, or public marketing copy without being told this has cleared legal review.
