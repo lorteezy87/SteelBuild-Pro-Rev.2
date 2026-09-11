@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { calculateBudget, parseB2Config, readB2Inventory } from '../lib/b2Backup.mjs';
 
-const file = (path, size, sha1 = 'a'.repeat(40)) => ({ Path: path, Size: size, Hashes: { 'SHA-1': sha1 } });
+const file = (path, size, sha1 = 'a'.repeat(40)) => ({ Path: path, Size: size, Hashes: { sha1 } });
 describe('B2 storage budget', () => {
   it('charges only changed content, including same-size replacements', () => {
     expect(calculateBudget({ storedBytes: 100, source: [file('same', 5), file('changed', 10, 'b'.repeat(40)), file('new', 20)], current: [file('same', 5), file('changed', 10), file('deleted', 30)], reserveBytes: 50 }).projectedBytes).toBe(180);
@@ -78,6 +78,7 @@ describe('incremental execution', () => {
     const { calls, execute } = executor();
     const result = await runIncrementalBackup({ plan, stageRoot: '/tmp/stage', execute, inventory: async () => ({ storedBytes: 0 }) });
     expect(result.buckets).toHaveLength(3);
+    expect(result.buckets[0].files[0].sha1).toBe('a'.repeat(40));
     expect(result.budget.transferBytes).toBe(300);
     expect(calls.filter(a => a[0] === 'sync')).toHaveLength(3);
     expect(calls.filter(a => a[0] === 'sync').every(a => a.includes('--checksum') && a.includes('--b2-hard-delete=false'))).toBe(true);

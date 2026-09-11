@@ -29,7 +29,7 @@ export function indexFiles(files, requireHash = true) {
     if (file.IsDir) continue;
     if (typeof file.Path !== 'string' || !file.Path || file.Path.startsWith('/') || file.Path.split('/').some(p => p === '..' || p === '.') || /[\r\n\0]/.test(file.Path) || map.has(file.Path)) throw new Error('Unsafe or duplicate file path');
     bytes(file.Size);
-    const sha1 = file.Hashes?.['SHA-1']?.toLowerCase();
+    const sha1 = (file.Hashes?.sha1 ?? file.Hashes?.['SHA-1'])?.toLowerCase();
     if (requireHash && !/^[a-f0-9]{40}$/.test(sha1 ?? '')) throw new Error('Missing SHA-1 in file inventory');
     map.set(file.Path, { ...file, sha1 });
   }
@@ -95,7 +95,7 @@ export async function readB2Inventory({ account, key, bucketName, fetcher = fetc
   return { storedBytes, versions, bucketName };
 }
 
-const COPY_FLAGS = ['--fast-list', '--transfers', '4', '--checkers', '8', '--retries', '1', '--low-level-retries', '1', '--stats', '30s', '--stats-one-line'];
+const COPY_FLAGS = ['--fast-list', '--transfers', '4', '--checkers', '8', '--retries', '1', '--low-level-retries', '1', '--stats', '30s', '--stats-log-level', 'NOTICE', '--stats-one-line'];
 const SAFE_B2_FLAGS = ['--b2-hard-delete=false', '--b2-disable-checksum=false'];
 export async function runIncrementalBackup({ plan, stageRoot, execute, inventory }) {
   if (plan.length !== 3 || ['app-files', 'email-attachments', 'sheets-files'].some(b => !plan.some(p => p.bucket === b))) throw new Error('Backup must cover all three required buckets');
@@ -124,7 +124,7 @@ export async function runIncrementalBackup({ plan, stageRoot, execute, inventory
     indexFiles(current);
     allSource.push(...files.map(f => ({ ...f, Path: `${item.bucket}/${f.Path}` })));
     allCurrent.push(...current.map(f => ({ ...f, Path: `${item.bucket}/${f.Path}` })));
-    staged.push({ ...item, local, files });
+    staged.push({ ...item, local, files: [...indexFiles(files).values()] });
   }
   const budget = calculateBudget({ ...(await inventory()), source: allSource, current: allCurrent });
   console.log(`Storage projection: ${budget.storedBytes} retained + ${budget.transferBytes} new + ${budget.reserveBytes} reserve = ${budget.projectedBytes} / ${budget.budgetBytes} bytes`);
@@ -142,7 +142,7 @@ export async function runIncrementalBackup({ plan, stageRoot, execute, inventory
       await run(['copyto', `${item.current}/${sample.Path}`, `${restored}/${sample.Path}`, '--b2-version-at', restoreAt, ...COPY_FLAGS]);
       await run(['check', item.local, restored, '--one-way', '--include', `/${sample.Path.replace(/([*?\[\]{}\\])/g, '\\$1')}`]);
     }
-    buckets.push({ bucket: item.bucket, current: item.current, restoreAt, objects: item.files.length, bytes: item.files.reduce((sum, f) => sum + f.Size, 0), files: item.files.map(f => ({ path: f.Path, bytes: f.Size, sha1: f.Hashes['SHA-1'] })), restoreSample: sample?.Path ?? null });
+    buckets.push({ bucket: item.bucket, current: item.current, restoreAt, objects: item.files.length, bytes: item.files.reduce((sum, f) => sum + f.Size, 0), files: item.files.map(f => ({ path: f.Path, bytes: f.Size, sha1: f.sha1 })), restoreSample: sample?.Path ?? null });
   }
   return { schemaVersion: 2, status: 'verified', method: 'b2-native-versions', budget, buckets };
 }
