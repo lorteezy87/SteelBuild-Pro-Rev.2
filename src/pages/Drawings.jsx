@@ -65,6 +65,7 @@ import {
 import { stageToSubmittalStatus } from "@/lib/submittalStageMapping";
 import { TERMINAL_APPROVED_STATUSES } from "@/hooks/useSubmittals";
 import { useFlag } from "@/hooks/useFeatureFlag";
+import { hubHref } from "@/pages/drawingSubmittalHub/hubLinks";
 
 // ── Presentation components ─────────────────────────────────────────────────
 import DrawingsTable from "@/components/drawings/DrawingsTable";
@@ -682,7 +683,7 @@ export default function Drawings({ embedded = false } = {}) {
         drawingSetRecordsLength={drawingSetRecords.length}
         existingSetNamesLength={existingSetNames.length}
         stageFilter={stageFilter}
-        onBackToHub={() => navigate("/DrawingSubmittalHub")}
+        onBackToHub={() => navigate(hubHref("drawings"))}
         onExportPkg={setExportPkgKind}
         onAddSheet={() => { setEditing(null); setShowModal(true); }}
         onOpenRevision={() => setRevisionOpen(true)}

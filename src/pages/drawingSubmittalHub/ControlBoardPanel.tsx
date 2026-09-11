@@ -26,6 +26,7 @@ import { useNavigate } from "react-router-dom";
 import { DecisionPanel, Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
 import { buildControlBoardModel } from "./drawingControlCenter.derive";
+import { createSubmittalHref, hubHrefForTriageItem } from "./hubLinks";
 import {
   InlineOwnerControl,
   InlineDateControl,
@@ -64,6 +65,14 @@ export interface ControlBoardPanelProps {
   drawingKpis: any;
   isLoading: boolean;
   onOpenTab: (key: string) => void;
+  /**
+   * Opens an in-hub href (the hub passes a push-navigate). When given, queue
+   * rows and Open Work open the item's record (hubHrefForTriageItem), and
+   * Create submittal opens create on the hub's Submittal Register. Absent:
+   * rows and Open Work fall back to onOpenTab(routeTab), and Create
+   * submittal to the standalone /Submittals page.
+   */
+  onOpenHref?: (href: string) => void;
   /** Absent = the viewer lacks the project role these writes need (RLS: field+). */
   onUpdateOwner?: (item: any, owner: string) => void;
   onUpdateDueDate?: (item: any, date: string) => void;
@@ -95,18 +104,32 @@ function itemTone(item: any): PillTone {
   return "neutral";
 }
 
-/** One clickable queue row that routes to the item's tab. */
-function QueueRow({ item, onOpenTab }: { item: any; onOpenTab: (k: string) => void }) {
+/** One clickable queue row. In the hub it opens the item's record (its
+ *  governing submittal, else its set's Sets & revisions view, else its tab);
+ *  without onOpenHref it routes to the item's tab. */
+function QueueRow({
+  item,
+  onOpenTab,
+  onOpenHref,
+}: {
+  item: any;
+  onOpenTab: (k: string) => void;
+  onOpenHref?: (href: string) => void;
+}) {
+  const open = () => {
+    if (onOpenHref) onOpenHref(hubHrefForTriageItem(item));
+    else onOpenTab(item.routeTab);
+  };
   return (
     <div
       className="cmd-row is-clickable"
       role="button"
       tabIndex={0}
-      onClick={() => onOpenTab(item.routeTab)}
+      onClick={open}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onOpenTab(item.routeTab);
+          open();
         }
       }}
     >
@@ -124,7 +147,7 @@ function QueueRow({ item, onOpenTab }: { item: any; onOpenTab: (k: string) => vo
 export default function ControlBoardPanel(props: ControlBoardPanelProps) {
   const navigate = useNavigate();
   const {
-    triage, kpis, isLoading, onOpenTab,
+    triage, kpis, isLoading, onOpenTab, onOpenHref,
     onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness,
     sequenceReadiness, revisionImpact, isSaving,
     onEscalate, onCompareRevision, modelMapping, modelElementRows,
@@ -141,6 +164,26 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
   // does (its triage prop is `any`). The derive layer stays strictly typed.
   const focus: any = model.focusItem;
   const focusRoute = focus?.routeTab || "matrix";
+  // Open Work: the focus item's record inside the hub (same rule as a queue
+  // row), or its tab when the board has no onOpenHref.
+  const openFocus = () => {
+    if (onOpenHref) {
+      onOpenHref(hubHrefForTriageItem({
+        _submittalId: focus?._submittalId,
+        _drawingSetId: focus?._drawingSetId,
+        routeTab: focusRoute,
+      }));
+    } else {
+      onOpenTab(focusRoute);
+    }
+  };
+  // Create submittal: create on the hub's Submittal Register with the set
+  // pre-linked, or the standalone Submittals page when there's no onOpenHref.
+  // The number is still minted by the create flow's RPC, never here.
+  const createForFocus = (setId: string) => {
+    if (onOpenHref) onOpenHref(createSubmittalHref(setId));
+    else navigate(`/Submittals?targetSetId=${encodeURIComponent(setId)}`);
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -206,7 +249,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
               <button
                 type="button"
                 className="cmd-btn cmd-btn--primary"
-                onClick={() => onOpenTab(focusRoute)}
+                onClick={openFocus}
               >
                 Open Work <ArrowRight size={14} />
               </button>
@@ -214,7 +257,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
                 <button
                   type="button"
                   className="cmd-btn cmd-btn--ghost"
-                  onClick={() => navigate(`/Submittals?targetSetId=${encodeURIComponent(focus._drawingSetId)}`)}
+                  onClick={() => createForFocus(focus._drawingSetId)}
                   title="Create a submittal linked to this drawing set"
                 >
                   Create submittal
@@ -262,7 +305,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
         <DecisionPanel title="Critical Work Queue" onViewAll={() => onOpenTab("matrix")}>
           {model.criticalItems.length === 0
             ? <EmptyState text="No critical work is currently queued." />
-            : model.criticalItems.map((it) => <QueueRow key={it.id} item={it} onOpenTab={onOpenTab} />)}
+            : model.criticalItems.map((it) => <QueueRow key={it.id} item={it} onOpenTab={onOpenTab} onOpenHref={onOpenHref} />)}
         </DecisionPanel>
         <DecisionPanel title="Pipeline">
           {model.topStatuses.length === 0
@@ -280,12 +323,12 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
         <DecisionPanel title="Due Next 7 Days">
           {model.dueSoon.length === 0
             ? <EmptyState text="No drawing or submittal due dates in the next week." />
-            : model.dueSoon.map((it) => <QueueRow key={it.id} item={it} onOpenTab={onOpenTab} />)}
+            : model.dueSoon.map((it) => <QueueRow key={it.id} item={it} onOpenTab={onOpenTab} onOpenHref={onOpenHref} />)}
         </DecisionPanel>
         <DecisionPanel title="Missing Due Dates">
           {model.noDate.length === 0
             ? <EmptyState text="All open items have due dates." />
-            : model.noDate.map((it) => <QueueRow key={it.id} item={it} onOpenTab={onOpenTab} />)}
+            : model.noDate.map((it) => <QueueRow key={it.id} item={it} onOpenTab={onOpenTab} onOpenHref={onOpenHref} />)}
         </DecisionPanel>
       </div>
 

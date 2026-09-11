@@ -53,6 +53,12 @@ export interface BoardItem {
   submittalCount: number;
   discipline: string;
   routeTab: string;
+  /**
+   * The submittal a card opens: a set's governing submittal (the one its stage
+   * and status come from), or an unlinked submittal's own id. Null for a set
+   * with no submittal at all.
+   */
+  submittalId: string | null;
   /** Drawing set id when kind is Drawing Set — used for create-submittal deep link. */
   drawingSetId?: string | null;
   /** Slice 7 — R&R/OFS/BFA aging risk (null when stage is not scored). */
@@ -220,6 +226,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
       submittalCount: (pkg.submittals || []).length,
       discipline: pkg.parent?.discipline || latestSubmittal?.discipline || "",
       routeTab: latestSubmittal ? "submittals" : "drawings",
+      submittalId: latestSubmittal?.id || null,
       drawingSetId: pkg.setId || null,
       risk: riskForBoardStage(stage, dueDate, latestSubmittal, useWorkdays && !!submittalDue),
       pendingEorResponse: hasUnansweredApproverNotes(latestSubmittal),
@@ -259,6 +266,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
         submittalCount: 1,
         discipline: submittal.discipline || submittal.submittal_type || "",
         routeTab: "submittals",
+        submittalId: submittal.id || null,
         risk: riskForBoardStage(stage, dueDate, submittal, useWorkdays),
         pendingEorResponse: hasUnansweredApproverNotes(submittal),
       };

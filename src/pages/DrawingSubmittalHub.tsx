@@ -681,6 +681,9 @@ function DetailingControlCenter() {
             drawingKpis={drawingKpis}
             isLoading={isLoading}
             onOpenTab={setActiveTab}
+            // Rows, Open Work and Create submittal open the record inside the
+            // hub (owner decision 3). A push, so Back returns to the board.
+            onOpenHref={(href: string) => navigate(href)}
             onUpdateOwner={canEditDetailing ? (item: any, owner: string) => updateOwnerMut.mutate({ item, owner }) : undefined}
             onUpdateDueDate={canEditDetailing ? (item: any, date: string) => updateDueDateMut.mutate({ item, date }) : undefined}
             onAdvanceDetailing={canEditDetailing ? (item: any, next: string) => updateDetailingStateMut.mutate({ item, next }) : undefined}
@@ -707,6 +710,8 @@ function DetailingControlCenter() {
             isLoading={isLoading}
             onOpenTab={setActiveTab}
             useWorkdays={workdayDues}
+            // Cards and Create submittal open the record inside the hub.
+            inHub
           />
         )}
         {activeTab === "drawings" && (

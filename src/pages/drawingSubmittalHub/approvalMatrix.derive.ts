@@ -19,7 +19,7 @@ import type { TransmittalRow } from "@/hooks/useTransmittals";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 import { submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { matrixStatusBucket, toDateInputValue } from "./format";
-import { hubHref } from "./hubLinks";
+import { createSubmittalHref, hubHref, submittalRecordHref } from "./hubLinks";
 import type { SetPackage } from "./types";
 
 /** The subset of a buildApprovalMatrixRows row this module reads. */
@@ -258,11 +258,11 @@ export function summarizeMatrixCoverage(rows: readonly EnrichedMatrixRow[]): Mat
 // strips its own param: Submittals reads recordId / targetSetId, Transmittals
 // reads transmittal.
 
-export const submittalHref = (submittalId: string): string =>
-  hubHref("submittals", { recordId: submittalId });
+// The record and create links are hubLinks' own, which the Control and
+// Process Boards use too, so the three can't drift apart.
+export const submittalHref = submittalRecordHref;
 
-export const createSubmittalForSetHref = (setId: string): string =>
-  hubHref("submittals", { targetSetId: setId });
+export const createSubmittalForSetHref = createSubmittalHref;
 
 export const transmittalHref = (transmittalId: string): string =>
   hubHref("transmittals", { transmittal: transmittalId });

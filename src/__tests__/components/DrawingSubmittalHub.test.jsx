@@ -6,7 +6,7 @@
  * route entry (no-project state) and tab-history semantics.
  */
 import React from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -439,5 +439,37 @@ describe("DrawingSubmittalHub — holds", () => {
     renderHub({ ctx: { activeProject: { id: "p-2", name: "Mesa Gateway", project_number: "24-117" } } });
     expect(await screen.findByText("24-117 · Mesa Gateway")).toBeInTheDocument();
     cleanup();
+  });
+});
+
+// Control Board and Process Board clicks land on these URLs (owner decision 3).
+describe("DrawingSubmittalHub — record deep links", () => {
+  it("opens ?hub_tab=submittals&recordId= on the Submittal Register, which consumes recordId and keeps hub_tab", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/Dashboard", "/DrawingSubmittalHub?hub_tab=submittals&recordId=sub-404"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-submittals");
+    // The embedded register strips recordId once its rows settle (a miss here:
+    // the entity mock has no rows), rewriting the entry rather than pushing.
+    await waitFor(
+      () => expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals"),
+      { timeout: 8000 },
+    );
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-submittals");
+
+    // Nothing was stacked: Back leaves the hub.
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/Dashboard");
+  });
+
+  it("opens ?hub_tab=submittals&targetSetId= as create on the Submittal Register, stripping targetSetId in place", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=submittals&targetSetId=set-1"] });
+
+    expect(await screen.findByRole("dialog", { name: "New Submittal" }, { timeout: 8000 })).toBeInTheDocument();
+    // The modal hides the page behind it from the accessibility tree.
+    expect(screen.getByRole("tab", { name: /Submittal Register/, hidden: true })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
   });
 });

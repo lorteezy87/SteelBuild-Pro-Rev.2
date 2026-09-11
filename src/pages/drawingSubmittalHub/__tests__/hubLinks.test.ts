@@ -10,12 +10,16 @@ import {
   HUB_TAB_SCOPED_PARAMS,
   HUB_VIEWS,
   canonicalHubSearch,
+  createSubmittalHref,
   defaultHubView,
   hubHref,
+  hubHrefForBoardItem,
+  hubHrefForTriageItem,
   hubViewSearch,
   nextTabSearch,
   parseHubTab,
   parseHubView,
+  submittalRecordHref,
 } from "../hubLinks";
 import type { HubTabAliases } from "../hubLinks";
 
@@ -260,5 +264,48 @@ describe("canonicalHubSearch", () => {
       expect(fixed).not.toBeNull();
       expect(canonicalHubSearch(fixed ?? "")).toBeNull();
     }
+  });
+});
+
+describe("record and create links (owner decision 3)", () => {
+  it("opens a submittal's record in the Submittal Register", () => {
+    expect(submittalRecordHref("s1")).toBe("/DrawingSubmittalHub?hub_tab=submittals&recordId=s1");
+    expect(submittalRecordHref("a b&c")).toBe("/DrawingSubmittalHub?hub_tab=submittals&recordId=a+b%26c");
+  });
+
+  it("opens create pre-linked to a set: URL-encoded, and with no new=1", () => {
+    expect(createSubmittalHref("set1")).toBe("/DrawingSubmittalHub?hub_tab=submittals&targetSetId=set1");
+    expect(createSubmittalHref("a b")).toBe("/DrawingSubmittalHub?hub_tab=submittals&targetSetId=a+b");
+    expect(createSubmittalHref("set1")).not.toContain("new=");
+  });
+
+  it("sends a triage item to its governing submittal, else its set's Sets & revisions view, else its tab", () => {
+    expect(hubHrefForTriageItem({ _submittalId: "s1", _drawingSetId: "set1", routeTab: "drawings" }))
+      .toBe("/DrawingSubmittalHub?hub_tab=submittals&recordId=s1");
+    expect(hubHrefForTriageItem({ _submittalId: "s1", _drawingSetId: null, routeTab: "submittals" }))
+      .toBe("/DrawingSubmittalHub?hub_tab=submittals&recordId=s1");
+    expect(hubHrefForTriageItem({ _submittalId: null, _drawingSetId: "set1", routeTab: "drawings" }))
+      .toBe("/DrawingSubmittalHub?hub_tab=drawings&hub_view=sets");
+    expect(hubHrefForTriageItem({ _submittalId: null, _drawingSetId: null, routeTab: "drawings" }))
+      .toBe("/DrawingSubmittalHub?hub_tab=drawings");
+    expect(hubHrefForTriageItem({ routeTab: "matrix" })).toBe("/DrawingSubmittalHub?hub_tab=matrix");
+  });
+
+  it("falls back to the Control Board for a missing or unknown tab, and follows a retired key to its home", () => {
+    expect(hubHrefForTriageItem({})).toBe("/DrawingSubmittalHub");
+    expect(hubHrefForTriageItem({ routeTab: "" })).toBe("/DrawingSubmittalHub");
+    expect(hubHrefForTriageItem({ routeTab: "bogus" })).toBe("/DrawingSubmittalHub");
+    expect(hubHrefForTriageItem({ routeTab: "doccontrol" })).toBe("/DrawingSubmittalHub?hub_tab=drawings");
+  });
+
+  it("sends a Process Board card by the same rule", () => {
+    expect(hubHrefForBoardItem({ submittalId: "s1", drawingSetId: "set1", routeTab: "submittals" }))
+      .toBe("/DrawingSubmittalHub?hub_tab=submittals&recordId=s1");
+    expect(hubHrefForBoardItem({ submittalId: null, drawingSetId: "set1", routeTab: "drawings" }))
+      .toBe("/DrawingSubmittalHub?hub_tab=drawings&hub_view=sets");
+    expect(hubHrefForBoardItem({ submittalId: null, drawingSetId: null, routeTab: "drawings" }))
+      .toBe("/DrawingSubmittalHub?hub_tab=drawings");
+    expect(hubHrefForBoardItem({ submittalId: null, routeTab: "submittals" }))
+      .toBe("/DrawingSubmittalHub?hub_tab=submittals");
   });
 });

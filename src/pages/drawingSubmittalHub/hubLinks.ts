@@ -186,6 +186,65 @@ export function hubHref(tab: HubTabKey, query: HubQuery = {}): string {
   return search ? `${HUB_PATH}?${search}` : HUB_PATH;
 }
 
+// ── Record and create links (owner decision 3, 2026-09-11) ──────────────────
+// A board click opens the record behind the item inside the hub, instead of
+// just switching tabs. All are absolute hrefs for a push, so Back returns to
+// the board. The receiving tab consumes and strips its own param: the
+// embedded Submittal Register reads recordId (opens the record) and
+// targetSetId (opens create with the set pre-linked). There is no new=1: REV2
+// opens create from targetSetId alone.
+
+/** Opens one submittal's record in the hub's Submittal Register. */
+export function submittalRecordHref(submittalId: string): string {
+  return hubHref("submittals", { recordId: submittalId });
+}
+
+/** Opens create on the hub's Submittal Register, pre-linked to a drawing set. */
+export function createSubmittalHref(setId: string): string {
+  return hubHref("submittals", { targetSetId: setId });
+}
+
+/**
+ * The shared rule behind both board link builders:
+ *   1. a submittal governs the item: open that submittal's record;
+ *   2. else a drawing set backs it: Drawing Register › Sets & revisions;
+ *   3. else the item's own tab (unknown or missing: the Control Board).
+ */
+function recordHref(
+  submittalId: string | null | undefined,
+  drawingSetId: string | null | undefined,
+  routeTab: string | null | undefined,
+): string {
+  if (submittalId) return submittalRecordHref(submittalId);
+  if (drawingSetId) return hubHref("drawings", { hub_view: "sets" });
+  return hubHref(parseHubTab(routeTab).tab);
+}
+
+/** The fields a Control Board triage item (format.ts buildTriage) links by. */
+export interface TriageLinkTarget {
+  /** The governing submittal (set items) or the submittal itself (unlinked). */
+  _submittalId?: string | null;
+  _drawingSetId?: string | null;
+  routeTab?: string | null;
+}
+
+/** Where a Control Board item opens: its governing submittal, its set, or its tab. */
+export function hubHrefForTriageItem(item: TriageLinkTarget): string {
+  return recordHref(item._submittalId, item._drawingSetId, item.routeTab);
+}
+
+/** The fields a Process Board card (processBoard.derive BoardItem) links by. */
+export interface BoardLinkTarget {
+  submittalId?: string | null;
+  drawingSetId?: string | null;
+  routeTab?: string | null;
+}
+
+/** Where a Process Board card opens, by the same rule as the Control Board. */
+export function hubHrefForBoardItem(item: BoardLinkTarget): string {
+  return recordHref(item.submittalId, item.drawingSetId, item.routeTab);
+}
+
 /**
  * The search a tab switch writes: `prev` minus every tab-scoped and project
  * param, with hub_tab set. Unrelated params survive. hub_tab is spelled out
