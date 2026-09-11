@@ -3,7 +3,6 @@ import {
   mono,
   textPrimary,
 } from "./format";
-export { ApprovalMatrix } from "./approvalMatrix";
 export { LeadTimesModal } from "./leadTimesModal";
 export { RevisionImpactBoard } from "./revisionImpactBoard";
 export { DrawingRegisterTable } from "./drawingRegisterTable";

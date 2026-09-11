@@ -13,6 +13,7 @@ import { entities } from "@/api/supabaseClient";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { usePermissions } from "@/services/permissions";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useTransmittals } from "@/hooks/useTransmittals";
 import type { TransmittalAttachment, TransmittalRow } from "@/hooks/useTransmittals";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
@@ -274,6 +275,19 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     setDeleteConfirmation("");
     setActiveId(closing ? null : transmittal.id);
   };
+
+  // ?transmittal=<id> deep link (the Approval Matrix's Last-transmittal
+  // column): open that transmittal's details once the log has loaded. The
+  // hook strips the param, so a refresh or tab switch can't re-open it.
+  useAutoOpenEdit(transmittals, (transmittal) => {
+    resetEditor();
+    setConfirmingDelete(false);
+    setDeleteConfirmation("");
+    setActiveId(transmittal.id);
+    requestAnimationFrame(() => {
+      document.getElementById(`transmittal-${transmittal.id}-details`)?.scrollIntoView?.({ block: "nearest" });
+    });
+  }, { enabled: !isLoading, param: "transmittal" });
 
   const startEdit = (transmittal: TransmittalRow) => {
     setCreateOpen(false);

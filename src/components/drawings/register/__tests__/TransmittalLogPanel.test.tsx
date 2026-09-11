@@ -5,6 +5,7 @@ import "@testing-library/jest-dom";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import type { TransmittalRow } from "@/hooks/useTransmittals";
 
@@ -104,12 +105,19 @@ function transmittalRow(overrides: Partial<TransmittalRow> = {}): TransmittalRow
   };
 }
 
-function renderPanel() {
+function LocationProbe() {
+  return <output data-testid="location-search">{useLocation().search}</output>;
+}
+
+function renderPanel(initialEntries: string[] = ["/"]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <TransmittalLogPanel projectId="project-1" />
-    </QueryClientProvider>,
+    <MemoryRouter initialEntries={initialEntries}>
+      <QueryClientProvider client={queryClient}>
+        <TransmittalLogPanel projectId="project-1" />
+        <LocationProbe />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -148,6 +156,26 @@ describe("TransmittalLogPanel", () => {
     expect(screen.getByText("Rev A")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+  });
+
+  it("opens the transmittal a ?transmittal= deep link names, then strips the param", async () => {
+    can.mockImplementation((action: string) => action === "view");
+    transmittals = [transmittalRow(), transmittalRow({ id: "transmittal-2", transmittal_number: "T-002", notes: "Second batch" })];
+    renderPanel(["/DrawingSubmittalHub?hub_tab=transmittals&transmittal=transmittal-2"]);
+
+    expect(await screen.findByText("Second batch")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close T-002" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByText("Issued for coordination")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("location-search")).toHaveTextContent("?hub_tab=transmittals"));
+    expect(screen.getByTestId("location-search")).not.toHaveTextContent("transmittal=");
+  });
+
+  it("ignores a stale ?transmittal= id without opening anything", async () => {
+    can.mockImplementation((action: string) => action === "view");
+    renderPanel(["/DrawingSubmittalHub?hub_tab=transmittals&transmittal=gone"]);
+
+    await waitFor(() => expect(screen.getByTestId("location-search")).toHaveTextContent("?hub_tab=transmittals"));
+    expect(screen.getByRole("button", { name: "View T-001" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("edits header fields and reconciles attached revisions", async () => {
