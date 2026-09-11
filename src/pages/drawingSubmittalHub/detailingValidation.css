@@ -10,7 +10,13 @@
 .detailing-validation__filters { display: flex; gap: 10px; flex-wrap: wrap; }
 .detailing-validation input, .detailing-validation select { min-width: 0; max-width: 100%; padding: 8px 10px; background: var(--cmd-surface); color: var(--cmd-text); border: 1px solid var(--cmd-border); border-radius: 4px; }
 .detailing-validation input { flex: 1 1 240px; }
-.detailing-validation .cmd-table { min-width: 720px; }
+.detailing-validation .cmd-table { min-width: 900px; width: 100%; table-layout: fixed; }
+.detailing-validation .cmd-table th:nth-child(1) { width: 85px; }
+.detailing-validation .cmd-table th:nth-child(2) { width: 80px; }
+.detailing-validation .cmd-table th:nth-child(3) { width: 110px; }
+.detailing-validation .cmd-table th:nth-child(4) { width: 140px; }
+.detailing-validation .cmd-table th:nth-child(5) { width: 200px; }
+.detailing-validation .cmd-table td { white-space: normal; overflow-wrap: anywhere; }
 .detailing-validation .cmd-table-wrap { overflow-x: auto; max-width: 100%; }
 .detailing-validation .cmd-table td:last-child { white-space: normal; min-width: 240px; }
 .detailing-validation a { color: var(--cmd-info); text-decoration: underline; }
