@@ -49,6 +49,18 @@ describe("audit gate thresholds", () => {
 });
 
 describe("audit gate classification", () => {
+  it("blocks an expired waiver even when its advisory is still reported", () => {
+    const waivers = new Map([["GHSA-known-0001", { package: "pkg", reason: "r", reviewBy: "2026-09-10" }]]);
+    const report = classifyAudit(auditWith(advisory("GHSA-known-0001", "moderate")), waivers, THRESHOLD, "2026-09-11");
+    expect(report.blocking).toHaveLength(1);
+    expect(report.waived).toHaveLength(0);
+  });
+
+  it("rejects audit service errors and missing vulnerability data", () => {
+    expect(() => classifyAudit({ error: { message: "registry unavailable" } }, new Map())).toThrow();
+    expect(() => classifyAudit({}, new Map())).toThrow();
+  });
+
   it("BLOCKS a new unwaived moderate — the gate must actually fail", () => {
     const report = classifyAudit(auditWith(advisory("GHSA-new-0000-0001", "moderate", "left-pad")), new Map());
     expect(report.blocking).toHaveLength(1);

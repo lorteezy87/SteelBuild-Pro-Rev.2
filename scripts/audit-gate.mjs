@@ -76,7 +76,10 @@ export function ghsaFromUrl(url) {
  * Flatten `npm audit --json` into the advisories that matter, then split them
  * into blocking / waived / stale. Pure: takes parsed JSON, returns a report.
  */
-export function classifyAudit(auditJson, allowlist = ALLOWLIST, threshold = THRESHOLD) {
+export function classifyAudit(auditJson, allowlist = ALLOWLIST, threshold = THRESHOLD, today = new Date().toISOString().slice(0, 10)) {
+  if (auditJson?.error || !auditJson?.vulnerabilities || typeof auditJson.vulnerabilities !== "object" || Array.isArray(auditJson.vulnerabilities)) {
+    throw new Error("Dependency audit returned no valid vulnerability report; audit was NOT completed.");
+  }
   const advisories = new Map();
   for (const [pkg, node] of Object.entries(auditJson?.vulnerabilities ?? {})) {
     for (const via of node?.via ?? []) {
@@ -94,8 +97,15 @@ export function classifyAudit(auditJson, allowlist = ALLOWLIST, threshold = THRE
   }
 
   const relevant = [...advisories.values()].filter((a) => meetsThreshold(a.severity, threshold));
-  const blocking = relevant.filter((a) => !allowlist.has(a.ghsa));
-  const waived = relevant.filter((a) => allowlist.has(a.ghsa));
+  const validWaiver = (advisory) => {
+    const waiver = allowlist.get(advisory.ghsa);
+    const date = waiver?.reviewBy;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? "")) return false;
+    const parsed = new Date(`${date}T00:00:00Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date && date >= today;
+  };
+  const blocking = relevant.filter((a) => !validWaiver(a));
+  const waived = relevant.filter(validWaiver);
   const seen = new Set(relevant.map((a) => a.ghsa));
   const stale = [...allowlist.keys()].filter((ghsa) => !seen.has(ghsa));
 

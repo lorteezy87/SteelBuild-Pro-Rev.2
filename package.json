@@ -35,7 +35,8 @@
     "cap:sync": "npm run build && cap sync ios",
     "cap:copy": "cap copy ios",
     "cap:open": "cap open ios",
-    "ios": "npm run cap:sync && cap open ios"
+    "ios": "npm run cap:sync && cap open ios",
+    "supabase:drift": "node scripts/supabase-drift-check.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

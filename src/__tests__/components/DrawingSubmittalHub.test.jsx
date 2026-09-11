@@ -102,7 +102,7 @@ describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
     await user.click(await screen.findByText("Drawing Register"));
     // DrawingRegisterGridPanel chrome — clean flat register (Doc Control look).
     expect(
-      await screen.findByText(/Current revision \+ release status/i),
+      await screen.findByRole("button", { name: "Sets & revisions" }),
     ).toBeInTheDocument();
     expect(
       screen.getByPlaceholderText(/Filter sheet, title, discipline, set/i),

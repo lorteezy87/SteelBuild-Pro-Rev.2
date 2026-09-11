@@ -56,7 +56,8 @@ function StatusCell({ status }: { status: string | null }) {
 }
 
 function Count({ n, danger, info }: { n: number | null; danger?: boolean; info?: boolean }) {
-  const v = n ?? 0;
+  if (n == null) return <span aria-label="Count unavailable" title="Count unavailable">—</span>;
+  const v = n;
   const color = v === 0
     ? "var(--cmd-text-muted)"
     : danger ? "var(--cmd-warn)" : info ? "var(--cmd-info)" : "var(--cmd-text)";
@@ -172,7 +173,7 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
     });
   };
 
-  const colCount = canRelease ? 14 : 13;
+  const colCount = canRelease ? 12 : 11;
 
   const renderSheetRow = (r: DrawingRegisterRow) => {
     const watched = !!watches?.has(r.drawing_id);
@@ -210,8 +211,6 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
         <td><StatusCell status={r.current_status} /></td>
         <td style={{ textAlign: "center" }}><Count n={r.open_impact_count} danger /></td>
         <td style={{ textAlign: "center" }}><Count n={r.pending_review_count} info /></td>
-        <td style={{ textAlign: "center" }}><Count n={r.rfi_count} /></td>
-        <td style={{ textAlign: "center" }}><Count n={r.work_package_count} /></td>
         <td style={{ color: "var(--cmd-text-muted)", whiteSpace: "nowrap" }}>{r.last_activity ? fmtDate(r.last_activity) : "—"}</td>
         <td style={{ textAlign: "center" }}>
           <Link
@@ -286,7 +285,7 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
         <div>
           <h3 style={{ margin: 0, color: "var(--cmd-text)", fontSize: 16, fontWeight: 700 }}>Drawing Register</h3>
           <p style={{ margin: "4px 0 0", color: "var(--cmd-text-muted)", fontSize: 12 }}>
-            Current revision + release status + downstream counts per sheet. Click a sheet to open the viewer.
+            Current revision, release status, impacts, and reviews per sheet. Click a sheet to open the viewer.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -391,8 +390,6 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
                 <th>Status</th>
                 <th style={{ textAlign: "center" }}>Impacts</th>
                 <th style={{ textAlign: "center" }}>Reviews</th>
-                <th style={{ textAlign: "center" }}>RFIs</th>
-                <th style={{ textAlign: "center" }}>WPs</th>
                 <th>Last activity</th>
                 <th style={{ width: 56 }}>View</th>
                 {canRelease && <th>Release</th>}

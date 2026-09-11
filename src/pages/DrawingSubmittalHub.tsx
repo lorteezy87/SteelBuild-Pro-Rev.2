@@ -180,7 +180,7 @@ export default function DrawingSubmittalHub() {
   const { data: summariesBySet = new Map() } = useQuery({
     queryKey: ["revision-summaries", projectId],
     queryFn: () => getLatestSummariesByProject(projectId as string),
-    enabled: !!projectId,
+    enabled: !!projectId && activeTab === "drawings",
     staleTime: 60_000,
   });
   // ── 3D model members (BIM integration Phase 0 — piece-mark mapping) ──────
