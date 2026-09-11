@@ -12,7 +12,7 @@ Exactly one module is active. Later modules remain pending until M0 is verified.
 
 | Module | State | Commit | Schema evidence | Logic/API evidence | Browser flow | Remaining blocker |
 |---|---|---|---|---|---|---|
-| M0 — Application shell and verification foundation | active | — | No schema change in M0; DB helper checks pass | [M0 evidence](M0_FOUNDATION.md): 4,909 tests and all local code gates pass | 6 local Playwright checks pass; authenticated preview pending | New PR CI/preview; signed-in shell and publisher verification |
+| M0 — Application shell and verification foundation | active | `984768f80` / [PR #333](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/333) | No schema change in M0; DB helper checks pass | [M0 evidence](M0_FOUNDATION.md): 4,909 tests and all local code gates pass | 6 local Playwright checks pass; authenticated preview pending | New PR CI/preview; signed-in shell and publisher verification |
 | M1 — Authentication and workspace membership | not_started | — | — | — | — | Preceding module gate |
 | M2 — Projects, project roles and operational settings | not_started | — | — | — | — | Preceding module gate |
 | M3 — Drawing sets, intake manifest and register | not_started | — | — | — | — | Preceding module gate |

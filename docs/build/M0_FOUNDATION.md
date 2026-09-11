@@ -81,6 +81,8 @@ The standalone fixture is served at `/dev/foundation.html` by Vite development o
 It is not a production build input and has a second `import.meta.env.DEV` guard.
 CI now runs this browser gate inside `ci`, before the dependent preview/deploy jobs.
 
+PR: [#333](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/333), draft; implementation commit `984768f80`. Live CI/preview pending at this evidence update.
+
 ## Still required before marking all of M0 verified
 
 - Authenticated shell navigation, unknown-route browser recovery and project-switch
