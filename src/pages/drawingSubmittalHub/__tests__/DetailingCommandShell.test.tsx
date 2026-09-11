@@ -57,6 +57,8 @@ const tab = (name: RegExp | string) => screen.getByRole("tab", { name });
 
 /** Every inline style on the page; the DCC's colours come from classes and tokens. */
 const renderedStyles = () => [...document.body.querySelectorAll("[style]")].map((el) => el.getAttribute("style") ?? "");
+/** A raw colour literal. jsdom rewrites hex to rgb(), so match every spelling. */
+const RAW_COLOR = /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i;
 
 describe("DetailingCommandShell — compact header", () => {
   it("shows the project eyebrow and an active-holds badge that matches the Holds tab count", () => {
@@ -136,6 +138,8 @@ describe("DetailingCommandShell — KPI strip and status line", () => {
     mount({ activeTab: "overview" });
     expect(within(screen.getByRole("tabpanel")).getByText("Submittals Needing Action")).toBeInTheDocument();
     expect(screen.queryByText(STATUS_LINE)).not.toBeInTheDocument();
+    // The one number the strip has no cell for.
+    expect(screen.getByText("Fab Ready 1/4")).toBeInTheDocument();
     cleanup();
 
     for (const activeTab of ["submittals", "holds"]) {
@@ -153,6 +157,7 @@ describe("DetailingCommandShell — KPI strip and status line", () => {
 
     mount({ activeTab: "overview", isLoading: true });
     expect(within(screen.getByRole("tabpanel")).getAllByText("—")).toHaveLength(7);
+    expect(screen.getByText("Fab Ready —")).toBeInTheDocument();
   });
 });
 
@@ -176,36 +181,63 @@ describe("DetailingCommandShell — tab strip", () => {
     expect(screen.getAllByRole("tab").map((t) => t.getAttribute("tabindex"))).toEqual(["-1", "0", "-1"]);
   });
 
-  it("moves focus and activates with ArrowRight/ArrowLeft (wrapping), Home and End", () => {
+  it("moves focus with ArrowRight/ArrowLeft (wrapping), Home and End, and opens only on Enter/Space", () => {
     const { onTab } = mount({ activeTab: "overview" });
     const [board, register, holds] = screen.getAllByRole("tab");
     board.focus();
 
     fireEvent.keyDown(board, { key: "ArrowRight" });
     expect(register).toHaveFocus();
-    expect(onTab).toHaveBeenLastCalledWith("submittals");
-
     fireEvent.keyDown(register, { key: "End" });
     expect(holds).toHaveFocus();
-    expect(onTab).toHaveBeenLastCalledWith("holds");
-
     fireEvent.keyDown(holds, { key: "ArrowRight" });
     expect(board).toHaveFocus();
-    expect(onTab).toHaveBeenLastCalledWith("overview");
-
     fireEvent.keyDown(board, { key: "ArrowLeft" });
     expect(holds).toHaveFocus();
-    expect(onTab).toHaveBeenLastCalledWith("holds");
-
     fireEvent.keyDown(holds, { key: "Home" });
     expect(board).toHaveFocus();
-    expect(onTab).toHaveBeenLastCalledWith("overview");
+    // Moving focus opens nothing: each open is a history entry and a fetch.
+    expect(onTab).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(board, { key: "ArrowRight" });
+    expect(register).toHaveAttribute("tabindex", "0"); // the Tab stop follows focus
+    expect(board).toHaveAttribute("tabindex", "-1");
+    fireEvent.click(register); // what Enter or Space does on a button
+    expect(onTab).toHaveBeenCalledWith("submittals");
 
     onTab.mockClear();
-    fireEvent.keyDown(board, { key: "ArrowDown" });
-    fireEvent.keyDown(board, { key: "a" });
+    fireEvent.keyDown(register, { key: "ArrowDown" });
+    fireEvent.keyDown(register, { key: "a" });
     expect(onTab).not.toHaveBeenCalled();
-    expect(board).toHaveFocus();
+    expect(register).toHaveFocus();
+  });
+
+  it("leaves modifier chords alone, so Alt/Cmd+Arrow stays the browser's Back", () => {
+    mount({ activeTab: "submittals" });
+    const register = tab(/Submittal Register/);
+    register.focus();
+    for (const init of [
+      { key: "ArrowLeft", altKey: true },
+      { key: "ArrowLeft", metaKey: true },
+      { key: "ArrowRight", altKey: true },
+      { key: "Home", ctrlKey: true },
+      { key: "End", shiftKey: true },
+    ]) {
+      // fireEvent returns false when the handler called preventDefault().
+      expect(fireEvent.keyDown(register, init)).toBe(true);
+      expect(register).toHaveFocus();
+    }
+  });
+
+  it("hands the Tab stop back to the open tab when focus leaves the strip", () => {
+    mount({ activeTab: "overview" });
+    const [board, register] = screen.getAllByRole("tab");
+    board.focus();
+    fireEvent.keyDown(board, { key: "ArrowRight" });
+    expect(register).toHaveAttribute("tabindex", "0");
+    fireEvent.focusOut(register, { relatedTarget: document.body });
+    expect(board).toHaveAttribute("tabindex", "0");
+    expect(register).toHaveAttribute("tabindex", "-1");
   });
 
   it("puts the count in the tab's accessible name, and keeps the label as its own text", () => {
@@ -219,17 +251,17 @@ describe("DetailingCommandShell — tab strip", () => {
     expect(within(tab("Submittal Register, 14")).getByText("14")).not.toHaveClass("is-alert");
   });
 
-  it("styles with classes and tokens: the strip has no inline styles, and no style attribute holds a hex colour", () => {
+  it("styles with classes and tokens: the strip has no inline styles, and no style attribute holds a raw colour", () => {
     mount({ activeTab: "holds", activeHolds: 2, tabCounts: { holds: 2, submittals: 5 }, alertTabs: ["holds"], isLoading: true });
     expect(screen.getByRole("tablist").querySelectorAll("[style]")).toHaveLength(0);
-    for (const style of renderedStyles()) expect(style).not.toContain("#");
+    for (const style of renderedStyles()) expect(style).not.toMatch(RAW_COLOR);
     cleanup();
 
     mount({ activeTab: "overview", activeHolds: 0 });
-    for (const style of renderedStyles()) expect(style).not.toContain("#");
+    for (const style of renderedStyles()) expect(style).not.toMatch(RAW_COLOR);
   });
 
-  it("scrolls the active tab into view on load, sideways only", async () => {
+  it("scrolls the active tab into view on load and on every change, sideways only", async () => {
     // jsdom has no layout, so give the strip and its tabs one: a 400px strip
     // with the active Holds tab starting at 700px.
     vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function (this: HTMLElement) {
@@ -242,10 +274,20 @@ describe("DetailingCommandShell — tab strip", () => {
       return this.getAttribute("role") === "tablist" ? 400 : 0;
     });
 
-    mount({ activeTab: "holds" });
+    const ui = (activeTab: string) => (
+      <MemoryRouter>
+        <DetailingCommandShell tabs={TABS} activeTab={activeTab} onTab={vi.fn()} kpis={KPIS} tabCounts={{}}>
+          <p>panel body</p>
+        </DetailingCommandShell>
+      </MemoryRouter>
+    );
+    const { rerender } = render(ui("holds"));
     const strip = screen.getByRole("tablist");
     // 700 + 150 + the 16px gutter, less the 400px it can show.
     await waitFor(() => expect(strip.scrollLeft).toBe(466));
+    // And on every change: going back to the first tab scrolls the strip home.
+    rerender(ui("overview"));
+    await waitFor(() => expect(strip.scrollLeft).toBe(0));
   });
 });
 
@@ -285,6 +327,6 @@ describe("DetailingNoProject", () => {
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    for (const style of renderedStyles()) expect(style).not.toContain("#");
+    for (const style of renderedStyles()) expect(style).not.toMatch(RAW_COLOR);
   });
 });

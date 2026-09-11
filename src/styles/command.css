@@ -364,13 +364,13 @@ html.steelbuild-dark [data-skin="command"],
    bottom row. DCC-local: PageHero and .cmd-hero still serve every other
    Control Center.
 
-   Sticky from 769px up. main#main-content is the app's scroll container
-   (Layout.jsx), so the header pins to its top. z-index 10 sits above the
-   panels' sticky theads (z-index 1-2) and below the topbar (z-index 100,
-   outside main). The background is the opaque page token, and the header
-   bleeds over .detailing-cc's 16px padding, so nothing shows beside it once
-   it's stuck. Never put overflow:hidden on .detailing-cc: it would become
-   the sticky scroller and the header would stop pinning.
+   Not sticky, on purpose, for now. main#main-content has no bounded height,
+   so the document scrolls and position: sticky here would never pin (the
+   review verified this). Pinning needs the app shell to bound main's height.
+   That changes every dashboard-chrome page and must be checked in a real
+   browser first. Until then the header scrolls with the page. Its
+   background is already the opaque page token, and it bleeds over
+   .detailing-cc's 16px padding, so it is ready to pin once main scrolls.
    =========================================================================== */
 [data-skin="command"] .detailing-cc__header {
   margin: -16px -16px 0;
@@ -379,9 +379,6 @@ html.steelbuild-dark [data-skin="command"],
   color: var(--cmd-text);
 }
 [data-skin="command"] .detailing-cc__header--bare { padding-bottom: 14px; box-shadow: inset 0 -1px 0 var(--cmd-border); }
-@media (min-width: 769px) {
-  [data-skin="command"] .detailing-cc__header { position: sticky; top: 0; z-index: 10; }
-}
 [data-skin="command"] .detailing-cc__header-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
 [data-skin="command"] .detailing-cc__heading { flex: 1 1 320px; min-width: 0; }
 [data-skin="command"] .detailing-cc__eyebrow { margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cmd-text-muted); }

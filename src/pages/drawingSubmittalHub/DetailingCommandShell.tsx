@@ -6,21 +6,22 @@
  * This file never touches data or workflow logic.
  *
  * Layout follows SteelBuild-Pro-2026's compact command header (owner decision
- * 2, 2026-09-11). A sticky header holds the project eyebrow, the h1 with its
- * holds badge, the subtitle, a status line on every tab but the Control
- * Board, and Lead Times, with the tab strip as its bottom row. The active
+ * 2, 2026-09-11). The header holds the project eyebrow, the h1 with its holds
+ * badge, the subtitle, a status line, and Lead Times, with the tab strip as
+ * its bottom row. Every tab but the Control Board gets the full status line;
+ * the Control Board gets only Fab Ready, beside its KPI strip. The active
  * panel follows, and the KPI strip opens the Control Board's panel.
  * DetailingNoProject is the explicit empty state for "no project selected".
  *
  * Rendered unconditionally by DrawingSubmittalHub.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ComponentType, KeyboardEvent, ReactNode } from "react";
 import "@/styles/command.css";
 import { KpiStrip, useCommandSkin } from "@/components/command";
 import { DetailingCommandHeader } from "./DetailingCommandHeader";
-import { buildDetailingKpiCells, buildStatusLine } from "./detailingKpis";
+import { buildDetailingKpiCells, buildFabReadyLine, buildStatusLine } from "./detailingKpis";
 import type { DetailingKpis } from "./detailingKpis";
 
 export type { DetailingKpis } from "./detailingKpis";
@@ -97,14 +98,23 @@ interface TabStripProps {
 
 /**
  * The header's bottom row: one line of tabs that scrolls sideways instead of
- * wrapping. Roving tabIndex keeps only the active tab in the Tab order.
- * ArrowLeft and ArrowRight (both wrap), Home and End move focus and activate
- * the tab, as a click does.
+ * wrapping. It uses manual activation (WAI-ARIA tabs). ArrowLeft and
+ * ArrowRight (both wrap), Home and End move focus. Enter or Space opens the
+ * focused tab, as a click does.
+ *
+ * Why manual: tab switches push history, and each panel loads its own data,
+ * so automatic activation would add a history entry and a fetch for every
+ * tab arrowed past. Roving tabIndex follows focus and returns to the open tab
+ * once focus leaves the strip. Modifier chords (Alt/Cmd+Arrow is the
+ * browser's Back) are left alone.
  */
 function DetailingTabStrip({ tabs, activeTab, onTab, tabCounts, alertTabs }: TabStripProps) {
   const stripRef = useRef<HTMLDivElement>(null);
+  // The tab keyboard focus sits on, while that differs from the open tab.
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const isListed = (key: string | null | undefined): key is string => Boolean(key) && tabs.some((t) => t.key === key);
   // Something must be reachable by Tab even if the active key isn't listed.
-  const tabbableKey = tabs.some((t) => t.key === activeTab) ? activeTab : tabs[0]?.key;
+  const tabbableKey = isListed(focusKey) ? focusKey : isListed(activeTab) ? activeTab : tabs[0]?.key;
 
   // Keep the active tab visible in the row, on load and on every change (Back
   // included). Measured a frame late on purpose. On mount the command skin
@@ -129,14 +139,17 @@ function DetailingTabStrip({ tabs, activeTab, onTab, tabCounts, alertTabs }: Tab
     return () => window.cancelAnimationFrame(frame);
   }, [activeTab]);
 
-  const moveTo = (index: number) => {
+  const focusTab = (index: number) => {
     const target = tabs[index];
     if (!target) return;
+    setFocusKey(target.key);
     stripRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus();
-    onTab(target.key);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    // Never swallow a chord. Alt/Cmd+Arrow is the browser's Back or Forward,
+    // and Ctrl/Shift+Home/End belong to the platform or assistive tech.
+    if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
     const last = tabs.length - 1;
     let target: number;
     switch (event.key) {
@@ -147,11 +160,20 @@ function DetailingTabStrip({ tabs, activeTab, onTab, tabCounts, alertTabs }: Tab
       default: return;
     }
     event.preventDefault();
-    moveTo(target);
+    focusTab(target);
   };
 
   return (
-    <div ref={stripRef} className="detailing-cc__tabs" role="tablist" aria-label="Detailing Control Center tabs">
+    <div
+      ref={stripRef}
+      className="detailing-cc__tabs"
+      role="tablist"
+      aria-label="Detailing Control Center tabs"
+      // Focus leaving the strip hands the Tab stop back to the open tab.
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusKey(null);
+      }}
+    >
       {tabs.map((tab, index) => {
         const isActive = tab.key === activeTab;
         const TabIcon = tab.icon;
@@ -169,7 +191,7 @@ function DetailingTabStrip({ tabs, activeTab, onTab, tabCounts, alertTabs }: Tab
             aria-label={count > 0 ? `${tab.label}, ${count}` : undefined}
             tabIndex={tab.key === tabbableKey ? 0 : -1}
             data-hub-tab={tab.key}
-            onClick={() => onTab(tab.key)}
+            onClick={() => { setFocusKey(null); onTab(tab.key); }}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={`detailing-cc__tab${isActive ? " is-active" : ""}`}
           >
@@ -217,9 +239,11 @@ export function DetailingCommandShell({
         projectNumber={projectNumber}
         activeHolds={activeHolds}
         onOpenHolds={hasHoldsTab ? () => onTab(HOLDS_TAB) : undefined}
-        // The Control Board carries the KPI strip. Every other tab gets the
-        // headline numbers as one line.
-        statusLine={onKpiTab ? null : buildStatusLine(kpis, pending)}
+        // The Control Board carries the KPI strip. That strip's grid is shared
+        // by every Control Center and has no Fab Ready cell, so the Control
+        // Board keeps just that number here. Every other tab gets the headline
+        // numbers as one line.
+        statusLine={onKpiTab ? buildFabReadyLine(kpis, pending) : buildStatusLine(kpis, pending)}
         actions={actions}
       >
         <DetailingTabStrip

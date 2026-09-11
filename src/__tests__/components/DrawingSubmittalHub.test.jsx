@@ -12,6 +12,10 @@ import { MemoryRouter, useLocation, useNavigate, useNavigationType } from "react
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, it, expect, vi } from "vitest";
 
+// Lazy panel chunks can take seconds under a loaded full-suite run, and
+// several waits below allow 8s, so the per-test budget has to exceed that.
+vi.setConfig({ testTimeout: 15000 });
+
 vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
@@ -431,7 +435,9 @@ describe("DrawingSubmittalHub — holds", () => {
     holdsState.data = undefined;
     holdsState.isError = true;
     renderHub();
-    expect(await screen.findByText("Nothing overdue")).toBeInTheDocument(); // band has rendered
+    // The header has rendered (its tabs are here) but shows no holds badge.
+    expect(await screen.findByRole("tab", { name: /Holds & Blockers/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /On Hold$|^No holds$/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/On Hold$|No holds/)).not.toBeInTheDocument();
   });
 
@@ -476,7 +482,7 @@ describe("DrawingSubmittalHub — compact header", () => {
 
   it("opens Holds & Blockers from the header's holds badge, as a new history entry", async () => {
     const user = userEvent.setup();
-    holdsState.rows = [{ id: "h1", drawing_id: "d1", is_active: true, placed_at: "2026-09-01T00:00:00Z" }];
+    holdsState.data = [{ id: "h1", drawing_id: "d1", is_active: true, placed_at: "2026-09-01T00:00:00Z" }];
     renderHub();
 
     await user.click(await screen.findByRole("button", { name: "1 Sheet On Hold" }));

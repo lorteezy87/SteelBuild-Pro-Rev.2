@@ -10,7 +10,7 @@
  * strip, a shared CommandBar with tab navigation, and the Approval Matrix.
  */
 
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -148,6 +148,14 @@ function DetailingControlCenter() {
   const [docControlNotice, setDocControlNotice] = useState(
     () => (location.state as { hubAliasedFrom?: unknown } | null)?.hubAliasedFrom === "doccontrol",
   );
+  // The marker is now in state. Clear it from the arrival entry so no later
+  // remount on that entry (Back after leaving the hub, or a reload) shows the
+  // notice again. Runs once, at mount.
+  useEffect(() => {
+    if ((location.state as { hubAliasedFrom?: unknown } | null)?.hubAliasedFrom === undefined) return;
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
   // Contextual escalation (Critical Work Queue / Next Decision → draft RFI / PCO)
   const [escalateItem, setEscalateItem] = useState<any | null>(null);

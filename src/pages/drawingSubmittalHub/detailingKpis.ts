@@ -126,6 +126,21 @@ export function buildDetailingKpiCells(kpis: DetailingKpis, pending: boolean): K
   ];
 }
 
+/** Sheets fab-ready as "n/d". "—" while loading, or when no sheet counts toward it. */
+function fabReadyText(kpis: DetailingKpis, pending: boolean): string {
+  return !pending && kpis.fabReadyDenominator > 0
+    ? `${kpis.fabReadyNumerator}/${kpis.fabReadyDenominator}`
+    : KPI_PENDING;
+}
+
+/**
+ * Fab Ready alone, for the Control Board. Its KPI strip has no cell for it:
+ * the strip's grid is shared by every Control Center.
+ */
+export function buildFabReadyLine(kpis: DetailingKpis, pending: boolean): string {
+  return `Fab Ready ${fabReadyText(kpis, pending)}`;
+}
+
 /**
  * One compact line for the tabs that don't show the KPI strip:
  * "4 sets · 2 open · 5 overdue · 1 at risk · Fab Ready 1/4". Same numbers as
@@ -136,9 +151,7 @@ export function buildDetailingKpiCells(kpis: DetailingKpis, pending: boolean): K
 export function buildStatusLine(kpis: DetailingKpis, pending: boolean): string {
   const num = (v: number): string => (pending ? KPI_PENDING : String(v));
   const sets = !pending && kpis.totalSets === 1 ? "set" : "sets";
-  const fabReady = !pending && kpis.fabReadyDenominator > 0
-    ? `${kpis.fabReadyNumerator}/${kpis.fabReadyDenominator}`
-    : KPI_PENDING;
+  const fabReady = fabReadyText(kpis, pending);
   return [
     `${num(kpis.totalSets)} ${sets}`,
     `${num(kpis.openItems)} open`,
