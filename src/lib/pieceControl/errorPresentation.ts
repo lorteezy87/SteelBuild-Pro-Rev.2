@@ -53,6 +53,23 @@ export function presentPieceControlError(
   if (/unsupported Unicode escape sequence|22P05/i.test(message)) {
     return "This data contains a null character the database can't store. If it came from a file, re-save it as CSV UTF-8 and import it again.";
   }
+  // archive_piece_lots guards (Sentry JAVASCRIPT-REACT-2D). The register
+  // pre-excludes what it can see; these cover server-only checks and races.
+  if (/Held or production-started pieces cannot be archived/i.test(message)) {
+    return "Held or production-started pieces can't be archived. Clear the hold or deselect those pieces, then try again.";
+  }
+  if (/Split piece lots cannot be archived/i.test(message)) {
+    return "Split piece lots can't be archived. Deselect the split lots, then try again.";
+  }
+  if (/Pieces with production history cannot be archived/i.test(message)) {
+    return "Pieces with recorded production history can't be archived. Deselect them, then try again.";
+  }
+  if (/canonically released work package cannot be archived/i.test(message)) {
+    return "Pieces in a work package released for fabrication can't be archived. Deselect them, then try again.";
+  }
+  if (/must be active and belong to the same project/i.test(message)) {
+    return "Some selected pieces are no longer active in this project. Refresh the register and try again.";
+  }
   if (/Not authorized|permission denied|42501/i.test(message)) {
     return "You do not have permission to complete this Piece Register action.";
   }

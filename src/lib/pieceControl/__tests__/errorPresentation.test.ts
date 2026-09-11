@@ -54,4 +54,33 @@ describe("presentPieceControlError", () => {
       "This data contains a null character the database can't store. If it came from a file, re-save it as CSV UTF-8 and import it again.",
     );
   });
+
+  // Sentry JAVASCRIPT-REACT-2D: archive_piece_lots guard failures used to
+  // collapse to the generic fallback.
+  it.each([
+    [
+      "Held or production-started pieces cannot be archived — P0001",
+      "Held or production-started pieces can't be archived. Clear the hold or deselect those pieces, then try again.",
+    ],
+    [
+      "Split piece lots cannot be archived; preserve the complete lot topology — P0001",
+      "Split piece lots can't be archived. Deselect the split lots, then try again.",
+    ],
+    [
+      "Pieces with production history cannot be archived — P0001",
+      "Pieces with recorded production history can't be archived. Deselect them, then try again.",
+    ],
+    [
+      "Pieces in a canonically released work package cannot be archived — P0001",
+      "Pieces in a work package released for fabrication can't be archived. Deselect them, then try again.",
+    ],
+    [
+      "All selected pieces must be active and belong to the same project — P0001",
+      "Some selected pieces are no longer active in this project. Refresh the register and try again.",
+    ],
+  ])("maps the archive guard %s to specific wording", (message, expected) => {
+    expect(
+      presentPieceControlError(new Error(message), "The selected pieces could not be archived."),
+    ).toBe(expected);
+  });
 });

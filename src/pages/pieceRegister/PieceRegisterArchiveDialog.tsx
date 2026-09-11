@@ -3,9 +3,20 @@
  * Extracted from PieceRegister.tsx (behavior-preserving).
  */
 import { Archive } from "lucide-react";
+import {
+  ARCHIVE_BLOCK_REASON_LABELS,
+  type ArchiveBlockedPiece,
+} from "@/lib/pieceControl/archiveEligibility";
+
+/** Skipped pieces named individually before collapsing to "+N more". */
+const BLOCKED_PREVIEW_LIMIT = 8;
 
 export type PieceRegisterArchiveDialogProps = {
   selectedCount: number;
+  /** Selected pieces the archive will include (defaults to selectedCount). */
+  archivableCount?: number;
+  /** Selected pieces skipped because the archive guards would refuse them. */
+  blockedPieces?: ArchiveBlockedPiece[];
   archiveReason: string;
   archiveConfirmation: string;
   archiveConfirmationText: string;
@@ -18,6 +29,8 @@ export type PieceRegisterArchiveDialogProps = {
 
 export function PieceRegisterArchiveDialog({
   selectedCount,
+  archivableCount = selectedCount,
+  blockedPieces = [],
   archiveReason,
   archiveConfirmation,
   archiveConfirmationText,
@@ -27,6 +40,16 @@ export function PieceRegisterArchiveDialog({
   onCancel,
   onConfirm,
 }: PieceRegisterArchiveDialogProps) {
+  const nothingArchivable = archivableCount === 0;
+  const blockedPreview = blockedPieces
+    .slice(0, BLOCKED_PREVIEW_LIMIT)
+    .map(
+      (piece) =>
+        `${piece.pieceMark} lot ${piece.lotCode} (${ARCHIVE_BLOCK_REASON_LABELS[piece.reason]})`,
+    )
+    .join(", ");
+  const blockedOverflow = blockedPieces.length - BLOCKED_PREVIEW_LIMIT;
+
   return (
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
@@ -67,7 +90,7 @@ export function PieceRegisterArchiveDialog({
               className="text-xl font-black"
               style={{ color: "var(--cmd-text, var(--text-primary))" }}
             >
-              Archive {selectedCount} piece{selectedCount === 1 ? "" : "s"}?
+              Archive {archivableCount} piece{archivableCount === 1 ? "" : "s"}?
             </h2>
             <p
               className="mt-2 text-sm leading-6"
@@ -82,6 +105,27 @@ export function PieceRegisterArchiveDialog({
             </p>
           </div>
         </div>
+        {(nothingArchivable || blockedPieces.length > 0) && (
+          <div
+            role="status"
+            className="mt-4 grid gap-1 rounded-lg px-3 py-2 text-sm leading-6"
+            style={{
+              background: "var(--cmd-chip-warn-bg, var(--warning-muted))",
+              color: "var(--cmd-warn-text, var(--status-warning))",
+            }}
+          >
+            {nothingArchivable && (
+              <p className="font-bold">None of the selected pieces can be archived.</p>
+            )}
+            {blockedPieces.length > 0 && (
+              <p>
+                {`Skipped — can't be archived: ${blockedPreview}${
+                  blockedOverflow > 0 ? `, +${blockedOverflow} more` : ""
+                }`}
+              </p>
+            )}
+          </div>
+        )}
         <label
           htmlFor="piece-archive-reason"
           className="mt-5 grid gap-2 text-xs font-bold uppercase tracking-wider"
@@ -141,6 +185,7 @@ export function PieceRegisterArchiveDialog({
             type="button"
             disabled={
               isPending ||
+              nothingArchivable ||
               archiveReason.trim().length === 0 ||
               archiveConfirmation !== archiveConfirmationText
             }

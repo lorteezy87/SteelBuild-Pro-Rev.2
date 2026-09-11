@@ -51,6 +51,7 @@ import {
 } from "@/lib/pieceControl/pieceIntelligenceDerive";
 import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceRepository";
 import { readPieceImportFile } from "@/lib/pieceControl/importAdapters";
+import { partitionArchiveSelection } from "@/lib/pieceControl/archiveEligibility";
 import {
   collectAppliedPieceIds,
   collectAppliedPiecesByWpNumber,
@@ -596,7 +597,16 @@ export default function PieceRegister() {
   const impactAssigneesLoading =
     canLoadImpactAssignees && impactAssigneesQuery.isLoading;
   const allFilteredSelected = allRowsSelected(filteredRows, selectedPieceIds);
-  const archiveConfirmationText = buildArchiveConfirmationText(selectedPieceIds.size);
+  // Held, production-started and split pieces are skipped before the RPC
+  // (Sentry JAVASCRIPT-REACT-2D). The server derives the phrase from the ids
+  // it receives, so the typed count always equals what gets archived.
+  const archiveEligibility = useMemo(
+    () => partitionArchiveSelection(piecesQuery.data ?? [], selectedPieceIds),
+    [piecesQuery.data, selectedPieceIds],
+  );
+  const archiveConfirmationText = buildArchiveConfirmationText(
+    archiveEligibility.archivableIds.length,
+  );
 
   const profiles = useMemo(() => uniqueValues(displayRows.map((row) => row.profile)), [displayRows]);
   const grades = useMemo(() => uniqueValues(displayRows.map((row) => row.material_grade)), [displayRows]);
@@ -928,18 +938,22 @@ export default function PieceRegister() {
   const archiveMutation = useMutation({
     mutationFn: () => archivePieceLots(
       projectId!,
-      [...selectedPieceIds],
+      archiveEligibility.archivableIds,
       archiveConfirmation,
       archiveReason.trim(),
     ),
     onSuccess: async (summary) => {
-      const archived = Number(summary.archived ?? selectedPieceIds.size);
+      const archived = Number(summary.archived ?? archiveEligibility.archivableIds.length);
+      const skipped = archiveEligibility.blocked.length;
       setSelectedPieceIds(new Set());
       setArchiveOpen(false);
       setArchiveReason("");
       setArchiveConfirmation("");
       await invalidate();
-      toast.success(`${archived} piece${archived === 1 ? "" : "s"} archived`);
+      toast.success(
+        `${archived} piece${archived === 1 ? "" : "s"} archived` +
+          (skipped > 0 ? `, ${skipped} skipped` : ""),
+      );
     },
     onError: (error: Error) =>
       toast.error(
@@ -1251,6 +1265,8 @@ export default function PieceRegister() {
         {archiveOpen && (
           <PieceRegisterArchiveDialog
             selectedCount={selectedPieceIds.size}
+            archivableCount={archiveEligibility.archivableIds.length}
+            blockedPieces={archiveEligibility.blocked}
             archiveReason={archiveReason}
             archiveConfirmation={archiveConfirmation}
             archiveConfirmationText={archiveConfirmationText}

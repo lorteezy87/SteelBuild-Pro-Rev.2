@@ -15,6 +15,7 @@ import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntellig
 import type { PieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceTypes";
 import { setPieceHold } from "@/lib/pieceControl/productionRepository";
 import {
+  archivePieceLots,
   fetchPieceImportBatches,
   fetchPieceImportRows,
   fetchPieceRegister,
@@ -1860,7 +1861,85 @@ describe("Piece Register command shell", () => {
     expect(notice).toHaveAttribute("role", "status");
     expect(screen.getByText("2 rows ready to stage")).toBeInTheDocument();
   });
+
+  // Sentry JAVASCRIPT-REACT-2D: a held piece in the selection failed the whole
+  // archive with P0001 behind a generic toast.
+  it("excludes a held piece from archive and names it", async () => {
+    vi.mocked(archivePieceLots).mockResolvedValue({ archived: 1 });
+    const dialog = await openArchiveDialog(
+      [
+        { ...pieceRegisterRow("p1"), lifecycle_status: "not_started" },
+        {
+          ...pieceRegisterRow("p2"),
+          lifecycle_status: "not_started",
+          on_hold: true,
+          on_hold_reason: "RFI 12",
+        },
+      ],
+      ["P1", "P2"],
+    );
+
+    expect(within(dialog).getByRole("heading", { name: "Archive 1 piece?" }))
+      .toBeInTheDocument();
+    expect(within(dialog).getByRole("status")).toHaveTextContent(
+      "Skipped — can't be archived: P2 lot A (held)",
+    );
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Duplicate import" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Type ARCHIVE 1 PIECE to confirm/), {
+      target: { value: "ARCHIVE 1 PIECE" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Archive pieces" }));
+
+    await waitFor(() =>
+      expect(archivePieceLots).toHaveBeenCalledWith(
+        "project-1",
+        ["p1"],
+        "ARCHIVE 1 PIECE",
+        "Duplicate import",
+      ),
+    );
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("1 piece archived, 1 skipped"),
+    );
+  });
+
+  it("blocks archive when every selected piece is held", async () => {
+    const dialog = await openArchiveDialog(
+      [{ ...pieceRegisterRow("p2"), lifecycle_status: "not_started", on_hold: true }],
+      ["P2"],
+    );
+
+    expect(within(dialog).getByText("None of the selected pieces can be archived."))
+      .toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Duplicate import" },
+    });
+    // Type whatever phrase the dialog asks for; it must still refuse.
+    const confirmation = within(dialog).getByLabelText(/to confirm/);
+    fireEvent.change(confirmation, {
+      target: { value: confirmation.getAttribute("placeholder") },
+    });
+    const archive = within(dialog).getByRole("button", { name: "Archive pieces" });
+    expect(archive).toBeDisabled();
+    fireEvent.click(archive);
+    expect(archivePieceLots).not.toHaveBeenCalled();
+  });
 });
+
+async function openArchiveDialog(
+  rows: PieceRegisterRow[],
+  marks: string[],
+): Promise<HTMLElement> {
+  vi.mocked(fetchPieceRegister).mockResolvedValue(rows);
+  renderPieceRegister("/PieceRegister?view=register");
+  for (const mark of marks) {
+    fireEvent.click(await screen.findByLabelText(`Select ${mark} lot A`));
+  }
+  fireEvent.click(screen.getByRole("button", { name: /Archive selected/i }));
+  return screen.getByRole("alertdialog");
+}
 
 function utf16le(text: string): Uint8Array {
   const bytes = new Uint8Array(text.length * 2);
