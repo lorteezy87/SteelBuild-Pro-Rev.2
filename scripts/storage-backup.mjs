@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
   createRcloneChildEnvironment,
+  rcloneRetryFlags,
   createStorageBackupPlan,
   decodeOffsiteRcloneConfig,
   formatStorageBackupTimestamp,
@@ -17,7 +18,7 @@ import { parseB2Config, readB2Inventory, runIncrementalBackup, BUDGET_BYTES } fr
 
 function createRcloneExecutor({ configPath, environment }) {
   return (args, { captureOutput, label }) => new Promise((resolveCommand, rejectCommand) => {
-    const child = spawn("rclone", [...args, "--config", configPath, "--retries", "1", "--low-level-retries", "1"], {
+    const child = spawn("rclone", [...args, "--config", configPath, ...rcloneRetryFlags(args)], {
       env: environment,
       shell: false,
       stdio: captureOutput ? ["ignore", "pipe", "pipe"] : "inherit",
@@ -83,14 +84,14 @@ async function main() {
       AWS_SECRET_ACCESS_KEY: process.env.SUPABASE_S3_SECRET_ACCESS_KEY,
       AWS_DEFAULT_REGION: process.env.SUPABASE_S3_REGION,
       AWS_EC2_METADATA_DISABLED: "true",
-      AWS_MAX_ATTEMPTS: "1",
+      AWS_MAX_ATTEMPTS: "3",
     };
     await promisify(execFile)("aws", ["--version"], { env: awsEnvironment });
     const stageSource = async ({ item, local, mapping, run, flags }) => {
       const normal = mapping.filter(f => !f.special);
       const listPath = join(tempDirectory, `${item.bucket}-files.txt`);
       await writeFile(listPath, normal.map(f => f.sourcePath).join("\n") + "\n");
-      if (normal.length) await run(["copy", item.source, local, "--files-from-raw", listPath, "--metadata", "--max-transfer", String(BUDGET_BYTES), "--cutoff-mode", "hard", ...flags]);
+      if (normal.length) await run(["copy", item.source, local, "--files-from-raw", listPath, "--no-traverse", "--metadata", "--max-transfer", String(BUDGET_BYTES), "--cutoff-mode", "hard", ...flags]);
       for (const object of mapping.filter(f => f.special)) {
         const target = join(local, object.path);
         await mkdir(dirname(target), { recursive: true });

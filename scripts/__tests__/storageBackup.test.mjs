@@ -1,12 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   createRcloneChildEnvironment,
+  rcloneRetryFlags,
   createRcloneSourceEnvironment,
   createStorageBackupPlan,
   decodeOffsiteRcloneConfig,
   formatStorageBackupTimestamp,
   validateStorageBackupEnvironment,
 } from "../lib/storageBackup.mjs";
+
+describe("Source read retries", () => {
+  it("retries source reads without permitting retries for destination writes", () => {
+    for (const args of [["size", "supabase:app-files"], ["lsjson", "supabase:app-files"], ["copy", "supabase:app-files", "/tmp/stage"]]) {
+      expect(rcloneRetryFlags(args)).toEqual(["--retries", "1", "--low-level-retries", "3"]);
+    }
+    for (const args of [["sync", "/tmp/stage", "offsite:bucket"], ["copyto", "/tmp/probe", "offsite:bucket/probe"], ["copy", "supabase:app-files", "offsite:bucket"], ["deletefile", "supabase:app-files/file"]]) {
+      expect(rcloneRetryFlags(args)).toEqual(["--retries", "1", "--low-level-retries", "1"]);
+    }
+  });
+});
 
 describe("Storage backup planner", () => {
   it("covers both required buckets with current and timestamped destinations", () => {

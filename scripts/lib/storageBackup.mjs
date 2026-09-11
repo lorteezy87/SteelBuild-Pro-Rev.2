@@ -1,3 +1,14 @@
+import { isAbsolute } from "node:path";
+
+export function rcloneRetryFlags(args) {
+  const sourceRead = args[1]?.startsWith("supabase:") && (
+    ["size", "lsjson"].includes(args[0]) ||
+    (args[0] === "copy" && isAbsolute(args[2] ?? ""))
+  );
+  // Read retries cannot create extra retained versions. Destination writes remain single-attempt.
+  return ["--retries", "1", "--low-level-retries", sourceRead ? "3" : "1"];
+}
+
 const REQUIRED_BUCKETS = ["app-files", "email-attachments", "sheets-files"];
 const REQUIRED_ENV_KEYS = [
   "OFFSITE_RCLONE_CONFIG_B64",
