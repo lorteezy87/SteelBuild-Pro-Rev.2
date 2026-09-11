@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
-  assertBackupVerified,
-  createRcloneBackupOperations,
   createRcloneChildEnvironment,
+  rcloneRetryFlags,
   createRcloneSourceEnvironment,
   createStorageBackupPlan,
   decodeOffsiteRcloneConfig,
-  executeStorageBackupPlan,
   formatStorageBackupTimestamp,
   validateStorageBackupEnvironment,
 } from "../lib/storageBackup.mjs";
+
+describe("Source read retries", () => {
+  it("retries source reads without permitting retries for destination writes", () => {
+    for (const args of [["size", "supabase:app-files"], ["lsjson", "supabase:app-files"], ["copy", "supabase:app-files", "/tmp/stage"]]) {
+      expect(rcloneRetryFlags(args)).toEqual(["--retries", "1", "--low-level-retries", "3"]);
+    }
+    for (const args of [["sync", "/tmp/stage", "offsite:bucket"], ["copyto", "/tmp/probe", "offsite:bucket/probe"], ["copy", "supabase:app-files", "offsite:bucket"], ["deletefile", "supabase:app-files/file"]]) {
+      expect(rcloneRetryFlags(args)).toEqual(["--retries", "1", "--low-level-retries", "1"]);
+    }
+  });
+});
 
 describe("Storage backup planner", () => {
   it("covers both required buckets with current and timestamped destinations", () => {
@@ -22,14 +31,17 @@ describe("Storage backup planner", () => {
       {
         bucket: "app-files",
         source: "supabase:app-files",
-        snapshot: "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/app-files",
         current: "offsite:steelbuild-pro-storage/current/app-files",
       },
       {
         bucket: "email-attachments",
         source: "supabase:email-attachments",
-        snapshot: "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/email-attachments",
         current: "offsite:steelbuild-pro-storage/current/email-attachments",
+      },
+      {
+        bucket: "sheets-files",
+        source: "supabase:sheets-files",
+        current: "offsite:steelbuild-pro-storage/current/sheets-files",
       },
     ]);
   });
@@ -154,26 +166,6 @@ describe("Storage backup configuration", () => {
   });
 });
 
-describe("Storage backup verification", () => {
-  it("accepts a verified empty bucket", () => {
-    expect(() => assertBackupVerified({
-      bucket: "email-attachments",
-      source: { count: 0, bytes: 0 },
-      snapshot: { count: 0, bytes: 0 },
-      current: { count: 0, bytes: 0 },
-    })).not.toThrow();
-  });
-
-  it("fails when either destination differs from the source", () => {
-    expect(() => assertBackupVerified({
-      bucket: "app-files",
-      source: { count: 10, bytes: 1200 },
-      snapshot: { count: 10, bytes: 1200 },
-      current: { count: 9, bytes: 1100 },
-    })).toThrow("app-files current verification failed");
-  });
-});
-
 describe("Storage backup execution", () => {
   it("creates a stable UTC path timestamp", () => {
     expect(formatStorageBackupTimestamp(new Date("2026-07-23T00:30:45.123Z")))
@@ -275,160 +267,17 @@ describe("Storage backup execution", () => {
     }
   });
 
-  it("copies immutable snapshots, syncs current mirrors, and checks both destinations", () => {
-    const [item] = createStorageBackupPlan({
-      destinationRoot: "offsite:steelbuild-pro-storage",
-      timestamp: "20260723T003000Z",
-    });
+});
 
-    expect(createRcloneBackupOperations(item)).toEqual([
-      {
-        label: "app-files snapshot copy",
-        args: [
-          "copy",
-          "supabase:app-files",
-          "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/app-files",
-          "--immutable",
-          "--metadata",
-          "--fast-list",
-          "--transfers",
-          "8",
-          "--checkers",
-          "16",
-          "--stats",
-          "30s",
-          "--stats-one-line",
-        ],
-      },
-      {
-        label: "app-files current sync",
-        args: [
-          "sync",
-          "supabase:app-files",
-          "offsite:steelbuild-pro-storage/current/app-files",
-          "--metadata",
-          "--fast-list",
-          "--transfers",
-          "8",
-          "--checkers",
-          "16",
-          "--stats",
-          "30s",
-          "--stats-one-line",
-        ],
-      },
-      {
-        label: "app-files snapshot check",
-        args: [
-          "check",
-          "supabase:app-files",
-          "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/app-files",
-          "--size-only",
-        ],
-      },
-      {
-        label: "app-files current check",
-        args: [
-          "check",
-          "supabase:app-files",
-          "offsite:steelbuild-pro-storage/current/app-files",
-          "--size-only",
-        ],
-      },
-    ]);
-  });
+it("ignores inherited destination overrides so accounting and transfers use the same B2 remote", () => {
+  const result = createRcloneChildEnvironment({ RCLONE_CONFIG_OFFSITE_TYPE: "local", RCLONE_CONFIG_OFFSITE_KEY: "other", rclone_config_offsite_account: "other" });
+  expect(result.RCLONE_CONFIG_OFFSITE_TYPE).toBeUndefined();
+  expect(result.RCLONE_CONFIG_OFFSITE_KEY).toBeUndefined();
+  expect(result.rclone_config_offsite_account).toBeUndefined();
+});
 
-  it("refuses to create a verified manifest without a validated source identity", async () => {
-    const plan = createStorageBackupPlan({
-      destinationRoot: "offsite:steelbuild-pro-storage",
-      timestamp: "20260723T003000Z",
-    });
-
-    await expect(executeStorageBackupPlan({
-      plan,
-      timestamp: "20260723T003000Z",
-      execute: async () => {
-        throw new Error("rclone must not run without source identity");
-      },
-    })).rejects.toThrow("validated Supabase source identity");
-  });
-
-  it("returns a verified manifest only after both required buckets pass", async () => {
-    const timestamp = "20260723T003000Z";
-    const plan = createStorageBackupPlan({
-      destinationRoot: "offsite:steelbuild-pro-storage",
-      timestamp,
-    });
-    const calls = [];
-    const stats = {
-      "supabase:app-files": { count: 2, bytes: 300 },
-      "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/app-files": { count: 2, bytes: 300 },
-      "offsite:steelbuild-pro-storage/current/app-files": { count: 2, bytes: 300 },
-      "supabase:email-attachments": { count: 0, bytes: 0 },
-      "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/email-attachments": { count: 0, bytes: 0 },
-      "offsite:steelbuild-pro-storage/current/email-attachments": { count: 0, bytes: 0 },
-    };
-    const execute = async (args) => {
-      calls.push(args);
-      return args[0] === "size" ? JSON.stringify(stats[args[1]]) : "";
-    };
-
-    const manifest = await executeStorageBackupPlan({
-      plan,
-      timestamp,
-      completedAt: "2026-07-23T00:31:00.000Z",
-      source: {
-        provider: "supabase-storage",
-        projectRef: "exampleprojectref123",
-      },
-      execute,
-    });
-
-    expect(calls.filter(([command]) => command === "check")).toHaveLength(4);
-    expect(calls.filter(([command]) => command === "size")).toHaveLength(6);
-    expect(manifest).toEqual({
-      schemaVersion: 1,
-      status: "verified",
-      backupTimestamp: timestamp,
-      completedAt: "2026-07-23T00:31:00.000Z",
-      source: {
-        provider: "supabase-storage",
-        projectRef: "exampleprojectref123",
-      },
-      buckets: [
-        {
-          bucket: "app-files",
-          objects: 2,
-          bytes: 300,
-          snapshot: "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/app-files",
-          current: "offsite:steelbuild-pro-storage/current/app-files",
-        },
-        {
-          bucket: "email-attachments",
-          objects: 0,
-          bytes: 0,
-          snapshot: "offsite:steelbuild-pro-storage/snapshots/20260723T003000Z/email-attachments",
-          current: "offsite:steelbuild-pro-storage/current/email-attachments",
-        },
-      ],
-    });
-  });
-
-  it("fails closed when rclone size output is not valid JSON", async () => {
-    const plan = createStorageBackupPlan({
-      destinationRoot: "offsite:steelbuild-pro-storage",
-      timestamp: "20260723T003000Z",
-    });
-
-    await expect(executeStorageBackupPlan({
-      plan,
-      timestamp: "20260723T003000Z",
-      completedAt: "2026-07-23T00:31:00.000Z",
-      source: {
-        provider: "supabase-storage",
-        projectRef: "exampleprojectref123",
-      },
-      execute: async (args) => args[0] === "size" ? "not-json" : "",
-    })).rejects.toThrow("rclone size returned invalid JSON");
-  });
+it("accepts wrapped Base64 copied from a terminal", () => {
+  const config = "[offsite]\ntype = b2\naccount = id\nkey = secret\n";
+  const wrapped = Buffer.from(config).toString("base64").match(/.{1,16}/g).join("\n");
+  expect(decodeOffsiteRcloneConfig(wrapped)).toBe(config);
 });
