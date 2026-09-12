@@ -90,8 +90,9 @@ jobs:
 
           (
             cd "$capture_work"
-            mkdir -p supabase/functions
-            : > "$evidence_dir/functions/download-failures.txt"
+            mkdir -p supabase/functions "$evidence_dir/functions/raw"
+            : > "$evidence_dir/functions/body-capture-failures.txt"
+            : > "$evidence_dir/functions/source-extraction-failures.txt"
             jq -r '.[].slug' "$evidence_dir/functions/inventory.json" \
               | while IFS= read -r slug; do
                   if ! supabase functions download "$slug" \
@@ -100,18 +101,19 @@ jobs:
                     --yes \
                     >> "$evidence_dir/functions/download.log" 2>&1; then
                     printf '%s\n' "$slug" \
-                      >> "$evidence_dir/functions/download-failures.txt"
+                      >> "$evidence_dir/functions/source-extraction-failures.txt"
+                    if ! curl --fail --silent --show-error --location \
+                      -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+                      -H "Accept: multipart/form-data" \
+                      "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/functions/${slug}/body" \
+                      --output "$evidence_dir/functions/raw/${slug}.multipart"; then
+                      printf '%s\n' "$slug" \
+                        >> "$evidence_dir/functions/body-capture-failures.txt"
+                    fi
                   fi
                 done
           )
           cp -R "$capture_work/supabase/functions" "$evidence_dir/functions/source"
-
-          (
-            cd "$evidence_dir"
-            find ledger schema functions -type f -print0 \
-              | sort -z \
-              | xargs -0 sha256sum > SHA256SUMS
-          )
 
           jq -n \
             --arg captured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -119,17 +121,28 @@ jobs:
             --arg project_ref "$SUPABASE_PROJECT_REF" \
             --arg run_id "$GITHUB_RUN_ID" \
             --arg supabase_cli "$(supabase --version)" \
-            --argjson function_source_complete \
-              "$([ ! -s "$evidence_dir/functions/download-failures.txt" ] && echo true || echo false)" \
+            --argjson function_body_complete \
+              "$([ ! -s "$evidence_dir/functions/body-capture-failures.txt" ] && echo true || echo false)" \
+            --argjson function_source_extracted \
+              "$([ ! -s "$evidence_dir/functions/source-extraction-failures.txt" ] && echo true || echo false)" \
             '{
               captured_at: $captured_at,
               commit: $commit,
-              function_source_complete: $function_source_complete,
+              function_body_complete: $function_body_complete,
+              function_source_extracted: $function_source_extracted,
               project_ref: $project_ref,
               run_id: $run_id,
               supabase_cli: $supabase_cli,
               read_only: true
             }' > "$evidence_dir/manifest.json"
+
+          (
+            cd "$evidence_dir"
+            find ledger schema functions -type f -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS
+            sha256sum manifest.json >> SHA256SUMS
+          )
 
       - name: Upload short-retention evidence
         if: ${{ !cancelled() }}
@@ -152,10 +165,14 @@ jobs:
           test -s "$evidence_dir/functions/inventory.json"
           test -s "$evidence_dir/SHA256SUMS"
           test -s "$evidence_dir/manifest.json"
-          if [ -s "$evidence_dir/functions/download-failures.txt" ]; then
-            echo "Function source capture was incomplete for:"
-            cat "$evidence_dir/functions/download-failures.txt"
+          if [ -s "$evidence_dir/functions/body-capture-failures.txt" ]; then
+            echo "Function body capture was incomplete for:"
+            cat "$evidence_dir/functions/body-capture-failures.txt"
             exit 1
+          fi
+          if [ -s "$evidence_dir/functions/source-extraction-failures.txt" ]; then
+            echo "Raw bodies retained after safe source extraction was refused for:"
+            cat "$evidence_dir/functions/source-extraction-failures.txt"
           fi
 
       - name: Remove temporary evidence
