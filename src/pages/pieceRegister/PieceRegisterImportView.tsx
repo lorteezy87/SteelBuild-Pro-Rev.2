@@ -31,6 +31,8 @@ export type PieceRegisterImportViewProps = {
   setSourceType: (value: PieceImportSourceType) => void;
   importFile: File | null;
   importRows: ImportPayload[];
+  /** Read-time notice for the chosen file (e.g. null characters removed). */
+  importNotice?: string | null;
   handleFile: (file: File | null) => void;
   stagePending: boolean;
   onStage: () => void;
@@ -63,6 +65,7 @@ export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
     setSourceType,
     importFile,
     importRows,
+    importNotice = null,
     handleFile,
     stagePending,
     onStage,
@@ -156,6 +159,20 @@ export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
             <p className="piece-import-file-summary">
               <strong>{importFile.name}</strong>
               <span>{importRows.length} rows ready to stage</span>
+              {importNotice && (
+                <span
+                  role="status"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    color: "var(--cmd-warn-text)",
+                  }}
+                >
+                  <AlertTriangle size={13} aria-hidden="true" />
+                  {importNotice}
+                </span>
+              )}
             </p>
           )}
           <button

@@ -51,6 +51,7 @@ import {
 } from "@/lib/pieceControl/pieceIntelligenceDerive";
 import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceRepository";
 import { readPieceImportFile } from "@/lib/pieceControl/importAdapters";
+import { partitionArchiveSelection } from "@/lib/pieceControl/archiveEligibility";
 import {
   collectAppliedPieceIds,
   collectAppliedPiecesByWpNumber,
@@ -283,6 +284,7 @@ export default function PieceRegister() {
   const [sourceType, setSourceType] = useState<PieceImportSourceType>("csv");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importRows, setImportRows] = useState<ImportPayload[]>([]);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [applyConfirmed, setApplyConfirmed] = useState(false);
   const [importTargetWorkPackageId, setImportTargetWorkPackageId] = useState("");
@@ -595,7 +597,16 @@ export default function PieceRegister() {
   const impactAssigneesLoading =
     canLoadImpactAssignees && impactAssigneesQuery.isLoading;
   const allFilteredSelected = allRowsSelected(filteredRows, selectedPieceIds);
-  const archiveConfirmationText = buildArchiveConfirmationText(selectedPieceIds.size);
+  // Held, production-started and split pieces are skipped before the RPC
+  // (Sentry JAVASCRIPT-REACT-2D). The server derives the phrase from the ids
+  // it receives, so the typed count always equals what gets archived.
+  const archiveEligibility = useMemo(
+    () => partitionArchiveSelection(piecesQuery.data ?? [], selectedPieceIds),
+    [piecesQuery.data, selectedPieceIds],
+  );
+  const archiveConfirmationText = buildArchiveConfirmationText(
+    archiveEligibility.archivableIds.length,
+  );
 
   const profiles = useMemo(() => uniqueValues(displayRows.map((row) => row.profile)), [displayRows]);
   const grades = useMemo(() => uniqueValues(displayRows.map((row) => row.material_grade)), [displayRows]);
@@ -853,6 +864,7 @@ export default function PieceRegister() {
       setSelectedBatchId(String(summary.batch_id));
       setImportFile(null);
       setImportRows([]);
+      setImportNotice(null);
       await invalidate();
       toast.success("Import staged for review");
     },
@@ -926,18 +938,22 @@ export default function PieceRegister() {
   const archiveMutation = useMutation({
     mutationFn: () => archivePieceLots(
       projectId!,
-      [...selectedPieceIds],
+      archiveEligibility.archivableIds,
       archiveConfirmation,
       archiveReason.trim(),
     ),
     onSuccess: async (summary) => {
-      const archived = Number(summary.archived ?? selectedPieceIds.size);
+      const archived = Number(summary.archived ?? archiveEligibility.archivableIds.length);
+      const skipped = archiveEligibility.blocked.length;
       setSelectedPieceIds(new Set());
       setArchiveOpen(false);
       setArchiveReason("");
       setArchiveConfirmation("");
       await invalidate();
-      toast.success(`${archived} piece${archived === 1 ? "" : "s"} archived`);
+      toast.success(
+        `${archived} piece${archived === 1 ? "" : "s"} archived` +
+          (skipped > 0 ? `, ${skipped} skipped` : ""),
+      );
     },
     onError: (error: Error) =>
       toast.error(
@@ -1074,11 +1090,17 @@ export default function PieceRegister() {
   const handleFile = async (file: File | null) => {
     setImportFile(file);
     setImportRows([]);
+    setImportNotice(null);
     if (!file) return;
     try {
-      const rows = await readPieceImportFile(file, sourceType);
+      const { rows, nulsRemoved } = await readPieceImportFile(file, sourceType);
       if (rows.length === 0) throw new Error("No import rows were found");
       setImportRows(rows);
+      if (nulsRemoved > 0) {
+        setImportNotice(
+          `Removed ${nulsRemoved} null character${nulsRemoved === 1 ? "" : "s"} from ${file.name}. Check the staged rows before applying.`,
+        );
+      }
     } catch (error) {
       setImportFile(null);
       toast.error(error instanceof Error ? error.message : "Unable to read import file");
@@ -1243,6 +1265,8 @@ export default function PieceRegister() {
         {archiveOpen && (
           <PieceRegisterArchiveDialog
             selectedCount={selectedPieceIds.size}
+            archivableCount={archiveEligibility.archivableIds.length}
+            blockedPieces={archiveEligibility.blocked}
             archiveReason={archiveReason}
             archiveConfirmation={archiveConfirmation}
             archiveConfirmationText={archiveConfirmationText}
@@ -1581,6 +1605,7 @@ export default function PieceRegister() {
             setSourceType={setSourceType}
             importFile={importFile}
             importRows={importRows}
+            importNotice={importNotice}
             handleFile={handleFile}
             stagePending={stageMutation.isPending}
             onStage={() => stageMutation.mutate()}
