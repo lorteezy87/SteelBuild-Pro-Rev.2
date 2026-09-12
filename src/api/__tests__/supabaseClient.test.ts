@@ -331,7 +331,10 @@ describe("supabase entity client", () => {
     });
 
     it("archives a project atomically via the soft_delete_project RPC", async () => {
-      const projectId = "00000000-0000-4000-8000-000000000001";
+      // A real UUID, not "project-1": Project.delete now validates the id
+      // against softDeleteProjectArgsSchema before calling the RPC, so a
+      // placeholder is rejected by zod before the call is ever made.
+      const projectId = "3793bea9-5c67-4ba4-adee-ac98022ee2fc";
       await entities.Project.delete(projectId);
 
       expect(mocks.rpcMock).toHaveBeenCalledWith("soft_delete_project", {

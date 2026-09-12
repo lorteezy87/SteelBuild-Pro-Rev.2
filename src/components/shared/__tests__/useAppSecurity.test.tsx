@@ -13,6 +13,12 @@ function authValue(partial: Partial<AuthContextValue>): AuthContextValue {
     isLoggingIn: false,
     isLoadingPublicSettings: false,
     authError: null,
+    // H23 MFA surface. Added when AuthContextValue gained the degraded-status
+    // fields; the stub must satisfy the whole contract or every consumer test
+    // fails to typecheck.
+    mfaStatusDegraded: false,
+    mfaStatusMessage: null,
+    retryMfaStatus: async () => {},
     appPublicSettings: null,
     logout: async () => {},
     loginWithPassword: async () => ({ success: false, error: { type: "auth_required", message: "n/a" } }),
