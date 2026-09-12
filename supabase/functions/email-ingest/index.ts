@@ -26,6 +26,9 @@
 //   EMAIL_CLASSIFY_DISABLED     — "1"/"true" forces the regex classifier (kill switch)
 //   EMAIL_CLASSIFY_DAILY_LIMIT  — per-project rolling-24h cap on paid classify calls
 //                                 (default 200; 0 = unlimited). Over the cap → regex.
+//   EMAIL_INGEST_TRUSTED_SENDER_DOMAINS — comma-separated global sender-domain allowlist
+//   EMAIL_INGEST_TRUSTED_SENDER_DOMAINS_BY_PROJECT — JSON map { "<project-uuid>": ["example.com"] }
+//   EMAIL_INGEST_UNTRUSTED_ACTION — "reject" (default) or "flag" (store as rejected)
 //
 // Deploy:
 //   supabase functions deploy email-ingest --no-verify-jwt
@@ -82,6 +85,114 @@ function authenticateWebhook(req: Request): boolean {
   if (!secret) {
     console.error("[email-ingest] EMAIL_WEBHOOK_SECRET not configured");
     return false;
+  }
+
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  function normalizeEmail(raw: string): string {
+    return extractEmailAddress(raw).trim().toLowerCase();
+  }
+
+  function extractDomain(email: string): string | null {
+    const at = email.lastIndexOf("@");
+    if (at <= 0 || at === email.length - 1) return null;
+    return email.slice(at + 1).toLowerCase();
+  }
+
+  function parseDomainCsv(csv: string | null | undefined): Set<string> {
+    if (!csv) return new Set<string>();
+    return new Set(
+      csv
+        .split(",")
+        .map((entry) => entry.trim().toLowerCase().replace(/^@/, ""))
+        .filter(Boolean),
+    );
+  }
+
+  function resolveTrustedDomainsForProject(projectId: string): Set<string> {
+    const domains = parseDomainCsv(Deno.env.get("EMAIL_INGEST_TRUSTED_SENDER_DOMAINS"));
+    const projectMapRaw = Deno.env.get("EMAIL_INGEST_TRUSTED_SENDER_DOMAINS_BY_PROJECT");
+    if (!projectMapRaw) return domains;
+    try {
+      const parsed = JSON.parse(projectMapRaw) as Record<string, string | string[]>;
+      const projectValue = parsed[projectId] ?? parsed["*"];
+      const projectList = Array.isArray(projectValue)
+        ? projectValue
+        : typeof projectValue === "string"
+          ? projectValue.split(",")
+          : [];
+      for (const entry of projectList) {
+        const normalized = String(entry).trim().toLowerCase().replace(/^@/, "");
+        if (normalized) domains.add(normalized);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[email-ingest] Invalid EMAIL_INGEST_TRUSTED_SENDER_DOMAINS_BY_PROJECT: ${message}`);
+    }
+    return domains;
+  }
+
+  async function fetchActiveProjectMailboxAddresses(
+    supabaseUrl: string,
+    serviceKey: string,
+    projectId: string,
+  ): Promise<Set<string>> {
+    const resp = await fetch(
+      `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${projectId}&is_active=eq.true&select=email_address&limit=500`,
+      { headers: { "apikey": serviceKey, "Authorization": `****** } },
+    );
+    if (!resp.ok) {
+      const detail = await resp.text();
+      throw new Error(`email_accounts lookup failed ${resp.status}: ${detail.slice(0, 200)}`);
+    }
+    const rows = await resp.json();
+    const addresses = new Set<string>();
+    if (Array.isArray(rows)) {
+      for (const row of rows) {
+        if (!row?.email_address) continue;
+        const normalized = normalizeEmail(String(row.email_address));
+        if (normalized) addresses.add(normalized);
+      }
+    }
+    return addresses;
+  }
+
+  type SenderTrustDecision = {
+    trusted: boolean;
+    senderNormalized: string;
+    senderDomain: string | null;
+    trustReason: "mapped_mailbox_sender" | "trusted_sender_domain" | "untrusted_sender";
+  };
+
+  function evaluateSenderTrust(
+    senderEmailRaw: string,
+    mailboxAddresses: Set<string>,
+    trustedDomains: Set<string>,
+  ): SenderTrustDecision {
+    const senderNormalized = normalizeEmail(senderEmailRaw);
+    const senderDomain = extractDomain(senderNormalized);
+    if (senderNormalized && mailboxAddresses.has(senderNormalized)) {
+      return {
+        trusted: true,
+        senderNormalized,
+        senderDomain,
+        trustReason: "mapped_mailbox_sender",
+      };
+    }
+    if (senderDomain && trustedDomains.has(senderDomain)) {
+      return {
+        trusted: true,
+        senderNormalized,
+        senderDomain,
+        trustReason: "trusted_sender_domain",
+      };
+    }
+    return {
+      trusted: false,
+      senderNormalized,
+      senderDomain,
+      trustReason: "untrusted_sender",
+    };
   }
 
   const authHeader = req.headers.get("Authorization");
@@ -685,7 +796,6 @@ async function handle(req: Request): Promise<Response> {
 
   // Reject malformed ids before they ever reach a PostgREST filter, and avoid
   // the confusing 500 PostgREST returns for a non-UUID project_id.
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!UUID_RE.test(projectId)) {
     return json({ error: "Invalid project_id format" }, 400);
   }
@@ -743,6 +853,41 @@ async function handle(req: Request): Promise<Response> {
     return json({ error: "No sender email found in payload" }, 400);
   }
 
+  const trustedDomains = resolveTrustedDomainsForProject(projectId);
+  let mailboxAddresses: Set<string>;
+  try {
+    mailboxAddresses = await fetchActiveProjectMailboxAddresses(supabaseUrl, serviceKey, projectId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[email-ingest] Sender trust lookup failed: ${message}`);
+    return json({ error: "Failed to validate sender trust" }, 500);
+  }
+  if (mailboxAddresses.size === 0 && trustedDomains.size === 0) {
+    console.error(`[email-ingest] sender trust blocked: no active mailbox mapping or domain allowlist configured for ${projectId}`);
+    return json(
+      {
+        error: "Sender trust is not configured for this project",
+        code: "sender_trust_unconfigured",
+      },
+      403,
+    );
+  }
+  const senderTrust = evaluateSenderTrust(email.senderEmail, mailboxAddresses, trustedDomains);
+  const untrustedAction = (Deno.env.get("EMAIL_INGEST_UNTRUSTED_ACTION") || "reject").toLowerCase();
+  const shouldFlagUntrusted = untrustedAction === "flag";
+  if (!senderTrust.trusted && !shouldFlagUntrusted) {
+    console.warn(
+      `[email-ingest] untrusted sender rejected: project=${projectId} sender=${senderTrust.senderNormalized || "<empty>"} domain=${senderTrust.senderDomain || "<unknown>"}`,
+    );
+    return json(
+      {
+        error: "Sender is not trusted for this project",
+        code: "untrusted_sender",
+      },
+      403,
+    );
+  }
+
   // Dedup check
   if (email.externalId && !email.externalId.startsWith("manual-")) {
     const dedupResp = await fetch(
@@ -780,9 +925,14 @@ async function handle(req: Request): Promise<Response> {
       ingestion_method: "webhook",
       ingested_at: new Date().toISOString(),
       classifier: "ai",
+      sender_trust: {
+        trusted: senderTrust.trusted,
+        trust_reason: senderTrust.trustReason,
+        domain: senderTrust.senderDomain,
+      },
       extracted: classification.extracted,
     }),
-    import_status: "pending",
+    import_status: senderTrust.trusted ? "pending" : "rejected",
   };
 
   const msgResp = await fetch(`${supabaseUrl}/rest/v1/email_messages`, {

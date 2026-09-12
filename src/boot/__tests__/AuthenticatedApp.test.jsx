@@ -36,6 +36,10 @@ const authed = {
   isLoadingPublicSettings: false,
   authError: null,
   loginWithPassword: vi.fn(),
+  retryMfaStatus: vi.fn(),
+  logout: vi.fn(),
+  mfaStatusDegraded: false,
+  mfaStatusMessage: null,
 };
 
 describe("AuthenticatedApp — auth + org gate precedence", () => {
@@ -128,6 +132,14 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     orgState = { isLoadingOrgs: false, hasOrg: true };
     render(<AuthenticatedApp />);
     expect(await screen.findByText("MFA_CHALLENGE")).toBeInTheDocument();
+    expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
+  });
+
+  it("blocks app entry when MFA status check is degraded", async () => {
+    authState = { ...authed, mfaStatusDegraded: true, mfaStatusMessage: "retry mfa" };
+    render(<AuthenticatedApp />);
+    expect(await screen.findByText("Verify your sign-in")).toBeInTheDocument();
+    expect(screen.getByText("retry mfa")).toBeInTheDocument();
     expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
   });
 

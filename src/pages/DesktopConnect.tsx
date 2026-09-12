@@ -21,6 +21,7 @@ import {
   type DesktopSessionValidationField,
   type MinimalDesktopSession,
 } from "@/lib/desktopSessionHandoff";
+import { desktopBrowserSessionSchema } from "@/lib/securitySchemas";
 
 type BrowserSession = {
   access_token: string;
@@ -186,11 +187,13 @@ export function DesktopConnect({
         const activeSearch = resolveDesktopConnectSearch(search);
         const query = parseQuery(activeSearch);
         failureStage = "session";
-        const browserSession = await (dependencies.waitForSession?.(8_000)
+        const maybeSession = await (dependencies.waitForSession?.(8_000)
           ?? dependencies.getSession());
-        if (!browserSession?.expires_at || !browserSession.user.email) {
+        const parsedSession = desktopBrowserSessionSchema.safeParse(maybeSession);
+        if (!parsedSession.success) {
           throw new Error("Authenticated SteelBuild session is unavailable");
         }
+        const browserSession = parsedSession.data;
         failureStage = "crypto";
         const encryptedSession = await dependencies.encryptSession({
           algorithm: DESKTOP_SESSION_ALGORITHM,

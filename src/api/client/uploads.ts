@@ -40,6 +40,9 @@ export const UploadFile = async ({ file, workflow }: UploadFileArgs): Promise<Up
   if (!orgId) {
     throw new Error('Workspace is still loading — please try again in a moment.');
   }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orgId)) {
+    throw new Error('Unable to resolve a valid workspace context for upload.');
+  }
   const dir = `${orgId}/uploads`;
   const path = `${dir}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
