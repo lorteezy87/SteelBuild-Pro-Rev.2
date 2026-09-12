@@ -1,8 +1,9 @@
 /**
  * approvalMatrix.derive — the per-set columns the Approval Matrix borrowed from
  * SteelBuild-Pro-2026's matrix (live sheet count, sheets on hold, workflow
- * stage, last transmittal), the matrix's click-through quick filters, and its
- * deep links into sibling hub tabs.
+ * stage, last transmittal, last outgoing transmittal and what changed since),
+ * the matrix's click-through quick filters, and its deep links into sibling
+ * hub tabs.
  *
  * It deliberately does NOT re-pick the governing submittal. buildApprovalMatrixRows
  * (format.ts) resolves that with pickMostRecentSubmittal over stage-mappable
@@ -46,6 +47,44 @@ export interface MatrixTransmittal {
   date: string | null;
 }
 
+/**
+ * The newest OUTGOING transmittal that carried a sheet of the set, and how
+ * much of what it carried has changed since it went out.
+ */
+export interface LastOutgoingTransmittal {
+  id: string;
+  number: string;
+  /** The entered send date as a calendar day (YYYY-MM-DD). */
+  dateSent: string;
+  sentTo: string | null;
+  /** Distinct sheets of this set on it, live or since superseded. */
+  sheetCount: number;
+  /** (a) Sheets whose sent revision is no longer their current one. */
+  revisedSinceSent: number;
+  /** (b) Sheets now superseded (drawings.is_superseded). */
+  supersededSinceSent: number;
+  /** Distinct sheets with (a) or (b), counted once: the number shown. */
+  changedSinceSent: number;
+  /** Live sheets with no current revision loaded, so (a) couldn't be checked. */
+  uncheckedSheets: number;
+}
+
+export interface LastOutgoingRollup {
+  bySet: Map<string, LastOutgoingTransmittal>;
+  /**
+   * Items on outgoing, dated transmittals whose sheet is in no loaded package:
+   * its revision wasn't in the read, the sheet was deleted, or a row cap cut
+   * it off. Project-wide, because such an item could belong to any set.
+   */
+  unresolvedItems: number;
+}
+
+/** One set's Last sent value. "unknown" is never shown as "not sent". */
+export type LastSent =
+  | { kind: "sent"; transmittal: LastOutgoingTransmittal }
+  | { kind: "unknown"; unresolvedItems: number }
+  | { kind: "none" };
+
 export interface MatrixEnrichment {
   stage: string;
   stageSource: MatrixStageSource;
@@ -54,11 +93,19 @@ export interface MatrixEnrichment {
   /** Live sheets in the set carrying an ACTIVE hold. */
   onHold: number;
   lastTransmittal: MatrixTransmittal | null;
+  /** The newest outgoing transmittal and what changed since (expanded row). */
+  lastSent: LastSent;
 }
 
 export type EnrichedMatrixRow<T extends MatrixRowLike = MatrixRowLike> = T & MatrixEnrichment;
 
 type SheetLike = { id?: string | null };
+
+interface TransmittalOrder {
+  day: string;
+  createdAt: string;
+  number: string;
+}
 
 function sheetIds(sheets: readonly SheetLike[] | null | undefined): string[] {
   const ids: string[] = [];
@@ -84,7 +131,7 @@ function packagesBySetId(setPackages: readonly SetPackage[] | null | undefined):
  * created_at is a timestamp — comparing the raw strings would rank
  * "2026-03-02T09:00Z" above "2026-03-02" for the same day.
  */
-function compareTransmittals(a: { day: string; createdAt: string; number: string }, b: { day: string; createdAt: string; number: string }): number {
+function compareTransmittals(a: TransmittalOrder, b: TransmittalOrder): number {
   return (
     a.day.localeCompare(b.day) ||
     a.createdAt.localeCompare(b.createdAt) ||
@@ -153,6 +200,127 @@ export function buildLastTransmittalBySet(
 }
 
 /**
+ * drawing_set_id → the newest OUTGOING transmittal carrying any of the set's
+ * sheets, and how many of those sheets have changed since it went out.
+ *
+ * Kept apart from buildLastTransmittalBySet on purpose. That one is the Last
+ * Transmittal column: the newest in EITHER direction, undated ones by
+ * created_at. This one answers "what did we last send, and is it still
+ * what's current?".
+ *
+ * - Only outgoing transmittals with a date_sent count. Newest wins by that
+ *   day (the entered date as written, never shifted), then created_at, then
+ *   transmittal number.
+ * - item → drawing (useTransmittals resolves it from the item's immutable
+ *   revision) → set, over every loaded sheet, live AND superseded. A sheet in
+ *   no set (a legacy ungrouped package) is known, just set-less: skipped, not
+ *   unresolved.
+ * - A sheet is changed since sent when (a) its current revision is known and
+ *   is none of the revisions this transmittal carried for it, or (b) it is
+ *   now superseded. (b) is how the owner's revise-as-a-new-set workflow shows:
+ *   the old sheet stays current in the old set and is marked superseded.
+ *   Both at once count once.
+ */
+export function buildLastOutgoingBySet(
+  transmittals: readonly TransmittalRow[] | null | undefined,
+  setPackages: readonly SetPackage[] | null | undefined,
+  currentRevisionIdByDrawingId: ReadonlyMap<string, string> | null | undefined,
+): LastOutgoingRollup {
+  const sheetIndex = new Map<string, { setId: string | null; superseded: boolean }>();
+  for (const pkg of setPackages || []) {
+    if (!pkg) continue;
+    const setId = pkg.setId ? String(pkg.setId) : null;
+    for (const id of sheetIds(pkg.sheets)) sheetIndex.set(id, { setId, superseded: false });
+    for (const id of sheetIds(pkg.supersededSheets)) sheetIndex.set(id, { setId, superseded: true });
+  }
+
+  const best = new Map<string, { value: LastOutgoingTransmittal; order: TransmittalOrder }>();
+  let unresolvedItems = 0;
+  for (const transmittal of transmittals || []) {
+    if (!transmittal || transmittal.is_deleted || transmittal.direction !== "outgoing") continue;
+    const dateSent = String(transmittal.date_sent ?? "").trim();
+    if (!dateSent) continue;
+
+    // set → sheet → the revision ids this transmittal carried for that sheet.
+    const sentBySet = new Map<string, Map<string, Set<string>>>();
+    for (const item of transmittal.items || []) {
+      const drawingId = item?.drawing_id ? String(item.drawing_id) : "";
+      const sheet = drawingId ? sheetIndex.get(drawingId) : undefined;
+      if (!sheet) {
+        unresolvedItems++;
+        continue;
+      }
+      if (!sheet.setId) continue;
+      let sheets = sentBySet.get(sheet.setId);
+      if (!sheets) {
+        sheets = new Map();
+        sentBySet.set(sheet.setId, sheets);
+      }
+      let revisionIds = sheets.get(drawingId);
+      if (!revisionIds) {
+        revisionIds = new Set();
+        sheets.set(drawingId, revisionIds);
+      }
+      if (item.drawing_revision_id) revisionIds.add(String(item.drawing_revision_id));
+    }
+
+    const order: TransmittalOrder = {
+      day: dateSent.slice(0, 10),
+      createdAt: String(transmittal.created_at || ""),
+      number: String(transmittal.transmittal_number || ""),
+    };
+    const sentTo = String(transmittal.sent_to ?? "").trim();
+    for (const [setId, sheets] of sentBySet) {
+      const held = best.get(setId);
+      if (held && compareTransmittals(order, held.order) <= 0) continue;
+      let revised = 0;
+      let superseded = 0;
+      let changed = 0;
+      let unchecked = 0;
+      for (const [drawingId, sentRevisionIds] of sheets) {
+        const isSuperseded = sheetIndex.get(drawingId)?.superseded === true;
+        const currentId = currentRevisionIdByDrawingId?.get(drawingId);
+        const isRevised = currentId !== undefined && !sentRevisionIds.has(currentId);
+        if (isRevised) revised++;
+        if (isSuperseded) superseded++;
+        if (isRevised || isSuperseded) changed++;
+        else if (currentId === undefined) unchecked++;
+      }
+      best.set(setId, {
+        order,
+        value: {
+          id: String(transmittal.id),
+          number: order.number,
+          dateSent: order.day,
+          sentTo: sentTo || null,
+          sheetCount: sheets.size,
+          revisedSinceSent: revised,
+          supersededSinceSent: superseded,
+          changedSinceSent: changed,
+          uncheckedSheets: unchecked,
+        },
+      });
+    }
+  }
+
+  const bySet = new Map<string, LastOutgoingTransmittal>();
+  for (const [setId, entry] of best) bySet.set(setId, entry.value);
+  return { bySet, unresolvedItems };
+}
+
+/**
+ * One set's Last sent. Its own transmittal if one matched. Otherwise Unknown
+ * while any item couldn't be placed, because that item might be this set's.
+ * Only with every item placed is it "not sent yet".
+ */
+export function lastSentForSet(rollup: LastOutgoingRollup, setId: string): LastSent {
+  const transmittal = rollup.bySet.get(String(setId));
+  if (transmittal) return { kind: "sent", transmittal };
+  if (rollup.unresolvedItems > 0) return { kind: "unknown", unresolvedItems: rollup.unresolvedItems };
+  return { kind: "none" };
+}
+
+/**
  * Add the 2026 columns to buildApprovalMatrixRows output. Row order and the
  * governing submittal are untouched.
  */
@@ -162,10 +330,13 @@ export function enrichApprovalMatrixRows<T extends MatrixRowLike>(
     setPackages = [],
     holds = [],
     transmittals = [],
+    currentRevisionIdByDrawingId = null,
   }: {
     setPackages?: readonly SetPackage[] | null;
     holds?: readonly DrawingHoldRow[] | null;
     transmittals?: readonly TransmittalRow[] | null;
+    /** drawing_id → current drawing_revisions.id (format.buildCurrentRevisionIdMap). */
+    currentRevisionIdByDrawingId?: ReadonlyMap<string, string> | null;
   } = {},
 ): Array<EnrichedMatrixRow<T>> {
   const pkgBySetId = packagesBySetId(setPackages);
@@ -175,6 +346,7 @@ export function enrichApprovalMatrixRows<T extends MatrixRowLike>(
     if (hold?.is_active && hold.drawing_id) heldDrawingIds.add(String(hold.drawing_id));
   }
   const lastBySet = buildLastTransmittalBySet(transmittals, setPackages);
+  const lastOutgoing = buildLastOutgoingBySet(transmittals, setPackages, currentRevisionIdByDrawingId);
 
   return (rows || []).map((row) => {
     const pkg = pkgBySetId.get(String(row.id));
@@ -191,6 +363,7 @@ export function enrichApprovalMatrixRows<T extends MatrixRowLike>(
       sheetCount: pkg ? sheets.length : null,
       onHold: sheetIds(sheets).filter((id) => heldDrawingIds.has(id)).length,
       lastTransmittal: lastBySet.get(String(row.id)) ?? null,
+      lastSent: lastSentForSet(lastOutgoing, String(row.id)),
     };
   });
 }

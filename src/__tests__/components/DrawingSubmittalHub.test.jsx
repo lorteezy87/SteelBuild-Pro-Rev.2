@@ -16,6 +16,9 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 // several waits below allow 8s, so the per-test budget has to exceed that.
 vi.setConfig({ testTimeout: 15000 });
 
+// Per-test entity overrides ({ Name: { filter } }). Every other entity answers
+// with no rows. Cleared after each test.
+const entityOverrides = vi.hoisted(() => ({}));
 vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
@@ -25,7 +28,7 @@ vi.mock("@/api/supabaseClient", () => {
     create: vi.fn().mockResolvedValue(null),
   };
   return {
-    entities: new Proxy({}, { get: () => noop }),
+    entities: new Proxy({}, { get: (_target, name) => (entityOverrides[name] ? { ...noop, ...entityOverrides[name] } : noop) }),
     resolveFileUrl: vi.fn((u) => u),
     integrations: { Core: { UploadFile: vi.fn() } },
   };
@@ -111,6 +114,7 @@ const TEST_PROJECT = { id: "test-project-id", name: "Test Project" };
 afterEach(() => {
   holdsState.data = [];
   holdsState.isError = false;
+  for (const name of Object.keys(entityOverrides)) delete entityOverrides[name];
 });
 
 function LocationProbe() {
@@ -127,8 +131,9 @@ function LocationProbe() {
   );
 }
 
-function renderHub({ entries = ["/DrawingSubmittalHub"], ctx = {} } = {}) {
+function renderHub({ entries = ["/DrawingSubmittalHub"], ctx = {}, seed } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  seed?.(qc);
   const ctxValue = {
     activeProject: TEST_PROJECT,
     setActiveProject: () => {},
@@ -526,5 +531,67 @@ describe("DrawingSubmittalHub — record deep links", () => {
     expect(screen.getByRole("tab", { name: /Submittal Register/, hidden: true })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals");
     expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+  });
+});
+
+// The matrix's Last sent line needs the transmittal log AND the hub's own
+// drawing-revisions read. The log is seeded fresh (staleTime 60s), so it never
+// refetches and the only DrawingRevision read is the hub's. Each test then
+// controls that read alone.
+describe("DrawingSubmittalHub — the matrix's Last sent line", () => {
+  const SENT = [{
+    id: "t-1", project_id: TEST_PROJECT.id, transmittal_number: "T-014", direction: "outgoing",
+    source_company: null, received_from: null, sent_to: "EOR", subject: null,
+    date_sent: "2026-08-03", date_received: null, notes: null, created_at: "2026-08-03T09:00:00Z",
+    items: [{ id: "i1", drawing_revision_id: "r1", drawing_id: "d1", sheet_number: "S1", sheet_title: null, revision_code: "0" }],
+    item_count: 1,
+  }];
+  const seedLog = (qc) => qc.setQueryData(["drawing-transmittals", TEST_PROJECT.id], SENT);
+
+  function withSheetAndRevisions(revisionsFilter) {
+    entityOverrides.DrawingSet = { filter: vi.fn().mockResolvedValue([{ id: "s1", project_id: TEST_PROJECT.id, set_name: "Main Steel" }]) };
+    entityOverrides.Drawing = { filter: vi.fn().mockResolvedValue([{ id: "d1", project_id: TEST_PROJECT.id, drawing_set_id: "s1", stage: "IFA" }]) };
+    entityOverrides.DrawingRevision = { filter: revisionsFilter };
+  }
+
+  async function openLastSent(user) {
+    await user.click(await screen.findByRole("button", { name: "Main Steel" }, { timeout: 8000 }));
+    return () => document.querySelector("#matrix-detail-s1 [data-last-sent]");
+  }
+
+  it("waits for the drawing revisions before claiming anything", async () => {
+    const user = userEvent.setup();
+    withSheetAndRevisions(vi.fn(() => new Promise(() => {})));
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=matrix"], seed: seedLog });
+
+    const line = await openLastSent(user);
+    // The log itself is in: the Last Transmittal column shows it.
+    expect(screen.getByRole("link", { name: "T-014" })).toBeInTheDocument();
+    expect(line()).toHaveAttribute("data-last-sent", "loading");
+    expect(within(line()).getByText("Loading last sent transmittal")).toHaveClass("sr-only");
+  });
+
+  it("counts a sheet revised since sent, from the hub's own revisions read", async () => {
+    const user = userEvent.setup();
+    withSheetAndRevisions(vi.fn().mockResolvedValue([
+      { id: "r1", project_id: TEST_PROJECT.id, drawing_id: "d1", version_number: 1, is_current: false },
+      { id: "r2", project_id: TEST_PROJECT.id, drawing_id: "d1", version_number: 2, is_current: true },
+    ]));
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=matrix"], seed: seedLog });
+
+    const line = await openLastSent(user);
+    await waitFor(() => expect(line()?.textContent).toBe(
+      "Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 1 revised or superseded since",
+    ));
+  });
+
+  it("says the revisions couldn't be loaded instead of guessing", async () => {
+    const user = userEvent.setup();
+    withSheetAndRevisions(vi.fn().mockRejectedValue(new Error("revisions failed")));
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=matrix"], seed: seedLog });
+
+    const line = await openLastSent(user);
+    await waitFor(() => expect(line()).toHaveAttribute("data-last-sent", "error"));
+    expect(within(line()).getByText("Transmittals or revisions couldn't be loaded")).toHaveClass("sr-only");
   });
 });

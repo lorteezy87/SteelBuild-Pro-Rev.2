@@ -35,6 +35,7 @@ import {
   getStatusColor,
   getSubmittalDueDate,
   isClosedSubmittal,
+  pluralize,
   summarizeApprovalMatrix,
   submittalRoundCount,
 } from "./format";
@@ -47,7 +48,7 @@ import {
   summarizeMatrixCoverage,
   transmittalHref,
 } from "./approvalMatrix.derive";
-import type { EnrichedMatrixRow, MatrixFilter, MatrixTransmittal } from "./approvalMatrix.derive";
+import type { EnrichedMatrixRow, LastSent, MatrixFilter, MatrixTransmittal } from "./approvalMatrix.derive";
 import { hubHref } from "./hubLinks";
 import type { DueInfo, SetPackage } from "./types";
 import { FilterBar, Pill } from "@/components/command";
@@ -64,10 +65,17 @@ const StageChip = StageChipRaw as unknown as ComponentType<AnyProps>;
 export const MATRIX_FILTER_PARAM = "matrix_filter";
 /** Whether the holds list is known yet — "no rows" is not "no holds". */
 export type HoldsStatus = "ready" | "loading" | "error";
+/**
+ * Whether the expanded row's Last sent inputs, the transmittal log AND the
+ * drawing revisions, are known yet. Missing either, "Not sent yet" or
+ * "0 revised" would be a guess.
+ */
+export type LastSentStatus = "ready" | "loading" | "error";
 const COLUMN_COUNT = 10;
 // Stable defaults: a fresh [] per render would re-run the row enrichment memo.
 const NO_PACKAGES: SetPackage[] = [];
 const NO_HOLDS: DrawingHoldRow[] = [];
+const NO_REVISION_IDS: ReadonlyMap<string, string> = new Map();
 
 interface ApprovalMatrixPanelProps {
   drawingSets: any[];
@@ -87,6 +95,13 @@ interface ApprovalMatrixPanelProps {
   /** Transmittal log (loaded only while this tab is open). */
   transmittals?: TransmittalRow[];
   transmittalsLoading?: boolean;
+  /**
+   * drawing_id → current drawing_revisions.id, from the hub's revisions read.
+   * Drives "revised or superseded since" on the expanded row's Last sent line.
+   */
+  currentRevisionIdByDrawingId?: ReadonlyMap<string, string> | null;
+  /** Defaults to "loading" while `transmittals` is undefined, else "ready". */
+  lastSentStatus?: LastSentStatus;
   /** Gates the "+ Create submittal" link on sets with none. */
   canCreateSubmittal?: boolean;
 }
@@ -139,8 +154,12 @@ export function ApprovalMatrixPanel({
   holdsStatus = "ready",
   transmittals,
   transmittalsLoading = false,
+  currentRevisionIdByDrawingId = NO_REVISION_IDS,
+  lastSentStatus,
   canCreateSubmittal = false,
 }: ApprovalMatrixPanelProps) {
+  // An undefined log is unknown, not empty: never "Not sent yet" off it.
+  const lastSentState: LastSentStatus = lastSentStatus ?? (transmittals === undefined ? "loading" : "ready");
   const [search, setSearch] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const filter = parseMatrixFilter(searchParams.get(MATRIX_FILTER_PARAM));
@@ -160,8 +179,8 @@ export function ApprovalMatrixPanel({
     [drawingSets, submittals, search, useWorkdays],
   );
   const matrixRows = useMemo(
-    () => enrichApprovalMatrixRows(baseRows, { setPackages, holds, transmittals }),
-    [baseRows, setPackages, holds, transmittals],
+    () => enrichApprovalMatrixRows(baseRows, { setPackages, holds, transmittals, currentRevisionIdByDrawingId }),
+    [baseRows, setPackages, holds, transmittals, currentRevisionIdByDrawingId],
   );
   const summary = useMemo(() => summarizeApprovalMatrix(matrixRows), [matrixRows]);
   const coverage = useMemo(() => summarizeMatrixCoverage(matrixRows), [matrixRows]);
@@ -268,6 +287,7 @@ export function ApprovalMatrixPanel({
                   canCreateSubmittal={canCreateSubmittal}
                   transmittalsLoading={transmittalsLoading}
                   holdsStatus={holdsStatus}
+                  lastSentStatus={lastSentState}
                 />
               ))
             )}
@@ -290,9 +310,10 @@ interface MatrixRowProps {
   canCreateSubmittal: boolean;
   transmittalsLoading: boolean;
   holdsStatus: HoldsStatus;
+  lastSentStatus: LastSentStatus;
 }
 
-function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmittal, transmittalsLoading, holdsStatus }: MatrixRowProps) {
+function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmittal, transmittalsLoading, holdsStatus, lastSentStatus }: MatrixRowProps) {
   const [expanded, setExpanded] = useState(false);
   const sub = row.latestSubmittal ?? null;
   const due: DueInfo = row.due;
@@ -423,7 +444,7 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
       {expanded && (
         <tr id={detailId} style={{ background: "var(--cmd-row-hover)" }}>
           <td colSpan={COLUMN_COUNT} style={{ padding: "10px 16px 12px 28px" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 18px", fontSize: 12, color: "var(--cmd-text-muted)", marginBottom: hasHistory ? 10 : 0 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 18px", fontSize: 12, color: "var(--cmd-text-muted)", marginBottom: 8 }}>
               <span>Discipline: <strong style={{ color: "var(--cmd-text)" }}>{row.discipline || "—"}</strong></span>
               {sub && (
                 <>
@@ -436,6 +457,8 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
                 <span>Last transmittal party: <strong style={{ color: "var(--cmd-text)" }}>{row.lastTransmittal.party}</strong></span>
               )}
             </div>
+
+            <LastSentLine lastSent={row.lastSent} status={lastSentStatus} marginBottom={hasHistory ? 10 : 0} />
 
             {approverNotes.unansweredCount > 0 && (
               <div
@@ -512,6 +535,76 @@ function LastTransmittalCell({ transmittal, loading }: { transmittal: MatrixTran
       <Pill tone={directionTone(transmittal.direction)}>{transmittal.direction}</Pill>
       {transmittal.date && <span style={{ ...muted, fontSize: 11 }}>{fmtDate(transmittal.date)}</span>}
     </span>
+  );
+}
+
+const valueStyle = { color: "var(--cmd-text)" } as const;
+
+/**
+ * The expanded row's Last sent line: the newest OUTGOING transmittal that
+ * carried a sheet of this set, and how many of those sheets have been revised
+ * or superseded since. Loading, failed and unmatched states never read as
+ * "Not sent yet".
+ */
+function LastSentLine({ lastSent, status, marginBottom }: { lastSent: LastSent; status: LastSentStatus; marginBottom: number }) {
+  return (
+    <div data-last-sent={status === "ready" ? lastSent.kind : status} style={{ fontSize: 12, color: "var(--cmd-text-muted)", marginBottom }}>
+      {"Last sent: "}
+      <LastSentValue lastSent={lastSent} status={status} />
+    </div>
+  );
+}
+
+function LastSentValue({ lastSent, status }: { lastSent: LastSent; status: LastSentStatus }): ReactNode {
+  if (status === "loading") return <UnknownValue glyph="…" label="Loading last sent transmittal" />;
+  if (status === "error") return <UnknownValue glyph="?" label="Transmittals or revisions couldn't be loaded" />;
+  if (lastSent.kind === "none") return <strong style={valueStyle}>Not sent yet</strong>;
+  if (lastSent.kind === "unknown") {
+    return (
+      <strong
+        style={valueStyle}
+        title={`${pluralize(lastSent.unresolvedItems, "transmittal item")} couldn't be matched to a sheet, so this set's last outgoing transmittal can't be confirmed.`}
+      >
+        Unknown
+      </strong>
+    );
+  }
+  const sent = lastSent.transmittal;
+  const number = sent.number || "Unnumbered";
+  const changed = sent.changedSinceSent;
+  const unchecked = sent.uncheckedSheets;
+  const changedTitle =
+    `Revised or superseded since sent: ${sent.revisedSinceSent} revised, ${sent.supersededSinceSent} superseded` +
+    (unchecked > 0 ? `; ${pluralize(unchecked, "sheet")} couldn't be checked against a current revision` : "");
+  return (
+    <>
+      <Link to={transmittalHref(sent.id)} style={linkStyle} title={`Open transmittal ${number}`}>
+        {number}
+      </Link>
+      {" · "}
+      <strong style={valueStyle}>{fmtDate(sent.dateSent)}</strong>
+      {sent.sentTo && (
+        <>
+          {" · to "}
+          <strong style={valueStyle}>{sent.sentTo}</strong>
+        </>
+      )}
+      {" · "}
+      <strong style={valueStyle}>{pluralize(sent.sheetCount, "sheet")}</strong>
+      {" · "}
+      <strong style={{ color: changed > 0 ? "var(--cmd-warn-text)" : "var(--cmd-text)" }} title={changedTitle}>
+        {`${changed} revised or superseded since`}
+      </strong>
+      {/* Unknown is not "unrevised": say how many sheets had nothing to compare against. */}
+      {unchecked > 0 && (
+        <>
+          {" · "}
+          <span title={`No current revision is loaded for ${pluralize(unchecked, "sheet")}, so ${unchecked === 1 ? "it isn't" : "they aren't"} counted as revised.`}>
+            {`${unchecked} couldn't be checked`}
+          </span>
+        </>
+      )}
+    </>
   );
 }
 

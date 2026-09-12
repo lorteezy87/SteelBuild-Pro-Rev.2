@@ -512,6 +512,43 @@ export function buildCurrentRevisionMap(
 }
 
 /**
+ * drawing_id → the id of its CURRENT drawing_revisions row. A transmittal item
+ * carries the immutable revision id it sent, so "revised since it was sent"
+ * is an id comparison against this map (the Approval Matrix's Last sent line).
+ *
+ * Only is_current=true rows with an id and a drawing_id count. The DB allows
+ * one current row per drawing (ux_drawing_revisions_one_current), so two can
+ * only come from a stale or merged read: then the highest version_number
+ * wins, then the later created_at, then the larger id — never input order.
+ * A drawing with no current row loaded is simply absent: unknown, not
+ * "unrevised".
+ */
+export function buildCurrentRevisionIdMap(
+  drawingRevisions: DrawingRevision[] | null | undefined,
+): Map<string, string> {
+  const best = new Map<string, { id: string; version: number; createdAt: string }>();
+  for (const rev of drawingRevisions || []) {
+    if (!rev || rev.is_current !== true || !rev.id || !rev.drawing_id) continue;
+    const candidate = {
+      id: String(rev.id),
+      version: Number(rev.version_number) || 0,
+      createdAt: String(rev.created_at || ""),
+    };
+    const drawingId = String(rev.drawing_id);
+    const held = best.get(drawingId);
+    const newer = !held || (
+      candidate.version - held.version ||
+      candidate.createdAt.localeCompare(held.createdAt) ||
+      candidate.id.localeCompare(held.id)
+    ) > 0;
+    if (newer) best.set(drawingId, candidate);
+  }
+  const map = new Map<string, string>();
+  for (const [drawingId, entry] of best) map.set(drawingId, entry.id);
+  return map;
+}
+
+/**
  * Package-level displayed revision = the current revision of the set's
  * HIGHEST-version sheet (a per-set rollup), shown as that sheet's revision_code.
  *

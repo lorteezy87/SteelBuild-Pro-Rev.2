@@ -44,6 +44,7 @@ import { DocControlMovedNotice } from "./drawingSubmittalHub/DocControlMovedNoti
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
+  buildCurrentRevisionIdMap,
   buildCurrentRevisionMap,
   buildDrawingKpis,
   buildSequenceReadiness,
@@ -59,7 +60,7 @@ import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
 import RevisionImpactViews from "./drawingSubmittalHub/RevisionImpactViews";
 import { ApprovalMatrixPanel } from "./drawingSubmittalHub/ApprovalMatrixPanel";
-import type { HoldsStatus } from "./drawingSubmittalHub/ApprovalMatrixPanel";
+import type { HoldsStatus, LastSentStatus } from "./drawingSubmittalHub/ApprovalMatrixPanel";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
@@ -235,11 +236,13 @@ function DetailingControlCenter() {
   const holds = holdsQuery.data ?? NO_HOLDS;
   const holdsStatus: HoldsStatus = holdsQuery.data !== undefined ? "ready" : holdsQuery.isError ? "error" : "loading";
   const activeHolds = holdsStatus === "ready" ? activeHoldCount(holds) : null;
-  // The matrix's Last Transmittal column. It's a three-table read, so it
-  // loads only while the matrix is open (same key as the Transmittals tab).
-  const { data: transmittals, isPending: transmittalsPending } = useTransmittals(projectId ?? null, {
+  // The matrix's Last Transmittal column and Last sent line. It's a
+  // three-table read, so it loads only while the matrix is open (same key as
+  // the Transmittals tab).
+  const transmittalsQuery = useTransmittals(projectId ?? null, {
     enabled: activeTab === "matrix",
   });
+  const { data: transmittals, isPending: transmittalsPending } = transmittalsQuery;
 
   // Work packages (for the erection sequence date → backward scheduling) + RFIs
   // (to know which linked RFIs are still open → rfiBlocked readiness).
@@ -255,12 +258,13 @@ function DetailingControlCenter() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
-  const { data: drawingRevisions = [], isPending: revisionsLoading } = useQuery({
+  const revisionsQuery = useQuery({
     queryKey: ["drawing-revisions", projectId],
     queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
+  const { data: drawingRevisions = [], isPending: revisionsLoading } = revisionsQuery;
   // Latest persisted Revision Summary per set → the "revised · N" badge + re-open.
   const { data: summariesBySet = new Map() } = useQuery({
     queryKey: ["revision-summaries", projectId],
@@ -312,6 +316,21 @@ function DetailingControlCenter() {
     () => buildCurrentRevisionMap(drawingRevisions as unknown as HubDrawingRevision[]),
     [drawingRevisions]
   );
+  // The matrix's Last sent line: drawing_id → current revision id, so a sheet
+  // sent at an older revision reads as revised since. Keyed on the query's
+  // own data, because the `= []` default above is a new array every render
+  // while loading.
+  const currentRevisionIdByDrawingId = useMemo(
+    () => buildCurrentRevisionIdMap(revisionsQuery.data as unknown as HubDrawingRevision[] | undefined),
+    [revisionsQuery.data]
+  );
+  // Known only once BOTH inputs are; with either missing, "Not sent yet" or
+  // "0 revised" would be a guess. Data first, like holdsStatus: a failed
+  // background refetch keeps its cached rows.
+  const lastSentStatus: LastSentStatus =
+    transmittals !== undefined && revisionsQuery.data !== undefined
+      ? "ready"
+      : transmittalsQuery.isError || revisionsQuery.isError ? "error" : "loading";
 
   // Per-set Drawing Health Score (slice 2) — deterministic; feeds the Register
   // Health column + the Control Board fleet rollup.
@@ -753,6 +772,8 @@ function DetailingControlCenter() {
             holdsStatus={holdsStatus}
             transmittals={transmittals}
             transmittalsLoading={transmittalsPending}
+            currentRevisionIdByDrawingId={currentRevisionIdByDrawingId}
+            lastSentStatus={lastSentStatus}
             canCreateSubmittal={can("create", "submittal")}
           />
         )}

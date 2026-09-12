@@ -19,7 +19,7 @@ vi.mock("../format", async (importOriginal) => {
   return { ...actual, toDateInputValue: utcMinus7Day };
 });
 
-import { buildLastTransmittalBySet } from "../approvalMatrix.derive";
+import { buildLastOutgoingBySet, buildLastTransmittalBySet } from "../approvalMatrix.derive";
 import { buildSetPackages } from "../format";
 
 function transmittal(overrides: Partial<TransmittalRow> & { drawingIds?: string[] }): TransmittalRow {
@@ -79,5 +79,18 @@ describe("Last Transmittal day keys (fixed UTC-7 local zone)", () => {
       transmittal({ id: "undated", transmittal_number: "T-002", date_sent: null, created_at: "2026-08-02T19:00:00Z", drawingIds: ["d1"] }),
     ], packages);
     expect(last.get("s1")?.id).toBe("entered");
+  });
+});
+
+describe("Last sent day keys (fixed UTC-7 local zone)", () => {
+  it("keeps an entered send date on the day it names, for ordering and for display", () => {
+    // Shifting the entered Aug 3 (00:00Z) to local would make it Aug 2 at
+    // UTC-7. That ties with one sent at noon UTC on Aug 2 and logged later,
+    // which then wins on created_at, and the line would print Aug 2.
+    const { bySet } = buildLastOutgoingBySet([
+      transmittal({ id: "entered", transmittal_number: "T-001", date_sent: "2026-08-03T00:00:00+00:00", created_at: "2026-07-30T15:00:00Z", drawingIds: ["d1"] }),
+      transmittal({ id: "day-before", transmittal_number: "T-002", date_sent: "2026-08-02T12:00:00+00:00", created_at: "2026-08-02T19:00:00Z", drawingIds: ["d1"] }),
+    ], packages, new Map());
+    expect(bySet.get("s1")).toMatchObject({ id: "entered", dateSent: "2026-08-03" });
   });
 });
