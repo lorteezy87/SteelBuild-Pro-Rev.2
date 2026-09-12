@@ -55,12 +55,22 @@ The manifest intentionally remains red for these source/lineage gaps:
 - `20260802090500` (`planner_offline_idempotency`): exact Rev.2 SQL survives as
   git object `26216f3247b0cc63dc0ff03e7f756b0f64c9b762`, but is absent from active
   replay migrations.
-- `20260906040515` (`fix_alerts_superseded_status`): exact SQL and authoritative
-  owner are unresolved.
+- `20260906040515` (`fix_alerts_superseded_status`): production
+  `generate_operational_alerts` is byte-identical to active Rev.2
+  `20260819002000` (SHA-256
+  `d6da4d5d559bfca074cbcd0228e484d2155e0c7b26682f8e7fc7a551b40d8280`),
+  so the stamp has no surviving distinct function-body effect and is an
+  overwritten/orphan candidate. Exact SQL and authoritative ownership remain
+  unresolved, so migration-history repair is not safe.
 - `20260910034739` (`hard_delete_records`): ledger order places it in the
-  SteelBuild-Pro-2026 sequence, but exact source is absent.
+  SteelBuild-Pro-2026 sequence. Its isolated live footprint is six
+  `hard_delete_*` functions plus `data_erasure_log` record metadata changes,
+  none present in the 38 accessible sibling migrations; exact source is absent.
 - `20260910044641` (`m30_scope_items`): ledger order places it in the
-  SteelBuild-Pro-2026 sequence, but exact source is absent.
+  SteelBuild-Pro-2026 sequence. Its isolated live footprint is six
+  `scope_items` columns, four functions, two foreign keys, two checks, three
+  indexes, two triggers, and replacement field/access RLS, none present in the
+  Rev.2 baseline or 38 accessible sibling migrations; exact source is absent.
 
 The two Rev.2 apply-time restamps `20260817072554` and `20260817083550` are
 explicitly frozen and point to their active canonical migration sources in the
