@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ProductionSnapshot } from "@/lib/pieceControl/productionRepository";
 import { derivePieceProductionView } from "../pieceProductionControl.derive";
 
-const snapshot = {
+const snapshot: ProductionSnapshot = {
   pieces: [
     {
       id: "piece-1",
@@ -42,7 +42,7 @@ const snapshot = {
   ],
   completions: [],
   canonicalReleaseWorkPackageIds: ["wp-1"],
-} satisfies ProductionSnapshot;
+};
 
 describe("derivePieceProductionView", () => {
   it("preserves selected-piece, split, release, and bulk planning rules", () => {
