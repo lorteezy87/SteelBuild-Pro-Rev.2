@@ -30,6 +30,10 @@ vi.mock("sonner", () => ({
   },
 }));
 
+// Reached only when a test swaps in the real setPieceControlMode (T18).
+const rpc = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/supabase", () => ({ supabase: { rpc } }));
+
 const rpcReadinessCopy = {
   modelLinks: "3 active model elements are not linked to canonical pieces",
   discrepancy: "Canonical versus legacy discrepancy: 4 pieces and 1.25 tons",
@@ -291,5 +295,65 @@ describe("PieceControlPilotReadiness", () => {
       ruleId: "piece-mode.pilot-blocked",
       code: "P0001",
     });
+  });
+
+  // T18: the server's own admin check fires when the cached role is stale. The
+  // real repository throws a normalized Error whose message ends in "— 42501",
+  // so the toast is the permission message, not the generic fallback.
+  it("explains the server admin check (42501) as a permission problem", async () => {
+    const actual = await vi.importActual<
+      typeof import("@/lib/pieceControl/pilotReadinessRepository")
+    >("@/lib/pieceControl/pilotReadinessRepository");
+    vi.mocked(setPieceControlMode).mockImplementation(actual.setPieceControlMode);
+    rpc.mockReset();
+    rpc.mockResolvedValue({
+      data: null,
+      error: {
+        message: "Only a project admin may change Piece Control mode",
+        code: "42501",
+        details: null,
+        hint: null,
+      },
+    });
+    const { queryClient } = renderReadiness();
+
+    fireEvent.change(await screen.findByRole("combobox"), {
+      target: { value: "pilot" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Type: CHANGE SHADOW TO PILOT"),
+      { target: { value: "CHANGE SHADOW TO PILOT" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm mode change" }),
+    );
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "You do not have permission to complete this Piece Register action.",
+      ),
+    );
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("set_piece_control_mode", {
+      p_project_id: "project-1",
+      p_next_mode: "pilot",
+      p_confirmation: "CHANGE SHADOW TO PILOT",
+    });
+
+    // Outside the P0001 ceiling, so Sentry still gets it at error level.
+    const modeChange = queryClient
+      .getMutationCache()
+      .getAll()
+      .find((mutation) => mutation.meta?.action === "pieceControl.setMode");
+    if (!modeChange) throw new Error("The mode mutation was never built.");
+    const { hasLocalHandler, expectedErrors } = mutationReportingInput(modeChange);
+    expect(
+      classifyReportedError(modeChange.state.error, {
+        source: "mutation",
+        rawIsError: modeChange.state.error instanceof Error,
+        hasLocalHandler,
+        expectedErrors,
+      }),
+    ).toEqual({ verdict: "unexpected", reason: "code-not-eligible", code: "42501" });
   });
 });

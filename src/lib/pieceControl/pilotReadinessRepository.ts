@@ -76,6 +76,8 @@ export async function setPieceControlMode(
   });
   // A real Error carrying the SQLSTATE, like repository.ts: the mutation cache
   // can then recognise the readiness guard (P0001) as an expected outcome.
+  // Its message ends in " — <code>", so the server's admin check (42501) now
+  // toasts the permission message instead of the generic fallback.
   if (error) throw normalizeThrownQueryError(error);
   unwrapPieceControlRpc(data);
 }

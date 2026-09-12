@@ -51,8 +51,15 @@ function rule(id: string, message: RegExp, example: string): ExpectedErrorRule {
  * (supabase/migrations/20260720213000_archive_canonical_pieces.sql), shown by
  * presentPieceControlError. The register pre-filters the held and split cases
  * (archiveEligibility.ts), so a hit on those two now means a stale row.
- * Deliberately absent: "All selected pieces must be active and belong to the
- * same project", which can be a cache-invalidation bug.
+ * Deliberately absent, so they stay error-level:
+ *   - "All selected pieces must be active and belong to the same project",
+ *     which can be a cache-invalidation bug;
+ *   - "Pieces with production history cannot be archived". Consistent data
+ *     never reaches it: advance_piece_station writes a completion and moves the
+ *     piece off not_started onto a station in one transaction, so the
+ *     held-or-started guard fires first, and split child lots with copied
+ *     completions hit the split-lot guard. A hit means completions and the
+ *     piece's lifecycle/station disagree: drift, not a user outcome.
  */
 export const PIECE_ARCHIVE_EXPECTED_ERRORS: readonly ExpectedErrorRule[] = Object.freeze([
   rule(
@@ -64,11 +71,6 @@ export const PIECE_ARCHIVE_EXPECTED_ERRORS: readonly ExpectedErrorRule[] = Objec
     "piece-archive.split-lot",
     /^Split piece lots cannot be archived; preserve the complete lot topology$/,
     "Split piece lots cannot be archived; preserve the complete lot topology",
-  ),
-  rule(
-    "piece-archive.production-history",
-    /^Pieces with production history cannot be archived$/,
-    "Pieces with production history cannot be archived",
   ),
   rule(
     "piece-archive.canonical-release",

@@ -78,11 +78,10 @@ describe("classifyReportedError: allowlisted guards (T1)", () => {
     }
   });
 
-  it("catalogues exactly the six reviewed guards", () => {
+  it("catalogues exactly the five reviewed guards", () => {
     expect(PIECE_ARCHIVE_EXPECTED_ERRORS.map((rule) => rule.id)).toEqual([
       "piece-archive.held-or-started",
       "piece-archive.split-lot",
-      "piece-archive.production-history",
       "piece-archive.canonical-release",
     ]);
     expect(PIECE_MODE_EXPECTED_ERRORS.map((rule) => rule.id)).toEqual([
@@ -255,6 +254,60 @@ describe("classifyReportedError: everything else stays reported (T3)", () => {
         .code,
     ).toBe("42501");
     expect(classifyReportedError(new TypeError("x"), OPTED_IN_ARCHIVE).code).toBe("");
+  });
+});
+
+/**
+ * The opted-in RPCs' other P0001 RAISEs are request bugs, drift or stale state,
+ * never an outcome the screen explains. A widened rule such as
+ * /^[A-Z][A-Za-z ]+: / still passes usableRule's anchoring checks, so only
+ * these texts catch it.
+ */
+describe("classifyReportedError: the opted-in RPCs' other errors stay reported (T17)", () => {
+  // set_piece_control_mode (supabase/migrations/20260718070000_piece_control_slice7.sql)
+  const modeErrors = [
+    "Invalid Piece Control mode",
+    "Project not found",
+    "Project is already in pilot mode",
+    "Unsafe Piece Control transition from off to live",
+    "Confirmation must exactly match: CHANGE SHADOW TO PILOT",
+  ];
+  // archive_piece_lots (supabase/migrations/20260720213000_archive_canonical_pieces.sql).
+  // The stale-selection guard is covered in T3.
+  const archiveErrors = [
+    "Select at least one piece to archive",
+    "Confirmation must exactly match ARCHIVE 1 PIECE",
+    "An archive reason is required",
+    "Project not found",
+    "Piece control is disabled for this project",
+    // Unreachable on consistent data, so a hit is drift (see PIECE_ARCHIVE_EXPECTED_ERRORS).
+    "Pieces with production history cannot be archived",
+  ];
+  const stillReported = { verdict: "unexpected", reason: "no-rule-match", code: "P0001" };
+
+  for (const message of modeErrors) {
+    it(`pieceControl.setMode keeps reporting "${message}"`, () => {
+      expect(
+        classifyReportedError(pg("P0001", message), withRules(PIECE_MODE_EXPECTED_ERRORS)),
+      ).toEqual(stillReported);
+    });
+  }
+
+  for (const message of archiveErrors) {
+    it(`pieceRegister.archive keeps reporting "${message}"`, () => {
+      expect(classifyReportedError(pg("P0001", message), OPTED_IN_ARCHIVE)).toEqual(
+        stillReported,
+      );
+    });
+  }
+
+  it("pieceControl.setMode keeps reporting the server admin check (42501)", () => {
+    expect(
+      classifyReportedError(
+        pg("42501", "Only a project admin may change Piece Control mode"),
+        withRules(PIECE_MODE_EXPECTED_ERRORS),
+      ),
+    ).toEqual({ verdict: "unexpected", reason: "code-not-eligible", code: "42501" });
   });
 });
 

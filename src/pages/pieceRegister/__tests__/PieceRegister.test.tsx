@@ -1934,7 +1934,7 @@ describe("Piece Register command shell", () => {
   it("opts the archive mutation in to expected-guard reporting", async () => {
     const guard = normalizeThrownQueryError({
       code: "P0001",
-      message: "Pieces with production history cannot be archived",
+      message: "Pieces in a canonically released work package cannot be archived",
     });
     vi.mocked(archivePieceLots).mockRejectedValue(guard);
     vi.mocked(fetchPieceRegister).mockResolvedValue([
@@ -1954,7 +1954,7 @@ describe("Piece Register command shell", () => {
 
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
-        "Pieces with recorded production history can't be archived. Deselect them, then try again.",
+        "Pieces in a work package released for fabrication can't be archived. Deselect them, then try again.",
       ),
     );
     const archive = queryClient
@@ -1963,19 +1963,29 @@ describe("Piece Register command shell", () => {
       .find((mutation) => mutation.meta?.action === "pieceRegister.archive");
     if (!archive) throw new Error("The archive mutation was never built.");
     const { hasLocalHandler, expectedErrors } = mutationReportingInput(archive);
-    expect(
-      classifyReportedError(guard, {
+    const classify = (error: Error) =>
+      classifyReportedError(error, {
         source: "mutation",
         rawIsError: true,
         hasLocalHandler,
         expectedErrors,
-      }),
-    ).toEqual({
+      });
+    expect(classify(guard)).toEqual({
       verdict: "expected",
       reason: "matched-rule",
-      ruleId: "piece-archive.production-history",
+      ruleId: "piece-archive.canonical-release",
       code: "P0001",
     });
+    // Consistent data never reaches the production-history guard, so a hit is
+    // drift and stays error-level even on this opted-in screen.
+    expect(
+      classify(
+        normalizeThrownQueryError({
+          code: "P0001",
+          message: "Pieces with production history cannot be archived",
+        }),
+      ),
+    ).toEqual({ verdict: "unexpected", reason: "no-rule-match", code: "P0001" });
   });
 });
 
