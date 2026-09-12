@@ -355,6 +355,10 @@ function SummaryStrip({ summary, onExport }) {
         <Kpi label="Rework risk" value={summary.downstreamExposure} color="#F85149" />
       )}
       {summary.sheetsBlocked > 0 && <Kpi label="No prior file" value={summary.sheetsBlocked} color="var(--text-muted)" />}
+      {/* Without this, a run where every sheet failed is indistinguishable from
+          a clean review that found nothing — the failure mode that hid a 403
+          on every comparison for two days. */}
+      {summary.errorCount > 0 && <Kpi label="Failed" value={summary.errorCount} color="#F85149" />}
       <div style={{ flex: 1 }} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {SEV_ORDER.filter((s) => summary.bySeverity[s] > 0).map((s) => (

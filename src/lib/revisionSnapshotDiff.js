@@ -244,7 +244,7 @@ async function fetchDeltas(comparisonId) {
  * Idempotent against the ux_revision_comparison_pair unique index — a
  * concurrent click that loses the insert race re-reads the winner's row.
  */
-export async function findOrCreateComparison({ projectId, drawingId, fromRevisionId, toRevisionId, requestedBy }) {
+export async function findOrCreateComparison({ drawingId, fromRevisionId, toRevisionId }) {
   const matchPair = (q) =>
     q.eq("source", "revision")
       .eq("drawing_id", drawingId)
@@ -257,19 +257,17 @@ export async function findOrCreateComparison({ projectId, drawingId, fromRevisio
   if (error && error.code !== "PGRST116") throw error;
   if (existing) return existing;
 
-  const { data: created, error: insErr } = await supabase
-    .from("drawing_revision_comparisons")
-    .insert({
-      project_id: projectId || null,
-      drawing_id: drawingId,
-      from_revision_id: fromRevisionId,
-      to_revision_id: toRevisionId,
-      source: "revision",
-      compare_status: "pending",
-      requested_by: requestedBy || null,
-    })
-    .select()
-    .single();
+  // A direct insert is rejected by trg_a_enforce_revision_comparison_guards
+  // ("Open a comparison through create_revision_comparison()", SQLSTATE 42501,
+  // surfaced as an HTTP 403). The RPC is the only sanctioned opener: it derives
+  // project_id from the sheet, enforces PM+, validates that both revisions
+  // belong to the sheet and that FROM is older than TO, and lands the row in
+  // `processing`.
+  const { data: created, error: insErr } = await supabase.rpc("create_revision_comparison", {
+    p_drawing_id: drawingId,
+    p_from_revision_id: fromRevisionId,
+    p_to_revision_id: toRevisionId,
+  });
   if (insErr) {
     if (insErr.code === "23505") {
       const { data: raced } = await matchPair(
@@ -279,7 +277,9 @@ export async function findOrCreateComparison({ projectId, drawingId, fromRevisio
     }
     throw insErr;
   }
-  return created;
+  // A composite-returning RPC comes back as the row itself; tolerate a
+  // single-element array in case PostgREST wraps it.
+  return Array.isArray(created) ? created[0] : created;
 }
 
 /** Load a persisted comparison + its deltas for a sheet pair (reopen path). */
@@ -324,7 +324,9 @@ export async function generateRevisionDiff({
   fromLabel,
   toLabel,
   sheetNumber,
-  requestedBy,
+  // Accepted for API stability; the requester is stamped server-side by
+  // create_revision_comparison() via actor_display_name().
+  requestedBy: _requestedBy,
   model = DEFAULT_MODEL,
   provider = DEFAULT_PROVIDER,
   onRetry,
@@ -338,11 +340,21 @@ export async function generateRevisionDiff({
   }
 
   const comparison = await findOrCreateComparison({
-    projectId, drawingId, fromRevisionId, toRevisionId, requestedBy,
+    // project_id and the requester are stamped server-side by the RPC
+    // (from the sheet, and actor_display_name()) — `requestedBy` is accepted
+    // from callers for API stability but is no longer sent.
+    drawingId, fromRevisionId, toRevisionId,
   });
 
-  if (!force && comparison.compare_status === "complete") {
-    return { comparison, deltas: await fetchDeltas(comparison.id), cached: true };
+  if (comparison.compare_status === "complete") {
+    if (!force) return { comparison, deltas: await fetchDeltas(comparison.id), cached: true };
+    // record_revision_comparison() only accepts a pending/processing comparison,
+    // so a finished review is final by design. Say so here rather than letting
+    // the RPC reject the write after another paid AI call.
+    throw new Error(
+      "This revision pair has already been reviewed, and a completed comparison is final. " +
+        "Dismiss the findings you disagree with instead of re-running it.",
+    );
   }
 
   if (!fromImageB64 || !toImageB64) {
@@ -350,21 +362,26 @@ export async function generateRevisionDiff({
   }
 
   const cid = comparison.id;
+  // Status, summary and deltas are writable ONLY through
+  // record_revision_comparison() — the guard trigger rejects a direct write
+  // ("Comparison results are written only by record_revision_comparison()").
+  // The RPC inserts the deltas itself, so the client never touches that table.
   const markError = async (msg) => {
-    await supabase
-      .from("drawing_revision_comparisons")
-      .update({ compare_status: "error", error_message: String(msg).slice(0, 500) })
-      .eq("id", cid);
+    const { error } = await supabase.rpc("record_revision_comparison", {
+      p_comparison_id: cid,
+      p_status: "error",
+      p_model: model,
+      p_error: String(msg).slice(0, 2000),
+    });
+    if (error) {
+      console.error("[revisionSnapshotDiff] could not record the failure:", error.message);
+    }
   };
 
   try {
-    await supabase
-      .from("drawing_revision_comparisons")
-      .update({ compare_status: "processing", error_message: null })
-      .eq("id", cid);
-    // Clear any partial deltas from a prior failed / forced run before re-inserting.
-    await supabase.from("drawing_revision_deltas").delete().eq("comparison_id", cid);
-
+    // create_revision_comparison() already opened the row in `processing`, and
+    // a comparison is recorded exactly once — there are no partial deltas to
+    // clear (the deltas table refuses hard deletes outright).
     const { data } = await invokeLlmProxy(
       {
         useCase: "revision-compare",
@@ -385,28 +402,24 @@ export async function generateRevisionDiff({
       throw new Error("AI did not return a structured diff. Try again.");
     }
 
-    const rows = coerceDeltas(toolInput).map((r) => ({ ...r, comparison_id: cid }));
-    if (rows.length) {
-      const { error: dErr } = await supabase.from("drawing_revision_deltas").insert(rows);
-      if (dErr) throw new Error(`Delta insert failed: ${dErr.message}`);
-    }
-
     const summary = typeof toolInput.summary === "string" ? toolInput.summary : null;
-    await supabase
-      .from("drawing_revision_comparisons")
-      .update({
-        compare_status: "complete",
-        ai_summary: summary,
-        delta_count: rows.length,
-        model,
-        raw_ai_response: data?.raw ?? null,
-        error_message: null,
-      })
-      .eq("id", cid);
+    const { data: recorded, error: recErr } = await supabase.rpc("record_revision_comparison", {
+      p_comparison_id: cid,
+      p_status: "complete",
+      p_summary: summary,
+      p_model: model,
+      p_deltas: coerceDeltas(toolInput),
+      p_raw: data?.raw ?? null,
+    });
+    // The AI call already succeeded and was paid for — if the save fails, say
+    // that plainly instead of reporting a review that found nothing.
+    if (recErr) throw new Error(`The review ran but could not be saved: ${recErr.message}`);
 
+    const saved = (Array.isArray(recorded) ? recorded[0] : recorded) || null;
+    const deltas = await fetchDeltas(cid);
     return {
-      comparison: { ...comparison, compare_status: "complete", ai_summary: summary, delta_count: rows.length },
-      deltas: await fetchDeltas(cid),
+      comparison: saved || { ...comparison, compare_status: "complete", ai_summary: summary, delta_count: deltas.length },
+      deltas,
       cached: false,
     };
   } catch (err) {
