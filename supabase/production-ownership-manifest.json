@@ -26,18 +26,6 @@
   },
   "migrations": [
     {
-      "version": "20260802090000",
-      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
-      "lifecycle": "unresolved",
-      "evidence": "Exact planner_action_control SQL survives as git object 8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef, but replay source is absent from active migrations"
-    },
-    {
-      "version": "20260802090500",
-      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
-      "lifecycle": "unresolved",
-      "evidence": "Exact planner_offline_idempotency SQL survives as git object 26216f3247b0cc63dc0ff03e7f756b0f64c9b762, but replay source is absent from active migrations"
-    },
-    {
       "version": "20260817072554",
       "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
       "lifecycle": "intentionally-frozen",

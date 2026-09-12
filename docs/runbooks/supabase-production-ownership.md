@@ -47,14 +47,14 @@ configuration.
 
 ## Current reconciliation blockers
 
-The manifest intentionally remains red for these source/lineage gaps:
+The two evidence-backed Rev.2 Planner migrations are restored in active
+inventory as `20260802090000_planner_action_control.sql` and
+`20260802090500_planner_offline_idempotency.sql`. Their contents remain
+byte-identical to git objects `8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef` and
+`26216f3247b0cc63dc0ff03e7f756b0f64c9b762`, respectively.
 
-- `20260802090000` (`planner_action_control`): exact Rev.2 SQL survives as git
-  object `8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef`, but is absent from active
-  replay migrations.
-- `20260802090500` (`planner_offline_idempotency`): exact Rev.2 SQL survives as
-  git object `26216f3247b0cc63dc0ff03e7f756b0f64c9b762`, but is absent from active
-  replay migrations.
+The manifest intentionally remains red for these three source/lineage gaps:
+
 - `20260906040515` (`fix_alerts_superseded_status`): production
   `generate_operational_alerts` is byte-identical to active Rev.2
   `20260819002000` (SHA-256
