@@ -199,6 +199,20 @@ COMMIT;
 -- 9. Two bare auth.uid() policies on storage.objects — the only auth_rls_initplan
 --    violations in the database. Public-schema policies are clean.
 --
--- 10. The supabase-drift CI job cannot execute: .github/workflows/ci.yml:230 runs
---    `npm run supabase:drift`, which is not a script in package.json. This is the
---    job whose stated purpose is catching exactly the drift documented above.
+-- 10. The supabase-drift CI job has never run, but not because it is broken.
+--    Corrected 2026-09-12: an earlier draft of this comment said `npm run
+--    supabase:drift` was undefined in package.json. That was true when written
+--    (absent at 7fdccc0) and was fixed by 3ca62fe, "repair audit controls",
+--    before this file merged. The claim should not have survived into main.
+--
+--    The job is opt-in and simply not switched on: it is gated on the repo
+--    variable SUPABASE_DRIFT_ENABLED == 'true' and needs the secret
+--    SUPABASE_ACCESS_TOKEN, and neither is set, so it skips on every PR.
+--
+--    The checker itself is sound. scripts/supabase-drift-check.mjs hard-fails on
+--    all four directions — repo-only migrations, remote-only migrations,
+--    repo-only functions, deployed-only functions — plus a deprecated-slug list,
+--    because compareDrift sets hasDrift when ANY bucket is non-empty. Turning it
+--    on would have caught items 6 and 7 above, and would have caught
+--    account-delete sitting in supabase/functions/ but never deployed before a
+--    user hit the 404. Two owner settings, no code change.
