@@ -25,27 +25,19 @@ import {
   makeExportFilename,
   recordsToCsv,
 } from "@/lib/dataExchange";
-import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
-import { readFileText } from "@/lib/textDecoding";
+import {
+  assertImportReady,
+  buildProjectOptions,
+  DATASET_KEYS,
+  dataExchangeQueryKeys,
+  formatProjectLabel,
+  IMPORT_EXAMPLES,
+  prepareImportRecords,
+  readDataExchangeFile,
+  summarizeImportResult,
+} from "@/pages/dataExchange/dataExchangeLogic";
 
-const DATASET_KEYS = Object.keys(IMPORT_TARGETS);
-
-const IMPORT_EXAMPLES = {
-  rfis: "RFI #,Title,Question,Drawing Reference,Priority,Status\n001,Anchor bolt projection,Confirm projection at grid B/4,S1.02,High,Open",
-  scheduleTasks: "Task Name,Phase,Start Date,End Date,Status,Assigned To\nDetail anchor bolt plan,Detailing,2026-06-01,2026-06-07,Not Started,Detailing Lead",
-  workPackages: "WP Number,Name,Phase,Status,Tonnage,Crew\nWP-001,Anchor Bolts,Detailing,Not Started,18,Detailing",
-  deliveries: "PO Number,Description,Scheduled Date,Required Date,Status,Pieces,Receiving Location\nPO-1001,Sequence 1 steel,2026-07-15,2026-07-17,Scheduled,86,North laydown yard",
-  punchlist: "Description,Category,Location,Assigned To,Priority,Status\nTouch up primer at Column B4,Coating,Grid B/4,Field Crew,Medium,Open",
-  contacts: "First Name,Last Name,Company,Role,Email,Phone\nJordan,Steel,Demo Steel,Project Manager,jordan@example.com,555-0100",
-  sovItems: "Line Item,Description,Scheduled Value,Current % Complete,Retainage %,Status\n1,Structural Steel Fabrication,485000,35,10,Open\n2,Erection & Field Labor,220000,10,10,Open",
-  costCodes: "Code,Description,Category,Budget,Actual Cost,Committed Cost,Forecast to Complete\n01,Project Management,General Conditions,45000,12500,22000,10500\n02,Detailing,Engineering,85000,42000,85000,0",
-  expenses: "Description,Expense Type,Cost Code,Amount,Vendor,Invoice #,Invoice Date,Payment Status\nShop drawing review,Engineering,02,4500,Detailing Consultants,INV-2026-041,2026-05-01,Approved",
-};
-
-function formatProjectLabel(project) {
-  if (!project) return "Select a project";
-  return project.project_number ? `${project.project_number} - ${project.name}` : project.name;
-}
+export { readDataExchangeFile } from "@/pages/dataExchange/dataExchangeLogic";
 
 function downloadTextFile({ filename, content, type }) {
   const blob = new Blob([content], { type });
@@ -57,24 +49,6 @@ function downloadTextFile({ filename, content, type }) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-}
-
-/**
- * Import file to CSV text. Workbooks go through XLSX; text files decode by
- * byte-order mark / UTF-16 sniff with U+0000 dropped, which Postgres rejects
- * (22P05). Throws TextDecodingError for UTF-32 and misnamed binary files.
- */
-export async function readDataExchangeFile(file) {
-  if (!file) return "";
-  if (/\.(xlsx|xls)$/i.test(file.name)) {
-    const xlsxModule = await import("xlsx");
-    const XLSX = xlsxModule.default || xlsxModule;
-    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
-    const firstSheetName = workbook.SheetNames[0];
-    if (!firstSheetName) return "";
-    return XLSX.utils.sheet_to_csv(workbook.Sheets[firstSheetName], { blankrows: false });
-  }
-  return (await readFileText(file)).text;
 }
 
 function SectionHeader({ icon: Icon, title, detail }) {
@@ -169,14 +143,10 @@ export default function DataExchange() {
   const { activeProject, activeProjects: projects, loading: projectsLoading } = useProjectContext();
   const fileInputRef = useRef(null);
 
-  const projectOptions = useMemo(() => {
-    const byId = new Map();
-    for (const project of projects || []) {
-      if (project?.id) byId.set(project.id, project);
-    }
-    if (activeProject?.id) byId.set(activeProject.id, activeProject);
-    return [...byId.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
-  }, [activeProject, projects]);
+  const projectOptions = useMemo(
+    () => buildProjectOptions(projects, activeProject),
+    [activeProject, projects],
+  );
 
   const [selectedProjectId, setSelectedProjectId] = useState(projectId || activeProject?.id || "");
   const [targetKey, setTargetKey] = useState(DATASET_KEYS[0]);
@@ -205,7 +175,7 @@ export default function DataExchange() {
   const selectedEntity = entities[selectedTarget.entityKey];
 
   const recordsQuery = useQuery({
-    queryKey: ["data-exchange", selectedTarget.entityKey, selectedProjectId],
+    queryKey: dataExchangeQueryKeys.records(selectedTarget.entityKey, selectedProjectId),
     enabled: Boolean(selectedProjectId && selectedEntity),
     queryFn: () => selectedEntity.filter({ project_id: selectedProjectId }, "-created_at"),
     staleTime: 30 * 1000,
@@ -228,55 +198,19 @@ export default function DataExchange() {
 
   const importMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedProject?.id) throw new Error("Select a project before importing.");
-      if (!selectedEntity) throw new Error(`No entity client is available for ${selectedTarget.label}.`);
-      if (stagedImport.invalidRows.length) throw new Error("Resolve invalid import rows before committing.");
-      if (!stagedImport.validRecords.length) throw new Error("No valid rows are ready to import.");
-      if (!importApproved) throw new Error("Review and approve the import before committing records.");
-
-      let skippedDuplicates = 0;
-      // Skip rows that already exist (or repeat within the paste) by the
-      // target's natural key, so a re-import doesn't 409 on the unique index.
-      // RFIs key on the normalized rfi_number; submittals on submittal_number
-      // (the (project_id, submittal_number) unique index). Other targets have
-      // no natural key here and aren't deduped.
-      const dedupField =
-        targetKey === "rfis" ? "rfi_number"
-          : targetKey === "submittals" ? "submittal_number"
-            : null;
-      const dedupKey = (value) =>
-        targetKey === "rfis"
-          ? rfiNumberDedupKey(value)
-          : value == null ? "" : String(value).trim().toLowerCase();
-      const existingKeys = dedupField
-        ? new Set(records.map((record) => dedupKey(record[dedupField])).filter(Boolean))
-        : null;
-      const stagedKeys = new Set();
-
-      const recordsToCreate = stagedImport.validRecords.flatMap((record) => {
-        const nextRecord = targetKey === "rfis" && record.rfi_number
-          ? { ...record, rfi_number: normalizeRfiNumber(record.rfi_number) }
-          : record;
-        if (dedupField) {
-          const key = dedupKey(nextRecord[dedupField]);
-          if (key) {
-            if (existingKeys.has(key) || stagedKeys.has(key)) {
-              skippedDuplicates += 1;
-              return [];
-            }
-            stagedKeys.add(key);
-          }
-        }
-        const metadata = { ...(record.metadata || {}) };
-        delete metadata.onboarding_import;
-        return [{
-          ...nextRecord,
-          metadata: {
-            ...metadata,
-            data_exchange_import: true,
-            import_source_name: importSourceName,
-          },
-        }];
+      assertImportReady({
+        projectId: selectedProject?.id,
+        entityAvailable: Boolean(selectedEntity),
+        targetLabel: selectedTarget.label,
+        invalidRowCount: stagedImport.invalidRows.length,
+        validRowCount: stagedImport.validRecords.length,
+        approved: importApproved,
+      });
+      const { recordsToCreate, skippedDuplicates } = prepareImportRecords({
+        targetKey,
+        existingRecords: records,
+        validRecords: stagedImport.validRecords,
+        importSourceName,
       });
 
       if (!recordsToCreate.length) {
@@ -287,24 +221,20 @@ export default function DataExchange() {
       return { rows: created, skippedDuplicates, skippedCreates: skipped };
     },
     onSuccess: ({ rows, skippedDuplicates, skippedCreates = 0 }) => {
-      queryClient.invalidateQueries({ queryKey: ["data-exchange", selectedTarget.entityKey, selectedProjectId] });
-      queryClient.invalidateQueries({ queryKey: [selectedTarget.entityKey] });
+      queryClient.invalidateQueries({
+        queryKey: dataExchangeQueryKeys.records(selectedTarget.entityKey, selectedProjectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: dataExchangeQueryKeys.entity(selectedTarget.entityKey),
+      });
       setImportApproved(false);
-      const skipBits = [];
-      if (skippedDuplicates) skipBits.push(`${skippedDuplicates} duplicate skipped`);
-      if (skippedCreates) skipBits.push(`${skippedCreates} row create failed`);
-      const skipSuffix = skipBits.length ? `, ${skipBits.join(", ")}` : "";
-      if (rows.length > 0 && skippedCreates > 0) {
-        toast.warning(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skipSuffix}`);
-      } else if (rows.length > 0) {
-        toast.success(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skipSuffix}`);
-      } else if (skippedDuplicates || skippedCreates) {
-        toast.warning(
-          `${skipBits.join(", ") || "rows skipped"}; no new rows imported`,
-        );
-      } else {
-        toast.info("No rows were imported");
-      }
+      const summary = summarizeImportResult({
+        importedCount: rows.length,
+        skippedDuplicates,
+        skippedCreates,
+        targetLabel: selectedTarget.label,
+      });
+      toast[summary.level](summary.message);
     },
     onError: (err) => toast.error(err?.message || "Import failed"),
   });
