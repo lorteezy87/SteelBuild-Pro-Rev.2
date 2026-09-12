@@ -26,6 +26,7 @@ import {
   recordsToCsv,
 } from "@/lib/dataExchange";
 import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
+import { readFileText } from "@/lib/textDecoding";
 
 const DATASET_KEYS = Object.keys(IMPORT_TARGETS);
 
@@ -58,7 +59,12 @@ function downloadTextFile({ filename, content, type }) {
   URL.revokeObjectURL(url);
 }
 
-async function readDataExchangeFile(file) {
+/**
+ * Import file to CSV text. Workbooks go through XLSX; text files decode by
+ * byte-order mark / UTF-16 sniff with U+0000 dropped, which Postgres rejects
+ * (22P05). Throws TextDecodingError for UTF-32 and misnamed binary files.
+ */
+export async function readDataExchangeFile(file) {
   if (!file) return "";
   if (/\.(xlsx|xls)$/i.test(file.name)) {
     const xlsxModule = await import("xlsx");
@@ -68,7 +74,7 @@ async function readDataExchangeFile(file) {
     if (!firstSheetName) return "";
     return XLSX.utils.sheet_to_csv(workbook.Sheets[firstSheetName], { blankrows: false });
   }
-  return file.text();
+  return (await readFileText(file)).text;
 }
 
 function SectionHeader({ icon: Icon, title, detail }) {
