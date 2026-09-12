@@ -26,7 +26,7 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { computeRevisedContractValue, preferManualActual } from "@/services/costRollup";
 import { COST_CODES } from "@/components/shared/costCodes";
-import { formatCurrency as sharedFormatCurrency } from "@/components/shared/formatters";
+import { formatCurrencyWhole as formatCurrency } from "@/components/shared/formatters";
 import { sovScheduledTotal } from "@/pages/dashboard/projectMetrics";
 import { calcEVM } from "@/utils/projectKpis";
 import { logActivity } from "@/services/auditLogger";
@@ -53,12 +53,9 @@ export function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Delegates to the canonical shared formatter (whole-dollar display) so the
-// Cost Control Center respects user currency preferences like every other
-// financial surface. Kept as a re-export for existing call sites.
-export function formatCurrency(value: unknown): string {
-  return sharedFormatCurrency(safeNumber(value), 0);
-}
+// Preserve the hook's public named export while keeping formatting logic in
+// the canonical shared module.
+export { formatCurrency };
 
 export function formatSigned(value: unknown): string {
   if (value == null) return "—";
