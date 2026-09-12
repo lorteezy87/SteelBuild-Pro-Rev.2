@@ -18,7 +18,7 @@ import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import { buildSovSummary, calcRow } from "./sovControlCenter.derive";
 import type { SovLineItem, SovSummary } from "./sovControlCenter.derive";
-// Note: formatCurrency/formatPercent from formatters.jsx are available if needed
+// Note: shared formatCurrency/formatPercent helpers are available if needed.
 // but we use local fmtFull/fmtMoney below to stay strictly typed in this file.
 
 // ---------------------------------------------------------------------------

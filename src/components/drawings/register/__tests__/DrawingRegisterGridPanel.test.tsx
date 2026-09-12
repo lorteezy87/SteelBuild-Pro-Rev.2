@@ -6,7 +6,7 @@
 // provisions a revision via ensureCurrentRevision and refetches the register. A
 // row that already has a current revision shows the normal Release select.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import "@testing-library/jest-dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -251,5 +251,100 @@ describe("DrawingRegisterGridPanel — revision workflow", () => {
 
     expect(screen.getByRole("button", { name: /revised · 1/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upload revision for Main Steel - IFC" })).toBeInTheDocument();
+  });
+});
+
+describe("DrawingRegisterGridPanel — large registers", () => {
+  let rectSpy: ReturnType<typeof vi.spyOn>;
+  let originalResizeObserver: typeof window.ResizeObserver;
+
+  beforeEach(() => {
+    originalResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = class {
+      private readonly callback: ResizeObserverCallback;
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+
+      observe(target: Element) {
+        const rect = target.getBoundingClientRect();
+        this.callback([{
+          target,
+          contentRect: rect,
+          borderBoxSize: [{
+            inlineSize: rect.width,
+            blockSize: rect.height,
+          }],
+        } as unknown as ResizeObserverEntry], this);
+      }
+
+      unobserve() {}
+      disconnect() {}
+    };
+    rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function getBoundingClientRect() {
+        const height = this.getAttribute("data-testid") === "drawing-register-virtual-body"
+          ? 600
+          : 54;
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: 1400,
+          bottom: height,
+          width: 1400,
+          height,
+          toJSON: () => ({}),
+        };
+      });
+    vi.clearAllMocks();
+    canEdit = true;
+    registerRows = Array.from({ length: 150 }, (_, index) => {
+      const sequence = String(index + 1).padStart(3, "0");
+      return makeRow({
+        drawing_id: `dwg-${sequence}`,
+        sheet_number: `S${sequence}`,
+        sheet_title: `Framing level ${sequence}`,
+        current_revision_id: `rev-${sequence}`,
+      });
+    });
+
+    afterEach(() => {
+      rectSpy.mockRestore();
+      window.ResizeObserver = originalResizeObserver;
+    });
+  });
+
+  it("virtualizes the row body while preserving accessible headers and visible controls", () => {
+    renderGrid();
+
+    expect(screen.getByRole("table", { name: "Drawing Register" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Sheet" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "S001" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View S001" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "S150" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("row").length).toBeLessThan(registerRows.length);
+  });
+
+  it("keeps filtering and grouped expansion controls functional across virtualization", async () => {
+    const user = userEvent.setup();
+    const view = renderGrid();
+
+    await user.type(screen.getByPlaceholderText("Filter sheet, title, discipline, set…"), "S150");
+    expect(screen.getByRole("link", { name: "S150" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View S150" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "S001" })).not.toBeInTheDocument();
+
+    view.unmount();
+    registerRows = registerRows.map((row) => ({ ...row, drawing_set_name: "Main Steel - IFC" }));
+    renderGrid();
+    await user.click(screen.getByRole("button", { name: "Group by set" }));
+    const groupToggle = screen.getByRole("button", { name: /main steel - ifc.*150 sheets/i });
+    expect(groupToggle).toHaveAttribute("aria-expanded", "true");
+    await user.click(groupToggle);
+    expect(groupToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("link", { name: "S001" })).not.toBeInTheDocument();
   });
 });
