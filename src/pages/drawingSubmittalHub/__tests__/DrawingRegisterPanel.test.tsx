@@ -95,6 +95,7 @@ describe('Drawing register revision workflow discoverability', () => {
   it('forwards revision upload and summary callbacks from the canonical sheet grid', async () => {
     registerRows = [{
       drawing_id: 'dwg-1', project_id: 'p1', sheet_number: 'S101', sheet_title: 'Framing',
+      drawing_set_id: 'set-1',
       discipline: 'S', drawing_set_name: 'Main steel', stage: 'IFC', current_revision_id: 'rev-1',
       current_revision: 'A', current_status: 'released_for_shop', current_issued_at: null,
       open_impact_count: 0, pending_review_count: 0, rfi_count: 0, work_package_count: 0,

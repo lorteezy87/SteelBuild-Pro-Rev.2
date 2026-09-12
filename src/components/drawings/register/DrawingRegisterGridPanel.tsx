@@ -201,13 +201,21 @@ export function DrawingRegisterGridPanel({
   const untrackedRows = useMemo(() => rowsNeedingProvisioning(rows), [rows]);
   const packageByDrawingId = useMemo(() => {
     const packages = new Map<string, SetPackage>();
+    const packagesBySetId = new Map<string, SetPackage>();
     for (const pkg of setPackages) {
-      for (const drawing of pkg.sheets) {
+      if (pkg.setId) packagesBySetId.set(String(pkg.setId), pkg);
+      for (const drawing of [...pkg.sheets, ...pkg.supersededSheets]) {
         if (drawing.id) packages.set(String(drawing.id), pkg);
       }
     }
+    for (const row of rows) {
+      if (!packages.has(row.drawing_id) && row.drawing_set_id) {
+        const pkg = packagesBySetId.get(String(row.drawing_set_id));
+        if (pkg) packages.set(row.drawing_id, pkg);
+      }
+    }
     return packages;
-  }, [setPackages]);
+  }, [rows, setPackages]);
   const firstVisibleDrawingByPackage = useMemo(() => {
     const first = new Map<string, string>();
     for (const row of rows) {

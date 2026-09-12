@@ -53,6 +53,7 @@ import { DrawingRegisterGridPanel } from "../DrawingRegisterGridPanel";
 function makeRow(over: Partial<DrawingRegisterRow> = {}): DrawingRegisterRow {
   return {
     drawing_id: "dwg-1",
+    drawing_set_id: "set-1",
     project_id: "proj-1",
     sheet_number: "S101",
     sheet_title: "First Floor Framing",
@@ -225,5 +226,30 @@ describe("DrawingRegisterGridPanel — revision workflow", () => {
     expect(screen.queryByRole("button", { name: /upload revision/i })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /revised · 1/i }));
     expect(onOpenSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves a visible sheet from its canonical set ID when the hub drawing list is truncated", () => {
+    const truncatedPackage: SetPackage = { ...pkg, sheets: [] };
+    renderGrid({
+      setPackages: [truncatedPackage],
+      summariesBySet: new Map([["set-1", { summary: { setId: "set-1" }, sheets_changed: 2 } as any]]),
+      onOpenSummary: vi.fn(),
+    });
+
+    expect(screen.getByRole("button", { name: /revised · 2/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Upload revision for Main Steel - IFC" })).toBeInTheDocument();
+  });
+
+  it("resolves revision actions for superseded sheets", () => {
+    registerRows = [makeRow({ drawing_set_id: null })];
+    const supersededPackage: SetPackage = { ...pkg, sheets: [], supersededSheets: [{ id: "dwg-1", is_superseded: true }] };
+    renderGrid({
+      setPackages: [supersededPackage],
+      summariesBySet: new Map([["set-1", { summary: { setId: "set-1" }, sheets_changed: 1 } as any]]),
+      onOpenSummary: vi.fn(),
+    });
+
+    expect(screen.getByRole("button", { name: /revised · 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Upload revision for Main Steel - IFC" })).toBeInTheDocument();
   });
 });
