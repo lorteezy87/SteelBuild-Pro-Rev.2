@@ -1,4 +1,70 @@
-export const INTEGRATION_AREAS = [
+export type IntegrationKey =
+  | "email"
+  | "accounting"
+  | "document-storage"
+  | "scheduling"
+  | "autodesk-bim";
+
+export type IntegrationStatus = "Partially Live" | "Planned" | "Adapter Required";
+export type IntegrationRisk = "Medium" | "High";
+export type CustomerStatusKey =
+  | "available"
+  | "setup_required"
+  | "custom_setup"
+  | "coming_soon"
+  | "admin_review";
+export type CustomerTone = "success" | "info" | "warning" | "muted";
+
+export interface IntegrationProvider {
+  name: string;
+  status: CustomerStatusKey;
+}
+
+export interface IntegrationArea {
+  key: IntegrationKey;
+  name: string;
+  category: string;
+  status: IntegrationStatus;
+  risk: IntegrationRisk;
+  customerStatus: CustomerStatusKey;
+  customerSummary: string;
+  providers: IntegrationProvider[];
+  shortDescription: string;
+  systems: string[];
+  existingCapabilities: string[];
+  targetWorkflows: string[];
+  dataTouched: string[];
+  prerequisites: string[];
+  nextSprint: string[];
+}
+
+export interface IntegrationFilters {
+  category?: string;
+  status?: string;
+  query?: string;
+}
+
+export interface IntegrationSummary {
+  total: number;
+  byStatus: Partial<Record<IntegrationStatus, number>>;
+  highRisk: number;
+  partiallyLive: number;
+}
+
+export interface CustomerIntegrationSummary {
+  total: number;
+  availableAreas: number;
+  availableProviders: number;
+  comingSoonProviders: number;
+}
+
+export interface IntegrationBuildOrderItem {
+  phase: string;
+  title: string;
+  reason: string;
+}
+
+export const INTEGRATION_AREAS: IntegrationArea[] = [
   {
     key: "email",
     name: "Email",
@@ -187,11 +253,15 @@ export const INTEGRATION_AREAS = [
 export const INTEGRATION_STATUSES = ["All", "Partially Live", "Planned", "Adapter Required"];
 export const INTEGRATION_CATEGORIES = ["All", ...Array.from(new Set(INTEGRATION_AREAS.map((area) => area.category)))];
 
-export function getIntegrationByKey(key) {
+export function getIntegrationByKey(key: string): IntegrationArea {
   return INTEGRATION_AREAS.find((area) => area.key === key) || INTEGRATION_AREAS[0];
 }
 
-export function filterIntegrations({ category = "All", status = "All", query = "" } = {}) {
+export function filterIntegrations({
+  category = "All",
+  status = "All",
+  query = "",
+}: IntegrationFilters = {}): IntegrationArea[] {
   const normalizedQuery = query.trim().toLowerCase();
   return INTEGRATION_AREAS.filter((area) => {
     const matchesCategory = category === "All" || area.category === category;
@@ -208,20 +278,20 @@ export function filterIntegrations({ category = "All", status = "All", query = "
   });
 }
 
-export function integrationSummary(areas = INTEGRATION_AREAS) {
+export function integrationSummary(areas: IntegrationArea[] = INTEGRATION_AREAS): IntegrationSummary {
   return areas.reduce((acc, area) => {
     acc.total += 1;
     acc.byStatus[area.status] = (acc.byStatus[area.status] || 0) + 1;
     acc.highRisk += area.risk === "High" ? 1 : 0;
     acc.partiallyLive += area.status === "Partially Live" ? 1 : 0;
     return acc;
-  }, { total: 0, byStatus: {}, highRisk: 0, partiallyLive: 0 });
+  }, { total: 0, byStatus: {}, highRisk: 0, partiallyLive: 0 } as IntegrationSummary);
 }
 
 // ── Customer-facing readiness ────────────────────────────────────────
 // Clean product language shown to normal users; the dev `status`/`risk`
 // fields on each area stay for the admin/developer view.
-export const CUSTOMER_STATUS_META = {
+export const CUSTOMER_STATUS_META: Record<CustomerStatusKey, { label: string; tone: CustomerTone }> = {
   available:      { label: "Available",              tone: "success" },
   setup_required: { label: "Setup Required",         tone: "info" },
   custom_setup:   { label: "Custom Setup",           tone: "info" },
@@ -229,8 +299,11 @@ export const CUSTOMER_STATUS_META = {
   admin_review:   { label: "Admin Review Required",  tone: "warning" },
 };
 
-export function customerStatusMeta(statusKey) {
-  return CUSTOMER_STATUS_META[statusKey] || CUSTOMER_STATUS_META.coming_soon;
+export function customerStatusMeta(statusKey?: string): { label: string; tone: CustomerTone } {
+  if (statusKey && statusKey in CUSTOMER_STATUS_META) {
+    return CUSTOMER_STATUS_META[statusKey as CustomerStatusKey];
+  }
+  return CUSTOMER_STATUS_META.coming_soon;
 }
 
 // Filter options for the customer-facing catalog (by readiness label).
@@ -243,13 +316,18 @@ export const CUSTOMER_STATUS_FILTERS = [
 ];
 
 // Filter the catalog by the customer-facing readiness label (e.g. "Available").
-export function filterByCustomerStatus(areas = INTEGRATION_AREAS, label = "All") {
+export function filterByCustomerStatus(
+  areas: IntegrationArea[] = INTEGRATION_AREAS,
+  label = "All",
+): IntegrationArea[] {
   if (label === "All") return areas;
   return areas.filter((area) => customerStatusMeta(area.customerStatus).label === label);
 }
 
 // Roll up customer-facing readiness for the KPI strip.
-export function customerIntegrationSummary(areas = INTEGRATION_AREAS) {
+export function customerIntegrationSummary(
+  areas: IntegrationArea[] = INTEGRATION_AREAS,
+): CustomerIntegrationSummary {
   return areas.reduce((acc, area) => {
     acc.total += 1;
     if (area.customerStatus === "available") acc.availableAreas += 1;
@@ -257,10 +335,15 @@ export function customerIntegrationSummary(areas = INTEGRATION_AREAS) {
     acc.availableProviders += providers.filter((p) => p.status === "available").length;
     acc.comingSoonProviders += providers.filter((p) => p.status === "coming_soon").length;
     return acc;
-  }, { total: 0, availableAreas: 0, availableProviders: 0, comingSoonProviders: 0 });
+  }, {
+    total: 0,
+    availableAreas: 0,
+    availableProviders: 0,
+    comingSoonProviders: 0,
+  });
 }
 
-export const INTEGRATION_BUILD_ORDER = [
+export const INTEGRATION_BUILD_ORDER: IntegrationBuildOrderItem[] = [
   {
     phase: "Foundation",
     title: "Integration registry and provider boundaries",

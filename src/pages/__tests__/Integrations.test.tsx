@@ -9,7 +9,15 @@ interface ProjectState {
   id: string | null;
 }
 
-const { projectState } = vi.hoisted((): { projectState: ProjectState } => ({
+interface PermissionState {
+  isAdmin: boolean;
+}
+
+const { permissionState, projectState } = vi.hoisted((): {
+  permissionState: PermissionState;
+  projectState: ProjectState;
+} => ({
+  permissionState: { isAdmin: false },
   projectState: { id: null },
 }));
 
@@ -18,7 +26,7 @@ vi.mock("@/hooks/useProjectId", () => ({
 }));
 
 vi.mock("@/services/permissions", () => ({
-  usePermissions: () => ({ isAdmin: false }),
+  usePermissions: () => ({ isAdmin: permissionState.isAdmin }),
 }));
 
 vi.mock("@/api/supabaseClient", () => ({
@@ -41,7 +49,9 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@/components/dms/DocumentStorageSettings", () => ({
-  default: (): null => null,
+  default: ({ projectId }: { projectId: string }) => (
+    <div>Linked folders for {projectId}</div>
+  ),
 }));
 
 import Integrations from "@/pages/Integrations";
@@ -62,6 +72,7 @@ function renderIntegrations() {
 
 describe("Integrations catalog", () => {
   beforeEach(() => {
+    permissionState.isAdmin = false;
     projectState.id = null;
   });
 
@@ -91,5 +102,34 @@ describe("Integrations catalog", () => {
     expect(screen.getByText("Gmail")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Live Configuration" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Email Accounts" })).toBeInTheDocument();
+  });
+
+  it("keeps project settings fail-closed until a project is active", () => {
+    const { rerender } = renderIntegrations();
+
+    expect(screen.queryByRole("heading", { name: "Live Configuration" })).not.toBeInTheDocument();
+
+    projectState.id = "project-1";
+    rerender(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <Integrations />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Live Configuration" })).toBeInTheDocument();
+    expect(screen.getByText("Linked folders for project-1")).toBeInTheDocument();
+  });
+
+  it("exposes internal status and risk only through the admin developer toggle", () => {
+    permissionState.isAdmin = true;
+    renderIntegrations();
+
+    expect(screen.queryByText("Build Order")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Developer view" }));
+
+    expect(screen.getByRole("heading", { name: "Build Order" })).toBeInTheDocument();
+    expect(screen.getAllByText("Partially Live").length).toBeGreaterThan(0);
   });
 });
