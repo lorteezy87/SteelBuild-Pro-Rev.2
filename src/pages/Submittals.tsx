@@ -1,52 +1,45 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { ComponentType, PropsWithChildren } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { entities } from "@/api/supabaseClient";
 import { ensureCriticalAgingActionItems } from "@/lib/submittalAgingTriggers";
 import { localToday } from "@/utils/dates";
 import {
   buildCreateInitialFromSet,
-  buildStatusSuggestPatch,
-  filterSuggestAgainstCurrent,
-  type StatusSuggestPatch,
 } from "@/lib/submittalLinkGlue";
 import { useProjectContext } from "@/components/shared/ProjectContext";
-import {
-  BulkActionBar as BulkActionBarRaw,
-} from "@/components/design-system";
 import { toast } from "sonner";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import SubmittalBulkEditModal from "@/components/submittals/SubmittalBulkEditModal";
-import SubmittalBulkAddModal from "@/components/submittals/SubmittalBulkAddModal";
-import NewRoundModalRaw from "@/components/submittals/NewRoundModal";
-import ReleaseGateOverrideModalRaw from "@/components/submittals/ReleaseGateOverrideModal";
-import SheetResponseGridRaw from "@/components/submittals/SheetResponseGrid";
-import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import {
   splitCreateSubmittalPayload,
 } from "./submittals/submittalMutationHelpers";
 import {
   buildNewRoundCarrySeed,
-  buildStatusChangeWrite,
-  buildVerbCtaAdvanceInput,
 } from "./submittals/submittalAdvanceHelpers";
 import { forecastPortfolio } from "@/lib/submittalForecast";
 import { usePermissions } from "@/services/permissions";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useSubmittalComponents } from "@/hooks/useSubmittalComponents";
-import { isMissingSchemaObjectError } from "@/lib/postgrestErrors";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import type { DrawingType } from "@/lib/submittalComponents";
-import { Dialog, DialogContent } from "./submittals/uiCompat";
-import { SubmittalVirtualList } from "./submittals/components";
-import { SubmittalDetail } from "./submittals/SubmittalDetail";
 import SubmittalRegisterPanel from "./submittals/SubmittalRegisterPanel";
-import { computeSubmittalStats, filterAndSortSubmittals, getVisibleSelectionState } from "./submittals/submittalRegister.derive";
 import SubmittalFormModal from "./submittals/SubmittalFormModal";
-import StatusSuggestStrip from "./submittals/StatusSuggestStrip";
+import SubmittalPageOverlays from "./submittals/SubmittalPageOverlays";
+import {
+  SubmittalDetailSection,
+  SubmittalListSection,
+} from "./submittals/SubmittalWorkspace";
 import { useSubmittalsPageMutations } from "./submittals/useSubmittalsPageMutations";
-import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types";
+import { useSubmittalsPageQueries } from "./submittals/useSubmittalsPageQueries";
+import { useSubmittalsPageState } from "./submittals/useSubmittalsPageState";
+import { useSubmittalRouteController } from "./submittals/useSubmittalRouteController";
+import type { DrawingSet, Submittal } from "./submittals/types";
+
+interface ActiveProject {
+  id: string;
+  name?: string;
+  project_name?: string;
+  metadata?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
 
 /**
  * Submittals — formal transmittal register.
@@ -56,76 +49,61 @@ import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types"
  * sent, when, to whom, which round, current status, who the ball is
  * with.
  *
- * The SubmittalRegisterPanel is the canonical route presentation. The page
- * remains the owner of queries, workflow flags, and detail panels; mutations
- * live in useSubmittalsPageMutations (ID 21).
+ * The route owns project/URL wiring and composes typed query, state, workflow,
+ * mutation, register, detail, and overlay seams.
  */
 
-// These modals and the bulk action bar are still .jsx, so TS infers their array
-// props from [] defaults; casts keep the typed parent boundary explicit.
-type AnyProps = PropsWithChildren<Record<string, unknown>>;
-const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
-const NewRoundModal = NewRoundModalRaw as unknown as ComponentType<AnyProps>;
-const ReleaseGateOverrideModal = ReleaseGateOverrideModalRaw as unknown as ComponentType<AnyProps>;
-const SheetResponseGrid = SheetResponseGridRaw as unknown as ComponentType<AnyProps>;
-
 export default function Submittals({ embedded = false }: { embedded?: boolean } = {}) {
-  const qc = useQueryClient();
-  const activeProject = useProjectContext().activeProject as any;
-  const projectId = activeProject?.id as string | undefined;
+  const activeProject = useProjectContext().activeProject as ActiveProject | null;
+  const projectId = activeProject?.id;
   const { can } = usePermissions();
-
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  /** Event glue: create opened from a set (`?targetSetId=`) — seeds linked sets. */
-  const [createFromSet, setCreateFromSet] = useState<{
-    drawing_set_ids: string[];
-    status?: string;
-    ball_in_court?: string;
-    requireLinkedSet: boolean;
-  } | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  // Phase 3 splitting: when set, the create form opens as a "spin off child"
-  // with this submittal as the parent (project + drawing sets prefilled).
-  const [spinOffParentId, setSpinOffParentId] = useState<string | null>(null);
-  const [toDelete, setToDelete] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterBIC, setFilterBIC] = useState("all");
-  const [search, setSearch] = useState("");
-  // Bulk-op state — mirrors the RFI page. selectedIds is a Set so
-  // toggling a single row is O(1) and React's structural compare
-  // (we always replace the Set) keeps re-renders predictable.
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [showBulkEdit, setShowBulkEdit] = useState(false);
-  const [showBulkAdd, setShowBulkAdd] = useState(false);
-  const [showBulkDelete, setShowBulkDelete] = useState(false);
-  const [showNewRound, setShowNewRound] = useState(false);
-  // Pending "Release for Fabrication" move blocked by open RFIs — drives the
-  // override dialog (the server gate refused; PM can release with a reason).
-  const [releaseBlock, setReleaseBlock] = useState<{ input: any; rfis: string[] } | null>(null);
-  const [showSheetResponse, setShowSheetResponse] = useState<any>(null); // round object or null
-  /** Event glue: after status change, suggest BIC/dates that still need confirm. */
-  const [statusSuggest, setStatusSuggest] = useState<{
-    submittalId: string;
-    patch: StatusSuggestPatch;
-  } | null>(null);
-  const pendingSuggestRef = useRef<{
-    id: string;
-    before: Submittal;
-    nextStatus: string;
-  } | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const {
+    rows,
+    isLoading,
+    drawingSets,
+    drawingSetsById,
+    allRounds,
+    roundsBySubmittal,
+    allRfis,
+    allTasks,
+    allDrawings,
+    allSheetResponses,
+    allCommentDispositions,
+  } = useSubmittalsPageQueries(projectId);
+  const pageState = useSubmittalsPageState(rows, drawingSetsById);
+  const {
+    selectedId, setSelectedId,
+    showCreate, setShowCreate,
+    createFromSet, setCreateFromSet,
+    editingId, setEditingId,
+    spinOffParentId, setSpinOffParentId,
+    toDelete, setToDelete,
+    filterStatus, setFilterStatus,
+    filterBIC, setFilterBIC,
+    search, setSearch,
+    selectedIds, setSelectedIds,
+    showBulkEdit, setShowBulkEdit,
+    showBulkAdd, setShowBulkAdd,
+    showBulkDelete, setShowBulkDelete,
+    showNewRound, setShowNewRound,
+    releaseBlock, setReleaseBlock,
+    showSheetResponse, setShowSheetResponse,
+    statusSuggest, setStatusSuggest,
+    pendingSuggestRef,
+    filtered,
+    stats,
+    allSelected,
+    toggleSelect,
+    toggleAll,
+    settleStatusSuggest,
+  } = pageState;
 
-  // Key ["submittals", projectId] matches getQueryKey("submittal", projectId) in useSubmittals.ts — React Query dedupes; no second fetch when embedded in the DCC hub.
-  const { data: rows = [], isLoading } = useQuery({
-    queryKey: ["submittals", projectId],
-    queryFn: () => projectId
-      ? entities.Submittal.filter({ project_id: projectId }, "-submitted_date")
-      : [],
-    enabled: !!projectId,
-    staleTime: 30_000,
-  });
-  useAutoOpenEdit(rows, (submittal) => setSelectedId(submittal.id), {
+  // Key ["submittals", projectId] matches getQueryKey("submittal", projectId)
+  // in useSubmittals.ts, so React Query dedupes the route and hub reads.
+  useAutoOpenEdit(rows, (submittal) => {
+    if (submittal.id) setSelectedId(submittal.id);
+  }, {
     enabled: !isLoading,
     param: "recordId",
   });
@@ -161,126 +139,15 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
   useEffect(() => {
     if (!projectId || isLoading || rows.length === 0) return;
     void ensureCriticalAgingActionItems(
-      rows.map((row: any) => ({
-        ...row,
-        project_id: row.project_id || projectId,
-        project_name: activeProject?.name || activeProject?.project_name || null,
-      })),
+      rows
+        .filter((row): row is Submittal & { id: string } => typeof row.id === "string")
+        .map((row) => ({
+          ...row,
+          project_id: row.project_id || projectId,
+          project_name: activeProject?.name || activeProject?.project_name || null,
+        })),
     );
   }, [projectId, isLoading, rows, activeProject?.name, activeProject?.project_name]);
-
-  // Drawing sets for the active project — used by the "Linked drawing
-  // sets" picker on the detail panel. Read-only here (the Drawings page
-  // owns the create/edit flow), so a longer staleTime is fine.
-  const { data: drawingSets = [] } = useQuery({
-    queryKey: ["drawing_sets", projectId],
-    queryFn: () => projectId
-      ? entities.DrawingSet.filter({ project_id: projectId })
-      : [],
-    enabled: !!projectId,
-    staleTime: 60_000,
-  });
-
-  const drawingSetsById: DrawingSetsById = useMemo(() => {
-    // Bridge the generated DB row to the page's domain `DrawingSet` view (same
-    // data, nullable columns modeled as optional). Cast preserves runtime; the
-    // map only ever holds real drawing-set rows. Removable once `types` models
-    // the nullable columns directly.
-    const map = new Map<string, DrawingSet>();
-    for (const set of drawingSets) {
-      if (set?.id) map.set(set.id, set as DrawingSet);
-    }
-    return map;
-  }, [drawingSets]);
-
-  // ── Rounds for the selected submittal ────────────────────────────
-  const { data: allRounds = [] } = useQuery({
-    queryKey: ["submittal-rounds", projectId],
-    queryFn: () => projectId
-      ? entities.SubmittalRound.filter({ project_id: projectId }, "round_number")
-      : [],
-    enabled: !!projectId,
-    staleTime: 30_000,
-  });
-  const roundsBySubmittal = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    for (const r of allRounds) {
-      if (!map[r.submittal_id]) map[r.submittal_id] = [];
-      map[r.submittal_id].push(r);
-    }
-    for (const arr of Object.values(map)) {
-      arr.sort((a, b) => (a.round_number || 1) - (b.round_number || 1));
-    }
-    return map;
-  }, [allRounds]);
-
-  // ── RFIs for linked-entity picker ────────────────────────────────
-  const { data: allRfis = [] } = useQuery({
-    queryKey: ["rfis", projectId],
-    queryFn: () => projectId
-      ? entities.RFI.filter({ project_id: projectId })
-      : [],
-    enabled: !!projectId,
-    staleTime: 60_000,
-  });
-
-  // ── Schedule tasks for linked-entity picker ────────────────────────
-  const { data: allTasks = [] } = useQuery({
-    queryKey: ["schedule-tasks", projectId],
-    queryFn: () => projectId
-      ? entities.ScheduleTask.filter({ project_id: projectId })
-      : [],
-    enabled: !!projectId,
-    staleTime: 60_000,
-  });
-
-  // ── Drawings for sheet-response grid ─────────────────────────────
-  const { data: allDrawings = [] } = useQuery({
-    queryKey: ["drawings", projectId],
-    queryFn: () => projectId
-      ? entities.Drawing.filter({ project_id: projectId })
-      : [],
-    enabled: !!projectId,
-    staleTime: 60_000,
-  });
-
-  // ── Sheet responses for the active round ─────────────────────────
-  const { data: allSheetResponses = [] } = useQuery({
-    queryKey: ["sheet-responses", projectId],
-    queryFn: () => projectId
-      ? entities.SubmittalSheetResponse.filter({ project_id: projectId })
-      : [],
-    enabled: !!projectId,
-    staleTime: 30_000,
-  });
-
-  // Returned-comment dispositions (Slice 5) — gate OFS→IFC / R&R→OFA.
-  // Soft-fail when the migration is not applied yet (prod PGRST205) so the
-  // Submittals register still loads; checklist simply stays empty.
-  const { data: allCommentDispositions = [] } = useQuery({
-    queryKey: ["comment-dispositions", projectId],
-    queryFn: async () => {
-      if (!projectId) return [];
-      try {
-        return await entities.SubmittalCommentDisposition.filter({
-          project_id: projectId,
-        });
-      } catch (error) {
-        if (isMissingSchemaObjectError(error)) {
-          console.warn(
-            "[submittals] comment dispositions unavailable — apply pending migration",
-            error,
-          );
-          return [];
-        }
-        throw error;
-      }
-    },
-    enabled: !!projectId,
-    staleTime: 30_000,
-  });
-  const invalidateCommentDispositions = () =>
-    qc.invalidateQueries({ queryKey: ["comment-dispositions", projectId] });
 
   // Opt-in routing correction: when on, a BFA "Approved" flows through the
   // detailer scrub (OFS → IFC → Released) exactly like "Approved as Noted".
@@ -322,20 +189,6 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
     remove: removeComponentMut,
   } = useSubmittalComponents(projectId, drawingTypesEnabled);
 
-  const settleStatusSuggest = useCallback((updatedRow: any | null | undefined) => {
-    const pending = pendingSuggestRef.current;
-    pendingSuggestRef.current = null;
-    if (!pending) return;
-    const raw = buildStatusSuggestPatch(pending.before, pending.nextStatus, {
-      today: localToday(),
-    });
-    const remaining = filterSuggestAgainstCurrent(raw, updatedRow || pending.before);
-    if (remaining) {
-      setStatusSuggest({ submittalId: pending.id, patch: remaining });
-      setSelectedId(pending.id);
-    }
-  }, []);
-
   const {
     createMut,
     updateMut,
@@ -349,7 +202,9 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
     saveSheetResponsesMut,
   } = useSubmittalsPageMutations({
     projectId,
-    rows: rows as any[],
+    rows: rows.filter(
+      (row): row is Submittal & { id: string } => typeof row.id === "string",
+    ),
     activeProject,
     selectedId,
     setSelectedId,
@@ -366,20 +221,6 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
     onUpdateError: () => { pendingSuggestRef.current = null; },
     onAdvanceError: () => { pendingSuggestRef.current = null; },
   });
-
-  // ── Filter/search ──────────────────────────────────────────────────
-  // Pure filter+sort extracted to submittalRegister.derive (Slice 2b, TDD) —
-  // byte-identical to the former inline memo (status-group / BIC / search then
-  // drawing-set sort). Domain-view bridge cast: same rows, nullable columns
-  // modeled as optional — no runtime change.
-  const filtered = useMemo(
-    () => filterAndSortSubmittals(rows as Submittal[], { filterStatus, filterBIC, search }, drawingSetsById),
-    [rows, filterStatus, filterBIC, search, drawingSetsById],
-  );
-
-  // KPI counts — same pure derive. `today` is local-today; overdue is identical
-  // in sign to the former `daysUntil(required_date) < 0` check.
-  const stats = useMemo(() => computeSubmittalStats(rows as Submittal[], localToday()), [rows]);
 
   // Review-return forecast across all submittals — learns the shop's cycle
   // time from history (rounds + completed submittals) and projects each pending
@@ -415,32 +256,30 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
   const drawingSetsView = drawingSets as DrawingSet[];
   const selectedView = selected as Submittal | null;
   const editingView = editing as Submittal | null;
+  const selectedRounds = selected?.id ? (roundsBySubmittal[selected.id] || []) : [];
+  const selectedCommentDispositions = selected?.id
+    ? allCommentDispositions.filter((disposition) => disposition.submittal_id === selected.id)
+    : [];
+  const {
+    onStatusChange,
+    onAdvance,
+    onCommentDispositionAdd,
+    onCommentDispositionStatus,
+    onCommentDispositionResolution,
+  } = useSubmittalRouteController({
+    projectId,
+    selected: selectedView,
+    rounds: selectedRounds,
+    commentDispositions: selectedCommentDispositions,
+    revisionAutoBump,
+    workdayDuesEnabled,
+    projectMeta: activeProject?.metadata ?? null,
+    pendingSuggestRef,
+    update: updateMut.mutate,
+    runAdvance,
+  });
 
-  // ── Selection helpers ─────────────────────────────────────────────
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-  // toggleAll uses the *filtered* list, not all rows — matches the
-  // RFI pattern. Without this, "select all" while a status filter
-  // was active would silently grab hidden rows too.
-  // `filtered` is the domain `Submittal[]` view (id modeled optional); rows
-  // always carry an id at runtime, so cast at the Set boundary — the same
-  // `r.id as string` bridge SubmittalVirtualList already uses.
-  const { allSelected } = getVisibleSelectionState(filtered, selectedIds);
-  const toggleAll = useCallback(() => {
-    setSelectedIds((prev) => {
-      if (filtered.length > 0 && filtered.every((r) => prev.has(r.id as string))) return new Set();
-      const next = new Set(prev);
-      filtered.forEach((r) => next.add(r.id as string));
-      return next;
-    });
-  }, [filtered]);
-
-  const newRoundSeed = showNewRound && selected
+  const newRoundSeed = showNewRound && selected?.id
     ? buildNewRoundCarrySeed({
         submittalId: selected.id,
         submittalRounds: roundsBySubmittal[selected.id] || [],
@@ -448,13 +287,18 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
         allCommentDispositions,
       })
     : null;
+  const selectedSheetResponses = selected
+    ? allSheetResponses.filter((response) =>
+        selectedRounds.some((round) => round.id === response.submittal_round_id),
+      )
+    : [];
 
   // ── Canonical register list + detail elements ───────────────────────────
   // The canonical panel owns presentation; these elements retain the complete
   // operational list/detail behavior — splitting, lineage, type chips,
   // working-day due display, revision, and workflow actions.
   const listEl = (
-    <SubmittalVirtualList
+    <SubmittalListSection
       filtered={filteredView}
       isLoading={isLoading}
       rows={rowsView}
@@ -470,192 +314,103 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
   );
 
   const detailEl = (
-    <>
-      {statusSuggest && selected && statusSuggest.submittalId === selected.id && (
-        <StatusSuggestStrip
-          patch={statusSuggest.patch}
-          busy={updateMut.isPending}
-          onDismiss={() => setStatusSuggest(null)}
-          onApply={async (patch) => {
-            try {
-              await updateMut.mutateAsync({ id: statusSuggest.submittalId, ...patch });
-              setStatusSuggest(null);
-              toast.success("Suggested fields applied");
-            } catch {
-              /* updateMut toasts */
+    <SubmittalDetailSection
+      statusSuggest={
+        statusSuggest && selected && statusSuggest.submittalId === selected.id
+          ? {
+              patch: statusSuggest.patch,
+              busy: updateMut.isPending,
+              onDismiss: () => setStatusSuggest(null),
+              onApply: async (patch) => {
+                try {
+                  await updateMut.mutateAsync({
+                    id: statusSuggest.submittalId,
+                    ...patch,
+                  });
+                  setStatusSuggest(null);
+                  toast.success("Suggested fields applied");
+                } catch {
+                  /* updateMut toasts */
+                }
+              },
             }
-          }}
-        />
-      )}
-      <SubmittalDetail
-      approvedRoutesToScrub={approvedRoutesToScrub}
-      splittingEnabled={splittingEnabled}
-      drawingTypesEnabled={drawingTypesEnabled}
-      components={selected ? (componentsBySubmittal[selected.id] || []) : []}
-      onComponentSetReceived={(args) => {
-        if (!selected?.id || !selected?.project_id) return;
-        setComponentReceived({
-          submittalId: selected.id,
-          projectId: selected.project_id,
-          drawingType: args.drawingType,
-          existing: args.existing,
-          date: args.date,
-        });
-      }}
-      onComponentSetReleased={(args) => {
-        if (!selected?.id || !selected?.project_id) return;
-        setComponentReleased({
-          submittalId: selected.id,
-          projectId: selected.project_id,
-          drawingType: args.drawingType,
-          existing: args.existing,
-          released: args.released,
-        });
-      }}
-      onComponentAddType={(drawingType) => {
-        if (!selected?.id || !selected?.project_id) return;
-        addComponentType({ submittalId: selected.id, projectId: selected.project_id, drawingType });
-      }}
-      onComponentRemoveType={(component) => {
-        if (component.id) removeComponentMut.mutate(component.id);
-      }}
-      onSpinOff={() => selected && setSpinOffParentId(selected.id)}
-      onSelectSubmittal={(id) => setSelectedId(id)}
-      submittal={selectedView}
-      allSubmittals={rowsView}
-      drawingSets={drawingSetsView}
-      rounds={selected ? (roundsBySubmittal[selected.id] || []) : []}
-      sheetResponses={
-        selected
-          ? allSheetResponses.filter((r: any) =>
-              (roundsBySubmittal[selected.id] || []).some(
-                (rd: any) => rd.id === r.submittal_round_id,
-              ),
-            )
-          : []
+          : null
       }
-      commentDispositions={
-        selected
-          ? allCommentDispositions.filter((d: any) => d.submittal_id === selected.id)
-          : []
-      }
-      onCommentDispositionAdd={async (draft) => {
-        if (!selected?.id || !selected.project_id) return;
-        const rounds = roundsBySubmittal[selected.id] || [];
-        const roundId = rounds.at(-1)?.id;
-        if (!roundId) {
-          toast.error("Add an approval cycle before tracking returned comments.");
-          return;
-        }
-        try {
-          await entities.SubmittalCommentDisposition.create(
-            withProjectId({
-              submittal_id: selected.id,
-              submittal_round_id: roundId,
-              comment_number: draft.comment_number,
-              source: draft.source,
-              location: draft.location || null,
-              comment_text: draft.comment_text,
-              is_required: draft.is_required,
-              status: "Unreviewed",
-            }, selected.project_id || projectId),
-          );
-          await invalidateCommentDispositions();
-          toast.success("Returned comment added");
-        } catch (err: any) {
-          toast.error(`Could not add comment: ${toUserErrorMessage(err)}`);
-        }
-      }}
-      onCommentDispositionStatus={async (id, status) => {
-        try {
-          const patch: Record<string, unknown> = { status };
-          if (status === "Complete" || status === "Incorporated" || status === "Not Applicable") {
-            patch.completed_at = new Date().toISOString();
-          }
-          await entities.SubmittalCommentDisposition.update(id, patch as any);
-          await invalidateCommentDispositions();
-        } catch (err: any) {
-          toast.error(`Could not update disposition: ${err?.message || err}`);
-        }
-      }}
-      onCommentDispositionResolution={async (id, resolution) => {
-        try {
-          await entities.SubmittalCommentDisposition.update(id, { resolution } as any);
-          await invalidateCommentDispositions();
-        } catch (err: any) {
-          toast.error(`Could not save resolution: ${err?.message || err}`);
-        }
-      }}
-      drawings={allDrawings}
-      cycleStats={reviewForecast.stats}
-      today={today}
-      allRfis={allRfis as any}
-      allTasks={allTasks}
-      projectName={activeProject?.project_name || activeProject?.name || "Project"}
-      project={activeProject}
-      onClose={() => { setStatusSuggest(null); setSelectedId(null); }}
-      onEdit={() => selected && setEditingId(selected.id)}
-      onDelete={() => selected && setToDelete(selected.id)}
-      onStatusChange={(status) => {
-        if (!selected) return;
-        pendingSuggestRef.current = {
-          id: selected.id as string,
-          // Cast: DB row ↔ Submittal null/optional gap (same as selectedView bridge).
-          before: selected as Submittal,
-          nextStatus: status,
-        };
-        const write = buildStatusChangeWrite({
-          selected: selected as any,
-          status,
-          today: localToday(),
-          revisionAutoBump,
-          workdayDuesEnabled,
-          projectMeta: activeProject?.metadata ?? null,
-        });
-        if (write.kind === "advance") runAdvance(write.input);
-        else if (write.kind === "update") updateMut.mutate(write.patch as any);
-      }}
-      onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
-      // Verb CTA — advance via the audited write path: logs a round +
-      // patches atomically. Stamps the submitted date when
-      // sending out (→OFA) and the returned date when logging a return
-      // (→BFA); never a fake date otherwise (§22).
-      onAdvance={(action) => {
-        if (!selected) return;
-        if (action?.nextStatus) {
-          pendingSuggestRef.current = {
-            id: selected.id as string,
-            before: selected as Submittal,
-            nextStatus: action.nextStatus,
-          };
-        } else {
-          pendingSuggestRef.current = null;
-        }
-        const input = buildVerbCtaAdvanceInput({
-          selected: selected as any,
-          action,
-          today: localToday(),
-          revisionAutoBump,
-          workdayDuesEnabled,
-          projectMeta: activeProject?.metadata ?? null,
-          commentDispositions: allCommentDispositions.filter(
-            (d: any) => d.submittal_id === selected.id,
-          ),
-        });
-        if (input) runAdvance(input);
-      }}
-      // Inline-edit hook — every editable cell in the detail
-      // panel calls this with a single-field patch so we don't
-      // need to round-trip through the modal for trivial fixes
-      // like "fix the date" or "rename this submittal".
-      onFieldChange={(patch) => selected && updateMut.mutate({ id: selected.id, ...patch })}
-      onNewRound={() => setShowNewRound(true)}
-      onReturnRound={(roundId) => {
-        const round = allRounds.find((r) => r.id === roundId);
-        if (round) setShowSheetResponse(round);
+      detail={{
+        approvedRoutesToScrub,
+        splittingEnabled,
+        drawingTypesEnabled,
+        components: selected?.id ? (componentsBySubmittal[selected.id] || []) : [],
+        onComponentSetReceived: (args) => {
+          if (!selected?.id || !selected.project_id) return;
+          setComponentReceived({
+            submittalId: selected.id,
+            projectId: selected.project_id,
+            drawingType: args.drawingType,
+            existing: args.existing,
+            date: args.date,
+          });
+        },
+        onComponentSetReleased: (args) => {
+          if (!selected?.id || !selected.project_id) return;
+          setComponentReleased({
+            submittalId: selected.id,
+            projectId: selected.project_id,
+            drawingType: args.drawingType,
+            existing: args.existing,
+            released: args.released,
+          });
+        },
+        onComponentAddType: (drawingType) => {
+          if (!selected?.id || !selected.project_id) return;
+          addComponentType({
+            submittalId: selected.id,
+            projectId: selected.project_id,
+            drawingType,
+          });
+        },
+        onComponentRemoveType: (component) => {
+          if (component.id) removeComponentMut.mutate(component.id);
+        },
+        onSpinOff: () => selected?.id && setSpinOffParentId(selected.id),
+        onSelectSubmittal: setSelectedId,
+        submittal: selectedView,
+        allSubmittals: rowsView,
+        drawingSets: drawingSetsView,
+        rounds: selectedRounds,
+        sheetResponses: selectedSheetResponses,
+        commentDispositions: selectedCommentDispositions,
+        onCommentDispositionAdd,
+        onCommentDispositionStatus,
+        onCommentDispositionResolution,
+        drawings: allDrawings,
+        cycleStats: reviewForecast.stats,
+        today,
+        allRfis,
+        allTasks,
+        projectName: activeProject?.project_name || activeProject?.name || "Project",
+        project: activeProject,
+        onClose: () => {
+          setStatusSuggest(null);
+          setSelectedId(null);
+        },
+        onEdit: () => selected?.id && setEditingId(selected.id),
+        onDelete: () => selected?.id && setToDelete(selected.id),
+        onStatusChange,
+        onBICChange: (ballInCourt) => {
+          if (selected?.id) updateMut.mutate({ id: selected.id, ball_in_court: ballInCourt });
+        },
+        onAdvance,
+        onFieldChange: (patch) => {
+          if (selected?.id) updateMut.mutate({ id: selected.id, ...patch });
+        },
+        onNewRound: () => setShowNewRound(true),
+        onReturnRound: (roundId) => {
+          const round = allRounds.find((candidate) => candidate.id === roundId);
+          if (round) setShowSheetResponse(round);
+        },
       }}
     />
-    </>
   );
 
   if (!projectId) return (
@@ -712,19 +467,19 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
           projectName={activeProject?.project_name || activeProject?.name || ""}
           availableSets={drawingSetsView}
           allDrawings={allDrawings}
-          allRfis={allRfis as any}
+          allRfis={allRfis}
           parentSubmittal={spinOffParent as Submittal | null}
           drawingTypesEnabled={drawingTypesEnabled}
           saving={createMut.isPending || updateMut.isPending}
           existingNumbers={new Set(
             rows
-              .filter((r: any) => r.id !== editing?.id)
-              .map((r: any) => String(r.submittal_number || "").trim())
+              .filter((row) => row.id !== editing?.id)
+              .map((row) => String(row.submittal_number || "").trim())
               .filter(Boolean),
           )}
           onClose={() => { setShowCreate(false); setEditingId(null); setSpinOffParentId(null); setCreateFromSet(null); }}
           onSubmit={async (data) => {
-            if (editing) {
+            if (editing?.id) {
               await updateMut.mutateAsync({ id: editing.id, ...data });
             } else {
               // Phase 4: `drawing_types` is a UI-only key (the types to start
@@ -781,109 +536,51 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
         />
       )}
 
-      {/* Bulk actions — bottom-fixed, only renders when ≥1 row is
-          selected. Mirrors the RFI page exactly so muscle memory
-          carries over. */}
-      <BulkActionBar
-        count={selectedIds.size}
-        onClear={() => setSelectedIds(new Set())}
-        actions={[
-          ...(can("edit", "submittal") ? [{
-            label: "EDIT SELECTED",
-            icon: "edit",
-            onClick: () => setShowBulkEdit(true),
-          }] : []),
-          ...(can("delete", "submittal") ? [{
-            label: "DELETE",
-            icon: "x",
-            variant: "danger",
-            onClick: () => setShowBulkDelete(true),
-          }] : []),
-        ]}
-      />
-
-      <SubmittalBulkEditModal
-        open={showBulkEdit}
-        count={selectedIds.size}
-        onCancel={() => setShowBulkEdit(false)}
-        busy={bulkUpdateMut.isPending}
-        onSubmit={async (data) => {
-          await bulkUpdateMut.mutateAsync({ ids: [...selectedIds], data });
-        }}
-      />
-
-      <SubmittalBulkAddModal
-        open={showBulkAdd}
-        onCancel={() => setShowBulkAdd(false)}
-        busy={bulkCreateMut.isPending}
-        onSubmit={(newRows) => bulkCreateMut.mutate(newRows)}
-      />
-
-      <DeleteDialog
-        open={showBulkDelete}
-        onClose={() => setShowBulkDelete(false)}
-        busy={bulkDeleteMut.isPending}
-        onConfirm={() => bulkDeleteMut.mutateAsync([...selectedIds])}
-        title={`Delete ${selectedIds.size} submittal${selectedIds.size === 1 ? "" : "s"}`}
-        description={`Soft-delete ${selectedIds.size} selected submittal${selectedIds.size === 1 ? "" : "s"}? This cannot be undone from the UI.`}
-      />
-
-      {/* New Round modal — creates a new submittal round for the
-          selected submittal. Carries forward drawing sets and
-          increments the round number automatically. */}
-      {showNewRound && selected && newRoundSeed && (
-        <NewRoundModal
-          open={showNewRound}
-          submittal={selected}
-          previousRound={newRoundSeed.previousRound}
-          carryItems={newRoundSeed.carryItems}
-          carryFromRound={newRoundSeed.carryFromRound}
-          seededNotes={newRoundSeed.seededNotes}
-          busy={createRoundMut.isPending}
-          onClose={() => setShowNewRound(false)}
-          onSubmit={(data) => createRoundMut.mutateAsync(data)}
-        />
-      )}
-
-      {/* Fab-release gate override — a "Release for Fabrication" move blocked by
-          open RFIs reopens here so a PM can release with a recorded reason. */}
-      <ReleaseGateOverrideModal
-        open={!!releaseBlock}
-        blockingRfiNumbers={releaseBlock?.rfis || []}
-        busy={advanceMut.isPending}
-        onClose={() => setReleaseBlock(null)}
-        onConfirm={(reason: string) =>
-          releaseBlock && runAdvance({ ...releaseBlock.input, fabReleaseOverrideReason: reason })
+      <SubmittalPageOverlays
+        selectedIds={selectedIds}
+        canEdit={can("edit", "submittal")}
+        canDelete={can("delete", "submittal")}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onOpenBulkEdit={() => setShowBulkEdit(true)}
+        onOpenBulkDelete={() => setShowBulkDelete(true)}
+        showBulkEdit={showBulkEdit}
+        onCloseBulkEdit={() => setShowBulkEdit(false)}
+        bulkEditPending={bulkUpdateMut.isPending}
+        onBulkEdit={(data) =>
+          bulkUpdateMut.mutateAsync({ ids: [...selectedIds], data })
         }
+        showBulkAdd={showBulkAdd}
+        onCloseBulkAdd={() => setShowBulkAdd(false)}
+        bulkAddPending={bulkCreateMut.isPending}
+        onBulkAdd={(newRows) => bulkCreateMut.mutate(newRows)}
+        showBulkDelete={showBulkDelete}
+        onCloseBulkDelete={() => setShowBulkDelete(false)}
+        bulkDeletePending={bulkDeleteMut.isPending}
+        onBulkDelete={() => bulkDeleteMut.mutateAsync([...selectedIds])}
+        showNewRound={showNewRound}
+        selected={selectedView}
+        newRoundSeed={newRoundSeed}
+        createRoundPending={createRoundMut.isPending}
+        onCloseNewRound={() => setShowNewRound(false)}
+        onCreateRound={(data) => createRoundMut.mutateAsync(data)}
+        releaseBlock={releaseBlock}
+        advancePending={advanceMut.isPending}
+        onCloseReleaseBlock={() => setReleaseBlock(null)}
+        onReleaseOverride={(reason) => {
+          if (releaseBlock) {
+            runAdvance({
+              ...releaseBlock.input,
+              fabReleaseOverrideReason: reason,
+            });
+          }
+        }}
+        sheetResponseRound={showSheetResponse}
+        drawings={allDrawings}
+        sheetResponses={allSheetResponses}
+        saveSheetResponsesPending={saveSheetResponsesMut.isPending}
+        onCloseSheetResponses={() => setShowSheetResponse(null)}
+        onSaveSheetResponses={saveSheetResponsesMut.mutateAsync}
       />
-
-      {/* Sheet response grid — per-sheet response entry when a round
-          is returned by the reviewer. Opens when "Mark Returned" is
-          clicked on a timeline node. */}
-      {showSheetResponse && (
-        <Dialog open={!!showSheetResponse} onOpenChange={(o) => !o && setShowSheetResponse(null)}>
-          <DialogContent className="sm:max-w-[900px]" style={{ padding: 0 }}>
-            <SheetResponseGrid
-              round={showSheetResponse}
-              drawings={allDrawings.filter((d) => {
-                const setIds = showSheetResponse.drawing_set_ids || [];
-                return setIds.includes(d.drawing_set_id);
-              })}
-              existingResponses={allSheetResponses.filter(
-                (r) => r.submittal_round_id === showSheetResponse.id
-              )}
-              onSave={(responses) =>
-                saveSheetResponsesMut.mutateAsync({
-                  roundId: showSheetResponse.id,
-                  responses,
-                })
-              }
-              saving={saveSheetResponsesMut.isPending}
-              onClose={() => setShowSheetResponse(null)}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }
