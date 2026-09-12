@@ -3,8 +3,346 @@
  * Every item scored here must have transparent, traceable reasons.
  */
 
+export type PCCRecordType =
+  | "RFI"
+  | "Drawing"
+  | "Submittal"
+  | "WorkPackage"
+  | "Delivery"
+  | "ChangeOrder"
+  | "ScheduleTask"
+  | "ActionItem";
+
+export type SeverityKey = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+export type ImpactTag = keyof typeof IMPACT_TAGS;
+export type ImpactArea = "Fabrication" | "Shipping" | "Erection" | "Cost" | "GC Approval";
+export type ReleaseConfirmationKey =
+  | "vif_confirmed"
+  | "field_dimensions_confirmed"
+  | "shop_drawing_revision_checked"
+  | "e_sheet_checked"
+  | "load_list_complete"
+  | "sequence_aligned"
+  | "site_ready";
+
+export type DateInput = string | number | Date | null | undefined;
+export type NumericInput = string | number | null | undefined;
+
+export interface ReleaseConfirmations {
+  vif_confirmed: boolean;
+  field_dimensions_confirmed: boolean;
+  shop_drawing_revision_checked: boolean;
+  e_sheet_checked: boolean;
+  load_list_complete: boolean;
+  sequence_aligned: boolean;
+  site_ready: boolean;
+}
+
+export interface PCCItem {
+  id: string;
+  entityId?: string;
+  type: PCCRecordType;
+  title?: string;
+  subtitle?: string;
+  status?: string;
+  stage?: string;
+  due_date?: DateInput;
+  target_date?: DateInput;
+  assigned_to?: string | null;
+  owner?: string | null;
+  waiting_on?: string | null;
+  priority?: string | null;
+  impact_area?: ImpactArea | null;
+  project_id?: string;
+  project_name?: string;
+  confirmations?: ReleaseConfirmations | null;
+  affects_fabrication?: boolean;
+  affects_drawings?: boolean;
+  affects_erection?: boolean;
+  external_wait_days?: number;
+  priority_flag?: boolean;
+  review_risk?: "critical" | "warning" | string;
+  review_flag_count?: number;
+  review_recommendation?: string;
+  round_friction?: boolean;
+  round_count?: number;
+  percent_complete?: number;
+  phase?: string;
+  amount?: NumericInput;
+  task_kind?: string;
+  created_from?: string;
+}
+
+export interface SeverityBand {
+  label: SeverityKey;
+  value: 1 | 2 | 3 | 4;
+  color: string;
+  bg: string;
+  border: string;
+}
+
+export type ScoredPCCItem<T extends PCCItem = PCCItem> = T & {
+  score: number;
+  severity: SeverityBand;
+  severityKey: SeverityKey;
+  tags: ImpactTag[];
+  reasons: string[];
+  overdueDays: number;
+  dueSoonDays: number | null;
+  nextAction: string;
+};
+
+export interface ExecutionWindows {
+  today: ScoredPCCItem[];
+  next48: Array<ScoredPCCItem & { daysOut: number }>;
+  next10: Array<ScoredPCCItem & { daysOut: number }>;
+  releaseGate: Array<ScoredPCCItem & { daysOut: number }>;
+}
+
+export interface WaitingOnGroup {
+  party: string;
+  items: ScoredPCCItem[];
+  count: number;
+  maxScore: number;
+}
+
+export interface RFIRecord {
+  id: string;
+  status?: string;
+  question?: string;
+  subject?: string;
+  rfi_number?: string | number;
+  date_submitted?: DateInput;
+  created_date?: DateInput;
+  date_required?: DateInput;
+  due_date?: DateInput;
+  required_by?: DateInput;
+  assigned_to?: string | null;
+  ball_in_court?: string | null;
+  affects_fabrication?: boolean;
+  affects_drawings?: boolean;
+  affects_erection?: boolean;
+  priority?: string;
+  severity?: string;
+  project_id?: string;
+  project_name?: string;
+}
+
+export interface DrawingRecord {
+  id: string;
+  stage?: string;
+  sheet_number?: string;
+  title?: string;
+  drawing_set_name?: string;
+  due_date?: DateInput;
+  priority_flag?: boolean;
+  reviewer?: string | null;
+  project_id?: string;
+  project_name?: string;
+}
+
+export interface SubmittalRecord {
+  id: string;
+  status?: string;
+  title?: string;
+  description?: string;
+  submittal_number?: string | number;
+  spec_section?: string;
+  total_rounds?: NumericInput;
+  required_date?: DateInput;
+  priority?: string;
+  ball_in_court?: string | null;
+  project_id?: string;
+  project_name?: string;
+}
+
+interface ReleaseGateSource {
+  vif_confirmed?: boolean;
+  field_dimensions_confirmed?: boolean;
+  shop_drawing_revision_checked?: boolean;
+  current_drawing_revision_checked?: boolean;
+  drawings_approved?: boolean;
+  e_sheet_checked?: boolean;
+  erection_sheet_checked?: boolean;
+  load_list_complete?: boolean;
+  load_list_completed?: boolean;
+  items_confirmed?: boolean;
+  sequence_aligned?: boolean;
+  erection_sequence_aligned?: boolean;
+  site_ready?: boolean;
+}
+
+export interface WorkPackageRecord extends ReleaseGateSource {
+  id: string;
+  name?: string;
+  status?: string;
+  phase?: string;
+  ship_date?: DateInput;
+  delivery_date?: DateInput;
+  install_date?: DateInput;
+  released_date?: DateInput;
+  percent_complete?: number;
+  assigned_to?: string | null;
+  owner?: string | null;
+  crew?: string | null;
+  project_id?: string;
+  project_name?: string;
+}
+
+export interface ScheduleReleaseGate {
+  vif_confirmed?: boolean;
+  field_dimensions_confirmed?: boolean;
+  shop_drawing_revision_checked?: boolean;
+  e_sheet_checked?: boolean;
+  load_list_complete?: boolean;
+  sequence_aligned?: boolean;
+  site_ready?: boolean;
+}
+
+export interface ScheduleTaskMetadata {
+  is_summary?: boolean;
+  release_gate?: ScheduleReleaseGate;
+}
+
+export interface ScheduleTaskRecord {
+  id: string;
+  status?: string;
+  metadata?: ScheduleTaskMetadata | null;
+  is_summary?: boolean;
+  task_type?: string;
+  percent_complete?: number;
+  end_date?: DateInput;
+  start_date?: DateInput;
+  phase?: string;
+  task_name?: string;
+  name?: string;
+  is_milestone?: boolean;
+  wbs_code?: string;
+  resource_names?: string | null;
+  assigned_to?: string | null;
+  owner?: string | null;
+  crew?: string | null;
+  ball_in_court?: string | null;
+  project_id?: string;
+  project_name?: string;
+}
+
+export interface DeliveryRecord extends ReleaseGateSource {
+  id: string;
+  delivery_id?: string | number;
+  description?: string;
+  status?: string;
+  scheduled_date?: DateInput;
+  priority?: string;
+  contact_name?: string | null;
+  vendor?: string | null;
+  supplier?: string | null;
+  project_id?: string;
+  project_name?: string;
+}
+
+export interface ChangeOrderRecord {
+  id: string;
+  status?: string;
+  title?: string;
+  description?: string;
+  change_order_number?: string | number;
+  due_date?: DateInput;
+  required_by?: DateInput;
+  co_amount?: NumericInput;
+  amount?: NumericInput;
+  estimated_cost?: NumericInput;
+  assigned_to?: string | null;
+  owner?: string | null;
+  gc_name?: string | null;
+  project_id?: string;
+  project_name?: string;
+}
+
+export interface ActionItemMetadata {
+  impact_area?: ImpactArea | null;
+  task_type?: string;
+  waiting_on?: string | null;
+  created_from?: string;
+  pcc_release_gate_key?: string;
+}
+
+export interface ActionItemRecord {
+  id: string;
+  status?: string;
+  title?: string;
+  description?: string;
+  meeting_reference?: string;
+  due_date?: DateInput;
+  priority?: string;
+  assigned_to?: string | null;
+  metadata?: ActionItemMetadata | null;
+  project_id?: string;
+  project_name?: string;
+}
+
+export interface SignalKPIs {
+  critical: number;
+  highRisk: number;
+  external: number;
+  overdueAll: number;
+  blocksFab: number;
+  blocksErec: number;
+  coExposure: number;
+}
+
+export interface OwnerLoad {
+  owner: string;
+  dueToday: number;
+  due48: number;
+  overdue: number;
+  blocked: number;
+  critical: number;
+  total: number;
+  maxScore: number;
+}
+
+export interface DailyBriefing {
+  criticalReleases: ScoredPCCItem[];
+  waitingOn: Array<ScoredPCCItem & { waitingParty: string }>;
+  next48: Array<ScoredPCCItem & { daysOut: number }>;
+  scheduleRisk: ScoredPCCItem[];
+  costExposure: ScoredPCCItem[];
+  total: number;
+}
+
+export interface ReleaseGateActionDraft {
+  key: string;
+  sourceItemId: string;
+  sourceType: PCCRecordType;
+  sourceEntityId?: string;
+  confirmationKey: ReleaseConfirmationKey;
+  title: string;
+  description: string;
+  assigned_to: string;
+  due_date: DateInput;
+  priority: "Critical" | "High" | "Medium";
+  status: "Open";
+  project_id?: string;
+  project_name?: string;
+  metadata: {
+    created_from: "pcc_release_gate";
+    pcc_release_gate_key: string;
+    source_type: PCCRecordType;
+    source_id: string;
+    confirmation_key: ReleaseConfirmationKey;
+    missing_confirmation: string;
+    impact_area: ImpactArea | null;
+    source_title?: string;
+    source_subtitle: string | null;
+    target_date: DateInput;
+    pcc_score: number;
+    pcc_severity: SeverityKey;
+  };
+}
+
 // ─── Severity bands ───────────────────────────────────────────────────────────
-export const SEVERITY = {
+export const SEVERITY: Record<SeverityKey, SeverityBand> = {
   CRITICAL: { label: "CRITICAL", value: 4, color: "var(--status-error-bright)",   bg: "rgba(255,59,59,0.10)",   border: "rgba(255,59,59,0.25)"   },
   HIGH:     { label: "HIGH",     value: 3, color: "var(--status-warning-bright)", bg: "rgba(255,180,0,0.10)",   border: "rgba(255,180,0,0.25)"   },
   MEDIUM:   { label: "MEDIUM",   value: 2, color: "var(--status-warning)",        bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.18)"  },
@@ -29,15 +367,15 @@ export const IMPACT_TAGS = {
   SCHEDULE_RISK:     { label: "SCHEDULE RISK",       color: "var(--status-review)" },
   OWNER_MISSING:     { label: "OWNER MISSING",       color: "var(--status-error)" },
   RELEASE_GATE:      { label: "RELEASE GATE",        color: "var(--accent)" },
-};
+} as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 /** Normalize a string for case-insensitive status comparison */
-function norm(value) {
+function norm(value: string | null | undefined): string {
   return String(value || "").trim().toLowerCase();
 }
 
-const RELEASE_CONFIRMATIONS = [
+const RELEASE_CONFIRMATIONS: ReadonlyArray<readonly [ReleaseConfirmationKey, string]> = [
   ["vif_confirmed", "VIF missing"],
   ["field_dimensions_confirmed", "Field dimensions missing"],
   ["shop_drawing_revision_checked", "Current shop drawing revision not verified"],
@@ -47,7 +385,11 @@ const RELEASE_CONFIRMATIONS = [
   ["site_ready", "Site readiness not confirmed"],
 ];
 
-const RELEASE_CONFIRMATION_ACTIONS = {
+const RELEASE_CONFIRMATION_ACTIONS: Record<ReleaseConfirmationKey, {
+  title: string;
+  impact_area: ImpactArea;
+  description: string;
+}> = {
   vif_confirmed: {
     title: "Confirm VIF",
     impact_area: "Fabrication",
@@ -85,13 +427,13 @@ const RELEASE_CONFIRMATION_ACTIONS = {
   },
 };
 
-function dateValue(date) {
+function dateValue(date: DateInput): Date | null {
   if (!date) return null;
   const parsed = new Date(`${String(date).slice(0, 10)}T00:00:00`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function daysFromToday(date) {
+function daysFromToday(date: DateInput): number | null {
   const parsed = dateValue(date);
   if (!parsed) return null;
   const today = new Date();
@@ -99,13 +441,27 @@ function daysFromToday(date) {
   return Math.ceil((parsed.getTime() - today.getTime()) / 86400000);
 }
 
-function ownerOf(item) {
+function ownerOf(item: Pick<PCCItem, "assigned_to" | "owner" | "waiting_on">): string | null {
   return item.assigned_to || item.owner || item.waiting_on || null;
 }
 
+function numericValue(value: NumericInput): number {
+  return parseFloat(String(value ?? "")) || 0;
+}
+
+export interface NextActionInput {
+  type: PCCRecordType;
+  status?: string;
+  overdueDays?: number;
+  waitingOnExternal?: boolean;
+  blocksPhase?: "Fabrication" | "Delivery" | "Erection" | null;
+  waiting_on?: string | null;
+  review_recommendation?: string;
+}
+
 // ─── Recommended next actions by record type / state ─────────────────────────
-export function recommendNextAction(item) {
-  const { type, overdueDays, waitingOnExternal, blocksPhase } = item;
+export function recommendNextAction(item: NextActionInput): string {
+  const { type, overdueDays = 0, waitingOnExternal = false, blocksPhase } = item;
   const s = norm(item.status);
 
   if (type === "RFI") {
@@ -167,13 +523,13 @@ export function recommendNextAction(item) {
 }
 
 // ─── Core scoring function ────────────────────────────────────────────────────
-export function scoreItem(item) {
+export function scoreItem<T extends PCCItem>(item: T): ScoredPCCItem<T> {
   let score = 0;
-  const reasons = [];
-  const tags = [];
+  const reasons: Array<{ points: number; text: string }> = [];
+  const tags: ImpactTag[] = [];
   // Record each reason with the point value it contributed, so the reason
   // list can be ranked by impact (not push order) before it is truncated.
-  const note = (points, text) => reasons.push({ points, text });
+  const note = (points: number, text: string): number => reasons.push({ points, text });
 
   // Overdue / due-soon on the SAME local-calendar-day basis as
   // daysFromToday/dateValue, so the two date paths never disagree and scoring
@@ -184,7 +540,7 @@ export function scoreItem(item) {
   const dueSoonDays = dueDelta !== null && dueDelta >= 0 ? dueDelta : null;
 
   // 1. Base score by type priority
-  const typeBase = {
+  const typeBase: Record<PCCRecordType, number> = {
     RFI: 30,
     Drawing: 25,
     Submittal: 26,
@@ -221,9 +577,10 @@ export function scoreItem(item) {
   }
 
   if (item.confirmations) {
+    const confirmations = item.confirmations;
     const targetDays = daysFromToday(item.target_date || item.due_date);
     const missing = RELEASE_CONFIRMATIONS
-      .filter(([key]) => item.confirmations[key] === false)
+      .filter(([key]) => confirmations[key] === false)
       .map(([, label]) => label);
 
     if (missing.length > 0) {
@@ -274,7 +631,7 @@ export function scoreItem(item) {
   if (item.type === "Submittal") {
     if (item.review_risk === "critical") { score += 25; note(25, "Critical review flags"); tags.push("BLOCKS_FAB"); }
     else if (item.review_risk === "warning") { score += 12; note(12, "Review warnings"); }
-    if (item.review_flag_count > 3) { score += 8; note(8, `${item.review_flag_count} review flags`); }
+    if ((item.review_flag_count || 0) > 3) { score += 8; note(8, `${item.review_flag_count} review flags`); }
     if (itemStatus === "revise and resubmit") { score += 15; tags.push("BLOCKS_DETAILING"); note(15, "R&R — needs detailer action"); }
     if (itemStatus === "rejected") { score += 18; tags.push("BLOCKS_DETAILING"); note(18, "Rejected — needs resubmission"); }
     if (itemStatus === "under review") { score += 5; tags.push("EXTERNAL_WAIT"); note(5, "Under external review"); }
@@ -284,7 +641,7 @@ export function scoreItem(item) {
   // 6. Work package scoring
   if (item.type === "WorkPackage") {
     if (itemStatus === "on hold") { score += 20; note(20, "On hold — blocker"); tags.push("BLOCKS_FAB"); }
-    if (item.percent_complete < 20 && overdueDays > 3) { score += 10; note(10, "Low progress, overdue"); }
+    if (item.percent_complete !== undefined && item.percent_complete < 20 && overdueDays > 3) { score += 10; note(10, "Low progress, overdue"); }
     const phaseN = norm(item.phase);
     if (phaseN === "erection" || phaseN === "installation") { score += 8; tags.push("BLOCKS_ERECTION"); }
   }
@@ -297,7 +654,7 @@ export function scoreItem(item) {
 
   // 8. Change order scoring
   if (item.type === "ChangeOrder") {
-    const exposure = parseFloat(item.amount) || 0;
+      const exposure = numericValue(item.amount);
     if (exposure > 50000) { score += 20; tags.push("COST_EXPOSURE"); note(20, `$${(exposure / 1000).toFixed(0)}k exposure`); }
     else if (exposure > 10000) { score += 10; tags.push("COST_EXPOSURE"); note(10, `$${(exposure / 1000).toFixed(0)}k exposure`); }
     // change_orders.status has no "pending"; any non-terminal CO (Draft /
@@ -325,7 +682,7 @@ export function scoreItem(item) {
   else if (externalWait > 7) { score += 10; tags.push("EXTERNAL_WAIT"); note(10, `${externalWait}d external wait`); }
 
   // 10. Determine severity band
-  let severityKey = "LOW";
+  let severityKey: SeverityKey = "LOW";
   if (score >= 80)      severityKey = "CRITICAL";
   else if (score >= 55) severityKey = "HIGH";
   else if (score >= 35) severityKey = "MEDIUM";
@@ -335,8 +692,8 @@ export function scoreItem(item) {
   // so the dominant scoring factor is never crowded out of the "explainable"
   // list by earlier, lower-value reasons. Array.sort is stable, so ties keep
   // their original push order.
-  const seenReasons = new Set();
-  const uniqueReasons = [];
+  const seenReasons = new Set<string>();
+  const uniqueReasons: string[] = [];
   reasons
     .slice()
     .sort((a, b) => b.points - a.points)
@@ -370,7 +727,7 @@ export function scoreItem(item) {
 }
 
 // ─── Map raw entity records to normalized PCC items ─────────────────────────
-export function mapRFIsToPCCItems(rfis) {
+export function mapRFIsToPCCItems(rfis?: RFIRecord[] | null): PCCItem[] {
   const RFI_TERMINAL = new Set(["answered", "closed", "complete", "completed", "cancelled", "canceled", "void"]);
   return (rfis || [])
     .filter((r) => !RFI_TERMINAL.has(norm(r.status)))
@@ -407,7 +764,7 @@ export function mapRFIsToPCCItems(rfis) {
     });
 }
 
-export function mapDrawingsToPCCItems(drawings) {
+export function mapDrawingsToPCCItems(drawings?: DrawingRecord[] | null): PCCItem[] {
   const DRAWING_TERMINAL = new Set(["released", "void", "cancelled", "canceled"]);
   return (drawings || [])
     .filter((d) => !DRAWING_TERMINAL.has(norm(d.stage)))
@@ -437,7 +794,7 @@ export function mapDrawingsToPCCItems(drawings) {
  * mapSubmittalsToPCCItems exported from src/lib/submittalReviewEngine.js. This
  * one is suffixed *Basic to avoid the duplicate-export name collision.
  */
-export function mapSubmittalsToPCCItemsBasic(submittals) {
+export function mapSubmittalsToPCCItemsBasic(submittals?: SubmittalRecord[] | null): PCCItem[] {
   const SUB_TERMINAL = new Set([
     "approved", "approved as noted", "released for fabrication",
     "void", "cancelled", "canceled",
@@ -480,14 +837,15 @@ export function mapSubmittalsToPCCItemsBasic(submittals) {
     });
 }
 
-export function mapWorkPackagesToPCCItems(wps) {
+export function mapWorkPackagesToPCCItems(wps?: WorkPackageRecord[] | null): PCCItem[] {
   const WP_TERMINAL = new Set(["complete", "completed", "cancelled", "canceled", "void"]);
   return (wps || [])
     .filter((w) => !WP_TERMINAL.has(norm(w.status)))
-    .map((w) => {
+    .map((w): PCCItem => {
       const targetDate = w.ship_date || w.delivery_date || w.install_date || w.released_date;
       const targetDays = daysFromToday(targetDate);
-      const phaseNeedsGate = ["Fabrication", "Delivery", "Erection", "Installation"].includes(w.phase) || (targetDays !== null && targetDays <= 10);
+      const phaseNeedsGate = (w.phase !== undefined && ["Fabrication", "Delivery", "Erection", "Installation"].includes(w.phase))
+        || (targetDays !== null && targetDays <= 10);
 
       // due_date = the next meaningful deadline for this WP, NOT released_date
       // (released_date is when it WAS released — always in the past for
@@ -540,7 +898,7 @@ export function mapWorkPackagesToPCCItems(wps) {
     });
 }
 
-export function mapScheduleTasksToPCCItems(tasks) {
+export function mapScheduleTasksToPCCItems(tasks?: ScheduleTaskRecord[] | null): PCCItem[] {
   const TASK_TERMINAL = new Set(["complete", "completed", "cancelled", "canceled", "closed", "done", "void"]);
   const SUMMARY_TYPES = new Set(["summary", "phase"]);
   return (tasks || [])
@@ -550,7 +908,7 @@ export function mapScheduleTasksToPCCItems(tasks) {
       if (isSummary) return false;
       if (TASK_TERMINAL.has(norm(t.status))) return false;
       // Tasks at 100% completion are done regardless of status label
-      if (t.percent_complete >= 100) return false;
+      if (t.percent_complete !== undefined && t.percent_complete >= 100) return false;
       return true;
     })
     .map((t) => {
@@ -601,7 +959,7 @@ export function mapScheduleTasksToPCCItems(tasks) {
     });
 }
 
-export function mapDeliveriesToPCCItems(deliveries) {
+export function mapDeliveriesToPCCItems(deliveries?: DeliveryRecord[] | null): PCCItem[] {
   const DEL_TERMINAL = new Set(["delivered", "received", "complete", "completed", "cancelled", "canceled", "void"]);
   return (deliveries || [])
     .filter((d) => !DEL_TERMINAL.has(norm(d.status)))
@@ -645,7 +1003,7 @@ export function mapDeliveriesToPCCItems(deliveries) {
     });
 }
 
-export function mapChangeOrdersToPCCItems(cos) {
+export function mapChangeOrdersToPCCItems(cos?: ChangeOrderRecord[] | null): PCCItem[] {
   const CO_TERMINAL = new Set(["approved", "rejected", "complete", "completed", "cancelled", "canceled", "void"]);
   return (cos || [])
     .filter((c) => !CO_TERMINAL.has(norm(c.status)))
@@ -668,7 +1026,7 @@ export function mapChangeOrdersToPCCItems(cos) {
 }
 
 // ─── Build scored + sorted priority feed ─────────────────────────────────────
-export function mapActionItemsToPCCItems(actionItems) {
+export function mapActionItemsToPCCItems(actionItems?: ActionItemRecord[] | null): PCCItem[] {
   const AI_TERMINAL = new Set(["complete", "completed", "done", "resolved", "cancelled", "canceled", "closed", "void"]);
   return (actionItems || [])
     .filter((a) => !AI_TERMINAL.has(norm(a.status)))
@@ -704,14 +1062,14 @@ export function mapActionItemsToPCCItems(actionItems) {
     });
 }
 
-export function buildPriorityFeed(allItems) {
+export function buildPriorityFeed<T extends PCCItem>(allItems?: T[] | null): Array<ScoredPCCItem<T>> {
   return (allItems || [])
     .map(scoreItem)
     .sort((a, b) => b.score - a.score);
 }
 
 // ─── Build signal card KPIs from scored feed ──────────────────────────────────
-export function buildSignalKPIs(scoredItems) {
+export function buildSignalKPIs(scoredItems?: ScoredPCCItem[] | null): SignalKPIs {
   const items = scoredItems || [];
   const critical   = items.filter((i) => i.severityKey === "CRITICAL").length;
   const highRisk   = items.filter((i) => i.severityKey === "HIGH").length;
@@ -721,15 +1079,15 @@ export function buildSignalKPIs(scoredItems) {
   const blocksErec = items.filter((i) => i.tags.includes("BLOCKS_ERECTION")).length;
   const coExposure = items
     .filter((i) => i.type === "ChangeOrder")
-    .reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+    .reduce((sum, i) => sum + numericValue(i.amount), 0);
 
   return { critical, highRisk, external, overdueAll, blocksFab, blocksErec, coExposure };
 }
 
 // ─── Build waiting-on board ───────────────────────────────────────────────────
-export function buildWaitingOnBoard(scoredItems) {
-  const external = (scoredItems || []).filter((i) => i.tags.includes("EXTERNAL_WAIT") || i.external_wait_days > 3);
-  const grouped = {};
+export function buildWaitingOnBoard(scoredItems?: ScoredPCCItem[] | null): WaitingOnGroup[] {
+  const external = (scoredItems || []).filter((i) => i.tags.includes("EXTERNAL_WAIT") || (i.external_wait_days || 0) > 3);
+  const grouped: Record<string, ScoredPCCItem[]> = {};
   external.forEach((item) => {
     const party = item.waiting_on || "Unknown";
     if (!grouped[party]) grouped[party] = [];
@@ -740,11 +1098,11 @@ export function buildWaitingOnBoard(scoredItems) {
     .sort((a, b) => b.maxScore - a.maxScore);
 }
 
-export function buildExecutionWindows(scoredItems) {
+export function buildExecutionWindows(scoredItems?: ScoredPCCItem[] | null): ExecutionWindows {
   const items = scoredItems || [];
   const withWindow = items
     .map((item) => ({ ...item, daysOut: daysFromToday(item.target_date || item.due_date) }))
-    .filter((item) => item.daysOut !== null);
+    .filter((item): item is ScoredPCCItem & { daysOut: number } => item.daysOut !== null);
 
   // dueSoonDays === 0 now correctly matches due-today items (scoreItem anchors
   // overdue/due-soon on the same local-calendar-day basis as daysFromToday).
@@ -770,8 +1128,8 @@ export function buildExecutionWindows(scoredItems) {
   return { today, next48, next10, releaseGate };
 }
 
-export function buildOwnerLoad(scoredItems) {
-  const grouped = {};
+export function buildOwnerLoad(scoredItems?: ScoredPCCItem[] | null): OwnerLoad[] {
+  const grouped: Record<string, OwnerLoad> = {};
   (scoredItems || []).forEach((item) => {
     const owner = ownerOf(item) || "Unassigned";
     if (!grouped[owner]) {
@@ -806,10 +1164,16 @@ export function buildOwnerLoad(scoredItems) {
   );
 }
 
-export function buildDailyBriefing(scoredItems, executionWindows, waitingBoard) {
+export function buildDailyBriefing(
+  scoredItems?: ScoredPCCItem[] | null,
+  executionWindows?: ExecutionWindows | null,
+  waitingBoard?: WaitingOnGroup[] | null,
+): DailyBriefing {
   const items = scoredItems || [];
-  const isHighSignal = (item) => item.severityKey === "CRITICAL" || item.severityKey === "HIGH";
-  const hasAnyTag = (item, tags) => tags.some((tag) => item.tags.includes(tag));
+  const isHighSignal = (item: ScoredPCCItem): boolean =>
+    item.severityKey === "CRITICAL" || item.severityKey === "HIGH";
+  const hasAnyTag = (item: ScoredPCCItem, tags: ImpactTag[]): boolean =>
+    tags.some((tag) => item.tags.includes(tag));
 
   const criticalReleases = items
     .filter((item) => isHighSignal(item) && hasAnyTag(item, ["RELEASE_GATE", "BLOCKS_DELIVERY", "BLOCKS_FAB", "BLOCKS_ERECTION"]))
@@ -847,7 +1211,10 @@ export function buildDailyBriefing(scoredItems, executionWindows, waitingBoard) 
   };
 }
 
-export function buildReleaseGateActionDrafts(scoredItems, existingActionItems = []) {
+export function buildReleaseGateActionDrafts(
+  scoredItems?: ScoredPCCItem[] | null,
+  existingActionItems: Array<Pick<ActionItemRecord, "metadata">> = [],
+): ReleaseGateActionDraft[] {
   const existingKeys = new Set(
     (existingActionItems || [])
       .map((item) => item?.metadata?.pcc_release_gate_key)
@@ -855,14 +1222,16 @@ export function buildReleaseGateActionDrafts(scoredItems, existingActionItems = 
   );
 
   return (scoredItems || [])
-    .filter((item) => item?.confirmations && (item.tags || []).includes("RELEASE_GATE"))
+    .filter((item): item is ScoredPCCItem & { confirmations: ReleaseConfirmations } =>
+      Boolean(item.confirmations) && item.tags.includes("RELEASE_GATE")
+    )
     .flatMap((item) => {
       const targetDate = item.target_date || item.due_date || null;
       const daysOut = daysFromToday(targetDate);
 
       return RELEASE_CONFIRMATIONS
         .filter(([key]) => item.confirmations[key] === false)
-        .map(([key, missingLabel]) => {
+        .map(([key, missingLabel]): ReleaseGateActionDraft | null => {
           const action = RELEASE_CONFIRMATION_ACTIONS[key] || {
             title: missingLabel,
             impact_area: item.impact_area || null,
@@ -915,7 +1284,7 @@ export function buildReleaseGateActionDrafts(scoredItems, existingActionItems = 
             },
           };
         })
-        .filter(Boolean);
+        .filter((draft): draft is ReleaseGateActionDraft => draft !== null);
     })
     .sort((a, b) => {
       const priorityRank = { Critical: 3, High: 2, Medium: 1, Low: 0 };
