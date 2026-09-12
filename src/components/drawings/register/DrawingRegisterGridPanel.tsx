@@ -6,11 +6,11 @@
  *  - flat sheet rows by default; optional group-by-set
  *  - click sheet # / View to open DrawingViewer
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { Suspense, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Star, Loader2, ChevronDown, ChevronRight, Eye, ExternalLink } from "lucide-react";
+import { Star, Loader2, ChevronDown, ChevronRight, Eye, ExternalLink, FileUp } from "lucide-react";
 import { useDrawingRegister, type DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { usePublishRevision, type ReleaseStatus } from "@/hooks/usePublishRevision";
 import { useMyDrawingWatches, useToggleDrawingWatch } from "@/hooks/useDrawingWatch";
@@ -22,6 +22,9 @@ import { createPageUrl } from "@/utils";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
+import { lazyWithRetry } from "@/lib/lazyRetry";
+import type { SavedRevisionSummary } from "@/lib/revisionSummaryRepo";
+import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
 import { registerRowToDrawing, rowsNeedingProvisioning } from "./registerProvision";
 import {
   filterRegisterRows,
@@ -29,6 +32,29 @@ import {
   groupRegisterRowsBySet,
   SET_FILTER_NONE,
 } from "./docControl.derive";
+
+interface RevisionUploadModalProps {
+  open: boolean;
+  onClose: () => void;
+  onComplete: () => void;
+  activeProject: { id?: string | null; name?: string | null } | null | undefined;
+  preSelectedSet: DrawingSet;
+  drawingSets: unknown[];
+}
+
+const RevisionUploadModal = lazyWithRetry(
+  () => import("@/components/drawings/RevisionUploadModal"),
+) as unknown as ComponentType<RevisionUploadModalProps>;
+
+export interface DrawingRegisterGridPanelProps {
+  projectId: string | null;
+  activeProject?: { id?: string | null; name?: string | null } | null;
+  drawingSets?: unknown[];
+  setPackages?: SetPackage[];
+  summariesBySet?: Map<string, SavedRevisionSummary>;
+  onRevisionUploaded?: (pkgKey: string) => void | Promise<void>;
+  onOpenSummary?: (summary: SavedRevisionSummary["summary"]) => void;
+}
 
 const STATUS_FILTERS = [
   "all", "received", "pending_review", "reviewed", "released_for_estimate",
@@ -68,7 +94,15 @@ function viewerHref(drawingId: string) {
   return `${createPageUrl("DrawingViewer")}?recordId=${encodeURIComponent(drawingId)}`;
 }
 
-export function DrawingRegisterGridPanel({ projectId }: { projectId: string | null }) {
+export function DrawingRegisterGridPanel({
+  projectId,
+  activeProject,
+  drawingSets = [],
+  setPackages = [],
+  summariesBySet = new Map(),
+  onRevisionUploaded,
+  onOpenSummary,
+}: DrawingRegisterGridPanelProps) {
   const { data = [], isLoading, error } = useDrawingRegister(projectId);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -78,6 +112,7 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
   /** Flat clean table by default (Doc Control look). Group headers optional. */
   const [groupBySet, setGroupBySet] = useState(false);
   const { can } = usePermissions();
+  const canEdit = can("edit", "drawing");
   const canRelease = can("approve", "drawing");
   const publish = usePublishRevision();
   const { data: watches } = useMyDrawingWatches(projectId);
@@ -87,6 +122,7 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
 
   const [provisioning, setProvisioning] = useState<Set<string>>(new Set());
   const [bulkProvisioning, setBulkProvisioning] = useState(false);
+  const [revisionPackage, setRevisionPackage] = useState<SetPackage | null>(null);
 
   const invalidateRegister = () =>
     queryClient.invalidateQueries({ queryKey: ["drawing-register", projectId] });
@@ -163,6 +199,31 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
   );
   const groups = useMemo(() => groupRegisterRowsBySet(rows), [rows]);
   const untrackedRows = useMemo(() => rowsNeedingProvisioning(rows), [rows]);
+  const packageByDrawingId = useMemo(() => {
+    const packages = new Map<string, SetPackage>();
+    const packagesBySetId = new Map<string, SetPackage>();
+    for (const pkg of setPackages) {
+      if (pkg.setId) packagesBySetId.set(String(pkg.setId), pkg);
+      for (const drawing of [...pkg.sheets, ...pkg.supersededSheets]) {
+        if (drawing.id) packages.set(String(drawing.id), pkg);
+      }
+    }
+    for (const row of rows) {
+      if (!packages.has(row.drawing_id) && row.drawing_set_id) {
+        const pkg = packagesBySetId.get(String(row.drawing_set_id));
+        if (pkg) packages.set(row.drawing_id, pkg);
+      }
+    }
+    return packages;
+  }, [rows, setPackages]);
+  const firstVisibleDrawingByPackage = useMemo(() => {
+    const first = new Map<string, string>();
+    for (const row of rows) {
+      const pkg = packageByDrawingId.get(row.drawing_id);
+      if (pkg && !first.has(pkg.key)) first.set(pkg.key, row.drawing_id);
+    }
+    return first;
+  }, [packageByDrawingId, rows]);
 
   const toggleGroup = (key: string) => {
     setCollapsed((prev) => {
@@ -178,6 +239,9 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
   const renderSheetRow = (r: DrawingRegisterRow) => {
     const watched = !!watches?.has(r.drawing_id);
     const href = viewerHref(r.drawing_id);
+    const pkg = packageByDrawingId.get(r.drawing_id);
+    const showRevisionActions = !!pkg && firstVisibleDrawingByPackage.get(pkg.key) === r.drawing_id;
+    const savedSummary = pkg?.setId ? summariesBySet.get(String(pkg.setId)) : undefined;
     return (
       <tr key={r.drawing_id}>
         <td style={{ textAlign: "center" }}>
@@ -206,7 +270,42 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
         </td>
         <td style={{ color: "var(--cmd-text)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sheet_title || "—"}</td>
         <td style={{ color: "var(--cmd-text-muted)" }}>{r.discipline || "—"}</td>
-        <td style={{ color: "var(--cmd-text-muted)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.drawing_set_name || "—"}</td>
+        <td style={{ color: "var(--cmd-text-muted)", maxWidth: 220 }}>
+          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {r.drawing_set_name || "—"}
+          </div>
+          {showRevisionActions && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+              {savedSummary && onOpenSummary && (
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  title={`View the latest revision summary for ${pkg.name}`}
+                  onClick={() => onOpenSummary(savedSummary.summary)}
+                  style={{ padding: "2px 6px", fontSize: 9 }}
+                >
+                  Revised · {savedSummary.sheets_changed}
+                </button>
+              )}
+              {canEdit && pkg.parent && (
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  disabled={!!pkg.parent.is_locked}
+                  title={pkg.parent.is_locked
+                    ? `Locked — ${pkg.parent.locked_reason || "an admin must unlock before a new revision"}`
+                    : `Upload a new revision for ${pkg.name}`}
+                  aria-label={`Upload revision for ${pkg.name}`}
+                  onClick={() => setRevisionPackage(pkg)}
+                  style={{ padding: "2px 6px", fontSize: 9 }}
+                >
+                  <FileUp size={11} />
+                  New revision
+                </button>
+              )}
+            </div>
+          )}
+        </td>
         <td style={{ fontVariantNumeric: "tabular-nums", color: "var(--cmd-text)", whiteSpace: "nowrap" }}>{r.current_revision || "—"}</td>
         <td><StatusCell status={r.current_status} /></td>
         <td style={{ textAlign: "center" }}><Count n={r.open_impact_count} danger /></td>
@@ -418,6 +517,23 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
             </tbody>
           </table>
         </div>
+      )}
+      {canEdit && revisionPackage?.parent && (
+        <Suspense fallback={<p role="status" style={{ color: "var(--cmd-text-muted)", fontSize: 12 }}>Loading revision upload…</p>}>
+          <RevisionUploadModal
+            open
+            onClose={() => setRevisionPackage(null)}
+            onComplete={() => {
+              const pkgKey = revisionPackage.key;
+              setRevisionPackage(null);
+              void invalidateRegister();
+              void onRevisionUploaded?.(pkgKey);
+            }}
+            activeProject={activeProject}
+            preSelectedSet={revisionPackage.parent}
+            drawingSets={drawingSets}
+          />
+        </Suspense>
       )}
     </section>
   );
