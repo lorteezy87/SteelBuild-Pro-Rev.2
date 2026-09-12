@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import type { ComponentType, CSSProperties } from "react";
 import { SectionCard, StatusPill } from "@/components/desktop/module";
 import {
@@ -31,7 +30,6 @@ import {
   fmtDate,
   getActionTone,
   info,
-  itemUrgency,
   mono,
   pluralize,
   review,
@@ -60,6 +58,19 @@ import {
   InlineDetailingControl,
   InlineOwnerControl,
 } from "./inlineControls";
+import { buildControlBoardModel } from "./drawingControlCenter.derive";
+import type { HubTabKey } from "./hubLinks";
+import type {
+  DetailingReadiness,
+  DrawingKpis,
+  ModelElementViewRow,
+  RevisionImpactViewRow,
+  SequenceReadinessRow,
+  SubmittalKpis,
+  TriageItem,
+  TriageModel,
+} from "./types";
+import { useControlBoardNavigation } from "./useControlBoardNavigation";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -67,47 +78,39 @@ type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 
 interface TriageBoardProps {
-  triage: any;
-  kpis: any;
-  drawingKpis: any;
+  triage: TriageModel;
+  kpis: SubmittalKpis;
+  drawingKpis: DrawingKpis;
   isLoading: boolean;
-  onOpenTab: (key: string) => void;
-  onUpdateOwner: (item: any, owner: string) => void;
-  onUpdateDueDate: (item: any, date: string) => void;
-  onAdvanceDetailing: (item: any, next: string) => void;
-  onToggleReadiness: (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
-  sequenceReadiness: Array<{ sequence: string; packageCount: number; detailingPct: number; fabReadyCount: number; erectionReadyCount: number; atRiskCount: number }>;
-  revisionImpact: Array<any>;
+  onOpenTab: (key: HubTabKey) => void;
+  onUpdateOwner: (item: TriageItem, owner: string) => void;
+  onUpdateDueDate: (item: TriageItem, date: string) => void;
+  onAdvanceDetailing: (item: TriageItem, next: string) => void;
+  onToggleReadiness: (item: TriageItem, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
+  sequenceReadiness: SequenceReadinessRow[];
+  revisionImpact: RevisionImpactViewRow[];
   isSaving: boolean;
   /** Escalate a queue item into a draft RFI / potential CO. Absent = hidden. */
-  onEscalate?: (item: any, kind: "rfi" | "pco") => void;
+  onEscalate?: (item: TriageItem, kind: "rfi" | "pco") => void;
   /** Open the revision overlay compare for a sheet. Absent = hidden. */
   onCompareRevision?: (drawingId: string) => void;
   /** 3D model element mapping rollup (Phase 0 of the BIM integration). */
   modelMapping?: ElementStatusSummary | null;
   /** The raw model_elements rows (for the per-bucket member drill-down). */
-  modelElementRows?: any[];
+  modelElementRows?: ModelElementViewRow[];
   /** Open the Tekla/SDS2 member CSV import. Absent = section hidden. */
   onImportModelElements?: () => void;
 }
 
 export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving, onEscalate, onCompareRevision, modelMapping, modelElementRows, onImportModelElements }: TriageBoardProps) {
-  const navigate = useNavigate();
+  const { openItem, createSubmittal } = useControlBoardNavigation({ onOpenTab });
   if (isLoading) return <LoadingSkeleton />;
 
-  const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
-  const focusTone = getActionTone(focusItem);
-  const topStatuses = Object.entries(triage.pipelineCounts)
-    .sort((a, b) => (b[1] as number) - (a[1] as number))
-    .slice(0, 6);
-  const focusRoute = focusItem?.routeTab || "matrix";
-  const criticalItems = Array.from(
-    new Map(
-      [...triage.overdue, ...triage.needsAction, ...triage.dueSoon]
-        .sort(itemUrgency)
-        .map((item: any) => [item.id, item]),
-    ).values(),
-  ).slice(0, 12) as any[];
+  const model = buildControlBoardModel(triage);
+  const focusItem = model.focusItem;
+  const topStatuses = model.topStatuses;
+  const focusDrawingSetId = focusItem?._drawingSetId ?? null;
+  const criticalItems = model.criticalItems;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -209,18 +212,18 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
                 <button
                   type="button"
-                  onClick={() => onOpenTab(focusRoute)}
+                  onClick={() => openItem(focusItem)}
                   className="sbd-btn-primary"
                   style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
                 >
                   Open Work
                   <ArrowRight size={14} />
                 </button>
-                {focusItem.kind === "Drawing Set" && focusItem._drawingSetId && (focusItem._canDraft || focusItem._needsUnlinkedHint) && (
+                {focusItem.kind === "Drawing Set" && focusDrawingSetId && (focusItem._canDraft || focusItem._needsUnlinkedHint) && (
                   <button
                     type="button"
                     className="sbd-btn-ghost"
-                    onClick={() => navigate(`/Submittals?targetSetId=${encodeURIComponent(focusItem._drawingSetId)}`)}
+                    onClick={() => createSubmittal(focusDrawingSetId)}
                     title="Create a submittal linked to this drawing set"
                     style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
                   >
@@ -334,7 +337,7 @@ export function ModelMappingSection({
   rosterCount = null, rosterCountLoading = false, rosterLoading = false, onLoadRoster,
 }: {
   summary?: ElementStatusSummary | null;
-  elements?: any[];
+  elements?: ModelElementViewRow[];
   onImport: () => void;
   /** Live member count (HEAD count). null = not known yet. */
   rosterCount?: number | null;
@@ -573,15 +576,6 @@ const drillTd: CSSProperties = { padding: "6px 12px", borderBottom: `1px solid $
 // each sequence's detailing has progressed + how many packages are fab/erection
 // ready, so the schedule can pull detailing (design doc §7).
 
-interface SequenceReadinessRow {
-  sequence: string;
-  packageCount: number;
-  detailingPct: number;
-  fabReadyCount: number;
-  erectionReadyCount: number;
-  atRiskCount: number;
-}
-
 export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
   return (
     <SectionCard
@@ -639,7 +633,7 @@ export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[
 
 const REV_SEVERITY_TONE: Record<string, string> = { critical: error, high: warning, medium: info, low: textMuted };
 
-export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onCompare?: (drawingId: string) => void }) {
+export function RevisionImpactSection({ rows, onCompare }: { rows: RevisionImpactViewRow[]; onCompare?: (drawingId: string) => void }) {
   const shown = (rows || []).slice(0, 8);
   return (
     <SectionCard
@@ -727,7 +721,7 @@ const SCHEDULE_ROWS: Array<[string, string]> = [
 ];
 
 interface ReadinessPanelProps {
-  readiness: any;
+  readiness: DetailingReadiness;
   onToggle: (field: "material_impacted" | "long_lead_impact", value: boolean) => void;
   disabled: boolean;
 }
@@ -793,9 +787,9 @@ export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanel
 }
 
 interface PipelinePanelProps {
-  topStatuses: Array<[string, unknown]>;
+  topStatuses: Array<[string, number]>;
   openCount: number;
-  onOpenTab: (key: string) => void;
+  onOpenTab: (key: HubTabKey) => void;
 }
 
 function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps) {
@@ -817,7 +811,7 @@ function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps
           <EmptyState text="No open items to summarize." />
         ) : (
           topStatuses.map(([status, count]) => (
-            <PipelineBar key={status} status={status} count={count as number} total={openCount} />
+            <PipelineBar key={status} status={status} count={count} total={openCount} />
           ))
         )}
       </div>
@@ -828,11 +822,11 @@ function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps
 interface TriageListProps {
   title: string;
   subtitle: string;
-  items: any[];
+  items: TriageItem[];
   empty: string;
-  onOpenTab: (key: string) => void;
+  onOpenTab: (key: HubTabKey) => void;
   compact?: boolean;
-  onEscalate?: (item: any, kind: "rfi" | "pco") => void;
+  onEscalate?: (item: TriageItem, kind: "rfi" | "pco") => void;
 }
 
 function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false, onEscalate }: TriageListProps) {
@@ -855,7 +849,7 @@ function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false,
   );
 }
 
-function TriageItemRow({ item, onOpen, onEscalate }: { item: any; onOpen: () => void; onEscalate?: (item: any, kind: "rfi" | "pco") => void }) {
+function TriageItemRow({ item, onOpen, onEscalate }: { item: TriageItem; onOpen: () => void; onEscalate?: (item: TriageItem, kind: "rfi" | "pco") => void }) {
   const tone = getActionTone(item);
   // div+role=button (not <button>) so the per-row escalation buttons can nest
   // without invalid button-in-button markup. Enter/Space still activate.

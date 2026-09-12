@@ -8,7 +8,18 @@ import { workingDaysBetween } from "@/lib/workingDays";
 import { todayLocalISO } from "@/lib/dateMath";
 import { pickMostRecentSubmittal, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
-import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
+import type {
+  ApprovalMatrixRow,
+  CurrentRevisionInfo,
+  Drawing,
+  DrawingRevision,
+  DrawingSet,
+  DueInfo,
+  SetPackage,
+  Submittal,
+  TriageItem,
+  TriageModel,
+} from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
 // Use the SAME CSS custom-property names as the rest of the app (Submittals,
@@ -440,7 +451,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
   };
 
   for (const parent of parentsById.values()) {
-    ensurePackage({ setId: parent.id, legacyName: parent.set_name, parent });
+    ensurePackage({ setId: parent.id, legacyName: parent.set_name ?? undefined, parent });
   }
 
   for (const drawing of drawings || []) {
@@ -466,7 +477,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
     if (ids.length) {
       ids.forEach((setId) => {
         const parent = parentsById.get(setId);
-        if (parent) ensurePackage({ setId, legacyName: parent.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
+        if (parent) ensurePackage({ setId, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent }).submittals.push(submittal);
       });
       continue;
     }
@@ -474,7 +485,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
       const parent = parentsByName.get(submittal.drawing_set_name.trim().toLowerCase()) || null;
       // No unique active parent means this is an actionable unlinked
       // Submittal, not a synthetic package that could imply the wrong owner.
-      if (parent) ensurePackage({ setId: parent.id, legacyName: parent.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
+      if (parent) ensurePackage({ setId: parent.id, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent }).submittals.push(submittal);
     }
   }
 
@@ -653,10 +664,10 @@ export function buildTriage(
   setPackages: SetPackage[],
   readinessByKey: Map<string, any>,
   useWorkdays = false,
-) {
+): TriageModel {
     const activeSubmittals = submittals.filter((s) => !s.is_deleted) as any[];
 
-    const setItems = setPackages.map((pkg) => {
+    const setItems: TriageItem[] = setPackages.map((pkg) => {
       const {
         governingSubmittal,
         closed,
@@ -737,7 +748,7 @@ export function buildTriage(
     const linkedSubmittalIds = new Set(
       setPackages.flatMap((pkg) => pkg.submittals.map((submittal) => submittal.id).filter(Boolean))
     );
-    const unlinkedSubmittalItems = activeSubmittals
+    const unlinkedSubmittalItems: TriageItem[] = activeSubmittals
       .filter((submittal) => !linkedSubmittalIds.has(submittal.id))
       .map((submittal) => {
       const closed = isClosedSubmittal(submittal);
@@ -882,11 +893,16 @@ export function submittalRoundCount(submittal: any): number {
   return Number(submittal?.total_rounds) || Number(submittal?.round_number) || 1;
 }
 
-export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], search = "", useWorkdays = false): any[] {
+export function buildApprovalMatrixRows(
+  drawingSets: DrawingSet[],
+  submittals: Submittal[],
+  search = "",
+  useWorkdays = false,
+): ApprovalMatrixRow[] {
    
   const activeSubmittals = (submittals || []).filter((s: any) => !s.is_deleted);
    
-  const setSubmittalMap: Record<string, any[]> = {};
+  const setSubmittalMap: Record<string, Submittal[]> = {};
   for (const sub of activeSubmittals) {
     const setIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
     for (const sid of setIds) {
@@ -911,7 +927,7 @@ export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], s
       // submittal plus a fresh Draft rendered Status "Draft", BIC "—", Due "No
       // date", and vanished from the Overdue and Pending pills. A Void submittal
       // did the same, rendering a green "Closed".
-      const usable = linked.filter((s: any) =>
+      const usable = linked.filter((s) =>
         submittalStatusToStage(s?.status, s?.ball_in_court, s?.approved_date) !== null,
       );
       const latestSubmittal = pickMostRecentSubmittal(usable) || pickMostRecentSubmittal(linked) || null;
@@ -936,17 +952,17 @@ export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], s
         pendingEorResponse: hasUnansweredApproverNotes(latestSubmittal),
       };
     })
-    .filter((set: any) => {
+    .filter((set) => {
       if (!search) return true;
       const q = search.toLowerCase();
       return (
         formatDrawingSetNumber(set).toLowerCase().includes(q) ||
         (set.set_name || "").toLowerCase().includes(q) ||
         (set.discipline || "").toLowerCase().includes(q) ||
-        set.submittals.some((s: any) => (s.submittal_number || "").toLowerCase().includes(q))
+        set.submittals.some((s: Submittal) => (s.submittal_number || "").toLowerCase().includes(q))
       );
     })
-    .sort((a: any, b: any) => compareDrawingSetPackages(a, b));
+    .sort((a, b) => compareDrawingSetPackages(a, b));
 }
 
 export interface ApprovalMatrixSummary {
