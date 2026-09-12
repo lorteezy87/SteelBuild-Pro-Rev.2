@@ -3,12 +3,24 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft, AlertTriangle } from "lucide-react";
 import { sheetReviewFlags } from "@/components/drawings/intakeReview";
 import { DISCIPLINES } from "../upload/uploadWizardConstants";
+import { useCrossSetSupersede } from "../upload/useCrossSetSupersede";
+import CrossSetSupersedePanel from "./CrossSetSupersedePanel";
 
 // ─── Review: verify AI-extracted sheets ───────────────────────────────
-export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [] }) {
+export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [], canSupersede = false, projectId }) {
   const [search, setSearch]         = useState("");
   const [discFilter, setDiscFilter] = useState("all");
   const [fileFilter, setFileFilter] = useState("all");
+
+  // Live sheets in OTHER sets of the project that this upload replaces. Read
+  // fresh on every visit; re-planned as sheet numbers, titles, selection or the
+  // set name change. Create waits for the check so nobody commits unseen.
+  const crossSet = useCrossSetSupersede({ projectId, sheets, meta });
+  const checkingOtherSets = crossSet.status === "loading";
+  const handleCreateClick = () => {
+    const supersedeIds = canSupersede && crossSet.status === "ready" ? crossSet.checkedIds : [];
+    onCreate(sheets.filter(s => s.selected), { supersedeIds, supersedeLabels: crossSet.labels });
+  };
 
   const setMetaField = (k, v) => setMeta(prev => ({ ...prev, [k]: v }));
   const anyAiFilled = Object.values(aiFilledFields).some(Boolean);
@@ -265,14 +277,28 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
         )}
       </div>
 
+      <CrossSetSupersedePanel
+        status={crossSet.status}
+        plan={crossSet.plan}
+        canSupersede={canSupersede}
+        isChecked={crossSet.isChecked}
+        onToggle={crossSet.toggle}
+        onToggleGroup={crossSet.toggleGroup}
+        onSelectAll={crossSet.selectAll}
+        onClear={crossSet.clear}
+        onRetry={crossSet.retry}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
         <Button
-          onClick={() => onCreate(sheets.filter(s => s.selected))}
-          disabled={selectedCount === 0}
+          onClick={handleCreateClick}
+          disabled={selectedCount === 0 || checkingOtherSets}
           style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none" }}
         >
-          Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
+          {checkingOtherSets
+            ? "Checking other sets…"
+            : <>Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} /></>}
         </Button>
       </div>
     </div>

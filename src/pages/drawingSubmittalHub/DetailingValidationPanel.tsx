@@ -29,7 +29,7 @@ export default function DetailingValidationPanel({ projectId }: { projectId: str
       <div><h2>Drawing and piece validation</h2><p>Find missing drawing information, incomplete piece lots, and drawing holds affecting erected steel.</p></div>
       <button className="cmd-chip-btn" disabled={query.isFetching} onClick={() => query.refetch()}>{query.isFetching ? 'Checking…' : query.isError ? 'Retry validation' : report ? 'Re-run validation' : 'Run validation'}</button>
     </div>
-    <p className="detailing-validation__scope">Checks sheet titles, revisions, PDF references and hold reasons; piece quantity, weight and active drawing links; and current drawing holds affecting erected lots. These checks do not verify file access or fabrication release eligibility.</p>
+    <p className="detailing-validation__scope">Checks sheet titles, revisions, PDF references, hold reasons and sheet numbers live in more than one set; piece quantity, weight and active drawing links; and current drawing holds affecting erected lots. These checks do not verify file access or fabrication release eligibility.</p>
     {query.isFetching ? <p role="status">Loading complete sheet, revision, hold, piece, and relationship evidence…</p>
       : query.isError ? <p role="alert">Validation unavailable: {toUserErrorMessage(query.error)}. No result is certified from this failed run.</p>
       : !report ? <div className="detailing-validation__empty"><h3>Not run yet</h3><p>Run validation to check this project’s current sheets and actionable piece lots.</p></div>

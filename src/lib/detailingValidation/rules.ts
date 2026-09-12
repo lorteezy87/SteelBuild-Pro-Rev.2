@@ -1,6 +1,8 @@
 /** 2026 sheet-completeness checks adapted to Rev 2 revision and viewer authorities.
  * This report checks recorded references, not file accessibility or release eligibility.
  */
+import { normalizeSheetKey, normalizeSheetTitle } from '@/lib/sheetKey';
+
 export interface ValidationSheet {
   id: string;
   sheet_number?: string | null;
@@ -29,6 +31,7 @@ export const VALIDATION_RULES = {
   piece_unlinked: { label: 'No active drawing link', severity: 'error', detail: 'Link this lot to an active sheet or a drawing set containing active sheets.' },
   piece_erected_drawing_on_hold: { label: 'Erected lot with drawing hold', severity: 'error', detail: 'Review this erected lot against its current drawing holds.' },
   missing_title: { label: 'Missing title', severity: 'warning', detail: 'Add the sheet title so recipients can identify its content.' },
+  duplicate_live_sheet: { label: 'Sheet number live in more than one set', severity: 'warning', detail: 'This sheet number is also live in another set. Check which copy is current.' },
 } as const;
 export type ValidationRule = keyof typeof VALIDATION_RULES;
 export interface DetailingFinding {
@@ -36,9 +39,68 @@ export interface DetailingFinding {
   severity: 'error' | 'warning'; label: string; detail: string; href: string;
 }
 const blank = (value: string | null | undefined) => !value?.trim();
+const joinNames = (names: readonly string[]) =>
+  names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+/**
+ * Read-only safety net for the revise-as-a-new-set workflow: a sheet number
+ * (normalizeSheetKey, the key the upload wizard matches on) live in two or more
+ * sets. Each copy gets its own warning naming the other set(s). A set is its
+ * drawing_set_id; a legacy row without one belongs to the linked set of the same
+ * name when exactly one exists, else to 'name:' + its set name.
+ */
+function duplicateLiveSheetDetails(live: readonly ValidationSheet[]): Map<string, string> {
+  const idsByName = new Map<string, Set<string>>();
+  for (const sheet of live) {
+    if (!sheet.drawing_set_id || !sheet.drawing_set_name) continue;
+    const ids = idsByName.get(sheet.drawing_set_name) || new Set<string>();
+    ids.add(sheet.drawing_set_id);
+    idsByName.set(sheet.drawing_set_name, ids);
+  }
+  const setOf = (sheet: ValidationSheet) => {
+    if (sheet.drawing_set_id) return sheet.drawing_set_id;
+    const ids = idsByName.get(sheet.drawing_set_name || '');
+    return ids && ids.size === 1 ? [...ids][0] : `name:${sheet.drawing_set_name || ''}`;
+  };
+  const byKey = new Map<string, ValidationSheet[]>();
+  for (const sheet of live) {
+    const key = normalizeSheetKey(sheet.sheet_number);
+    if (!key) continue;
+    const group = byKey.get(key);
+    if (group) group.push(sheet);
+    else byKey.set(key, [sheet]);
+  }
+  const details = new Map<string, string>();
+  for (const group of byKey.values()) {
+    if (new Set(group.map(setOf)).size < 2) continue;
+    for (const sheet of group) {
+      const own = setOf(sheet);
+      const title = normalizeSheetTitle(sheet.title);
+      const others = new Map<string, 'same title' | 'different title' | 'title missing' | 'same and different titles'>();
+      for (const other of group) {
+        if (setOf(other) === own) continue;
+        const otherTitle = normalizeSheetTitle(other.title);
+        const relation = !title || !otherTitle ? 'title missing' : otherTitle === title ? 'same title' : 'different title';
+        const name = other.drawing_set_name || 'Unassigned';
+        const known = others.get(name);
+        // Several copies in one other set: say 'title missing' only when a title really is missing.
+        others.set(name, !known || known === relation ? relation
+          : known === 'title missing' || relation === 'title missing' ? 'title missing' : 'same and different titles');
+      }
+      const names = [...others.keys()];
+      const relations = new Set(others.values());
+      details.set(sheet.id,
+        relations.size === 1 && relations.has('same title') ? `Also live in ${joinNames(names)} — same title, likely a replaced copy: check which one is current.`
+          : relations.size === 1 && relations.has('different title') ? `Also live in ${joinNames(names)} — different title: the same number is used for a different drawing.`
+            : `Also live in ${joinNames([...others].map(([name, relation]) => `${name} (${relation})`))} — check which copy is current.`);
+    }
+  }
+  return details;
+}
 
 export function validateDetailingSheets(sheets: readonly ValidationSheet[], revisions: readonly ValidationRevision[], holds: readonly ValidationHold[]) {
   const live = sheets.filter(sheet => !sheet.is_deleted && !sheet.deleted_at && !sheet.is_superseded);
+  const duplicates = duplicateLiveSheetDetails(live);
   const current = new Map<string, ValidationRevision[]>();
   for (const revision of revisions) {
     if (revision.is_current) current.set(revision.drawing_id, [...(current.get(revision.drawing_id) || []), revision]);
@@ -47,12 +109,14 @@ export function validateDetailingSheets(sheets: readonly ValidationSheet[], revi
   const findings: DetailingFinding[] = [];
   for (const sheet of live) {
     const sheetRevisions = current.get(sheet.id) || [];
-    const add = (rule: ValidationRule) => findings.push({ id: `${sheet.id}:${rule}`, recordType: 'sheet', recordId: sheet.id, recordLabel: sheet.sheet_number || 'Unnumbered sheet', set: sheet.drawing_set_name || 'Unassigned', rule, ...VALIDATION_RULES[rule], href: `/DrawingViewer?drawingId=${encodeURIComponent(sheet.id)}` });
+    const add = (rule: ValidationRule, detail?: string) => findings.push({ id: `${sheet.id}:${rule}`, recordType: 'sheet', recordId: sheet.id, recordLabel: sheet.sheet_number || 'Unnumbered sheet', set: sheet.drawing_set_name || 'Unassigned', rule, ...VALIDATION_RULES[rule], ...(detail ? { detail } : {}), href: `/DrawingViewer?drawingId=${encodeURIComponent(sheet.id)}` });
     if (sheetRevisions.length > 1) add('multiple_current_revisions');
     else if (blank(sheetRevisions.length ? sheetRevisions[0].revision_code : sheet.revision_number)) add('missing_revision');
     if (blank(sheet.file_url) && !sheetRevisions.some(revision => !blank(revision.file_url))) add('missing_pdf');
     if (noReason.has(sheet.id)) add('hold_no_reason');
     if (blank(sheet.title)) add('missing_title');
+    const duplicateDetail = duplicates.get(sheet.id);
+    if (duplicateDetail) add('duplicate_live_sheet', duplicateDetail);
   }
   findings.sort((a,b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1) || a.recordLabel.localeCompare(b.recordLabel, undefined, { numeric: true }));
   const errors = new Set(findings.filter(f => f.severity === 'error').map(f => f.recordId));

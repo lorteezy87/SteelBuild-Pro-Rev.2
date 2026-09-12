@@ -2,6 +2,7 @@ import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename, validatePdfPage } 
 import { applyTitleblockRevisionOcr } from "@/lib/applyTitleblockRevisionOcr";
 import { normalizeRevisionNumber } from "@/lib/drawingUploadUtils";
 import { sheetReviewFlags } from "@/components/drawings/intakeReview";
+import { normalizeSheetKey } from "@/lib/sheetKey";
 
 export const MAX_PDF_SIZE_MB = 32;
 
@@ -136,9 +137,9 @@ export function detectMultiSheetSamePageRegression(selectedSheets, records, file
   return regressions;
 }
 
-export function normalizeSheetKey(value) {
-  return String(value || "").toUpperCase().replace(/[-.\s]/g, "");
-}
+// The shared sheet key lives in @/lib/sheetKey so the cross-set supersede and
+// the Detailing Validation rule match sheets exactly the way this replace does.
+export { normalizeSheetKey };
 
 export function planExistingSetSheetReplace(existingLiveSheets = [], newRecords = []) {
   const byKey = new Map();
