@@ -14,8 +14,8 @@ export const numberSequenceArgsSchema = z.object({
   record_type: z.string().trim().min(1, "record_type is required"),
 });
 
-export const softDeleteProjectArgsSchema = z.object({
-  p_project_id: uuidSchema,
+export const parseSoftDeleteProjectArgs = (projectId: unknown): { p_project_id: string } => ({
+  p_project_id: uuidSchema.parse(projectId),
 });
 
 export const publishRevisionArgsSchema = z.object({

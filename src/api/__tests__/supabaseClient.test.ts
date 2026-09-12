@@ -331,10 +331,11 @@ describe("supabase entity client", () => {
     });
 
     it("archives a project atomically via the soft_delete_project RPC", async () => {
-      await entities.Project.delete("project-1");
+      const projectId = "00000000-0000-4000-8000-000000000001";
+      await entities.Project.delete(projectId);
 
       expect(mocks.rpcMock).toHaveBeenCalledWith("soft_delete_project", {
-        p_project_id: "project-1",
+        p_project_id: projectId,
       });
       expect(mocks.calls).not.toContainEqual(
         expect.objectContaining({ table: "work_packages", op: "update" }),

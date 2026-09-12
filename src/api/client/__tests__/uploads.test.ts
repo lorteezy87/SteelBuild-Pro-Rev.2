@@ -1,11 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const uploadMock = vi.fn();
-const fromMock = vi.fn(() => ({ upload: uploadMock }));
-const getActiveOrgIdMock = vi.fn();
-const assertUploadAllowedMock = vi.fn();
-const sanitizeFilenameMock = vi.fn((name: string) => name);
-const remapQuotaErrorMock = vi.fn();
+const {
+  uploadMock,
+  fromMock,
+  getActiveOrgIdMock,
+  assertUploadAllowedMock,
+  sanitizeFilenameMock,
+  remapQuotaErrorMock,
+} = vi.hoisted(() => {
+  const upload = vi.fn();
+  return {
+    uploadMock: upload,
+    fromMock: vi.fn(() => ({ upload })),
+    getActiveOrgIdMock: vi.fn(),
+    assertUploadAllowedMock: vi.fn(),
+    sanitizeFilenameMock: vi.fn((name: string) => name),
+    remapQuotaErrorMock: vi.fn(),
+  };
+});
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {

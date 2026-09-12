@@ -183,7 +183,10 @@ describe("problem-tracker database security hardening", () => {
     expect(cutoverSql).toMatch(/alter\s+policy\s+auth_read\s+on\s+storage\.objects/);
     expect(cutoverSql).toMatch(/alter\s+policy\s+auth_upload\s+on\s+storage\.objects/);
 
-    const alteredPolicies = cutoverSql.slice(cutoverSql.indexOf("alter policy auth_read"));
+    const alteredPolicies = [
+      cutoverSql.match(/alter\s+policy\s+auth_read\s+on\s+storage\.objects[\s\S]*?\);\s*/i)?.[0],
+      cutoverSql.match(/alter\s+policy\s+auth_upload\s+on\s+storage\.objects[\s\S]*?\);\s*/i)?.[0],
+    ].join("\n");
     expect(alteredPolicies).not.toContain("founding_org_id");
     expect(alteredPolicies).not.toContain("= 'uploads'");
     expect(alteredPolicies).not.toContain("like 'uploads/%'");
