@@ -17,10 +17,12 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), message: v
 
 import ProductionStatusImportModal from "@/components/production/ProductionStatusImportModal";
 
-// jsdom File.text() can be flaky across versions — pin it to our bytes.
+// jsdom's File has no reliable text()/arrayBuffer() across versions — pin both
+// to our bytes. The modal decodes via readFileText, which reads arrayBuffer().
 function csvFile(text, name = "production.csv") {
   const file = new File([text], name, { type: "text/csv" });
   file.text = async () => text;
+  file.arrayBuffer = async () => new TextEncoder().encode(text).buffer;
   return file;
 }
 

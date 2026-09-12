@@ -16,13 +16,28 @@ import { deriveActualsPatch, hasActualsPatch } from "@/lib/schedule/actuals";
 import { taskDurationDays, finishFromDuration } from "@/lib/schedule/duration";
 import { withReconciledPercent } from "@/lib/schedule/taskStatus";
 import { withMilestoneFlags } from "@/lib/schedule/taskFields";
+import { readFileText } from "@/lib/textDecoding";
 import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./wbs";
 import { parseMsProjectXml } from "./mppImport";
 import { commitImportedScheduleTasks } from "./commitImportedTasks";
 import { filterEditableTasks } from "./scheduleTaskHelpers";
 import { buildScheduleResourceAssignPatch, withAssignmentPair } from "./scheduleAssignmentHelpers";
-import type { ScheduleTask } from "./types";
+import type { ParsedMppTask, ScheduleTask } from "./types";
 import { assertScheduleDateRange } from "./scheduleDateValidation";
+
+/**
+ * Read an MS Project XML export into parsed tasks.
+ *
+ * Decodes by byte-order mark / UTF-16 sniff rather than `file.text()`, which
+ * is UTF-8 only: MS Project can save XML as UTF-16, and a misread UTF-16 file
+ * puts U+0000 into task names that Postgres rejects (22P05, Sentry
+ * JAVASCRIPT-REACT-2C). A UTF-32 or binary file throws TextDecodingError; its
+ * re-save guidance reaches the user through the import toast.
+ */
+export async function readMsProjectXmlFile(file: Blob): Promise<ParsedMppTask[]> {
+  const { text } = await readFileText(file);
+  return parseMsProjectXml(text);
+}
 
 export interface UseScheduleMutationsParams {
   projectId: string | null | undefined;
@@ -563,8 +578,7 @@ export function useScheduleMutations({
     }
 
     try {
-      const text = await file.text();
-      const allParsed = parseMsProjectXml(text);
+      const allParsed = await readMsProjectXmlFile(file);
       if (!allParsed.length) {
         throw new Error("Couldn't read tasks from the file. Please export the MPP as XML (File → Save As → XML) and retry.");
       }

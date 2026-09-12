@@ -3,6 +3,7 @@
  * Entity clients are injected so tests can stub without React.
  */
 import { SEED_ENTITY_MAP } from "@/lib/onboardingTemplates";
+import { readFileText } from "@/lib/textDecoding";
 
 export type SeedPayloadKey = keyof typeof SEED_ENTITY_MAP;
 export type SeedRecord = Record<string, unknown>;
@@ -125,8 +126,10 @@ export async function readOnboardingImportFile(file: File): Promise<{ text: stri
       sourceName: `${file.name} / ${sheetName}`,
     };
   }
+  // Decode by byte-order mark / UTF-16 sniff and drop U+0000, which Postgres
+  // rejects (22P05). Throws TextDecodingError for UTF-32 and misnamed binaries.
   return {
-    text: await file.text(),
+    text: (await readFileText(file)).text,
     sourceName: file.name,
   };
 }

@@ -37,6 +37,8 @@
  * picks in the preview.
  */
 
+import { readFileText } from "@/lib/textDecoding";
+
 // ── Shared CSV tokenizer ────────────────────────────────────────────
 export function parseCsv(raw) {
   if (typeof raw !== "string") return [];
@@ -418,6 +420,12 @@ export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
 /**
  * Read a user-selected File and return the parsed result. Size cap
  * matches importRfiCsv — 8 MB is wildly generous for a CO log.
+ *
+ * Decodes by byte-order mark / UTF-16 sniff, never `file.text()` (UTF-8
+ * only): a UTF-16 export read as UTF-8 is full of U+0000, which Postgres
+ * rejects (22P05) once the rows reach ChangeOrder.create. A UTF-32 or
+ * binary file (xlsx, xls, pdf) throws a TextDecodingError whose message
+ * the import modal shows as-is.
  */
 export async function readChangeOrderCsvFile(file) {
   if (!file) throw new Error("No file provided.");
@@ -428,6 +436,12 @@ export async function readChangeOrderCsvFile(file) {
     file.type === "text/plain";
   if (!looksCsv) throw new Error("File must be a CSV (or plain text).");
   if (file.size > 8 * 1024 * 1024) throw new Error("CSV exceeds 8 MB.");
-  const text = await file.text();
-  return parseChangeOrderCsv(text, { fileName: file.name });
+  const { text, nulsRemoved } = await readFileText(file);
+  const result = parseChangeOrderCsv(text, { fileName: file.name });
+  if (nulsRemoved > 0) {
+    result.warnings.push(
+      `Removed ${nulsRemoved} null character${nulsRemoved === 1 ? "" : "s"} from the file.`,
+    );
+  }
+  return result;
 }

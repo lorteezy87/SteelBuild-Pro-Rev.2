@@ -2,16 +2,23 @@ import { useRef, useState } from "react";
 import { Download, Upload } from "lucide-react";
 import { parseUserPreferencesExport, serializeUserPreferences } from "@/lib/userPreferences/portability";
 import type { UserPreferences } from "@/lib/userPreferences/schema";
+import { decodeTextBytes, readFileText, stripNulDeep, TextDecodingError } from "@/lib/textDecoding";
 import { PreferenceResetPanel } from "./PreferenceResetPanel";
 
-function readFile(file: File): Promise<string> {
-  if (typeof file.text === "function") return file.text();
-  return new Promise((resolve, reject) => {
+/**
+ * Decode by byte-order mark / UTF-16 sniff and drop U+0000, which Postgres
+ * rejects (22P05). Throws TextDecodingError for UTF-32 and binary files.
+ */
+async function readFile(file: File): Promise<string> {
+  if (typeof file.arrayBuffer === "function") return (await readFileText(file)).text;
+  // Blob implementations without arrayBuffer() (older engines, jsdom).
+  const bytes = await new Promise<ArrayBuffer>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
     reader.onerror = () => reject(reader.error ?? new Error("Could not read settings file"));
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   });
+  return decodeTextBytes(bytes).text;
 }
 
 export function PreferencesDataTab({ preferences, onSave, onPatch, isSaving }: { preferences: UserPreferences; onSave: (preferences: UserPreferences) => void; onPatch: (patch: Partial<UserPreferences>) => void; isSaving: boolean }) {
@@ -37,9 +44,14 @@ export function PreferencesDataTab({ preferences, onSave, onPatch, isSaving }: {
     try {
       const result = parseUserPreferencesExport(await readFile(file));
       if (result.ok === false) setImportError(result.error);
-      else setCandidate(result.preferences);
-    } catch {
-      setImportError("The selected settings file could not be read.");
+      // JSON can still spell U+0000 as an escape; jsonb rejects it (22P05).
+      else setCandidate(stripNulDeep(result.preferences).value);
+    } catch (error) {
+      setImportError(
+        error instanceof TextDecodingError
+          ? error.message
+          : "The selected settings file could not be read.",
+      );
     }
   };
 

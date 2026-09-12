@@ -24,10 +24,26 @@ import { entities } from "@/api/supabaseClient";
 import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseFabSuiteXml, stageModelElements, teklaRowToModelElement } from "@/lib/importFabSuiteXml";
+import { readFileText } from "@/lib/textDecoding";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 const ACCENT = "var(--accent, #3B82F6)";
+
+/**
+ * Read and parse an uploaded Tekla EPM / FabSuite XML. Decodes by byte-order
+ * mark / UTF-16 sniff, never `file.text()` (UTF-8 only), so a UTF-16 export
+ * parses instead of failing on the U+0000 between its characters. Throws with
+ * a user-facing message: a TextDecodingError for UTF-32 or binary files, else
+ * the parse failure.
+ */
+export async function readTeklaEpmFile(file) {
+  const { text } = await readFileText(file);
+  const res = parseFabSuiteXml(text);
+  if (!res.ok) throw new Error(res.error || "Could not parse the XML.");
+  if (res.pieces.length === 0 && res.drawings.length === 0) throw new Error("No pieces or drawings found in the file.");
+  return res;
+}
 
 export default function TeklaEpmImportModal({ open, projectId, projectName, onClose, onImported }) {
   const qc = useQueryClient();
@@ -74,10 +90,7 @@ export default function TeklaEpmImportModal({ open, projectId, projectName, onCl
     if (!file) return;
     setStep("parsing"); setErr(null);
     try {
-      const text = await file.text();
-      const res = parseFabSuiteXml(text);
-      if (!res.ok) throw new Error(res.error || "Could not parse the XML.");
-      if (res.pieces.length === 0 && res.drawings.length === 0) throw new Error("No pieces or drawings found in the file.");
+      const res = await readTeklaEpmFile(file);
       setParsed(res);
       setStaged(stageModelElements(res.pieces, existingElements));
       setStep("preview");
