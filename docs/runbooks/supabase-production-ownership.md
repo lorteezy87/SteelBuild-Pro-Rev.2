@@ -85,11 +85,13 @@ inventory as `20260802090000_planner_action_control.sql` and
 byte-identical to git objects `8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef` and
 `26216f3247b0cc63dc0ff03e7f756b0f64c9b762`, respectively.
 
-The manifest intentionally remains red for these five source/lineage gaps:
+The manifest intentionally remains red for these three source/lineage gaps:
 
-- `20260909062016`, `20260909073500`, and `20260909090445`: authenticated
-  production inventory identifies these as remote-only restamps. Exact SQL,
-  canonical source versions, and authoritative owners remain unresolved.
+- `20260909090445`: lineage to sibling
+  `20260909090000_m19_reset_org_data.sql` is confirmed by Rev.2 migration
+  `20260912042823`, but later Rev.2 migrations superseded the production body.
+  It is not byte-equivalent or repair-safe without replaying the canonical
+  source and every later replacement.
 - `20260910034739` (`hard_delete_records`): ledger order places it in the
   SteelBuild-Pro-2026 sequence. Its isolated live footprint is six
   `hard_delete_*` functions plus `data_erasure_log` record metadata changes,
@@ -112,14 +114,31 @@ and `30143ad37ed0f2bbf8bc066d13ced9643b6b41c1de284d55aa2ee03578b2a959`.
 Bookkeeping repair remains gated on disposable replay, second review, and a
 maintenance window.
 
+Two remote restamps are now evidence-backed and intentionally frozen:
+
+- `20260909062016` maps to sibling
+  `20260909060000_m3_7_auto_archive_empty_drawing_sets.sql`, unchanged since
+  commit `a8560ab5447a0b8d564f9a7264d24b528a954076`. Its normalized
+  `recount_drawing_set` body matches production at SHA-256
+  `d49a40cfddda1e84f47bfd8cc3346ceae37b593b9cc9a141bdc9034da5c5a54a`.
+- `20260909073500` maps to sibling
+  `20260909060100_m2_1_scope_project_number_uniqueness_to_org.sql`, unchanged
+  since commit `1222ad55b073fcfefeae7788fb03d230af5afb3c`. Production has the
+  semantically identical unique partial index, and source commentary records
+  the live MCP apply.
+
+These classifications remove false-positive unknown drift while preserving the
+repair gate: neither restamp may be rewritten until disposable replay and
+two-reviewer maintenance approval succeed.
+
 ## Authenticated drift snapshot
 
 The CI run against commit `bb5dc6c41` on 2026-09-12 authenticated successfully
 and failed closed as designed. It reported:
 
 - 42 active local migration versions absent from the production ledger;
-- the three remote restamps above as unknown before they were recorded as
-  explicit unresolved blockers;
+- three remote restamps as unknown before follow-up evidence classified two as
+  frozen historical aliases and retained `20260909090445` as unresolved;
 - the two source-absent SteelBuild-Pro-2026 migrations above; and
 - six deployed deprecated functions: `bluebeam-proxy`, `schedule-assistant`,
   `sharepoint-proxy`, `stripe-setup`, `stripe-webhook`, and `stripe-worker`.
