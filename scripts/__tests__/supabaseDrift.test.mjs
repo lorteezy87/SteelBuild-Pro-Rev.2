@@ -26,10 +26,13 @@ describe('Supabase production ownership evidence', () => {
     const repositoryManifest = drift.readManifest();
     const repositoryLocal = drift.localInventory();
     expect(() => drift.validateManifest(repositoryManifest, repositoryLocal)).not.toThrow();
-    expect(repositoryManifest.migrations).toHaveLength(42);
+    expect(repositoryManifest.migrations).toHaveLength(45);
     expect(repositoryManifest.migrations
       .filter(entry => entry.lifecycle === 'unresolved')
       .map(entry => entry.version)).toEqual([
+      '20260909062016',
+      '20260909073500',
+      '20260909090445',
       '20260910034739',
       '20260910044641',
     ]);

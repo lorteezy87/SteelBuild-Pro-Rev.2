@@ -85,8 +85,11 @@ inventory as `20260802090000_planner_action_control.sql` and
 byte-identical to git objects `8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef` and
 `26216f3247b0cc63dc0ff03e7f756b0f64c9b762`, respectively.
 
-The manifest intentionally remains red for these two source/lineage gaps:
+The manifest intentionally remains red for these five source/lineage gaps:
 
+- `20260909062016`, `20260909073500`, and `20260909090445`: authenticated
+  production inventory identifies these as remote-only restamps. Exact SQL,
+  canonical source versions, and authoritative owners remain unresolved.
 - `20260910034739` (`hard_delete_records`): ledger order places it in the
   SteelBuild-Pro-2026 sequence. Its isolated live footprint is six
   `hard_delete_*` functions plus `data_erasure_log` record metadata changes,
@@ -108,6 +111,23 @@ matched to production at SHA-256
 and `30143ad37ed0f2bbf8bc066d13ced9643b6b41c1de284d55aa2ee03578b2a959`.
 Bookkeeping repair remains gated on disposable replay, second review, and a
 maintenance window.
+
+## Authenticated drift snapshot
+
+The CI run against commit `bb5dc6c41` on 2026-09-12 authenticated successfully
+and failed closed as designed. It reported:
+
+- 42 active local migration versions absent from the production ledger;
+- the three remote restamps above as unknown before they were recorded as
+  explicit unresolved blockers;
+- the two source-absent SteelBuild-Pro-2026 migrations above; and
+- six deployed deprecated functions: `bluebeam-proxy`, `schedule-assistant`,
+  `sharepoint-proxy`, `stripe-setup`, `stripe-webhook`, and `stripe-worker`.
+
+The 42 missing ledger versions do not by themselves distinguish unapplied SQL
+from already-present schema with missing bookkeeping. Resolve that distinction
+through disposable replay and reviewed live-schema evidence before proposing
+`migration repair` or applying SQL.
 
 The two Rev.2 apply-time restamps `20260817072554` and `20260817083550` are
 explicitly frozen and point to their active canonical migration sources in the

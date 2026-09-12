@@ -134,6 +134,12 @@
       "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060100_m2_1_scope_project_number_uniqueness_to_org.sql"
     },
     {
+      "version": "20260909062016",
+      "owner": "unresolved",
+      "lifecycle": "unresolved",
+      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
+    },
+    {
       "version": "20260909062929",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
       "lifecycle": "required",
@@ -162,6 +168,12 @@
       "owner": "lorteezy87/SteelBuild-Pro-2026",
       "lifecycle": "required",
       "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909073142_m14_quality.sql"
+    },
+    {
+      "version": "20260909073500",
+      "owner": "unresolved",
+      "lifecycle": "unresolved",
+      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
     },
     {
       "version": "20260909074754",
@@ -198,6 +210,12 @@
       "owner": "lorteezy87/SteelBuild-Pro-2026",
       "lifecycle": "required",
       "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909090000_m19_reset_org_data.sql"
+    },
+    {
+      "version": "20260909090445",
+      "owner": "unresolved",
+      "lifecycle": "unresolved",
+      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
     },
     {
       "version": "20260909091118",
