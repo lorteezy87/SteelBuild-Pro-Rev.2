@@ -1,20 +1,16 @@
 import { pieceTons } from "./tonnage";
+import {
+  PIECE_LIFECYCLE_STATUSES,
+  type PieceLifecycleStatus,
+} from "./types";
 import type {
   StationCompletion,
   StationConfiguration,
 } from "./stationProgress";
 
-export const CANONICAL_LIFECYCLES = [
-  "not_started",
-  "released",
-  "in_fabrication",
-  "fabricated",
-  "shipped",
-  "delivered",
-  "erected",
-] as const;
+export const CANONICAL_LIFECYCLES = PIECE_LIFECYCLE_STATUSES;
 
-export type CanonicalLifecycle = (typeof CANONICAL_LIFECYCLES)[number];
+export type CanonicalLifecycle = PieceLifecycleStatus;
 export type DerivedWorkPackageStatus =
   | "No Canonical Scope"
   | "Ready for Release"
@@ -263,4 +259,3 @@ export function rollupCanonicalWorkPackages(
       };
     });
 }
-

@@ -1,11 +1,17 @@
-import { CANONICAL_LIFECYCLES } from "./canonicalRollups";
+import {
+  CANONICAL_LIFECYCLES,
+  rollupCanonicalPieces,
+  selectActionableLeafPieces,
+  type CanonicalRollupPiece,
+  type LeafSelectablePiece,
+} from "./canonicalRollups";
 import { pieceLifecycleLabel } from "./lifecycle";
 import { pieceTons } from "./tonnage";
 
 export type PieceControlMode = "off" | "shadow" | "pilot" | "live";
 export type PresentationTone = "neutral" | "good" | "warn" | "danger" | "info";
 
-export interface PieceSummaryRow {
+export interface PieceSummaryRow extends LeafSelectablePiece {
   quantity: number;
   weight_each_lbs: number | null;
   weight_total_lbs: number | null;
@@ -47,6 +53,16 @@ export interface PieceControlSummary {
   attention: PieceAttentionItem[];
 }
 
+export interface LegacyProductionSummaryRow {
+  quantity: number | null;
+  weight: number | null;
+}
+
+export interface PieceControlShadowComparison {
+  pieceDelta: number;
+  tonsDelta: number;
+}
+
 const MODE_PRESENTATION: Record<PieceControlMode, PieceControlModePresentation> = {
   off: {
     label: "Not set up",
@@ -74,7 +90,39 @@ export function modePresentation(mode: PieceControlMode): PieceControlModePresen
   return MODE_PRESENTATION[mode];
 }
 
-export function buildPieceControlSummary(rows: PieceSummaryRow[]): PieceControlSummary {
+export function normalizePieceControlMode(
+  mode: string | null | undefined,
+): PieceControlMode {
+  if (mode === "shadow" || mode === "pilot" || mode === "live") return mode;
+  return "off";
+}
+
+export function buildPieceControlShadowComparison(
+  pieces: CanonicalRollupPiece[],
+  legacyProduction: LegacyProductionSummaryRow[],
+): PieceControlShadowComparison | null {
+  const registerRollup = rollupCanonicalPieces(pieces);
+  const existingPieceCount = legacyProduction.reduce(
+    (total, row) => total + (Number(row.quantity) || 0),
+    0,
+  );
+  const existingTons = legacyProduction.reduce(
+    (total, row) =>
+      row.weight == null
+        ? total
+        : total + (Number(row.weight) * (Number(row.quantity) || 1)) / 2000,
+    0,
+  );
+  const pieceDelta = registerRollup.pieceCount - existingPieceCount;
+  const tonsDelta = registerRollup.knownTons - existingTons;
+
+  if (Math.abs(pieceDelta) < 1 && Math.abs(tonsDelta) < 0.1) return null;
+  return { pieceDelta, tonsDelta };
+}
+
+export function buildPieceControlSummary(
+  rows: PieceSummaryRow[] | null | undefined,
+): PieceControlSummary {
   const lifecycle = CANONICAL_LIFECYCLES.map((key) => ({
     key,
     label: pieceLifecycleLabel(key),
@@ -90,7 +138,9 @@ export function buildPieceControlSummary(rows: PieceSummaryRow[]): PieceControlS
   let heldRows = 0;
   let unassignedRows = 0;
 
-  for (const row of rows) {
+  const actionableRows = selectActionableLeafPieces(rows);
+
+  for (const row of actionableRows) {
     const quantity = Number(row.quantity) || 0;
     const tons = pieceTons(row);
     totalPieces += quantity;
@@ -112,7 +162,7 @@ export function buildPieceControlSummary(rows: PieceSummaryRow[]): PieceControlS
   ].filter((item) => item.count > 0) as PieceAttentionItem[];
 
   return {
-    rowCount: rows.length,
+    rowCount: actionableRows.length,
     totalPieces,
     knownTons,
     inFabricationPieces: lifecycleByKey.get("in_fabrication")?.pieces ?? 0,
