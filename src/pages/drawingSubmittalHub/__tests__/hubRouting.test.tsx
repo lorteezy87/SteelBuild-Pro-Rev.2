@@ -52,7 +52,13 @@ vi.mock("@/lib/supabase", () => {
   };
 });
 
-vi.mock("@/hooks/useFeatureFlag", () => ({ useFlag: () => false, useFeatureFlag: () => false }));
+// Flags loaded, all off. The hub reads the flags query's isSuccess to tell
+// "off" from "still loading" on the 3D tab.
+vi.mock("@/hooks/useFeatureFlag", () => ({
+  useFlag: () => false,
+  useFeatureFlag: () => false,
+  useAllFlags: () => ({ isSuccess: true, isPending: false, data: new Map<string, boolean>() }),
+}));
 vi.mock("@/components/shared/useAppSecurity", () => ({
   useAppSecurity: () => ({ user: { email: "test@example.com", id: "test-user-id" } }),
 }));

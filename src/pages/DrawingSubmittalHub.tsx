@@ -35,12 +35,13 @@ import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
 import { Box, CalendarCog } from "lucide-react";
-import { useFlag } from "@/hooks/useFeatureFlag";
+import { useAllFlags, useFlag } from "@/hooks/useFeatureFlag";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import { DetailingCommandShell, DetailingNoProject } from "./drawingSubmittalHub/DetailingCommandShell";
 import { DEFAULT_HUB_TAB, canonicalHubSearch, hubHref, nextTabSearch, parseHubTab } from "./drawingSubmittalHub/hubLinks";
 import { DocControlMovedNotice } from "./drawingSubmittalHub/DocControlMovedNotice";
+import { Model3DGateLoading, Model3DGateNotice } from "./drawingSubmittalHub/Model3DGateNotice";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
@@ -106,6 +107,9 @@ const ModelElementImportModal = ModelElementImportModalRaw as unknown as Compone
 // Tabs whose count is a warning, not a row tally (header badge's twin).
 const ALERT_TABS = ["holds"] as const;
 const NO_HOLDS: DrawingHoldRow[] = [];
+// The flag-gated 3D tab. Listed while viewer_3d is on, or while it's the open
+// tab (see the tabs memo), so a 3D link always opens it.
+const MODEL3D_TAB = { key: "model3d", label: "3D Model", icon: Box };
 
 /**
  * Route entry. An unknown (or aliased) ?hub_tab= is corrected first, before
@@ -175,23 +179,30 @@ function DetailingControlCenter() {
   const projectName = activeProject?.name || activeProject?.project_number || "";
 
   // The 3D model viewer is flag-gated until verified against real models in prod.
+  // The flag gates the 3D tab's body, not its link. useFlag reads false until
+  // the flags query succeeds, so through it "off" and "not known yet" look the
+  // same. flagsReady (the same query, so no extra fetch) tells them apart: no
+  // one who has the flag is shown the turned-off notice while flags load.
   const show3d = useFlag("viewer_3d");
+  const flagsReady = useAllFlags().isSuccess;
   // Phase 5 display: count SUBMITTAL due-date countdowns in working days (Mon–Fri)
   // rather than calendar days when on. Drawing-set dues stay calendar-day. Threaded
   // as a param into the pure formatters (buildTriage / buildApprovalMatrixRows) and
   // as a prop into the submittal boards — pure fns never read the flag directly.
   const workdayDues = useFlag("submittal_workday_dues");
-  const tabs = useMemo(
-    () => (show3d ? [...TABS, { key: "model3d", label: "3D Model", icon: Box }] : TABS),
-    [show3d],
-  );
 
   // Tab state from URL (persistent across navigation). The route entry has
-  // already corrected unknown keys. A key this session doesn't show — model3d
-  // with the flag off, or while flags load — opens the Control Board and the
-  // URL is left alone.
+  // already corrected unknown keys, so this is a hub tab. model3d opens its own
+  // tab in every flag state, flags still loading included, and the URL is never
+  // rewritten here.
   const urlTab = parseHubTab(searchParams.get("hub_tab")).tab;
-  const activeTab = tabs.some((t) => t.key === urlTab) ? urlTab : DEFAULT_HUB_TAB;
+  const activeTab = urlTab === "model3d" || TABS.some((t) => t.key === urlTab) ? urlTab : DEFAULT_HUB_TAB;
+  // The 3D tab is listed while the flag is on, or while it's the open tab. A 3D
+  // link always lands on its tab; nobody else sees a dead one.
+  const tabs = useMemo(
+    () => (show3d || activeTab === "model3d" ? [...TABS, MODEL3D_TAB] : TABS),
+    [show3d, activeTab],
+  );
   // Leaving the Drawing Register, by any route (tab click, Back), ends the
   // one-time notice. Adjusted during render rather than in an effect, so it
   // can't flash back on a later visit to the tab.
@@ -292,6 +303,8 @@ function DetailingControlCenter() {
   // fetchAllModelElements pages with .range() — ~28 round-trips on the largest
   // live project. That cost is why it loads only where it is actually rendered:
   // the 3D tab, or when the user opens the mapping card on the Control Board.
+  // The 3D tab counts only with the flag ON: its gate (flag off, or flags still
+  // loading) renders no viewer, so it must never page the roster.
   const [mappingRosterRequested, setMappingRosterRequested] = useState(false);
   const { data: modelElements = [], isFetching: modelElementsLoading, error: modelElementsError } = useQuery({
     queryKey: ["model-elements", projectId],
@@ -792,8 +805,12 @@ function DetailingControlCenter() {
         {activeTab === "holds" && <HoldsPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "transmittals" && <TransmittalLogPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "validation" && <DetailingValidationPanel key={projectId} projectId={projectId || null} />}
+        {/* The flag gates the body, never the link. Until the flags query
+            succeeds, a loading line, never "turned off". */}
         {activeTab === "model3d" && (
-          <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} rosterError={modelElementsError} />
+          !flagsReady ? <Model3DGateLoading />
+          : !show3d ? <Model3DGateNotice />
+          : <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} rosterError={modelElementsError} />
         )}
       </Suspense>
     </ErrorBoundary>

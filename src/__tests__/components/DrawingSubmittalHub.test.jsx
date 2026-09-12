@@ -57,7 +57,31 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
-vi.mock("@/hooks/useFeatureFlag", () => ({ useFlag: () => false, useFeatureFlag: () => false }));
+// Feature flags. `ready` is the flags query's isSuccess; like the real hook,
+// useFlag reads false until then. Default: loaded, everything off.
+const flagsState = vi.hoisted(() => ({ ready: true, on: new Set() }));
+vi.mock("@/hooks/useFeatureFlag", () => ({
+  useFlag: (key) => flagsState.ready && flagsState.on.has(key),
+  useAllFlags: () => ({
+    isSuccess: flagsState.ready,
+    isPending: !flagsState.ready,
+    data: flagsState.ready ? new Map([...flagsState.on].map((key) => [key, true])) : undefined,
+  }),
+}));
+// The real 3D tab pulls in the IFC viewer. The stub says which project it got.
+vi.mock("@/components/viewer3d/Model3DTab", async () => {
+  const { createElement } = await import("react");
+  return {
+    default: ({ projectId }) => createElement("p", { "data-testid": "model3d-tab" }, `model3d-tab:${projectId}`),
+  };
+});
+// The full model roster pages ~28 requests on big projects. Only the 3D tab
+// (flag on) or the mapping card may start it. countModelElements stays real.
+const rosterFetch = vi.hoisted(() => vi.fn(async () => []));
+vi.mock("@/lib/ifc/fetchAllModelElements", async (importOriginal) => ({
+  ...(await importOriginal()),
+  fetchAllModelElements: rosterFetch,
+}));
 vi.mock("@/components/shared/useAppSecurity", () => ({
   useAppSecurity: () => ({ user: { email: "test@example.com", id: "test-user-id" } }),
 }));
@@ -115,6 +139,9 @@ afterEach(() => {
   holdsState.data = [];
   holdsState.isError = false;
   for (const name of Object.keys(entityOverrides)) delete entityOverrides[name];
+  flagsState.ready = true;
+  flagsState.on.clear();
+  rosterFetch.mockClear();
 });
 
 function LocationProbe() {
@@ -258,10 +285,11 @@ describe("DrawingSubmittalHub — tab history", () => {
   });
 });
 
-// Every live ?hub_tab= key but model3d (its body is flag-gated, and the flag is
-// off here). Pinned rather than imported, so a key that stops resolving fails
-// loudly. doccontrol was retired into an alias; its redirect is tested below.
-const NON_3D_KEYS = ["overview", "process", "drawings", "submittals", "transmittals", "matrix", "revimpact", "holds", "validation"];
+// Every live ?hub_tab= key, model3d too: the viewer_3d flag (off here) gates
+// its body, not its tab. Pinned rather than imported, so a key that stops
+// resolving fails loudly. doccontrol was retired into an alias; its redirect
+// is tested below.
+const LIVE_KEYS = ["overview", "process", "drawings", "submittals", "transmittals", "matrix", "revimpact", "holds", "validation", "model3d"];
 
 // The hub's own tab strip; some panels (Holds) render a tablist of their own.
 async function selectedTab() {
@@ -270,7 +298,7 @@ async function selectedTab() {
 }
 
 describe("DrawingSubmittalHub — ?hub_tab= links", () => {
-  it.each(NON_3D_KEYS)("?hub_tab=%s opens its tab and leaves the URL alone", async (key) => {
+  it.each(LIVE_KEYS)("?hub_tab=%s opens its tab and leaves the URL alone", async (key) => {
     renderHub({ entries: [`/DrawingSubmittalHub?hub_tab=${key}`] });
     expect(await selectedTab()).toHaveAttribute("id", `dcc-tab-${key}`);
     expect(screen.getByTestId("search").textContent).toBe(`?hub_tab=${key}`);
@@ -291,12 +319,74 @@ describe("DrawingSubmittalHub — ?hub_tab= links", () => {
     expect(screen.getByTestId("pathname").textContent).toBe("/Dashboard");
   });
 
-  it("keeps a ?hub_tab=model3d link while the 3D flag is off, showing the Control Board", async () => {
+});
+
+// Plan S3: the viewer_3d flag gates the 3D tab's body, never its link.
+const MODEL3D_OFF = "3D model viewer is turned off for this workspace. Ask an admin to enable it.";
+const MODEL3D_OFF_HEADING = { level: 3, name: "3D model viewer is off" };
+const MODEL3D_LOADING = "Loading the 3D model viewer…";
+/** A raw colour literal. jsdom rewrites hex to rgb(), so match every spelling. */
+const RAW_COLOR = /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i;
+
+describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
+  it("shows a loading line on ?hub_tab=model3d while flags load, never the turned-off notice, and leaves the URL alone", async () => {
+    flagsState.ready = false;
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
 
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    expect(screen.getByText(MODEL3D_LOADING)).toHaveAttribute("role", "status");
+    expect(screen.queryByText(MODEL3D_OFF)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", MODEL3D_OFF_HEADING)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("model3d-tab")).not.toBeInTheDocument();
+    expect(rosterFetch).not.toHaveBeenCalled();
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=model3d");
     expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
+  });
+
+  it("keeps ?hub_tab=model3d on the 3D tab with the flag off: the notice, no viewer, no roster read", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    const notice = screen.getByRole("heading", MODEL3D_OFF_HEADING).closest("section");
+    expect(notice).toHaveTextContent(MODEL3D_OFF);
+    expect(screen.queryByText(MODEL3D_LOADING)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("model3d-tab")).not.toBeInTheDocument();
+    // Not the Control Board under another tab's name.
+    expect(screen.queryByText("Items Needing Action")).not.toBeInTheDocument();
+    expect(rosterFetch).not.toHaveBeenCalled();
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=model3d");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
+    // Themed by --cmd-* tokens, never a raw colour.
+    const styles = [notice, ...notice.querySelectorAll("[style]")].map((el) => el.getAttribute("style") ?? "");
+    expect(styles.join(" ")).toContain("var(--cmd-");
+    for (const style of styles) expect(style).not.toMatch(RAW_COLOR);
+  });
+
+  it("renders the 3D viewer, and loads its roster, when viewer_3d is on", async () => {
+    flagsState.on.add("viewer_3d");
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    expect(await screen.findByTestId("model3d-tab", {}, { timeout: 8000 })).toHaveTextContent("model3d-tab:test-project-id");
+    expect(screen.queryByRole("heading", MODEL3D_OFF_HEADING)).not.toBeInTheDocument();
+    expect(screen.queryByText(MODEL3D_LOADING)).not.toBeInTheDocument();
+    await waitFor(() => expect(rosterFetch).toHaveBeenCalledWith("test-project-id"));
+  });
+
+  it("lists no 3D tab on the bare path when viewer_3d is off", async () => {
+    renderHub();
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    const tablist = screen.getByRole("tablist", { name: "Detailing Control Center tabs" });
+    expect(within(tablist).queryByRole("tab", { name: /3D Model/ })).not.toBeInTheDocument();
+  });
+
+  it("lists the 3D tab on the bare path when viewer_3d is on, without reading the roster", async () => {
+    flagsState.on.add("viewer_3d");
+    renderHub();
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    const tablist = screen.getByRole("tablist", { name: "Detailing Control Center tabs" });
+    expect(within(tablist).getByRole("tab", { name: /3D Model/ })).toHaveAttribute("aria-selected", "false");
+    expect(rosterFetch).not.toHaveBeenCalled();
   });
 });
 
@@ -477,6 +567,7 @@ describe("DrawingSubmittalHub — compact header", () => {
     ["submittals", () => screen.findByPlaceholderText("Search # / title / spec section", {}, { timeout: 8000 })],
     ["holds", () => screen.findByRole("heading", { name: "Holds & Blockers" }, { timeout: 8000 })],
     ["validation", () => screen.findByRole("heading", { name: "Drawing and piece validation" }, { timeout: 8000 })],
+    ["model3d", () => screen.findByRole("heading", MODEL3D_OFF_HEADING)],
   ])("has exactly one h1 on ?hub_tab=%s once its panel has loaded", async (key, panelLoaded) => {
     renderHub({ entries: [`/DrawingSubmittalHub?hub_tab=${key}`] });
     await panelLoaded();
