@@ -41,7 +41,7 @@ import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import { DetailingCommandShell, DetailingNoProject } from "./drawingSubmittalHub/DetailingCommandShell";
 import { DEFAULT_HUB_TAB, canonicalHubSearch, hubHref, nextTabSearch, parseHubTab } from "./drawingSubmittalHub/hubLinks";
 import { DocControlMovedNotice } from "./drawingSubmittalHub/DocControlMovedNotice";
-import { Model3DGateLoading, Model3DGateNotice } from "./drawingSubmittalHub/Model3DGateNotice";
+import { Model3DGateError, Model3DGateLoading, Model3DGateNotice } from "./drawingSubmittalHub/Model3DGateNotice";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
@@ -179,12 +179,18 @@ function DetailingControlCenter() {
   const projectName = activeProject?.name || activeProject?.project_number || "";
 
   // The 3D model viewer is flag-gated until verified against real models in prod.
-  // The flag gates the 3D tab's body, not its link. useFlag reads false until
-  // the flags query succeeds, so through it "off" and "not known yet" look the
-  // same. flagsReady (the same query, so no extra fetch) tells them apart: no
-  // one who has the flag is shown the turned-off notice while flags load.
-  const show3d = useFlag("viewer_3d");
-  const flagsReady = useAllFlags().isSuccess;
+  // The flag gates the 3D tab's body, not its link. Read straight off the
+  // flags query (the one useFlag reads, so no extra fetch), because useFlag
+  // reads false whenever the query isn't a success: "off", "not known yet" and
+  // "a background refetch just failed" would all look the same.
+  // - Ready means the flags are HERE. A failed background refetch keeps its
+  //   cached flags (TanStack v5: status "error" with data), so the viewer stays.
+  // - Failed with nothing cached: an error with Retry, never an endless load.
+  // show3d comes from the same data, so the tab strip, the body and the
+  // roster read always agree.
+  const flagsQuery = useAllFlags();
+  const flagsReady = flagsQuery.data !== undefined;
+  const show3d = flagsQuery.data?.get("viewer_3d") === true;
   // Phase 5 display: count SUBMITTAL due-date countdowns in working days (Mon–Fri)
   // rather than calendar days when on. Drawing-set dues stay calendar-day. Threaded
   // as a param into the pure formatters (buildTriage / buildApprovalMatrixRows) and
@@ -805,10 +811,15 @@ function DetailingControlCenter() {
         {activeTab === "holds" && <HoldsPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "transmittals" && <TransmittalLogPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "validation" && <DetailingValidationPanel key={projectId} projectId={projectId || null} />}
-        {/* The flag gates the body, never the link. Until the flags query
-            succeeds, a loading line, never "turned off". */}
+        {/* The flag gates the body, never the link. Until the flags are in, a
+            loading line (or, if the read failed, an error with Retry), never
+            "turned off". */}
         {activeTab === "model3d" && (
-          !flagsReady ? <Model3DGateLoading />
+          !flagsReady ? (
+            flagsQuery.isError
+              ? <Model3DGateError onRetry={() => { void flagsQuery.refetch(); }} retrying={flagsQuery.isFetching} />
+              : <Model3DGateLoading />
+          )
           : !show3d ? <Model3DGateNotice />
           : <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} rosterError={modelElementsError} />
         )}

@@ -168,20 +168,31 @@ describe("ApprovalMatrixPanel — 2026 columns on Rev.2 logic", () => {
 });
 
 describe("ApprovalMatrixPanel — Last sent (expanded row)", () => {
-  it("names the last outgoing transmittal, when and to whom, its sheets, and what changed since", () => {
+  it("names the last outgoing transmittal, when and to whom, its sheets, and how many were revised since", () => {
     mount();
     const line = expandLastSent("s1");
-    expect(line.textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 0 revised or superseded since");
+    expect(line.textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 0 revised since");
     expect(within(line).getByRole("link", { name: "T-014" })).toHaveAttribute("href", "/DrawingSubmittalHub?hub_tab=transmittals&transmittal=t-1");
+    // Nothing revised: the ordinary text colour, not the warning one.
+    expect(within(line).getByText("0 revised since").style.color).toBe("var(--cmd-text)");
   });
 
-  it("counts a sheet revised since it was sent, and breaks the count down on hover", () => {
+  it("drops ' · to ' when the recipient is blank", () => {
+    mount({ transmittals: [{ ...TRANSMITTALS[0], sent_to: "   " }] });
+    expect(expandLastSent("s1").textContent).toBe("Last sent: T-014 · Aug 3, 26 · 1 sheet · 0 revised since");
+  });
+
+  it("counts a sheet revised since it was sent, in the warning colour, and explains the count on hover", () => {
     mount({ currentRevisionIdByDrawingId: new Map([["d1", "r1-B"], ["d2", "r2"]]) });
-    const changed = within(expandLastSent("s1")).getByText("1 revised or superseded since");
-    expect(changed).toHaveAttribute("title", "Revised or superseded since sent: 1 revised, 0 superseded");
+    const line = expandLastSent("s1");
+    expect(line.textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 1 revised since");
+    const revised = within(line).getByText("1 revised since");
+    expect(revised).toHaveAttribute("title", "Revised since sent: 1 of 1 sheet checked against a current revision");
+    expect(revised.style.color).toBe("var(--cmd-warn-text)");
   });
 
-  it("counts a sheet superseded since it was sent: the revise-as-a-new-set workflow", () => {
+  it("reports a sheet superseded NOW, never 'since', because the supersession date isn't recorded", () => {
+    // The revise-as-a-new-set workflow marks the old sheet superseded.
     const drawings = [
       { id: "d1", drawing_set_id: "s1", stage: "IFA" },
       { id: "d2", drawing_set_id: "s1", stage: "IFA", is_superseded: true },
@@ -190,12 +201,33 @@ describe("ApprovalMatrixPanel — Last sent (expanded row)", () => {
     const sent = { ...TRANSMITTALS[0], items: [...TRANSMITTALS[0].items, sentItem("i2", "d2", "r2")] };
     mount({ drawings, transmittals: [sent] });
     const line = expandLastSent("s1");
-    expect(line).toHaveTextContent(/· 2 sheets · 1 revised or superseded since$/);
-    expect(within(line).getByText("1 revised or superseded since")).toHaveAttribute("title", "Revised or superseded since sent: 0 revised, 1 superseded");
+    expect(line.textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 2 sheets · 0 revised since · 1 now superseded");
+    const superseded = within(line).getByText("1 now superseded");
+    expect(superseded).toHaveAttribute(
+      "title",
+      "Superseded now: 1 sheet. When a sheet was superseded isn't recorded, so this can include sheets superseded before T-014 went out.",
+    );
+    // Either count above 0 is a warning; a 0 beside it is not.
+    expect(superseded.style.color).toBe("var(--cmd-warn-text)");
+    expect(within(line).getByText("0 revised since").style.color).toBe("var(--cmd-text)");
   });
 
   it("says a set no outgoing transmittal carried is not sent yet", () => {
     mount();
+    expect(expandLastSent("s2").textContent).toBe("Last sent: Not sent yet");
+  });
+
+  it("says a set an undated outgoing transmittal carried was sent, date not entered, never 'Not sent yet'", () => {
+    mount({ transmittals: [{ ...TRANSMITTALS[0], date_sent: null }] });
+    const line = expandLastSent("s1");
+    expect(line).toHaveAttribute("data-last-sent", "undated");
+    expect(line.textContent).toBe("Last sent: T-014 · Sent (date not entered)");
+    expect(within(line).getByRole("link", { name: "T-014" })).toHaveAttribute("href", "/DrawingSubmittalHub?hub_tab=transmittals&transmittal=t-1");
+    expect(within(line).getByText("Sent (date not entered)")).toHaveAttribute(
+      "title",
+      "T-014 is logged as outgoing with no send date, so when it went out, and what changed since, can't be shown.",
+    );
+    // It carried nothing of Anchor Bolts, and every item matched a sheet.
     expect(expandLastSent("s2").textContent).toBe("Last sent: Not sent yet");
   });
 
@@ -212,13 +244,46 @@ describe("ApprovalMatrixPanel — Last sent (expanded row)", () => {
     expect(within(expandLastSent("s1")).getByRole("link", { name: "T-014" })).toBeInTheDocument();
   });
 
-  it("says how many sheets it couldn't check instead of calling them unrevised", () => {
+  it("says Unknown, never 'Not sent yet', when the log read may have been cut off at the row cap", () => {
+    const cutOff = Object.defineProperty([...TRANSMITTALS], "possiblyTruncated", { value: true });
+    mount({ transmittals: cutOff });
+    const bolts = expandLastSent("s2");
+    expect(bolts.textContent).toBe("Last sent: Unknown");
+    expect(within(bolts).getByText("Unknown")).toHaveAttribute(
+      "title",
+      "Some transmittal records weren't loaded, so this set's last outgoing transmittal can't be confirmed.",
+    );
+    // A set with a transmittal of its own still shows it.
+    expect(within(expandLastSent("s1")).getByRole("link", { name: "T-014" })).toBeInTheDocument();
+  });
+
+  it("gives both reasons when the log was cut off and an item couldn't be matched", () => {
+    const sent = { ...TRANSMITTALS[0], items: [...TRANSMITTALS[0].items, sentItem("i2", null, "r-unloaded")] };
+    mount({ transmittals: Object.defineProperty([sent], "possiblyTruncated", { value: true }) });
+    expect(within(expandLastSent("s2")).getByText("Unknown")).toHaveAttribute(
+      "title",
+      "Some transmittal records weren't loaded; 1 transmittal item couldn't be matched to a sheet, so this set's last outgoing transmittal can't be confirmed.",
+    );
+  });
+
+  it("says how many sheets it couldn't check, and claims no '0 revised' when it could check none", () => {
     mount({ currentRevisionIdByDrawingId: new Map() });
     const line = expandLastSent("s1");
-    expect(line).toHaveTextContent(/· 1 sheet · 0 revised or superseded since · 1 couldn't be checked$/);
-    expect(within(line).getByText("0 revised or superseded since")).toHaveAttribute(
+    expect(line.textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 1 couldn't be checked");
+    expect(within(line).getByText("1 couldn't be checked")).toHaveAttribute(
       "title",
-      "Revised or superseded since sent: 0 revised, 0 superseded; 1 sheet couldn't be checked against a current revision",
+      "No current revision is loaded for 1 sheet, so it isn't counted as revised.",
+    );
+  });
+
+  it("counts revisions over the sheets it could check, and says how many it couldn't", () => {
+    const sent = { ...TRANSMITTALS[0], items: [...TRANSMITTALS[0].items, sentItem("i2", "d2", "r2")] };
+    mount({ transmittals: [sent], currentRevisionIdByDrawingId: new Map([["d1", "r1"]]) });
+    const line = expandLastSent("s1");
+    expect(line.textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 2 sheets · 0 revised since · 1 couldn't be checked");
+    expect(within(line).getByText("0 revised since")).toHaveAttribute(
+      "title",
+      "Revised since sent: 0 of 1 sheet checked against a current revision",
     );
   });
 

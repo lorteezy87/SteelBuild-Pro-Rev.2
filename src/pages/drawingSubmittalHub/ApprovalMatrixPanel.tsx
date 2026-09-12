@@ -97,7 +97,7 @@ interface ApprovalMatrixPanelProps {
   transmittalsLoading?: boolean;
   /**
    * drawing_id → current drawing_revisions.id, from the hub's revisions read.
-   * Drives "revised or superseded since" on the expanded row's Last sent line.
+   * Drives "revised since" on the expanded row's Last sent line.
    */
   currentRevisionIdByDrawingId?: ReadonlyMap<string, string> | null;
   /** Defaults to "loading" while `transmittals` is undefined, else "ready". */
@@ -542,9 +542,9 @@ const valueStyle = { color: "var(--cmd-text)" } as const;
 
 /**
  * The expanded row's Last sent line: the newest OUTGOING transmittal that
- * carried a sheet of this set, and how many of those sheets have been revised
- * or superseded since. Loading, failed and unmatched states never read as
- * "Not sent yet".
+ * carried a sheet of this set, how many of those sheets were revised since,
+ * and how many are superseded now. Loading, failed, undated, unmatched and
+ * cut-off states never read as "Not sent yet".
  */
 function LastSentLine({ lastSent, status, marginBottom }: { lastSent: LastSent; status: LastSentStatus; marginBottom: number }) {
   return (
@@ -560,22 +560,40 @@ function LastSentValue({ lastSent, status }: { lastSent: LastSent; status: LastS
   if (status === "error") return <UnknownValue glyph="?" label="Transmittals or revisions couldn't be loaded" />;
   if (lastSent.kind === "none") return <strong style={valueStyle}>Not sent yet</strong>;
   if (lastSent.kind === "unknown") {
+    const reasons: string[] = [];
+    if (lastSent.possiblyTruncated) reasons.push("Some transmittal records weren't loaded");
+    if (lastSent.unresolvedItems > 0) reasons.push(`${pluralize(lastSent.unresolvedItems, "transmittal item")} couldn't be matched to a sheet`);
     return (
-      <strong
-        style={valueStyle}
-        title={`${pluralize(lastSent.unresolvedItems, "transmittal item")} couldn't be matched to a sheet, so this set's last outgoing transmittal can't be confirmed.`}
-      >
+      <strong style={valueStyle} title={`${reasons.join("; ")}, so this set's last outgoing transmittal can't be confirmed.`}>
         Unknown
       </strong>
     );
   }
+  if (lastSent.kind === "undated") {
+    const number = lastSent.transmittal.number || "Unnumbered";
+    return (
+      <>
+        <Link to={transmittalHref(lastSent.transmittal.id)} style={linkStyle} title={`Open transmittal ${number}`}>
+          {number}
+        </Link>
+        {" · "}
+        <strong
+          style={valueStyle}
+          title={`${number} is logged as outgoing with no send date, so when it went out, and what changed since, can't be shown.`}
+        >
+          Sent (date not entered)
+        </strong>
+      </>
+    );
+  }
   const sent = lastSent.transmittal;
   const number = sent.number || "Unnumbered";
-  const changed = sent.changedSinceSent;
+  const revised = sent.revisedSinceSent;
+  const superseded = sent.supersededNow;
   const unchecked = sent.uncheckedSheets;
-  const changedTitle =
-    `Revised or superseded since sent: ${sent.revisedSinceSent} revised, ${sent.supersededSinceSent} superseded` +
-    (unchecked > 0 ? `; ${pluralize(unchecked, "sheet")} couldn't be checked against a current revision` : "");
+  // Every sheet unchecked: "0 revised since" would rest on nothing, so only the
+  // "couldn't be checked" segment shows.
+  const checked = sent.sheetCount - unchecked;
   return (
     <>
       <Link to={transmittalHref(sent.id)} style={linkStyle} title={`Open transmittal ${number}`}>
@@ -591,10 +609,29 @@ function LastSentValue({ lastSent, status }: { lastSent: LastSent; status: LastS
       )}
       {" · "}
       <strong style={valueStyle}>{pluralize(sent.sheetCount, "sheet")}</strong>
-      {" · "}
-      <strong style={{ color: changed > 0 ? "var(--cmd-warn-text)" : "var(--cmd-text)" }} title={changedTitle}>
-        {`${changed} revised or superseded since`}
-      </strong>
+      {checked > 0 && (
+        <>
+          {" · "}
+          <strong
+            style={{ color: revised > 0 ? "var(--cmd-warn-text)" : "var(--cmd-text)" }}
+            title={`Revised since sent: ${revised} of ${pluralize(checked, "sheet")} checked against a current revision`}
+          >
+            {`${revised} revised since`}
+          </strong>
+        </>
+      )}
+      {/* Present state, not "since": drawings keep no supersession date. */}
+      {superseded > 0 && (
+        <>
+          {" · "}
+          <strong
+            style={{ color: "var(--cmd-warn-text)" }}
+            title={`Superseded now: ${pluralize(superseded, "sheet")}. When a sheet was superseded isn't recorded, so this can include sheets superseded before ${number} went out.`}
+          >
+            {`${superseded} now superseded`}
+          </strong>
+        </>
+      )}
       {/* Unknown is not "unrevised": say how many sheets had nothing to compare against. */}
       {unchecked > 0 && (
         <>

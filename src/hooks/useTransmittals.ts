@@ -36,6 +36,32 @@ export interface TransmittalRow {
 }
 
 /**
+ * EFFECTIVE_LIST_CAP (src/api/client/entityClient.ts): the row count at which a
+ * default filter() read is cut off, PostgREST's 1000-row ceiling. Mirrored, not
+ * imported: page tests mock "@/api/supabaseClient", and reading a named export
+ * the mock doesn't define throws, which inside this queryFn would turn every
+ * such test's log read into a quiet query error (ListTruncationNotice mirrors it
+ * for the same reason). useTransmittals.test pins the two equal.
+ */
+export const TRANSMITTAL_LOG_READ_CAP = 1000;
+
+/**
+ * The log as the query returns it: the rows, plus `possiblyTruncated` when the
+ * transmittals or items read came back at TRANSMITTAL_LOG_READ_CAP rows. Those
+ * reads are newest first, so a cap drops the OLDEST rows without a trace, and a
+ * set sent only on them would otherwise look never sent.
+ *
+ * The flag is a non-enumerable property on the array, so the Transmittals tab
+ * and every other consumer still get a plain-looking array (spreads, equality
+ * and JSON never see it). A log built anywhere else reads as complete.
+ */
+export type TransmittalLog = TransmittalRow[] & { readonly possiblyTruncated?: boolean };
+
+function withTruncationFlag(rows: TransmittalRow[], possiblyTruncated: boolean): TransmittalLog {
+  return Object.defineProperty(rows, "possiblyTruncated", { value: possiblyTruncated, enumerable: false });
+}
+
+/**
  * `enabled` lets a consumer that only needs the log on one tab (the Detailing
  * hub's Approval Matrix) defer the three-table read until that tab is open.
  */
@@ -45,12 +71,22 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
     queryKey: ["drawing-transmittals", projectId],
     enabled: !!projectId && enabled,
     staleTime: 60_000,
-    queryFn: async (): Promise<TransmittalRow[]> => {
+    // Structural sharing rebuilds a changed array without the non-enumerable
+    // flag, so a refetch would silently clear it. The log is rebuilt on every
+    // fetch anyway.
+    structuralSharing: false,
+    queryFn: async (): Promise<TransmittalLog> => {
       const [rawTransmittals, rawItems, rawRevisions] = await Promise.all([
         entities.DrawingTransmittal.filter({ project_id: projectId }),
         entities.DrawingTransmittalItem.filter({ project_id: projectId }),
         entities.DrawingRevision.filter({ project_id: projectId }),
       ]);
+      // Counted on the raw reads, before soft-deleted headers are dropped.
+      // A truncated revisions read needs no flag: its items resolve to no
+      // drawing and are already reported as unmatched.
+      const possiblyTruncated =
+        ((rawTransmittals as any[]) ?? []).length >= TRANSMITTAL_LOG_READ_CAP ||
+        ((rawItems as any[]) ?? []).length >= TRANSMITTAL_LOG_READ_CAP;
 
       const revisionsById = new Map<string, any>();
       for (const revision of (rawRevisions as any[]) ?? []) {
@@ -76,7 +112,7 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
         itemsByTransmittal.set(tid, transmittalItems);
       }
 
-      return ((rawTransmittals as any[]) ?? [])
+      const rows = ((rawTransmittals as any[]) ?? [])
         .filter((t) => !t.is_deleted)
         .map((t) => {
           const items = (itemsByTransmittal.get(String(t.id)) ?? []).sort((a, b) =>
@@ -86,6 +122,7 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
           return { ...t, items, item_count: items.length };
         })
         .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+      return withTruncationFlag(rows, possiblyTruncated);
     },
   });
 }

@@ -16,7 +16,7 @@
 import { resolvePackageStage } from "@/components/submittals/processBoard.derive";
 import { resolveTransmittalDisplay } from "@/components/drawings/register/docControl.derive";
 import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
-import type { TransmittalRow } from "@/hooks/useTransmittals";
+import type { TransmittalLog, TransmittalRow } from "@/hooks/useTransmittals";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 import { submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { matrixStatusBucket, toDateInputValue } from "./format";
@@ -48,8 +48,8 @@ export interface MatrixTransmittal {
 }
 
 /**
- * The newest OUTGOING transmittal that carried a sheet of the set, and how
- * much of what it carried has changed since it went out.
+ * The newest dated OUTGOING transmittal that carried a sheet of the set, and
+ * what has become of the sheets it carried.
  */
 export interface LastOutgoingTransmittal {
   id: string;
@@ -59,30 +59,56 @@ export interface LastOutgoingTransmittal {
   sentTo: string | null;
   /** Distinct sheets of this set on it, live or since superseded. */
   sheetCount: number;
-  /** (a) Sheets whose sent revision is no longer their current one. */
+  /**
+   * Sheets whose current revision is known and is none of the revisions this
+   * transmittal carried for them: revised since it went out.
+   */
   revisedSinceSent: number;
-  /** (b) Sheets now superseded (drawings.is_superseded). */
-  supersededSinceSent: number;
-  /** Distinct sheets with (a) or (b), counted once: the number shown. */
-  changedSinceSent: number;
-  /** Live sheets with no current revision loaded, so (a) couldn't be checked. */
+  /**
+   * Sheets superseded NOW (drawings.is_superseded). Present state only:
+   * drawings record no supersession date, so this can include a sheet that was
+   * already superseded when the transmittal went out. Never labelled "since".
+   */
+  supersededNow: number;
+  /**
+   * Sheets with no current revision loaded, superseded or not: whether they
+   * were revised couldn't be checked, so revisedSinceSent is a lower bound.
+   */
   uncheckedSheets: number;
 }
 
-export interface LastOutgoingRollup {
-  bySet: Map<string, LastOutgoingTransmittal>;
-  /**
-   * Items on outgoing, dated transmittals whose sheet is in no loaded package:
-   * its revision wasn't in the read, the sheet was deleted, or a row cap cut
-   * it off. Project-wide, because such an item could belong to any set.
-   */
-  unresolvedItems: number;
+/** An outgoing transmittal with no send date: it carried the set, but when is unknown. */
+export interface UndatedOutgoingTransmittal {
+  id: string;
+  number: string;
 }
 
-/** One set's Last sent value. "unknown" is never shown as "not sent". */
+export interface LastOutgoingRollup {
+  /** Sets carried by a dated outgoing transmittal: the newest one. */
+  bySet: Map<string, LastOutgoingTransmittal>;
+  /**
+   * Sets carried by an outgoing transmittal with a blank date_sent: the newest
+   * by created_at. Used only for a set no dated transmittal carried.
+   */
+  undatedBySet: Map<string, UndatedOutgoingTransmittal>;
+  /**
+   * Items on outgoing transmittals, dated or not, whose sheet is in no loaded
+   * package: its revision wasn't in the read, the sheet was deleted, or a row
+   * cap cut it off. Project-wide, because such an item could belong to any set.
+   */
+  unresolvedItems: number;
+  /**
+   * The log's transmittals or items read hit the row cap (useTransmittals'
+   * TransmittalLog.possiblyTruncated), so rows may be missing without a trace.
+   */
+  possiblyTruncated: boolean;
+}
+
+/** One set's Last sent value. "undated" and "unknown" are never shown as "not sent". */
 export type LastSent =
   | { kind: "sent"; transmittal: LastOutgoingTransmittal }
-  | { kind: "unknown"; unresolvedItems: number }
+  | { kind: "undated"; transmittal: UndatedOutgoingTransmittal }
+  | { kind: "unknown"; unresolvedItems: number; possiblyTruncated: boolean }
   | { kind: "none" };
 
 export interface MatrixEnrichment {
@@ -200,26 +226,41 @@ export function buildLastTransmittalBySet(
 }
 
 /**
+ * useTransmittals marks a log whose transmittals or items read hit the row cap
+ * (TransmittalLog.possiblyTruncated). A log built anywhere else reads as whole.
+ */
+function logPossiblyTruncated(transmittals: readonly TransmittalRow[] | null | undefined): boolean {
+  return (transmittals as Pick<TransmittalLog, "possiblyTruncated"> | null | undefined)?.possiblyTruncated === true;
+}
+
+/**
  * drawing_set_id → the newest OUTGOING transmittal carrying any of the set's
- * sheets, and how many of those sheets have changed since it went out.
+ * sheets, and what has become of those sheets since.
  *
  * Kept apart from buildLastTransmittalBySet on purpose. That one is the Last
  * Transmittal column: the newest in EITHER direction, undated ones by
  * created_at. This one answers "what did we last send, and is it still
  * what's current?".
  *
- * - Only outgoing transmittals with a date_sent count. Newest wins by that
+ * - Outgoing transmittals with a date_sent go in bySet. Newest wins by that
  *   day (the entered date as written, never shifted), then created_at, then
  *   transmittal number.
+ * - Outgoing transmittals with a blank date_sent still carried their sets: a
+ *   missing date is unknown, not "never sent". They go in undatedBySet (newest
+ *   by created_at, then number) and never compete with a dated one, because
+ *   they can't be ordered against it.
  * - item → drawing (useTransmittals resolves it from the item's immutable
  *   revision) → set, over every loaded sheet, live AND superseded. A sheet in
  *   no set (a legacy ungrouped package) is known, just set-less: skipped, not
- *   unresolved.
- * - A sheet is changed since sent when (a) its current revision is known and
- *   is none of the revisions this transmittal carried for it, or (b) it is
- *   now superseded. (b) is how the owner's revise-as-a-new-set workflow shows:
- *   the old sheet stays current in the old set and is marked superseded.
- *   Both at once count once.
+ *   unresolved. Items on dated and undated transmittals alike count as
+ *   unresolved when their sheet isn't loaded.
+ * - For each sheet on the winning dated transmittal: revised since sent when
+ *   its current revision is known and is none of the revisions carried for it;
+ *   unchecked when no current revision is loaded; superseded now when
+ *   drawings.is_superseded is set. That last is how the owner's
+ *   revise-as-a-new-set workflow shows (the old sheet stays in the old set and
+ *   is marked superseded), but drawings keep no supersession date, so it is a
+ *   present-state count, never a "since".
  */
 export function buildLastOutgoingBySet(
   transmittals: readonly TransmittalRow[] | null | undefined,
@@ -235,11 +276,11 @@ export function buildLastOutgoingBySet(
   }
 
   const best = new Map<string, { value: LastOutgoingTransmittal; order: TransmittalOrder }>();
+  const undated = new Map<string, { value: UndatedOutgoingTransmittal; order: TransmittalOrder }>();
   let unresolvedItems = 0;
   for (const transmittal of transmittals || []) {
     if (!transmittal || transmittal.is_deleted || transmittal.direction !== "outgoing") continue;
     const dateSent = String(transmittal.date_sent ?? "").trim();
-    if (!dateSent) continue;
 
     // set → sheet → the revision ids this transmittal carried for that sheet.
     const sentBySet = new Map<string, Map<string, Set<string>>>();
@@ -269,22 +310,28 @@ export function buildLastOutgoingBySet(
       createdAt: String(transmittal.created_at || ""),
       number: String(transmittal.transmittal_number || ""),
     };
+
+    if (!dateSent) {
+      for (const setId of sentBySet.keys()) {
+        const held = undated.get(setId);
+        if (held && compareTransmittals(order, held.order) <= 0) continue;
+        undated.set(setId, { order, value: { id: String(transmittal.id), number: order.number } });
+      }
+      continue;
+    }
+
     const sentTo = String(transmittal.sent_to ?? "").trim();
     for (const [setId, sheets] of sentBySet) {
       const held = best.get(setId);
       if (held && compareTransmittals(order, held.order) <= 0) continue;
       let revised = 0;
       let superseded = 0;
-      let changed = 0;
       let unchecked = 0;
       for (const [drawingId, sentRevisionIds] of sheets) {
-        const isSuperseded = sheetIndex.get(drawingId)?.superseded === true;
         const currentId = currentRevisionIdByDrawingId?.get(drawingId);
-        const isRevised = currentId !== undefined && !sentRevisionIds.has(currentId);
-        if (isRevised) revised++;
-        if (isSuperseded) superseded++;
-        if (isRevised || isSuperseded) changed++;
-        else if (currentId === undefined) unchecked++;
+        if (currentId === undefined) unchecked++;
+        else if (!sentRevisionIds.has(currentId)) revised++;
+        if (sheetIndex.get(drawingId)?.superseded === true) superseded++;
       }
       best.set(setId, {
         order,
@@ -295,8 +342,7 @@ export function buildLastOutgoingBySet(
           sentTo: sentTo || null,
           sheetCount: sheets.size,
           revisedSinceSent: revised,
-          supersededSinceSent: superseded,
-          changedSinceSent: changed,
+          supersededNow: superseded,
           uncheckedSheets: unchecked,
         },
       });
@@ -305,18 +351,27 @@ export function buildLastOutgoingBySet(
 
   const bySet = new Map<string, LastOutgoingTransmittal>();
   for (const [setId, entry] of best) bySet.set(setId, entry.value);
-  return { bySet, unresolvedItems };
+  const undatedBySet = new Map<string, UndatedOutgoingTransmittal>();
+  for (const [setId, entry] of undated) undatedBySet.set(setId, entry.value);
+  return { bySet, undatedBySet, unresolvedItems, possiblyTruncated: logPossiblyTruncated(transmittals) };
 }
 
 /**
- * One set's Last sent. Its own transmittal if one matched. Otherwise Unknown
- * while any item couldn't be placed, because that item might be this set's.
- * Only with every item placed is it "not sent yet".
+ * One set's Last sent. Its own dated transmittal if one carried it, else its
+ * own undated one ("sent, date not entered"). Otherwise Unknown while any item
+ * couldn't be placed (it might be this set's) or the log read may have been
+ * cut off. Only with every item placed and the whole log loaded is it
+ * "not sent yet".
  */
 export function lastSentForSet(rollup: LastOutgoingRollup, setId: string): LastSent {
-  const transmittal = rollup.bySet.get(String(setId));
+  const key = String(setId);
+  const transmittal = rollup.bySet.get(key);
   if (transmittal) return { kind: "sent", transmittal };
-  if (rollup.unresolvedItems > 0) return { kind: "unknown", unresolvedItems: rollup.unresolvedItems };
+  const undated = rollup.undatedBySet.get(key);
+  if (undated) return { kind: "undated", transmittal: undated };
+  if (rollup.unresolvedItems > 0 || rollup.possiblyTruncated) {
+    return { kind: "unknown", unresolvedItems: rollup.unresolvedItems, possiblyTruncated: rollup.possiblyTruncated };
+  }
   return { kind: "none" };
 }
 

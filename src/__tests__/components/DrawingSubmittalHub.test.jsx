@@ -6,7 +6,7 @@
  * route entry (no-project state) and tab-history semantics.
  */
 import React from "react";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -57,15 +57,20 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
-// Feature flags. `ready` is the flags query's isSuccess; like the real hook,
-// useFlag reads false until then. Default: loaded, everything off.
-const flagsState = vi.hoisted(() => ({ ready: true, on: new Set() }));
+// Feature flags, shaped like the TanStack v5 query. `ready` means the flags
+// query HAS data; `error` is its isError. Both at once is a failed background
+// refetch that kept its cached flags. Like the real hook, useFlag reads false
+// unless the query is a success. Default: loaded, everything off.
+const flagsState = vi.hoisted(() => ({ ready: true, error: false, fetching: false, on: new Set(), refetch: vi.fn() }));
 vi.mock("@/hooks/useFeatureFlag", () => ({
-  useFlag: (key) => flagsState.ready && flagsState.on.has(key),
+  useFlag: (key) => flagsState.ready && !flagsState.error && flagsState.on.has(key),
   useAllFlags: () => ({
-    isSuccess: flagsState.ready,
-    isPending: !flagsState.ready,
+    isSuccess: flagsState.ready && !flagsState.error,
+    isPending: !flagsState.ready && !flagsState.error,
+    isError: flagsState.error,
+    isFetching: flagsState.fetching,
     data: flagsState.ready ? new Map([...flagsState.on].map((key) => [key, true])) : undefined,
+    refetch: flagsState.refetch,
   }),
 }));
 // The real 3D tab pulls in the IFC viewer. The stub says which project it got.
@@ -140,7 +145,10 @@ afterEach(() => {
   holdsState.isError = false;
   for (const name of Object.keys(entityOverrides)) delete entityOverrides[name];
   flagsState.ready = true;
+  flagsState.error = false;
+  flagsState.fetching = false;
   flagsState.on.clear();
+  flagsState.refetch.mockClear();
   rosterFetch.mockClear();
 });
 
@@ -325,6 +333,7 @@ describe("DrawingSubmittalHub — ?hub_tab= links", () => {
 const MODEL3D_OFF = "3D model viewer is turned off for this workspace. Ask an admin to enable it.";
 const MODEL3D_OFF_HEADING = { level: 3, name: "3D model viewer is off" };
 const MODEL3D_LOADING = "Loading the 3D model viewer…";
+const MODEL3D_FLAGS_FAILED = "Couldn't check whether the 3D model viewer is enabled.";
 /** A raw colour literal. jsdom rewrites hex to rgb(), so match every spelling. */
 const RAW_COLOR = /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i;
 
@@ -387,6 +396,69 @@ describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
     const tablist = screen.getByRole("tablist", { name: "Detailing Control Center tabs" });
     expect(within(tablist).getByRole("tab", { name: /3D Model/ })).toHaveAttribute("aria-selected", "false");
     expect(rosterFetch).not.toHaveBeenCalled();
+  });
+
+  it("drops the 3D tab once a flag-off user leaves it, and Back brings it back", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+
+    await user.click(screen.getByRole("tab", { name: /Control Board/ }));
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    const tablist = screen.getByRole("tablist", { name: "Detailing Control Center tabs" });
+    expect(within(tablist).queryByRole("tab", { name: /3D Model/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    expect(screen.getByRole("heading", MODEL3D_OFF_HEADING)).toBeInTheDocument();
+    expect(rosterFetch).not.toHaveBeenCalled();
+  });
+
+  it("says the flag check failed, with a Retry, when the flags query errors before it ever loads", async () => {
+    const user = userEvent.setup();
+    flagsState.ready = false;
+    flagsState.error = true;
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    const alert = screen.getByText(MODEL3D_FLAGS_FAILED).closest('[role="alert"]');
+    expect(alert).not.toBeNull();
+    // Not an endless load, not "turned off", no viewer and no roster read.
+    expect(screen.queryByText(MODEL3D_LOADING)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", MODEL3D_OFF_HEADING)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("model3d-tab")).not.toBeInTheDocument();
+    expect(rosterFetch).not.toHaveBeenCalled();
+    // Themed by --cmd-* tokens, never a raw colour; a plain button, no form.
+    const styles = [alert, ...alert.querySelectorAll("[style]")].map((el) => el.getAttribute("style") ?? "");
+    expect(styles.join(" ")).toContain("var(--cmd-");
+    for (const style of styles) expect(style).not.toMatch(RAW_COLOR);
+    expect(alert.querySelector("form")).toBeNull();
+
+    await user.click(within(alert).getByRole("button", { name: "Retry" }));
+    expect(flagsState.refetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=model3d");
+  });
+
+  it("disables Retry while the flags are being re-read", async () => {
+    flagsState.ready = false;
+    flagsState.error = true;
+    flagsState.fetching = true;
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    expect(screen.getByText(MODEL3D_FLAGS_FAILED)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+  });
+
+  it("keeps the 3D viewer through a failed background flags refetch that kept its cached flags", async () => {
+    flagsState.on.add("viewer_3d");
+    flagsState.error = true; // `ready` stays true: TanStack v5 keeps the cached data
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
+
+    expect(await screen.findByTestId("model3d-tab", {}, { timeout: 8000 })).toHaveTextContent("model3d-tab:test-project-id");
+    expect(screen.queryByText(MODEL3D_FLAGS_FAILED)).not.toBeInTheDocument();
+    expect(screen.queryByText(MODEL3D_LOADING)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", MODEL3D_OFF_HEADING)).not.toBeInTheDocument();
   });
 });
 
@@ -626,10 +698,12 @@ describe("DrawingSubmittalHub — record deep links", () => {
 });
 
 // The matrix's Last sent line needs the transmittal log AND the hub's own
-// drawing-revisions read. The log is seeded fresh (staleTime 60s), so it never
-// refetches and the only DrawingRevision read is the hub's. Each test then
-// controls that read alone.
+// drawing-revisions read. Most tests seed the log fresh (staleTime 60s), so it
+// never refetches and the only DrawingRevision read is the hub's; each then
+// controls that read alone. The log tests let it read, or refetch, through
+// DrawingTransmittal.filter instead.
 describe("DrawingSubmittalHub — the matrix's Last sent line", () => {
+  const LOG_KEY = ["drawing-transmittals", TEST_PROJECT.id];
   const SENT = [{
     id: "t-1", project_id: TEST_PROJECT.id, transmittal_number: "T-014", direction: "outgoing",
     source_company: null, received_from: null, sent_to: "EOR", subject: null,
@@ -637,7 +711,9 @@ describe("DrawingSubmittalHub — the matrix's Last sent line", () => {
     items: [{ id: "i1", drawing_revision_id: "r1", drawing_id: "d1", sheet_number: "S1", sheet_title: null, revision_code: "0" }],
     item_count: 1,
   }];
-  const seedLog = (qc) => qc.setQueryData(["drawing-transmittals", TEST_PROJECT.id], SENT);
+  const seedLog = (qc) => qc.setQueryData(LOG_KEY, SENT);
+  // d1's current revision is r1, the one T-014 sent.
+  const CURRENT_R1 = { id: "r1", project_id: TEST_PROJECT.id, drawing_id: "d1", version_number: 1, is_current: true };
 
   function withSheetAndRevisions(revisionsFilter) {
     entityOverrides.DrawingSet = { filter: vi.fn().mockResolvedValue([{ id: "s1", project_id: TEST_PROJECT.id, set_name: "Main Steel" }]) };
@@ -672,7 +748,7 @@ describe("DrawingSubmittalHub — the matrix's Last sent line", () => {
 
     const line = await openLastSent(user);
     await waitFor(() => expect(line()?.textContent).toBe(
-      "Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 1 revised or superseded since",
+      "Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 1 revised since",
     ));
   });
 
@@ -684,5 +760,64 @@ describe("DrawingSubmittalHub — the matrix's Last sent line", () => {
     const line = await openLastSent(user);
     await waitFor(() => expect(line()).toHaveAttribute("data-last-sent", "error"));
     expect(within(line()).getByText("Transmittals or revisions couldn't be loaded")).toHaveClass("sr-only");
+  });
+
+  it("says the log couldn't be loaded when the transmittal read fails", async () => {
+    const user = userEvent.setup();
+    withSheetAndRevisions(vi.fn().mockResolvedValue([CURRENT_R1]));
+    // Only the transmittals read fails. useTransmittals reads revisions too,
+    // and they keep working, so the error is the log's own.
+    const transmittalsRead = vi.fn().mockRejectedValue(new Error("log failed"));
+    entityOverrides.DrawingTransmittal = { filter: transmittalsRead };
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=matrix"] });
+
+    const line = await openLastSent(user);
+    await waitFor(() => expect(line()).toHaveAttribute("data-last-sent", "error"));
+    expect(transmittalsRead).toHaveBeenCalled();
+    expect(within(line()).getByText("Transmittals or revisions couldn't be loaded")).toHaveClass("sr-only");
+  });
+
+  it("keeps the last-known log on screen when a background refetch of it fails", async () => {
+    const user = userEvent.setup();
+    withSheetAndRevisions(vi.fn().mockResolvedValue([CURRENT_R1]));
+    const transmittalsRead = vi.fn().mockRejectedValue(new Error("refetch failed"));
+    entityOverrides.DrawingTransmittal = { filter: transmittalsRead };
+    let client;
+    // Seeded stale, so opening the matrix refetches the log, and that fails.
+    renderHub({
+      entries: ["/DrawingSubmittalHub?hub_tab=matrix"],
+      seed: (qc) => {
+        client = qc;
+        qc.setQueryData(LOG_KEY, SENT, { updatedAt: 1 });
+      },
+    });
+
+    const line = await openLastSent(user);
+    await waitFor(() => expect(client.getQueryState(LOG_KEY)?.status).toBe("error"));
+    expect(transmittalsRead).toHaveBeenCalled();
+    // Let the observer hand the failed refetch to the hub before looking.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(line()).toHaveAttribute("data-last-sent", "sent");
+    expect(line()?.textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 0 revised since");
+  });
+
+  it("says Unknown, never 'Not sent yet', when the log's read comes back at the row cap", async () => {
+    const user = userEvent.setup();
+    withSheetAndRevisions(vi.fn().mockResolvedValue([CURRENT_R1]));
+    // A full page of incoming transmittals. Last sent ignores incoming ones,
+    // so only the cap can make Main Steel Unknown.
+    const fullPage = Array.from({ length: 1000 }, (_, i) => ({
+      id: `in-${i}`, project_id: TEST_PROJECT.id, transmittal_number: `T-${i}`, direction: "incoming",
+      date_received: "2026-08-01", created_at: "2026-08-01T09:00:00Z",
+    }));
+    entityOverrides.DrawingTransmittal = { filter: vi.fn().mockResolvedValue(fullPage) };
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=matrix"] });
+
+    const line = await openLastSent(user);
+    await waitFor(() => expect(line()).toHaveAttribute("data-last-sent", "unknown"));
+    expect(within(line()).getByText("Unknown")).toHaveAttribute(
+      "title",
+      "Some transmittal records weren't loaded, so this set's last outgoing transmittal can't be confirmed.",
+    );
   });
 });

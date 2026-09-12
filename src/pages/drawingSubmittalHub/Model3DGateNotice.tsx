@@ -26,6 +26,25 @@ export function Model3DGateLoading() {
   );
 }
 
+/**
+ * The flags query failed before it ever loaded, so whether the viewer is on is
+ * unknown: say so and offer a retry, never "loading" forever and never "off".
+ * (A failed background refetch keeps its cached flags, so it never lands here.)
+ */
+export function Model3DGateError({ onRetry, retrying = false }: { onRetry: () => void; retrying?: boolean }) {
+  return (
+    <div
+      role="alert"
+      style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "12px 2px", fontSize: 13, color: "var(--cmd-text)" }}
+    >
+      <span>Couldn't check whether the 3D model viewer is enabled.</span>
+      <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onRetry} disabled={retrying}>
+        {retrying ? "Retrying…" : "Retry"}
+      </button>
+    </div>
+  );
+}
+
 /** Flags loaded, and viewer_3d is off for this user. */
 export function Model3DGateNotice() {
   return (

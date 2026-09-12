@@ -52,8 +52,8 @@ vi.mock("@/lib/supabase", () => {
   };
 });
 
-// Flags loaded, all off. The hub reads the flags query's isSuccess to tell
-// "off" from "still loading" on the 3D tab.
+// Flags loaded, all off. The hub reads the flags query's data to tell "off"
+// from "still loading" on the 3D tab.
 vi.mock("@/hooks/useFeatureFlag", () => ({
   useFlag: () => false,
   useFeatureFlag: () => false,

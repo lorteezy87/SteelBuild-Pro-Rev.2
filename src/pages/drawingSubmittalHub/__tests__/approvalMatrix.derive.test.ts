@@ -219,13 +219,28 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
     return map;
   };
 
-  type Expected = "none" | { unknown: number } | Partial<LastOutgoingTransmittal>;
+  // What useTransmittals hands over when its transmittals or items read hit the
+  // row cap: the same rows, flagged with a non-enumerable property.
+  const truncatedLog = (rows: TransmittalRow[]): TransmittalRow[] =>
+    Object.defineProperty(rows, "possiblyTruncated", { value: true, enumerable: false });
+
+  // One sheet sent at two revisions, the older of which is no longer current.
+  const CURRENT_REV_ITEM = { id: "a", drawing_revision_id: "rev-d1", drawing_id: "d1", sheet_number: "D1", sheet_title: null as string | null, revision_code: "1" };
+  const OLDER_REV_ITEM = { id: "b", drawing_revision_id: "rev-d1-A", drawing_id: "d1", sheet_number: "D1", sheet_title: null as string | null, revision_code: "0" };
+
+  type Expected =
+    | "none"
+    | { unknown: number; truncated?: boolean }
+    | { undated: string }
+    | Partial<LastOutgoingTransmittal>;
   const asLastSent = (expected: Expected) =>
     expected === "none"
       ? { kind: "none" }
       : "unknown" in expected
-        ? { kind: "unknown", unresolvedItems: expected.unknown }
-        : { kind: "sent", transmittal: expected };
+        ? { kind: "unknown", unresolvedItems: expected.unknown, possiblyTruncated: expected.truncated ?? false }
+        : "undated" in expected
+          ? { kind: "undated", transmittal: { id: expected.undated } }
+          : { kind: "sent", transmittal: expected };
 
   const CASES: Array<{
     name: string;
@@ -240,21 +255,45 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
       expected: { s1: "none" },
     },
     {
-      name: "ignores internal transmittals",
-      transmittals: [transmittal({ id: "int", direction: "internal", drawingIds: ["d1"] })],
-      expected: { s1: "none" },
-    },
-    {
-      name: "ignores outgoing transmittals with no send date, null or blank",
+      name: "ignores internal transmittals, dated or not",
       transmittals: [
-        transmittal({ id: "no-date", date_sent: null, drawingIds: ["d1"] }),
-        transmittal({ id: "blank-date", date_sent: "  ", drawingIds: ["d1"] }),
+        transmittal({ id: "int", direction: "internal", drawingIds: ["d1"] }),
+        transmittal({ id: "int-undated", direction: "internal", date_sent: null, drawingIds: ["d1", "ghost"] }),
       ],
       expected: { s1: "none" },
     },
     {
-      name: "ignores soft-deleted transmittals",
-      transmittals: [transmittal({ id: "gone", is_deleted: true, drawingIds: ["d1"] })],
+      name: "an outgoing transmittal with no send date, null or blank, still carried its set: sent, date not entered",
+      transmittals: [
+        transmittal({ id: "no-date", date_sent: null, drawingIds: ["d1"] }),
+        transmittal({ id: "blank-date", date_sent: "  ", drawingIds: ["d4"] }),
+      ],
+      expected: { s1: { undated: "no-date" }, s2: { undated: "blank-date" }, s3: "none" },
+    },
+    {
+      name: "of two undated transmittals the later logged wins, then the higher number",
+      transmittals: [
+        transmittal({ id: "later", transmittal_number: "T-001", date_sent: null, created_at: "2026-08-05T09:00:00Z", drawingIds: ["d1"] }),
+        transmittal({ id: "earlier", transmittal_number: "T-009", date_sent: null, created_at: "2026-08-01T09:00:00Z", drawingIds: ["d1"] }),
+        transmittal({ id: "t2", transmittal_number: "T-2", date_sent: null, drawingIds: ["d4"] }),
+        transmittal({ id: "t10", transmittal_number: "T-10", date_sent: null, drawingIds: ["d4"] }),
+      ],
+      expected: { s1: { undated: "later" }, s2: { undated: "t10" } },
+    },
+    {
+      name: "a dated transmittal wins over an undated one logged after it: only the dated one can be ordered",
+      transmittals: [
+        transmittal({ id: "dated", date_sent: "2026-08-01", created_at: "2026-08-01T09:00:00Z", drawingIds: ["d1"] }),
+        transmittal({ id: "undated", date_sent: null, created_at: "2026-08-09T09:00:00Z", drawingIds: ["d2"] }),
+      ],
+      expected: { s1: { id: "dated", sheetCount: 1 } },
+    },
+    {
+      name: "ignores soft-deleted transmittals, dated or not",
+      transmittals: [
+        transmittal({ id: "gone", is_deleted: true, drawingIds: ["d1"] }),
+        transmittal({ id: "gone-undated", is_deleted: true, date_sent: null, drawingIds: ["d1", "ghost"] }),
+      ],
       expected: { s1: "none" },
     },
     {
@@ -289,47 +328,48 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
     {
       name: "counts distinct sheets, not items",
       transmittals: [transmittal({ id: "dup", drawingIds: ["d1", "d1", "d2"] })],
-      expected: { s1: { sheetCount: 2, changedSinceSent: 0 } },
+      expected: { s1: { sheetCount: 2, revisedSinceSent: 0 } },
     },
     {
       name: "a sheet whose current revision moved on is revised since sent",
       transmittals: [transmittal({ id: "t", drawingIds: ["d1", "d2"] })],
       current: currentWith({ d1: "rev-d1-B" }),
-      expected: { s1: { sheetCount: 2, revisedSinceSent: 1, supersededSinceSent: 0, changedSinceSent: 1, uncheckedSheets: 0 } },
+      expected: { s1: { sheetCount: 2, revisedSinceSent: 1, supersededNow: 0, uncheckedSheets: 0 } },
     },
     {
-      name: "a sheet superseded since is changed: the revise-as-a-new-set workflow",
+      name: "a superseded sheet counts as superseded now, not revised: the revise-as-a-new-set workflow",
       transmittals: [transmittal({ id: "t", drawingIds: ["d3"] })],
-      expected: { s1: { sheetCount: 1, revisedSinceSent: 0, supersededSinceSent: 1, changedSinceSent: 1, uncheckedSheets: 0 } },
+      expected: { s1: { sheetCount: 1, revisedSinceSent: 0, supersededNow: 1, uncheckedSheets: 0 } },
     },
     {
-      name: "a sheet both revised and superseded counts once",
+      name: "a sheet both revised and superseded counts in both parts",
       transmittals: [transmittal({ id: "t", drawingIds: ["d3"] })],
       current: currentWith({ d3: "rev-d3-B" }),
-      expected: { s1: { revisedSinceSent: 1, supersededSinceSent: 1, changedSinceSent: 1 } },
+      expected: { s1: { sheetCount: 1, revisedSinceSent: 1, supersededNow: 1, uncheckedSheets: 0 } },
     },
     {
-      name: "a superseded sheet is changed even with no current revision loaded",
+      name: "a superseded sheet with no current revision loaded is superseded now AND unchecked, never unrevised",
       transmittals: [transmittal({ id: "t", drawingIds: ["d3"] })],
       current: currentWith({ d3: null }),
-      expected: { s1: { supersededSinceSent: 1, changedSinceSent: 1, uncheckedSheets: 0 } },
+      expected: { s1: { revisedSinceSent: 0, supersededNow: 1, uncheckedSheets: 1 } },
     },
     {
-      name: "not revised when any revision it carried for the sheet is still current",
-      transmittals: [transmittal({
-        id: "two-revs",
-        items: [
-          { id: "a", drawing_revision_id: "rev-d1", drawing_id: "d1", sheet_number: "D1", sheet_title: null, revision_code: "1" },
-          { id: "b", drawing_revision_id: "rev-d1-A", drawing_id: "d1", sheet_number: "D1", sheet_title: null, revision_code: "0" },
-        ],
-      })],
-      expected: { s1: { sheetCount: 1, revisedSinceSent: 0, changedSinceSent: 0 } },
+      name: "current revision listed first: not revised while any revision it carried for the sheet is still current",
+      transmittals: [transmittal({ id: "two-revs", items: [CURRENT_REV_ITEM, OLDER_REV_ITEM] })],
+      expected: { s1: { sheetCount: 1, revisedSinceSent: 0, uncheckedSheets: 0 } },
+    },
+    {
+      // useTransmittals sorts a sheet's items by revision_code ascending, so
+      // real data lists the older revision first and the current one last.
+      name: "older revision listed first, as useTransmittals sorts: not revised while any revision it carried is still current",
+      transmittals: [transmittal({ id: "two-revs", items: [OLDER_REV_ITEM, CURRENT_REV_ITEM] })],
+      expected: { s1: { sheetCount: 1, revisedSinceSent: 0, uncheckedSheets: 0 } },
     },
     {
       name: "a live sheet with no current revision loaded is unchecked, not revised",
       transmittals: [transmittal({ id: "t", drawingIds: ["d1", "d2"] })],
       current: currentWith({ d2: null }),
-      expected: { s1: { sheetCount: 2, revisedSinceSent: 0, changedSinceSent: 0, uncheckedSheets: 1 } },
+      expected: { s1: { sheetCount: 2, revisedSinceSent: 0, uncheckedSheets: 1 } },
     },
     {
       name: "unmatched items make every unmatched set Unknown, while a matched set still shows its transmittal",
@@ -342,12 +382,32 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
       expected: { s3: { unknown: 1 }, s1: { unknown: 1 } },
     },
     {
-      name: "unmatched items on incoming or undated transmittals don't make anything Unknown",
-      transmittals: [
-        transmittal({ id: "in", direction: "incoming", date_received: "2026-08-02", drawingIds: [null] }),
-        transmittal({ id: "no-date", date_sent: null, drawingIds: ["ghost"] }),
-      ],
+      name: "unmatched items on incoming transmittals don't make anything Unknown",
+      transmittals: [transmittal({ id: "in", direction: "incoming", date_received: "2026-08-02", drawingIds: [null] })],
       expected: { s1: "none", s2: "none" },
+    },
+    {
+      name: "unmatched items on an undated outgoing transmittal make every unmatched set Unknown",
+      transmittals: [transmittal({ id: "no-date", date_sent: null, drawingIds: ["d1", "ghost"] })],
+      expected: { s1: { undated: "no-date" }, s2: { unknown: 1 }, s3: { unknown: 1 } },
+    },
+    {
+      name: "a log cut off at the row cap makes every set with no transmittal of its own Unknown, never Not sent yet",
+      transmittals: truncatedLog([
+        transmittal({ id: "t", drawingIds: ["d1"] }),
+        transmittal({ id: "no-date", date_sent: null, drawingIds: ["d4"] }),
+      ]),
+      expected: { s1: { id: "t" }, s2: { undated: "no-date" }, s3: { unknown: 0, truncated: true } },
+    },
+    {
+      name: "a log cut off at the row cap is Unknown even with no rows left to show",
+      transmittals: truncatedLog([]),
+      expected: { s1: { unknown: 0, truncated: true }, s3: { unknown: 0, truncated: true } },
+    },
+    {
+      name: "a cut-off log with unmatched items reports both",
+      transmittals: truncatedLog([transmittal({ id: "t", drawingIds: [null] })]),
+      expected: { s1: { unknown: 1, truncated: true } },
     },
     {
       name: "a known sheet in no set is skipped, not unmatched",
@@ -383,13 +443,14 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
         dateSent: "2026-08-03",
         sentTo: "EOR",
         sheetCount: 3,
-        revisedSinceSent: 1,
-        supersededSinceSent: 1,
-        changedSinceSent: 2,
-        uncheckedSheets: 1,
+        revisedSinceSent: 1, // d1
+        supersededNow: 1, // d3, still at the revision sent
+        uncheckedSheets: 1, // d2
       },
     });
     expect(rollup.unresolvedItems).toBe(0);
+    expect(rollup.possiblyTruncated).toBe(false);
+    expect(rollup.undatedBySet.size).toBe(0);
   });
 
   it("drops a blank recipient rather than showing 'to '", () => {
@@ -406,12 +467,18 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
     const { rows } = enrich([], { transmittals, current: CURRENT });
     // #334's column still shows the newer INCOMING one; Last sent shows what went out.
     expect(byId(rows, "s1").lastTransmittal?.id).toBe("in");
-    expect(byId(rows, "s1").lastSent).toMatchObject({ kind: "sent", transmittal: { id: "out", sheetCount: 1, changedSinceSent: 0, uncheckedSheets: 0 } });
+    expect(byId(rows, "s1").lastSent).toMatchObject({ kind: "sent", transmittal: { id: "out", sheetCount: 1, revisedSinceSent: 0, uncheckedSheets: 0 } });
     expect(byId(rows, "s2").lastSent).toEqual({ kind: "none" });
 
     // Without the revision map nothing can be checked, so nothing is called unrevised.
     const unchecked = enrich([], { transmittals });
-    expect(byId(unchecked.rows, "s1").lastSent).toMatchObject({ kind: "sent", transmittal: { changedSinceSent: 0, uncheckedSheets: 1 } });
+    expect(byId(unchecked.rows, "s1").lastSent).toMatchObject({ kind: "sent", transmittal: { revisedSinceSent: 0, uncheckedSheets: 1 } });
+  });
+
+  it("carries a cut-off log's flag through enrichApprovalMatrixRows", () => {
+    const { rows } = enrich([], { transmittals: truncatedLog([transmittal({ id: "out", drawingIds: ["d1"] })]), current: CURRENT });
+    expect(byId(rows, "s1").lastSent).toMatchObject({ kind: "sent", transmittal: { id: "out" } });
+    expect(byId(rows, "s2").lastSent).toEqual({ kind: "unknown", unresolvedItems: 0, possiblyTruncated: true });
   });
 });
 
