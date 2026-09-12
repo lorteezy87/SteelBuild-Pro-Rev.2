@@ -16,24 +16,26 @@
  * Rendered unconditionally by DrawingSubmittalHub.
  */
 
-import { useEffect, useRef, useState } from "react";
-import type { ComponentType, KeyboardEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import "@/styles/command.css";
 import { KpiStrip, useCommandSkin } from "@/components/command";
 import { DetailingCommandHeader } from "./DetailingCommandHeader";
+import {
+  DETAILING_PANEL_ID,
+  DetailingTabStrip,
+  detailingTabId,
+} from "./DetailingTabStrip";
+import type { DetailingTabDef } from "./DetailingTabStrip";
 import { buildDetailingKpiCells, buildFabReadyLine, buildStatusLine } from "./detailingKpis";
 import type { DetailingKpis } from "./detailingKpis";
 
 export type { DetailingKpis } from "./detailingKpis";
+export { revealScrollLeft } from "./DetailingTabStrip";
 
 // ── Prop types ─────────────────────────────────────────────────────────────
 
 /** One tab descriptor — same shape as TABS in format.ts / the hub's `tabs` memo. */
-export interface TabDef {
-  key: string;
-  label: string;
-  icon: ComponentType<{ size?: number | string }>;
-}
+export type TabDef = DetailingTabDef;
 
 interface DetailingCommandShellProps {
   tabs: TabDef[];
@@ -61,154 +63,9 @@ interface DetailingCommandShellProps {
   children: ReactNode;
 }
 
-const tabId = (key: string) => `dcc-tab-${key}`;
-const PANEL_ID = "dcc-panel";
 /** The tab that owns the KPI strip. Every other tab shows the status line. */
 const KPI_TAB = "overview";
 const HOLDS_TAB = "holds";
-/** Room kept beside a tab scrolled into view: the strip's side padding. */
-const TAB_SCROLL_GUTTER = 16;
-
-/**
- * The strip scrollLeft that brings a tab fully into view, or null when it
- * already is. `tab` is the tab's offsetLeft/offsetWidth inside the strip,
- * `strip` the strip's scrollLeft/clientWidth. Sideways only: revealing a tab
- * never scrolls the page.
- */
-export function revealScrollLeft(
-  strip: { scrollLeft: number; width: number },
-  tab: { left: number; width: number },
-  gutter: number = TAB_SCROLL_GUTTER,
-): number | null {
-  if (tab.left - gutter < strip.scrollLeft) return Math.max(0, tab.left - gutter);
-  const end = tab.left + tab.width + gutter;
-  if (end > strip.scrollLeft + strip.width) return end - strip.width;
-  return null;
-}
-
-// ── Tab strip ──────────────────────────────────────────────────────────────
-
-interface TabStripProps {
-  tabs: TabDef[];
-  activeTab: string;
-  onTab: (key: string) => void;
-  tabCounts: Record<string, number>;
-  alertTabs: readonly string[];
-}
-
-/**
- * The header's bottom row: one line of tabs that scrolls sideways instead of
- * wrapping. It uses manual activation (WAI-ARIA tabs). ArrowLeft and
- * ArrowRight (both wrap), Home and End move focus. Enter or Space opens the
- * focused tab, as a click does.
- *
- * Why manual: tab switches push history, and each panel loads its own data,
- * so automatic activation would add a history entry and a fetch for every
- * tab arrowed past. Roving tabIndex follows focus and returns to the open tab
- * once focus leaves the strip. Modifier chords (Alt/Cmd+Arrow is the
- * browser's Back) are left alone.
- */
-function DetailingTabStrip({ tabs, activeTab, onTab, tabCounts, alertTabs }: TabStripProps) {
-  const stripRef = useRef<HTMLDivElement>(null);
-  // The tab keyboard focus sits on, while that differs from the open tab.
-  const [focusKey, setFocusKey] = useState<string | null>(null);
-  const isListed = (key: string | null | undefined): key is string => Boolean(key) && tabs.some((t) => t.key === key);
-  // Something must be reachable by Tab even if the active key isn't listed.
-  const tabbableKey = isListed(focusKey) ? focusKey : isListed(activeTab) ? activeTab : tabs[0]?.key;
-
-  // Keep the active tab visible in the row, on load and on every change (Back
-  // included). Measured a frame late on purpose. On mount the command skin
-  // lands in the shell's own effect, which runs after this child's, and the
-  // strip only becomes a scrolling row once that skin applies.
-  useEffect(() => {
-    const reveal = () => {
-      const strip = stripRef.current;
-      const tab = strip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-      if (!strip || !tab) return;
-      const next = revealScrollLeft(
-        { scrollLeft: strip.scrollLeft, width: strip.clientWidth },
-        { left: tab.offsetLeft, width: tab.offsetWidth },
-      );
-      if (next !== null) strip.scrollLeft = next;
-    };
-    if (typeof window.requestAnimationFrame !== "function") {
-      reveal();
-      return undefined;
-    }
-    const frame = window.requestAnimationFrame(reveal);
-    return () => window.cancelAnimationFrame(frame);
-  }, [activeTab]);
-
-  const focusTab = (index: number) => {
-    const target = tabs[index];
-    if (!target) return;
-    setFocusKey(target.key);
-    stripRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus();
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    // Never swallow a chord. Alt/Cmd+Arrow is the browser's Back or Forward,
-    // and Ctrl/Shift+Home/End belong to the platform or assistive tech.
-    if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
-    const last = tabs.length - 1;
-    let target: number;
-    switch (event.key) {
-      case "ArrowRight": target = index === last ? 0 : index + 1; break;
-      case "ArrowLeft": target = index === 0 ? last : index - 1; break;
-      case "Home": target = 0; break;
-      case "End": target = last; break;
-      default: return;
-    }
-    event.preventDefault();
-    focusTab(target);
-  };
-
-  return (
-    <div
-      ref={stripRef}
-      className="detailing-cc__tabs"
-      role="tablist"
-      aria-label="Detailing Control Center tabs"
-      // Focus leaving the strip hands the Tab stop back to the open tab.
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusKey(null);
-      }}
-    >
-      {tabs.map((tab, index) => {
-        const isActive = tab.key === activeTab;
-        const TabIcon = tab.icon;
-        const count = tabCounts[tab.key] ?? 0;
-        const alert = alertTabs.includes(tab.key);
-        return (
-          <button
-            key={tab.key}
-            id={tabId(tab.key)}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            aria-controls={PANEL_ID}
-            // Screen readers hear the count with the label: "Holds & Blockers, 2".
-            aria-label={count > 0 ? `${tab.label}, ${count}` : undefined}
-            tabIndex={tab.key === tabbableKey ? 0 : -1}
-            data-hub-tab={tab.key}
-            onClick={() => { setFocusKey(null); onTab(tab.key); }}
-            onKeyDown={(event) => onKeyDown(event, index)}
-            className={`detailing-cc__tab${isActive ? " is-active" : ""}`}
-          >
-            <TabIcon size={14} />
-            <span>{tab.label}</span>
-            {count > 0 && (
-              <span data-tab-count={tab.key} className={`detailing-cc__tab-count${alert ? " is-alert" : ""}`}>
-                {count}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Shell component ────────────────────────────────────────────────────────
 
 export function DetailingCommandShell({
@@ -258,9 +115,9 @@ export function DetailingCommandShell({
       {/* Tab panel slot — the hub renders the existing active-tab JSX here unchanged */}
       <div
         className="detailing-cc__panel"
-        id={PANEL_ID}
+        id={DETAILING_PANEL_ID}
         role="tabpanel"
-        aria-labelledby={tabId(activeTab)}
+        aria-labelledby={detailingTabId(activeTab)}
         data-hub-panel={activeTab}
       >
         {onKpiTab && <KpiStrip cells={buildDetailingKpiCells(kpis, pending)} />}
