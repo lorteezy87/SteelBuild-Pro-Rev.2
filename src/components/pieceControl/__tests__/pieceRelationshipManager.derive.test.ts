@@ -4,6 +4,7 @@ import type { PieceRegisterRow } from "@/lib/pieceControl/repository";
 import {
   calculateSelectedTons,
   countAutoAssignSkips,
+  derivePieceRelationshipReadiness,
   derivePieceRelationshipView,
 } from "../pieceRelationshipManager.derive";
 
@@ -131,5 +132,14 @@ describe("derivePieceRelationshipView", () => {
         { reason: "no_match" },
       ]),
     ).toEqual({ ambiguous: 2, no_match: 1 });
+  });
+
+  it("derives readiness independently from selectable-piece filters", () => {
+    const view = derivePieceRelationshipReadiness(snapshot, "wp-1");
+
+    expect(view.readiness).toHaveLength(1);
+    expect(view.visibleReadiness.map((row) => row.workPackageId)).toEqual([
+      "wp-1",
+    ]);
   });
 });

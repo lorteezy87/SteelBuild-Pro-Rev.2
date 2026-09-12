@@ -14,6 +14,7 @@ import type { AutoAssignPlan } from "@/lib/pieceControl/wpAutoAssign";
 import {
   calculateSelectedTons,
   countAutoAssignSkips,
+  derivePieceRelationshipReadiness,
   derivePieceRelationshipView,
   liveWorkPackageId,
   type RelationshipScopeFilter,
@@ -87,6 +88,13 @@ export default function PieceRelationshipManager({
       scopeFilter,
       snapshot,
     ],
+  );
+  const relationshipReadiness = useMemo(
+    () =>
+      snapshot
+        ? derivePieceRelationshipReadiness(snapshot, focusedWorkPackageId)
+        : null,
+    [focusedWorkPackageId, snapshot],
   );
   const selectablePieces = relationshipView?.selectablePieces ?? [];
 
@@ -217,10 +225,10 @@ export default function PieceRelationshipManager({
     drawingLinkCountByPiece,
     packageScopedLeaves,
     drawingPieces,
-    visibleReadiness,
     drawingSetMap,
     activeDrawingSets,
   } = relationshipView!;
+  const visibleReadiness = relationshipReadiness?.visibleReadiness ?? [];
 
   return (
     <div className={`piece-relationships${compact ? " is-compact" : ""}`} data-skin="command">

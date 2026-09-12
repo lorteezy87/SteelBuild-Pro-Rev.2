@@ -104,21 +104,6 @@ export function derivePieceRelationshipView(
           filters.focusedWorkPackageId,
       )
     : leafPieces;
-  const readiness = evaluateWorkPackageReadiness(
-    workPackages,
-    pieces,
-    pieceDrawings,
-    drawings,
-    {
-      drawingSets,
-      submittals,
-      sheetResponses,
-      drawingRevisions,
-      drawingReviews,
-      drawingSignoffs,
-    },
-    pieceDrawingSets,
-  );
   const activeDrawingSets = drawingSets.filter(
     (set) => !set.is_deleted && !set.deleted_at,
   );
@@ -130,14 +115,37 @@ export function derivePieceRelationshipView(
     packageScopedLeaves,
     selectablePieces,
     drawingPieces,
-    readiness,
-    visibleReadiness: filters.focusedWorkPackageId
-      ? readiness.filter(
-          (row) => row.workPackageId === filters.focusedWorkPackageId,
-        )
-      : readiness,
     drawingSetMap: new Map(drawingSets.map((set) => [set.id, set])),
     activeDrawingSets,
+  };
+}
+
+export function derivePieceRelationshipReadiness(
+  snapshot: PieceRelationshipSnapshot,
+  focusedWorkPackageId?: string,
+) {
+  const readiness = evaluateWorkPackageReadiness(
+    snapshot.workPackages ?? [],
+    snapshot.pieces ?? [],
+    snapshot.pieceDrawings ?? [],
+    snapshot.drawings ?? [],
+    {
+      drawingSets: snapshot.drawingSets ?? [],
+      submittals: snapshot.submittals ?? [],
+      sheetResponses: snapshot.sheetResponses ?? [],
+      drawingRevisions: snapshot.drawingRevisions ?? [],
+      drawingReviews: snapshot.drawingReviews ?? [],
+      drawingSignoffs: snapshot.drawingSignoffs ?? [],
+    },
+    snapshot.pieceDrawingSets ?? [],
+  );
+  return {
+    readiness,
+    visibleReadiness: focusedWorkPackageId
+      ? readiness.filter(
+          (row) => row.workPackageId === focusedWorkPackageId,
+        )
+      : readiness,
   };
 }
 
