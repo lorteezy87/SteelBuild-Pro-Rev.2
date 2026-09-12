@@ -163,6 +163,24 @@ function getLatestStageSubmittal(submittals: any[]): any {
   return pickMostRecentSubmittal(usable) || pickMostRecentSubmittal(submittals);
 }
 
+/**
+ * A set package's workflow stage: the governing submittal's mapped stage, or —
+ * only when no linked submittal maps to one — derivedSetStage's legacy sheet
+ * rollup. Exported so the Approval Matrix's Stage column runs this exact rule
+ * and can never disagree with the Process Board about where a set is.
+ */
+export function resolvePackageStage(submittals: any[], sheets: any[]): string {
+  const latestSubmittal = getLatestStageSubmittal(submittals);
+  const mapped = latestSubmittal
+    ? submittalStatusToStage(
+        latestSubmittal.status,
+        latestSubmittal.ball_in_court,
+        latestSubmittal.approved_date,
+      )
+    : null;
+  return mapped || derivedSetStage(submittals, sheets);
+}
+
 // ── Board build / filter / bucket / summary (byte-identical to the .jsx) ─────
 
 /**
@@ -172,13 +190,7 @@ function getLatestStageSubmittal(submittals: any[]): any {
 export function buildBoardItems(setPackages: any[], submittals: any[], useWorkdays = false): BoardItem[] {
   const packageItems = (setPackages || []).map((pkg) => {
     const latestSubmittal = getLatestStageSubmittal(pkg.submittals);
-    const stage = latestSubmittal
-      ? submittalStatusToStage(
-          latestSubmittal.status,
-          latestSubmittal.ball_in_court,
-          latestSubmittal.approved_date,
-        ) || derivedSetStage(pkg.submittals, pkg.sheets)
-      : derivedSetStage(pkg.submittals, pkg.sheets);
+    const stage = resolvePackageStage(pkg.submittals, pkg.sheets);
     // Prefer the governing submittal's due; only fall back to the earliest sheet
     // due when no submittal governs. Working-day counting applies ONLY to the
     // submittal-governed case (a drawing-set/sheet due stays calendar-day).

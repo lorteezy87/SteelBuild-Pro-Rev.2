@@ -5,7 +5,7 @@
  * revision snapshots, update the header/attachment set when permitted, and
  * soft-delete the header while retaining its items for history.
  */
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import { entities } from "@/api/supabaseClient";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { usePermissions } from "@/services/permissions";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useTransmittals } from "@/hooks/useTransmittals";
 import type { TransmittalAttachment, TransmittalRow } from "@/hooks/useTransmittals";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
@@ -274,6 +275,25 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     setDeleteConfirmation("");
     setActiveId(closing ? null : transmittal.id);
   };
+
+  // ?transmittal=<id> deep link (the Approval Matrix's Last-transmittal
+  // column): open that transmittal's details once the log has loaded. The
+  // hook strips the param, so a refresh or tab switch can't re-open it.
+  const pendingScrollRef = useRef<string | null>(null);
+  useAutoOpenEdit(transmittals, (transmittal) => {
+    resetEditor();
+    setConfirmingDelete(false);
+    setDeleteConfirmation("");
+    setActiveId(transmittal.id);
+    pendingScrollRef.current = transmittal.id;
+  }, { enabled: !isLoading, param: "transmittal" });
+  // Scroll once React has committed the opened details row. A
+  // requestAnimationFrame from the opener could run before the row exists.
+  useEffect(() => {
+    if (!activeId || pendingScrollRef.current !== activeId) return;
+    pendingScrollRef.current = null;
+    document.getElementById(`transmittal-${activeId}-details`)?.scrollIntoView?.({ block: "nearest" });
+  }, [activeId]);
 
   const startEdit = (transmittal: TransmittalRow) => {
     setCreateOpen(false);

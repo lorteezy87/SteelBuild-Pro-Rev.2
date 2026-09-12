@@ -35,10 +35,15 @@ export interface TransmittalRow {
   item_count: number;
 }
 
-export function useTransmittals(projectId: string | null) {
+/**
+ * `enabled` lets a consumer that only needs the log on one tab (the Detailing
+ * hub's Approval Matrix) defer the three-table read until that tab is open.
+ */
+export function useTransmittals(projectId: string | null, options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
   return useQuery({
     queryKey: ["drawing-transmittals", projectId],
-    enabled: !!projectId,
+    enabled: !!projectId && enabled,
     staleTime: 60_000,
     queryFn: async (): Promise<TransmittalRow[]> => {
       const [rawTransmittals, rawItems, rawRevisions] = await Promise.all([

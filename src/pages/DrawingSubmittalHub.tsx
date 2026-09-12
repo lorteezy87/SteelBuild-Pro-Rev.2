@@ -17,6 +17,9 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
+import { activeHoldCount, useDrawingHolds } from "@/hooks/useDrawingHolds";
+import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
+import { useTransmittals } from "@/hooks/useTransmittals";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
@@ -35,7 +38,7 @@ import { Box, CalendarCog } from "lucide-react";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
-import { DetailingCommandShell } from "./drawingSubmittalHub/DetailingCommandShell";
+import { DetailingCommandShell, DetailingNoProject } from "./drawingSubmittalHub/DetailingCommandShell";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
@@ -54,6 +57,7 @@ import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
 import RevisionImpactPanel from "./drawingSubmittalHub/RevisionImpactPanel";
 import { ApprovalMatrixPanel } from "./drawingSubmittalHub/ApprovalMatrixPanel";
+import type { HoldsStatus } from "./drawingSubmittalHub/ApprovalMatrixPanel";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
@@ -101,7 +105,27 @@ const ErrorBoundary = ErrorBoundaryRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 const ModelElementImportModal = ModelElementImportModalRaw as unknown as ComponentType<AnyProps>;
 
+// Tabs whose count is a warning, not a row tally (header badge's twin).
+const ALERT_TABS = ["holds"] as const;
+const NO_HOLDS: DrawingHoldRow[] = [];
+// One-shot record/create params, each aimed at a specific tab (Submittals:
+// recordId, targetSetId, prefilled*; Transmittals: transmittal).
+const HUB_RECORD_PARAMS = ["recordId", "targetSetId", "prefilledStatus", "prefilledBallInCourt", "transmittal"] as const;
+
+/**
+ * Route entry. With no project every query below is disabled, so the shell
+ * used to sit on "—" and "Loading…" forever; now it says so plainly. Keyed
+ * on the project so a switch remounts the hub — open drafts (escalation, RFI
+ * from a summary, revision compare, lead times) never carry across projects.
+ */
 export default function DrawingSubmittalHub() {
+  const projectCtx = useProjectContext() as any;
+  const projectId = projectCtx.activeProject?.id as string | undefined;
+  if (!projectId) return projectCtx.loading ? <LoadingSkeleton /> : <DetailingNoProject />;
+  return <DetailingControlCenter key={projectId} />;
+}
+
+function DetailingControlCenter() {
   const projectCtx = useProjectContext() as any;
   const activeProject = projectCtx.activeProject as any;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -121,6 +145,7 @@ export default function DrawingSubmittalHub() {
   const { can } = usePermissions();
   const projectId = activeProject?.id as string | undefined;
   const projectName = activeProject?.name || activeProject?.project_number || "";
+  const projectLabel = [activeProject?.project_number, activeProject?.name].filter(Boolean).join(" · ");
 
   // The 3D model viewer is flag-gated until verified against real models in prod.
   const show3d = useFlag("viewer_3d");
@@ -137,12 +162,27 @@ export default function DrawingSubmittalHub() {
   // Tab state from URL (persistent across navigation)
   const tabParam = searchParams.get("hub_tab") || "overview";
   const activeTab = tabs.find((t) => t.key === tabParam) ? tabParam : "overview";
+  // Tab changes PUSH a history entry (the 2026 hub keeps its tab in the path
+  // for the same reason), so Back returns to the previous tab instead of
+  // leaving the hub. ?hub_tab= stays the format, so old bookmarks and the
+  // Validation panel's ?hub_tab=holds link keep working. The matrix's quick
+  // filter is tab-scoped and doesn't follow the user to another tab.
   const setActiveTab = (key: string) => {
+    if (key === activeTab) return;
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("hub_tab", key);
+      if (key !== "matrix") next.delete("matrix_filter");
+      // A ?projectId= / ?project= deep link has done its job once
+      // ProjectScopedRoute synced the project. Pushed entries must not re-pin
+      // it, or Back after a project switch would quietly switch the app back.
+      next.delete("projectId");
+      next.delete("project");
+      // A lazy tab that hadn't consumed its record param yet must not fire it
+      // later, on some other visit.
+      for (const param of HUB_RECORD_PARAMS) next.delete(param);
       return next;
-    }, { replace: true });
+    });
   };
 
   // ── Data for KPI strip & matrix ────────────────────────────────────────
@@ -158,6 +198,22 @@ export default function DrawingSubmittalHub() {
     queryFn: () => entities.DrawingSet.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
+  });
+
+  // Holds: one query feeds the header badge, the Holds tab count and the
+  // matrix's On Hold column — the same key HoldsPanel reads, so all agree.
+  // "Known" means we HAVE rows. A failed background refetch keeps its cached
+  // rows (TanStack v5: status "error" with data), and those last-known values
+  // stay on screen — flipping cells to "?" while the hold filter still matched
+  // the same cached rows contradicted itself.
+  const holdsQuery = useDrawingHolds(projectId ?? null);
+  const holds = holdsQuery.data ?? NO_HOLDS;
+  const holdsStatus: HoldsStatus = holdsQuery.data !== undefined ? "ready" : holdsQuery.isError ? "error" : "loading";
+  const activeHolds = holdsStatus === "ready" ? activeHoldCount(holds) : null;
+  // The matrix's Last Transmittal column. It's a three-table read, so it
+  // loads only while the matrix is open (same key as the Transmittals tab).
+  const { data: transmittals, isPending: transmittalsPending } = useTransmittals(projectId ?? null, {
+    enabled: activeTab === "matrix",
   });
 
   // Work packages (for the erection sequence date → backward scheduling) + RFIs
@@ -478,7 +534,8 @@ export default function DrawingSubmittalHub() {
     drawings: drawingKpis.totalSheets,
     submittals: kpis.total,
     matrix: drawingSets.filter((set) => !set?.is_deleted).length,
-  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSheets, kpis.total, drawingSets]);
+    holds: activeHolds ?? 0,
+  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSheets, kpis.total, drawingSets, activeHolds]);
 
   // ── Inline quick-action mutations (Next Decision card) ────────────────
   const invalidateHub = async () => {
@@ -656,6 +713,12 @@ export default function DrawingSubmittalHub() {
             // "No drawing sets yet." while that key was still cold.
             isLoading={isLoading || drawingSetsLoading}
             useWorkdays={workdayDues}
+            setPackages={setPackages}
+            holds={holds}
+            holdsStatus={holdsStatus}
+            transmittals={transmittals}
+            transmittalsLoading={transmittalsPending}
+            canCreateSubmittal={can("create", "submittal")}
           />
         )}
         {activeTab === "revimpact" && (
@@ -775,8 +838,10 @@ export default function DrawingSubmittalHub() {
           openItems: triage.openItems.length,
           fleetAverageScore: fleetHealth.count > 0 ? fleetHealth.averageScore : null,
         }}
-        projectName={projectName}
+        projectName={projectLabel}
         tabCounts={tabCounts}
+        alertTabs={ALERT_TABS}
+        activeHolds={activeHolds}
         isLoading={isLoading}
         // Lead Times is the ONLY writer of projects.metadata.detailing_lead_days,
         // which drives the whole backward schedule (Submit by / Approval by / Fab

@@ -918,6 +918,20 @@ export interface ApprovalMatrixSummary {
   overdue: number; dueSoon: number; total: number; pendingEor: number;
 }
 
+export type MatrixStatusBucket = "approved" | "rejected" | "pending" | "void";
+
+/**
+ * The Approval Matrix's status buckets. Shared by summarizeApprovalMatrix and
+ * the matrix's click-through filters, so a pill's count is always the number
+ * of rows its filter shows.
+ */
+export function matrixStatusBucket(status: string | null | undefined): MatrixStatusBucket {
+  if (status === "Approved" || status === "Approved as Noted" || status === "Released for Fabrication") return "approved";
+  if (status === "Rejected" || status === "Revise and Resubmit") return "rejected";
+  if (status === "Void") return "void"; // Void is terminal — never "pending"
+  return "pending";
+}
+
 /**
  * Summary counts for the Approval Matrix. Status buckets: approved (Approved /
  * Approved as Noted / Released for Fabrication), rejected (Rejected / Revise and
@@ -928,10 +942,10 @@ export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummar
   let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0, pendingEor = 0;
   for (const row of matrixRows || []) {
     if (!row.latestSubmittal) { noSubmittal++; continue; }
-    const st = row.latestSubmittal.status;
-    if (st === "Approved" || st === "Approved as Noted" || st === "Released for Fabrication") approved++;
-    else if (st === "Rejected" || st === "Revise and Resubmit") rejected++;
-    else if (st !== "Void") pending++; // Void is terminal — never "pending"
+    const bucket = matrixStatusBucket(row.latestSubmittal.status);
+    if (bucket === "approved") approved++;
+    else if (bucket === "rejected") rejected++;
+    else if (bucket === "pending") pending++;
     if (row.due.overdue) overdue++;
     if (row.due.dueSoon) dueSoon++;
     if (row.pendingEorResponse || hasUnansweredApproverNotes(row.latestSubmittal)) pendingEor++;

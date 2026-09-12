@@ -5,6 +5,11 @@
  * lives in DrawingSubmittalHub.tsx and is passed through via `children`.
  * This file never touches data or workflow logic.
  *
+ * Layout follows the master brief's control-center contract and the
+ * SteelBuild-Pro-2026 hub it borrows from: context header (project, overdue,
+ * holds) → KPI strip → tab strip → the active panel. DetailingNoProject is the
+ * explicit empty state for "no project selected".
+ *
  * Rendered unconditionally by DrawingSubmittalHub.
  */
 
@@ -15,6 +20,11 @@ import { PageHero, KpiStrip, useCommandSkin } from "@/components/command";
 import type { KpiCellDef, HeroChip, KpiTone } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import { AlertTriangle, CalendarClock, CheckCircle, Gauge, FileStack, ClipboardList } from "lucide-react";
+
+const TITLE = "Detailing Control Center";
+// The 2026 hub's framing: one place for the whole drawings → submittals →
+// transmittals chain, with the submittal workflow owning the stage.
+const SUBTITLE = "Drawings → submittals → transmittals in one place. Stage follows each set's governing submittal.";
 
 // ── Prop types ─────────────────────────────────────────────────────────────
 
@@ -50,16 +60,28 @@ interface DetailingCommandShellProps {
   activeTab: string;
   onTab: (key: string) => void;
   kpis: DetailingKpis;
+  /** Project context line, e.g. "24-117 · Mesa Gateway". */
   projectName?: string;
   /** True while the underlying queries are still resolving. */
   isLoading?: boolean;
+  /**
+   * Active sheet holds — the Holds tab's Active-table count over the same
+   * query. null/undefined while unknown, so the header never claims "No holds"
+   * before it has checked.
+   */
+  activeHolds?: number | null;
   /** Header actions rendered in the hero (e.g. Lead Times). Optional. */
   actions?: ReactNode;
   /** Tab-count badge values, keyed by tab key. */
   tabCounts: Record<string, number>;
+  /** Tabs whose count is a warning (e.g. holds) rather than a row tally. */
+  alertTabs?: readonly string[];
   /** The active tab panel rendered by the hub (unchanged). */
   children: ReactNode;
 }
+
+const tabId = (key: string) => `dcc-tab-${key}`;
+const PANEL_ID = "dcc-panel";
 
 // ── Shell component ────────────────────────────────────────────────────────
 
@@ -70,6 +92,8 @@ export function DetailingCommandShell({
   kpis,
   projectName,
   tabCounts,
+  alertTabs = [],
+  activeHolds,
   actions,
   isLoading,
   children,
@@ -88,6 +112,14 @@ export function DetailingCommandShell({
   // Every overdue item on the board, both kinds. buildTriage partitions its
   // `overdue` bucket into these two disjoint counts.
   const totalOverdue = kpis.overdueDrawingSets + kpis.overdueUnlinkedSubmittals;
+
+  // Holds badge (from the 2026 hub): the same number the Holds tab's Active
+  // table shows. Omitted until the holds query answers.
+  const holdsChip: HeroChip[] = typeof activeHolds === "number"
+    ? [activeHolds > 0
+        ? { label: `${activeHolds} Sheet${activeHolds === 1 ? "" : "s"} On Hold`, tone: "warn" as const }
+        : { label: "No holds" }]
+    : [];
 
   // ── Hero chips from real fleet metrics ────────────────────────────────
   const chips: HeroChip[] = pending ? [{ label: "Loading…" }] : [
@@ -108,6 +140,7 @@ export function DetailingCommandShell({
           tone: "danger" as const,
         }]
       : [{ label: "Nothing overdue", tone: "good" as const }]),
+    ...holdsChip,
     ...(kpis.atRisk > 0
       ? [{ label: `${kpis.atRisk} At Risk`, tone: "warn" as const }]
       : []),
@@ -199,8 +232,8 @@ export function DetailingCommandShell({
       {/* Hero band */}
       <PageHero
         Icon={LayoutGrid}
-        title="Detailing Control Center"
-        subtitle="Drawings, submittals, and the path to Released-for-Fab"
+        title={TITLE}
+        subtitle={SUBTITLE}
         projectName={projectName}
         chips={chips}
         stats={heroStats}
@@ -230,12 +263,16 @@ export function DetailingCommandShell({
           const isActive = tab.key === activeTab;
           const TabIcon = tab.icon;
           const count = tabCounts[tab.key] ?? 0;
+          const alert = alertTabs.includes(tab.key);
           return (
             <button
               key={tab.key}
+              id={tabId(tab.key)}
               type="button"
               role="tab"
               aria-selected={isActive}
+              aria-controls={PANEL_ID}
+              data-hub-tab={tab.key}
               onClick={() => onTab(tab.key)}
               className={`detailing-cc__tab${isActive ? " is-active" : ""}`}
               style={{
@@ -264,12 +301,16 @@ export function DetailingCommandShell({
               <span>{tab.label}</span>
               {count > 0 && (
                 <span
+                  data-tab-count={tab.key}
                   style={{
                     fontSize: 11,
                     fontWeight: 700,
-                    color: isActive
-                      ? "var(--cmd-gold, var(--accent))"
-                      : "var(--cmd-text-muted, var(--text-muted))",
+                    fontVariantNumeric: "tabular-nums",
+                    color: alert
+                      ? "var(--cmd-warn-text, var(--status-warning-fg))"
+                      : isActive
+                        ? "var(--cmd-gold, var(--accent))"
+                        : "var(--cmd-text-muted, var(--text-muted))",
                   }}
                 >
                   {count}
@@ -281,8 +322,44 @@ export function DetailingCommandShell({
       </div>
 
       {/* Tab panel slot — the hub renders the existing active-tab JSX here unchanged */}
-      <div className="detailing-cc__panel">
+      <div className="detailing-cc__panel" id={PANEL_ID} role="tabpanel" aria-labelledby={tabId(activeTab)}>
         {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Explicit "no project" state. Without it the hub rendered its full shell
+ * with every query disabled, so the band sat on em dashes and "Loading…"
+ * indefinitely — reading as a stuck page, not as "pick a project first".
+ */
+export function DetailingNoProject() {
+  useCommandSkin();
+  return (
+    <div className="detailing-cc">
+      <PageHero
+        Icon={LayoutGrid}
+        title={TITLE}
+        subtitle={SUBTITLE}
+        photoSrc={photoFor("DrawingSubmittalHub") ?? undefined}
+      />
+      <div
+        role="status"
+        style={{
+          padding: "40px 24px",
+          textAlign: "center",
+          border: "1px dashed var(--cmd-border, var(--border-default))",
+          borderRadius: 6,
+          background: "var(--cmd-surface, var(--bg-surface-low))",
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--cmd-text, var(--text-primary))", marginBottom: 4 }}>
+          No active project
+        </div>
+        <div style={{ fontSize: 13, color: "var(--cmd-text-muted, var(--text-muted))" }}>
+          Pick a project from the project selector to open its Detailing Control Center.
+        </div>
       </div>
     </div>
   );

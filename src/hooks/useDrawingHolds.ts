@@ -46,6 +46,19 @@ export function sortHoldsNewestFirst(holds: DrawingHoldRow[]): DrawingHoldRow[] 
     .sort((a, b) => String(b.placed_at || "").localeCompare(String(a.placed_at || "")));
 }
 
+/**
+ * Active holds — the Holds tab's Active-table predicate. The Detailing hub's
+ * header badge and Holds tab count read this over the same query, so all
+ * three always show the same number.
+ */
+export function activeHoldCount(holds: readonly Pick<DrawingHoldRow, "is_active">[] | null | undefined): number {
+  let count = 0;
+  for (const hold of holds || []) {
+    if (hold?.is_active) count++;
+  }
+  return count;
+}
+
 /** drawing_id → its single active hold, for O(1) badge lookups. */
 export function activeHoldByDrawingId(holds: DrawingHoldRow[]): Map<string, DrawingHoldRow> {
   const map = new Map<string, DrawingHoldRow>();
