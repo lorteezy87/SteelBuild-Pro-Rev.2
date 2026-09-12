@@ -1,0 +1,136 @@
+name: Supabase production evidence
+
+on:
+  push:
+    branches:
+      - copilot/security-audit-phase-1
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type CAPTURE_READ_ONLY_EVIDENCE to continue
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-evidence
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture read-only production evidence
+    if: github.repository == 'lorteezy87/SteelBuild-Pro-Rev.2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+        with:
+          version: 2.117.0
+
+      - name: Capture migration, schema, and function evidence
+        env:
+          CONFIRMATION: ${{ github.event_name == 'push' && 'CAPTURE_READ_ONLY_EVIDENCE' || inputs.confirmation }}
+          EXPECTED_PROJECT_REF: kjrwqagyeswwoxpjkcko
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          [ "$CONFIRMATION" = "CAPTURE_READ_ONLY_EVIDENCE" ] || {
+            echo "Exact read-only confirmation phrase is required."
+            exit 1
+          }
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || {
+            echo "SUPABASE_ACCESS_TOKEN is empty."
+            exit 1
+          }
+          [ -n "$SUPABASE_DB_PASSWORD" ] || {
+            echo "SUPABASE_DB_PASSWORD is empty."
+            exit 1
+          }
+          [ "$SUPABASE_PROJECT_REF" = "$EXPECTED_PROJECT_REF" ] || {
+            echo "SUPABASE_PROJECT_REF does not match the approved production project."
+            exit 1
+          }
+
+          evidence_dir="$RUNNER_TEMP/supabase-production-evidence"
+          capture_work="$RUNNER_TEMP/supabase-function-capture"
+          mkdir -p "$evidence_dir"/{ledger,schema,functions} "$capture_work"
+
+          curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/database/migrations" \
+            | jq 'map({version, name, statements})' \
+            > "$evidence_dir/ledger/migrations.json"
+
+          curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/functions" \
+            | jq 'map({
+                id, slug, name, status, version, verify_jwt, created_at, updated_at,
+                import_map, import_map_path, entrypoint_path
+              })' \
+            > "$evidence_dir/functions/inventory.json"
+
+          supabase migration list \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD" \
+            > "$evidence_dir/ledger/migration-list.txt"
+
+          supabase db dump \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD" \
+            --schema public \
+            --file "$evidence_dir/schema/public.sql"
+
+          (
+            cd "$capture_work"
+            supabase functions download \
+              --project-ref "$SUPABASE_PROJECT_REF" \
+              --use-api \
+              --yes
+          )
+          cp -R "$capture_work/supabase/functions" "$evidence_dir/functions/source"
+
+          (
+            cd "$evidence_dir"
+            find ledger schema functions -type f -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS
+          )
+
+          jq -n \
+            --arg captured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg commit "$GITHUB_SHA" \
+            --arg project_ref "$SUPABASE_PROJECT_REF" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg supabase_cli "$(supabase --version)" \
+            '{
+              captured_at: $captured_at,
+              commit: $commit,
+              project_ref: $project_ref,
+              run_id: $run_id,
+              supabase_cli: $supabase_cli,
+              read_only: true
+            }' > "$evidence_dir/manifest.json"
+
+      - name: Upload short-retention evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: supabase-production-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/supabase-production-evidence
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+      - name: Remove temporary evidence
+        if: always()
+        run: |
+          rm -rf \
+            "$RUNNER_TEMP/supabase-production-evidence" \
+            "$RUNNER_TEMP/supabase-function-capture"
