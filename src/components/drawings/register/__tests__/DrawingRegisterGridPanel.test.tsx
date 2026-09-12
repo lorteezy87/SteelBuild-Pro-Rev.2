@@ -13,9 +13,12 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
+import type { DrawingRegisterGridPanelProps } from "../DrawingRegisterGridPanel";
+import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
 
 const ensureCurrentRevision = vi.fn().mockResolvedValue({ id: "rev-new", is_current: true });
 const invalidateQueries = vi.fn();
+let canEdit = true;
 
 let registerRows: DrawingRegisterRow[] = [];
 
@@ -30,13 +33,18 @@ vi.mock("@/hooks/useDrawingWatch", () => ({
   useToggleDrawingWatch: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("@/services/permissions", () => ({
-  usePermissions: () => ({ can: () => true }), // PM+ — release column visible
+  usePermissions: () => ({ can: (action: string) => action === "edit" ? canEdit : true }),
 }));
 vi.mock("@/components/shared/useAppSecurity", () => ({
   useAppSecurity: () => ({ user: { id: "user-1", email: "pm@x.com" } }),
 }));
 vi.mock("@/lib/drawingHub/revisions", () => ({
   ensureCurrentRevision: (...a: any[]) => ensureCurrentRevision(...a),
+}));
+vi.mock("@/components/drawings/RevisionUploadModal", () => ({
+  default: ({ onComplete }: { onComplete: () => void }) => (
+    <button type="button" onClick={onComplete}>Complete revision upload</button>
+  ),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -64,19 +72,23 @@ function makeRow(over: Partial<DrawingRegisterRow> = {}): DrawingRegisterRow {
   };
 }
 
-function renderGrid() {
+function renderGrid(props: Partial<DrawingRegisterGridPanelProps> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   qc.invalidateQueries = invalidateQueries as any;
   return render(
     <MemoryRouter>
       <QueryClientProvider client={qc}>
-        <DrawingRegisterGridPanel projectId="proj-1" />
+        <DrawingRegisterGridPanel projectId="proj-1" {...props} />
       </QueryClientProvider>
     </MemoryRouter>,
   );
 }
 
 describe("DrawingRegisterGridPanel — release affordance", () => {
+  beforeEach(() => {
+    canEdit = true;
+  });
+
   it("does not present incomplete legacy RFI and WP link counts as totals", () => {
     registerRows = [makeRow({ rfi_count: 0, work_package_count: 0 })];
     renderGrid();
@@ -92,6 +104,7 @@ describe("DrawingRegisterGridPanel — release affordance", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    canEdit = true;
     ensureCurrentRevision.mockResolvedValue({ id: "rev-new", is_current: true });
   });
 
@@ -150,5 +163,67 @@ describe("DrawingRegisterGridPanel — release affordance", () => {
     await waitFor(() =>
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-register", "proj-1"] }),
     );
+  });
+});
+
+describe("DrawingRegisterGridPanel — revision workflow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    canEdit = true;
+    registerRows = [makeRow()];
+  });
+
+  const drawingSet: DrawingSet = { id: "set-1", set_name: "Main Steel - IFC" };
+  const pkg: SetPackage = {
+    key: "id:set-1",
+    setId: "set-1",
+    name: "Main Steel - IFC",
+    parent: drawingSet,
+    sheets: [{ id: "dwg-1" }],
+    supersededSheets: [],
+    submittals: [],
+  };
+
+  it("opens a saved summary from the canonical sheet grid", async () => {
+    const onOpenSummary = vi.fn();
+    const summary = { setId: "set-1", sheetsChanged: 3 };
+    renderGrid({
+      setPackages: [pkg],
+      summariesBySet: new Map([["set-1", { summary, sheets_changed: 3 } as any]]),
+      onOpenSummary,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /revised · 3/i }));
+    expect(onOpenSummary).toHaveBeenCalledWith(summary);
+  });
+
+  it("opens revision upload and forwards the exact package key on completion", async () => {
+    const onRevisionUploaded = vi.fn();
+    renderGrid({
+      activeProject: { id: "proj-1", name: "Project One" },
+      drawingSets: [drawingSet],
+      setPackages: [pkg],
+      onRevisionUploaded,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Upload revision for Main Steel - IFC" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Complete revision upload" }));
+
+    expect(onRevisionUploaded).toHaveBeenCalledWith("id:set-1");
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-register", "proj-1"] });
+  });
+
+  it("keeps saved summaries readable for viewers without exposing revision upload", async () => {
+    canEdit = false;
+    const onOpenSummary = vi.fn();
+    renderGrid({
+      setPackages: [pkg],
+      summariesBySet: new Map([["set-1", { summary: { setId: "set-1" }, sheets_changed: 1 } as any]]),
+      onOpenSummary,
+    });
+
+    expect(screen.queryByRole("button", { name: /upload revision/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /revised · 1/i }));
+    expect(onOpenSummary).toHaveBeenCalledTimes(1);
   });
 });

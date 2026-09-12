@@ -9,10 +9,11 @@ import DrawingRegisterPanel from '../DrawingRegisterPanel';
 import type { DrawingRegisterRow } from '@/hooks/useDrawingRegister';
 import type { DrawingReviewRow } from '@/hooks/useDrawingReviews';
 let canEdit = true;
+let registerRows: DrawingRegisterRow[] = [];
 const reviewCalls = vi.hoisted(() => [] as (string | null)[]);
 vi.mock('@/services/permissions', () => ({ usePermissions: () => ({ can: () => canEdit }) }));
 vi.mock('@/hooks/useFeatureFlag', () => ({ useFlag: () => false }));
-vi.mock('@/hooks/useDrawingRegister', () => ({ useDrawingRegister: () => ({ data: [] as DrawingRegisterRow[], isLoading: false }) }));
+vi.mock('@/hooks/useDrawingRegister', () => ({ useDrawingRegister: () => ({ data: registerRows, isLoading: false }) }));
 vi.mock('@/hooks/useDrawingReviews', () => ({
   useDrawingReviews: (projectId: string | null) => {
     reviewCalls.push(projectId);
@@ -24,6 +25,11 @@ vi.mock('@/hooks/useDrawingWatch', () => ({
   useMyDrawingWatches: () => ({ data: new Set() }), useToggleDrawingWatch: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('@/components/shared/useAppSecurity', () => ({ useAppSecurity: () => ({ user: { id: 'user' } }) }));
+vi.mock('@/components/drawings/RevisionUploadModal', () => ({
+  default: ({ onComplete }: { onComplete: () => void }) => (
+    <button type="button" onClick={onComplete}>Finish revision upload</button>
+  ),
+}));
 
 const HUB = '/DrawingSubmittalHub?hub_tab=drawings';
 
@@ -43,22 +49,36 @@ function LocationProbe() {
 
 const summary = { setId: 'set-1', sheetsChanged: 3 };
 type OpenSummary = Mock<(summary: unknown) => void>;
-function mount({ onOpenSummary = vi.fn<(summary: unknown) => void>(), entries = [HUB] }: { onOpenSummary?: OpenSummary; entries?: string[] } = {}) {
+type RevisionUploaded = Mock<(pkgKey: string) => void>;
+function mount({
+  onOpenSummary = vi.fn<(summary: unknown) => void>(),
+  onRevisionUploaded = vi.fn<(pkgKey: string) => void>(),
+  entries = [HUB],
+}: {
+  onOpenSummary?: OpenSummary;
+  onRevisionUploaded?: RevisionUploaded;
+  entries?: string[];
+} = {}) {
   render(<MemoryRouter initialEntries={entries}><QueryClientProvider client={new QueryClient()}>
     <DrawingRegisterPanel projectId="p1" setPackages={[{
       key: 'set-1', setId: 'set-1', name: 'Main steel', parent: { id: 'set-1' },
-      sheets: [], supersededSheets: [], submittals: [],
-    }]} summariesBySet={new Map([['set-1', { summary, sheets_changed: 3 }]])}
-      onOpenSummary={onOpenSummary} />
+      sheets: [{ id: 'dwg-1' }], supersededSheets: [], submittals: [],
+    }]} activeProject={{ id: 'p1', name: 'Project One' }}
+      drawingSets={[{ id: 'set-1', set_name: 'Main steel' }]}
+      summariesBySet={new Map([['set-1', { summary, sheets_changed: 3 } as any]])}
+      onRevisionUploaded={onRevisionUploaded} onOpenSummary={onOpenSummary} />
     <LocationProbe />
   </QueryClientProvider></MemoryRouter>);
-  return onOpenSummary;
+  return { onOpenSummary, onRevisionUploaded };
 }
 
 describe('Drawing register revision workflow discoverability', () => {
-  beforeEach(() => { canEdit = true; });
+  beforeEach(() => {
+    canEdit = true;
+    registerRows = [];
+  });
   it('opens the existing saved summary through the set view', async () => {
-    const onOpenSummary = mount();
+    const { onOpenSummary } = mount();
     await userEvent.click(screen.getByRole('button', { name: 'Sets & revisions' }));
     await userEvent.click(await screen.findByRole('button', { name: /revised · 3/i }));
     expect(onOpenSummary).toHaveBeenCalledWith(summary);
@@ -72,11 +92,31 @@ describe('Drawing register revision workflow discoverability', () => {
     expect(screen.queryByRole('button', { name: 'New Rev' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /upload drawings/i })).not.toBeInTheDocument();
   });
+  it('forwards revision upload and summary callbacks from the canonical sheet grid', async () => {
+    registerRows = [{
+      drawing_id: 'dwg-1', project_id: 'p1', sheet_number: 'S101', sheet_title: 'Framing',
+      discipline: 'S', drawing_set_name: 'Main steel', stage: 'IFC', current_revision_id: 'rev-1',
+      current_revision: 'A', current_status: 'released_for_shop', current_issued_at: null,
+      open_impact_count: 0, pending_review_count: 0, rfi_count: 0, work_package_count: 0,
+      last_activity: null,
+    }];
+    const onOpenSummary = vi.fn<(summary: unknown) => void>();
+    const onRevisionUploaded = vi.fn<(pkgKey: string) => void>();
+    mount({ onOpenSummary, onRevisionUploaded });
+
+    await userEvent.click(screen.getByRole('button', { name: /revised · 3/i }));
+    expect(onOpenSummary).toHaveBeenCalledWith(summary);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Upload revision for Main steel' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Finish revision upload' }));
+    expect(onRevisionUploaded).toHaveBeenCalledWith('set-1');
+  });
 });
 
 describe('Drawing register views (?hub_view=)', () => {
   beforeEach(() => {
     canEdit = true;
+    registerRows = [];
     reviewCalls.length = 0;
   });
 
