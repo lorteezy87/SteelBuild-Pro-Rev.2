@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "projectRef": "kjrwqagyeswwoxpjkcko",
+  "reviewedAt": "2026-09-12",
+  "local": {
+    "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
+    "migrationLifecycle": "required",
+    "functionLifecycle": "required",
+    "functionOverrides": [
+      {
+        "slug": "account-delete",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "docs/PHASE_0_AGENT_HANDOFF.md and migrations 20260912034015/20260912055243/20260912062606: owner release and rollback evidence remain required before deployment"
+      },
+      {
+        "slug": "legacy-app-files-copy",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "docs/app-files-tenant-isolation-plan.md: completed one-time production cutover; only the permanent 410 replacement may remain"
+      },
+      {
+        "slug": "staging-e2e-bootstrap",
+        "lifecycle": "staging-only",
+        "evidence": "docs/runbooks/staging-e2e-automation.md: hard-locked one-time staging fixture bootstrap"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "version": "20260817072554",
+      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Production apply-time restamp of active supabase/migrations/20260813120000_note_folders_job_linking.sql"
+    },
+    {
+      "version": "20260817083550",
+      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Production apply-time restamp of active supabase/migrations/20260817020000_repair_bimc_rfi_and_schedule_dates.sql"
+    },
+    {
+      "version": "20260909011728",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909011728_m1_auth_and_organizations.sql"
+    },
+    {
+      "version": "20260909014620",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909014620_m2_projects_and_project_rbac.sql"
+    },
+    {
+      "version": "20260909020328",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909020328_m3_drawing_sets_and_sheets.sql"
+    },
+    {
+      "version": "20260909021554",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909021554_m3_1_titleblock_mapping.sql"
+    },
+    {
+      "version": "20260909025658",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909025658_m3_3_markup_annotations.sql"
+    },
+    {
+      "version": "20260909031838",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909031838_m3_5_drawing_holds.sql"
+    },
+    {
+      "version": "20260909033138",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909033138_m3_6_gc_drawings_register.sql"
+    },
+    {
+      "version": "20260909034903",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909034903_m4_submittals_workflow_engine.sql"
+    },
+    {
+      "version": "20260909042216",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909042216_m4_1_transmittals.sql"
+    },
+    {
+      "version": "20260909043638",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909043638_m5_attach_revision_to_submittal_round.sql"
+    },
+    {
+      "version": "20260909050350",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909050350_m6_rfis.sql"
+    },
+    {
+      "version": "20260909051637",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909051637_m7_fab_release_gate.sql"
+    },
+    {
+      "version": "20260909053304",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909053304_m8_work_packages.sql"
+    },
+    {
+      "version": "20260909055216",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909055216_m9_piece_register.sql"
+    },
+    {
+      "version": "20260909060000",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060000_m3_7_auto_archive_empty_drawing_sets.sql"
+    },
+    {
+      "version": "20260909060100",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060100_m2_1_scope_project_number_uniqueness_to_org.sql"
+    },
+    {
+      "version": "20260909062016",
+      "owner": "unresolved",
+      "lifecycle": "unresolved",
+      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
+    },
+    {
+      "version": "20260909062929",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909062929_m10_schedule.sql"
+    },
+    {
+      "version": "20260909064310",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909064310_m11_deliveries.sql"
+    },
+    {
+      "version": "20260909065749",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909065749_m12_production.sql"
+    },
+    {
+      "version": "20260909070839",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909070839_m13_field.sql"
+    },
+    {
+      "version": "20260909073142",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909073142_m14_quality.sql"
+    },
+    {
+      "version": "20260909073500",
+      "owner": "unresolved",
+      "lifecycle": "unresolved",
+      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
+    },
+    {
+      "version": "20260909074754",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909074754_m15_sov_cost_codes.sql"
+    },
+    {
+      "version": "20260909080453",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909080453_m16_change_orders.sql"
+    },
+    {
+      "version": "20260909082019",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909082019_m17_pay_applications.sql"
+    },
+    {
+      "version": "20260909083319",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909083319_m18_backcharges.sql"
+    },
+    {
+      "version": "20260909084749",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909084749_m19_expenses.sql"
+    },
+    {
+      "version": "20260909090000",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909090000_m19_reset_org_data.sql"
+    },
+    {
+      "version": "20260909090445",
+      "owner": "unresolved",
+      "lifecycle": "unresolved",
+      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
+    },
+    {
+      "version": "20260909091118",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909091118_m20_billing.sql"
+    },
+    {
+      "version": "20260909092236",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909092236_m21_feature_flags.sql"
+    },
+    {
+      "version": "20260909093448",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909093448_m22_data_export_erasure.sql"
+    },
+    {
+      "version": "20260909100010",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909100010_m23_observability.sql"
+    },
+    {
+      "version": "20260909104609",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909104609_m24_risk_hub.sql"
+    },
+    {
+      "version": "20260909111157",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909111157_m25_closeout.sql"
+    },
+    {
+      "version": "20260909113533",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909113533_m26_revision_intelligence_model.sql"
+    },
+    {
+      "version": "20260910025557",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260910025557_m27_reports.sql"
+    },
+    {
+      "version": "20260910031027",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260910031027_m24_1_pma_audit_guard_allows_legacy_trigger.sql"
+    },
+    {
+      "version": "20260910031540",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260910031540_m28_action_items_meetings.sql"
+    },
+    {
+      "version": "20260910034739",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "unresolved",
+      "evidence": "Remote hard_delete_records stamp follows committed M28 and precedes M29. Its live footprint is six functions absent from all 38 sibling migrations (hard_delete_allowlist, hard_delete_merge_counts, hard_delete_record, hard_delete_records, hard_delete_release_dependents, hard_delete_toggle_triggers) plus data_erasure_log record_kind/table_name/record_id/record_label changes; exact source is absent"
+    },
+    {
+      "version": "20260910040138",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "required",
+      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260910040138_m29_documents.sql"
+    },
+    {
+      "version": "20260910044641",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "unresolved",
+      "evidence": "Remote m30_scope_items stamp follows committed M29. Its live footprint is six scope_items columns, four guard/progress/link functions, two FKs, two checks, three indexes, prepare/guard triggers, and field-plus/access RLS absent from the Rev.2 baseline and all 38 sibling migrations; exact source is absent"
+    }
+  ],
+  "functions": [
+    {
+      "slug": "sheets-api",
+      "owner": "lorteezy87/steelbuild-sheets-web",
+      "lifecycle": "required",
+      "evidence": "supabase/migrations/20260912023827_revoke_trigger_fn_execute_and_sheets_grants.sql documents the external source-of-truth repository and legitimate service-role caller"
+    },
+    {
+      "slug": "schedule-assistant",
+      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "lifecycle": "deprecated",
+      "evidence": "docs/superpowers/plans/2026-07-24-dashboard-piece-register-and-assistant-removal.md removes the retired schedule assistant"
+    },
+    {
+      "slug": "sharepoint-proxy",
+      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "lifecycle": "deprecated",
+      "evidence": "docs/runbooks/owner-checklist.md section 3 requires production deletion"
+    },
+    {
+      "slug": "bluebeam-proxy",
+      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "lifecycle": "deprecated",
+      "evidence": "docs/runbooks/owner-checklist.md section 3 requires production deletion"
+    },
+    {
+      "slug": "stripe-setup",
+      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "lifecycle": "deprecated",
+      "evidence": "docs/runbooks/owner-checklist.md section 3 identifies the orphan Stripe Sync Engine deployment"
+    },
+    {
+      "slug": "stripe-webhook",
+      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "lifecycle": "deprecated",
+      "evidence": "docs/runbooks/owner-checklist.md section 3 identifies the orphan; the live webhook is routed by stripe-billing"
+    },
+    {
+      "slug": "stripe-worker",
+      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "lifecycle": "deprecated",
+      "evidence": "docs/runbooks/owner-checklist.md section 3 identifies the orphan Stripe Sync Engine deployment"
+    }
+  ]
+}

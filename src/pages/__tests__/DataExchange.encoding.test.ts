@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { describe, expect, it, vi } from "vitest";
 import { stageImportText } from "@/lib/onboardingTemplates";
 import { TextDecodingError } from "@/lib/textDecoding";
-import { readDataExchangeFile } from "../DataExchange";
+import { readDataExchangeFile } from "../dataExchange/dataExchangeLogic";
 
 vi.mock("@/api/supabaseClient", () => ({ entities: {} }));
 vi.mock("@/components/shared/ProjectContext", () => ({ useProjectContext: () => ({}) }));

@@ -4,15 +4,12 @@ import { DecisionPanel } from "@/components/command";
 import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import {
-  rollupCanonicalPieces,
-  selectActionableLeafPieces,
-} from "@/lib/pieceControl/canonicalRollups";
-import {
+  buildPieceControlShadowComparison,
   buildPieceControlSummary,
   modePresentation,
+  normalizePieceControlMode,
 } from "@/lib/pieceControl/presentation";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
-import type { PieceControlMode } from "@/lib/pieceControl/presentation";
 import { PieceAttentionPanel } from "./PieceAttentionPanel";
 import { PieceControlModeBadge } from "./PieceControlModeBadge";
 import { PieceLifecycleStrip } from "./PieceLifecycleStrip";
@@ -29,16 +26,11 @@ const numberFormat = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-function normalizeMode(mode: string | null | undefined): PieceControlMode {
-  if (mode === "shadow" || mode === "pilot" || mode === "live") return mode;
-  return "off";
-}
-
 export function PieceControlDashboardPanel({
   project,
   onOpen,
 }: PieceControlDashboardPanelProps) {
-  const mode = normalizeMode(project.piece_control_mode);
+  const mode = normalizePieceControlMode(project.piece_control_mode);
   const enabled = mode !== "off";
 
   useCanonicalReportingRealtime(enabled ? project.id : undefined);
@@ -50,33 +42,15 @@ export function PieceControlDashboardPanel({
   });
 
   const summary = useMemo(
-    () =>
-      buildPieceControlSummary(
-        selectActionableLeafPieces(query.data?.pieces),
-      ),
+    () => buildPieceControlSummary(query.data?.pieces),
     [query.data?.pieces],
   );
   const shadowComparison = useMemo(() => {
     if (mode !== "shadow" || !query.data) return null;
-
-    const registerRollup = rollupCanonicalPieces(query.data.pieces);
-    const existingPieceCount = query.data.legacyProduction.reduce(
-      (total, row) => total + (Number(row.quantity) || 0),
-      0,
+    return buildPieceControlShadowComparison(
+      query.data.pieces,
+      query.data.legacyProduction,
     );
-    const existingTons = query.data.legacyProduction.reduce(
-      (total, row) =>
-        row.weight == null
-          ? total
-          : total +
-            (Number(row.weight) * (Number(row.quantity) || 1)) / 2000,
-      0,
-    );
-    const pieceDelta = registerRollup.pieceCount - existingPieceCount;
-    const tonsDelta = registerRollup.knownTons - existingTons;
-
-    if (Math.abs(pieceDelta) < 1 && Math.abs(tonsDelta) < 0.1) return null;
-    return { pieceDelta, tonsDelta };
   }, [mode, query.data]);
 
   if (!enabled) return null;

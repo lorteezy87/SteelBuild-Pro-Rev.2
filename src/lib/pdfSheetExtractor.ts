@@ -1,5 +1,5 @@
 /**
- * pdfSheetExtractor.js
+ * pdfSheetExtractor.ts
  *
  * Single source of truth for parsing a structural drawing PDF into a
  * `{ setMeta, sheets[] }` bundle. Both DrawingSetUploadModal and
@@ -30,6 +30,139 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { integrations } from "@/api/supabaseClient";
 import { extractTextFromRect } from "@/lib/pdfTitleblockText";
 import { parseTitleblockRect } from "@/lib/titleblock";
+import type { Json } from "@/types/supabase";
+
+export type DrawingSetMetadata = {
+  setName: string;
+  revision: string;
+  issueDate: string;
+  issuedBy: string;
+  discipline: string;
+  projectName: string;
+};
+
+export type PdfSheetRecord = {
+  sheetNumber?: string;
+  sheetTitle?: string;
+  discipline?: string;
+  sheetType?: string;
+  revision?: string;
+  scale?: string;
+  date?: string;
+  pdfPage?: unknown;
+  _note?: PdfExtractionWarning;
+  [key: string]: unknown;
+};
+
+export type ParsedPdfSheet = PdfSheetRecord & {
+  sheetNumber: string;
+  sheetTitle: string;
+};
+
+export type PdfSheetWithPage = ParsedPdfSheet & { pdfPage: number };
+type AssignedPdfSheet = PdfSheetRecord & { pdfPage: number };
+
+export type PdfExtractionWarning = string;
+export type PdfExtractionError = string;
+export type PdfPageText = string;
+
+export type PdfExtractionStatus =
+  | { phase: "rate-limit-wait"; remainingSec: number }
+  | { phase: "llm-calling" };
+
+export type PdfExtractorConfiguration = {
+  titleblockTemplate?: {
+    titleRect?: Json | null;
+    numberRect?: Json | null;
+    revisionRect?: Json | null;
+  };
+  onStatus?: (status: PdfExtractionStatus) => void;
+};
+
+export type PdfExtractionResult = {
+  setMeta: DrawingSetMetadata;
+  sheets: ParsedPdfSheet[] | PdfSheetWithPage[];
+  scanned: boolean;
+  extractFailed: boolean;
+  error?: PdfExtractionError;
+  pageCount?: number;
+};
+
+type ExtractedPdfText = {
+  pages: PdfPageText[];
+  totalChars: number;
+  pageCount: number;
+  scanned: boolean;
+  perPageTitle: string[] | null;
+  perPageNumber: string[] | null;
+  titleblockApplied: boolean;
+};
+
+export type PdfTextItem = {
+  x: number;
+  y: number;
+  str: string;
+  width: number;
+};
+
+type TextLine = { y: number; items: PdfTextItem[] };
+
+type FilenameParts = {
+  sheetNumber: string;
+  revision: string;
+  baseName: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function errorMessage(error: unknown): string {
+  return isRecord(error) && typeof error.message === "string"
+    ? error.message
+    : String(error);
+}
+
+function stringField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" ? value : "";
+}
+
+function optionalStringField(
+  record: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = record[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function asSheetRecord(value: unknown): PdfSheetRecord {
+  const record = isRecord(value) ? value : {};
+  return {
+    ...record,
+    sheetNumber: optionalStringField(record, "sheetNumber"),
+    sheetTitle: optionalStringField(record, "sheetTitle"),
+    discipline: optionalStringField(record, "discipline"),
+    sheetType: optionalStringField(record, "sheetType"),
+    revision: optionalStringField(record, "revision"),
+    scale: optionalStringField(record, "scale"),
+    date: optionalStringField(record, "date"),
+    pdfPage: record.pdfPage,
+    _note: optionalStringField(record, "_note"),
+  };
+}
+
+function asSetMetadata(value: unknown): DrawingSetMetadata {
+  const record = isRecord(value) ? value : {};
+  return {
+    setName: stringField(record, "setName"),
+    revision: stringField(record, "revision"),
+    issueDate: stringField(record, "issueDate"),
+    issuedBy: stringField(record, "issuedBy"),
+    discipline: stringField(record, "discipline"),
+    projectName: stringField(record, "projectName"),
+  };
+}
 
 // Set the worker once, idempotently — safe for multiple imports.
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -65,10 +198,13 @@ export const EMPTY_SET_META = Object.freeze({
 });
 
 // ─── File helpers ────────────────────────────────────────────────────
-function readFileAsArrayBuffer(file) {
+function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result);
+    reader.onload  = () => {
+      if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+      else reject(new Error("FileReader did not return an ArrayBuffer"));
+    };
     reader.onerror = () => reject(reader.error || new Error("FileReader error"));
     reader.readAsArrayBuffer(file);
   });
@@ -91,7 +227,10 @@ function readFileAsArrayBuffer(file) {
  * column boundaries, which is the single biggest lever we have against the
  * "sheet number ended up in the title" class of bugs.
  */
-async function extractPdfText(file, options = {}) {
+async function extractPdfText(
+  file: File,
+  options: PdfExtractorConfiguration = {},
+): Promise<ExtractedPdfText> {
   // Optional titleblock template (slice 3 of the marker feature). When the
   // drawing set has rectangles saved on it, we run a tiny OCR pass on each
   // page during this same loop and stash per-page title / number strings
@@ -105,7 +244,7 @@ async function extractPdfText(file, options = {}) {
   const buf = await readFileAsArrayBuffer(file);
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
   const pageCount = pdf.numPages;
-  const pages = [];
+  const pages: PdfPageText[] = [];
   // Per-page extracted titleblock values. Indexed 0..pageCount-1, parallel
   // to `pages` above. Empty string = no text in rect on this page.
   const perPageTitle  = useTemplate ? new Array(pageCount).fill("") : null;
@@ -123,7 +262,7 @@ async function extractPdfText(file, options = {}) {
       // getTextContent call serves both, since extractTextFromRect
       // re-reads it but pdfjs caches per-page so the cost is one pdf-js
       // text walk per page regardless.
-      if (useTemplate) {
+      if (titleRect && numberRect && perPageTitle && perPageNumber) {
         try {
           const [titleStr, numberStr] = await Promise.all([
             extractTextFromRect(page, titleRect),
@@ -137,21 +276,24 @@ async function extractPdfText(file, options = {}) {
       }
 
       // 1. Collect raw items with their positions.
-      const rawItems = [];
+      const rawItems: PdfTextItem[] = [];
       for (const item of content.items) {
-        if (!item?.str) continue;
-        const str = String(item.str);
+        if (!("str" in item) || typeof item.str !== "string" || !item.str) continue;
+        const str = item.str;
         if (!str.trim()) continue;
-        const x = item.transform?.[4] ?? 0;
-        const y = item.transform?.[5] ?? 0;
-        const width = Number.isFinite(item.width) ? item.width : str.length * 5;
+        const transform = Array.isArray(item.transform) ? item.transform : [];
+        const x = typeof transform[4] === "number" ? transform[4] : 0;
+        const y = typeof transform[5] === "number" ? transform[5] : 0;
+        const width = typeof item.width === "number" && Number.isFinite(item.width)
+          ? item.width
+          : str.length * 5;
         rawItems.push({ x, y, str, width });
       }
 
       // 2. Bucket by y-tolerance. We sort once by descending y so stable
       //    buckets form top-to-bottom.
       rawItems.sort((a, b) => b.y - a.y);
-      const lines = [];
+      const lines: TextLine[] = [];
       for (const it of rawItems) {
         const line = lines.find((l) => Math.abs(l.y - it.y) <= LINE_Y_TOLERANCE);
         if (line) {
@@ -210,7 +352,7 @@ async function extractPdfText(file, options = {}) {
   };
 }
 
-function buildPdfTextBlock(pages) {
+function buildPdfTextBlock(pages: string[]): string {
   return pages
     .map((txt, i) => `===== PAGE ${i + 1} =====\n${txt.trim() || "[empty / image-only page]"}`)
     .join("\n\n");
@@ -300,7 +442,7 @@ COMPLETENESS:
 - NEVER invent data. Use "" for any field you cannot read.
 - Return EVERY sheet you find. Do not truncate.`;
 
-function buildUserPrompt(extracted, fileName) {
+function buildUserPrompt(extracted: ExtractedPdfText, fileName: string): string {
   const filenameHint = fileName
     ? `\nThe source filename is "${fileName}". If the filename follows a pattern like {jobNumber}{sheetId}-R{rev} (e.g. "101E108-R1.pdf"), the sheetId portion (e.g. "E108") is the expected sheet number. Use this to validate what you find in the text.\n`
     : "";
@@ -324,8 +466,8 @@ const SHEET_NUMBER_RE =
  *   - If sheetTitle starts with a duplicate of sheetNumber, strip it.
  *   - Uppercase the sheet number and collapse internal spaces.
  */
-export function fixupSheet(raw) {
-  const out = { ...raw };
+export function fixupSheet(raw: unknown): ParsedPdfSheet {
+  const out = { ...asSheetRecord(raw) };
   const rawSn    = String(out.sheetNumber || "").trim();
   const rawTitle = String(out.sheetTitle  || "").trim();
 
@@ -365,9 +507,7 @@ export function fixupSheet(raw) {
   // the columnar input.
   sheetTitle = sheetTitle.replace(/^[\t\s]+|[\t\s]+$/g, "");
 
-  out.sheetNumber = sheetNumber;
-  out.sheetTitle  = sheetTitle;
-  return out;
+  return { ...out, sheetNumber, sheetTitle };
 }
 
 /**
@@ -375,7 +515,7 @@ export function fixupSheet(raw) {
  * positive integer, or null when the value is missing/invalid (caller
  * decides what to fall back to).
  */
-export function validatePdfPage(value) {
+export function validatePdfPage(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
@@ -401,9 +541,22 @@ export function validatePdfPage(value) {
  * Returns a NEW array of sheet objects with `pdfPage` populated; does not
  * mutate the input. Exported for testing.
  */
-export function assignPdfPages(sheets, pageCount) {
-  const list = Array.isArray(sheets) ? sheets : [];
-  const pc = Number.isFinite(pageCount) && pageCount >= 1 ? pageCount : 0;
+export function assignPdfPages<T extends PdfSheetRecord>(
+  sheets: readonly T[],
+  pageCount: unknown,
+): Array<T & { pdfPage: number }>;
+export function assignPdfPages(
+  sheets: null | undefined,
+  pageCount: unknown,
+): AssignedPdfSheet[];
+export function assignPdfPages(
+  sheets: unknown,
+  pageCount: unknown,
+): AssignedPdfSheet[] {
+  const list = Array.isArray(sheets) ? sheets.map(asSheetRecord) : [];
+  const pc = typeof pageCount === "number" && Number.isFinite(pageCount) && pageCount >= 1
+    ? pageCount
+    : 0;
 
   // One-sheet-per-page deterministic override.
   if (pc > 0 && list.length === pc) {
@@ -439,9 +592,8 @@ export function assignPdfPages(sheets, pageCount) {
   //    entry, or assigns the same page to groups of related sheets.
   //    Walk the array and reassign duplicates to the nearest unused page.
   if (out.length > 1) {
-    const usedPages = new Set();
     // First pass: mark pages that are used exactly once.
-    const pageCounts = {};
+    const pageCounts: Record<number, number> = {};
     for (const s of out) {
       pageCounts[s.pdfPage] = (pageCounts[s.pdfPage] || 0) + 1;
     }
@@ -449,12 +601,12 @@ export function assignPdfPages(sheets, pageCount) {
     if (hasDupes) {
       // Build the set of all available pages.
       const maxPage = pc > 0 ? pc : Math.max(...out.map((s) => s.pdfPage), out.length);
-      const allPages = new Set();
+      const allPages = new Set<number>();
       for (let p = 1; p <= maxPage; p++) allPages.add(p);
 
       // First-come-first-served: the first sheet claiming a page keeps it,
       // subsequent duplicates get reassigned to the nearest unclaimed page.
-      const claimed = new Set();
+      const claimed = new Set<number>();
       let dupeFixCount = 0;
       for (let i = 0; i < out.length; i++) {
         if (!claimed.has(out[i].pdfPage)) {
@@ -463,7 +615,7 @@ export function assignPdfPages(sheets, pageCount) {
         } else {
           // Find the nearest unclaimed page.
           const orig = out[i].pdfPage;
-          let best = null;
+          let best: number | null = null;
           for (const p of allPages) {
             if (best === null || Math.abs(p - orig) < Math.abs(best - orig)) {
               best = p;
@@ -509,9 +661,9 @@ export function assignPdfPages(sheets, pageCount) {
  * times — the drawing index plus a per-page title block can produce two
  * rows for the same sheet. Keep the richest entry (most non-empty fields).
  */
-function dedupeSheets(sheets) {
-  const byNum = new Map();
-  const orphanNoNumber = [];
+function dedupeSheets(sheets: ParsedPdfSheet[]): ParsedPdfSheet[] {
+  const byNum = new Map<string, ParsedPdfSheet>();
+  const orphanNoNumber: ParsedPdfSheet[] = [];
   for (const s of sheets) {
     const key = String(s.sheetNumber || "").toUpperCase().replace(/[-. ]/g, "");
     if (!key) {
@@ -524,7 +676,7 @@ function dedupeSheets(sheets) {
       continue;
     }
     // Keep whichever record has more populated fields.
-    const score = (rec) =>
+    const score = (rec: ParsedPdfSheet) =>
       (rec.sheetTitle ? 1 : 0) +
       (rec.discipline ? 1 : 0) +
       (rec.sheetType  ? 1 : 0) +
@@ -553,12 +705,15 @@ function dedupeSheets(sheets) {
  *   pageCount?:    number,
  * }>}
  */
-export async function extractSheetsFromPdf(file, options = {}) {
+export async function extractSheetsFromPdf(
+  file: File,
+  options: PdfExtractorConfiguration = {},
+): Promise<PdfExtractionResult> {
   // 1. Client-side PDF text extraction.
   //    Pass the titleblock template through so the per-page OCR pass
   //    can run during the same getTextContent loop; we'll merge the
   //    OCR'd title/number into the LLM result below.
-  let extracted;
+  let extracted: ExtractedPdfText;
   try {
     extracted = await extractPdfText(file, options);
   } catch (pdfErr) {
@@ -568,7 +723,7 @@ export async function extractSheetsFromPdf(file, options = {}) {
       sheets: [makeManualEntryRow(file, "PDF text extraction failed — please fill in sheet details manually.")],
       scanned: false,
       extractFailed: true,
-      error: pdfErr?.message || String(pdfErr),
+      error: errorMessage(pdfErr),
     };
   }
 
@@ -614,7 +769,7 @@ export async function extractSheetsFromPdf(file, options = {}) {
         temperature: 0,
       });
     } catch (err) {
-      const is429 = /429|rate.limit/i.test(err?.message || String(err));
+      const is429 = /429|rate.limit/i.test(errorMessage(err));
       if (is429 && attempt < MAX_LLM_RETRIES) {
         const waitMs = LLM_RETRY_BASE_MS * Math.pow(1.5, attempt);
         console.warn(`[pdfSheetExtractor] 429 rate-limit (attempt ${attempt + 1}/${MAX_LLM_RETRIES}), retrying in ${(waitMs / 1000).toFixed(0)}s…`);
@@ -624,10 +779,10 @@ export async function extractSheetsFromPdf(file, options = {}) {
       console.error("[pdfSheetExtractor] InvokeLLM threw:", err);
       return {
         setMeta: { ...EMPTY_SET_META },
-        sheets: [makeManualEntryRow(file, `AI extraction failed: ${err?.message || String(err)}`)],
+        sheets: [makeManualEntryRow(file, `AI extraction failed: ${errorMessage(err)}`)],
         scanned: false,
         extractFailed: true,
-        error: err?.message || String(err),
+        error: errorMessage(err),
         pageCount: extracted.pageCount,
       };
     }
@@ -698,7 +853,7 @@ export async function extractSheetsFromPdf(file, options = {}) {
   }
 
   // 3. Pull structured output — prefer tool_use.input, fall back to parsing text.
-  let parsed;
+  let parsed: unknown;
   if (llmResult?.tool_use?.input && typeof llmResult.tool_use.input === "object") {
     parsed = llmResult.tool_use.input;
   } else {
@@ -720,8 +875,9 @@ export async function extractSheetsFromPdf(file, options = {}) {
     }
   }
 
-  const setMeta = { ...EMPTY_SET_META, ...(parsed?.setMeta || {}) };
-  const rawSheets = Array.isArray(parsed?.sheets) ? parsed.sheets : [];
+  const parsedRecord = isRecord(parsed) ? parsed : {};
+  const setMeta = asSetMetadata(parsedRecord.setMeta);
+  const rawSheets = Array.isArray(parsedRecord.sheets) ? parsedRecord.sheets : [];
 
   // 4. Deterministic post-processing — splits sheet# out of title, dedupes,
   //    normalizes. This is the safety net: if the model slips up and
@@ -839,7 +995,7 @@ export async function extractSheetsFromPdf(file, options = {}) {
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────
-function stripExt(name) {
+function stripExt(name: unknown): string {
   return String(name || "").replace(/\.pdf$/i, "");
 }
 
@@ -855,7 +1011,7 @@ function stripExt(name) {
  * The leading numeric prefix (job number) is stripped so the sheet
  * number matches what users expect in the drawings table.
  */
-export function parseFilename(name) {
+export function parseFilename(name: unknown): FilenameParts {
   const stem = stripExt(name);
   const result = { sheetNumber: "", revision: "0", baseName: stem };
 
@@ -895,7 +1051,7 @@ export function parseFilename(name) {
   return result;
 }
 
-function makeManualEntryRow(file, note) {
+function makeManualEntryRow(file: File, note: string): ParsedPdfSheet {
   const parsed = parseFilename(file.name);
   return {
     sheetNumber: parsed.sheetNumber,

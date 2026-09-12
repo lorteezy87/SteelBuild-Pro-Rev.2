@@ -1,93 +1,97 @@
 #!/usr/bin/env node
 /**
- * Owner-run helper: delete deprecated / orphan Supabase edge functions that
- * are no longer in supabase/functions/ but may still be deployed remotely.
+ * Owner-run helper for deleting production Edge Functions classified as
+ * deprecated in the reviewed ownership manifest.
  *
- * Usage:
- *   SUPABASE_ACCESS_TOKEN=… node scripts/delete-deprecated-edge-functions.mjs
- *   DRY_RUN=0 SUPABASE_ACCESS_TOKEN=… node scripts/delete-deprecated-edge-functions.mjs
- *
- * Default is dry-run (lists + prints the delete commands). Set DRY_RUN=0 to
- * actually call `supabase functions delete`.
- *
- * Project ref defaults to production kjrwqagyeswwoxpjkcko.
+ * Dry-run is the default. Apply requires both DRY_RUN=0 and an exact
+ * CONFIRM_DELETE_DEPRECATED_FUNCTIONS=<project-ref> value.
  */
+import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
-import { spawnSync } from "node:child_process";
+import {
+  localInventory,
+  readManifest,
+  validateManifest,
+} from './supabase-drift-check.mjs';
 
-const PROJECT_REF = process.env.SUPABASE_PROJECT_REF || "kjrwqagyeswwoxpjkcko";
-const DRY_RUN = process.env.DRY_RUN !== "0";
+export function deprecatedFunctionSlugs(manifest, local) {
+  validateManifest(manifest, local);
+  return manifest.functions
+    .filter(entry => entry.lifecycle === 'deprecated')
+    .map(entry => entry.slug)
+    .sort();
+}
 
-const DEPRECATED = [
-  "sharepoint-proxy",
-  "bluebeam-proxy",
-  "stripe-setup",
-  "stripe-webhook",
-  "stripe-worker",
-];
+export function assertApplyConfirmation(projectRef, dryRun, confirmation) {
+  if (dryRun) return;
+  if (confirmation !== projectRef) {
+    throw new Error(
+      `Apply requires CONFIRM_DELETE_DEPRECATED_FUNCTIONS=${projectRef}.`,
+    );
+  }
+}
 
-function run(args, { allowFail = false } = {}) {
-  const result = spawnSync("npx", ["supabase", ...args], {
-    encoding: "utf8",
+function run(args, { allowNotFound = false } = {}) {
+  const result = spawnSync('npx', ['supabase', ...args], {
+    encoding: 'utf8',
     env: process.env,
   });
-  if (result.status !== 0 && !allowFail) {
-    const detail = (result.stderr || result.stdout || "").trim();
-    throw new Error(`supabase ${args.join(" ")} failed (${result.status}): ${detail}`);
+  const detail = (result.stderr || result.stdout || '').trim();
+  if (result.status !== 0) {
+    if (allowNotFound && /not found|does not exist|404/i.test(detail)) {
+      return { alreadyAbsent: true, detail };
+    }
+    throw new Error(`supabase ${args.join(' ')} failed (${result.status}): ${detail}`);
   }
-  return {
-    status: result.status ?? 1,
-    stdout: result.stdout || "",
-    stderr: result.stderr || "",
-  };
+  return { alreadyAbsent: false, detail: result.stdout || '' };
 }
 
-function main() {
+export function main() {
   if (!process.env.SUPABASE_ACCESS_TOKEN) {
-    console.error("SUPABASE_ACCESS_TOKEN is required (Supabase dashboard → Account → Access Tokens).");
-    process.exit(1);
+    throw new Error('SUPABASE_ACCESS_TOKEN is required; function inventory was NOT checked.');
   }
-
-  console.log(`Project: ${PROJECT_REF}`);
-  console.log(`Mode: ${DRY_RUN ? "DRY_RUN (set DRY_RUN=0 to delete)" : "APPLY"}`);
-  console.log("");
-
-  const listed = run(["functions", "list", "--project-ref", PROJECT_REF], { allowFail: true });
-  if (listed.status === 0) {
-    console.log("Currently deployed functions:");
-    console.log(listed.stdout.trim() || "(empty)");
-    console.log("");
-  } else {
-    console.warn("Could not list functions (continuing with fixed delete set):");
-    console.warn((listed.stderr || listed.stdout).trim());
-    console.log("");
+  const manifest = validateManifest(readManifest(), localInventory());
+  const projectRef = process.env.SUPABASE_PROJECT_REF || manifest.projectRef;
+  if (projectRef !== manifest.projectRef) {
+    throw new Error(`Project ref ${projectRef} does not match manifest project ${manifest.projectRef}.`);
   }
+  const dryRun = process.env.DRY_RUN !== '0';
+  assertApplyConfirmation(
+    projectRef,
+    dryRun,
+    process.env.CONFIRM_DELETE_DEPRECATED_FUNCTIONS,
+  );
+  const deprecated = deprecatedFunctionSlugs(manifest, localInventory());
 
-  for (const name of DEPRECATED) {
-    const args = ["functions", "delete", name, "--project-ref", PROJECT_REF];
-    if (DRY_RUN) {
-      console.log(`[dry-run] npx supabase ${args.join(" ")}`);
+  console.log(`Project: ${projectRef}`);
+  console.log(`Mode: ${dryRun ? 'DRY_RUN' : 'APPLY'}`);
+  console.log(`Manifest deprecated functions: ${deprecated.join(', ') || '(none)'}`);
+  console.log('');
+
+  const listed = run(['functions', 'list', '--project-ref', projectRef]);
+  console.log('Currently deployed functions:');
+  console.log(listed.detail.trim() || '(empty)');
+  console.log('');
+
+  for (const slug of deprecated) {
+    const args = ['functions', 'delete', slug, '--project-ref', projectRef];
+    if (dryRun) {
+      console.log(`[dry-run] npx supabase ${args.join(' ')}`);
       continue;
     }
-    console.log(`Deleting ${name}…`);
-    const result = run(args, { allowFail: true });
-    if (result.status === 0) {
-      console.log(`  deleted ${name}`);
-    } else {
-      // Already gone is success for idempotency.
-      const msg = (result.stderr || result.stdout).trim();
-      if (/not found|does not exist|404/i.test(msg)) {
-        console.log(`  already absent: ${name}`);
-      } else {
-        console.error(`  FAILED ${name}: ${msg}`);
-        process.exitCode = 1;
-      }
-    }
+    const result = run(args, { allowNotFound: true });
+    console.log(result.alreadyAbsent ? `already absent: ${slug}` : `deleted: ${slug}`);
   }
 
-  if (DRY_RUN) {
-    console.log("\nNo deletes performed. Re-run with DRY_RUN=0 to apply.");
-  }
+  if (dryRun) console.log('\nNo deletes performed.');
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    main();
+  } catch (error) {
+    console.error(`Deprecated Edge Function reconciliation failed: ${error.message}`);
+    process.exitCode = 1;
+  }
+}

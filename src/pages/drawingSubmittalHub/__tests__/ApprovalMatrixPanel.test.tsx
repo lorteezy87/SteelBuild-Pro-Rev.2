@@ -371,6 +371,24 @@ describe("ApprovalMatrixPanel — Last sent (expanded row)", () => {
 });
 
 describe("ApprovalMatrixPanel — click-through, linkable filters", () => {
+  it("does not rerun transmittal enrichment when only the quick filter changes", () => {
+    let itemReads = 0;
+    const trackedTransmittal = { ...TRANSMITTALS[0] };
+    Object.defineProperty(trackedTransmittal, "items", {
+      enumerable: true,
+      get: () => {
+        itemReads++;
+        return TRANSMITTALS[0].items;
+      },
+    });
+    mount({ transmittals: [trackedTransmittal] });
+    const readsAfterInitialEnrichment = itemReads;
+
+    fireEvent.click(screen.getByRole("button", { name: /On Hold/ }));
+
+    expect(itemReads).toBe(readsAfterInitialEnrichment);
+  });
+
   it("filters rows from a pill, records it in the URL, and clears it", () => {
     mount();
     const pill = screen.getByRole("button", { name: /On Hold/ });

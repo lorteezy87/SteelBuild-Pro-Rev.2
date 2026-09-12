@@ -22,11 +22,11 @@ moat.
 - **Viewers**: a **self-hosted IFC viewer** (`web-ifc` wasm + `three.js`,
   lazy-loaded) for the Detailing Control Center's 3D tab; `pdf.js` for drawings.
 - **Data**: Supabase (Postgres + RLS + Storage + Auth + Edge Functions).
-- **Hosting**: Cloudflare Workers. Production deploys are **CI-gated** — a push
-  to `main` runs `.github/workflows/ci.yml` (lint + TS/JS typechecks +
-  strictNullChecks + noImplicitAny + Vitest + production build) and only a
-  green `ci` job can publish Worker `steelbuild-pro-rev-2`. Cloudflare Workers
-  Builds must remain disconnected so it cannot bypass that gate.
+- **Hosting**: Cloudflare Workers (`steelbuild-pro-rev-2`). Production deploys
+  are **CI-gated** — a push to `main` runs `.github/workflows/ci.yml` (lint +
+  TS/JS typechecks + strictNullChecks + noImplicitAny + Vitest + production
+  build), and only a green run publishes the Worker. Vercel is retired;
+  Cloudflare Workers Builds remains disconnected so it cannot bypass that gate.
 - **LLM**: a provider-agnostic gateway via the `llm-proxy` Edge Function
   (currently OpenAI `gpt-4o` / `gpt-4o-mini`). Never call a provider from the browser.
 - **Billing**: Stripe subscription plans via the `stripe-billing` Edge Function.
@@ -113,6 +113,7 @@ src/
   api/           Supabase client (entities/auth/integrations/functions) + storage helpers
   lib/           shared utilities, AuthContext, billing/, org/, ifc/, payapp/, backcharge/, field/
   services/      deterministic domain engines (costRollup, marginRiskEngine, …)
+  utils/         shared deterministic helpers, including the typed PCC scoring engine
 supabase/
   migrations/    ordered SQL migrations (timestamped `YYYYMMDDhhmmss_name.sql`)
   functions/     Edge Functions (llm-proxy, email-ingest, email-send,
@@ -216,30 +217,33 @@ configured. Counts change as tested helper modules are added; run `npm test --
 ## CI/CD
 
 `.github/workflows/ci.yml` runs on configured push branches and pull requests
-targeting the supported bases: lint, four typecheck gates (TS, JS/JSX, the
-**strictNullChecks** ratchet, and the **noImplicitAny** ratchet), the no-new-JS
-ratchet, Vitest, and a production build. The separate Supabase inventory check
-also fails closed when credentials are absent or drift exists. Only a green
-application `ci` job lets the production job publish to Cloudflare Workers,
-followed by a post-deploy health check. An advisory dependency audit and
-opt-in Playwright smoke round out the workflow.
+targeting the supported bases: lint, four typecheck gates
+(TS, JS/JSX, the **strictNullChecks** ratchet, and the **noImplicitAny**
+ratchet), the no-new-JS ratchet, Vitest, and a production build — all blocking.
+The separate Supabase inventory check also fails closed when credentials are
+absent or drift exists. Only a green application `ci` job lets the gated deploy
+job publish the `steelbuild-pro-rev-2` Cloudflare Worker, followed by a
+post-deploy health check. An advisory `dependency-audit` job (`npm audit`,
+non-blocking) and opt-in Playwright smoke round it out. A concurrency group
+cancels redundant runs without interrupting a production deploy.
 
 ## Deployment
 
 Feature work lands on a feature branch and is reviewed through a pull request. A
 push to **`main`** runs the `ci` job; **only if it passes**
-does `npx wrangler deploy` publish the static-asset Worker
-`steelbuild-pro-rev-2`. A red run cannot deploy; production stays on the last
-good version. Cloudflare Workers Builds is disconnected, making the GitHub
-Action the sole production publisher. Pull requests receive version-preview
-URLs through the same workflow. [`CLAUDE.md`](./CLAUDE.md) documents the
-deployment and git-safety rules. Edge Functions deploy separately only through
-an owner-approved, evidence-backed change.
+does the deploy job publish the static-asset Cloudflare Worker configured in
+`wrangler.jsonc`. A red run cannot deploy — production stays on the last good
+build. Cloudflare Workers Builds is disconnected, making the GitHub Action the
+sole production path. Pull requests receive version-preview URLs through the
+same workflow. Remaining gap:
+no branch-protection required check (repo plan), so red/unreviewed commits can
+still land on `main` even though they cannot deploy. [`CLAUDE.md`](./CLAUDE.md)
+documents the full workflow + git-safety rules. Edge Functions deploy
+separately only through an owner-approved, evidence-backed change.
 
-**Staging.** The former Vercel staging project and staging Supabase project have
-been retired. Staging E2E jobs remain guarded and cannot run until a replacement
-environment is built. Do not target production as a staging substitute; setup
-requirements live in
+**Staging.** The former Vercel and Supabase staging projects are retired, so
+staging E2E jobs cannot run until the environment is rebuilt. Do not target
+production as a staging substitute; setup requirements remain in
 [`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
 
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200

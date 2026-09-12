@@ -55,7 +55,14 @@ import {
   validateDetailingStateWrite,
   validateDueDateWrite,
 } from "./drawingSubmittalHub/format";
-import type { Drawing as HubDrawing, DrawingRevision as HubDrawingRevision, DrawingSet as HubDrawingSet, Submittal as HubSubmittal } from "./drawingSubmittalHub/types";
+import type {
+  Drawing as HubDrawing,
+  DrawingRevision as HubDrawingRevision,
+  DrawingSet as HubDrawingSet,
+  ModelElementViewRow,
+  Submittal as HubSubmittal,
+  TriageItem,
+} from "./drawingSubmittalHub/types";
 import { FleetHealthStrip, LeadTimesModal } from "./drawingSubmittalHub/components";
 import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
@@ -163,7 +170,7 @@ function DetailingControlCenter() {
   }, []);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
   // Contextual escalation (Critical Work Queue / Next Decision → draft RFI / PCO)
-  const [escalateItem, setEscalateItem] = useState<any | null>(null);
+  const [escalateItem, setEscalateItem] = useState<TriageItem | null>(null);
   const [escalateKind, setEscalateKind] = useState<EscalationKind>("rfi");
   // Revision overlay compare (Revision Impact rows)
   const [compareDrawingId, setCompareDrawingId] = useState<string | null>(null);
@@ -619,7 +626,7 @@ function DetailingControlCenter() {
   };
 
   const updateOwnerMut = useMutation({
-    mutationFn: async ({ item, owner }: { item: any; owner: string }) => {
+    mutationFn: async ({ item, owner }: { item: TriageItem; owner: string }) => {
       if (item._submittalId) {
         await entities.Submittal.update(item._submittalId, { ball_in_court: owner });
       } else if (item._ownerScope === "First sheet owner" && item._firstSheetId) {
@@ -639,7 +646,7 @@ function DetailingControlCenter() {
   });
 
   const updateDueDateMut = useMutation({
-    mutationFn: async ({ item, date }: { item: any; date: string }) => {
+    mutationFn: async ({ item, date }: { item: TriageItem; date: string }) => {
       const dueDateError = validateDueDateWrite(item, date);
       if (dueDateError) throw new Error(dueDateError);
       // dueDateWriteTargets (format.ts, unit-tested) is the single source of truth
@@ -672,9 +679,10 @@ function DetailingControlCenter() {
   // Only meaningful when no submittal governs the package (the submittal
   // machine owns the middle of the flow); the UI gates the control accordingly.
   const updateDetailingStateMut = useMutation({
-    mutationFn: async ({ item, next }: { item: any; next: string }) => {
+    mutationFn: async ({ item, next }: { item: TriageItem; next: string }) => {
       const stateError = validateDetailingStateWrite(item, next);
       if (stateError) throw new Error(stateError);
+      if (!item._drawingSetId) throw new Error("No drawing set to update");
       await entities.DrawingSet.update(item._drawingSetId, { detailing_state: next } as any);
     },
     onSuccess: async (_data, { next }) => {
@@ -686,7 +694,7 @@ function DetailingControlCenter() {
 
   // Toggle a manual readiness flag (material_impacted / long_lead_impact).
   const updateReadinessFlagMut = useMutation({
-    mutationFn: async ({ item, field, value }: { item: any; field: "material_impacted" | "long_lead_impact"; value: boolean }) => {
+    mutationFn: async ({ item, field, value }: { item: TriageItem; field: "material_impacted" | "long_lead_impact"; value: boolean }) => {
       if (!item?._drawingSetId) throw new Error("No drawing set to update");
       await entities.DrawingSet.update(item._drawingSetId, { [field]: value } as any);
     },
@@ -735,17 +743,17 @@ function DetailingControlCenter() {
             // Rows, Open Work and Create submittal open the record inside the
             // hub (owner decision 3). A push, so Back returns to the board.
             onOpenHref={(href: string) => navigate(href)}
-            onUpdateOwner={canEditDetailing ? (item: any, owner: string) => updateOwnerMut.mutate({ item, owner }) : undefined}
-            onUpdateDueDate={canEditDetailing ? (item: any, date: string) => updateDueDateMut.mutate({ item, date }) : undefined}
-            onAdvanceDetailing={canEditDetailing ? (item: any, next: string) => updateDetailingStateMut.mutate({ item, next }) : undefined}
-            onToggleReadiness={canEditDetailing ? (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => updateReadinessFlagMut.mutate({ item, field, value }) : undefined}
+            onUpdateOwner={canEditDetailing ? (item: TriageItem, owner: string) => updateOwnerMut.mutate({ item, owner }) : undefined}
+            onUpdateDueDate={canEditDetailing ? (item: TriageItem, date: string) => updateDueDateMut.mutate({ item, date }) : undefined}
+            onAdvanceDetailing={canEditDetailing ? (item: TriageItem, next: string) => updateDetailingStateMut.mutate({ item, next }) : undefined}
+            onToggleReadiness={canEditDetailing ? (item: TriageItem, field: "material_impacted" | "long_lead_impact", value: boolean) => updateReadinessFlagMut.mutate({ item, field, value }) : undefined}
             sequenceReadiness={sequenceReadiness}
             revisionImpact={revisionImpact}
             isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
-            onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
+            onEscalate={canEscalate ? (item: TriageItem, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
             modelMapping={modelMappingSummary}
-            modelElementRows={modelElements as any[]}
+            modelElementRows={modelElements as ModelElementViewRow[]}
             modelRosterCount={modelElementCount}
             modelRosterCountLoading={modelElementCountLoading}
             modelRosterLoading={modelElementsLoading}

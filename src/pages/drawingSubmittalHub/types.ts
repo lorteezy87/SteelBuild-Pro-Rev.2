@@ -1,3 +1,5 @@
+import type { HubTabKey } from "./hubLinks";
+
 export interface DueInfo {
   label: string;
   days: number | null;
@@ -8,12 +10,12 @@ export interface DueInfo {
 }
 
 export interface Submittal {
-  id?: string;
-  status?: string;
-  round_number?: number;
-  drawing_set_ids?: string[];
-  drawing_set_name?: string;
-  ball_in_court?: string;
+  id: string;
+  status?: string | null;
+  round_number?: number | null;
+  drawing_set_ids?: string[] | null;
+  drawing_set_name?: string | null;
+  ball_in_court?: string | null;
   [key: string]: any;
 }
 
@@ -28,9 +30,9 @@ export interface Drawing {
 }
 
 export interface DrawingSet {
-  id?: string;
-  set_name?: string;
-  discipline?: string;
+  id: string;
+  set_name?: string | null;
+  discipline?: string | null;
   is_deleted?: boolean;
   /** Manual drafting/release sub-state (migration 20260526220000). */
   detailing_state?: string | null;
@@ -81,7 +83,7 @@ export interface TriageItem {
   due: DueInfo;
   closed: boolean;
   needsAction: boolean;
-  routeTab: string;
+  routeTab: HubTabKey;
   _submittalId: string | null;
   _drawingSetId: string | null;
   _firstSheetId: string | null;
@@ -92,10 +94,115 @@ export interface TriageItem {
   detailingState?: string;
   /** True when no submittal governs the package, so a drafting state applies. */
   _canDraft?: boolean;
+  /** True when the package's governing workflow is Revise & Resubmit. */
+  isRR?: boolean;
   /** Event glue: in-flight package with zero open linked submittals. */
   _needsUnlinkedHint?: boolean;
   /** The raw manual drawing_sets.detailing_state value (null = Not Started). */
   _detailingStateRaw?: string | null;
   /** Per-package readiness read-model (computeDetailingReadiness output). */
-  _readiness?: any;
+  _readiness?: DetailingReadiness | null;
+  /** Which persisted field receives an owner edit. */
+  _ownerScope?: "Submittal BIC" | "First sheet owner" | "No owner target";
+}
+
+export interface DetailingScheduleRisk {
+  atRisk?: boolean;
+  severity?: "critical" | "at_risk" | "on_track" | string;
+  daysLate?: number;
+  reasons?: string[];
+}
+
+export interface DetailingReadiness {
+  backwardDates?: Record<string, string | null | undefined>;
+  scheduleRisk?: DetailingScheduleRisk;
+  fabricationReady?: boolean;
+  erectionReady?: boolean;
+  rfiBlocked?: boolean;
+  revisionImpacted?: boolean;
+  materialImpacted?: boolean;
+  longLeadImpact?: boolean;
+  prioritySequence?: boolean;
+}
+
+export interface TriageModel {
+  setItems: TriageItem[];
+  unlinkedSubmittalItems: TriageItem[];
+  openItems: TriageItem[];
+  overdue: TriageItem[];
+  dueSoon: TriageItem[];
+  needsAction: TriageItem[];
+  noDate: TriageItem[];
+  pipelineCounts: Record<string, number>;
+  overdueDrawingSets: number;
+  overdueUnlinkedSubmittals: number;
+  dueSoonDrawingSets: number;
+  noDateDrawingSets: number;
+  atRiskCount: number;
+}
+
+export interface SubmittalKpis {
+  pending: number;
+  total: number;
+}
+
+export interface DrawingKpis {
+  totalSets: number;
+  totalSheets: number;
+  released: number;
+  inReview: number;
+  overdue: number;
+}
+
+export interface SequenceReadinessRow {
+  sequence: string;
+  packageCount: number;
+  detailingPct: number;
+  fabReadyCount: number;
+  erectionReadyCount: number;
+  atRiskCount: number;
+}
+
+export interface RevisionImpactViewRow {
+  revisionId: string;
+  drawingId?: string | null;
+  sheetNumber?: string | null;
+  revisionCode?: string | null;
+  issuedAt?: string | null;
+  drawingSetName?: string | null;
+  fabricated?: boolean;
+  delivered?: boolean;
+  inField?: boolean;
+  downstreamKnown?: boolean;
+  severity: "critical" | "high" | "medium" | "low" | "unknown" | string;
+}
+
+export interface ModelElementViewRow {
+  id?: string | null;
+  piece_mark?: string | null;
+  assembly_mark?: string | null;
+  profile?: string | null;
+  quantity?: number | null;
+  sequence_number?: string | null;
+  erection_area?: string | null;
+  drawing_id?: string | null;
+  drawing_no?: string | null;
+  fab_status?: string | null;
+  is_deleted?: boolean | null;
+}
+
+export interface SubmittalRound {
+  id: string;
+  round_number?: number | null;
+  status?: string | null;
+  submitted_date?: string | null;
+  returned_date?: string | null;
+}
+
+export interface ApprovalMatrixRow extends DrawingSet {
+  id: string;
+  submittals: Submittal[];
+  latestSubmittal: Submittal | null;
+  due: DueInfo;
+  pendingEorResponse: boolean;
 }

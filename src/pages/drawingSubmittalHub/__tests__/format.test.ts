@@ -472,11 +472,11 @@ describe("buildApprovalMatrixRows", () => {
     const rows = buildApprovalMatrixRows(sets, subs);
     expect(rows).toHaveLength(2); // s3 deleted → excluded
     const s1 = rows.find((r) => r.id === "s1");
-    expect(s1.submittals).toHaveLength(2);
-    expect(s1.latestSubmittal.id).toBe("b"); // round 2 wins
+    expect(s1?.submittals).toHaveLength(2);
+    expect(s1?.latestSubmittal?.id).toBe("b"); // round 2 wins
     const s2 = rows.find((r) => r.id === "s2");
-    expect(s2.submittals).toHaveLength(0); // its only submittal is deleted
-    expect(s2.latestSubmittal).toBeNull();
+    expect(s2?.submittals).toHaveLength(0); // its only submittal is deleted
+    expect(s2?.latestSubmittal).toBeNull();
   });
 
   it("filters by search across set name, discipline, and submittal number", () => {
@@ -883,8 +883,8 @@ describe("buildApprovalMatrixRows — governing submittal", () => {
       { id: "draft", drawing_set_ids: ["s1"], status: "Draft", round_number: 1, submitted_date: null },
       { id: "live", drawing_set_ids: ["s1"], status: "Under Review", round_number: 1, ball_in_court: "EOR", submitted_date: "2026-01-05", required_date: "2026-01-20" },
     ] as any);
-    expect(rows[0].latestSubmittal.id).toBe("live");
-    expect(rows[0].latestSubmittal.ball_in_court).toBe("EOR");
+    expect(rows[0]?.latestSubmittal?.id).toBe("live");
+    expect(rows[0]?.latestSubmittal?.ball_in_court).toBe("EOR");
   });
 
   it("does not let a Void submittal govern and render a green Closed", () => {
@@ -892,8 +892,8 @@ describe("buildApprovalMatrixRows — governing submittal", () => {
       { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 9 },
       { id: "live", drawing_set_ids: ["s1"], status: "Submitted", round_number: 1, submitted_date: "2026-01-05", required_date: "2000-01-01" },
     ] as any);
-    expect(rows[0].latestSubmittal.id).toBe("live");
-    expect(rows[0].due.overdue).toBe(true);
+    expect(rows[0]?.latestSubmittal?.id).toBe("live");
+    expect(rows[0]?.due.overdue).toBe(true);
   });
 
   it("still governs by the most recent submittal among usable ones", () => {
@@ -901,7 +901,7 @@ describe("buildApprovalMatrixRows — governing submittal", () => {
       { id: "older", drawing_set_ids: ["s1"], status: "Submitted", submitted_date: "2026-01-01" },
       { id: "newer", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-03-01" },
     ] as any);
-    expect(rows[0].latestSubmittal.id).toBe("newer");
+    expect(rows[0]?.latestSubmittal?.id).toBe("newer");
   });
 
   it("falls back to an unusable submittal rather than showing none linked", () => {

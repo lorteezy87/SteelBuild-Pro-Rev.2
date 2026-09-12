@@ -5,6 +5,9 @@ Vite, React 18, TypeScript, Supabase (project: kjrwqagyeswwoxpjkcko), Tailwind. 
 
 Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` from `@/api/supabaseClient` — a thin re-export barrel. The implementation lives in `src/api/client/*` domain modules (entities, auth, storage, uploads, llm, functions, entityClient, fieldMapping, …), not inline in supabaseClient.ts.
 
+## Production Control scoring
+`src/utils/pccEngine.ts` is the typed deterministic boundary for Production Control scoring. It exports the raw record contracts, normalized `PCCItem`, `ScoredPCCItem`, execution-window/owner-load/briefing results, and release-gate action drafts. Preserve its formulas, stable score ordering, local-calendar-day date semantics, status mappings, and output keys. Extend the narrow source interfaces when a real producer adds a field; do not bypass them with `any` or duplicate scoring in UI code.
+
 ## Commands
 - `npm run dev` — local dev server
 - `npm run lint` — lint (must be clean before commit)

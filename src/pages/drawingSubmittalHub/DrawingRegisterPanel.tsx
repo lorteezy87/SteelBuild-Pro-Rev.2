@@ -15,6 +15,8 @@ import { HubViewToggle } from "./HubViewToggle";
 import type { HubViewOption } from "./HubViewToggle";
 import { useHubView } from "./useHubView";
 import type { HubView } from "./hubLinks";
+import type { SavedRevisionSummary } from "@/lib/revisionSummaryRepo";
+import type { SetPackage } from "./types";
 
 const DrawingRegisterTable = lazy(() => import("./drawingRegisterTable").then(module => ({ default: module.DrawingRegisterTable })));
 const ReviewQueuePanel = lazyWithRetry(() =>
@@ -29,16 +31,16 @@ const VIEWS: readonly HubViewOption<HubView<"drawings">>[] = [
 
 /** Shared evidence and callbacks for the sheet and set views. */
 export interface DrawingRegisterPanelProps {
-  setPackages?: any[];
+  setPackages?: SetPackage[];
   projectId?: string;
-  activeProject?: any;
-  drawingSets?: any[];
+  activeProject?: { id?: string | null; name?: string | null } | null;
+  drawingSets?: unknown[];
   isLoading?: boolean;
   healthByKey?: Map<string, any>;
   currentRevByDrawingId?: Map<string, any>;
-  summariesBySet?: Map<string, any>;
-  onRevisionUploaded?: (pkgKey: string) => void;
-  onOpenSummary?: (summary: any) => void;
+  summariesBySet?: Map<string, SavedRevisionSummary>;
+  onRevisionUploaded?: (pkgKey: string) => void | Promise<void>;
+  onOpenSummary?: (summary: SavedRevisionSummary["summary"]) => void;
 }
 
 export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
@@ -46,7 +48,17 @@ export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
   const [view, setView] = useHubView("drawings");
   return <>
     <HubViewToggle label="Drawing register view" options={VIEWS} value={view} onChange={setView} />
-    {view === "sheets" && <DrawingRegisterGridPanel projectId={projectId} />}
+    {view === "sheets" && (
+      <DrawingRegisterGridPanel
+        projectId={projectId}
+        activeProject={props.activeProject}
+        drawingSets={props.drawingSets}
+        setPackages={props.setPackages}
+        summariesBySet={props.summariesBySet}
+        onRevisionUploaded={props.onRevisionUploaded}
+        onOpenSummary={props.onOpenSummary}
+      />
+    )}
     {view === "sets" && (
       <Suspense fallback={<p role="status">Loading drawing sets…</p>}>
         <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []} />
