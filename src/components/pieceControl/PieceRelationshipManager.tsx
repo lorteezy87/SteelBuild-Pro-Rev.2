@@ -1,32 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import { invalidatePieceControlQueries } from "@/lib/pieceControl/queryKeys";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Link2, PackageCheck, Sparkles, Unlink2 } from "lucide-react";
-import { toast } from "sonner";
 import "@/styles/piece-control-command.css";
 import { DecisionPanel, Pill } from "@/components/command";
 import { useProjectContext } from "@/components/shared/ProjectContext";
-import { evaluateWorkPackageReadiness } from "@/lib/pieceControl/readiness";
-import {
-  assignPiecesToWorkPackage,
-  fetchPieceRelationshipSnapshot,
-  linkPieceDrawingSet,
-  unassignPiecesFromWorkPackage,
-  unlinkPieceDrawingSet,
-} from "@/lib/pieceControl/relationshipsRepository";
+import { fetchPieceRelationshipSnapshot } from "@/lib/pieceControl/relationshipsRepository";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
-import { linkPiecesToDrawingSet } from "@/lib/pieceControl/bulkLinkDrawings";
 import {
   addIdsToSelection,
   selectIdRange,
 } from "@/lib/pieceControl/pieceSelectionRange";
-import { sortPieceRegisterRows } from "@/lib/pieceControl/pieceRegisterSort";
+import type { AutoAssignPlan } from "@/lib/pieceControl/wpAutoAssign";
 import {
-  applyWorkPackageAutoAssign,
-  planWorkPackageAutoAssign,
-  type AutoAssignPlan,
-} from "@/lib/pieceControl/wpAutoAssign";
-import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
+  calculateSelectedTons,
+  countAutoAssignSkips,
+  derivePieceRelationshipReadiness,
+  derivePieceRelationshipView,
+  liveWorkPackageId,
+  type RelationshipScopeFilter,
+} from "./pieceRelationshipManager.derive";
+import { usePieceRelationshipMutations } from "./usePieceRelationshipMutations";
 
 interface PieceRelationshipManagerProps {
   projectId: string;
@@ -63,7 +56,7 @@ export default function PieceRelationshipManager({
   const [drawingFilter, setDrawingFilter] = useState("");
   const [markFilter, setMarkFilter] = useState("");
   const [needsDrawingOnly, setNeedsDrawingOnly] = useState(false);
-  const [scopeFilter, setScopeFilter] = useState<"unassigned" | "package" | "all">(
+  const [scopeFilter, setScopeFilter] = useState<RelationshipScopeFilter>(
     focusedWorkPackageId ? "unassigned" : "all",
   );
   const [autoAssignPlan, setAutoAssignPlan] = useState<AutoAssignPlan | null>(null);
@@ -78,84 +71,32 @@ export default function PieceRelationshipManager({
   });
   const snapshot = snapshotQuery.data;
 
-  const containerIds = useMemo(
-    () => new Set(
-      (snapshot?.pieces ?? [])
-        .map((piece) => piece.parent_piece_id)
-        .filter((id): id is string => Boolean(id)),
-    ),
-    [snapshot?.pieces],
+  const relationshipView = useMemo(
+    () =>
+      snapshot
+        ? derivePieceRelationshipView(snapshot, {
+            focusedWorkPackageId,
+            scopeFilter,
+            markFilter,
+            needsDrawingOnly,
+          })
+        : null,
+    [
+      focusedWorkPackageId,
+      markFilter,
+      needsDrawingOnly,
+      scopeFilter,
+      snapshot,
+    ],
   );
-  const leafPieces = useMemo(
-    () => (snapshot?.pieces ?? []).filter(
-      (piece) => !piece.is_container && !containerIds.has(piece.id),
-    ),
-    [containerIds, snapshot?.pieces],
+  const relationshipReadiness = useMemo(
+    () =>
+      snapshot
+        ? derivePieceRelationshipReadiness(snapshot, focusedWorkPackageId)
+        : null,
+    [focusedWorkPackageId, snapshot],
   );
-  const workPackageMap = useMemo(
-    () => new Map(
-      (snapshot?.workPackages ?? []).map((wp) => [wp.id, formatWorkPackageTitle(wp)]),
-    ),
-    [snapshot?.workPackages],
-  );
-  const drawingLinkCountByPiece = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const link of snapshot?.pieceDrawingSets ?? []) {
-      map.set(link.piece_id, (map.get(link.piece_id) ?? 0) + 1);
-    }
-    return map;
-  }, [snapshot?.pieceDrawingSets]);
-
-  const liveWorkPackageId = (piece: { work_package_id?: string | null }) =>
-    piece.work_package_id && workPackageMap.has(piece.work_package_id)
-      ? piece.work_package_id
-      : null;
-
-  const packageScopedLeaves = focusedWorkPackageId
-    ? leafPieces.filter((piece) => {
-      const liveId = liveWorkPackageId(piece);
-      return !liveId || liveId === focusedWorkPackageId;
-    })
-    : leafPieces;
-
-  const selectablePieces = useMemo(() => {
-    const mark = markFilter.trim().toLowerCase();
-    const filtered = packageScopedLeaves.filter((piece) => {
-      const liveId = liveWorkPackageId(piece);
-      if (scopeFilter === "unassigned" && liveId) return false;
-      if (
-        scopeFilter === "package" &&
-        focusedWorkPackageId &&
-        liveId !== focusedWorkPackageId
-      ) {
-        return false;
-      }
-      if (mark && !String(piece.piece_mark || "").toLowerCase().includes(mark)) {
-        return false;
-      }
-      if (needsDrawingOnly && (drawingLinkCountByPiece.get(piece.id) ?? 0) > 0) {
-        return false;
-      }
-      return true;
-    });
-    return sortPieceRegisterRows(
-      filtered.map((piece) => ({
-        ...piece,
-        workPackageLabel: liveWorkPackageId(piece)
-          ? workPackageMap.get(liveWorkPackageId(piece)!) ?? "Unassigned"
-          : "Unassigned",
-      })),
-      { key: "work_package", direction: "asc" },
-    );
-  }, [
-    drawingLinkCountByPiece,
-    focusedWorkPackageId,
-    markFilter,
-    needsDrawingOnly,
-    packageScopedLeaves,
-    scopeFilter,
-    workPackageMap,
-  ]);
+  const selectablePieces = relationshipView?.selectablePieces ?? [];
 
   useEffect(() => {
     if (
@@ -166,75 +107,46 @@ export default function PieceRelationshipManager({
     }
   }, [selectablePieces, selectionAnchorId]);
 
-  const drawingPieces = focusedWorkPackageId
-    ? leafPieces.filter((piece) => liveWorkPackageId(piece) === focusedWorkPackageId)
-    : leafPieces;
-
-  const selectedTons = useMemo(() => {
-    let lbs = 0;
-    let known = 0;
-    for (const piece of selectablePieces) {
-      if (!selectedPieceIds.has(piece.id)) continue;
-      const each = Number(piece.weight_each_lbs);
-      const qty = Number(piece.quantity) || 0;
-      const total = Number(piece.weight_total_lbs);
-      const weight =
-        Number.isFinite(each) && each >= 0 && qty > 0
-          ? each * qty
-          : Number.isFinite(total) && total >= 0
-            ? total
-            : null;
-      if (weight !== null) {
-        lbs += weight;
-        known += 1;
-      }
-    }
-    return { tons: lbs / 2000, known, selected: selectedPieceIds.size };
-  }, [selectablePieces, selectedPieceIds]);
-
-  const readiness = useMemo(() => {
-    if (!snapshot) return [];
-    return evaluateWorkPackageReadiness(
-      snapshot.workPackages,
-      snapshot.pieces,
-      snapshot.pieceDrawings,
-      snapshot.drawings,
-      {
-        drawingSets: snapshot.drawingSets,
-        submittals: snapshot.submittals,
-        sheetResponses: snapshot.sheetResponses,
-        drawingRevisions: snapshot.drawingRevisions,
-        drawingReviews: snapshot.drawingReviews,
-        drawingSignoffs: snapshot.drawingSignoffs,
-      },
-      snapshot.pieceDrawingSets ?? [],
-    );
-  }, [snapshot]);
-  const visibleReadiness = focusedWorkPackageId
-    ? readiness.filter((row) => row.workPackageId === focusedWorkPackageId)
-    : readiness;
-  const selectedDrawingPieceId = drawingPieceId || drawingPieces[0]?.id || "";
+  const selectedTons = useMemo(
+    () => calculateSelectedTons(selectablePieces, selectedPieceIds),
+    [selectablePieces, selectedPieceIds],
+  );
+  const selectedDrawingPieceId =
+    drawingPieceId || relationshipView?.drawingPieces[0]?.id || "";
   const linksForPiece = (snapshot?.pieceDrawingSets ?? []).filter(
     (link) => link.piece_id === selectedDrawingPieceId,
   );
-  const drawingSetMap = new Map(
-    (snapshot?.drawingSets ?? []).map((set) => [set.id, set]),
-  );
-  const activeDrawingSets = useMemo(
-    () =>
-      (snapshot?.drawingSets ?? []).filter(
-        (set) => !set.is_deleted && !set.deleted_at,
-      ),
-    [snapshot?.drawingSets],
-  );
   const filteredDrawingSets = useMemo(() => {
     const needle = drawingFilter.trim().toLowerCase();
+    const activeDrawingSets = relationshipView?.activeDrawingSets ?? [];
     if (!needle) return activeDrawingSets;
     return activeDrawingSets.filter((set) => {
       const name = String(set.set_name ?? "").toLowerCase();
       return name.includes(needle) || set.id.toLowerCase().includes(needle);
     });
-  }, [activeDrawingSets, drawingFilter]);
+  }, [drawingFilter, relationshipView?.activeDrawingSets]);
+  const {
+    assignMutation,
+    unassignMutation,
+    linkMutation,
+    bulkLinkMutation,
+    unlinkMutation,
+    autoAssignMutation,
+    buildAutoAssignPlan,
+  } = usePieceRelationshipMutations({
+    projectId,
+    queryClient,
+    focusedWorkPackageId,
+    targetWorkPackageId,
+    selectedPieceIds,
+    selectedDrawingPieceId,
+    drawingSetId,
+    packageScopedLeaves: relationshipView?.packageScopedLeaves ?? [],
+    workPackages: snapshot?.workPackages ?? [],
+    setSelectedPieceIds,
+    setDrawingSetId,
+    setAutoAssignPlan,
+  });
 
   const allVisibleSelected =
     selectablePieces.length > 0 &&
@@ -250,159 +162,15 @@ export default function PieceRelationshipManager({
     setSelectionAnchorId(null);
   };
 
-  const invalidate = async () => {
-    await Promise.all([
-      // Shared scope: register, relationships, station board, logistics,
-      // Overview snapshot, release gate and the 3D link map.
-      invalidatePieceControlQueries(queryClient, projectId, "all"),
-      queryClient.invalidateQueries({ queryKey: ["modelElements", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["ifc", projectId] }),
-    ]);
-  };
-  const mutationOptions = {
-    onSuccess: async () => {
-      setSelectedPieceIds(new Set());
-      await invalidate();
-    },
-    onError: (error: Error) =>
-      toast.error(
-        presentPieceControlError(
-          error,
-          "The piece relationship could not be updated.",
-        ),
-      ),
-  };
-  const assignMutation = useMutation({
-    mutationFn: () => assignPiecesToWorkPackage(
-      projectId,
-      [...selectedPieceIds],
-      focusedWorkPackageId || targetWorkPackageId,
-    ),
-    ...mutationOptions,
-    onSuccess: async (summary) => {
-      await mutationOptions.onSuccess();
-      const synced = Number(summary.model_elements_synced ?? 0);
-      toast.success(
-        synced > 0
-          ? `${summary.assigned ?? 0} piece(s) assigned · ${synced} 3D element(s) synced`
-          : `${summary.assigned ?? 0} piece(s) assigned to work package`,
-      );
-    },
-  });
-  const unassignMutation = useMutation({
-    mutationFn: () => unassignPiecesFromWorkPackage(projectId, [...selectedPieceIds]),
-    ...mutationOptions,
-    onSuccess: async (summary) => {
-      await mutationOptions.onSuccess();
-      toast.success(`${summary.unassigned ?? 0} piece(s) removed from work package`);
-    },
-  });
-  const linkMutation = useMutation({
-    mutationFn: () =>
-      linkPieceDrawingSet(projectId, selectedDrawingPieceId, drawingSetId),
-    ...mutationOptions,
-    onSuccess: async (summary) => {
-      setDrawingSetId("");
-      await mutationOptions.onSuccess();
-      toast.success(
-        summary.linked ? "Drawing set linked" : "Drawing set was already linked",
-      );
-    },
-  });
-  const bulkLinkMutation = useMutation({
-    mutationFn: () =>
-      linkPiecesToDrawingSet(
-        [...selectedPieceIds],
-        drawingSetId,
-        (pieceId, targetSetId) =>
-          linkPieceDrawingSet(projectId, pieceId, targetSetId),
-      ),
-    ...mutationOptions,
-    onSuccess: async (result) => {
-      await mutationOptions.onSuccess();
-      if (result.errors.length > 0) {
-        toast.error(
-          `Linked ${result.linked}; ${result.errors.length} piece(s) failed.`,
-        );
-        return;
-      }
-      toast.success(`Linked drawing set to ${result.linked} piece(s)`);
-    },
-  });
-  const unlinkMutation = useMutation({
-    mutationFn: ({
-      pieceId,
-      targetDrawingSetId,
-    }: {
-      pieceId: string;
-      targetDrawingSetId: string;
-    }) => unlinkPieceDrawingSet(projectId, pieceId, targetDrawingSetId),
-    ...mutationOptions,
-    onSuccess: async (summary) => {
-      await mutationOptions.onSuccess();
-      toast.success(
-        summary.unlinked
-          ? "Drawing set unlinked"
-          : "Drawing set link was already absent",
-      );
-    },
-  });
-
-  const buildAutoAssignPlan = (reassignExisting: boolean) => {
-    const pieces = packageScopedLeaves.map((piece) => ({
-      id: piece.id,
-      mark: piece.piece_mark,
-      work_package_id: piece.work_package_id,
-      sequence_number: piece.sequence_number,
-      erection_area: piece.erection_area,
-      metadata: piece.metadata,
-      is_deleted: Boolean(piece.is_deleted || piece.deleted_at),
-    }));
-    let workPackages = snapshot?.workPackages ?? [];
-    if (focusedWorkPackageId) {
-      workPackages = workPackages.filter((wp) => wp.id === focusedWorkPackageId);
-    }
-    return planWorkPackageAutoAssign(pieces, workPackages, { reassignExisting });
-  };
-
-  const autoAssignMutation = useMutation({
-    mutationFn: async (plan: AutoAssignPlan) =>
-      applyWorkPackageAutoAssign(plan, (workPackageId, pieceIds) =>
-        assignPiecesToWorkPackage(projectId, pieceIds, workPackageId),
-      ),
-    onSuccess: async (result) => {
-      setAutoAssignPlan(null);
-      setSelectedPieceIds(new Set());
-      await invalidate();
-      if (result.errors.length > 0) {
-        toast.error(
-          `Auto-assign partially failed: ${result.assignedCount} assigned, ${result.errors.length} package error(s).`,
-        );
-        return;
-      }
-      toast.success(
-        `Auto-assigned ${result.assignedCount} piece(s) across ${result.workPackageCount} work package(s)`,
-      );
-    },
-    onError: (error: Error) =>
-      toast.error(
-        presentPieceControlError(error, "Auto-assign could not be applied."),
-      ),
-  });
-
   const autoAssignSkipSummary = useMemo(() => {
     if (!autoAssignPlan) return null;
-    const counts: Record<string, number> = {};
-    for (const row of autoAssignPlan.skipped) {
-      counts[row.reason] = (counts[row.reason] ?? 0) + 1;
-    }
-    return counts;
+    return countAutoAssignSkips(autoAssignPlan.skipped);
   }, [autoAssignPlan]);
 
   const runAssign = () => {
     const target = focusedWorkPackageId || targetWorkPackageId;
     const reassigning = [...selectedPieceIds].some((id) => {
-      const piece = leafPieces.find((row) => row.id === id);
+      const piece = relationshipView?.leafPieces.find((row) => row.id === id);
       return piece?.work_package_id && piece.work_package_id !== target;
     });
     if (
@@ -451,6 +219,16 @@ export default function PieceRelationshipManager({
       </div>
     );
   }
+  const {
+    leafPieces,
+    workPackageMap,
+    drawingLinkCountByPiece,
+    packageScopedLeaves,
+    drawingPieces,
+    drawingSetMap,
+    activeDrawingSets,
+  } = relationshipView!;
+  const visibleReadiness = relationshipReadiness?.visibleReadiness ?? [];
 
   return (
     <div className={`piece-relationships${compact ? " is-compact" : ""}`} data-skin="command">
@@ -644,8 +422,8 @@ export default function PieceRelationshipManager({
                   {linkCount > 0 ? `${linkCount} drawing set${linkCount === 1 ? "" : "s"}` : "No drawings"}
                 </span>
                 <span className="piece-assignment-row__package">
-                  {liveWorkPackageId(piece)
-                    ? workPackageMap.get(liveWorkPackageId(piece)!) ?? "Assigned"
+                  {liveWorkPackageId(piece, workPackageMap)
+                    ? workPackageMap.get(liveWorkPackageId(piece, workPackageMap)!) ?? "Assigned"
                     : "Unassigned"}
                 </span>
               </label>
