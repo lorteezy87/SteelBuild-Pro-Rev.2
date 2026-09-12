@@ -13,13 +13,11 @@
  * The IFC is persisted per project (upload → Storage + roster → model_elements)
  * and auto-loads on the next visit.
  */
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ELEMENT_STATUS_META, normalizePieceMark } from "@/services/modelElementStatus";
-import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, buildMarkByGuid, buildStatusByMark, buildSeqByMark, buildFabByMark, colorFnFor } from "@/lib/ifc/viewerColoring";
-import { buildCanonicalViewerLinks } from "@/lib/ifc/canonicalViewerLinks";
-import { buildRowsByGuid, buildFabLegend, findGuidsByMark, summarizeSelection, describeSelection } from "@/lib/ifc/viewerSelection";
+import { normalizePieceMark } from "@/services/modelElementStatus";
+import { findGuidsByMark, describeSelection } from "@/lib/ifc/viewerSelection";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
@@ -34,10 +32,18 @@ import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
 import { pieceControlKeys, invalidatePieceControlQueries } from "@/lib/pieceControl/queryKeys";
 import { fetchAllProjectRowsPaged } from "@/lib/pieceControl/pagedSelect";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
-import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
-import { createPageUrl } from "@/utils";
 import Model3dSyncPanel from "@/components/viewer3d/Model3dSyncPanel";
 import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
+import {
+  buildModel3DDisplayedClaims,
+  buildModel3DViewModel,
+} from "@/components/viewer3d/model3dTabDerive";
+import { useModel3DInteractionState } from "@/components/viewer3d/useModel3DInteractionState";
+import {
+  Model3DLegend,
+  Model3DRow,
+  PieceControlPanel,
+} from "@/components/viewer3d/Model3DTabViews";
 
 import "./viewerControls.css";
 
@@ -52,8 +58,6 @@ const COLOR_MODES = [
   { key: "sequence", label: "Sequence" },
   { key: "status", label: "Detailing" },
 ];
-const TYPE_LABELS = [["beam", "Beam"], ["column", "Column"], ["plate", "Plate"], ["member", "Member"]];
-
 const viewerTools = {
   position: "absolute", top: 10, left: 10, display: "flex", gap: 6, zIndex: 2, flexWrap: "wrap",
   maxWidth: "calc(100% - 110px)",
@@ -100,47 +104,20 @@ export default function Model3DTab(props) {
 function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLoading, rosterError }) {
   const qc = useQueryClient();
   useCanonicalReportingRealtime(projectId);
-  const viewerRef = useRef(null);
   const [buffer, setBuffer] = useState(null);
   const [fileName, setFileName] = useState(null);
   const [modelFile, setModelFile] = useState(null);
   const [source, setSource] = useState(null);
-  const [picked, setPicked] = useState(null);
-  const [selectedGuids, setSelectedGuids] = useState([]);
   const [loadErr, setLoadErr] = useState(null);
-  const [colorStats, setColorStats] = useState(null);
-  const [colorMode, setColorMode] = useState(() => {
-    try { return localStorage.getItem("sbp:viewer-colormode") || "fab"; } catch { return "fab"; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem("sbp:viewer-colormode", colorMode); } catch { /* ignore */ }
-  }, [colorMode]);
   const [roster, setRoster] = useState({ step: "idle" });
-
-  const containerRef = useRef(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [measureMode, setMeasureMode] = useState(false);
-  const [measureResult, setMeasureResult] = useState(null);
-  const [isolatedKey, setIsolatedKey] = useState(null); // legend bucket currently isolated
-  const [findQuery, setFindQuery] = useState("");
-  const [findResult, setFindResult] = useState(null);
-  const [clipEnabled, setClipEnabled] = useState(false);
-  const [clipPct, setClipPct] = useState(100);
-  useEffect(() => {
-    const onFs = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) containerRef.current?.requestFullscreen?.();
-    else document.exitFullscreen?.();
-  };
-  const toggleMeasure = () => {
-    setMeasureMode((on) => {
-      if (on) setMeasureResult(null);
-      return !on;
-    });
-  };
+  const {
+    viewerRef, containerRef, picked, setPicked, selectedGuids, setSelectedGuids,
+    colorStats, setColorStats, colorMode, setColorMode, markFallback, setMarkFallback,
+    isFullscreen, measureMode, setMeasureMode, measureResult, setMeasureResult,
+    isolatedKey, findQuery, setFindQuery, findResult, setFindResult,
+    clipEnabled, setClipEnabled, clipPct, setClipPct, resetViewerState,
+    toggleFullscreen, toggleMeasure, isolateBucket, isolateSelection, hideSelection, showAll,
+  } = useModel3DInteractionState(projectId);
 
   const { data: storedModel, error: storedModelError } = useQuery({
     queryKey: ["project-model", projectId],
@@ -206,54 +183,50 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
     return () => { cancelled = true; };
   }, [storedModel, buffer, source]);
 
-  const statusByGuid = useMemo(() => buildStatusByGuid(modelMapping), [modelMapping]);
-  const seqByGuid = useMemo(() => buildSeqByGuid(modelElementRows), [modelElementRows]);
-  const [markFallback, setMarkFallback] = useState(false);
-  useEffect(() => { setMarkFallback(false); }, [projectId]);
-  const fabByGuid = useMemo(() => buildFabByGuid(modelElementRows), [modelElementRows]);
-  const hasRoster = (modelElementRows?.length || 0) > 0;
-  const { direct: canonicalPieceByGuid, display: canonicalDisplayByGuid, blockedGuids } = useMemo(
-    () => buildCanonicalViewerLinks(modelElementRows || [], canonicalPieces),
-    [modelElementRows, canonicalPieces],
-  );
-  const evidenceError = piecesError || rosterError;
-  const evidencePending = (projectId && piecesLoading) || rosterLoading;
-  const fabUnavailable = !!evidenceError || !!evidencePending;
-  const rowsByGuid = useMemo(() => buildRowsByGuid(modelElementRows), [modelElementRows]);
-
-  const markByGuid = useMemo(() => buildMarkByGuid(modelElementRows), [modelElementRows]);
-  const seqByMark = useMemo(() => buildSeqByMark(modelElementRows), [modelElementRows]);
-  const statusByMark = useMemo(() => buildStatusByMark(modelMapping), [modelMapping]);
-  const fabByMark = useMemo(() => buildFabByMark(modelElementRows), [modelElementRows]);
-
-  const colorFor = useMemo(
-    () => colorFnFor(colorMode === "fab" && fabUnavailable ? "model" : colorMode, {
-      statusByGuid, seqByGuid, fabByGuid,
-      markByGuid, statusByMark, seqByMark, fabByMark,
-      canonicalPieceByGuid: canonicalDisplayByGuid, blockedGuids,
-      perPieceFab: !markFallback,
+  const viewModel = useMemo(
+    () => buildModel3DViewModel({
+      projectId,
+      modelMapping,
+      modelElementRows,
+      canonicalPieces,
+      selectedGuids,
+      colorMode,
+      markFallback,
+      piecesLoading,
+      piecesError,
+      rosterLoading,
+      rosterError,
+      colorStats: null,
     }),
-    [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, canonicalDisplayByGuid, blockedGuids, markFallback, fabUnavailable],
+    [
+      projectId, modelMapping, modelElementRows, canonicalPieces, selectedGuids,
+      colorMode, markFallback, piecesLoading, piecesError, rosterLoading,
+      rosterError,
+    ],
+  );
+  const {
+    hasRoster, evidenceError, fabUnavailable, markByGuid, canonicalPieceByGuid,
+    canonicalDisplayByGuid, colorFor, fabLegend, selection, sequenceGuids,
+    sequences, statusLegend, registerHref,
+  } = viewModel;
+  const claims = useMemo(
+    () => buildModel3DDisplayedClaims({
+      colorMode,
+      colorStats,
+      evidenceError,
+      evidencePending: fabUnavailable && !evidenceError,
+      hasRoster,
+      directLinkCount: canonicalPieceByGuid.size,
+      displayLinkCount: canonicalDisplayByGuid.size,
+    }),
+    [
+      colorMode, colorStats, evidenceError, fabUnavailable, hasRoster,
+      canonicalPieceByGuid, canonicalDisplayByGuid,
+    ],
   );
 
   // Hover label / alt-click "whole mark": the roster's assembly mark by GUID.
   const labelFor = useCallback((guid) => markByGuid.get(guid) || null, [markByGuid]);
-
-  const fabLegend = useMemo(
-    () => buildFabLegend({ rows: modelElementRows, canonicalPieceByGuid: canonicalDisplayByGuid, blockedGuids, fabByGuid, fabByMark, markByGuid, perPieceFab: !markFallback }),
-    [modelElementRows, canonicalDisplayByGuid, blockedGuids, fabByGuid, fabByMark, markByGuid, markFallback],
-  );
-
-  const selection = useMemo(
-    () => summarizeSelection(selectedGuids, { markByGuid, seqByGuid, canonicalPieceByGuid, rowsByGuid }),
-    [selectedGuids, markByGuid, seqByGuid, canonicalPieceByGuid, rowsByGuid],
-  );
-
-  const resetViewerState = () => {
-    setSelectedGuids([]); setPicked(null); setIsolatedKey(null);
-    setFindQuery(""); setFindResult(null); setClipEnabled(false); setClipPct(100);
-    setMeasureMode(false); setMeasureResult(null); setColorStats(null);
-  };
 
   const persistModel = async (file, buf) => {
     if (!projectId) return;
@@ -387,59 +360,9 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
     }
   };
 
-  const isolateBucket = (key, guids) => {
-    if (!viewerRef.current) return;
-    if (isolatedKey === key) {
-      viewerRef.current.showAll();
-      setIsolatedKey(null);
-      return;
-    }
-    if (!guids?.length) return;
-    viewerRef.current.isolate(guids);
-    setIsolatedKey(key);
-  };
-
-  const isolateSelection = () => {
-    if (!selectedGuids.length) return;
-    viewerRef.current?.isolate(selectedGuids);
-    setIsolatedKey("selection");
-  };
-  const hideSelection = () => {
-    if (!selectedGuids.length) return;
-    viewerRef.current?.hide(selectedGuids);
-    setIsolatedKey((k) => k ?? "hidden");
-  };
-  const showAll = () => {
-    viewerRef.current?.showAll();
-    setIsolatedKey(null);
-  };
-
   useEffect(() => {
     viewerRef.current?.setClipHeight(clipEnabled ? clipPct / 100 : null);
   }, [clipEnabled, clipPct, buffer]);
-
-  const sequenceGuids = useMemo(() => {
-    const m = new Map();
-    for (const [guid, seq] of seqByGuid) {
-      if (!m.has(seq)) m.set(seq, []);
-      m.get(seq).push(guid);
-    }
-    return m;
-  }, [seqByGuid]);
-
-  const legend = useMemo(() => {
-    const counts = modelMapping?.counts || {};
-    const guidsByStatus = modelMapping?.guidsByStatus || {};
-    return Object.entries(ELEMENT_STATUS_META)
-      .map(([key, meta]) => ({ key, ...meta, count: counts[key] || 0, guids: guidsByStatus[key] || [] }))
-      .filter((b) => b.count > 0);
-  }, [modelMapping]);
-
-  const registerHref = useMemo(() => {
-    const base = createPageUrl("PieceRegister");
-    if (selection.pieces.length === 1) return `${base}?piece=${encodeURIComponent(selection.pieces[0].id)}`;
-    return base;
-  }, [selection.pieces]);
 
   if (!buffer) {
     const loadingStored = !!storedModel?.file_url && !loadErr;
@@ -544,8 +467,8 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
           </label>
         </div>
 
-        {buffer && rosterLoading && (colorMode === "fab" || colorMode === "sequence" || colorMode === "status") && (
-          <div style={loadingChip}>Loading {colorMode === "fab" ? "fab" : colorMode === "sequence" ? "sequence" : "status"} colors…</div>
+        {buffer && claims.loadingColorLabel && (
+          <div style={loadingChip}>Loading {claims.loadingColorLabel} colors…</div>
         )}
 
         {source === "picked" && projectId && (
@@ -645,7 +568,7 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
               value={findQuery}
               onChange={(e) => setFindQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") runFind(findQuery); }}
-              placeholder={hasRoster ? "e.g. 1B12 or C4" : "Save the model first"}
+              placeholder={claims.findPlaceholder}
               disabled={!hasRoster}
               aria-label="Find piece mark"
               style={{
@@ -706,18 +629,17 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
           )}
           {colorMode === "fab" && (
             <div style={{ ...hintStyle, marginTop: 8 }} role={evidenceError ? "alert" : "status"}>
-              {evidenceError ? <>Status unavailable — piece or roster refresh failed. <button type="button" style={linkBtn} onClick={() => { void refetchPieces(); void qc.invalidateQueries({ queryKey: pieceControlKeys.modelElements(projectId) }); }}>Retry status</button></>
-                : evidencePending ? "Loading piece and roster status…"
-                : colorStats ? `${colorStats.colored.toLocaleString()} of ${colorStats.total.toLocaleString()} rendered parts colored. Uncolored parts need status or roster-link review.` : "Loading model coverage…"}
-              {!fabUnavailable && canonicalDisplayByGuid.size > canonicalPieceByGuid.size && <div>Matching-mark colors are inferred from one linked lot. Logistics requires an explicit part link.</div>}
+              {claims.fabCoverage}
+              {evidenceError && <> <button type="button" style={linkBtn} onClick={() => { void refetchPieces(); void qc.invalidateQueries({ queryKey: pieceControlKeys.modelElements(projectId) }); }}>Retry status</button></>}
+              {!fabUnavailable && claims.inferredLinkCount > 0 && <div>Matching-mark colors are inferred from one linked lot. Logistics requires an explicit part link.</div>}
             </div>
           )}
           <div style={{ marginTop: 10 }}>
-            {!(colorMode === "fab" && fabUnavailable) && <Legend
+            {!(colorMode === "fab" && fabUnavailable) && <Model3DLegend
               mode={colorMode}
-              statusLegend={legend}
+              statusLegend={statusLegend}
               fabLegend={fabLegend}
-              sequences={[...sequenceGuids.keys()].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))}
+              sequences={sequences}
               sequenceGuids={sequenceGuids}
               isolatedKey={isolatedKey}
               onIsolate={isolateBucket}
@@ -742,16 +664,16 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
             <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12 }}>
               {selection.count === 1 ? (
                 <>
-                  <Row label="Assembly" value={picked?.assemblyMark || selection.marks[0]} strong />
-                  <Row label="Part" value={picked?.partMark} />
-                  <Row label="Name" value={picked?.name} />
-                  <Row label="Sequence" value={picked?.sequence || selection.sequences[0]} />
-                  <Row label="GUID" value={picked?.guid || selection.guids[0]} small />
+                  <Model3DRow label="Assembly" value={picked?.assemblyMark || selection.marks[0]} strong />
+                  <Model3DRow label="Part" value={picked?.partMark} />
+                  <Model3DRow label="Name" value={picked?.name} />
+                  <Model3DRow label="Sequence" value={picked?.sequence || selection.sequences[0]} />
+                  <Model3DRow label="GUID" value={picked?.guid || selection.guids[0]} small />
                 </>
               ) : (
                 <>
-                  <Row label="Marks" value={selection.marks.slice(0, 8).join(", ") + (selection.marks.length > 8 ? ` +${selection.marks.length - 8}` : "")} strong />
-                  {selection.sequences.length > 0 && <Row label="Sequence" value={selection.sequences.join(", ")} />}
+                  <Model3DRow label="Marks" value={selection.marks.slice(0, 8).join(", ") + (selection.marks.length > 8 ? ` +${selection.marks.length - 8}` : "")} strong />
+                  {selection.sequences.length > 0 && <Model3DRow label="Sequence" value={selection.sequences.join(", ")} />}
                 </>
               )}
               <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
@@ -837,189 +759,4 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
       </aside>
     </div>
   );
-}
-
-function PieceControlPanel({ selection, registerHref, pending, onAction }) {
-  const { pieces, linkedCount, unlinkedCount, holdCount, lifecycle, actions } = selection;
-  const single = pieces.length === 1 ? pieces[0] : null;
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
-      {pieces.length === 0 ? (
-        <div style={hintStyle}>
-          {unlinkedCount.toLocaleString()} selected part{unlinkedCount === 1 ? " isn't" : "s aren't"} linked to a
-          Piece Register lot. Run <strong>Sync marks</strong> above, or add the mark in the register.
-        </div>
-      ) : (
-        <>
-          {single ? (
-            <>
-              <Row label="Lot" value={`${single.piece_mark || selection.marks[0] || "—"}${single.lot_code ? ` · ${single.lot_code}` : ""}`} strong />
-              <Row label="Status" value={single.on_hold ? `On Hold · ${pieceLifecycleLabel(single.lifecycle_status || "")}` : pieceLifecycleLabel(single.lifecycle_status || "")} />
-              {single.on_hold && single.on_hold_reason && <Row label="Hold" value={single.on_hold_reason} />}
-            </>
-          ) : (
-            <>
-              <Row label="Lots" value={`${pieces.length.toLocaleString()} linked${unlinkedCount ? ` · ${unlinkedCount} unlinked part${unlinkedCount === 1 ? "" : "s"}` : ""}`} strong />
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                {lifecycle.map((l) => (
-                  <div key={l.key} style={{ display: "flex", justifyContent: "space-between", color: "var(--text-secondary)" }}>
-                    <span>{l.label}</span>
-                    <span style={mono}>{l.count}</span>
-                  </div>
-                ))}
-                {holdCount > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", color: "var(--status-error)" }}>
-                    <span>On hold</span>
-                    <span style={mono}>{holdCount}</span>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-          {linkedCount > 0 && unlinkedCount > 0 && single && (
-            <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
-              {unlinkedCount} selected part{unlinkedCount === 1 ? "" : "s"} not linked to a lot.
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
-            {actions.map((a) => (
-              <button
-                key={a.action}
-                type="button"
-                disabled={!a.enabled || pending}
-                title={a.enabled ? `Record ${a.label.toLowerCase()} for ${a.pieceIds.length} lot${a.pieceIds.length === 1 ? "" : "s"}` : a.reason}
-                onClick={() => a.enabled && onAction(a)}
-                className={a.enabled ? "sbd-btn sbd-btn-primary" : "sbd-btn"}
-                style={{ flex: 1, justifyContent: "center", padding: "6px 4px", opacity: a.enabled && !pending ? 1 : 0.5, cursor: a.enabled && !pending ? "pointer" : "not-allowed" }}
-              >
-                {pending && a.enabled ? "…" : a.label}
-              </button>
-            ))}
-          </div>
-          {!actions.some((a) => a.enabled) && (
-            <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", lineHeight: 1.4 }}>
-              {actions[0].reason?.startsWith("No linked")
-                ? actions[0].reason
-                : holdCount
-                  ? "Release the hold in the Piece Register before recording logistics."
-                  : "Station progress is recorded in the Piece Register; the 3D view records ship, deliver and erect once every selected lot is at the prior stage."}
-            </div>
-          )}
-        </>
-      )}
-      <a href={registerHref} style={{ ...mono, fontSize: 10, color: "var(--accent)" }}>
-        Open in Piece Register →
-      </a>
-    </div>
-  );
-}
-
-function Row({ label, value, strong, small }) {
-  return (
-    <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-      <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", width: 64, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
-      <span style={{ color: value ? "var(--text-primary)" : "var(--text-muted)", fontWeight: strong ? 700 : 400, fontSize: small ? 10 : 12, ...(small ? mono : {}), wordBreak: "break-all" }}>
-        {value || "—"}
-      </span>
-    </div>
-  );
-}
-
-function Swatch({ color, label, count, active, onClick, title }) {
-  const clickable = typeof onClick === "function";
-  return (
-    <button
-      type="button"
-      onClick={clickable ? onClick : undefined}
-      disabled={!clickable}
-      title={title}
-      aria-pressed={clickable ? !!active : undefined}
-      style={{
-        display: "flex", alignItems: "center", gap: 8, fontSize: 12, width: "100%",
-        padding: "3px 5px", margin: "0 -5px", borderRadius: 6, textAlign: "left",
-        border: `1px solid ${active ? "var(--accent)" : "transparent"}`,
-        background: active ? "color-mix(in srgb, var(--accent) 14%, transparent)" : "transparent",
-        color: "inherit", cursor: clickable ? "pointer" : "default", font: "inherit",
-      }}
-    >
-      <span style={{ width: 11, height: 11, borderRadius: 2, background: color || "transparent", border: color ? "none" : "1px dashed var(--text-muted)", flexShrink: 0 }} />
-      <span style={{ color: "var(--text-secondary)", flex: 1 }}>{label}</span>
-      {count != null && <span style={{ ...mono, color: "var(--text-muted)", fontSize: 11 }}>{count.toLocaleString()}</span>}
-    </button>
-  );
-}
-
-function Legend({ mode, statusLegend, fabLegend, sequences, sequenceGuids, isolatedKey, onIsolate, markFallback, onMarkFallback }) {
-  const isolateHint = <div style={{ ...hintStyle, fontSize: 10, marginTop: 4 }}>Click a row to isolate those parts; click again to show all.</div>;
-  if (mode === "type") {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {TYPE_LABELS.map(([k, l]) => <Swatch key={k} color={TYPE_PALETTE[k]} label={l} />)}
-      </div>
-    );
-  }
-  if (mode === "sequence") {
-    if (!sequences.length) return <div style={hintStyle}>Import the piece roster to color by erection sequence.</div>;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {sequences.slice(0, 24).map((s) => (
-          <Swatch
-            key={s}
-            color={seqColor(s)}
-            label={`Seq ${s}`}
-            count={sequenceGuids.get(s)?.length}
-            active={isolatedKey === `seq:${s}`}
-            onClick={() => onIsolate(`seq:${s}`, sequenceGuids.get(s))}
-            title="Isolate this erection sequence"
-          />
-        ))}
-        {sequences.length > 24 && <div style={hintStyle}>+{sequences.length - 24} more</div>}
-        {isolateHint}
-      </div>
-    );
-  }
-  if (mode === "status") {
-    if (!statusLegend.length) return <div style={hintStyle}>No detailing status yet — pieces light up once they're linked to detailing packages. (For shop status, use the Fab mode.)</div>;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {statusLegend.map((b) => (
-          <Swatch
-            key={b.key}
-            color={b.color}
-            label={b.label}
-            count={b.count}
-            active={isolatedKey === `status:${b.key}`}
-            onClick={b.guids.length ? () => onIsolate(`status:${b.key}`, b.guids) : undefined}
-            title={b.guids.length ? "Isolate these parts" : "No parts with a model GUID in this bucket"}
-          />
-        ))}
-        {isolateHint}
-      </div>
-    );
-  }
-  if (mode === "fab") {
-    const shown = fabLegend.filter((b) => b.count > 0);
-    if (!shown.length) return <div style={hintStyle}>Save the model to import its roster, then Sync marks to paint Piece Register lifecycle.</div>;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {shown.map((b) => (
-          <Swatch
-            key={b.key}
-            color={b.color}
-            label={b.label}
-            count={b.count}
-            active={isolatedKey === `fab:${b.key}`}
-            onClick={() => onIsolate(`fab:${b.key}`, b.guids)}
-            title={b.key === "unlinked" ? "Isolate parts with no Piece Register link or status" : `Isolate ${b.label} parts`}
-          />
-        ))}
-        {isolateHint}
-        <label style={{ ...hintStyle, fontSize: 10, display: "flex", alignItems: "center", gap: 6, marginTop: 6, cursor: "pointer" }}>
-          <input type="checkbox" checked={markFallback} onChange={(e) => onMarkFallback(e.target.checked)} style={{ margin: 0 }} />
-          Fill unlinked parts from their mark's legacy status
-        </label>
-      </div>
-    );
-  }
-  return <div style={hintStyle}>Showing the model's own (Tekla) member colors.</div>;
 }
