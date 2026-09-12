@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { normalizeThrownQueryError } from "@/lib/postgrestErrors";
 import { unwrapPieceControlRpc } from "./rpcResult";
 
 export type PieceControlMode = "off" | "shadow" | "pilot" | "live";
@@ -73,7 +74,9 @@ export async function setPieceControlMode(
     p_next_mode: nextMode,
     p_confirmation: confirmation,
   });
-  if (error) throw error;
+  // A real Error carrying the SQLSTATE, like repository.ts: the mutation cache
+  // can then recognise the readiness guard (P0001) as an expected outcome.
+  if (error) throw normalizeThrownQueryError(error);
   unwrapPieceControlRpc(data);
 }
 

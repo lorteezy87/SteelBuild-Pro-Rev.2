@@ -96,6 +96,7 @@ import {
 import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { PIECE_ARCHIVE_EXPECTED_ERRORS, reportingMeta } from "@/lib/sentry/reportedErrors";
 import { withProjectId } from "@/lib/mutations/standardMutation";
 import type { PieceRegisterFilters } from "./pieceRegister/filter";
 import {
@@ -667,6 +668,7 @@ export default function PieceRegister() {
   };
 
   const holdMutation = useMutation({
+    meta: reportingMeta("pieceRegister.hold"),
     mutationFn: ({ pieceId, onHold, reason }: PieceHoldRequest) => {
       const cleanedReason = reason.trim();
       if (!cleanedReason) throw new Error("A hold reason is required.");
@@ -683,6 +685,7 @@ export default function PieceRegister() {
   });
 
   const drawingImpactMutation = useMutation({
+    meta: reportingMeta("pieceRegister.drawingImpact.save"),
     mutationFn: async ({
       impactId,
       revisionId,
@@ -761,6 +764,7 @@ export default function PieceRegister() {
   });
 
   const resolveDrawingImpactMutation = useMutation({
+    meta: reportingMeta("pieceRegister.drawingImpact.resolve"),
     mutationFn: async (impactId: string) => {
       await entities.DrawingImpact.update(
         impactId,
@@ -854,6 +858,7 @@ export default function PieceRegister() {
   };
 
   const stageMutation = useMutation({
+    meta: reportingMeta("pieceRegister.import.stage"),
     mutationFn: () => stagePieceImportBatch(
       projectId!,
       sourceType,
@@ -874,6 +879,7 @@ export default function PieceRegister() {
       ),
   });
   const approveMutation = useMutation({
+    meta: reportingMeta("pieceRegister.import.approve"),
     mutationFn: () => approvePieceImportBatch(selectedBatch!.id),
     onSuccess: async () => {
       await invalidate();
@@ -885,6 +891,7 @@ export default function PieceRegister() {
       ),
   });
   const applyMutation = useMutation({
+    meta: reportingMeta("pieceRegister.import.apply"),
     mutationFn: async () => {
       const summary = await applyPieceImportBatch(selectedBatch!.id);
       const hints = await finalizeImportedBatchHints(selectedBatch!.id);
@@ -911,6 +918,7 @@ export default function PieceRegister() {
       ),
   });
   const assignImportMutation = useMutation({
+    meta: reportingMeta("pieceRegister.import.assign"),
     mutationFn: () => finalizeImportedBatchHints(selectedBatch!.id),
     onSuccess: async (result) => {
       await invalidate();
@@ -936,6 +944,7 @@ export default function PieceRegister() {
       ),
   });
   const archiveMutation = useMutation({
+    meta: reportingMeta("pieceRegister.archive", PIECE_ARCHIVE_EXPECTED_ERRORS),
     mutationFn: () => archivePieceLots(
       projectId!,
       archiveEligibility.archivableIds,
@@ -961,6 +970,7 @@ export default function PieceRegister() {
       ),
   });
   const bulkAssignMutation = useMutation({
+    meta: reportingMeta("pieceRegister.bulk.assign"),
     mutationFn: (workPackageId: string) =>
       assignPiecesToWorkPackage(projectId!, [...selectedPieceIds], workPackageId),
     onSuccess: async (summary) => {
@@ -976,6 +986,7 @@ export default function PieceRegister() {
       ),
   });
   const bulkUnassignMutation = useMutation({
+    meta: reportingMeta("pieceRegister.bulk.unassign"),
     mutationFn: () =>
       unassignPiecesFromWorkPackage(projectId!, [...selectedPieceIds]),
     onSuccess: async (summary) => {
@@ -991,6 +1002,7 @@ export default function PieceRegister() {
       ),
   });
   const bulkAttrsMutation = useMutation({
+    meta: reportingMeta("pieceRegister.bulk.attributes"),
     mutationFn: (values: {
       updateSequence: boolean;
       updateArea: boolean;
@@ -1021,6 +1033,7 @@ export default function PieceRegister() {
       ),
   });
   const bulkHoldMutation = useMutation({
+    meta: reportingMeta("pieceRegister.bulk.hold"),
     mutationFn: ({ onHold, reason }: { onHold: boolean; reason?: string }) =>
       setPieceHold(projectId!, [...selectedPieceIds], onHold, reason),
     onSuccess: async (_result, variables) => {

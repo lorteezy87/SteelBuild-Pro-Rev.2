@@ -10,6 +10,7 @@ import {
 } from "@/lib/pieceControl/pilotReadinessRepository";
 import { modePresentation } from "@/lib/pieceControl/presentation";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { PIECE_MODE_EXPECTED_ERRORS, reportingMeta } from "@/lib/sentry/reportedErrors";
 import { PieceControlModeBadge } from "./PieceControlModeBadge";
 
 interface PieceControlPilotReadinessProps {
@@ -78,6 +79,7 @@ export function PieceControlPilotReadiness({
   const currentModeInfo = modePresentation(currentMode);
 
   const modeMutation = useMutation({
+    meta: reportingMeta("pieceControl.setMode", PIECE_MODE_EXPECTED_ERRORS),
     mutationFn: (confirmationOverride?: string) =>
       setPieceControlMode(
         projectId,

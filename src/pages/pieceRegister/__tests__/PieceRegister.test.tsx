@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import { supabase } from "@/lib/supabase";
+import { normalizeThrownQueryError } from "@/lib/postgrestErrors";
+import { classifyReportedError, mutationReportingInput } from "@/lib/sentry/reportedErrors";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceRepository";
 import type { PieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceTypes";
@@ -1925,6 +1927,55 @@ describe("Piece Register command shell", () => {
     expect(archive).toBeDisabled();
     fireEvent.click(archive);
     expect(archivePieceLots).not.toHaveBeenCalled();
+  });
+
+  // T14 — Sentry JAVASCRIPT-REACT-2D: this screen explains the archive guards,
+  // so it opts in to reporting them as expected (info level), not as crashes.
+  it("opts the archive mutation in to expected-guard reporting", async () => {
+    const guard = normalizeThrownQueryError({
+      code: "P0001",
+      message: "Pieces with production history cannot be archived",
+    });
+    vi.mocked(archivePieceLots).mockRejectedValue(guard);
+    vi.mocked(fetchPieceRegister).mockResolvedValue([
+      { ...pieceRegisterRow("p1"), lifecycle_status: "not_started" },
+    ]);
+    const { queryClient } = renderPieceRegister("/PieceRegister?view=register");
+    fireEvent.click(await screen.findByLabelText("Select P1 lot A"));
+    fireEvent.click(screen.getByRole("button", { name: /Archive selected/i }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Duplicate import" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Type ARCHIVE 1 PIECE to confirm/), {
+      target: { value: "ARCHIVE 1 PIECE" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Archive pieces" }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Pieces with recorded production history can't be archived. Deselect them, then try again.",
+      ),
+    );
+    const archive = queryClient
+      .getMutationCache()
+      .getAll()
+      .find((mutation) => mutation.meta?.action === "pieceRegister.archive");
+    if (!archive) throw new Error("The archive mutation was never built.");
+    const { hasLocalHandler, expectedErrors } = mutationReportingInput(archive);
+    expect(
+      classifyReportedError(guard, {
+        source: "mutation",
+        rawIsError: true,
+        hasLocalHandler,
+        expectedErrors,
+      }),
+    ).toEqual({
+      verdict: "expected",
+      reason: "matched-rule",
+      ruleId: "piece-archive.production-history",
+      code: "P0001",
+    });
   });
 });
 
