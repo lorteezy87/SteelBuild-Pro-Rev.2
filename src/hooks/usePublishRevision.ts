@@ -8,6 +8,7 @@
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { publishRevisionArgsSchema } from "@/lib/securitySchemas";
 import { invalidateEntity } from "@/services/cacheRegistry";
 
 export type ReleaseStatus =
@@ -26,9 +27,13 @@ export function usePublishRevision() {
       revisionId: string;
       releaseStatus: ReleaseStatus;
     }) => {
+      const parsed = publishRevisionArgsSchema.parse({
+        revisionId,
+        releaseStatus,
+      });
       const { data, error } = await supabase.rpc("publish_drawing_revision", {
-        p_revision_id: revisionId,
-        p_release_status: releaseStatus,
+        p_revision_id: parsed.revisionId,
+        p_release_status: parsed.releaseStatus,
       });
       if (error) throw error;
       return data as { project_id?: string | null } | null;

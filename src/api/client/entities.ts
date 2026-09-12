@@ -9,6 +9,10 @@
 
 import { supabase } from '@/lib/supabase';
 import {
+  createProjectRecordSchema,
+  softDeleteProjectArgsSchema,
+} from '@/lib/securitySchemas';
+import {
   parseDependencies as parseScheduleDependencies,
   serializeDependencies as serializeScheduleDependencies,
 } from '@/services/scheduleCascade';
@@ -26,11 +30,16 @@ export const entities = {
   Project: {
     ...createEntityClient('projects'),
     create: async (record: Insert<'projects'>): Promise<RowWithAliases<'projects'>> => {
-      const clean = Object.fromEntries(
+      const cleanInput = Object.fromEntries(
         Object.entries(record as Record<string, unknown>).filter(([, v]) => v !== undefined)
       );
+      const parsed = createProjectRecordSchema.safeParse(cleanInput);
+      if (!parsed.success) {
+        const detail = parsed.error.issues.map((i) => i.message).join('; ');
+        throw new Error(`Invalid project payload: ${detail}`);
+      }
       const { data, error } = await supabase.rpc('create_project', {
-        project_data: clean as never,
+        project_data: parsed.data as never,
       });
       if (error) throw new SupabaseOperationError('projects', 'create', error);
       return addAliases<RowWithAliases<'projects'>>(data as RowWithAliases<'projects'>, 'projects');
@@ -39,7 +48,8 @@ export const entities = {
       // Atomic, admin-gated archive: the RPC soft-deletes every project-scoped
       // child + the project root in one transaction, so the project can never be
       // left half-archived (#13). Replaces the old best-effort multi-step delete.
-      const { error } = await supabase.rpc('soft_delete_project', { p_project_id: id });
+      const payload = softDeleteProjectArgsSchema.parse({ p_project_id: id });
+      const { error } = await supabase.rpc('soft_delete_project', payload);
       if (error) throw new SupabaseOperationError('projects', 'delete', error);
       return { success: true };
     },
@@ -48,7 +58,8 @@ export const entities = {
       // stranding every child record live (the half-archive bug #13). Route
       // each project through the atomic soft_delete_project RPC instead.
       for (const id of ids) {
-        const { error } = await supabase.rpc('soft_delete_project', { p_project_id: id });
+        const payload = softDeleteProjectArgsSchema.parse({ p_project_id: id });
+        const { error } = await supabase.rpc('soft_delete_project', payload);
         if (error) throw new SupabaseOperationError('projects', 'bulkDelete', error);
       }
       return { success: true };

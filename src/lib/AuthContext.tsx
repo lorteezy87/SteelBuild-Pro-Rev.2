@@ -74,6 +74,9 @@ export type AuthContextValue = {
   // H23 — TOTP multi-factor auth. `mfaRequired` gates the app when the session
   // is aal1 but the user has a verified factor (must step up before entering).
   mfaRequired: boolean;
+  mfaStatusDegraded: boolean;
+  mfaStatusMessage: string | null;
+  retryMfaStatus: () => Promise<void>;
   listMfaFactors: () => Promise<Array<{ id: string; friendlyName: string; status: string }>>;
   enrollMfa: () => Promise<{ success: boolean; factorId?: string; qrCode?: string; secret?: string; uri?: string; error?: string }>;
   verifyMfaFactor: (factorId: string, code: string) => Promise<{ success: boolean; error?: string }>;
@@ -105,15 +108,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // True when the current session is aal1 but the user has a verified TOTP
   // factor (i.e. must complete an MFA challenge before entering the app). H23.
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaStatusDegraded, setMfaStatusDegraded] = useState(false);
+  const [mfaStatusMessage, setMfaStatusMessage] = useState<string | null>(null);
 
-  // Recompute whether the session needs an MFA step-up. Fail-open (never lock a
-  // user out on an AAL lookup error) — the DB/RLS boundary is the real gate.
+  // Recompute whether the session needs an MFA step-up. Fail closed on AAL
+  // lookup errors: block app entry until the MFA state can be confirmed.
   const refreshMfaRequired = async (): Promise<void> => {
     try {
       const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       setMfaRequired(!!data && data.currentLevel === 'aal1' && data.nextLevel === 'aal2');
+      setMfaStatusDegraded(false);
+      setMfaStatusMessage(null);
     } catch {
-      setMfaRequired(false);
+      setMfaRequired(true);
+      setMfaStatusDegraded(true);
+      setMfaStatusMessage('We could not verify your MFA status. Retry to continue or sign out.');
     }
   };
 
@@ -206,11 +215,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           }
           setUser(null);
           setIsAuthenticated(false);
+          setMfaRequired(false);
+          setMfaStatusDegraded(false);
+          setMfaStatusMessage(null);
           setAuthError({ type: 'auth_required', message: 'Authentication required' });
         }
       } catch {
         setUser(null);
         setIsAuthenticated(false);
+        setMfaRequired(false);
+        setMfaStatusDegraded(false);
+        setMfaStatusMessage(null);
         setAuthError({ type: 'auth_required', message: 'Authentication required' });
       } finally {
         setIsLoadingAuth(false);
@@ -428,6 +443,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setUser(null);
     setIsAuthenticated(false);
     setMfaRequired(false);
+    setMfaStatusDegraded(false);
+    setMfaStatusMessage(null);
+  };
+
+  const retryMfaStatus = async (): Promise<void> => {
+    await refreshMfaRequired();
   };
 
   const navigateToLogin = () => {
@@ -479,6 +500,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       sendPasswordReset,
       updatePassword,
       mfaRequired,
+      mfaStatusDegraded,
+      mfaStatusMessage,
+      retryMfaStatus,
       listMfaFactors,
       enrollMfa,
       verifyMfaFactor,

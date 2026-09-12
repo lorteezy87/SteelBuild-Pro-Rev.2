@@ -199,15 +199,10 @@ COMMIT;
 -- 9. Two bare auth.uid() policies on storage.objects — the only auth_rls_initplan
 --    violations in the database. Public-schema policies are clean.
 --
--- 10. The supabase-drift CI job has never run, but not because it is broken.
---    Corrected 2026-09-12: an earlier draft of this comment said `npm run
---    supabase:drift` was undefined in package.json. That was true when written
---    (absent at 7fdccc0) and was fixed by 3ca62fe, "repair audit controls",
---    before this file merged. The claim should not have survived into main.
---
---    The job is opt-in and simply not switched on: it is gated on the repo
---    variable SUPABASE_DRIFT_ENABLED == 'true' and needs the secret
---    SUPABASE_ACCESS_TOKEN, and neither is set, so it skips on every PR.
+-- 10. The supabase-drift CI job is now mandatory and should run on each PR.
+--    It requires SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_REF repository
+--    settings; missing settings intentionally fail CI so drift cannot be
+--    ignored at signoff time.
 --
 --    The checker itself is sound. scripts/supabase-drift-check.mjs hard-fails on
 --    all four directions — repo-only migrations, remote-only migrations,

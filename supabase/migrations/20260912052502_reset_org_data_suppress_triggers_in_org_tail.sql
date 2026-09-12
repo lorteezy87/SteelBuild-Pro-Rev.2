@@ -160,6 +160,12 @@ begin
 end;
 $function$;
 
+-- SECURITY DEFINER RPC hardening parity (Batch 44A contract):
+-- deny default EXECUTE grants and allow only authenticated callers.
+REVOKE ALL ON FUNCTION public.reset_org_data(uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.reset_org_data(uuid, text) TO authenticated;
+
 -- NOT APPLIED -- found while tracing this, worth an owner's attention separately.
 --
 -- 1. public.hard_delete_organization has the 55006 bug this function was cured of

@@ -186,6 +186,24 @@ describe("problem-tracker database security hardening", () => {
     const alteredPolicies = cutoverSql.slice(cutoverSql.indexOf("alter policy auth_read"));
     expect(alteredPolicies).not.toContain("founding_org_id");
     expect(alteredPolicies).not.toContain("= 'uploads'");
+    expect(alteredPolicies).not.toContain("like 'uploads/%'");
+  });
+
+  it("keeps auth_read/auth_upload scoped to org UUID folders only", () => {
+    const authRead = cutoverSql.match(
+      /alter\s+policy\s+auth_read\s+on\s+storage\.objects[\s\S]*?\);\s*/i,
+    )?.[0];
+    const authUpload = cutoverSql.match(
+      /alter\s+policy\s+auth_upload\s+on\s+storage\.objects[\s\S]*?\);\s*/i,
+    )?.[0];
+
+    expect(authRead).toContain("~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'");
+    expect(authRead).toContain("public.user_is_org_member(((storage.foldername(name))[1])::uuid)");
+    expect(authRead).not.toContain("uploads/");
+
+    expect(authUpload).toContain("~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'");
+    expect(authUpload).toContain("public.user_is_org_member(((storage.foldername(name))[1])::uuid)");
+    expect(authUpload).not.toContain("uploads/");
   });
 
   it("atomically completes and disables the legacy-copy maintenance job", () => {

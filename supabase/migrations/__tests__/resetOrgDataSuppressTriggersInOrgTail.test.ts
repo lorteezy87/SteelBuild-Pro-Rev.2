@@ -95,6 +95,15 @@ describe("reset_org_data suppresses triggers around the org-level tail", () => {
     }
   });
 
+  it("locks down EXECUTE grants to authenticated only", () => {
+    expect(migration).toMatch(
+      /REVOKE ALL ON FUNCTION public\.reset_org_data\(uuid,\s*text\)\s+FROM PUBLIC,\s*anon,\s*authenticated,\s*service_role;/i,
+    );
+    expect(migration).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.reset_org_data\(uuid,\s*text\)\s+TO authenticated;/i,
+    );
+  });
+
   it("uses CREATE OR REPLACE and redefines nothing else", () => {
     expect(migration.match(/CREATE OR REPLACE FUNCTION/g)).toHaveLength(1);
     expect(migration).not.toMatch(/drop\s+function/i);
