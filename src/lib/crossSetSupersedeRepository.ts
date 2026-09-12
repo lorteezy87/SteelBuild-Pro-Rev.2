@@ -26,7 +26,7 @@ export async function fetchCrossSetSource(projectId: string): Promise<CrossSetSo
   if (!projectId) throw new Error("Select a project before checking other sets.");
   const [drawings, sets] = await Promise.all([
     allRows<CrossSetSourceDrawing>((start, end) => supabase.from("drawings")
-      .select("id, sheet_number, title, revision_number, stage, drawing_set_id, drawing_set_name, is_superseded, is_deleted, metadata")
+      .select("id, sheet_number, title, revision_number, drawing_set_id, drawing_set_name, is_superseded, is_deleted, metadata")
       .eq("project_id", projectId).eq("is_deleted", false).order("id").range(start, end)),
     allRows<CrossSetSourceSet>((start, end) => supabase.from("drawing_sets")
       .select("id, set_name, is_locked, is_deleted")

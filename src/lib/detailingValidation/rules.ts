@@ -76,14 +76,16 @@ function duplicateLiveSheetDetails(live: readonly ValidationSheet[]): Map<string
     for (const sheet of group) {
       const own = setOf(sheet);
       const title = normalizeSheetTitle(sheet.title);
-      const others = new Map<string, 'same title' | 'different title' | 'title missing'>();
+      const others = new Map<string, 'same title' | 'different title' | 'title missing' | 'same and different titles'>();
       for (const other of group) {
         if (setOf(other) === own) continue;
         const otherTitle = normalizeSheetTitle(other.title);
         const relation = !title || !otherTitle ? 'title missing' : otherTitle === title ? 'same title' : 'different title';
         const name = other.drawing_set_name || 'Unassigned';
         const known = others.get(name);
-        others.set(name, known && known !== relation ? 'title missing' : relation);
+        // Several copies in one other set: say 'title missing' only when a title really is missing.
+        others.set(name, !known || known === relation ? relation
+          : known === 'title missing' || relation === 'title missing' ? 'title missing' : 'same and different titles');
       }
       const names = [...others.keys()];
       const relations = new Set(others.values());

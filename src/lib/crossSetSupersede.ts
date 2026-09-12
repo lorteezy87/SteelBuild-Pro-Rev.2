@@ -28,7 +28,6 @@ export interface CrossSetSourceDrawing {
   sheet_number?: string | null;
   title?: string | null;
   revision_number?: string | null;
-  stage?: string | null;
   drawing_set_id?: string | null;
   drawing_set_name?: string | null;
   is_superseded?: boolean | null;
@@ -83,7 +82,6 @@ export interface CrossSetRow {
   oldSheetNumber: string;
   oldTitle: string;
   oldRevision: string;
-  oldStage: string;
   newSheetNumber: string;
   newTitle: string;
   newRevision: string;
@@ -158,8 +156,11 @@ export function normalizeRevisionToken(value: unknown): string {
 const UNKNOWN_REVISIONS = new Set(["", "0", "-"]);
 
 /**
- * Compare the uploaded revision with the live one. Comparable only when both
- * are all digits or both a single letter (A → 1 crosses IFC: not comparable).
+ * Compare the uploaded revision with the live one. Two all-digit or two
+ * single-letter revisions compare directly. A letter uploaded over a number is
+ * older: pre-IFC revisions are letters, post-IFC numbers, and letters sort
+ * first (compareRevisionLabels). A number over a letter (A → 1) crosses IFC
+ * forwards and stays not comparable.
  */
 export function compareRevisions(newRevision: unknown, oldRevision: unknown): RevisionComparison {
   const next = normalizeRevisionToken(newRevision);
@@ -173,6 +174,7 @@ export function compareRevisions(newRevision: unknown, oldRevision: unknown): Re
     return a < b ? "older" : "newer";
   }
   if (/^[A-Z]$/.test(next) && /^[A-Z]$/.test(prev)) return next < prev ? "older" : "newer";
+  if (/^[A-Z]$/.test(next) && /^\d+$/.test(prev)) return "older";
   return "not_comparable";
 }
 
@@ -193,6 +195,22 @@ export function buildReplaceSentence(
   const one = list.length === 1;
   const base = `${joinSheetNumbers(list)} ${one ? "replaces a page" : "replace pages"} in ${setName}.`;
   return ask ? `${base} Mark the old ${one ? "one" : "ones"} superseded?` : base;
+}
+
+/**
+ * Neutral copy for a group whose matches are all unlikely or locked — the data
+ * shows a shared number, not a replacement: "C1 shares a number with a page in
+ * Joists." `compare` adds the prompt for someone who can tick the rows.
+ */
+export function buildSharedNumberSentence(
+  sheetNumbers: readonly string[],
+  setName: string,
+  { compare = false }: { compare?: boolean } = {},
+): string {
+  const list = sheetNumbers.filter(Boolean);
+  const one = list.length === 1;
+  const base = `${joinSheetNumbers(list)} ${one ? "shares a number with a page" : "share numbers with pages"} in ${setName}.`;
+  return compare ? `${base} Compare the drawings before ticking.` : base;
 }
 
 // ─── Planning ─────────────────────────────────────────────────────────
@@ -257,7 +275,6 @@ function buildRow(
     oldSheetNumber: String(drawing.sheet_number ?? "").trim(),
     oldTitle,
     oldRevision,
-    oldStage: String(drawing.stage ?? "").trim(),
     newSheetNumber: String(incoming.sheetNumber ?? "").trim(),
     newTitle,
     newRevision,
@@ -578,9 +595,9 @@ export function groupSupersedeItemsBySet(items: readonly SupersedeItem[]): Super
 
 const pages = (n: number) => `${n} page${n === 1 ? "" : "s"}`;
 
-/** "Marked 3 pages superseded in Main Steel – L2: S-201, S-204, S-209" */
+/** "Marked 3 pages superseded in Main Steel – L2: S-201, S-204, S-209." */
 export function describeSupersededSet(summary: SupersedeSetSummary): string {
-  return `Marked ${pages(summary.sheetNumbers.length)} superseded in ${summary.setName}: ${summary.sheetNumbers.join(", ")}`;
+  return `Marked ${pages(summary.sheetNumbers.length)} superseded in ${summary.setName}: ${summary.sheetNumbers.join(", ")}.`;
 }
 
 /** The readable activities row per old set. */

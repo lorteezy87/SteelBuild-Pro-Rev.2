@@ -6,6 +6,7 @@ import type {
   CrossSetPlan,
   CrossSetRow,
   SupersedeLabels,
+  TitleRelation,
   UploadMetaLike,
   UploadSheetLike,
 } from "@/lib/crossSetSupersede";
@@ -39,12 +40,26 @@ export interface UseCrossSetSupersedeResult {
   retry: () => void;
 }
 
+/** A user's choice for one old drawing, with the title relation its row had when it was made. */
+interface StoredChoice {
+  value: boolean;
+  relation: TitleRelation;
+}
+
+// A choice made while the row had another title relation doesn't carry over —
+// above all, a tick given to a same-title or title-missing row never follows it
+// into the "different drawing" section. The row falls back to its default.
+function choiceFor(row: CrossSetRow, stored: StoredChoice | undefined): boolean {
+  return stored && stored.relation === row.titleRelation ? stored.value : row.defaultChecked;
+}
+
 /**
  * The Review step's "pages this upload replaces" proposal: a fresh read of the
  * project's live sheets on every visit (staleTime 0), re-planned as the user
  * edits sheet numbers, titles, selection or the set name. Defaults come from the
  * plan; once the user toggles a row that choice is kept against the old
- * drawing's id, and dropped if the row stops matching.
+ * drawing's id, and dropped if the row stops matching or its title relation
+ * changes.
  */
 export function useCrossSetSupersede({ projectId, sheets, meta }: UseCrossSetSupersedeArgs): UseCrossSetSupersedeResult {
   const query = useQuery({
@@ -62,26 +77,23 @@ export function useCrossSetSupersede({ projectId, sheets, meta }: UseCrossSetSup
     [query.data, sheets, setName, revision],
   );
 
-  const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map());
+  const [overrides, setOverrides] = useState<ReadonlyMap<string, StoredChoice>>(() => new Map());
 
   useEffect(() => {
     setOverrides((prev) => {
       if (prev.size === 0) return prev;
-      const live = new Set(plan.rows.map((row) => row.oldId));
-      const next = new Map<string, boolean>();
-      prev.forEach((value, id) => {
-        if (live.has(id)) next.set(id, value);
+      const relationById = new Map<string, TitleRelation>();
+      for (const row of plan.rows) relationById.set(row.oldId, row.titleRelation);
+      const next = new Map<string, StoredChoice>();
+      prev.forEach((stored, id) => {
+        if (relationById.get(id) === stored.relation) next.set(id, stored);
       });
       return next.size === prev.size ? prev : next;
     });
   }, [plan]);
 
   const isChecked = useCallback(
-    (row: CrossSetRow) => {
-      if (row.disabled) return false;
-      const stored = overrides.get(row.oldId);
-      return stored === undefined ? row.defaultChecked : stored;
-    },
+    (row: CrossSetRow) => !row.disabled && choiceFor(row, overrides.get(row.oldId)),
     [overrides],
   );
 
@@ -95,7 +107,7 @@ export function useCrossSetSupersede({ projectId, sheets, meta }: UseCrossSetSup
   const setMany = useCallback((rows: readonly CrossSetRow[], value: boolean) => {
     setOverrides((prev) => {
       const next = new Map(prev);
-      for (const row of rows) if (!row.disabled) next.set(row.oldId, value);
+      for (const row of rows) if (!row.disabled) next.set(row.oldId, { value, relation: row.titleRelation });
       return next;
     });
   }, []);
@@ -104,19 +116,19 @@ export function useCrossSetSupersede({ projectId, sheets, meta }: UseCrossSetSup
     (id: string) => {
       const row = plan.rows.find((candidate) => candidate.oldId === id);
       if (!row || row.disabled) return;
-      setOverrides((prev) => {
-        const stored = prev.get(id);
-        const current = stored === undefined ? row.defaultChecked : stored;
-        return new Map(prev).set(id, !current);
-      });
+      setOverrides((prev) => new Map(prev).set(id, { value: !choiceFor(row, prev.get(id)), relation: row.titleRelation }));
     },
     [plan],
   );
 
+  // The group checkbox asks only about the likely replacements (the rows ticked
+  // by default), so it ticks and unticks only those. A row left unticked for a
+  // reason — title missing, short number, older revision, set-name case — needs
+  // its own tick.
   const toggleGroup = useCallback(
     (setId: string, checked: boolean) => {
       const group = plan.groups.find((candidate) => candidate.setId === setId);
-      if (group) setMany(group.rows, checked);
+      if (group) setMany(group.rows.filter((row) => row.defaultChecked), checked);
     },
     [plan, setMany],
   );

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { renderHook } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { render, renderHook, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
@@ -225,17 +226,45 @@ describe("useDrawingSetCreation — cross-set supersede", () => {
     expect(state.setCreatedCount).not.toHaveBeenCalled();
   });
 
-  it("finishes a started phase after a cancel, refreshes caches and reports it in a toast", async () => {
+  it("finishes a started phase after a cancel, refreshes caches and reports it in a toast, one line per set", async () => {
+    const l1Page = oldRow("l1-205", "S-205", "set-l1", "Main Steel – L1");
+    rowsById[l1Page.id] = l1Page;
+    m.fetchSource.mockImplementation(async () => ({ sets: [L2, L1, { id: "set-new", set_name: NEW_SET }], drawings: Object.values(rowsById) }));
     const { handleCreate, state, qc } = mount();
     m.update.mockImplementation(async (id: string, patch: Record<string, unknown>) => {
       state.cancelledRef.current = true;
       return { ...rowsById[id], id, ...patch };
     });
-    await handleCreate(SHEETS, { supersedeIds: OLD_IDS });
-    expect(supersedeCalls().map(([id]) => id)).toEqual(OLD_IDS);
+    await handleCreate([...SHEETS, uploadSheet("S-205", 3)], { supersedeIds: [...OLD_IDS, "l1-205"] });
+    expect(supersedeCalls().map(([id]) => id)).toEqual([...OLD_IDS, "l1-205"]);
     expect(m.invalidateEntities).toHaveBeenCalled();
     expect(qc.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["canonical-release-gate"] });
-    expect(m.toast.success).toHaveBeenCalledWith("Marked 3 pages superseded in Main Steel – L2: S-201, S-204, S-209");
+    expect(m.toast.success).toHaveBeenCalledTimes(1);
+    const toast = renderToast(m.toast.success.mock.calls[0][0]);
+    expect(within(toast).getByText("Marked 3 pages superseded in Main Steel – L2: S-201, S-204, S-209.")).toBeInTheDocument();
+    expect(within(toast).getByText("Marked 1 page superseded in Main Steel – L1: S-205.")).toBeInTheDocument();
     expect(state.setStep).not.toHaveBeenCalledWith(5);
   });
+
+  it("puts each line of the post-cancel problems toast on its own line", async () => {
+    const { handleCreate, state } = mount();
+    m.update.mockImplementation(async (id: string, patch: Record<string, unknown>) => {
+      state.cancelledRef.current = true;
+      if (id === "old-209") throw new Error("[drawings.update] DRAWING_SET_LOCKED: This drawing set is locked from edits.");
+      return { ...rowsById[id], id, ...patch };
+    });
+    await handleCreate(SHEETS, { supersedeIds: OLD_IDS });
+    expect(m.toast.warning).toHaveBeenCalledTimes(1);
+    const [title, options] = m.toast.warning.mock.calls[0];
+    expect(title).toBe("Upload finished with problems");
+    const toast = renderToast((options as { description?: unknown }).description);
+    // The page left live never reads as part of the superseded list.
+    expect(within(toast).getByText("Marked 2 pages superseded in Main Steel – L2: S-201, S-204.")).toBeInTheDocument();
+    expect(within(toast).getByText("S-209 (Main Steel – L2) is still live — Set is locked. Nothing was changed on it.")).toBeInTheDocument();
+  });
 });
+
+/** Render what was handed to sonner, the way its title/description slot would. */
+function renderToast(node: unknown): HTMLElement {
+  return render(<div data-testid="toast">{node as ReactNode}</div>).getByTestId("toast");
+}

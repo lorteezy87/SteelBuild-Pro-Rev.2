@@ -15,8 +15,10 @@ import {
   SUPERSEDE_FETCH_FAILED,
   applyCrossSetSupersede,
   buildReplaceSentence,
+  buildSharedNumberSentence,
   compareRevisions,
   describeSupersedeActivity,
+  describeSupersededSet,
   describeSupersedeWriteError,
   groupSupersedeItemsBySet,
   isShortSheetKey,
@@ -45,7 +47,7 @@ const dwg = (
   extra: Partial<CrossSetSourceDrawing> = {},
 ): CrossSetSourceDrawing => ({
   id, drawing_set_id: setId, drawing_set_name: setName, sheet_number: sheetNumber, title,
-  revision_number: revision, stage: "Released", is_superseded: false, is_deleted: false, metadata: null, ...extra,
+  revision_number: revision, is_superseded: false, is_deleted: false, metadata: null, ...extra,
 });
 const sheet = (sheetNumber: string, sheetTitle: string, revision = "2", selected = true): UploadSheetLike => ({
   sheetNumber, sheetTitle, revision, selected,
@@ -246,6 +248,20 @@ describe("planCrossSetSupersede — default selection", () => {
     expect(plan.rows[0]).toMatchObject({ reason: "locked", disabled: true, defaultChecked: false, note: "Set is locked" });
     expect(plan.groups[0].locked).toBe(true);
   });
+
+  it("leaves a live numbered page unticked when the upload carries an older letter revision", () => {
+    const plan = planCrossSetSupersede({
+      source: { sets: [set("set-ifc", "Main Steel – L2 IFC")], drawings: [dwg("ifc-201", "set-ifc", "Main Steel – L2 IFC", "S-201", "Framing Plan", "1")] },
+      newSheets: [sheet("S-201", "Framing Plan", "B")],
+      meta: { setName: "Main Steel – L2 Approval" },
+    });
+    expect(plan.rows[0]).toMatchObject({
+      reason: "older_revision", revisionComparison: "older", defaultChecked: false,
+      note: "Uploaded rev B is older than the live rev 1",
+    });
+    // The row carries no per-sheet stage: drawings.stage isn't synced from the submittal.
+    expect(plan.rows[0]).not.toHaveProperty("oldStage");
+  });
 });
 
 describe("pure helpers", () => {
@@ -254,7 +270,10 @@ describe("pure helpers", () => {
     expect(compareRevisions("A", "B")).toBe("older");
     expect(compareRevisions("2", "1")).toBe("newer");
     expect(compareRevisions("C", "B")).toBe("newer");
-    expect(compareRevisions("A", "1")).toBe("not_comparable");
+    // Letters are pre-IFC, numbers post-IFC: a letter over a number is the stale copy,
+    // while a number over a letter (A → 1) crosses IFC forwards and stays not comparable.
+    expect(compareRevisions("A", "1")).toBe("older");
+    expect(compareRevisions("Rev B", "3")).toBe("older");
     expect(compareRevisions("1", "A")).toBe("not_comparable");
     expect(compareRevisions("0", "2")).toBe("unknown");
     expect(compareRevisions("", "A")).toBe("unknown");
@@ -281,6 +300,18 @@ describe("pure helpers", () => {
     expect(buildReplaceSentence(["S-201", "S-204", "S-209"], "Main Steel – L2", { ask: true }))
       .toBe("S-201, S-204 and S-209 replace pages in Main Steel – L2. Mark the old ones superseded?");
     expect(buildReplaceSentence(["S-201"], "X", { ask: true })).toBe("S-201 replaces a page in X. Mark the old one superseded?");
+  });
+
+  it("buildSharedNumberSentence never claims a replacement", () => {
+    expect(buildSharedNumberSentence(["C1"], "Joists")).toBe("C1 shares a number with a page in Joists.");
+    expect(buildSharedNumberSentence(["C1", "D3"], "Joists")).toBe("C1 and D3 share numbers with pages in Joists.");
+    expect(buildSharedNumberSentence(["C1"], "Joists", { compare: true }))
+      .toBe("C1 shares a number with a page in Joists. Compare the drawings before ticking.");
+  });
+
+  it("describeSupersededSet ends each set's line as a sentence", () => {
+    expect(describeSupersededSet({ setId: "set-l2", setName: "Main Steel – L2", sheetNumbers: ["S-201", "S-204"] }))
+      .toBe("Marked 2 pages superseded in Main Steel – L2: S-201, S-204.");
   });
 
   it("describeSupersedeWriteError names locks and permission refusals", () => {

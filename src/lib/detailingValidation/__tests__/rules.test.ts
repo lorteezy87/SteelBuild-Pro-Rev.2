@@ -43,6 +43,16 @@ it('says when the shared number is a different drawing', () => {
  expect(detail('lad')).toBe('Also live in Balcony Rail - Bldg. 2 and Added Rails - Bldg. 2 — different title: the same number is used for a different drawing.');
  expect(detail('br')).toBe('Also live in Ladders - Bldg. 2 (different title) and Added Rails - Bldg. 2 (same title) — check which copy is current.');
 });
+it('names a same-and-different title mix in one other set without claiming a title is missing', () => {
+ const a=inSet('a','S-201','FRAMING PLAN','set-a','Main Steel – L2');
+ const same=inSet('b1','S-201','FRAMING PLAN','set-b','Main Steel Rev A');
+ const different=inSet('b2','S201','CONNECTION DETAILS','set-b','Main Steel Rev A');
+ const detail=(sheets:Array<typeof a>)=>validateDetailingSheets(sheets,[],[]).findings.find(f=>f.recordId==='a'&&f.rule==='duplicate_live_sheet')?.detail;
+ expect(detail([a,same,different])).toBe('Also live in Main Steel Rev A (same and different titles) — check which copy is current.');
+ expect(detail([a,different,same])).toBe('Also live in Main Steel Rev A (same and different titles) — check which copy is current.');
+ // A copy that really has no title still says so.
+ expect(detail([a,same,{...different,title:''}])).toBe('Also live in Main Steel Rev A (title missing) — check which copy is current.');
+});
 it('does not flag a copy once the other is superseded or deleted, nor a legacy row of the same set', () => {
  const a=inSet('a','S-201','Framing Plan','set-a','Main Steel – L2');
  for (const other of [{...inSet('b','S-201','Framing Plan','set-b','Rev A'),is_superseded:true},{...inSet('b','S-201','Framing Plan','set-b','Rev A'),is_deleted:true},inSet('legacy','S-201','Framing Plan',null,'Main Steel – L2')]) {

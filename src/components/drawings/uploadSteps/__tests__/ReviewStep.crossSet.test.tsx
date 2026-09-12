@@ -15,7 +15,7 @@ import type { CrossSetSource, CrossSetSourceDrawing } from "@/lib/crossSetSupers
 
 const drawing = (id: string, sheetNumber: string, title: string): CrossSetSourceDrawing => ({
   id, drawing_set_id: "set-l2", drawing_set_name: "Main Steel – L2", sheet_number: sheetNumber, title,
-  revision_number: "1", stage: "Released", is_superseded: false, is_deleted: false, metadata: null,
+  revision_number: "1", is_superseded: false, is_deleted: false, metadata: null,
 });
 const SOURCE: CrossSetSource = {
   sets: [{ id: "set-l2", set_name: "Main Steel – L2", is_locked: false }],
@@ -114,6 +114,25 @@ describe("ReviewStep — pages this upload replaces", () => {
     expect(screen.queryByRole("checkbox", { name: "Mark S-204 in Main Steel – L2 superseded" })).toBeNull();
     fireEvent.change(numberInput, { target: { value: "S-204" } });
     expect(screen.getByRole("checkbox", { name: "Mark S-204 in Main Steel – L2 superseded" })).toBeChecked();
+  });
+
+  it("a tick never follows a page into the different-drawing section", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(SOURCE);
+    const onCreate = mount();
+    await screen.findByRole("checkbox", { name: "Mark S-209 in Main Steel – L2 superseded" });
+    // S-209 has no title yet, so it isn't ticked by default; Select all ticks it anyway.
+    fireEvent.click(screen.getByRole("button", { name: "Select all pages to supersede" }));
+    expect(screen.getByRole("checkbox", { name: "Mark S-209 in Main Steel – L2 superseded" })).toBeChecked();
+    // Its real title differs from the old page's: a different drawing.
+    const row = screen.getByDisplayValue("S-209").closest("tr") as HTMLElement;
+    const [, titleInput] = within(row).getAllByRole("textbox");
+    fireEvent.change(titleInput, { target: { value: "Connection Details" } });
+    const moved = screen.getByRole("checkbox", { name: "Mark S-209 in Main Steel – L2 superseded" });
+    expect(moved.closest("details")).not.toBeNull();
+    expect(moved).not.toBeChecked();
+    expect(screen.getByText("1 sheet shares a number with a different drawing — not superseded")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Create 3 Entries/ }));
+    expect(onCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ supersedeIds: ["old-201", "old-204"] }));
   });
 
   it("a failed check says nothing will be superseded and lets Create go ahead", async () => {

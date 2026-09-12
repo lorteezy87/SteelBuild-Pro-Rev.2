@@ -1,3 +1,4 @@
+import React from "react";
 import { entities } from "@/api/supabaseClient";
 import { invalidateEntities } from "@/services/cacheRegistry";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
@@ -22,15 +23,20 @@ import {
   planExistingSetSheetReplace,
 } from "../drawingSetUploadHelpers";
 
+// sonner renders toast text with white-space: normal, so "\n" would run the
+// lines together; give each line its own block instead.
+const toastLines = (lines) =>
+  React.createElement("div", null, lines.map((line, i) => React.createElement("div", { key: i }, line)));
+
 // The wizard was reset while the supersede phase ran — the Success step is gone,
-// so say what happened to the old pages in a toast instead.
+// so say what happened to the old pages in a toast instead, one line per item.
 function notifySupersedeAfterCancel(result) {
   const lines = groupSupersedeItemsBySet(result.superseded).map(describeSupersededSet);
   const problems = [...result.failed, ...result.skipped].map(describeSupersedeProblem);
   if (problems.length > 0) {
-    toast.warning("Upload finished with problems", { description: [...lines, ...problems].join("\n") });
+    toast.warning("Upload finished with problems", { description: toastLines([...lines, ...problems]) });
   } else if (lines.length > 0) {
-    toast.success(lines.join("\n"));
+    toast.success(toastLines(lines));
   }
 }
 

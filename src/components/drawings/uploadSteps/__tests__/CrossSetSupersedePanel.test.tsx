@@ -8,11 +8,11 @@ vi.mock("@/lib/crossSetSupersedeRepository", () => repo);
 
 import CrossSetSupersedePanel from "../CrossSetSupersedePanel";
 import { useCrossSetSupersede } from "../../upload/useCrossSetSupersede";
-import type { CrossSetSource, CrossSetSourceDrawing, UploadSheetLike } from "@/lib/crossSetSupersede";
+import type { CrossSetSource, CrossSetSourceDrawing, UploadMetaLike, UploadSheetLike } from "@/lib/crossSetSupersede";
 
-const drawing = (id: string, setId: string, setName: string, sheetNumber: string, title: string, stage = "Released"): CrossSetSourceDrawing => ({
+const drawing = (id: string, setId: string, setName: string, sheetNumber: string, title: string, revision = "1"): CrossSetSourceDrawing => ({
   id, drawing_set_id: setId, drawing_set_name: setName, sheet_number: sheetNumber, title,
-  revision_number: "1", stage, is_superseded: false, is_deleted: false, metadata: null,
+  revision_number: revision, is_superseded: false, is_deleted: false, metadata: null,
 });
 const SOURCE: CrossSetSource = {
   sets: [
@@ -22,7 +22,7 @@ const SOURCE: CrossSetSource = {
   ],
   drawings: [
     drawing("old-201", "set-l2", "Main Steel – L2", "S-201", "FRAMING PLAN"),
-    drawing("old-204", "set-l2", "Main Steel – L2", "S-204", "SECTIONS", "IFC"),
+    drawing("old-204", "set-l2", "Main Steel – L2", "S-204", "SECTIONS"),
     drawing("old-209", "set-l2", "Main Steel – L2", "S-209", "DETAILS"),
     drawing("old-212", "set-l2", "Main Steel – L2", "S-212", "ROOF PLAN"),
     drawing("lad-204", "set-lad", "Ladders - Bldg. 2", "S-204", "LADDER L-1 LAYOUT"),
@@ -35,10 +35,28 @@ const SHEETS: UploadSheetLike[] = [
   { sheetNumber: "S-209", sheetTitle: "Details", revision: "2", selected: true },
   { sheetNumber: "S212", sheetTitle: "", revision: "2", selected: true },
 ];
-const META = { setName: "Main Steel – L2 Rev A", revision: "A" };
+const META: UploadMetaLike = { setName: "Main Steel – L2 Rev A", revision: "A" };
 
-function Harness({ canSupersede }: { canSupersede: boolean }) {
-  const crossSet = useCrossSetSupersede({ projectId: "p1", sheets: SHEETS, meta: META });
+// A vendor package whose matches are all unlikely: a short number (C1) and a
+// stale upload (rev 1 over the live rev 2).
+const VENDOR_SOURCE: CrossSetSource = {
+  sets: [
+    { id: "set-joists", set_name: "Joists", is_locked: false },
+    { id: "set-acad", set_name: "Academy MS Mesa", is_locked: false },
+  ],
+  drawings: [
+    drawing("joists-c1", "set-joists", "Joists", "C1", "GENERAL NOTES", "0"),
+    drawing("acad-abp1", "set-acad", "Academy MS Mesa", "101ABP1", "ANCHOR BOLT LAYOUT PLAN", "2"),
+  ],
+};
+const VENDOR_SHEETS: UploadSheetLike[] = [
+  { sheetNumber: "C1", sheetTitle: "General Notes", revision: "0", selected: true },
+  { sheetNumber: "101ABP1", sheetTitle: "Anchor Bolt Layout Plan", revision: "1", selected: true },
+];
+const VENDOR_META: UploadMetaLike = { setName: "Deck", revision: "0" };
+
+function Harness({ canSupersede, sheets, meta }: { canSupersede: boolean; sheets: UploadSheetLike[]; meta: UploadMetaLike }) {
+  const crossSet = useCrossSetSupersede({ projectId: "p1", sheets, meta });
   return (
     <CrossSetSupersedePanel
       status={crossSet.status}
@@ -54,13 +72,16 @@ function Harness({ canSupersede }: { canSupersede: boolean }) {
   );
 }
 
-function mount(canSupersede = true) {
+function mount(canSupersede = true, sheets = SHEETS, meta = META) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><Harness canSupersede={canSupersede} /></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><Harness canSupersede={canSupersede} sheets={sheets} meta={meta} /></QueryClientProvider>);
 }
 
+const L2_QUESTION = "S-201, S-204 and S-209 replace pages in Main Steel – L2. Mark the old ones superseded?";
 const rowBox = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
 const groupBox = () => screen.getByRole("checkbox", { name: /replace pages in Main Steel – L2/ }) as HTMLInputElement;
+const differentSummary = () => screen.getByText(/a number with a different drawing/).closest("summary") as HTMLElement;
+const ready = () => screen.findByRole("heading", { name: "Pages this upload replaces" });
 
 beforeEach(() => {
   repo.fetchCrossSetSource.mockReset();
@@ -70,9 +91,7 @@ beforeEach(() => {
 describe("CrossSetSupersedePanel", () => {
   it("shows the approved sentence and one row per old page with the details to decide", async () => {
     mount();
-    expect(await screen.findByRole("checkbox", {
-      name: "S-201, S-204 and S-209 replace pages in Main Steel – L2. Mark the old ones superseded?",
-    })).toBeInTheDocument();
+    expect(await screen.findByRole("checkbox", { name: L2_QUESTION })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pages this upload replaces" })).toBeInTheDocument();
 
     const table = screen.getByRole("table", { name: "Main Steel – L2" });
@@ -84,12 +103,19 @@ describe("CrossSetSupersedePanel", () => {
     const row204 = within(table).getByText("S-204").closest("tr") as HTMLElement;
     expect(within(row204).getByText("Main Steel – L2")).toBeInTheDocument();
     expect(within(row204).getByText("1 → 2")).toBeInTheDocument();
-    expect(within(row204).getByText("IFC")).toBeInTheDocument();
+  });
+
+  it("has no Stage column — drawings.stage isn't synced from the submittal", async () => {
+    mount();
+    const table = await screen.findByRole("table", { name: "Main Steel – L2" });
+    expect(within(table).getAllByRole("columnheader").map((th) => th.textContent)).toEqual([
+      "Supersede", "Sheet", "Old set", "Title (old / new)", "Rev (old → new)", "Note",
+    ]);
   });
 
   it("ticks by the default rules, disables locked sets and tucks different drawings away unticked", async () => {
     mount();
-    await screen.findByRole("heading", { name: "Pages this upload replaces" });
+    await ready();
     expect(rowBox("Mark S-201 in Main Steel – L2 superseded").checked).toBe(true);
     expect(rowBox("Mark S-204 in Main Steel – L2 superseded").checked).toBe(true);
     expect(rowBox("Mark S-209 in Main Steel – L2 superseded").checked).toBe(true);
@@ -109,18 +135,39 @@ describe("CrossSetSupersedePanel", () => {
     expect(screen.getByText("3 of 5 will be marked superseded")).toBeInTheDocument();
   });
 
-  it("group checkbox is tri-state; Select all, Clear and row toggles update the count", async () => {
+  it("the group checkbox asks about, and ticks, only the likely replacements", async () => {
     mount();
-    await screen.findByRole("heading", { name: "Pages this upload replaces" });
-    expect(groupBox().indeterminate).toBe(true);
-    expect(groupBox().checked).toBe(false);
+    await ready();
+    // S-212 (title missing) shares the table but isn't in the question, so the
+    // box starts fully ticked, not mixed.
+    expect(groupBox().checked).toBe(true);
+    expect(groupBox().indeterminate).toBe(false);
 
+    fireEvent.click(rowBox("Mark S-209 in Main Steel – L2 superseded"));
+    expect(groupBox().indeterminate).toBe(true);
+    expect(groupBox()).toHaveAccessibleName(L2_QUESTION);
+
+    // Answering yes ticks the pages the question names — never S-212.
     fireEvent.click(groupBox());
     expect(groupBox().checked).toBe(true);
     expect(groupBox().indeterminate).toBe(false);
-    expect(rowBox("Mark S-212 in Main Steel – L2 superseded").checked).toBe(true);
-    expect(screen.getByText("4 of 5 will be marked superseded")).toBeInTheDocument();
+    expect(rowBox("Mark S-209 in Main Steel – L2 superseded").checked).toBe(true);
+    expect(rowBox("Mark S-212 in Main Steel – L2 superseded").checked).toBe(false);
+    expect(screen.getByText("3 of 5 will be marked superseded")).toBeInTheDocument();
 
+    // A page ticked by hand is its own decision: unticking the group leaves it.
+    fireEvent.click(rowBox("Mark S-212 in Main Steel – L2 superseded"));
+    fireEvent.click(groupBox());
+    expect(groupBox().checked).toBe(false);
+    expect(groupBox().indeterminate).toBe(false);
+    expect(rowBox("Mark S-201 in Main Steel – L2 superseded").checked).toBe(false);
+    expect(rowBox("Mark S-212 in Main Steel – L2 superseded").checked).toBe(true);
+    expect(screen.getByText("1 of 5 will be marked superseded")).toBeInTheDocument();
+  });
+
+  it("Select all ticks every grouped page but no different drawing; Clear unticks everything", async () => {
+    mount();
+    await ready();
     fireEvent.click(screen.getByRole("button", { name: "Clear all pages to supersede" }));
     expect(screen.getByText("0 of 5 will be marked superseded")).toBeInTheDocument();
     expect(groupBox().checked).toBe(false);
@@ -128,26 +175,79 @@ describe("CrossSetSupersedePanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Select all pages to supersede" }));
     expect(screen.getByText("4 of 5 will be marked superseded")).toBeInTheDocument();
+    expect(rowBox("Mark S-212 in Main Steel – L2 superseded").checked).toBe(true);
     expect(rowBox("Mark S-204 in Ladders - Bldg. 2 superseded").checked).toBe(false);
+  });
 
-    fireEvent.click(rowBox("Mark S-209 in Main Steel – L2 superseded"));
-    expect(rowBox("Mark S-209 in Main Steel – L2 superseded").checked).toBe(false);
-    expect(groupBox().indeterminate).toBe(true);
-    expect(screen.getByRole("checkbox", {
-      name: "S-201, S-204 and S212 replace pages in Main Steel – L2. Mark the old ones superseded?",
-    })).toBeInTheDocument();
+  it("never summarises a ticked different drawing as not superseded, and opens its section", async () => {
+    mount();
+    await ready();
+    const details = differentSummary().closest("details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(differentSummary()).toHaveTextContent("1 sheet shares a number with a different drawing — not superseded");
 
     fireEvent.click(rowBox("Mark S-204 in Ladders - Bldg. 2 superseded"));
     expect(screen.getByText("4 of 5 will be marked superseded")).toBeInTheDocument();
-    expect(screen.getByText(/Releasing Main Steel – L2 and Ladders - Bldg\. 2 again as a set will need an admin override/)).toBeInTheDocument();
+    expect(differentSummary()).toHaveTextContent("1 sheet shares a number with a different drawing — 1 ticked, will be superseded");
+    expect(differentSummary()).not.toHaveTextContent("not superseded");
+    expect(details.open).toBe(true);
+
+    // Unticking it restores the summary without snapping the open section shut.
+    fireEvent.click(rowBox("Mark S-204 in Ladders - Bldg. 2 superseded"));
+    expect(differentSummary()).toHaveTextContent("1 sheet shares a number with a different drawing — not superseded");
+    expect(details.open).toBe(true);
+  });
+
+  it("says what superseding does to releasing the old sets, without claiming an admin or a re-release", async () => {
+    mount();
+    await ready();
+    const note = screen.getByText(/Superseded pages can't be released for fabrication/);
+    expect(note).toHaveTextContent(
+      "Superseded pages can't be released for fabrication, so a submittal or fab-release export that includes Main Steel – L2 will be blocked. " +
+      "A PM can release it only with an override reason, and that override also skips the open-RFI and rejected-sheet checks.",
+    );
+    expect(note).not.toHaveTextContent(/admin|again/i);
+
+    fireEvent.click(rowBox("Mark S-204 in Ladders - Bldg. 2 superseded"));
+    expect(note).toHaveTextContent("a submittal or fab-release export that includes Main Steel – L2 and Ladders - Bldg. 2 will be blocked.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear all pages to supersede" }));
+    expect(note).toHaveTextContent(/^Superseded pages can't be released for fabrication\.$/);
+  });
+
+  it("never says a page replaces another when every match in its set is unlikely", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(VENDOR_SOURCE);
+    mount(true, VENDOR_SHEETS, VENDOR_META);
+    await ready();
+    expect(screen.getByText("C1 shares a number with a page in Joists. Compare the drawings before ticking.")).toBeInTheDocument();
+    expect(screen.getByText("101ABP1 shares a number with a page in Academy MS Mesa. Compare the drawings before ticking.")).toBeInTheDocument();
+    expect(screen.queryByText(/replaces? (a page|pages)/)).toBeNull();
+    // No group question to answer: each page is ticked on its own.
+    expect(screen.getAllByRole("checkbox").map((box) => box.getAttribute("aria-label"))).toEqual([
+      "Mark 101ABP1 in Academy MS Mesa superseded", "Mark C1 in Joists superseded",
+    ]);
+    expect(screen.getByText("0 of 2 will be marked superseded")).toBeInTheDocument();
+  });
+
+  it("a locked set's matches get the neutral line without a prompt to tick", async () => {
+    mount();
+    await ready();
+    expect(screen.getByText("S-209 shares a number with a page in Canopy.")).toBeInTheDocument();
   });
 
   it("read-only users see the rows but no checkboxes", async () => {
     mount(false);
-    await screen.findByRole("heading", { name: "Pages this upload replaces" });
+    await ready();
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
     expect(screen.getByText("You need PM access to mark pages superseded — the old pages will stay live.")).toBeInTheDocument();
     expect(screen.getByText("S-201, S-204 and S-209 replace pages in Main Steel – L2.")).toBeInTheDocument();
+  });
+
+  it("read-only users get the neutral line for unlikely matches too", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(VENDOR_SOURCE);
+    mount(false, VENDOR_SHEETS, VENDOR_META);
+    expect(await screen.findByText("C1 shares a number with a page in Joists.")).toBeInTheDocument();
+    expect(screen.queryByText(/replaces? (a page|pages)|Compare the drawings/)).toBeNull();
   });
 
   it("renders nothing when no other set shares these numbers", async () => {
