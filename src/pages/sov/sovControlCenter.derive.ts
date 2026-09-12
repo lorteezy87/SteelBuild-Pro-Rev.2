@@ -140,12 +140,12 @@ export function buildSovSummary(
   effectiveRetainage: number | null = null,
 ): SovSummary {
   // sov_items holds one row per (line item × application × status) — see the
-  // SOV ROW MODEL comment in projectMetrics.js. KPI totals must run over the
+  // SOV ROW MODEL comment in projectMetrics.ts. KPI totals must run over the
   // deduped "current SOV" view (latest application per line item) or a
   // project with N pay applications shows ~N× its real contract value. The
   // Billing Progress panel below intentionally stays on raw rows — grouping
   // by application is the one place the per-application rows are the point.
-  const currentLines = latestApplicationPerLineItem(lines) as SovLineItem[];
+  const currentLines = latestApplicationPerLineItem(lines);
 
   // ── Totals pass ──────────────────────────────────────────────────
   let contractValue = 0;
