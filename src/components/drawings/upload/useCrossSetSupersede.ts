@@ -46,11 +46,13 @@ interface StoredChoice {
   relation: TitleRelation;
 }
 
-// An untick (by hand or Clear) always sticks while its row is in the plan: a
-// title edit must never re-tick a page the user chose to keep live. Only a tick
-// is tied to the title relation it was given under — a tick on a same-title or
-// title-missing row never follows it into the "different drawing" section; once
-// the relation changes the row falls back to its default.
+// An untick (by hand or Clear) always sticks: no edit may re-tick a page the
+// user chose to keep live — not a title edit, and not a row that briefly leaves
+// the plan (include box off and on, a sheet number retyped, a set name passing
+// through the old set's exact name). Only a tick is tied to the title relation
+// it was given under — a tick on a same-title or title-missing row never follows
+// it into the "different drawing" section; once the relation changes, or the row
+// leaves the plan, the row falls back to its default.
 function choiceFor(row: CrossSetRow, stored: StoredChoice | undefined): boolean {
   if (!stored) return row.defaultChecked;
   if (!stored.value) return false;
@@ -62,8 +64,9 @@ function choiceFor(row: CrossSetRow, stored: StoredChoice | undefined): boolean 
  * project's live sheets on every visit (staleTime 0), re-planned as the user
  * edits sheet numbers, titles, selection or the set name. Defaults come from the
  * plan; once the user toggles a row that choice is kept against the old
- * drawing's id and dropped if the row stops matching. An untick survives title
- * edits; a tick is also dropped when the row's title relation changes.
+ * drawing's id. An untick is kept even while its row is out of the plan, so it
+ * is still there when the row comes back; a tick is dropped when its row leaves
+ * the plan or its title relation changes.
  */
 export function useCrossSetSupersede({ projectId, sheets, meta }: UseCrossSetSupersedeArgs): UseCrossSetSupersedeResult {
   const query = useQuery({
@@ -89,11 +92,13 @@ export function useCrossSetSupersede({ projectId, sheets, meta }: UseCrossSetSup
       const relationById = new Map<string, TitleRelation>();
       for (const row of plan.rows) relationById.set(row.oldId, row.titleRelation);
       const next = new Map<string, StoredChoice>();
-      // Drop a choice whose row left the plan, and a tick whose title relation
-      // changed; keep an untick whatever the title does.
+      // Keep every untick, even one whose row has left the plan: checkedIds and
+      // isChecked only read rows in plan.rows, so a leftover untick can only keep
+      // an old page live. Drop a tick whose row left (relation is undefined) or
+      // whose title relation changed.
       prev.forEach((stored, id) => {
         const relation = relationById.get(id);
-        if (relation !== undefined && (!stored.value || relation === stored.relation)) next.set(id, stored);
+        if (!stored.value || relation === stored.relation) next.set(id, stored);
       });
       return next.size === prev.size ? prev : next;
     });

@@ -108,16 +108,84 @@ describe("ReviewStep — pages this upload replaces", () => {
     expect(onCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ supersedeIds: ["old-204"] }));
   });
 
-  it("forgets a toggled choice once its row stops matching", async () => {
+  it("keeps an untick while its row stops matching and comes back", async () => {
     repo.fetchCrossSetSource.mockResolvedValue(SOURCE);
-    mount();
+    const onCreate = mount();
     fireEvent.click(await screen.findByRole("checkbox", { name: "Mark S-204 in Main Steel – L2 superseded" }));
     expect(screen.getByRole("checkbox", { name: "Mark S-204 in Main Steel – L2 superseded" })).not.toBeChecked();
     const numberInput = screen.getByDisplayValue("S-204");
     fireEvent.change(numberInput, { target: { value: "S-299" } });
     expect(screen.queryByRole("checkbox", { name: "Mark S-204 in Main Steel – L2 superseded" })).toBeNull();
     fireEvent.change(numberInput, { target: { value: "S-204" } });
-    expect(screen.getByRole("checkbox", { name: "Mark S-204 in Main Steel – L2 superseded" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Mark S-204 in Main Steel – L2 superseded" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /Create 3 Entries/ }));
+    expect(onCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ supersedeIds: ["old-201"] }));
+  });
+
+  it("an untick survives the new sheet's include box going off and on", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(SOURCE);
+    const onCreate = mount();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" }));
+    const row = screen.getByDisplayValue("S-201").closest("tr") as HTMLElement;
+    const include = within(row).getByRole("checkbox");
+    fireEvent.click(include);
+    expect(screen.queryByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" })).toBeNull();
+    fireEvent.click(include);
+    expect(screen.getByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /Create 3 Entries/ }));
+    const { supersedeIds } = onCreate.mock.calls[0][1] as { supersedeIds: string[] };
+    expect(supersedeIds).toEqual(["old-204"]);
+    expect(supersedeIds).not.toContain("old-201");
+  });
+
+  it("an untick survives retyping the sheet number keystroke by keystroke", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(SOURCE);
+    const onCreate = mount();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" }));
+    const numberInput = screen.getByDisplayValue("S-201");
+    // Backspace then retype: "S-20" matches nothing, "S-201" matches again.
+    fireEvent.change(numberInput, { target: { value: "S-20" } });
+    expect(screen.queryByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" })).toBeNull();
+    fireEvent.change(numberInput, { target: { value: "S-201" } });
+    expect(screen.getByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /Create 3 Entries/ }));
+    const { supersedeIds } = onCreate.mock.calls[0][1] as { supersedeIds: string[] };
+    expect(supersedeIds).toEqual(["old-204"]);
+    expect(supersedeIds).not.toContain("old-201");
+  });
+
+  it("Clear survives the set name passing through the old set's exact name", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(SOURCE);
+    const onCreate = mount();
+    await screen.findByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" });
+    fireEvent.click(screen.getByRole("button", { name: "Clear all pages to supersede" }));
+    const setNameInput = screen.getByDisplayValue("Main Steel – L2 Rev A");
+    // While the name equals the old set's, that set is the upload's target and its rows leave the plan.
+    fireEvent.change(setNameInput, { target: { value: "Main Steel – L2" } });
+    expect(screen.queryByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" })).toBeNull();
+    fireEvent.change(setNameInput, { target: { value: "Main Steel – L2 Rev B" } });
+    expect(screen.getByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Mark S-204 in Main Steel – L2 superseded" })).not.toBeChecked();
+    expect(screen.getByText("0 of 3 will be marked superseded")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Create 3 Entries/ }));
+    expect(onCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ supersedeIds: [] }));
+  });
+
+  it("a tick is still dropped when its row leaves the plan", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(SOURCE);
+    const onCreate = mount();
+    await screen.findByRole("checkbox", { name: "Mark S-209 in Main Steel – L2 superseded" });
+    // S-209 has no title, so it is unticked by default; Select all ticks it anyway.
+    fireEvent.click(screen.getByRole("button", { name: "Select all pages to supersede" }));
+    expect(screen.getByRole("checkbox", { name: "Mark S-209 in Main Steel – L2 superseded" })).toBeChecked();
+    const row = screen.getByDisplayValue("S-209").closest("tr") as HTMLElement;
+    const include = within(row).getByRole("checkbox");
+    fireEvent.click(include);
+    fireEvent.click(include);
+    // Back to its default: the tick did not survive the row leaving.
+    expect(screen.getByRole("checkbox", { name: "Mark S-209 in Main Steel – L2 superseded" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /Create 3 Entries/ }));
+    expect(onCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ supersedeIds: ["old-201", "old-204"] }));
   });
 
   it("a tick never follows a page into the different-drawing section", async () => {
