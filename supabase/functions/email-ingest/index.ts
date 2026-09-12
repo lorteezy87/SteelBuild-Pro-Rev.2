@@ -87,114 +87,6 @@ function authenticateWebhook(req: Request): boolean {
     return false;
   }
 
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-  function normalizeEmail(raw: string): string {
-    return extractEmailAddress(raw).trim().toLowerCase();
-  }
-
-  function extractDomain(email: string): string | null {
-    const at = email.lastIndexOf("@");
-    if (at <= 0 || at === email.length - 1) return null;
-    return email.slice(at + 1).toLowerCase();
-  }
-
-  function parseDomainCsv(csv: string | null | undefined): Set<string> {
-    if (!csv) return new Set<string>();
-    return new Set(
-      csv
-        .split(",")
-        .map((entry) => entry.trim().toLowerCase().replace(/^@/, ""))
-        .filter(Boolean),
-    );
-  }
-
-  function resolveTrustedDomainsForProject(projectId: string): Set<string> {
-    const domains = parseDomainCsv(Deno.env.get("EMAIL_INGEST_TRUSTED_SENDER_DOMAINS"));
-    const projectMapRaw = Deno.env.get("EMAIL_INGEST_TRUSTED_SENDER_DOMAINS_BY_PROJECT");
-    if (!projectMapRaw) return domains;
-    try {
-      const parsed = JSON.parse(projectMapRaw) as Record<string, string | string[]>;
-      const projectValue = parsed[projectId] ?? parsed["*"];
-      const projectList = Array.isArray(projectValue)
-        ? projectValue
-        : typeof projectValue === "string"
-          ? projectValue.split(",")
-          : [];
-      for (const entry of projectList) {
-        const normalized = String(entry).trim().toLowerCase().replace(/^@/, "");
-        if (normalized) domains.add(normalized);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[email-ingest] Invalid EMAIL_INGEST_TRUSTED_SENDER_DOMAINS_BY_PROJECT: ${message}`);
-    }
-    return domains;
-  }
-
-  async function fetchActiveProjectMailboxAddresses(
-    supabaseUrl: string,
-    serviceKey: string,
-    projectId: string,
-  ): Promise<Set<string>> {
-    const resp = await fetch(
-      `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${projectId}&is_active=eq.true&select=email_address&limit=500`,
-      { headers: { "apikey": serviceKey, "Authorization": `****** } },
-    );
-    if (!resp.ok) {
-      const detail = await resp.text();
-      throw new Error(`email_accounts lookup failed ${resp.status}: ${detail.slice(0, 200)}`);
-    }
-    const rows = await resp.json();
-    const addresses = new Set<string>();
-    if (Array.isArray(rows)) {
-      for (const row of rows) {
-        if (!row?.email_address) continue;
-        const normalized = normalizeEmail(String(row.email_address));
-        if (normalized) addresses.add(normalized);
-      }
-    }
-    return addresses;
-  }
-
-  type SenderTrustDecision = {
-    trusted: boolean;
-    senderNormalized: string;
-    senderDomain: string | null;
-    trustReason: "mapped_mailbox_sender" | "trusted_sender_domain" | "untrusted_sender";
-  };
-
-  function evaluateSenderTrust(
-    senderEmailRaw: string,
-    mailboxAddresses: Set<string>,
-    trustedDomains: Set<string>,
-  ): SenderTrustDecision {
-    const senderNormalized = normalizeEmail(senderEmailRaw);
-    const senderDomain = extractDomain(senderNormalized);
-    if (senderNormalized && mailboxAddresses.has(senderNormalized)) {
-      return {
-        trusted: true,
-        senderNormalized,
-        senderDomain,
-        trustReason: "mapped_mailbox_sender",
-      };
-    }
-    if (senderDomain && trustedDomains.has(senderDomain)) {
-      return {
-        trusted: true,
-        senderNormalized,
-        senderDomain,
-        trustReason: "trusted_sender_domain",
-      };
-    }
-    return {
-      trusted: false,
-      senderNormalized,
-      senderDomain,
-      trustReason: "untrusted_sender",
-    };
-  }
-
   const authHeader = req.headers.get("Authorization");
   if (authHeader === `Bearer ${secret}`) return true;
 
@@ -216,6 +108,114 @@ function generateMessageId(): string {
 function extractEmailAddress(raw: string): string {
   const match = raw.match(/<([^>]+)>/);
   return match ? match[1] : raw.trim();
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizeEmail(raw: string): string {
+  return extractEmailAddress(raw).trim().toLowerCase();
+}
+
+function extractDomain(email: string): string | null {
+  const at = email.lastIndexOf("@");
+  if (at <= 0 || at === email.length - 1) return null;
+  return email.slice(at + 1).toLowerCase();
+}
+
+function parseDomainCsv(csv: string | null | undefined): Set<string> {
+  if (!csv) return new Set<string>();
+  return new Set(
+    csv
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase().replace(/^@/, ""))
+      .filter(Boolean),
+  );
+}
+
+function resolveTrustedDomainsForProject(projectId: string): Set<string> {
+  const domains = parseDomainCsv(Deno.env.get("EMAIL_INGEST_TRUSTED_SENDER_DOMAINS"));
+  const projectMapRaw = Deno.env.get("EMAIL_INGEST_TRUSTED_SENDER_DOMAINS_BY_PROJECT");
+  if (!projectMapRaw) return domains;
+  try {
+    const parsed = JSON.parse(projectMapRaw) as Record<string, string | string[]>;
+    const projectValue = parsed[projectId] ?? parsed["*"];
+    const projectList = Array.isArray(projectValue)
+      ? projectValue
+      : typeof projectValue === "string"
+        ? projectValue.split(",")
+        : [];
+    for (const entry of projectList) {
+      const normalized = String(entry).trim().toLowerCase().replace(/^@/, "");
+      if (normalized) domains.add(normalized);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[email-ingest] Invalid EMAIL_INGEST_TRUSTED_SENDER_DOMAINS_BY_PROJECT: ${message}`);
+  }
+  return domains;
+}
+
+async function fetchActiveProjectMailboxAddresses(
+  supabaseUrl: string,
+  serviceKey: string,
+  projectId: string,
+): Promise<Set<string>> {
+  const resp = await fetch(
+    `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${projectId}&is_active=eq.true&select=email_address&limit=500`,
+    { headers: { "apikey": serviceKey, "Authorization": `****** } },
+  );
+  if (!resp.ok) {
+    const detail = await resp.text();
+    throw new Error(`email_accounts lookup failed ${resp.status}: ${detail.slice(0, 200)}`);
+  }
+  const rows = await resp.json();
+  const addresses = new Set<string>();
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (!row?.email_address) continue;
+      const normalized = normalizeEmail(String(row.email_address));
+      if (normalized) addresses.add(normalized);
+    }
+  }
+  return addresses;
+}
+
+type SenderTrustDecision = {
+  trusted: boolean;
+  senderNormalized: string;
+  senderDomain: string | null;
+  trustReason: "mapped_mailbox_sender" | "trusted_sender_domain" | "untrusted_sender";
+};
+
+function evaluateSenderTrust(
+  senderEmailRaw: string,
+  mailboxAddresses: Set<string>,
+  trustedDomains: Set<string>,
+): SenderTrustDecision {
+  const senderNormalized = normalizeEmail(senderEmailRaw);
+  const senderDomain = extractDomain(senderNormalized);
+  if (senderNormalized && mailboxAddresses.has(senderNormalized)) {
+    return {
+      trusted: true,
+      senderNormalized,
+      senderDomain,
+      trustReason: "mapped_mailbox_sender",
+    };
+  }
+  if (senderDomain && trustedDomains.has(senderDomain)) {
+    return {
+      trusted: true,
+      senderNormalized,
+      senderDomain,
+      trustReason: "trusted_sender_domain",
+    };
+  }
+  return {
+    trusted: false,
+    senderNormalized,
+    senderDomain,
+    trustReason: "untrusted_sender",
+  };
 }
 
 function extractDisplayName(raw: string): string {
