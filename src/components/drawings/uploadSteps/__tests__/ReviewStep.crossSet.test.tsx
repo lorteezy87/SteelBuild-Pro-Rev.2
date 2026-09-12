@@ -139,6 +139,39 @@ describe("ReviewStep — pages this upload replaces", () => {
     expect(onCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ supersedeIds: ["old-201", "old-204"] }));
   });
 
+  it("Clear survives typing a matching title: the page stays unticked and is not sent", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(SOURCE);
+    const onCreate = mount();
+    await screen.findByRole("checkbox", { name: "Mark S-209 in Main Steel – L2 superseded" });
+    fireEvent.click(screen.getByRole("button", { name: "Clear all pages to supersede" }));
+    expect(screen.getByText("0 of 3 will be marked superseded")).toBeInTheDocument();
+    // Typing S-209's real title makes it a same-title match, which is ticked by default — but the user cleared it.
+    const row = screen.getByDisplayValue("S-209").closest("tr") as HTMLElement;
+    const [, titleInput] = within(row).getAllByRole("textbox");
+    fireEvent.change(titleInput, { target: { value: "Details" } });
+    expect(screen.getByRole("checkbox", { name: "Mark S-209 in Main Steel – L2 superseded" })).not.toBeChecked();
+    expect(screen.getByText("0 of 3 will be marked superseded")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Create 3 Entries/ }));
+    expect(onCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ supersedeIds: [] }));
+  });
+
+  it("a hand untick survives title edits: the page stays unticked and is not sent", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(SOURCE);
+    const onCreate = mount();
+    const s201 = await screen.findByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" });
+    expect(s201).toBeChecked();
+    fireEvent.click(s201);
+    // Retyping the title passes through a different drawing ("F") and back to the same title.
+    const row = screen.getByDisplayValue("S-201").closest("tr") as HTMLElement;
+    const [, titleInput] = within(row).getAllByRole("textbox");
+    fireEvent.change(titleInput, { target: { value: "F" } });
+    expect(screen.getByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" })).not.toBeChecked();
+    fireEvent.change(titleInput, { target: { value: "Framing Plan" } });
+    expect(screen.getByRole("checkbox", { name: "Mark S-201 in Main Steel – L2 superseded" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /Create 3 Entries/ }));
+    expect(onCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ supersedeIds: ["old-204"] }));
+  });
+
   it("a failed check says nothing will be superseded and lets Create go ahead", async () => {
     repo.fetchCrossSetSource.mockRejectedValue(new Error("network down"));
     const onCreate = mount();

@@ -203,23 +203,25 @@ describe("CrossSetSupersedePanel", () => {
     await ready();
     const note = screen.getByText(/^Superseded pages are left out of fab-release and turnover exports/);
     expect(note).toHaveTextContent(
-      "Superseded pages are left out of fab-release and turnover exports, but they still block release: " +
-      "moving a submittal that includes Main Steel – L2 to Released for Fabrication (if it isn't there yet), " +
-      "and any such export that includes pages from Main Steel – L2, will need an override reason from someone with PM access " +
-      "— and that override skips every other release check too, including open RFIs and rejected sheets.",
+      "Superseded pages are left out of fab-release and turnover exports, but they block release: " +
+      "any such export that includes other pages from Main Steel – L2 needs an override reason from someone with project admin access, " +
+      "and moving a submittal that includes Main Steel – L2 to Released for Fabrication (if it isn't there yet) " +
+      "needs one from someone with PM access. " +
+      "The export override also waives every other export check, including open RFIs and holds; " +
+      "the submittal override also waives open RFIs and rejected sheets.",
     );
-    // Not an admin-only override, not a re-release, and no block on a submittal that is already released.
-    expect(note).not.toHaveTextContent(/admin|again|can't be released/i);
+    // Export overrides are admin-only in production; submittal overrides are PM. No re-release, and no block
+    // on a submittal that is already released.
+    expect(note).not.toHaveTextContent(/PM override|again|can't be released/i);
 
     // Any one ticked set blocks the submittal or export that holds it.
     fireEvent.click(rowBox("Mark S-204 in Ladders - Bldg. 2 superseded"));
+    expect(note).toHaveTextContent("any such export that includes other pages from Main Steel – L2 or Ladders - Bldg. 2 needs an override reason");
     expect(note).toHaveTextContent("moving a submittal that includes Main Steel – L2 or Ladders - Bldg. 2 to Released for Fabrication");
-    expect(note).toHaveTextContent("any such export that includes pages from Main Steel – L2 or Ladders - Bldg. 2, will need");
 
+    // Nothing ticked: nothing will be superseded, so there is nothing to warn about.
     fireEvent.click(screen.getByRole("button", { name: "Clear all pages to supersede" }));
-    expect(note).toHaveTextContent(
-      /^Superseded pages are left out of fab-release and turnover exports, and they block release of the sets they're in\.$/,
-    );
+    expect(screen.queryByText(/^Superseded pages are left out/)).toBeNull();
   });
 
   it("never says a page replaces another when every match in its set is unlikely", async () => {

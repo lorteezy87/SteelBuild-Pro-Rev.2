@@ -46,11 +46,15 @@ interface StoredChoice {
   relation: TitleRelation;
 }
 
-// A choice made while the row had another title relation doesn't carry over —
-// above all, a tick given to a same-title or title-missing row never follows it
-// into the "different drawing" section. The row falls back to its default.
+// An untick (by hand or Clear) always sticks while its row is in the plan: a
+// title edit must never re-tick a page the user chose to keep live. Only a tick
+// is tied to the title relation it was given under — a tick on a same-title or
+// title-missing row never follows it into the "different drawing" section; once
+// the relation changes the row falls back to its default.
 function choiceFor(row: CrossSetRow, stored: StoredChoice | undefined): boolean {
-  return stored && stored.relation === row.titleRelation ? stored.value : row.defaultChecked;
+  if (!stored) return row.defaultChecked;
+  if (!stored.value) return false;
+  return stored.relation === row.titleRelation ? true : row.defaultChecked;
 }
 
 /**
@@ -58,8 +62,8 @@ function choiceFor(row: CrossSetRow, stored: StoredChoice | undefined): boolean 
  * project's live sheets on every visit (staleTime 0), re-planned as the user
  * edits sheet numbers, titles, selection or the set name. Defaults come from the
  * plan; once the user toggles a row that choice is kept against the old
- * drawing's id, and dropped if the row stops matching or its title relation
- * changes.
+ * drawing's id and dropped if the row stops matching. An untick survives title
+ * edits; a tick is also dropped when the row's title relation changes.
  */
 export function useCrossSetSupersede({ projectId, sheets, meta }: UseCrossSetSupersedeArgs): UseCrossSetSupersedeResult {
   const query = useQuery({
@@ -85,8 +89,11 @@ export function useCrossSetSupersede({ projectId, sheets, meta }: UseCrossSetSup
       const relationById = new Map<string, TitleRelation>();
       for (const row of plan.rows) relationById.set(row.oldId, row.titleRelation);
       const next = new Map<string, StoredChoice>();
+      // Drop a choice whose row left the plan, and a tick whose title relation
+      // changed; keep an untick whatever the title does.
       prev.forEach((stored, id) => {
-        if (relationById.get(id) === stored.relation) next.set(id, stored);
+        const relation = relationById.get(id);
+        if (relation !== undefined && (!stored.value || relation === stored.relation)) next.set(id, stored);
       });
       return next.size === prev.size ? prev : next;
     });

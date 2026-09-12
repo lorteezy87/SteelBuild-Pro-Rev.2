@@ -38,25 +38,29 @@ const joinOr = (names: readonly string[]) =>
   names.length <= 1 ? names[0] ?? "" : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
 
 /**
- * What superseding does to releasing the old sets.
- * - Fab-release and turnover exports always leave superseded pages out
- *   (isApprovedForFab), but still gate on them as revision conflicts.
- * - enforce_submittal_fab_release_gate refuses a submittal's move INTO Released
- *   for Fabrication while any sheet in its sets is superseded; a submittal that
- *   is already released is never re-checked.
- * - Only an override reason gets past either. RLS allows it from pm up, and it
- *   skips every other release check too.
+ * What superseding does to releasing the old sets, as the shared production
+ * database enforces it. Shown only while pages are ticked.
+ * - Fab-release and turnover exports leave superseded pages out
+ *   (isApprovedForFab).
+ * - Exports: every fab_release_log insert re-evaluates each drawing set its
+ *   drawing_ids touch (enforce_fab_release_gate → evaluate_fab_release_set), and
+ *   one superseded sheet anywhere in a set blocks it. Only a project admin (or
+ *   owner) with a reason may override, and that override waives every blocker
+ *   (open RFIs, holds, missing files, the governing submittal's stage).
+ * - Submittals: enforce_submittal_fab_release_gate still refuses a move INTO
+ *   Released for Fabrication while any sheet in its sets is superseded; an
+ *   already-released submittal is never re-checked. A non-blank override reason
+ *   passes it — writing the status needs pm up — and also skips its open-RFI and
+ *   rejected-sheet checks, but not the separate OFS-checklist workflow gate.
  */
-function releaseNote(tickedSetNames: readonly string[]): string {
-  if (tickedSetNames.length === 0) {
-    return "Superseded pages are left out of fab-release and turnover exports, and they block release of the sets they're in.";
-  }
+function releaseNote(tickedSetNames: readonly string[]): string | null {
+  if (tickedSetNames.length === 0) return null;
   const sets = joinOr(tickedSetNames);
   return (
-    `Superseded pages are left out of fab-release and turnover exports, but they still block release: moving a submittal that includes ${sets} ` +
-    "to Released for Fabrication (if it isn't there yet), and any such export that includes pages from " +
-    `${sets}, will need an override reason from someone with PM access — and that override skips every other release check too, ` +
-    "including open RFIs and rejected sheets."
+    `Superseded pages are left out of fab-release and turnover exports, but they block release: any such export that includes other pages from ${sets} ` +
+    `needs an override reason from someone with project admin access, and moving a submittal that includes ${sets} to Released for Fabrication ` +
+    "(if it isn't there yet) needs one from someone with PM access. " +
+    "The export override also waives every other export check, including open RFIs and holds; the submittal override also waives open RFIs and rejected sheets."
   );
 }
 
@@ -262,6 +266,7 @@ export default function CrossSetSupersedePanel({
   const selectable = plan.rows.filter((row) => !row.disabled);
   const checkedRows = plan.rows.filter(isChecked);
   const tickedSetNames = [...new Set(checkedRows.map((row) => row.oldSetName))];
+  const note = canSupersede ? releaseNote(tickedSetNames) : null;
 
   return (
     <section aria-labelledby={titleId} style={{
@@ -328,9 +333,9 @@ export default function CrossSetSupersedePanel({
         />
       )}
 
-      {canSupersede && (
+      {note && (
         <p style={{ ...bodyText, color: "var(--text-muted)", margin: "10px 0 0" }}>
-          {releaseNote(tickedSetNames)}
+          {note}
         </p>
       )}
     </section>
