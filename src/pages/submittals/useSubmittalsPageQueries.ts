@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
+import { groupSubmittalRounds } from "@/hooks/submittals/queries";
 import { isMissingSchemaObjectError } from "@/lib/postgrestErrors";
 import type { DrawingSet, DrawingSetsById, Submittal, SubmittalRoundRecord } from "./types";
 
@@ -37,22 +38,7 @@ export function indexDrawingSets(drawingSets: DrawingSet[]): DrawingSetsById {
   return indexed;
 }
 
-export function groupSubmittalRounds(
-  rounds: SubmittalRoundRecord[],
-): Record<string, SubmittalRoundRecord[]> {
-  const grouped: Record<string, SubmittalRoundRecord[]> = {};
-  for (const round of rounds) {
-    if (!round.submittal_id) continue;
-    if (!grouped[round.submittal_id]) grouped[round.submittal_id] = [];
-    grouped[round.submittal_id].push(round);
-  }
-  for (const submittalRounds of Object.values(grouped)) {
-    submittalRounds.sort(
-      (left, right) => (left.round_number || 1) - (right.round_number || 1),
-    );
-  }
-  return grouped;
-}
+export { groupSubmittalRounds };
 
 export function useSubmittalsPageQueries(projectId: string | undefined) {
   const { data: rows = [], isLoading } = useQuery({
