@@ -2,12 +2,10 @@ import React, { useMemo, useState } from "react";
 import { Archive, FolderPlus, Link2, MoreHorizontal, Pencil } from "lucide-react";
 import { buildFolderTree } from "@/lib/noteFolders/domain";
 import type { VisibleNoteFolder } from "@/lib/noteFolders/types";
-
-interface ProjectOption {
-  id: string;
-  name?: string | null;
-  project_number?: string | null;
-}
+import {
+  deriveFolderJobLinkViewModels,
+  type ProductionNotesProject,
+} from "@/pages/productionNotes/productionNotesDerive";
 
 interface FolderTreeProps {
   folders: VisibleNoteFolder[];
@@ -17,7 +15,7 @@ interface FolderTreeProps {
   onRename: (folder: VisibleNoteFolder, name: string) => void;
   onArchive: (folder: VisibleNoteFolder) => void;
   onLinkJobs: (folder: VisibleNoteFolder) => void;
-  projects: ProjectOption[];
+  projects: ProductionNotesProject[];
   canOrganize: boolean;
   canManageLinks: boolean;
 }
@@ -39,7 +37,10 @@ export function FolderTree({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
   const tree = useMemo(() => buildFolderTree(folders), [folders]);
-  const projectsById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+  const folderViews = useMemo(
+    () => deriveFolderJobLinkViewModels(folders, projects),
+    [folders, projects],
+  );
 
   const submitCreate = (parentId: string | null) => {
     const name = draftName.trim();
@@ -107,9 +108,8 @@ export function FolderTree({
         )}
         {tree.map((node) => {
           const selected = node.id === selectedId;
-          const jobLabels = node.effective_project_ids
-            .map((id) => projectsById.get(id)?.project_number || projectsById.get(id)?.name)
-            .filter(Boolean);
+          const folderView = folderViews.get(node.id);
+          const jobLabels = folderView?.jobLabels ?? [];
           return (
             <div key={node.id}>
               <div
