@@ -19,7 +19,7 @@ import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 import type { TransmittalLog, TransmittalRow } from "@/hooks/useTransmittals";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 import { submittalStatusToStage } from "@/lib/submittalStageMapping";
-import { matrixStatusBucket, toDateInputValue } from "./format";
+import { matrixStatusBucket } from "./format";
 import { createSubmittalHref, hubHref, submittalRecordHref } from "./hubLinks";
 import type { SetPackage } from "./types";
 
@@ -169,6 +169,10 @@ function packagesBySetId(setPackages: readonly SetPackage[] | null | undefined):
  * Day-first because date_sent / date_received are plain dates while
  * created_at is a timestamp — comparing the raw strings would rank
  * "2026-03-02T09:00Z" above "2026-03-02" for the same day.
+ *
+ * An undated row's day is blank, and a blank day sorts before every date: an
+ * undated row never outranks a dated one, and undated rows order among
+ * themselves by created_at, then number.
  */
 function compareTransmittals(a: TransmittalOrder, b: TransmittalOrder): number {
   return (
@@ -181,12 +185,22 @@ function compareTransmittals(a: TransmittalOrder, b: TransmittalOrder): number {
 /**
  * drawing_set_id → the newest transmittal that carried any of the set's sheets.
  *
- * Rev.2 transmittals have no submittal_id or status (2026 keyed on both), so
- * the link is re-derived: transmittal item → drawing revision → sheet → set.
- * useTransmittals already resolves each item's drawing_id. Superseded sheets
- * count — they were transmitted as part of the set. Both directions count:
- * a set coming back from the EOR moved just as much as one going out, and the
- * direction is shown beside the number.
+ * Rev.2 transmittals carry no submittal_id, so the link is re-derived:
+ * transmittal item → sheet → set. useTransmittals gives each item a
+ * drawing_id: the item's own (m4_1 keys items by it), else its revision's.
+ * Superseded sheets count — they were transmitted as part of the set. Both
+ * directions count: a set coming back from the EOR moved just as much as one
+ * going out, and the direction is shown beside the number. Void (m4_1's
+ * retraction of a sent transmittal) and deleted rows don't count; every other
+ * status, and a missing one, does.
+ *
+ * Dated rows rank by the day their direction implies, as entered. A row with
+ * no such date can't be placed against them: a blank date is unknown, not
+ * "newest". Under the shared DB's m4_1 rules every undated row is an unsent
+ * draft, and 2026's create_transmittal fills one with every live sheet of a
+ * round, so letting its created_at compete would show a draft in place of
+ * the transmittal that went out. An undated row therefore shows only for a
+ * set that no dated transmittal carried.
  */
 export function buildLastTransmittalBySet(
   transmittals: readonly TransmittalRow[] | null | undefined,
@@ -205,21 +219,21 @@ export function buildLastTransmittalBySet(
     // Void (m4_1) is a retraction: it keeps its dates and is_deleted=false.
     if (!transmittal || transmittal.is_deleted || transmittal.status === "void") continue;
     const { party, date } = resolveTransmittalDisplay(transmittal);
+    const entered = String(date ?? "").trim();
     const candidate = {
       value: {
         id: String(transmittal.id),
         number: String(transmittal.transmittal_number || ""),
         direction: transmittal.direction,
         party: party ?? null,
-        date: date ?? null,
+        date: entered ? date : null,
       },
       // An entered date is a calendar day (stored at midnight UTC — slice it,
-      // don't shift it). created_at is a real UTC instant, so it becomes the
-      // LOCAL day it happened on; slicing it filed evening entries under
-      // tomorrow, ahead of transmittals actually dated tomorrow.
-      day: date
-        ? String(date).slice(0, 10)
-        : transmittal.created_at ? toDateInputValue(new Date(transmittal.created_at)) : "",
+      // don't shift it). A blank or missing one leaves the day blank, which
+      // ranks the row below every dated one (see compareTransmittals). Its
+      // created_at never stands in for a date: under m4_1 it is when an unsent
+      // draft was logged, not when anything went out.
+      day: entered.slice(0, 10),
       createdAt: String(transmittal.created_at || ""),
       number: String(transmittal.transmittal_number || ""),
     };
@@ -252,9 +266,9 @@ function logPossiblyTruncated(transmittals: readonly TransmittalRow[] | null | u
  * sheets, and what has become of those sheets since.
  *
  * Kept apart from buildLastTransmittalBySet on purpose. That one is the Last
- * Transmittal column: the newest in EITHER direction, undated ones by
- * created_at. This one answers "what did we last send, and is it still
- * what's current?".
+ * Transmittal column: the newest in EITHER direction, an undated one only when
+ * the set has no dated one. This one answers "what did we last send, and is it
+ * still what's current?".
  *
  * - Outgoing transmittals with a date_sent go in bySet. Newest wins by that
  *   day (the entered date as written, never shifted), then created_at, then
@@ -263,8 +277,8 @@ function logPossiblyTruncated(transmittals: readonly TransmittalRow[] | null | u
  *   missing date is unknown, not "never sent". They go in undatedBySet (newest
  *   by created_at, then number) and never compete with a dated one, because
  *   they can't be ordered against it.
- * - item → drawing (useTransmittals resolves it from the item's immutable
- *   revision) → set, over every loaded sheet, live AND superseded. A sheet in
+ * - item → drawing (useTransmittals takes the item's own drawing_id, else its
+ *   revision's) → set, over every loaded sheet, live AND superseded. A sheet in
  *   no set (a legacy ungrouped package) is known, just set-less: skipped, not
  *   unresolved. Items on dated and undated transmittals alike count as
  *   unresolved when their sheet isn't loaded.

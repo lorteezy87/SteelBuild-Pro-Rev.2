@@ -161,8 +161,14 @@ describe("enrichApprovalMatrixRows — stage", () => {
   });
 });
 
-describe("buildLastTransmittalBySet (items → revision → sheet → set)", () => {
+describe("buildLastTransmittalBySet (items → sheet → set)", () => {
   const { packages } = enrich([]);
+  // 2026's create_transmittal: an unsent draft (status draft, no date_sent, no
+  // recipient) whose items carry only drawing_id, with no revision recorded.
+  const unsentDraft = (overrides: Partial<TransmittalRow> & { drawingIds: string[] }): TransmittalRow => {
+    const draft = transmittal({ status: "draft", date_sent: null, sent_to: null, ...overrides });
+    return { ...draft, items: draft.items.map((item) => ({ ...item, drawing_revision_id: null as string | null })) };
+  };
 
   it("picks the newest by the date the direction implies, across both directions", () => {
     const last = buildLastTransmittalBySet([
@@ -204,12 +210,49 @@ describe("buildLastTransmittalBySet (items → revision → sheet → set)", () 
     expect(last.has("s2")).toBe(false);
   });
 
-  it("falls back to created_at when a transmittal carries no date", () => {
+  it("never lets an unsent draft outrank a sent transmittal, however new the draft", () => {
+    // T-014 went to the EOR on Aug 3. T-021 is a 2026 draft for the same
+    // sheets, logged Sep 10 and never sent. Under m4_1 every undated row is
+    // such a draft: its created_at is when it was drafted, not when it went out.
+    const sent = transmittal({ id: "sent", transmittal_number: "T-014", status: "sent", date_sent: "2026-08-03", created_at: "2026-08-03T15:00:00Z", drawingIds: ["d1"] });
+    for (const dateSent of [null, "", "   "]) {
+      const draft = unsentDraft({ id: "draft", transmittal_number: "T-021", date_sent: dateSent, created_at: "2026-09-10T15:00:00Z", drawingIds: ["d1", "d2"] });
+      // useTransmittals lists newest first; the input order must not matter.
+      for (const log of [[draft, sent], [sent, draft]]) {
+        expect(buildLastTransmittalBySet(log, packages).get("s1"), JSON.stringify(dateSent)).toEqual({
+          id: "sent", number: "T-014", direction: "outgoing", party: "EOR", date: "2026-08-03",
+        });
+      }
+    }
+  });
+
+  it("shows an unsent draft for a set no dated transmittal carried, with no party or date", () => {
     const last = buildLastTransmittalBySet([
-      transmittal({ id: "dated", date_sent: "2026-08-01", drawingIds: ["d1"] }),
-      transmittal({ id: "undated", date_sent: null, created_at: "2026-08-03T00:00:00Z", drawingIds: ["d1"] }),
+      unsentDraft({ id: "draft", transmittal_number: "T-021", created_at: "2026-09-10T15:00:00Z", drawingIds: ["d1", "d4"] }),
+      transmittal({ id: "sent", transmittal_number: "T-014", status: "sent", date_sent: "2026-08-03", drawingIds: ["d1"] }),
     ], packages);
-    expect(last.get("s1")).toMatchObject({ id: "undated", date: null });
+    expect(last.get("s1")?.id).toBe("sent");
+    expect(last.get("s2")).toEqual({ id: "draft", number: "T-021", direction: "outgoing", party: null, date: null });
+  });
+
+  it("orders undated rows among themselves by created_at, then transmittal number", () => {
+    const last = buildLastTransmittalBySet([
+      unsentDraft({ id: "older", transmittal_number: "T-030", created_at: "2026-09-01T15:00:00Z", drawingIds: ["d4"] }),
+      unsentDraft({ id: "newer", transmittal_number: "T-021", created_at: "2026-09-10T15:00:00Z", drawingIds: ["d4"] }),
+      unsentDraft({ id: "t2", transmittal_number: "T-2", created_at: "2026-09-05T15:00:00Z", drawingIds: ["d1"] }),
+      unsentDraft({ id: "t10", transmittal_number: "T-10", created_at: "2026-09-05T15:00:00Z", drawingIds: ["d1"] }),
+    ], packages);
+    expect(last.get("s2")?.id).toBe("newer");
+    expect(last.get("s1")?.id).toBe("t10"); // natural order: T-10 > T-2
+  });
+
+  it("ranks a dated draft like any dated transmittal: the rule is the date, not the status", () => {
+    // Rev.2's own inserts land as 'draft', dated.
+    const last = buildLastTransmittalBySet([
+      transmittal({ id: "sent", transmittal_number: "T-014", status: "sent", date_sent: "2026-08-03", drawingIds: ["d1"] }),
+      transmittal({ id: "rev2", transmittal_number: "T-015", status: "draft", date_sent: "2026-08-05", drawingIds: ["d1"] }),
+    ], packages);
+    expect(last.get("s1")).toEqual({ id: "rev2", number: "T-015", direction: "outgoing", party: "EOR", date: "2026-08-05" });
   });
 
   // Local-vs-UTC day keys are pinned in approvalMatrix.derive.localday.test.ts:
