@@ -23,7 +23,6 @@ const triggerFunctions = [
   "public.log_submittal_activity()",
   "public.piece_station_completion_refresh_wp()",
   "public.pieces_projection_after_change()",
-  "public.sync_gc_drawing_set_counts()",
 ];
 
 const sheetsTables = ["public.sheets_config", "public.sheets_doc", "public.sheets_doc_backup"];
@@ -35,13 +34,24 @@ describe("trigger-function EXECUTE lockdown + sheets_* grant removal", () => {
     expect(migration.match(/^COMMIT;$/gm)).toHaveLength(1);
   });
 
-  it("denies direct execution for all five SECURITY DEFINER trigger functions", () => {
+  it("denies direct execution for the four in-scope SECURITY DEFINER trigger functions", () => {
     for (const identity of triggerFunctions) {
       expect(executable).toContain(`'${identity}'`);
     }
     expect(executable).toMatch(
       /revoke all on function %s from public, anon, authenticated, service_role/i,
     );
+  });
+
+  it("leaves sync_gc_drawing_set_counts alone — gc_drawings is 2026-only, not this repo's to own", () => {
+    // CLAUDE.md, "Sibling app": no migrations for gc_drawings without the owner's
+    // say-so while schema ownership is undecided. Excluded on ownership, not merit.
+    //
+    // Assert on the quoted identity, not the bare name: the executable block
+    // names it in a SQL comment explaining the exclusion, which is intended.
+    expect(executable).not.toContain("'public.sync_gc_drawing_set_counts()'");
+    expect(executable).not.toMatch(/revoke[^;]*sync_gc_drawing_set_counts/i);
+    expect(migration).toMatch(/sync_gc_drawing_set_counts/); // exclusion stays documented
   });
 
   it("never grants execute back to PUBLIC or anon", () => {
