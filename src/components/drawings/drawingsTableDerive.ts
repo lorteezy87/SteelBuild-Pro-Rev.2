@@ -1,23 +1,69 @@
-// Pure derive helpers extracted from DrawingsTable.jsx — column defs, sort
-// helpers, flat row builders, and expand/collapse persistence. No React imports.
+import type { CSSProperties } from "react";
+import type { Database } from "@/types/supabase";
+import type { Drawing } from "@/hooks/useDrawings";
 import { SORTABLE_FIELDS } from "./drawingsConfig";
+import { groupByDrawingSet } from "./drawingsUtils";
 
 export const EXPAND_LS_KEY = "sbp-drawings-expanded-sets-v2";
 
-type SortState = { field: string; dir: "asc" | "desc" } | null;
+export type DrawingSetRow = Database["public"]["Tables"]["drawing_sets"]["Row"];
+export type DrawingTableSortField = keyof typeof SORTABLE_FIELDS;
+export type DrawingTableSort = {
+  field: DrawingTableSortField;
+  dir: "asc" | "desc";
+} | null;
 
-type DrawingGroup = {
+export interface DrawingGroupAggregates {
+  total: number;
+  stageCounts: Record<string, number>;
+  releasedCount: number;
+  percentReleased: number;
+  earliestSubmitted: string | null;
+  earliestDue: string | null;
+  overdueCount: number;
+  maxLate: number;
+  aggregateStatus: string | null;
+  disciplines: string[];
+  hasPriority: boolean;
+  maxRev: string | number;
+  aiProcessed: number;
+  aiNeedsReview: number;
+  aiExtracting: number;
+  aiFailed: number;
+  stageSummary: string | null;
+  driveUrl: string | null;
+  revisionHistory: string | null;
+  eventCount: number | null;
+}
+
+export interface DrawingGroup {
   key: string;
-  setOnly?: boolean;
-  sheets: Record<string, unknown>[];
-};
+  setId: string | null;
+  setNumber: string;
+  name: string;
+  isUngrouped: boolean;
+  setOnly: boolean;
+  parent: DrawingSetRow | null;
+  sheets: Drawing[];
+  aggregates: DrawingGroupAggregates;
+}
 
-type FlatDrawingRow =
+export type FlatDrawingRow =
   | { type: "group"; group: DrawingGroup; isExpanded: boolean }
   | { type: "setOnlyInfo"; group: DrawingGroup }
-  | { type: "sheet"; drawing: Record<string, unknown>; group: DrawingGroup };
+  | { type: "sheet"; drawing: Drawing; group: DrawingGroup };
 
-/** Monospace header cell styles (stable reference for the table thead). */
+export interface DrawingSelectionState {
+  selectedCount: number;
+  allSelected: boolean;
+  indeterminate: boolean;
+}
+
+export interface DrawingTableViewModel {
+  groups: DrawingGroup[];
+  rows: FlatDrawingRow[];
+}
+
 export const TABLE_HEADER_STYLE = {
   fontFamily: "var(--font-mono)",
   fontSize: 9,
@@ -30,14 +76,8 @@ export const TABLE_HEADER_STYLE = {
   borderBottom: "1px solid var(--border-default)",
   whiteSpace: "nowrap",
   background: "var(--bg-surface)",
-};
+} satisfies CSSProperties;
 
-/**
- * Column definitions for the register table.
- * Default visible: checkbox | sheet # | title | rev | stage | due | actions.
- * Discipline, reviewer, submitted_date, and approval stay in the DOM for
- * colSpan stability but are hidden — secondary data lives behind expand / ⋮.
- */
 export const TABLE_COLUMNS = [
   { key: "checkbox", field: null as null, label: "", width: 36 },
   { key: "sheet_number", field: "sheet_number", label: SORTABLE_FIELDS.sheet_number.label },
@@ -50,7 +90,13 @@ export const TABLE_COLUMNS = [
   { key: "reviewer", field: "reviewer", label: SORTABLE_FIELDS.reviewer.label, hidden: true },
   { key: "approval", field: null as null, label: "APPROVAL", hidden: true },
   { key: "actions", field: null as null, label: "" },
-];
+] satisfies ReadonlyArray<{
+  key: string;
+  field: DrawingTableSortField | null;
+  label: string;
+  width?: number;
+  hidden?: boolean;
+}>;
 
 export function loadExpandedSets(): Set<string> | null {
   try {
@@ -62,40 +108,41 @@ export function loadExpandedSets(): Set<string> | null {
   }
 }
 
-export function saveExpandedSets(set: Set<string>): void {
+export function saveExpandedSets(set: ReadonlySet<string>): void {
   try {
     localStorage.setItem(EXPAND_LS_KEY, JSON.stringify([...set]));
-  } catch { /* noop */ }
+  } catch {
+    // Expansion persistence is optional; storage can be unavailable.
+  }
 }
 
-/**
- * Toggle sort state: off → asc → desc → off (null).
- * Byte-identical to DrawingsTable handleSort reducer logic.
- */
-export function nextSortState(prev: SortState, field: string): SortState {
+export function nextSortState(
+  prev: DrawingTableSort,
+  field: DrawingTableSortField,
+): DrawingTableSort {
   if (!prev || prev.field !== field) return { field, dir: "asc" };
   if (prev.dir === "asc") return { field, dir: "desc" };
   return null;
 }
 
-/** Sort sheet lists within each group; groups stay in alphabetical order. */
-export function sortDrawingGroups(groups: DrawingGroup[], sort: SortState): DrawingGroup[] {
+export function sortDrawingGroups(
+  groups: DrawingGroup[],
+  sort: DrawingTableSort,
+): DrawingGroup[] {
   if (!sort) return groups;
   const { field, dir } = sort;
-  const cmp = SORTABLE_FIELDS[field as keyof typeof SORTABLE_FIELDS]?.cmp;
-  if (!cmp) return groups;
+  const cmp = SORTABLE_FIELDS[field].cmp;
   const sign = dir === "desc" ? -1 : 1;
-  return groups.map((g) => ({
-    ...g,
-    sheets: [...g.sheets].sort((a, b) => sign * cmp(a, b)),
+  return groups.map((group) => ({
+    ...group,
+    sheets: [...group.sheets].sort((a, b) => sign * cmp(a, b)),
   }));
 }
 
-/**
- * Flatten grouped sets into a virtual row list for @tanstack/react-virtual.
- * Emits group headers, optional set-only info rows, and child sheet rows.
- */
-export function buildFlatDrawingRows(sortedGroups: DrawingGroup[], expanded: Set<string>): FlatDrawingRow[] {
+export function buildFlatDrawingRows(
+  sortedGroups: DrawingGroup[],
+  expanded: ReadonlySet<string>,
+): FlatDrawingRow[] {
   const rows: FlatDrawingRow[] = [];
   for (const group of sortedGroups) {
     const isExpanded = expanded.has(group.key);
@@ -104,33 +151,89 @@ export function buildFlatDrawingRows(sortedGroups: DrawingGroup[], expanded: Set
       rows.push({ type: "setOnlyInfo", group });
     }
     if (isExpanded && !group.setOnly) {
-      for (const d of group.sheets) {
-        rows.push({ type: "sheet", drawing: d, group });
+      for (const drawing of group.sheets) {
+        rows.push({ type: "sheet", drawing, group });
       }
     }
   }
   return rows;
 }
 
-/** Virtualizer row height estimate by flat row type. */
+export function buildDrawingTableViewModel(
+  groups: DrawingGroup[],
+  sort: DrawingTableSort,
+  expanded: ReadonlySet<string>,
+): DrawingTableViewModel {
+  const sortedGroups = sortDrawingGroups(groups, sort);
+  return {
+    groups,
+    rows: buildFlatDrawingRows(sortedGroups, expanded),
+  };
+}
+
+export function buildDrawingGroups(
+  drawings: Drawing[],
+  drawingSetMap: Record<string, DrawingSetRow>,
+): DrawingGroup[] {
+  return groupByDrawingSet(drawings, drawingSetMap) as DrawingGroup[];
+}
+
+export function deriveSelectionState(
+  drawings: ReadonlyArray<Pick<Drawing, "id">>,
+  selected: ReadonlySet<string>,
+): DrawingSelectionState {
+  const selectedCount = drawings.reduce(
+    (count, drawing) => count + Number(selected.has(drawing.id)),
+    0,
+  );
+  const allSelected = drawings.length > 0 && selectedCount === drawings.length;
+  return {
+    selectedCount,
+    allSelected,
+    indeterminate: selectedCount > 0 && !allSelected,
+  };
+}
+
+export function deriveGroupSelectionState(
+  group: Pick<DrawingGroup, "sheets">,
+  selected: ReadonlySet<string>,
+): DrawingSelectionState {
+  return deriveSelectionState(group.sheets, selected);
+}
+
+export function getGroupSelectionToggleIds(
+  group: Pick<DrawingGroup, "sheets">,
+  selected: ReadonlySet<string>,
+): string[] {
+  const selection = deriveGroupSelectionState(group, selected);
+  return group.sheets
+    .filter((drawing) => (
+      selection.allSelected ? selected.has(drawing.id) : !selected.has(drawing.id)
+    ))
+    .map((drawing) => drawing.id);
+}
+
 export function estimateFlatRowHeight(row: FlatDrawingRow): number {
   if (row.type === "group") return 48;
   if (row.type === "setOnlyInfo") return 120;
   return 44;
 }
 
-/** Sort arrow suffix for active column headers. */
-export function sortArrow(sort: SortState, field: string): string {
+export function sortArrow(
+  sort: DrawingTableSort,
+  field: DrawingTableSortField,
+): string {
   if (sort?.field !== field) return "";
   return sort.dir === "asc" ? " ▲" : " ▼";
 }
 
-/** Style helper: hide cells on compact viewports without changing colSpan. */
-export function compactHideStyle(compact: boolean): { display: string } | undefined {
+export function compactHideStyle(compact: boolean): CSSProperties | undefined {
   return compact ? { display: "none" } : undefined;
 }
 
-/** Discover group keys that appeared since last render (for auto-expand). */
-export function findBrandNewGroupKeys(groups: DrawingGroup[], seenKeys: Set<string>): DrawingGroup[] {
-  return groups.filter((g) => !seenKeys.has(g.key));
+export function findBrandNewGroupKeys(
+  groups: DrawingGroup[],
+  seenKeys: ReadonlySet<string>,
+): DrawingGroup[] {
+  return groups.filter((group) => !seenKeys.has(group.key));
 }
