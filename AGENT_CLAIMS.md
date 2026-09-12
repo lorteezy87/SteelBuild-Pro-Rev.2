@@ -32,7 +32,6 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-09-12T23:00:00Z | field-today-decomposition | Field Today control-center decomposition | src/pages/fieldToday/**; focused Field Today UI tests | Extract typed pure view models and a cohesive interaction subsystem while preserving offline field behavior. |
 | 2026-08-13T20:10:00Z | grok-notes-apple-pencil | Tools Notes Apple Pencil ink | src/pages/Notes.jsx; src/lib/notesInk/**; src/components/notes/InkCanvas.tsx | Upgrade Notes ink: coalesced/predicted strokes, pressure+tilt, palm rejection, highlighter, undo/redo, vector persistence. |
 | 2026-08-09T00:07:05Z | codex-ui-ux-liquid-glass | Professional UI/UX cleanup + native iOS Liquid Glass | docs/superpowers/{specs,plans}/2026-08-09-professional-ui-liquid-glass*; src/styles/{tokens,base,command,responsive}.css; src/pages/Settings.jsx; src/pages/settings/**; src/components/{settings,nav,ui,design-system}/**; src/lib/native/**; capacitor.config.ts; ios/**; mobile/ios/**; related tests/docs | Normalize typography, dark-theme contrast, spacing, icons and shared settings patterns; add an iOS 26 SwiftUI Liquid Glass command dock with earlier-iOS fallback. |
 | ~~2026-07-28T04:47:00Z~~ released | cursor-logistics-wp-filter-bulk-0b3b | Logistics WP filter + bulk select-all | src/components/pieceControl/PieceLogisticsControl.tsx, src/lib/pieceControl/logisticsRepository.ts, src/styles/piece-control-command.css | Mirror Production: work-package filter + select-all on Ship/Deliver/Erect panels. |
