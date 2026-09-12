@@ -9,7 +9,7 @@
 
 import React from "react";
 import { surface } from "./drawingsConfig";
-import { ContextMenuItem } from "./DrawingsTable";
+import { ContextMenuItem } from "./DrawingsTablePrimitives";
 
 export default function DrawingContextMenu({
   contextMenu,
