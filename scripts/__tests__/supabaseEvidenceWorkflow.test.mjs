@@ -70,6 +70,8 @@ describe("Supabase evidence workflow", () => {
     expect(captureStep.run).toContain("supabase migration list");
     expect(captureStep.run).toContain("supabase db dump");
     expect(captureStep.run).toContain("supabase functions download");
+    expect(captureStep.run).toContain("download-failures.txt");
+    expect(captureStep.run).toContain("if ! supabase functions download");
     expect(captureStep.run).not.toContain("npx ");
     expect(captureStep.run).not.toMatch(
       /supabase (?:migration repair|db (?:push|reset)|functions (?:deploy|delete))/,
@@ -90,12 +92,18 @@ describe("Supabase evidence workflow", () => {
     const cleanupStep = captureJob.steps.find(
       ({ name }) => name === "Remove temporary evidence",
     );
+    const verifyStep = captureJob.steps.find(
+      ({ name }) => name === "Verify evidence completeness",
+    );
 
     expect(uploadStep.with.path).toBe(
       "${{ runner.temp }}/supabase-production-evidence",
     );
     expect(uploadStep.with["retention-days"]).toBe(1);
     expect(uploadStep.with["if-no-files-found"]).toBe("error");
+    expect(uploadStep.if).toBe("${{ !cancelled() }}");
+    expect(verifyStep.run).toContain("download-failures.txt");
+    expect(verifyStep.run).toContain("exit 1");
     expect(cleanupStep.if).toBe("always()");
     expect(cleanupStep.run).toContain(
       '"$RUNNER_TEMP/supabase-production-evidence"',

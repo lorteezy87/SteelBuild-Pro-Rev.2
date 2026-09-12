@@ -90,10 +90,19 @@ jobs:
 
           (
             cd "$capture_work"
-            supabase functions download \
-              --project-ref "$SUPABASE_PROJECT_REF" \
-              --use-api \
-              --yes
+            mkdir -p supabase/functions
+            : > "$evidence_dir/functions/download-failures.txt"
+            jq -r '.[].slug' "$evidence_dir/functions/inventory.json" \
+              | while IFS= read -r slug; do
+                  if ! supabase functions download "$slug" \
+                    --project-ref "$SUPABASE_PROJECT_REF" \
+                    --use-api \
+                    --yes \
+                    >> "$evidence_dir/functions/download.log" 2>&1; then
+                    printf '%s\n' "$slug" \
+                      >> "$evidence_dir/functions/download-failures.txt"
+                  fi
+                done
           )
           cp -R "$capture_work/supabase/functions" "$evidence_dir/functions/source"
 
@@ -110,9 +119,12 @@ jobs:
             --arg project_ref "$SUPABASE_PROJECT_REF" \
             --arg run_id "$GITHUB_RUN_ID" \
             --arg supabase_cli "$(supabase --version)" \
+            --argjson function_source_complete \
+              "$([ ! -s "$evidence_dir/functions/download-failures.txt" ] && echo true || echo false)" \
             '{
               captured_at: $captured_at,
               commit: $commit,
+              function_source_complete: $function_source_complete,
               project_ref: $project_ref,
               run_id: $run_id,
               supabase_cli: $supabase_cli,
@@ -120,6 +132,7 @@ jobs:
             }' > "$evidence_dir/manifest.json"
 
       - name: Upload short-retention evidence
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: supabase-production-evidence-${{ github.run_id }}
@@ -127,6 +140,23 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 1
+
+      - name: Verify evidence completeness
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          evidence_dir="$RUNNER_TEMP/supabase-production-evidence"
+          test -s "$evidence_dir/ledger/migrations.json"
+          test -s "$evidence_dir/ledger/migration-list.txt"
+          test -s "$evidence_dir/schema/public.sql"
+          test -s "$evidence_dir/functions/inventory.json"
+          test -s "$evidence_dir/SHA256SUMS"
+          test -s "$evidence_dir/manifest.json"
+          if [ -s "$evidence_dir/functions/download-failures.txt" ]; then
+            echo "Function source capture was incomplete for:"
+            cat "$evidence_dir/functions/download-failures.txt"
+            exit 1
+          fi
 
       - name: Remove temporary evidence
         if: always()
