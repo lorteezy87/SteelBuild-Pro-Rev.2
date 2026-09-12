@@ -29,6 +29,7 @@ import type { TransmittalRow } from "@/hooks/useTransmittals";
 import {
   CLOSED_SUBMITTAL_STATUSES,
   STATUS_COLORS,
+  buildApprovalMatrixRows,
   dueInfoFor,
   fmtDate,
   getStatusColor,
@@ -36,10 +37,13 @@ import {
   isClosedSubmittal,
   pluralize,
   submittalRoundCount,
+  summarizeApprovalMatrix,
 } from "./format";
 import {
-  buildApprovalMatrixModel,
   createSubmittalForSetHref,
+  enrichApprovalMatrixRows,
+  matchesMatrixFilter,
+  summarizeMatrixCoverage,
   submittalHref,
   transmittalHref,
 } from "./approvalMatrix.derive";
@@ -164,29 +168,24 @@ export function ApprovalMatrixPanel({
   const [search, setSearch] = useState("");
   const { filter, setFilter } = useMatrixFilter();
 
-  const { visibleRows, summary, coverage } = useMemo(
-    () => buildApprovalMatrixModel({
-      drawingSets,
-      submittals,
-      search,
-      useWorkdays,
-      filter,
+  const baseRows = useMemo(
+    () => buildApprovalMatrixRows(drawingSets, submittals, search, useWorkdays),
+    [drawingSets, submittals, search, useWorkdays],
+  );
+  const rows = useMemo(
+    () => enrichApprovalMatrixRows(baseRows, {
       setPackages,
       holds,
       transmittals,
       currentRevisionIdByDrawingId,
     }),
-    [
-      drawingSets,
-      submittals,
-      search,
-      useWorkdays,
-      filter,
-      setPackages,
-      holds,
-      transmittals,
-      currentRevisionIdByDrawingId,
-    ],
+    [baseRows, setPackages, holds, transmittals, currentRevisionIdByDrawingId],
+  );
+  const summary = useMemo(() => summarizeApprovalMatrix(rows), [rows]);
+  const coverage = useMemo(() => summarizeMatrixCoverage(rows), [rows]);
+  const visibleRows = useMemo(
+    () => rows.filter((row) => matchesMatrixFilter(row, filter)),
+    [rows, filter],
   );
 
   if (isLoading) return <LoadingSkeleton />;
