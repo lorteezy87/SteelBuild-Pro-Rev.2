@@ -44,6 +44,7 @@ import {
   summarizeBoard,
 } from "./processBoard.derive";
 import type { BoardFilter, BoardItem, BoardSummary } from "./processBoard.derive";
+import { createSubmittalHref, hubHrefForBoardItem } from "@/pages/drawingSubmittalHub/hubLinks";
 
 type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
@@ -87,6 +88,13 @@ export interface ProcessBoardPanelProps {
   isLoading?: boolean;
   onOpenTab?: (key: string) => void;
   useWorkdays?: boolean;
+  /**
+   * Rendered inside the Detailing Control Center. A card then opens its
+   * record in the hub (hubHrefForBoardItem), and Create submittal opens create
+   * on the hub's Submittal Register; both push, so Back returns to the board.
+   * Otherwise a card calls onOpenTab and Create submittal goes to /Submittals.
+   */
+  inHub?: boolean;
 }
 
 export default function ProcessBoardPanel({
@@ -95,6 +103,7 @@ export default function ProcessBoardPanel({
   isLoading = false,
   onOpenTab,
   useWorkdays = false,
+  inHub = false,
 }: ProcessBoardPanelProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<BoardFilter>("all");
@@ -162,6 +171,7 @@ export default function ProcessBoardPanel({
             stage={stage}
             items={stageBuckets[stage] || []}
             onOpenTab={onOpenTab}
+            inHub={inHub}
           />
         ))}
       </div>
@@ -171,7 +181,17 @@ export default function ProcessBoardPanel({
 
 // ── Column ──────────────────────────────────────────────────────────────────
 
-function ProcessColumn({ stage, items, onOpenTab }: { stage: string; items: BoardItem[]; onOpenTab?: (k: string) => void }) {
+function ProcessColumn({
+  stage,
+  items,
+  onOpenTab,
+  inHub,
+}: {
+  stage: string;
+  items: BoardItem[];
+  onOpenTab?: (k: string) => void;
+  inHub: boolean;
+}) {
   const color = getStageColor(stage);
   const caption = STAGE_CAPTIONS[stage] || stage;
   return (
@@ -257,7 +277,7 @@ function ProcessColumn({ stage, items, onOpenTab }: { stage: string; items: Boar
             No packages
           </div>
         ) : (
-          items.map((item) => <ProcessCard key={item.id} item={item} onOpenTab={onOpenTab} />)
+          items.map((item) => <ProcessCard key={item.id} item={item} onOpenTab={onOpenTab} inHub={inHub} />)
         )}
       </div>
     </div>
@@ -266,7 +286,15 @@ function ProcessColumn({ stage, items, onOpenTab }: { stage: string; items: Boar
 
 // ── Card ──────────────────────────────────────────────────────────────────
 
-function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: string) => void }) {
+function ProcessCard({
+  item,
+  onOpenTab,
+  inHub,
+}: {
+  item: BoardItem;
+  onOpenTab?: (k: string) => void;
+  inHub: boolean;
+}) {
   const navigate = useNavigate();
   const accent = item.risk?.tier === "critical" || item.due.overdue
     ? "var(--cmd-danger)"
@@ -279,10 +307,21 @@ function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: str
     item.setNumber ? `Set ${item.setNumber}` : null,
     item.submittalNumber ? `Sub ${item.submittalNumber}` : null,
   ].filter(Boolean).join(" | ");
+  // In the hub a card opens its record: the governing submittal, else its
+  // set's Sets & revisions view. A push, so Back returns to the board.
+  const openCard = () => {
+    if (inHub) navigate(hubHrefForBoardItem(item));
+    else onOpenTab?.(item.routeTab || "submittals");
+  };
+  // Create submittal: in the hub, create on its Submittal Register with the
+  // set pre-linked; elsewhere the standalone Submittals page. Either way the
+  // create flow mints the number (the sequence RPC), not this link.
+  const createHref = (setId: string) =>
+    inHub ? createSubmittalHref(setId) : `/Submittals?targetSetId=${encodeURIComponent(setId)}`;
   return (
     <button
       type="button"
-      onClick={() => onOpenTab?.(item.routeTab || "submittals")}
+      onClick={openCard}
       style={{
         width: "100%",
         textAlign: "left",
@@ -367,14 +406,15 @@ function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: str
             role="link"
             tabIndex={0}
             onClick={(e) => {
+              // Nested inside the card's button: never also fire the card.
               e.stopPropagation();
-              navigate(`/Submittals?targetSetId=${encodeURIComponent(item.drawingSetId!)}`);
+              navigate(createHref(item.drawingSetId!));
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 e.stopPropagation();
-                navigate(`/Submittals?targetSetId=${encodeURIComponent(item.drawingSetId!)}`);
+                navigate(createHref(item.drawingSetId!));
               }
             }}
             title="Create a submittal linked to this drawing set"

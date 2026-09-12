@@ -19,6 +19,7 @@ import type { TransmittalRow } from "@/hooks/useTransmittals";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 import { submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { matrixStatusBucket, toDateInputValue } from "./format";
+import { createSubmittalHref, hubHref, submittalRecordHref } from "./hubLinks";
 import type { SetPackage } from "./types";
 
 /** The subset of a buildApprovalMatrixRows row this module reads. */
@@ -252,20 +253,16 @@ export function summarizeMatrixCoverage(rows: readonly EnrichedMatrixRow[]): Mat
 }
 
 // ── Deep links into sibling hub tabs ─────────────────────────────────────────
-// Query-string links so they push history (Back returns to the matrix) and
-// stay inside the hub. The receiving tab consumes and strips its own param:
-// Submittals reads recordId / targetSetId, Transmittals reads transmittal.
+// Absolute in-hub links (hubLinks.hubHref), so they push history (Back returns
+// to the matrix) and never re-pin the project. The receiving tab consumes and
+// strips its own param: Submittals reads recordId / targetSetId, Transmittals
+// reads transmittal.
 
-export function hubTabSearch(tab: string, extra: Record<string, string> = {}): string {
-  const params = new URLSearchParams({ hub_tab: tab, ...extra });
-  return `?${params.toString()}`;
-}
+// The record and create links are hubLinks' own, which the Control and
+// Process Boards use too, so the three can't drift apart.
+export const submittalHref = submittalRecordHref;
 
-export const submittalSearch = (submittalId: string): string =>
-  hubTabSearch("submittals", { recordId: submittalId });
+export const createSubmittalForSetHref = createSubmittalHref;
 
-export const createSubmittalForSetSearch = (setId: string): string =>
-  hubTabSearch("submittals", { targetSetId: setId });
-
-export const transmittalSearch = (transmittalId: string): string =>
-  hubTabSearch("transmittals", { transmittal: transmittalId });
+export const transmittalHref = (transmittalId: string): string =>
+  hubHref("transmittals", { transmittal: transmittalId });

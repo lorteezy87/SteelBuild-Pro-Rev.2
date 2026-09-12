@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { runDetailingValidation } from '@/lib/detailingValidation/repository';
 import { VALIDATION_RULES } from '@/lib/detailingValidation/rules';
 import { toUserErrorMessage } from '@/lib/mutations/standardMutation';
+import { hubHref } from './hubLinks';
 import './detailingValidation.css';
 
 export default function DetailingValidationPanel({ projectId }: { projectId: string | null }) {
@@ -44,7 +45,7 @@ export default function DetailingValidationPanel({ projectId }: { projectId: str
           <select aria-label="Validation rule" value={rule} onChange={event => setRule(event.target.value)}><option value="all">All checks</option>{Object.entries(VALIDATION_RULES).map(([key, definition]) => <option key={key} value={key}>{definition.label}</option>)}</select>
         </div>
         <div className="cmd-table-wrap"><table className="cmd-table"><thead><tr><th>Severity</th><th>Type</th><th>Record</th><th>Set</th><th>Finding</th><th>Next action</th></tr></thead><tbody>
-          {rows.map(finding => <tr key={finding.id}><td>{finding.severity === 'error' ? 'Review' : 'Warning'}</td><td>{finding.recordType === 'piece' ? 'Piece lot' : 'Sheet'}</td><td><Link to={finding.href}>{finding.recordLabel}</Link></td><td>{finding.set}</td><td>{finding.label}</td><td>{finding.detail}{finding.rule === 'hold_no_reason' && <> <Link to="?hub_tab=holds">Open Holds &amp; Blockers</Link></>}</td></tr>)}
+          {rows.map(finding => <tr key={finding.id}><td>{finding.severity === 'error' ? 'Review' : 'Warning'}</td><td>{finding.recordType === 'piece' ? 'Piece lot' : 'Sheet'}</td><td><Link to={finding.href}>{finding.recordLabel}</Link></td><td>{finding.set}</td><td>{finding.label}</td><td>{finding.detail}{finding.rule === 'hold_no_reason' && <> <Link to={hubHref('holds')}>Open Holds &amp; Blockers</Link></>}</td></tr>)}
           {!rows.length && <tr><td colSpan={6}>{report.findings.length ? 'No findings match these filters.' : report.checked ? `No findings in these ${Object.keys(VALIDATION_RULES).length} checks.` : 'No active sheets or actionable piece lots to check.'}</td></tr>}
         </tbody></table></div>
       </>}
