@@ -369,7 +369,7 @@ jobs:
 
           (
             cd "$evidence_dir"
-            find ledger schema functions -type f -print0 \
+            find backups ledger schema functions -type f -print0 \
               | sort -z \
               | xargs -0 sha256sum > SHA256SUMS
             sha256sum manifest.json >> SHA256SUMS

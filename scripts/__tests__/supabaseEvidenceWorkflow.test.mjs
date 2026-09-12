@@ -80,6 +80,9 @@ describe("Supabase evidence workflow", () => {
     expect(
       captureStep.run.indexOf('> "$evidence_dir/manifest.json"'),
     ).toBeLessThan(captureStep.run.indexOf("sha256sum manifest.json"));
+    expect(captureStep.run).toContain(
+      "find backups ledger schema functions -type f",
+    );
     expect(captureStep.run).not.toContain("npx ");
     expect(captureStep.run).not.toMatch(
       /supabase (?:migration repair|db (?:push|reset)|functions (?:deploy|delete))/,
