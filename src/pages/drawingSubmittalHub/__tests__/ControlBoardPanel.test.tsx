@@ -16,6 +16,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { MemoryRouter, useLocation } from "react-router-dom";
 import ControlBoardPanel from "../ControlBoardPanel";
 import { buildSetPackages, buildTriage } from "../format";
+import type { TriageModel } from "../types";
 
 afterEach(cleanup);
 
@@ -63,7 +64,7 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname + location.search}</output>;
 }
 
-function renderBoard(triage: unknown, { inHub = true }: { inHub?: boolean } = {}) {
+function renderBoard(triage: TriageModel, { inHub = true }: { inHub?: boolean } = {}) {
   const onOpenTab = vi.fn();
   const onOpenHref = vi.fn();
   render(
@@ -71,7 +72,7 @@ function renderBoard(triage: unknown, { inHub = true }: { inHub?: boolean } = {}
       <ControlBoardPanel
         triage={triage}
         kpis={{ pending: 0, total: 0 }}
-        drawingKpis={{}}
+        drawingKpis={{ totalSets: 0, totalSheets: 0, released: 0, inReview: 0, overdue: 0 }}
         isLoading={false}
         onOpenTab={onOpenTab}
         onOpenHref={inHub ? onOpenHref : undefined}

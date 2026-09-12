@@ -8,20 +8,14 @@
  * so the conversion is behavior-preserving. Independently typed + unit-tested so
  * it stays strict-null / no-implicit-any clean.
  */
-import { itemUrgency } from "./format";
-import type { TriageItem } from "./types";
-
-/** The triage read-model shape this slice consumes (a subset of buildTriage's
- *  return — see format.ts). Typed loosely on the count fields to match the
- *  container boundary; the arrays are TriageItem[]. */
-export interface TriageModel {
-  overdue: TriageItem[];
-  dueSoon: TriageItem[];
-  needsAction: TriageItem[];
-  noDate: TriageItem[];
-  openItems: TriageItem[];
-  pipelineCounts: Record<string, number>;
-}
+import {
+  canWriteDetailingState,
+  canWriteDueDate,
+  canWriteOwner,
+  canWriteReadinessFlags,
+  itemUrgency,
+} from "./format";
+import type { TriageItem, TriageModel } from "./types";
 
 export interface ControlBoardModel {
   /** The single most-urgent open exception, or null when nothing is flagged. */
@@ -36,6 +30,38 @@ export interface ControlBoardModel {
   topStatuses: [string, number][];
   /** Total open items (openItems.length). */
   openCount: number;
+}
+
+export interface ControlBoardWriteAccess {
+  owner: boolean;
+  dueDate: boolean;
+  detailingState: boolean;
+  readinessFlags: boolean;
+}
+
+export interface ControlBoardFocus {
+  item: TriageItem;
+  ownerLabel: string;
+  canCreateSubmittal: boolean;
+  writeAccess: ControlBoardWriteAccess;
+}
+
+/** Adapt runtime-only triage fields into the explicit focus-card view model. */
+export function adaptControlBoardFocus(item: TriageItem | null): ControlBoardFocus | null {
+  if (!item) return null;
+  return {
+    item,
+    ownerLabel: item._ownerScope || "Owner",
+    canCreateSubmittal: item.kind === "Drawing Set"
+      && Boolean(item._drawingSetId)
+      && Boolean(item._canDraft || item._needsUnlinkedHint),
+    writeAccess: {
+      owner: canWriteOwner(item),
+      dueDate: canWriteDueDate(item),
+      detailingState: canWriteDetailingState(item),
+      readinessFlags: canWriteReadinessFlags(item),
+    },
+  };
 }
 
 /**

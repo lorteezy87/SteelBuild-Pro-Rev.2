@@ -4,6 +4,7 @@ import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 import type { TransmittalRow } from "@/hooks/useTransmittals";
 import {
   MATRIX_FILTERS,
+  buildApprovalMatrixModel,
   buildLastOutgoingBySet,
   buildLastTransmittalBySet,
   createSubmittalForSetHref,
@@ -126,7 +127,7 @@ describe("enrichApprovalMatrixRows — sheets and holds (2026 columns)", () => {
     const base = buildApprovalMatrixRows(SETS, submittals);
     const { rows } = enrich(submittals);
     expect(rows.map((r) => r.id)).toEqual(base.map((r) => r.id));
-    expect(byId(rows, "s1").latestSubmittal.id).toBe("a");
+    expect(byId(rows, "s1").latestSubmittal?.id).toBe("a");
   });
 });
 
@@ -645,6 +646,28 @@ describe("matchesMatrixFilter — every pill's count equals the rows its filter 
 
   it("summarizes holds and released coverage", () => {
     expect(coverage).toEqual({ setsOnHold: 2, sheetsOnHold: 2, released: 0 });
+  });
+});
+
+describe("buildApprovalMatrixModel", () => {
+  it("keeps search, enrichment, summary, coverage, and quick filtering in one pure read model", () => {
+    const packages = buildSetPackages(DRAWINGS, SETS, []);
+    const model = buildApprovalMatrixModel({
+      drawingSets: SETS,
+      submittals: [],
+      search: "anchor",
+      useWorkdays: false,
+      filter: "hold",
+      setPackages: packages,
+      holds: [hold("d4")],
+      transmittals: [],
+      currentRevisionIdByDrawingId: new Map(),
+    });
+
+    expect(model.rows.map((row) => row.id)).toEqual(["s2"]);
+    expect(model.visibleRows.map((row) => row.id)).toEqual(["s2"]);
+    expect(model.summary).toMatchObject({ total: 1, noSubmittal: 1 });
+    expect(model.coverage).toMatchObject({ setsOnHold: 1, sheetsOnHold: 1 });
   });
 });
 

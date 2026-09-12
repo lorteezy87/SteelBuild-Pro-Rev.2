@@ -17,7 +17,7 @@
  */
 import { Fragment, useMemo, useState } from "react";
 import type { ComponentType, MouseEvent, ReactNode } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { AlertTriangle, ClipboardList, FileQuestion, MessageSquareWarning, ShieldAlert, ShieldCheck } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
@@ -29,28 +29,31 @@ import type { TransmittalRow } from "@/hooks/useTransmittals";
 import {
   CLOSED_SUBMITTAL_STATUSES,
   STATUS_COLORS,
-  buildApprovalMatrixRows,
   dueInfoFor,
   fmtDate,
   getStatusColor,
   getSubmittalDueDate,
   isClosedSubmittal,
   pluralize,
-  summarizeApprovalMatrix,
   submittalRoundCount,
 } from "./format";
 import {
+  buildApprovalMatrixModel,
   createSubmittalForSetHref,
-  enrichApprovalMatrixRows,
-  matchesMatrixFilter,
-  parseMatrixFilter,
   submittalHref,
-  summarizeMatrixCoverage,
   transmittalHref,
 } from "./approvalMatrix.derive";
 import type { EnrichedMatrixRow, LastSent, MatrixFilter, MatrixTransmittal } from "./approvalMatrix.derive";
 import { hubHref } from "./hubLinks";
-import type { DueInfo, SetPackage } from "./types";
+import type {
+  ApprovalMatrixRow,
+  DrawingSet,
+  DueInfo,
+  SetPackage,
+  Submittal,
+  SubmittalRound,
+} from "./types";
+import { useMatrixFilter } from "./useMatrixFilter";
 import { FilterBar, Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
 import { evaluateApproverNotes, INCOMPLETE_EOR_AOR_LABEL } from "@/lib/approverNotes";
@@ -61,8 +64,6 @@ const CycleTimeCard = CycleTimeCardRaw as unknown as ComponentType<AnyProps>;
 const AgingReportTable = AgingReportTableRaw as unknown as ComponentType<AnyProps>;
 const StageChip = StageChipRaw as unknown as ComponentType<AnyProps>;
 
-/** URL param holding the active quick filter. The hub drops it on tab change. */
-export const MATRIX_FILTER_PARAM = "matrix_filter";
 /** Whether the holds list is known yet — "no rows" is not "no holds". */
 export type HoldsStatus = "ready" | "loading" | "error";
 /**
@@ -78,9 +79,9 @@ const NO_HOLDS: DrawingHoldRow[] = [];
 const NO_REVISION_IDS: ReadonlyMap<string, string> = new Map();
 
 interface ApprovalMatrixPanelProps {
-  drawingSets: any[];
-  submittals: any[];
-  roundsBySubmittal: Record<string, any[]>;
+  drawingSets: DrawingSet[];
+  submittals: Submittal[];
+  roundsBySubmittal: Record<string, SubmittalRound[]>;
   isLoading: boolean;
   useWorkdays?: boolean;
   /** The hub's set packages: live sheets per set + the Process Board's stage inputs. */
@@ -161,32 +162,31 @@ export function ApprovalMatrixPanel({
   // An undefined log is unknown, not empty: never "Not sent yet" off it.
   const lastSentState: LastSentStatus = lastSentStatus ?? (transmittals === undefined ? "loading" : "ready");
   const [search, setSearch] = useState("");
-  const [searchParams, setSearchParams] = useSearchParams();
-  const filter = parseMatrixFilter(searchParams.get(MATRIX_FILTER_PARAM));
+  const { filter, setFilter } = useMatrixFilter();
 
-  // Filter toggles REPLACE the entry: linkable, without a Back press per click.
-  const setFilter = (next: MatrixFilter | null) => {
-    setSearchParams((prev) => {
-      const params = new URLSearchParams(prev);
-      if (next) params.set(MATRIX_FILTER_PARAM, next);
-      else params.delete(MATRIX_FILTER_PARAM);
-      return params;
-    }, { replace: true });
-  };
-
-  const baseRows = useMemo(
-    () => buildApprovalMatrixRows(drawingSets, submittals, search, useWorkdays),
-    [drawingSets, submittals, search, useWorkdays],
-  );
-  const matrixRows = useMemo(
-    () => enrichApprovalMatrixRows(baseRows, { setPackages, holds, transmittals, currentRevisionIdByDrawingId }),
-    [baseRows, setPackages, holds, transmittals, currentRevisionIdByDrawingId],
-  );
-  const summary = useMemo(() => summarizeApprovalMatrix(matrixRows), [matrixRows]);
-  const coverage = useMemo(() => summarizeMatrixCoverage(matrixRows), [matrixRows]);
-  const visibleRows = useMemo(
-    () => matrixRows.filter((row) => matchesMatrixFilter(row, filter)),
-    [matrixRows, filter],
+  const { visibleRows, summary, coverage } = useMemo(
+    () => buildApprovalMatrixModel({
+      drawingSets,
+      submittals,
+      search,
+      useWorkdays,
+      filter,
+      setPackages,
+      holds,
+      transmittals,
+      currentRevisionIdByDrawingId,
+    }),
+    [
+      drawingSets,
+      submittals,
+      search,
+      useWorkdays,
+      filter,
+      setPackages,
+      holds,
+      transmittals,
+      currentRevisionIdByDrawingId,
+    ],
   );
 
   if (isLoading) return <LoadingSkeleton />;
@@ -304,8 +304,8 @@ export function ApprovalMatrixPanel({
 }
 
 interface MatrixRowProps {
-  row: EnrichedMatrixRow<any>;
-  roundsBySubmittal: Record<string, any[]>;
+  row: EnrichedMatrixRow<ApprovalMatrixRow>;
+  roundsBySubmittal: Record<string, SubmittalRound[]>;
   useWorkdays?: boolean;
   canCreateSubmittal: boolean;
   transmittalsLoading: boolean;
@@ -317,12 +317,12 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
   const [expanded, setExpanded] = useState(false);
   const sub = row.latestSubmittal ?? null;
   const due: DueInfo = row.due;
-  const allSubmittals: any[] = Array.isArray(row.submittals) ? row.submittals : [];
+  const allSubmittals: Submittal[] = Array.isArray(row.submittals) ? row.submittals : [];
   const otherSubmittals = allSubmittals.filter((s) => s.id !== sub?.id);
   // Ties the disclosure button to the detail row it reveals.
   const detailId = `matrix-detail-${row.id}`;
-  const rowRail = sub ? getStatusColor(sub.status) : "var(--cmd-warn)";
-  const hasHistory = otherSubmittals.length > 0 || (sub && (roundsBySubmittal[sub.id]?.length ?? 0) > 0);
+  const rowRail = sub ? getStatusColor(sub.status ?? "") : "var(--cmd-warn)";
+  const hasHistory = otherSubmittals.length > 0 || Boolean(sub && (roundsBySubmittal[sub.id]?.length ?? 0) > 0);
   const approverNotes = evaluateApproverNotes(sub);
   const setLabel = row.set_name || formatDrawingSetNumber(row) || "this set";
 
@@ -672,7 +672,7 @@ function PartialLogCaveat() {
   );
 }
 
-function RoundTimeline({ rounds }: { rounds: any[] }) {
+function RoundTimeline({ rounds }: { rounds: SubmittalRound[] }) {
   if (!rounds || rounds.length === 0) return null;
 
   return (
@@ -682,7 +682,7 @@ function RoundTimeline({ rounds }: { rounds: any[] }) {
       </span>
       {rounds.map((r, i) => {
         const isLast = i === rounds.length - 1;
-        const statusColor = STATUS_COLORS[r.status] || "var(--cmd-text-muted)";
+        const statusColor = STATUS_COLORS[r.status ?? ""] || "var(--cmd-text-muted)";
         const days = r.submitted_date && r.returned_date
           ? Math.ceil((new Date(r.returned_date).getTime() - new Date(r.submitted_date).getTime()) / 86400000)
           : null;

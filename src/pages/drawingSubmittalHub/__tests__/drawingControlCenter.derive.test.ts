@@ -1,13 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { buildControlBoardModel } from "../drawingControlCenter.derive";
-import type { TriageItem } from "../types";
+import { adaptControlBoardFocus, buildControlBoardModel } from "../drawingControlCenter.derive";
+import type { TriageItem, TriageModel } from "../types";
 
-/**
- * Fixture factory for a triage item. Annotated `: any` on the override bag so
- * the noImplicitAny ratchet stays happy with partial fixtures (see
- * agent-memory wave2-page-extraction-ratchets). Returns a full TriageItem.
- */
-function item(over: any = {}): TriageItem {
+/** Fixture factory for a complete triage item from typed partial overrides. */
+function item(over: Partial<TriageItem> = {}): TriageItem {
   return {
     id: over.id || "set-x",
     kind: over.kind || "Drawing Set",
@@ -15,7 +11,7 @@ function item(over: any = {}): TriageItem {
     group: over.group || "10 sheets - Submittal 3",
     status: over.status || "OFA",
     owner: over.owner || "Detailer",
-    dueDate: "dueDate" in over ? over.dueDate : "2026-06-01",
+    dueDate: "dueDate" in over ? (over.dueDate ?? null) : "2026-06-01",
     due: over.due || { label: "5d late", days: -5, overdue: false, dueSoon: false, tone: "x", sort: 0 },
     closed: false,
     needsAction: !!over.needsAction,
@@ -33,8 +29,10 @@ const dueSoonItem = item({ id: "b", due: { label: "in 2d", days: 2, overdue: fal
 const needsActionItem = item({ id: "c", needsAction: true });
 const noDateItem = item({ id: "d", dueDate: null, due: { label: "No date", days: null, overdue: false, dueSoon: false, tone: "z", sort: 999 } });
 
-function makeTriage(over: any = {}): any {
+function makeTriage(over: Partial<TriageModel> = {}): TriageModel {
   return {
+    setItems: [overdueItem, dueSoonItem, needsActionItem, noDateItem],
+    unlinkedSubmittalItems: [],
     overdue: [overdueItem],
     dueSoon: [dueSoonItem],
     needsAction: [needsActionItem],
@@ -54,6 +52,53 @@ describe("buildControlBoardModel", () => {
   it("selects the focus item by urgency (overdue first)", () => {
     const model = buildControlBoardModel(makeTriage());
     expect(model.focusItem?.id).toBe("a");
+  });
+
+  describe("adaptControlBoardFocus", () => {
+    it("keeps write availability in parity with the format validators", () => {
+      const focus = adaptControlBoardFocus(item({
+        _submittalId: null,
+        _drawingSetId: "ds1",
+        _firstSheetId: "sh1",
+        _sheetIds: ["sh1"],
+        _ownerScope: "First sheet owner",
+        _canDraft: true,
+        detailingState: "Not Started",
+      }));
+
+      expect(focus).toMatchObject({
+        ownerLabel: "First sheet owner",
+        canCreateSubmittal: true,
+        writeAccess: {
+          owner: true,
+          dueDate: true,
+          detailingState: true,
+          readinessFlags: true,
+        },
+      });
+    });
+
+    it("does not expose writes or create actions without persisted targets", () => {
+      const focus = adaptControlBoardFocus(item({
+        kind: "Unlinked Submittal",
+        _submittalId: null,
+        _drawingSetId: null,
+        _firstSheetId: null,
+        _sheetIds: [],
+        _ownerScope: "No owner target",
+        _canDraft: false,
+      }));
+
+      expect(focus).toMatchObject({
+        canCreateSubmittal: false,
+        writeAccess: {
+          owner: false,
+          dueDate: false,
+          detailingState: false,
+          readinessFlags: false,
+        },
+      });
+    });
   });
 
   it("falls back through dueSoon → needsAction → noDate when higher buckets are empty", () => {

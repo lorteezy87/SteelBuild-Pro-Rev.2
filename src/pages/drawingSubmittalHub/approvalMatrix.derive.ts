@@ -19,9 +19,9 @@ import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 import type { TransmittalLog, TransmittalRow } from "@/hooks/useTransmittals";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 import { submittalStatusToStage } from "@/lib/submittalStageMapping";
-import { matrixStatusBucket } from "./format";
+import { buildApprovalMatrixRows, matrixStatusBucket, summarizeApprovalMatrix } from "./format";
 import { createSubmittalHref, hubHref, submittalRecordHref } from "./hubLinks";
-import type { SetPackage } from "./types";
+import type { ApprovalMatrixRow, DrawingSet, SetPackage, Submittal } from "./types";
 
 /** The subset of a buildApprovalMatrixRows row this module reads. */
 export interface MatrixRowLike {
@@ -456,6 +456,50 @@ export function enrichApprovalMatrixRows<T extends MatrixRowLike>(
       lastSent: lastSentForSet(lastOutgoing, String(row.id)),
     };
   });
+}
+
+export interface ApprovalMatrixModel {
+  rows: Array<EnrichedMatrixRow<ApprovalMatrixRow>>;
+  visibleRows: Array<EnrichedMatrixRow<ApprovalMatrixRow>>;
+  summary: ReturnType<typeof summarizeApprovalMatrix>;
+  coverage: ReturnType<typeof summarizeMatrixCoverage>;
+}
+
+/** Build the matrix's complete read model without coupling it to React state. */
+export function buildApprovalMatrixModel({
+  drawingSets,
+  submittals,
+  search,
+  useWorkdays,
+  filter,
+  setPackages,
+  holds,
+  transmittals,
+  currentRevisionIdByDrawingId,
+}: {
+  drawingSets: DrawingSet[];
+  submittals: Submittal[];
+  search: string;
+  useWorkdays: boolean;
+  filter: MatrixFilter | null;
+  setPackages: readonly SetPackage[];
+  holds: readonly DrawingHoldRow[];
+  transmittals?: readonly TransmittalRow[];
+  currentRevisionIdByDrawingId: ReadonlyMap<string, string> | null;
+}): ApprovalMatrixModel {
+  const baseRows = buildApprovalMatrixRows(drawingSets, submittals, search, useWorkdays);
+  const rows = enrichApprovalMatrixRows(baseRows, {
+    setPackages,
+    holds,
+    transmittals,
+    currentRevisionIdByDrawingId,
+  });
+  return {
+    rows,
+    visibleRows: rows.filter((row) => matchesMatrixFilter(row, filter)),
+    summary: summarizeApprovalMatrix(rows),
+    coverage: summarizeMatrixCoverage(rows),
+  };
 }
 
 // ── Quick filters (the summary pills, made click-through) ───────────────────
