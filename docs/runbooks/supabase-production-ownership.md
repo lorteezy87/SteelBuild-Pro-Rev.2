@@ -62,6 +62,21 @@ deprecated/staging-only functions, unknown remote assets, and unresolved
 lineage. Use saved evidence from the intended disposable environment first.
 Never feed a generated action list directly to a shell.
 
+Deprecated Edge Function deletion is derived from the same reviewed manifest.
+The helper first requires a successful remote inventory read and defaults to a
+dry run:
+
+```bash
+npm run supabase:delete-deprecated-fns
+DRY_RUN=0 \
+  CONFIRM_DELETE_DEPRECATED_FUNCTIONS=kjrwqagyeswwoxpjkcko \
+  npm run supabase:delete-deprecated-fns
+```
+
+Apply mode refuses a missing/mismatched project ref or confirmation value.
+Function-list failures abort; the helper never continues from a stale fixed
+deletion list.
+
 ## Current reconciliation blockers
 
 The two evidence-backed Rev.2 Planner migrations are restored in active
@@ -70,15 +85,8 @@ inventory as `20260802090000_planner_action_control.sql` and
 byte-identical to git objects `8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef` and
 `26216f3247b0cc63dc0ff03e7f756b0f64c9b762`, respectively.
 
-The manifest intentionally remains red for these three source/lineage gaps:
+The manifest intentionally remains red for these two source/lineage gaps:
 
-- `20260906040515` (`fix_alerts_superseded_status`): production
-  `generate_operational_alerts` is byte-identical to active Rev.2
-  `20260819002000` (SHA-256
-  `d6da4d5d559bfca074cbcd0228e484d2155e0c7b26682f8e7fc7a551b40d8280`),
-  so the stamp has no surviving distinct function-body effect and is an
-  overwritten/orphan candidate. Exact SQL and authoritative ownership remain
-  unresolved, so migration-history repair is not safe.
 - `20260910034739` (`hard_delete_records`): ledger order places it in the
   SteelBuild-Pro-2026 sequence. Its isolated live footprint is six
   `hard_delete_*` functions plus `data_erasure_log` record metadata changes,
@@ -88,6 +96,18 @@ The manifest intentionally remains red for these three source/lineage gaps:
   `scope_items` columns, four functions, two foreign keys, two checks, three
   indexes, two triggers, and replacement field/access RLS, none present in the
   Rev.2 baseline or 38 accessible sibling migrations; exact source is absent.
+
+Recovered Rev.2 lineage now includes
+`20260906040515_fix_alerts_superseded_status.sql`. The original
+`apply_migration` payload was recovered from local Claude `tool_use` line 1775
+and committed byte-identically: 4,899 bytes, SHA-256
+`f1c7c1b81c6cd0a451b1e896ab9f2e9ebc120704f21699c80a5d723caaaf3358`.
+Its `escalate_rfi_sla` and `notify_rfi_bic_handoff` bodies were independently
+matched to production at SHA-256
+`0ef63f248c1d8aaa4559c192e58b5f7aae65f4c58a6e3bc887d0604f6d36c2b0`
+and `30143ad37ed0f2bbf8bc066d13ced9643b6b41c1de284d55aa2ee03578b2a959`.
+Bookkeeping repair remains gated on disposable replay, second review, and a
+maintenance window.
 
 The two Rev.2 apply-time restamps `20260817072554` and `20260817083550` are
 explicitly frozen and point to their active canonical migration sources in the
