@@ -29,6 +29,16 @@ import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 import { BrandLogo } from "./BrandLogo";
 import { mergeLegacyFavorites, shouldClearLegacyFavorites, toggleServerFavorite } from "./sidebarFavorites";
+import {
+  collapseAroundActivePage,
+  createInitialCollapseState,
+  createToggleAllCollapseState,
+  deriveFavoriteItems,
+  deriveRecentItems,
+  filterVisibleSidebarGroups,
+  hasExpandedCollapsibleGroup,
+  isDashboardSidebarItemActive,
+} from "./sidebarNavDerive";
 
 // ── Local storage helpers ───────────────────────────────────────────
 const RAIL_LS_KEY    = "sbp-sidebar-rail";
@@ -78,14 +88,9 @@ export default function SidebarNav({
   const { pinned_modules, sidebar_mode, show_recent_pages } = useUserPrefs();
   const { savePatch, savePatchConfirmed } = useSaveUserPrefs();
   const { isPageVisible } = useModuleAccess();
-  const [collapsed, setCollapsed] = useState(() => {
-    // Light (the command theme) shows EVERY group expanded so all modules are
-    // visible at once — matches the mockup's full sidebar list. Dark (legacy)
-    // keeps the accordion: all collapsed, the active group auto-expands below.
-    const def = {};
-    SIDEBAR_GROUPS.forEach((g) => { if (g.collapsible) def[g.label] = !isLightTheme; });
-    return def;
-  });
+  const [collapsed, setCollapsed] = useState(() =>
+    createInitialCollapseState(SIDEBAR_GROUPS, !isLightTheme)
+  );
   const [railModeState, setRailMode] = useState(loadRailState);
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
@@ -130,17 +135,9 @@ export default function SidebarNav({
   // persist until the next navigation.
   useEffect(() => {
     if (isLightTheme) return; // light shows every group expanded (mockup parity) — no accordion
-    const activeGroup = SIDEBAR_GROUPS.find((g) => g.items.some((it) => it.page === currentPageName));
-    if (!activeGroup) return;
     setCollapsed((prev) => {
-      const next = {};
-      let changed = false;
-      for (const g of SIDEBAR_GROUPS) {
-        if (!g.collapsible) continue;
-        next[g.label] = g.label !== activeGroup.label;
-        if (next[g.label] !== !!prev[g.label]) changed = true;
-      }
-      if (!changed) return prev;
+      const next = collapseAroundActivePage(SIDEBAR_GROUPS, currentPageName, prev);
+      if (next === prev) return prev;
       saveSidebarState(next);
       return next;
     });
@@ -152,14 +149,8 @@ export default function SidebarNav({
   useEffect(() => {
     if (!isLightTheme) return;
     setCollapsed((prev) => {
-      const next = {};
-      let changed = false;
-      for (const g of SIDEBAR_GROUPS) {
-        if (!g.collapsible) continue;
-        next[g.label] = false;
-        if (prev[g.label]) changed = true;
-      }
-      return changed ? next : prev;
+      const next = createInitialCollapseState(SIDEBAR_GROUPS, false);
+      return Object.keys(next).some((label) => prev[label]) ? next : prev;
     });
   }, [isLightTheme]);
 
@@ -179,13 +170,10 @@ export default function SidebarNav({
     });
   };
 
-  const allCollapsibleGroups = SIDEBAR_GROUPS.filter((g) => g.collapsible);
-  const anyExpanded = allCollapsibleGroups.some((g) => !collapsed[g.label]);
+  const anyExpanded = hasExpandedCollapsibleGroup(SIDEBAR_GROUPS, collapsed);
 
   const toggleAll = () => {
-    const newState = {};
-    const shouldCollapse = anyExpanded;
-    allCollapsibleGroups.forEach((g) => { newState[g.label] = shouldCollapse; });
+    const newState = createToggleAllCollapseState(SIDEBAR_GROUPS, collapsed);
     setCollapsed(newState);
     saveSidebarState(newState);
   };
@@ -197,33 +185,21 @@ export default function SidebarNav({
 
   // Groups with gated-off pages removed (and emptied groups dropped).
   const visibleGroups = useMemo(
-    () => SIDEBAR_GROUPS
-      .map((g) => ({ ...g, items: g.items.filter((it) => isPageVisible(it.page)) }))
-      .filter((g) => g.items.length > 0),
+    () => filterVisibleSidebarGroups(SIDEBAR_GROUPS, isPageVisible),
     [isPageVisible],
   );
 
-  const favoriteItems = useMemo(() => {
-    const flat = visibleGroups.flatMap((g) =>
-      g.items.map((it) => ({ ...it, _group: g.label }))
-    );
-    return favorites
-      .map((p) => flat.find((it) => it.page === p))
-      .filter(Boolean);
-  }, [favorites, visibleGroups]);
+  const favoriteItems = useMemo(
+    () => deriveFavoriteItems(visibleGroups, favorites),
+    [favorites, visibleGroups],
+  );
 
   // Recents filtered against the flat registry so a deleted/renamed
   // page falls out cleanly instead of rendering a dead entry.
-  const recentItems = useMemo(() => {
-    const flat = visibleGroups.flatMap((g) =>
-      g.items.map((it) => ({ ...it, _group: g.label }))
-    );
-    return recents
-      .map((p) => flat.find((it) => it.page === p))
-      .filter(Boolean)
-      .filter((it) => it.page !== currentPageName)
-      .slice(0, 3);
-  }, [recents, currentPageName, visibleGroups]);
+  const recentItems = useMemo(
+    () => deriveRecentItems(visibleGroups, recents, currentPageName),
+    [recents, currentPageName, visibleGroups],
+  );
 
   const openGlobalSearch = () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
@@ -593,9 +569,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
   const effectiveCollapsed = forceRail || collapsed;
   const { isPageVisible } = useModuleAccess();
   const visibleGroups = useMemo(
-    () => SIDEBAR_GROUPS
-      .map((g) => ({ ...g, items: g.items.filter((it) => isPageVisible(it.page)) }))
-      .filter((g) => g.items.length > 0),
+    () => filterVisibleSidebarGroups(SIDEBAR_GROUPS, isPageVisible),
     [isPageVisible],
   );
 
@@ -609,8 +583,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
 
   const renderItem = (item) => {
     const Icon = PAGE_ICON[item.page] || FallbackIcon;
-    const active = currentPageName === item.page
-      || (item.page === "DrawingSubmittalHub" && ["Drawings", "Submittals"].includes(currentPageName));
+    const active = isDashboardSidebarItemActive(item.page, currentPageName);
     return (
       <button
         key={item.page}
