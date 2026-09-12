@@ -1,33 +1,16 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMemo, type ChangeEvent } from "react";
 import { CheckCircle2, Construction, Loader2, MapPin, PackageCheck, Truck } from "lucide-react";
-import { toast } from "sonner";
 import {
   logisticsDisabledReason,
   pieceLifecycleLabel,
-  requiredLifecycleForAction,
   type LogisticsAction,
 } from "@/lib/pieceControl/lifecycle";
-import {
-  fetchLogisticsSnapshot,
-  transitionPieceLots,
-} from "@/lib/pieceControl/logisticsRepository";
-import {
-  productionScopeFetchArg,
-  productionScopeQueryKey,
-  resolveProductionWorkPackageScope,
-  UNASSIGNED_WP_FILTER,
-} from "@/lib/pieceControl/productionScope";
-import { invalidatePieceControlQueries } from "@/lib/pieceControl/queryKeys";
+import { UNASSIGNED_WP_FILTER } from "@/lib/pieceControl/productionScope";
 import { DecisionPanel } from "@/components/command";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
-import { entities } from "@/api/supabaseClient";
 import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
+import { derivePieceLogisticsView } from "./pieceLogisticsControl.derive";
+import { usePieceLogisticsControl } from "./usePieceLogisticsControl";
 
 const Button = ({ variant: _variant, size: _size, ...props }: any) => (
   <button type="button" {...props} />
@@ -75,106 +58,39 @@ const actionDefinitions = {
   },
 } as const;
 
-const EMPTY_SELECTION: Record<LogisticsAction, string[]> = {
-  ship: [],
-  deliver: [],
-  erect: [],
-};
-
 export function PieceLogisticsControl({
   projectId,
   pieceControlMode,
   workPackageId,
 }: PieceLogisticsControlProps) {
-  const enabled = pieceControlMode !== "off";
-  const queryClient = useQueryClient();
-  const lockedToWorkPackage = Boolean(workPackageId);
-  const [boardWorkPackageFilter, setBoardWorkPackageFilter] = useState<string>(
-    workPackageId ?? "",
-  );
-  const [selectedByAction, setSelectedByAction] = useState<Record<LogisticsAction, string[]>>({
-    ...EMPTY_SELECTION,
+  const controller = usePieceLogisticsControl({
+    projectId,
+    pieceControlMode,
+    workPackageId,
   });
-  const [referenceByAction, setReferenceByAction] = useState<
-    Record<LogisticsAction, Record<string, string>>
-  >({ ship: {}, deliver: {}, erect: {} });
-  const [historyPieceId, setHistoryPieceId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (workPackageId) setBoardWorkPackageFilter(workPackageId);
-  }, [workPackageId]);
-
-  const scopedWorkPackageId = useMemo(
-    () =>
-      resolveProductionWorkPackageScope(workPackageId, boardWorkPackageFilter),
-    [workPackageId, boardWorkPackageFilter],
-  );
-  const logisticsScopeKey = productionScopeQueryKey(scopedWorkPackageId);
-
-  const workPackagesQuery = useQuery({
-    queryKey: ["piece-logistics-work-packages", projectId],
-    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
-    enabled: enabled && !lockedToWorkPackage,
-    staleTime: 30_000,
-  });
-
-  const snapshotQuery = useQuery({
-    queryKey: ["piece-logistics", projectId, logisticsScopeKey] as const,
-    queryFn: ({ queryKey }) =>
-      fetchLogisticsSnapshot(
-        queryKey[1],
-        productionScopeFetchArg(queryKey[2]),
-      ),
+  const {
     enabled,
-    placeholderData: keepPreviousData,
-  });
-  const pieces = useMemo(
-    () => snapshotQuery.data?.pieces ?? [],
-    [snapshotQuery.data?.pieces],
-  );
-  const events = snapshotQuery.data?.events ?? [];
-  const leafPieces = useMemo(
-    () => pieces.filter((piece) => !piece.is_container),
-    [pieces],
-  );
-
-  const transitionMutation = useMutation({
-    mutationFn: ({ action }: { action: LogisticsAction }) =>
-      transitionPieceLots(
-        action,
-        projectId,
-        selectedByAction[action],
-        referenceByAction[action],
+    lockedToWorkPackage,
+    boardWorkPackageFilter,
+    selectedByAction,
+    referenceByAction,
+    workPackagesQuery,
+    snapshotQuery,
+    transitionMutation,
+    setSelectedByAction,
+    setReferenceByAction,
+    setHistoryPieceId,
+    onBoardWorkPackageFilterChange,
+    selectAllForAction,
+  } = controller;
+  const view = useMemo(
+    () =>
+    derivePieceLogisticsView(
+      snapshotQuery.data,
+      controller.historyPieceId,
     ),
-    onSuccess: async (_, variables) => {
-      toast.success(`${actionDefinitions[variables.action].pastLabel} selected piece lots.`);
-      setSelectedByAction((current) => ({ ...current, [variables.action]: [] }));
-      setReferenceByAction((current) => ({ ...current, [variables.action]: {} }));
-      // Shared helper: logistics + production board + register + legacy EPM +
-      // model-elements / canonical-pieces-3d / reporting (Fab colors).
-      await invalidatePieceControlQueries(queryClient, projectId, "logistics");
-    },
-    onError: (error: Error) =>
-      toast.error(
-        presentPieceControlError(
-          error,
-          "The logistics update could not be recorded.",
-        ),
-      ),
-  });
-
-  const onBoardWorkPackageFilterChange = (value: string) => {
-    setBoardWorkPackageFilter(value);
-    setSelectedByAction({ ...EMPTY_SELECTION });
-    setHistoryPieceId(null);
-  };
-
-  const selectAllForAction = (action: LogisticsAction, pieceIds: string[]) => {
-    setSelectedByAction((current) => ({
-      ...current,
-      [action]: pieceIds,
-    }));
-  };
+    [controller.historyPieceId, snapshotQuery.data],
+  );
 
   if (!enabled) {
     return (
@@ -218,14 +134,6 @@ export function PieceLogisticsControl({
     );
   }
 
-  const historyPiece = pieces.find((piece) => piece.id === historyPieceId);
-  const history = events.filter((event) => event.piece_id === historyPieceId);
-  const readyCounts = {
-    ship: leafPieces.filter((piece) => piece.lifecycle_status === "fabricated").length,
-    deliver: leafPieces.filter((piece) => piece.lifecycle_status === "shipped").length,
-    erect: leafPieces.filter((piece) => piece.lifecycle_status === "delivered").length,
-  };
-
   return (
     <section className="piece-operations">
       <header className="piece-operations__head">
@@ -245,15 +153,15 @@ export function PieceLogisticsControl({
         <div className="piece-operations__summary" aria-label="Logistics summary">
           <span>
             <small>Ready to ship</small>
-            <strong>{readyCounts.ship}</strong>
+            <strong>{view.readyCounts.ship}</strong>
           </span>
           <span>
             <small>Ready to deliver</small>
-            <strong>{readyCounts.deliver}</strong>
+            <strong>{view.readyCounts.deliver}</strong>
           </span>
           <span>
             <small>Ready to erect</small>
-            <strong>{readyCounts.erect}</strong>
+            <strong>{view.readyCounts.erect}</strong>
           </span>
         </div>
       </header>
@@ -286,13 +194,8 @@ export function PieceLogisticsControl({
         {(Object.keys(actionDefinitions) as LogisticsAction[]).map((action) => {
           const definition = actionDefinitions[action];
           const Icon = definition.icon;
-          const requiredStatus = requiredLifecycleForAction(action);
-          const candidates = leafPieces.filter(
-            (piece) => piece.lifecycle_status === requiredStatus,
-          );
-          const selectableIds = candidates
-            .filter((piece) => !logisticsDisabledReason(piece, action))
-            .map((piece) => piece.id);
+          const { requiredStatus, candidates, selectableIds } =
+            view.actions[action];
           const selected = selectedByAction[action];
           return (
             <section key={action} className="piece-operation-card piece-logistics-panel">
@@ -417,7 +320,7 @@ export function PieceLogisticsControl({
       </div>
 
       <DecisionPanel title="Immutable logistics history">
-        {!historyPiece ? (
+        {!view.historyPiece ? (
           <p className="piece-operation-empty">
             Select a piece mark above to inspect recorded logistics events.
           </p>
@@ -426,22 +329,22 @@ export function PieceLogisticsControl({
             <div className="piece-operation-history__intro">
               <div>
                 <strong>
-                  {historyPiece.piece_mark} / {historyPiece.lot_code}
+                  {view.historyPiece.piece_mark} / {view.historyPiece.lot_code}
                 </strong>
-                <span>{history.length} logistics events</span>
+                <span>{view.history.length} logistics events</span>
               </div>
               <p>
                 <CheckCircle2 size={15} />
                 Recorded physical events are read-only.
               </p>
             </div>
-            {history.length === 0 ? (
+            {view.history.length === 0 ? (
               <p className="piece-operation-empty is-compact">
                 No logistics events recorded.
               </p>
             ) : (
               <div className="piece-operation-history__list">
-                {history.map((event) => {
+                {view.history.map((event) => {
                   const referenceData = event.next_state.reference_data ?? {};
                   return (
                     <div key={event.id} className="piece-operation-history__row">
