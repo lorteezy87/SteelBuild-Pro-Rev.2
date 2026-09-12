@@ -75,6 +75,7 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 
 ## Workflow rules
 - There is no legal issue or legal hold involving S&H Steel and this app (confirmed by the owner, 2026-09-11). An earlier version of this file said otherwise; that was false. Don't reintroduce it, and don't treat billing, multi-tenant signup or marketing work as blocked. (S&H Steel is the founding customer org; references to it in the repo are ordinary domain and seed data.)
+- Git safety: stage files explicitly, never force-push, and deploy only when asked.
 - Before touching Stripe/webhook code: idempotency is already implemented, don't remove it.
 - Playwright E2E spec for the fab-release gate must stay green — this is a P0 path.
 

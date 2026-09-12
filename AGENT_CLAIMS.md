@@ -25,7 +25,7 @@ Notes:
 - Command Control Centers use `--cmd-*` under `[data-skin="command"]`. Dark is
   via token remap — do not wrap command pages in `.sbd-*` chrome or force light
   in `LayoutRoute`.
-- This board does not replace the git-safety rules (CLAUDE.md §7): explicit
+- This board does not replace the git-safety rules (CLAUDE.md, Workflow rules): explicit
   staging, no force-push, deploy only when asked.
 
 ## Active claims
