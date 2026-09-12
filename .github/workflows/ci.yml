@@ -211,8 +211,10 @@ jobs:
         run: npm audit --audit-level=high
 
   # ── Supabase migration + edge-function drift (enforced) ──────────────────
-  # H4/H5: catches repo vs remote drift for migrations and edge functions, and
-  # fails when deprecated orphan functions are still deployed.
+  # H4/H5: compares production with the reviewed shared-project ownership
+  # manifest plus active Rev.2 assets. Unknown/unresolved assets, missing
+  # required assets, and deployed deprecated/staging-only functions fail closed.
+  # Inventory green does not prove SQL or deployed-source equivalence.
   supabase-drift:
     name: Supabase drift check
     runs-on: ubuntu-latest
