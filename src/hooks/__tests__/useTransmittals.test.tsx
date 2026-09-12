@@ -119,3 +119,49 @@ describe("useTransmittals — the row-cap flag", () => {
     expect(hook.result.current.data?.possiblyTruncated).toBe(true);
   });
 });
+
+// The shared production DB runs SteelBuild-Pro-2026's m4_1: items carry
+// drawing_id (or gc_drawing_id) plus number/title/revision_at_send snapshots,
+// and drawing_revision_id is NULL when the sheet had no current revision at send.
+describe("useTransmittals — items as the shared DB (m4_1) stores them", () => {
+  it("keeps an item with a drawing_id and no revision, its snapshots standing in for the revision's fields", async () => {
+    serve({
+      transmittals: [header(0, { status: "sent" })],
+      items: [{
+        id: "i-n", transmittal_id: "t-0", drawing_revision_id: null, drawing_id: "d7",
+        number_at_send: "S7", title_at_send: "Framing", revision_at_send: "2",
+      }],
+    });
+    const log = await loadedLog(renderLog());
+    expect(log[0]?.status).toBe("sent");
+    expect(log[0]?.item_count).toBe(1);
+    expect(log[0]?.items[0]).toEqual({
+      id: "i-n", drawing_revision_id: null, drawing_id: "d7", sheet_number: "S7", sheet_title: "Framing", revision_code: "2",
+    });
+  });
+
+  it("takes drawing_id from the item itself, falling back to its revision's", async () => {
+    serve({
+      items: [
+        { id: "own", transmittal_id: "t-0", drawing_revision_id: "r1", drawing_id: "d9" },
+        { id: "legacy", transmittal_id: "t-0", drawing_revision_id: "r1" },
+      ],
+    });
+    const log = await loadedLog(renderLog());
+    const byId = new Map((log[0]?.items ?? []).map((it) => [it.id, it]));
+    expect(byId.get("own")).toMatchObject({ drawing_id: "d9", drawing_revision_id: "r1", sheet_number: "S1" });
+    expect(byId.get("legacy")).toMatchObject({ drawing_id: "d1", drawing_revision_id: "r1", sheet_number: "S1" });
+  });
+
+  it("skips GC-drawing items, which aren't Rev.2 sheets, and items with no transmittal", async () => {
+    serve({
+      items: [
+        { id: "gc", transmittal_id: "t-0", drawing_revision_id: null, drawing_id: null, gc_drawing_id: "g1", number_at_send: "A-101" },
+        { id: "orphan", transmittal_id: null, drawing_revision_id: "r1", drawing_id: "d1" },
+        item(0),
+      ],
+    });
+    const log = await loadedLog(renderLog());
+    expect(log[0]?.items.map((it) => it.id)).toEqual(["i-0"]);
+  });
+});

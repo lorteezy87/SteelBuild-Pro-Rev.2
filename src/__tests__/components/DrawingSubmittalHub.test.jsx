@@ -57,22 +57,45 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
-// Feature flags, shaped like the TanStack v5 query. `ready` means the flags
-// query HAS data; `error` is its isError. Both at once is a failed background
-// refetch that kept its cached flags. Like the real hook, useFlag reads false
-// unless the query is a success. Default: loaded, everything off.
-const flagsState = vi.hoisted(() => ({ ready: true, error: false, fetching: false, on: new Set(), refetch: vi.fn() }));
-vi.mock("@/hooks/useFeatureFlag", () => ({
-  useFlag: (key) => flagsState.ready && !flagsState.error && flagsState.on.has(key),
-  useAllFlags: () => ({
-    isSuccess: flagsState.ready && !flagsState.error,
-    isPending: !flagsState.ready && !flagsState.error,
-    isError: flagsState.error,
-    isFetching: flagsState.fetching,
-    data: flagsState.ready ? new Map([...flagsState.on].map((key) => [key, true])) : undefined,
-    refetch: flagsState.refetch,
-  }),
+// Feature flags, shaped like the TanStack v5 (5.100) query. `ready` means the
+// flags query HAS data; `error` means its last read failed. Both at once is a
+// failed background refetch that kept its cached flags (status stays "error").
+// With no data, a re-read after an error resets to pending — isError false —
+// while errorUpdateCount keeps counting, exactly as v5's fetchState does. Like
+// the real hook, useFlag reads false unless the query is a success. Default:
+// loaded, everything off. setFlags() changes the state and re-renders.
+const flagsState = vi.hoisted(() => ({
+  ready: true, error: false, fetching: false, on: new Set(), refetch: vi.fn(), version: 0, listeners: new Set(),
 }));
+vi.mock("@/hooks/useFeatureFlag", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (listener) => {
+    flagsState.listeners.add(listener);
+    return () => flagsState.listeners.delete(listener);
+  };
+  const getVersion = () => flagsState.version;
+  return {
+    useFlag: (key) => flagsState.ready && !flagsState.error && flagsState.on.has(key),
+    useAllFlags: () => {
+      useSyncExternalStore(subscribe, getVersion);
+      const pendingAgain = !flagsState.ready && flagsState.fetching;
+      return {
+        isSuccess: flagsState.ready && !flagsState.error,
+        isPending: !flagsState.ready && (!flagsState.error || pendingAgain),
+        isError: flagsState.error && !pendingAgain,
+        isFetching: flagsState.fetching,
+        errorUpdateCount: flagsState.error ? 1 : 0,
+        data: flagsState.ready ? new Map([...flagsState.on].map((key) => [key, true])) : undefined,
+        refetch: flagsState.refetch,
+      };
+    },
+  };
+});
+function setFlags(patch) {
+  Object.assign(flagsState, patch);
+  flagsState.version++;
+  for (const listener of flagsState.listeners) listener();
+}
 // The real 3D tab pulls in the IFC viewer. The stub says which project it got.
 vi.mock("@/components/viewer3d/Model3DTab", async () => {
   const { createElement } = await import("react");
@@ -439,15 +462,48 @@ describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=model3d");
   });
 
-  it("disables Retry while the flags are being re-read", async () => {
+  it("keeps the error up while the flags are re-read, with Retry aria-disabled (not disabled) and inert", async () => {
+    const user = userEvent.setup();
     flagsState.ready = false;
     flagsState.error = true;
-    flagsState.fetching = true;
+    flagsState.fetching = true; // v5: isError false here; errorUpdateCount kept
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
 
     expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
     expect(screen.getByText(MODEL3D_FLAGS_FAILED)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+    expect(screen.queryByText(MODEL3D_LOADING)).not.toBeInTheDocument();
+    const retrying = screen.getByRole("button", { name: "Retrying…" });
+    expect(retrying).toHaveAttribute("aria-disabled", "true");
+    expect(retrying).not.toBeDisabled();
+    await user.click(retrying);
+    expect(flagsState.refetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the focused Retry button mounted, and focused, through the re-read and a second failure", async () => {
+    const user = userEvent.setup();
+    flagsState.ready = false;
+    flagsState.error = true;
+    flagsState.refetch.mockImplementationOnce(() => {
+      setFlags({ fetching: true });
+      return Promise.resolve();
+    });
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    const retry = screen.getByRole("button", { name: "Retry" });
+    await user.click(retry);
+    expect(flagsState.refetch).toHaveBeenCalledTimes(1);
+    // The same node, now retrying, keeps focus: no swap to the loading line.
+    expect(screen.queryByText(MODEL3D_LOADING)).not.toBeInTheDocument();
+    expect(retry).toBeInTheDocument();
+    expect(retry).toHaveTextContent("Retrying…");
+    expect(retry).toHaveFocus();
+
+    // The re-read fails again: the same button reads Retry, still focused.
+    act(() => setFlags({ fetching: false }));
+    expect(retry).toBeInTheDocument();
+    expect(retry).toHaveTextContent("Retry");
+    expect(retry).toHaveFocus();
   });
 
   it("keeps the 3D viewer through a failed background flags refetch that kept its cached flags", async () => {

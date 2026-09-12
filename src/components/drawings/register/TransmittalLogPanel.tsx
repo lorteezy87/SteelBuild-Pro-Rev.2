@@ -99,9 +99,11 @@ function buildSheetOptions(
     });
   }
   for (const item of attachedItems) {
-    if (byRevision.has(item.drawing_revision_id)) continue;
-    byRevision.set(item.drawing_revision_id, {
-      revisionId: item.drawing_revision_id,
+    // The picker is keyed by revision; an item with none recorded can't be listed.
+    const revisionId = item.drawing_revision_id;
+    if (!revisionId || byRevision.has(revisionId)) continue;
+    byRevision.set(revisionId, {
+      revisionId,
       drawingId: item.drawing_id,
       sheetNumber: item.sheet_number,
       sheetTitle: item.sheet_title,
@@ -301,7 +303,7 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     setConfirmingDelete(false);
     setDeleteConfirmation("");
     setForm(formForTransmittal(transmittal));
-    setSelected(new Set(transmittal.items.map((item) => item.drawing_revision_id)));
+    setSelected(new Set(transmittal.items.flatMap((item) => (item.drawing_revision_id ? [item.drawing_revision_id] : []))));
     setEditing(true);
   };
 
@@ -348,11 +350,13 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
       if (!patch.transmittal_number) throw new Error("Transmittal number is required");
       await entities.DrawingTransmittal.update(transmittal.id, patch as never);
 
-      const existingByRevision = new Map(
-        transmittal.items.map((item) => [item.drawing_revision_id, item]),
+      const existingRevisionIds = new Set(
+        transmittal.items.flatMap((item) => (item.drawing_revision_id ? [item.drawing_revision_id] : [])),
       );
-      const additions = [...selected].filter((revisionId) => !existingByRevision.has(revisionId));
-      const removals = transmittal.items.filter((item) => !selected.has(item.drawing_revision_id));
+      const additions = [...selected].filter((revisionId) => !existingRevisionIds.has(revisionId));
+      // An item with no revision recorded isn't in the picker, so it was never
+      // deselectable: leave it alone rather than delete it.
+      const removals = transmittal.items.filter((item) => item.drawing_revision_id && !selected.has(item.drawing_revision_id));
       await Promise.all([
         ...additions.map((revisionId) => entities.DrawingTransmittalItem.create(
           withProjectId({

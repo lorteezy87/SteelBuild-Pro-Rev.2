@@ -71,8 +71,10 @@ export interface LastOutgoingTransmittal {
    */
   supersededNow: number;
   /**
-   * Sheets with no current revision loaded, superseded or not: whether they
-   * were revised couldn't be checked, so revisedSinceSent is a lower bound.
+   * Sheets with nothing to compare, superseded or not: no current revision is
+   * loaded, or the transmittal recorded no revision for the sheet (m4_1 items
+   * can carry only drawing_id). Whether they were revised couldn't be checked,
+   * so revisedSinceSent is a lower bound.
    */
   uncheckedSheets: number;
 }
@@ -81,6 +83,12 @@ export interface LastOutgoingTransmittal {
 export interface UndatedOutgoingTransmittal {
   id: string;
   number: string;
+  /**
+   * status 'draft'. An undated draft is either a Rev.2 log entry with the date
+   * left blank or a 2026 draft not sent yet, and the row can't tell which, so
+   * it is never shown as sent.
+   */
+  draft: boolean;
 }
 
 export interface LastOutgoingRollup {
@@ -104,10 +112,15 @@ export interface LastOutgoingRollup {
   possiblyTruncated: boolean;
 }
 
-/** One set's Last sent value. "undated" and "unknown" are never shown as "not sent". */
+/**
+ * One set's Last sent value. "undated" and "unknown" are never shown as "not
+ * sent". On "sent" and "undated", possiblyTruncated means the log was cut off:
+ * a dated transmittal for the set, or more of this one's items, may be
+ * missing, so every count is a lower bound.
+ */
 export type LastSent =
-  | { kind: "sent"; transmittal: LastOutgoingTransmittal }
-  | { kind: "undated"; transmittal: UndatedOutgoingTransmittal }
+  | { kind: "sent"; transmittal: LastOutgoingTransmittal; possiblyTruncated: boolean }
+  | { kind: "undated"; transmittal: UndatedOutgoingTransmittal; possiblyTruncated: boolean }
   | { kind: "unknown"; unresolvedItems: number; possiblyTruncated: boolean }
   | { kind: "none" };
 
@@ -189,7 +202,8 @@ export function buildLastTransmittalBySet(
 
   const best = new Map<string, { value: MatrixTransmittal; day: string; createdAt: string; number: string }>();
   for (const transmittal of transmittals || []) {
-    if (!transmittal || transmittal.is_deleted) continue;
+    // Void (m4_1) is a retraction: it keeps its dates and is_deleted=false.
+    if (!transmittal || transmittal.is_deleted || transmittal.status === "void") continue;
     const { party, date } = resolveTransmittalDisplay(transmittal);
     const candidate = {
       value: {
@@ -280,6 +294,10 @@ export function buildLastOutgoingBySet(
   let unresolvedItems = 0;
   for (const transmittal of transmittals || []) {
     if (!transmittal || transmittal.is_deleted || transmittal.direction !== "outgoing") continue;
+    // Void is m4_1's only retraction of a sent transmittal, and it keeps
+    // date_sent and is_deleted=false. sent, acknowledged, draft (Rev.2's own
+    // inserts land as draft, dated or not) and a missing status all count.
+    if (transmittal.status === "void") continue;
     const dateSent = String(transmittal.date_sent ?? "").trim();
 
     // set → sheet → the revision ids this transmittal carried for that sheet.
@@ -315,7 +333,7 @@ export function buildLastOutgoingBySet(
       for (const setId of sentBySet.keys()) {
         const held = undated.get(setId);
         if (held && compareTransmittals(order, held.order) <= 0) continue;
-        undated.set(setId, { order, value: { id: String(transmittal.id), number: order.number } });
+        undated.set(setId, { order, value: { id: String(transmittal.id), number: order.number, draft: transmittal.status === "draft" } });
       }
       continue;
     }
@@ -329,7 +347,9 @@ export function buildLastOutgoingBySet(
       let unchecked = 0;
       for (const [drawingId, sentRevisionIds] of sheets) {
         const currentId = currentRevisionIdByDrawingId?.get(drawingId);
-        if (currentId === undefined) unchecked++;
+        // No revision recorded for the sheet on this transmittal: nothing to
+        // compare against, so unchecked, never revised.
+        if (currentId === undefined || sentRevisionIds.size === 0) unchecked++;
         else if (!sentRevisionIds.has(currentId)) revised++;
         if (sheetIndex.get(drawingId)?.superseded === true) superseded++;
       }
@@ -365,10 +385,11 @@ export function buildLastOutgoingBySet(
  */
 export function lastSentForSet(rollup: LastOutgoingRollup, setId: string): LastSent {
   const key = String(setId);
+  const { possiblyTruncated } = rollup;
   const transmittal = rollup.bySet.get(key);
-  if (transmittal) return { kind: "sent", transmittal };
+  if (transmittal) return { kind: "sent", transmittal, possiblyTruncated };
   const undated = rollup.undatedBySet.get(key);
-  if (undated) return { kind: "undated", transmittal: undated };
+  if (undated) return { kind: "undated", transmittal: undated, possiblyTruncated };
   if (rollup.unresolvedItems > 0 || rollup.possiblyTruncated) {
     return { kind: "unknown", unresolvedItems: rollup.unresolvedItems, possiblyTruncated: rollup.possiblyTruncated };
   }

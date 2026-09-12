@@ -195,6 +195,15 @@ describe("buildLastTransmittalBySet (items → revision → sheet → set)", () 
     expect(last.has("s3")).toBe(false);
   });
 
+  it("ignores voided transmittals: void is m4_1's only retraction, and it keeps its dates", () => {
+    const last = buildLastTransmittalBySet([
+      transmittal({ id: "live", transmittal_number: "T-001", status: "sent", date_sent: "2026-08-01", drawingIds: ["d1"] }),
+      transmittal({ id: "void", transmittal_number: "T-002", status: "void", date_sent: "2026-08-05", drawingIds: ["d1", "d4"] }),
+    ], packages);
+    expect(last.get("s1")?.id).toBe("live");
+    expect(last.has("s2")).toBe(false);
+  });
+
   it("falls back to created_at when a transmittal carries no date", () => {
     const last = buildLastTransmittalBySet([
       transmittal({ id: "dated", date_sent: "2026-08-01", drawingIds: ["d1"] }),
@@ -416,6 +425,45 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
       expected: { s1: "none", s2: "none" },
     },
     {
+      name: "a sheet sent with no revision recorded (m4_1 items carry only drawing_id) is placed, and unchecked, never revised",
+      transmittals: [transmittal({ id: "no-rev", items: [{ ...CURRENT_REV_ITEM, id: "n", drawing_revision_id: null }] })],
+      expected: { s1: { id: "no-rev", sheetCount: 1, revisedSinceSent: 0, uncheckedSheets: 1 }, s2: "none" },
+    },
+    {
+      name: "a voided transmittal is skipped, even a newer one, and the older live one wins",
+      transmittals: [
+        transmittal({ id: "void", transmittal_number: "T-002", status: "void", date_sent: "2026-08-05", drawingIds: ["d1"] }),
+        transmittal({ id: "live", transmittal_number: "T-001", status: "sent", date_sent: "2026-08-01", drawingIds: ["d1"] }),
+      ],
+      expected: { s1: { id: "live" } },
+    },
+    {
+      name: "a set carried only by a voided transmittal is not sent yet, and the void's unmatched items make nothing Unknown",
+      transmittals: [transmittal({ id: "void", status: "void", drawingIds: ["d1", "ghost"] })],
+      expected: { s1: "none", s2: "none" },
+    },
+    {
+      name: "a set carried only by a voided transmittal is Unknown while another transmittal's item is unmatched",
+      transmittals: [
+        transmittal({ id: "void", status: "void", drawingIds: ["d4"] }),
+        transmittal({ id: "live", status: "sent", drawingIds: ["d1", "ghost"] }),
+      ],
+      expected: { s1: { id: "live" }, s2: { unknown: 1 } },
+    },
+    {
+      name: "acknowledged and a dated draft (Rev.2's own inserts land as draft) count as sent",
+      transmittals: [
+        transmittal({ id: "ack", status: "acknowledged", drawingIds: ["d1"] }),
+        transmittal({ id: "draft", status: "draft", drawingIds: ["d4"] }),
+      ],
+      expected: { s1: { id: "ack" }, s2: { id: "draft" } },
+    },
+    {
+      name: "an undated draft still carried its set: placed as undated, never Not sent yet",
+      transmittals: [transmittal({ id: "undated-draft", status: "draft", date_sent: null, drawingIds: ["d1"] })],
+      expected: { s1: { undated: "undated-draft" } },
+    },
+    {
       name: "no outgoing transmittals: Not sent yet everywhere",
       transmittals: [],
       expected: { s1: "none", s2: "none", s3: "none" },
@@ -437,6 +485,7 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
     ], packages, currentWith({ d1: "rev-d1-B", d2: null }));
     expect(lastSentForSet(rollup, "s1")).toEqual({
       kind: "sent",
+      possiblyTruncated: false,
       transmittal: {
         id: "t-9",
         number: "T-009",
@@ -477,8 +526,35 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
 
   it("carries a cut-off log's flag through enrichApprovalMatrixRows", () => {
     const { rows } = enrich([], { transmittals: truncatedLog([transmittal({ id: "out", drawingIds: ["d1"] })]), current: CURRENT });
-    expect(byId(rows, "s1").lastSent).toMatchObject({ kind: "sent", transmittal: { id: "out" } });
+    expect(byId(rows, "s1").lastSent).toMatchObject({ kind: "sent", possiblyTruncated: true, transmittal: { id: "out" } });
     expect(byId(rows, "s2").lastSent).toEqual({ kind: "unknown", unresolvedItems: 0, possiblyTruncated: true });
+  });
+
+  it("carries a cut-off log's flag onto a set's own transmittal, dated or not: its counts are lower bounds", () => {
+    const { packages } = enrich([]);
+    const cutOff = buildLastOutgoingBySet(truncatedLog([
+      transmittal({ id: "t", drawingIds: ["d1"] }),
+      transmittal({ id: "no-date", date_sent: null, drawingIds: ["d4"] }),
+    ]), packages, CURRENT);
+    expect(lastSentForSet(cutOff, "s1")).toMatchObject({ kind: "sent", possiblyTruncated: true, transmittal: { id: "t" } });
+    expect(lastSentForSet(cutOff, "s2")).toMatchObject({ kind: "undated", possiblyTruncated: true, transmittal: { id: "no-date" } });
+
+    const whole = buildLastOutgoingBySet([
+      transmittal({ id: "t", drawingIds: ["d1"] }),
+      transmittal({ id: "no-date", date_sent: null, drawingIds: ["d4"] }),
+    ], packages, CURRENT);
+    expect(lastSentForSet(whole, "s1")).toMatchObject({ kind: "sent", possiblyTruncated: false });
+    expect(lastSentForSet(whole, "s2")).toMatchObject({ kind: "undated", possiblyTruncated: false });
+  });
+
+  it("marks an undated draft as a draft, and an undated row with no status as not one", () => {
+    const { packages } = enrich([]);
+    const rollup = buildLastOutgoingBySet([
+      transmittal({ id: "draft", status: "draft", date_sent: null, drawingIds: ["d1"] }),
+      transmittal({ id: "legacy", date_sent: null, drawingIds: ["d4"] }),
+    ], packages, CURRENT);
+    expect(rollup.undatedBySet.get("s1")).toEqual({ id: "draft", number: "T-001", draft: true });
+    expect(rollup.undatedBySet.get("s2")).toEqual({ id: "legacy", number: "T-001", draft: false });
   });
 });
 

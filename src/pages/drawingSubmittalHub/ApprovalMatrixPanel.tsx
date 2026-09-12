@@ -571,6 +571,9 @@ function LastSentValue({ lastSent, status }: { lastSent: LastSent; status: LastS
   }
   if (lastSent.kind === "undated") {
     const number = lastSent.transmittal.number || "Unnumbered";
+    // An undated draft is a Rev.2 entry with the date left blank or a 2026
+    // draft not sent yet; the row can't say which, so it claims neither.
+    const { draft } = lastSent.transmittal;
     return (
       <>
         <Link to={transmittalHref(lastSent.transmittal.id)} style={linkStyle} title={`Open transmittal ${number}`}>
@@ -579,10 +582,13 @@ function LastSentValue({ lastSent, status }: { lastSent: LastSent; status: LastS
         {" · "}
         <strong
           style={valueStyle}
-          title={`${number} is logged as outgoing with no send date, so when it went out, and what changed since, can't be shown.`}
+          title={draft
+            ? `${number} is logged as outgoing with no send date and isn't marked sent, so whether and when it went out can't be shown.`
+            : `${number} is logged as outgoing with no send date, so when it went out, and what changed since, can't be shown.`}
         >
-          Sent (date not entered)
+          {draft ? "Logged, no send date" : "Sent (date not entered)"}
         </strong>
+        {lastSent.possiblyTruncated && <PartialLogCaveat />}
       </>
     );
   }
@@ -591,9 +597,14 @@ function LastSentValue({ lastSent, status }: { lastSent: LastSent; status: LastS
   const revised = sent.revisedSinceSent;
   const superseded = sent.supersededNow;
   const unchecked = sent.uncheckedSheets;
+  // A cut-off log may be missing some of this transmittal's items: every count
+  // is then a lower bound, and a 0 proves nothing.
+  const partial = lastSent.possiblyTruncated;
+  const atLeast = partial ? "at least " : "";
   // Every sheet unchecked: "0 revised since" would rest on nothing, so only the
-  // "couldn't be checked" segment shows.
+  // "couldn't be checked" segment shows. Same for a 0 off a partial log.
   const checked = sent.sheetCount - unchecked;
+  const showRevised = checked > 0 && (!partial || revised > 0);
   return (
     <>
       <Link to={transmittalHref(sent.id)} style={linkStyle} title={`Open transmittal ${number}`}>
@@ -608,15 +619,15 @@ function LastSentValue({ lastSent, status }: { lastSent: LastSent; status: LastS
         </>
       )}
       {" · "}
-      <strong style={valueStyle}>{pluralize(sent.sheetCount, "sheet")}</strong>
-      {checked > 0 && (
+      <strong style={valueStyle}>{`${atLeast}${pluralize(sent.sheetCount, "sheet")}`}</strong>
+      {showRevised && (
         <>
           {" · "}
           <strong
             style={{ color: revised > 0 ? "var(--cmd-warn-text)" : "var(--cmd-text)" }}
-            title={`Revised since sent: ${revised} of ${pluralize(checked, "sheet")} checked against a current revision`}
+            title={`Revised since sent: ${atLeast}${revised} of ${pluralize(checked, "sheet")} checked against a current revision`}
           >
-            {`${revised} revised since`}
+            {`${atLeast}${revised} revised since`}
           </strong>
         </>
       )}
@@ -626,9 +637,9 @@ function LastSentValue({ lastSent, status }: { lastSent: LastSent; status: LastS
           {" · "}
           <strong
             style={{ color: "var(--cmd-warn-text)" }}
-            title={`Superseded now: ${pluralize(superseded, "sheet")}. When a sheet was superseded isn't recorded, so this can include sheets superseded before ${number} went out.`}
+            title={`Superseded now: ${atLeast}${pluralize(superseded, "sheet")}. When a sheet was superseded isn't recorded, so this can include sheets superseded before ${number} went out.`}
           >
-            {`${superseded} now superseded`}
+            {`${atLeast}${superseded} now superseded`}
           </strong>
         </>
       )}
@@ -636,11 +647,27 @@ function LastSentValue({ lastSent, status }: { lastSent: LastSent; status: LastS
       {unchecked > 0 && (
         <>
           {" · "}
-          <span title={`No current revision is loaded for ${pluralize(unchecked, "sheet")}, so ${unchecked === 1 ? "it isn't" : "they aren't"} counted as revised.`}>
-            {`${unchecked} couldn't be checked`}
+          <span title={`Nothing to compare for ${pluralize(unchecked, "sheet")}: no current revision is loaded, or ${number} didn't record which revision it sent. ${unchecked === 1 ? "It isn't" : "They aren't"} counted as revised.`}>
+            {`${atLeast}${unchecked} couldn't be checked`}
           </span>
         </>
       )}
+      {partial && <PartialLogCaveat />}
+    </>
+  );
+}
+
+/** Visible, not hover-only: counts off a cut-off log are lower bounds. */
+function PartialLogCaveat() {
+  return (
+    <>
+      {" · "}
+      <span
+        style={{ color: "var(--cmd-warn-text)" }}
+        title="Some transmittal records weren't loaded, so this set's last transmittal and its counts may be incomplete."
+      >
+        may be incomplete
+      </span>
     </>
   );
 }

@@ -190,6 +190,12 @@ function DetailingControlCenter() {
   // roster read always agree.
   const flagsQuery = useAllFlags();
   const flagsReady = flagsQuery.data !== undefined;
+  // TanStack v5 resets a data-less query to pending (isError false) the moment
+  // a Retry starts, which would swap the error for the loading line and drop
+  // the focused Retry button. errorUpdateCount survives that reset, so the
+  // error block stays mounted, in its retrying state, through the re-read.
+  const flagsFailed = !flagsReady
+    && (flagsQuery.isError || (flagsQuery.isFetching && flagsQuery.errorUpdateCount > 0));
   const show3d = flagsQuery.data?.get("viewer_3d") === true;
   // Phase 5 display: count SUBMITTAL due-date countdowns in working days (Mon–Fri)
   // rather than calendar days when on. Drawing-set dues stay calendar-day. Threaded
@@ -816,7 +822,7 @@ function DetailingControlCenter() {
             "turned off". */}
         {activeTab === "model3d" && (
           !flagsReady ? (
-            flagsQuery.isError
+            flagsFailed
               ? <Model3DGateError onRetry={() => { void flagsQuery.refetch(); }} retrying={flagsQuery.isFetching} />
               : <Model3DGateLoading />
           )

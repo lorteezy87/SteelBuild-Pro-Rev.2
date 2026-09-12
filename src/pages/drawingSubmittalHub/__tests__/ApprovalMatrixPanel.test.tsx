@@ -109,7 +109,7 @@ function expandLastSent(setId: string): HTMLElement {
   return line as HTMLElement;
 }
 
-const sentItem = (id: string, drawingId: string | null, revisionId: string): TransmittalAttachment => ({
+const sentItem = (id: string, drawingId: string | null, revisionId: string | null): TransmittalAttachment => ({
   id, drawing_revision_id: revisionId, drawing_id: drawingId, sheet_number: null, sheet_title: null, revision_code: null,
 });
 
@@ -272,8 +272,52 @@ describe("ApprovalMatrixPanel — Last sent (expanded row)", () => {
     expect(line.textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 1 couldn't be checked");
     expect(within(line).getByText("1 couldn't be checked")).toHaveAttribute(
       "title",
-      "No current revision is loaded for 1 sheet, so it isn't counted as revised.",
+      "Nothing to compare for 1 sheet: no current revision is loaded, or T-014 didn't record which revision it sent. It isn't counted as revised.",
     );
+  });
+
+  it("counts a sheet sent with no revision recorded as unchecked, never revised, though it has a current revision", () => {
+    mount({ transmittals: [{ ...TRANSMITTALS[0], items: [sentItem("i1", "d1", null)] }] });
+    expect(expandLastSent("s1").textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 1 couldn't be checked");
+  });
+
+  it("says an undated draft was logged with no send date: never 'Sent', never 'Not sent yet'", () => {
+    mount({ transmittals: [{ ...TRANSMITTALS[0], status: "draft", date_sent: null }] });
+    const line = expandLastSent("s1");
+    expect(line).toHaveAttribute("data-last-sent", "undated");
+    expect(line.textContent).toBe("Last sent: T-014 · Logged, no send date");
+    expect(within(line).getByText("Logged, no send date")).toHaveAttribute(
+      "title",
+      "T-014 is logged as outgoing with no send date and isn't marked sent, so whether and when it went out can't be shown.",
+    );
+  });
+
+  it("shows a dated draft, how Rev.2's own logged rows land, as sent", () => {
+    mount({ transmittals: [{ ...TRANSMITTALS[0], status: "draft" }] });
+    expect(expandLastSent("s1").textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · 1 sheet · 0 revised since");
+  });
+
+  it("gives only lower bounds, with a visible caveat, off a cut-off log: no exact count, no '0 revised since'", () => {
+    const cutOff = () => Object.defineProperty([...TRANSMITTALS], "possiblyTruncated", { value: true });
+    mount({ transmittals: cutOff() });
+    const line = expandLastSent("s1");
+    expect(line.textContent).toBe("Last sent: T-014 · Aug 3, 26 · to EOR · at least 1 sheet · may be incomplete");
+    expect(line).not.toHaveTextContent("0 revised since");
+    expect(within(line).getByText("may be incomplete")).toHaveAttribute(
+      "title",
+      "Some transmittal records weren't loaded, so this set's last transmittal and its counts may be incomplete.",
+    );
+    cleanup();
+
+    mount({ transmittals: cutOff(), currentRevisionIdByDrawingId: new Map([["d1", "r1-B"]]) });
+    expect(expandLastSent("s1").textContent).toBe(
+      "Last sent: T-014 · Aug 3, 26 · to EOR · at least 1 sheet · at least 1 revised since · may be incomplete",
+    );
+  });
+
+  it("flags an undated transmittal off a cut-off log as possibly incomplete", () => {
+    mount({ transmittals: Object.defineProperty([{ ...TRANSMITTALS[0], date_sent: null }], "possiblyTruncated", { value: true }) });
+    expect(expandLastSent("s1").textContent).toBe("Last sent: T-014 · Sent (date not entered) · may be incomplete");
   });
 
   it("counts revisions over the sheets it could check, and says how many it couldn't", () => {

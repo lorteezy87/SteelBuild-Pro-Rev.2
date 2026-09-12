@@ -10,18 +10,31 @@ import { entities } from "@/api/supabaseClient";
 
 export interface TransmittalAttachment {
   id: string;
-  drawing_revision_id: string;
+  /**
+   * The revision it carried, or null when none was recorded. The shared DB
+   * (2026's m4_1) keys items by drawing_id; send_transmittal fills this only
+   * when the sheet had a current drawing_revisions row at send time.
+   */
+  drawing_revision_id: string | null;
   drawing_id: string | null;
   sheet_number: string | null;
   sheet_title: string | null;
   revision_code: string | null;
 }
 
+/**
+ * m4_1's lifecycle. 'void' is the only retraction of a sent transmittal (a
+ * sent one can't be soft-deleted). Rev.2's own inserts land as 'draft', dated
+ * or not. Null/absent: a row from before the column existed.
+ */
+export type TransmittalStatus = "draft" | "sent" | "acknowledged" | "void";
+
 export interface TransmittalRow {
   id: string;
   project_id: string;
   transmittal_number: string;
   direction: "incoming" | "outgoing" | "internal";
+  status?: TransmittalStatus | null;
   source_company: string | null;
   received_from: string | null;
   sent_to: string | null;
@@ -96,16 +109,19 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
       const itemsByTransmittal = new Map<string, TransmittalAttachment[]>();
       for (const it of (rawItems as any[]) ?? []) {
         const tid = String(it?.transmittal_id ?? "");
-        const revisionId = String(it?.drawing_revision_id ?? "");
-        if (!tid || !revisionId) continue;
-        const revision = revisionsById.get(revisionId);
+        // A GC / contract drawing (m4_1's gc_drawing_id) is not a Rev.2 sheet.
+        if (!tid || it?.gc_drawing_id) continue;
+        // Kept without a revision: m4_1 items carry drawing_id, and a sheet
+        // with no current revision at send leaves drawing_revision_id NULL.
+        const revisionId = it?.drawing_revision_id ? String(it.drawing_revision_id) : "";
+        const revision = revisionId ? revisionsById.get(revisionId) : undefined;
         const attachment: TransmittalAttachment = {
           id: String(it.id),
-          drawing_revision_id: revisionId,
-          drawing_id: revision?.drawing_id ? String(revision.drawing_id) : null,
-          sheet_number: revision?.sheet_number ?? null,
-          sheet_title: revision?.sheet_title ?? null,
-          revision_code: revision?.revision_code ?? null,
+          drawing_revision_id: revisionId || null,
+          drawing_id: it.drawing_id ? String(it.drawing_id) : revision?.drawing_id ? String(revision.drawing_id) : null,
+          sheet_number: revision?.sheet_number ?? it.number_at_send ?? null,
+          sheet_title: revision?.sheet_title ?? it.title_at_send ?? null,
+          revision_code: revision?.revision_code ?? it.revision_at_send ?? null,
         };
         const transmittalItems = itemsByTransmittal.get(tid) ?? [];
         transmittalItems.push(attachment);

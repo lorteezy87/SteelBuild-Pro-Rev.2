@@ -38,7 +38,18 @@ export function Model3DGateError({ onRetry, retrying = false }: { onRetry: () =>
       style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "12px 2px", fontSize: 13, color: "var(--cmd-text)" }}
     >
       <span>Couldn't check whether the 3D model viewer is enabled.</span>
-      <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onRetry} disabled={retrying}>
+      {/* aria-disabled, not disabled: a disabled button drops keyboard focus
+          mid-retry. The hub keeps this block mounted through the re-read. */}
+      <button
+        type="button"
+        className="cmd-btn cmd-btn--ghost"
+        aria-disabled={retrying}
+        onClick={() => {
+          if (retrying) return;
+          onRetry();
+        }}
+        style={retrying ? { opacity: 0.6, cursor: "default" } : undefined}
+      >
         {retrying ? "Retrying…" : "Retry"}
       </button>
     </div>
