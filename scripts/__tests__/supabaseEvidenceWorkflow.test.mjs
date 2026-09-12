@@ -70,6 +70,9 @@ describe("Supabase evidence workflow", () => {
     expect(captureStep.run).toContain("supabase migration list");
     expect(captureStep.run).toContain("supabase db dump");
     expect(captureStep.run).toContain("supabase functions download");
+    expect(captureStep.run).toContain("/database/backups");
+    expect(captureStep.run).toContain("/database/query");
+    expect(captureStep.run).toContain("{query: $query, read_only: true}");
     expect(captureStep.run).toContain("body-capture-failures.txt");
     expect(captureStep.run).toContain("source-extraction-failures.txt");
     expect(captureStep.run).toContain("if ! supabase functions download");
@@ -86,6 +89,14 @@ describe("Supabase evidence workflow", () => {
         uses?.startsWith("actions/checkout@"),
       ),
     ).toBe(false);
+
+    const probeSql = captureStep.run.match(
+      /<<'SQL'\n([\s\S]*?)\nSQL(?:\n|$)/,
+    )?.[1];
+    expect(probeSql).toBeTruthy();
+    expect(probeSql).not.toMatch(
+      /^\s*(?:alter|create|delete|drop|grant|insert|revoke|truncate|update)\b/im,
+    );
   });
 
   it("retains evidence for one day and always removes runner copies", async () => {
