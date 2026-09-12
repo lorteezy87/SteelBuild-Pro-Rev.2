@@ -117,6 +117,9 @@ describe("useDrawingSetCreation — cross-set supersede", () => {
     await handleCreate(SHEETS, { supersedeIds: OLD_IDS });
 
     expect(m.bulkCreate).toHaveBeenCalledTimes(1);
+    // The commit-time re-read is of the active project, once.
+    expect(m.fetchSource).toHaveBeenCalledTimes(1);
+    expect(m.fetchSource).toHaveBeenCalledWith("p1");
     const calls = supersedeCalls();
     expect(calls.map(([id]) => id)).toEqual(OLD_IDS);
     for (const [id, patch] of calls) {
@@ -255,12 +258,57 @@ describe("useDrawingSetCreation — cross-set supersede", () => {
     });
     await handleCreate(SHEETS, { supersedeIds: OLD_IDS });
     expect(m.toast.warning).toHaveBeenCalledTimes(1);
+    // A page left live never gets an all-clear toast beside the warning.
+    expect(m.toast.success).not.toHaveBeenCalled();
     const [title, options] = m.toast.warning.mock.calls[0];
     expect(title).toBe("Upload finished with problems");
     const toast = renderToast((options as { description?: unknown }).description);
     // The page left live never reads as part of the superseded list.
     expect(within(toast).getByText("Marked 2 pages superseded in Main Steel – L2: S-201, S-204.")).toBeInTheDocument();
     expect(within(toast).getByText("S-209 (Main Steel – L2) is still live — Set is locked. Nothing was changed on it.")).toBeInTheDocument();
+  });
+
+  it("reports a phase cancelled mid-way even when every page was skipped — a warning, never a success", async () => {
+    const { handleCreate, state, qc } = mount();
+    // Reset while the phase re-reads; by then another session had superseded the pages.
+    m.fetchSource.mockImplementation(async () => {
+      state.cancelledRef.current = true;
+      return {
+        sets: [L2, { id: "set-new", set_name: NEW_SET }],
+        drawings: Object.values(rowsById).map((row) => ({ ...row, is_superseded: true })),
+      };
+    });
+    await handleCreate(SHEETS, { supersedeIds: OLD_IDS });
+    expect(m.update).not.toHaveBeenCalled();
+    expect(m.toast.success).not.toHaveBeenCalled();
+    expect(m.toast.warning).toHaveBeenCalledTimes(1);
+    const [title, options] = m.toast.warning.mock.calls[0];
+    expect(title).toBe("Upload finished with problems");
+    const toast = renderToast((options as { description?: unknown }).description);
+    for (const sheet of ["S-201", "S-204", "S-209"]) {
+      expect(within(toast).getByText(`${sheet} (Main Steel – L2) was not changed — it was already superseded or deleted.`)).toBeInTheDocument();
+    }
+    expect(within(toast).queryByText(/^Marked /)).toBeNull();
+    expect(m.invalidateEntities).toHaveBeenCalledWith(qc, ["drawing", "drawingSet", "submittal", "drawing_revision"], "p1");
+    expect(qc.invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ["canonical-release-gate"] });
+    expect(state.setStep).not.toHaveBeenCalledWith(5);
+  });
+
+  it("names the confirmed pages from the Review labels when the commit-time re-read fails, and changes none of them", async () => {
+    m.fetchSource.mockRejectedValueOnce(new Error("network down"));
+    const { handleCreate, state } = mount();
+    await handleCreate(SHEETS, {
+      supersedeIds: ["old-201"],
+      supersedeLabels: { "old-201": { sheetNumber: "S-201", setName: "Main Steel – L2" } },
+    });
+    expect(m.fetchSource).toHaveBeenCalledWith("p1");
+    expect(m.update).not.toHaveBeenCalled();
+    const result = lastSupersedeResult(state);
+    expect(result.superseded).toEqual([]);
+    expect(result.failed).toEqual([
+      expect.objectContaining({ id: "old-201", sheetNumber: "S-201", setName: "Main Steel – L2", failure: "fetch" }),
+    ]);
+    expect(state.setStep).toHaveBeenLastCalledWith(5);
   });
 });
 

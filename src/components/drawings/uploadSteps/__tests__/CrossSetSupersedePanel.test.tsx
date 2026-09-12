@@ -198,21 +198,28 @@ describe("CrossSetSupersedePanel", () => {
     expect(details.open).toBe(true);
   });
 
-  it("says what superseding does to releasing the old sets, without claiming an admin or a re-release", async () => {
+  it("says what superseding does to releasing the old sets: what is blocked, when, and who can override", async () => {
     mount();
     await ready();
-    const note = screen.getByText(/Superseded pages can't be released for fabrication/);
+    const note = screen.getByText(/^Superseded pages are left out of fab-release and turnover exports/);
     expect(note).toHaveTextContent(
-      "Superseded pages can't be released for fabrication, so a submittal or fab-release export that includes Main Steel – L2 will be blocked. " +
-      "A PM can release it only with an override reason, and that override also skips the open-RFI and rejected-sheet checks.",
+      "Superseded pages are left out of fab-release and turnover exports, but they still block release: " +
+      "moving a submittal that includes Main Steel – L2 to Released for Fabrication (if it isn't there yet), " +
+      "and any such export that includes pages from Main Steel – L2, will need an override reason from someone with PM access " +
+      "— and that override skips every other release check too, including open RFIs and rejected sheets.",
     );
-    expect(note).not.toHaveTextContent(/admin|again/i);
+    // Not an admin-only override, not a re-release, and no block on a submittal that is already released.
+    expect(note).not.toHaveTextContent(/admin|again|can't be released/i);
 
+    // Any one ticked set blocks the submittal or export that holds it.
     fireEvent.click(rowBox("Mark S-204 in Ladders - Bldg. 2 superseded"));
-    expect(note).toHaveTextContent("a submittal or fab-release export that includes Main Steel – L2 and Ladders - Bldg. 2 will be blocked.");
+    expect(note).toHaveTextContent("moving a submittal that includes Main Steel – L2 or Ladders - Bldg. 2 to Released for Fabrication");
+    expect(note).toHaveTextContent("any such export that includes pages from Main Steel – L2 or Ladders - Bldg. 2, will need");
 
     fireEvent.click(screen.getByRole("button", { name: "Clear all pages to supersede" }));
-    expect(note).toHaveTextContent(/^Superseded pages can't be released for fabrication\.$/);
+    expect(note).toHaveTextContent(
+      /^Superseded pages are left out of fab-release and turnover exports, and they block release of the sets they're in\.$/,
+    );
   });
 
   it("never says a page replaces another when every match in its set is unlikely", async () => {

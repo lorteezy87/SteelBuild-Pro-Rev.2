@@ -422,6 +422,23 @@ describe("applyCrossSetSupersede", () => {
     ]);
   });
 
+  it.each<[string, CrossSetSourceSet[]]>([
+    ["was soft-deleted", [set("set-l2", "Main Steel – L2", { is_deleted: true }), set("set-new", NEW_SET)]],
+    ["is missing from the fresh read", [set("set-new", NEW_SET)]],
+  ])("leaves every page alone when its old set %s after the preview", async (_label, sets) => {
+    const update = vi.fn(async () => ({}));
+    const result = await run(update, { ...freshSource(), sets });
+    expect(update).not.toHaveBeenCalled();
+    expect(result.superseded).toEqual([]);
+    expect(result.failed).toEqual([]);
+    // Still named, so the Success step can say which pages were left alone.
+    expect(result.skipped.map((item) => [item.id, item.skipReason, item.setName])).toEqual([
+      ["old-201", "no_longer_live", "Main Steel – L2"],
+      ["old-204", "no_longer_live", "Main Steel – L2"],
+      ["old-209", "no_longer_live", "Main Steel – L2"],
+    ]);
+  });
+
   it("writes nothing and fails every page when the fresh read fails", async () => {
     const update = vi.fn(async () => ({}));
     const result = await run(update, async () => { throw new Error("network down"); });

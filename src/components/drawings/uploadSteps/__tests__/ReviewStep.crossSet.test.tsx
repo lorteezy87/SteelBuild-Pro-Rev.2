@@ -80,6 +80,10 @@ describe("ReviewStep — pages this upload replaces", () => {
     expect((selected as Array<{ sheetNumber: string }>).map((s) => s.sheetNumber)).toEqual(["S-201", "S-204", "S-209"]);
     // S-209 has no title yet, so it is not ticked by default.
     expect(options).toEqual(expect.objectContaining({ supersedeIds: ["old-201"] }));
+    // The labels name each page if the commit-time re-read fails.
+    const { supersedeIds, supersedeLabels } = options as { supersedeIds: string[]; supersedeLabels: Record<string, unknown> };
+    expect(supersedeLabels["old-201"]).toEqual({ sheetNumber: "S-201", setName: "Main Steel – L2" });
+    for (const id of supersedeIds) expect(supersedeLabels[id]).toBeDefined();
   });
 
   it("typing a matching title into a blank-title row flips its default to ticked", async () => {

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import type { CSSProperties } from "react";
-import { buildReplaceSentence, buildSharedNumberSentence, joinSheetNumbers } from "@/lib/crossSetSupersede";
+import { buildReplaceSentence, buildSharedNumberSentence } from "@/lib/crossSetSupersede";
 import type { CrossSetGroup, CrossSetPlan, CrossSetRow } from "@/lib/crossSetSupersede";
 import type { CrossSetStatus } from "@/components/drawings/upload/useCrossSetSupersede";
 
@@ -32,6 +32,33 @@ const cell: CSSProperties = { padding: "5px 8px", textAlign: "left", verticalAli
 const headCell: CSSProperties = { ...cell, ...monoLabel, fontWeight: 600, background: "var(--bg-surface-low)", position: "sticky", top: 0 };
 
 const sheetLabels = (rows: readonly CrossSetRow[]) => rows.map((row) => row.newSheetNumber || row.oldSheetNumber);
+
+// "A", "A or B", "A, B or C": a submittal or export holding any one of them is blocked.
+const joinOr = (names: readonly string[]) =>
+  names.length <= 1 ? names[0] ?? "" : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
+
+/**
+ * What superseding does to releasing the old sets.
+ * - Fab-release and turnover exports always leave superseded pages out
+ *   (isApprovedForFab), but still gate on them as revision conflicts.
+ * - enforce_submittal_fab_release_gate refuses a submittal's move INTO Released
+ *   for Fabrication while any sheet in its sets is superseded; a submittal that
+ *   is already released is never re-checked.
+ * - Only an override reason gets past either. RLS allows it from pm up, and it
+ *   skips every other release check too.
+ */
+function releaseNote(tickedSetNames: readonly string[]): string {
+  if (tickedSetNames.length === 0) {
+    return "Superseded pages are left out of fab-release and turnover exports, and they block release of the sets they're in.";
+  }
+  const sets = joinOr(tickedSetNames);
+  return (
+    `Superseded pages are left out of fab-release and turnover exports, but they still block release: moving a submittal that includes ${sets} ` +
+    "to Released for Fabrication (if it isn't there yet), and any such export that includes pages from " +
+    `${sets}, will need an override reason from someone with PM access — and that override skips every other release check too, ` +
+    "including open RFIs and rejected sheets."
+  );
+}
 
 // No Stage column: drawings.stage is seeded "Not Started" by the wizard and
 // nothing syncs it from the submittal, so it would say "Not Started" on pages
@@ -301,21 +328,9 @@ export default function CrossSetSupersedePanel({
         />
       )}
 
-      {/* enforce_submittal_fab_release_gate blocks a move to Released for
-          Fabrication while any sheet in the submittal's sets is superseded, and
-          the fab-release export flags them as revision conflicts. Only an
-          override reason gets past either, and it skips every other check too. */}
       {canSupersede && (
         <p style={{ ...bodyText, color: "var(--text-muted)", margin: "10px 0 0" }}>
-          {tickedSetNames.length > 0 ? (
-            <>
-              Superseded pages can&apos;t be released for fabrication, so a submittal or fab-release export that
-              includes {joinSheetNumbers(tickedSetNames)} will be blocked. A PM can release it only with an override
-              reason, and that override also skips the open-RFI and rejected-sheet checks.
-            </>
-          ) : (
-            <>Superseded pages can&apos;t be released for fabrication.</>
-          )}
+          {releaseNote(tickedSetNames)}
         </p>
       )}
     </section>
