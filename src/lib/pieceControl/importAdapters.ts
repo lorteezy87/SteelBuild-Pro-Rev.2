@@ -1,5 +1,8 @@
 import type { ImportPayload, PieceImportSourceType } from "./reconciliation";
 import { aggregatePieceRowsByMark } from "./aggregateImportRows";
+import { readFileText, stripNulDeep } from "@/lib/textDecoding";
+
+type ReadText = () => Promise<string>;
 
 function parseCsv(text: string): ImportPayload[] {
   const records: string[][] = [];
@@ -157,9 +160,9 @@ export function parseKissPieceRows(text: string): ImportPayload[] {
   return rows;
 }
 
-async function parsePowerFabOrFabSuite(file: File): Promise<ImportPayload[]> {
+async function parsePowerFabOrFabSuite(readText: ReadText): Promise<ImportPayload[]> {
   const { parseFabSuiteXml } = await import("@/lib/importFabSuiteXml");
-  const parsed = parseFabSuiteXml(await file.text());
+  const parsed = parseFabSuiteXml(await readText());
   if (!parsed.ok) {
     throw new Error(parsed.error || "Could not parse PowerFab / FabSuite XML");
   }
@@ -192,10 +195,10 @@ async function parsePowerFabOrFabSuite(file: File): Promise<ImportPayload[]> {
   );
 }
 
-async function parseIfcRoster(file: File): Promise<ImportPayload[]> {
+async function parseIfcRoster(file: File, readText: ReadText): Promise<ImportPayload[]> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".json") || name.endsWith(".csv")) {
-    const text = await file.text();
+    const text = await readText();
     const rows = name.endsWith(".json")
       ? (JSON.parse(text) as ImportPayload[])
       : parseCsv(text);
@@ -234,23 +237,51 @@ async function parseIfcRoster(file: File): Promise<ImportPayload[]> {
   return Array.from(byMark.values());
 }
 
+export type PieceImportFileResult = {
+  rows: ImportPayload[];
+  /** U+0000 characters removed while reading (decoded text + parsed values). */
+  nulsRemoved: number;
+};
+
+/**
+ * Read an import file into staging rows. Text is decoded by byte-order mark /
+ * UTF-16 sniff (never `file.text()`, which is UTF-8 only), and every U+0000 is
+ * removed before the rows can reach the jsonb staging RPC (Postgres 22P05).
+ */
 export async function readPieceImportFile(
   file: File,
   sourceType: PieceImportSourceType = "csv",
+): Promise<PieceImportFileResult> {
+  let nulsRemoved = 0;
+  const readText: ReadText = async () => {
+    const decoded = await readFileText(file);
+    nulsRemoved += decoded.nulsRemoved;
+    return decoded.text;
+  };
+  const parsed = await parsePieceImportRows(file, sourceType, readText);
+  // JSON-escaped NULs and IFC property values bypass the text-level strip.
+  const { value: rows, removed } = stripNulDeep(parsed);
+  return { rows, nulsRemoved: nulsRemoved + removed };
+}
+
+async function parsePieceImportRows(
+  file: File,
+  sourceType: PieceImportSourceType,
+  readText: ReadText,
 ): Promise<ImportPayload[]> {
   const name = file.name.toLowerCase();
 
   if (sourceType === "powerfab_xml" || sourceType === "fabsuite_xml" || name.endsWith(".xml")) {
-    return parsePowerFabOrFabSuite(file);
+    return parsePowerFabOrFabSuite(readText);
   }
   if (sourceType === "ifc" || name.endsWith(".ifc")) {
-    return parseIfcRoster(file);
+    return parseIfcRoster(file, readText);
   }
   if (sourceType === "kiss" || name.endsWith(".kss") || name.endsWith(".kiss")) {
-    return parseKissPieceRows(await file.text());
+    return parseKissPieceRows(await readText());
   }
 
-  const text = await file.text();
+  const text = await readText();
   if (name.endsWith(".json") || sourceType === "manual") {
     if (name.endsWith(".json") || text.trim().startsWith("[")) {
       const parsed: unknown = JSON.parse(text);

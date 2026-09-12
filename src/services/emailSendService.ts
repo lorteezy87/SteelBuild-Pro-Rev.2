@@ -15,6 +15,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { env } from "@/lib/env";
+import { sendEmailParamsSchema } from "@/lib/securitySchemas";
 
 export interface EmailAttachment {
   filename: string;
@@ -62,6 +63,12 @@ const EDGE_FN_PATH = "/functions/v1/email-send";
  * Send an email through the email-send Edge Function.
  */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+  const parsed = sendEmailParamsSchema.safeParse(params);
+  if (!parsed.success) {
+    const detail = parsed.error.issues.map((i) => i.message).join("; ");
+    return { success: false, error: `Invalid email payload: ${detail}` };
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
     return { success: false, error: "Not authenticated" };
@@ -76,7 +83,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
         "Content-Type": "application/json",
         "Authorization": `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify(params),
+      body: JSON.stringify(parsed.data),
     });
 
     const data = await resp.json();

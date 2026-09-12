@@ -7,8 +7,6 @@
 import { Suspense } from "react";
 import { todayLocalISO } from "@/lib/dateMath";
 import type { ComponentType, PropsWithChildren } from "react";
-import { entities } from "@/api/supabaseClient";
-import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
@@ -17,8 +15,6 @@ import ScheduleRivetBriefRaw from "@/components/schedule/ScheduleRivetBrief";
 import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
 import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawerRaw from "@/components/schedule/TaskDetailDrawer";
-import { sanitizeScheduleTaskUpdatePayload } from "./wbs";
-import { invalidateEntity } from "@/services/cacheRegistry";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import BulkActionToolbar from "./BulkActionToolbar";
 import PhaseKpiTiles from "./PhaseKpiTiles";
@@ -76,7 +72,6 @@ interface ScheduleBodyProps {
   floatMap: Record<string, TaskFloat>;
   selectedProject: any;
   projectId: string | null | undefined;
-  qc: any;
   bulkParentOptions: ScheduleTask[];
 
   // View / filter state
@@ -140,7 +135,6 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
   floatMap,
     selectedProject,
     projectId,
-    qc,
     bulkParentOptions,
     view,
     setView,
@@ -253,22 +247,13 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
                 expandedTask={expandedTask}
                 setExpandedTask={setExpandedTask}
                 onTaskClick={(task: ScheduleTask) => { setSelectedTask(task); setShowDrawer(true); }}
-                onSave={async (data: ScheduleTask) => {
-                  try {
-                    // Inside the try on purpose: sanitize runs assertScheduleDateRange,
-                    // which throws on an inverted window ("Finish date cannot be before
-                    // the start date"). Called above the try, that throw escaped this
-                    // catch entirely and the save failed with NO feedback at all.
-                    const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                    if (!id) throw new Error("Cannot update a task without an id");
-                    await entities.ScheduleTask.update(id, fields);
-                    invalidateEntity(qc, "schedule_task", projectId);
-                    toast.success("Task saved");
-                  } catch (err: any) {
-                    toast.error("Save failed: " + (err?.message || "unknown error"));
-                    throw err;
-                  }
-                }}
+                // The canonical update path (§4.2). This used to inline its own
+                // ScheduleTask.update, which meant the inline row editor and the
+                // bar drag skipped actuals stamping, the status/percent
+                // reconciliation the database requires, and the optimistic
+                // paint. mutateAsync keeps the await-and-throw contract the
+                // Gantt's own commitEdit relies on to hold the editor open.
+                onSave={(data: ScheduleTask) => updateTaskMut.mutateAsync(data)}
                 onReparent={(p: { ids: string[]; newParentId: string | null; dropIndex?: number | null }) =>
                   reparentMut.mutate(p)
                 }
@@ -306,20 +291,8 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
                 setShowDrawer(true);
               }}
               onDelete={(task: ScheduleTask) => setDeleteTarget(task)}
-              onSave={async (data: ScheduleTask) => {
-                try {
-                  // Inside the try — see the Gantt's onSave above. A validation throw
-                  // from sanitize used to bypass this catch and fail silently.
-                  const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                  if (!id) throw new Error("Cannot update a task without an id");
-                  await entities.ScheduleTask.update(id, fields);
-                  invalidateEntity(qc, "schedule_task", projectId);
-                  toast.success("Task saved");
-                } catch (err: any) {
-                  toast.error("Save failed: " + (err?.message || "unknown error"));
-                  throw err;
-                }
-              }}
+              // Same canonical path as the Gantt above — see the note there.
+              onSave={(data: ScheduleTask) => updateTaskMut.mutateAsync(data)}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}
             />
@@ -348,8 +321,11 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
           <AddTaskModal
             open={showAddTask}
             onClose={() => setShowAddTask(false)}
+            // mutateAsync, not mutate: the modal awaits the result so "Save &
+            // Add Next" can clear the form only when the task really landed,
+            // and can leave it exactly as typed when it did not.
             onSubmit={(data: ScheduleTask) =>
-              createTaskMut.mutate({
+              createTaskMut.mutateAsync({
                 ...data,
                 project_id: projectId,
                 percent_complete: 0,

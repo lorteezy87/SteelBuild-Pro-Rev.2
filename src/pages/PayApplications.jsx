@@ -9,8 +9,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
-import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { localToday } from "@/utils/dates";
 import { formatMoney, sumMoney } from "@/lib/money";
@@ -18,11 +16,16 @@ import { logActivity } from "@/services/auditLogger";
 import {
   createPayApplication,
   listLines,
+  getPayAppContract,
+  listSovItems,
+  listPayAppChangeOrders,
   listPayApplications,
   softDeletePayApplication,
   updateLine,
   updatePayApplication,
 } from "@/lib/payapp/repository";
+import PayAppReconciliationPanel from "./payApplications/PayAppReconciliationPanel";
+import { reconcilePayApplication } from "@/lib/payapp/reconciliation";
 import { computeG702, lineFigures } from "@/lib/payapp/g702";
 import { PAY_APP_STATUSES, PAY_APP_STATUS_LABELS } from "@/lib/payapp/types";
 import { buildPayAppPdf, suggestPayAppFilename } from "@/lib/payapp/payAppPdf";
@@ -75,39 +78,41 @@ export default function PayApplications() {
   const {
     data: payApps = [],
     isLoading,
+    isFetching: appsFetching,
     isError,
     error,
     refetch,
   } = useQuery({ queryKey: ["pay_applications", projectId], queryFn: () => listPayApplications(projectId), enabled: !!projectId });
-  const { data: sovItems = [] } = useQuery({
-    queryKey: ["sov_items_payapp", projectId],
-    queryFn: async () => {
-      const { data } = await supabase.from("sov_items").select("id, line_item_number, description, scheduled_value").eq("project_id", projectId).eq("is_deleted", false);
-      return data || [];
-    },
-    enabled: !!projectId,
-  });
-  // Key must be the cacheRegistry `change_order` primary (hyphenated). It was
-  // ["change_orders", projectId], which no invalidation ever matched — so
-  // approving a CO left this pay app billing against a stale contract sum.
-  const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders", projectId], queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
+  const sovQuery = useQuery({ queryKey: ["sov-items", projectId, "payapp-evidence"], queryFn: () => listSovItems(projectId), enabled: !!projectId });
+  const sovItems = sovQuery.data || [];
+  // Preserve the change-orders invalidation prefix, with a separate cache shape.
+  const changesQuery = useQuery({ queryKey: ["change-orders", projectId, "payapp-evidence"], queryFn: () => listPayAppChangeOrders(projectId), enabled: !!projectId });
+  const changeOrders = changesQuery.data || [];
+  const contractQuery = useQuery({ queryKey: ["projects", projectId, "payapp-contract"], queryFn: () => getPayAppContract(projectId), enabled: !!projectId });
+  const sourcesReady = contractQuery.isSuccess && !contractQuery.isFetching && sovQuery.isSuccess && changesQuery.isSuccess && !sovQuery.isFetching && !changesQuery.isFetching;
 
   const contract = useMemo(() => ({
-    originalContractSum: num(activeProject?.original_contract_value),
-    netChangeOrders: sumMoney((changeOrders || []).filter((co) => String(co.status).toLowerCase() === "approved").map((co) => co.co_amount)),
-    retainagePercent: num(activeProject?.retainage_percent),
-  }), [activeProject, changeOrders]);
+    originalContractSum: num(contractQuery.data?.original_contract_value),
+    netChangeOrders: changeOrders.some(co => String(co.status).trim().toLowerCase() === "approved" && (co.co_amount == null || !Number.isFinite(Number(co.co_amount)))) ? NaN
+      : sumMoney(changeOrders.filter(co => String(co.status).trim().toLowerCase() === "approved").map(co => co.co_amount)),
+    retainagePercent: num(contractQuery.data?.retainage_percent),
+  }), [contractQuery.data, changeOrders]);
 
   const selectedApp = payApps.find((a) => a.id === selectedId) || null;
   // Only a DRAFT pay app is editable — once submitted/approved/paid the G703
   // figures are a billing record (locked in the UI here + by the DB trigger, C2).
   const isDraft = selectedApp?.status === "draft";
-  const { data: lines = [] } = useQuery({ queryKey: ["payapp_lines", selectedId], queryFn: () => listLines(selectedId), enabled: !!selectedId });
-  const g702 = useMemo(() => (selectedApp ? computeG702({
+  const linesQuery = useQuery({ queryKey: ["payapp_lines", selectedId], queryFn: () => listLines(selectedId), enabled: !!selectedApp });
+  const lines = linesQuery.data || [];
+  const linesReady = !!selectedApp && !appsFetching && linesQuery.isSuccess && !linesQuery.isFetching;
+  const reconciliation = useMemo(() => selectedApp && linesReady ? reconcilePayApplication(selectedApp, lines, sourcesReady ? {
+    sovItems, originalContractSum: contractQuery.data?.original_contract_value, netChangeOrders: contract.netChangeOrders,
+  } : null) : null, [selectedApp, linesReady, lines, sourcesReady, sovItems, contractQuery.data, contract.netChangeOrders]);
+  const g702 = useMemo(() => (selectedApp && linesReady ? computeG702({
     contract: { originalContractSum: num(selectedApp.original_contract_sum), netChangeOrders: num(selectedApp.net_change_orders), retainagePercent: num(selectedApp.retainage_percent) },
     lines,
     lessPreviousCertificates: num(selectedApp.less_previous_certificates),
-  }) : null), [selectedApp, lines]);
+  }) : null), [selectedApp, lines, linesReady]);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pay_applications", projectId] });
@@ -117,6 +122,7 @@ export default function PayApplications() {
   const createMut = useMutation({
     mutationFn: (input) => {
       assertProjectId(projectId);
+      if (!sourcesReady || !Number.isFinite(contract.netChangeOrders) || contractQuery.data?.original_contract_value == null) throw new Error("Wait for current SOV and change orders before creating an application.");
       return createPayApplication({ projectId, ...input }, { sovItems, contract });
     },
     onSuccess: (app) => { logActivity("pay_application", "created", app, { projectId }); refresh(); setNewOpen(false); setSelectedId(app.id); toast.success(`Pay Application #${app.application_number} created`); },
@@ -150,6 +156,7 @@ export default function PayApplications() {
 
   const exportPdf = () => {
     try {
+      if (!linesReady || lineMut.isPending) throw new Error("Wait for complete certificate lines before exporting.");
       buildPayAppPdf({ app: selectedApp, lines, project: activeProject }).save(`${suggestPayAppFilename(selectedApp, activeProject)}.pdf`);
       toast.success("Pay application PDF exported");
     } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
@@ -225,12 +232,17 @@ export default function PayApplications() {
           statusFilter={ccStatusFilter}
           onStatusFilter={setCcStatusFilter}
           onOpen={(app) => setSelectedId(app.id)}
-          onExport={selectedId ? exportPdf : null}
-          onCreate={sovItems.length > 0 ? () => setNewOpen(true) : null}
-          canCreate={sovItems.length > 0}
+          onExport={linesReady && !lineMut.isPending ? exportPdf : null}
+          onCreate={sourcesReady && sovItems.length > 0 ? () => setNewOpen(true) : null}
+          canCreate={sourcesReady && sovItems.length > 0}
         />
+        {(sovQuery.isError || changesQuery.isError || contractQuery.isError) && <p role="alert">Could not load current SOV, contract, or change orders. <button onClick={() => { sovQuery.refetch(); changesQuery.refetch(); contractQuery.refetch(); }}>Retry contract data</button></p>}
         {selectedApp && (
           <div style={{ padding: "0 20px 20px", maxWidth: 1240, margin: "0 auto" }}>
+            <PayAppReconciliationPanel result={lineMut.isPending ? null : reconciliation} linesError={linesQuery.isError}
+              liveState={sovQuery.isError || changesQuery.isError || contractQuery.isError ? "error" : sourcesReady ? "ready" : "loading"}
+              historical={!isDraft} busy={appsFetching || linesQuery.isFetching || sovQuery.isFetching || changesQuery.isFetching || contractQuery.isFetching || lineMut.isPending}
+              onRefresh={() => { refresh(); sovQuery.refetch(); changesQuery.refetch(); contractQuery.refetch(); }} />
             <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
               <div style={card}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -251,7 +263,7 @@ export default function PayApplications() {
                   <select style={{ ...input, width: "auto" }} value={selectedApp.status} onChange={(e) => statusMut.mutate({ id: selectedApp.id, status: e.target.value })}>
                     {PAY_APP_STATUSES.map((s) => <option key={s} value={s}>{PAY_APP_STATUS_LABELS[s]}</option>)}
                   </select>
-                  <button style={btnP} onClick={exportPdf}>Export PDF</button>
+                  <button style={btnP} disabled={!linesReady || lineMut.isPending} onClick={exportPdf}>Export PDF</button>
                   <button style={{ ...btn, color: "var(--status-error)", borderColor: "var(--status-error)", opacity: isDraft ? 1 : 0.4, cursor: isDraft ? "pointer" : "not-allowed" }} disabled={!isDraft} title={isDraft ? "" : "Only a draft pay application can be deleted — set status to void instead."} onClick={() => { if (confirm("Delete this pay application?")) delMut.mutate(selectedApp.id); }}>Delete</button>
                 </div>
               </div>
@@ -283,11 +295,11 @@ export default function PayApplications() {
                           <td style={{ padding: 4, color: "var(--text-muted)" }}>{formatMoney(l.work_completed_previous)}</td>
                           <td style={{ padding: 4, color: "var(--text-primary)" }}>{formatMoney(l.work_completed_this_period)}</td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft}
+                            <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft || !linesReady || lineMut.isPending}
                               onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.percent_complete)) lineMut.mutate({ line: l, edit: { percentComplete: v } }); }} />
                           </td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft}
+                            <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft || !linesReady || lineMut.isPending}
                               onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.materials_stored)) lineMut.mutate({ line: l, edit: { materialsStored: v } }); }} />
                           </td>
                           <td style={{ padding: 4, color: "var(--text-primary)", fontWeight: 700 }}>{formatMoney(f.totalCompletedStored)}</td>
@@ -296,7 +308,8 @@ export default function PayApplications() {
                         </tr>
                       );
                     })}
-                    {lines.length === 0 && <tr><td colSpan={10} style={{ padding: 10, color: "var(--text-muted)", textAlign: "center" }}>No lines.</td></tr>}
+                    {!linesReady && <tr><td colSpan={10} role="status">{linesQuery.isError ? "Certificate lines unavailable. Use Refresh checks to retry." : "Loading certificate lines…"}</td></tr>}
+                    {linesReady && lines.length === 0 && <tr><td colSpan={10} style={{ padding: 10, color: "var(--text-muted)", textAlign: "center" }}>No lines.</td></tr>}
                   </tbody>
                 </table>
               </div>

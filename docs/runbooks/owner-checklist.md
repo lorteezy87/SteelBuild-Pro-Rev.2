@@ -156,7 +156,8 @@ integrations no longer invoked by the client.
     - The `stripe-sync-worker` pg_cron job that pinged `stripe-worker` every ~60s **is already unscheduled** — deleting `stripe-worker` removes the dangling 404 target.
   - Why: dead attack surface + noise in edge logs; every deployed function is something to secure and reason about.
   - Verify (by runtime outcome): after deletion, `npx supabase functions list --project-ref kjrwqagyeswwoxpjkcko` no longer lists them; edge logs no longer show `stripe-worker` 404s; billing checkout/portal + webhook still work (do a test-mode checkout).
-  - Optional CI: set repo variable `SUPABASE_DRIFT_ENABLED=true` + secret `SUPABASE_ACCESS_TOKEN` so the `supabase-drift` job fails while these remain deployed.
+  - Mandatory CI: keep repo secret `SUPABASE_ACCESS_TOKEN` and variable `SUPABASE_PROJECT_REF` configured; the `supabase-drift` job fails closed when either is absent and fails while these remain deployed.
+  - Shared-project ownership and lifecycle are reviewed in [`supabase-production-ownership.md`](./supabase-production-ownership.md); inventory green does not prove SQL or deployed-source equivalence.
 
 ---
 

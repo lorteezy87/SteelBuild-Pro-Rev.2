@@ -10,13 +10,16 @@
  * strip, a shared CommandBar with tab navigation, and the Approval Matrix.
  */
 
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
+import { activeHoldCount, useDrawingHolds } from "@/hooks/useDrawingHolds";
+import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
+import { useTransmittals } from "@/hooks/useTransmittals";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
@@ -32,13 +35,17 @@ import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
 import { Box, CalendarCog } from "lucide-react";
-import { useFlag } from "@/hooks/useFeatureFlag";
+import { useAllFlags, useFlag } from "@/hooks/useFeatureFlag";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
-import { DetailingCommandShell } from "./drawingSubmittalHub/DetailingCommandShell";
+import { DetailingCommandShell, DetailingNoProject } from "./drawingSubmittalHub/DetailingCommandShell";
+import { DEFAULT_HUB_TAB, canonicalHubSearch, hubHref, nextTabSearch, parseHubTab } from "./drawingSubmittalHub/hubLinks";
+import { DocControlMovedNotice } from "./drawingSubmittalHub/DocControlMovedNotice";
+import { Model3DGateError, Model3DGateLoading, Model3DGateNotice } from "./drawingSubmittalHub/Model3DGateNotice";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
+  buildCurrentRevisionIdMap,
   buildCurrentRevisionMap,
   buildDrawingKpis,
   buildSequenceReadiness,
@@ -48,12 +55,20 @@ import {
   validateDetailingStateWrite,
   validateDueDateWrite,
 } from "./drawingSubmittalHub/format";
-import type { Drawing as HubDrawing, DrawingRevision as HubDrawingRevision, DrawingSet as HubDrawingSet, Submittal as HubSubmittal } from "./drawingSubmittalHub/types";
+import type {
+  Drawing as HubDrawing,
+  DrawingRevision as HubDrawingRevision,
+  DrawingSet as HubDrawingSet,
+  ModelElementViewRow,
+  Submittal as HubSubmittal,
+  TriageItem,
+} from "./drawingSubmittalHub/types";
 import { FleetHealthStrip, LeadTimesModal } from "./drawingSubmittalHub/components";
 import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
-import RevisionImpactPanel from "./drawingSubmittalHub/RevisionImpactPanel";
+import RevisionImpactViews from "./drawingSubmittalHub/RevisionImpactViews";
 import { ApprovalMatrixPanel } from "./drawingSubmittalHub/ApprovalMatrixPanel";
+import type { HoldsStatus, LastSentStatus } from "./drawingSubmittalHub/ApprovalMatrixPanel";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
@@ -74,11 +89,10 @@ const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
 const ProcessBoardPanel = lazyWithRetry(
   () => import("@/components/submittals/ProcessBoardPanel"),
 ) as unknown as ComponentType<AnyProps>;
-const DocControlPanel = lazyWithRetry(() =>
-  import("@/components/drawings/register/DocControlPanel").then((m) => ({
-    default: m.DocControlPanel,
-  })),
-) as unknown as ComponentType<AnyProps>;
+// 2026 hub layout: surface the existing canonical workflows as first-level tabs.
+const HoldsPanel = lazyWithRetry(() => import("@/components/drawings/register/HoldsPanel").then(m => ({ default: m.HoldsPanel })));
+const TransmittalLogPanel = lazyWithRetry(() => import("@/components/drawings/register/TransmittalLogPanel").then(m => ({ default: m.TransmittalLogPanel })));
+const DetailingValidationPanel = lazyWithRetry(() => import("@/pages/drawingSubmittalHub/DetailingValidationPanel"));
 // Overlay compare carries pdfjs — keep it off the hub's route chunk.
 const RevisionCompareModalLazy = lazyWithRetry(
   () => import("@/components/drawings/RevisionCompareModal"),
@@ -97,13 +111,66 @@ const ErrorBoundary = ErrorBoundaryRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 const ModelElementImportModal = ModelElementImportModalRaw as unknown as ComponentType<AnyProps>;
 
+// Tabs whose count is a warning, not a row tally (header badge's twin).
+const ALERT_TABS = ["holds"] as const;
+const NO_HOLDS: DrawingHoldRow[] = [];
+// The flag-gated 3D tab. Listed while viewer_3d is on, or while it's the open
+// tab (see the tabs memo), so a 3D link always opens it.
+const MODEL3D_TAB = { key: "model3d", label: "3D Model", icon: Box };
+
+/**
+ * Route entry. An unknown (or aliased) ?hub_tab= is corrected first, before
+ * project gating and before any panel mounts, so no embedded page's effect
+ * ever runs on the stale URL. It's a replace, so Back never returns to it.
+ *
+ * With no project every query below is disabled, so the shell used to sit on
+ * "—" and "Loading…" forever; now it says so plainly. Keyed on the project so
+ * a switch remounts the hub — open drafts (escalation, RFI from a summary,
+ * revision compare, lead times) never carry across projects.
+ */
 export default function DrawingSubmittalHub() {
+  const location = useLocation();
+  const projectCtx = useProjectContext() as any;
+  const canonicalSearch = canonicalHubSearch(location.search);
+  if (canonicalSearch !== null) {
+    const { aliasedFrom } = parseHubTab(new URLSearchParams(location.search).get("hub_tab"));
+    return (
+      <Navigate
+        replace
+        to={{ pathname: location.pathname, search: canonicalSearch, hash: location.hash }}
+        state={{ hubAliasedFrom: aliasedFrom }}
+      />
+    );
+  }
+  const projectId = projectCtx.activeProject?.id as string | undefined;
+  if (!projectId) return projectCtx.loading ? <LoadingSkeleton /> : <DetailingNoProject />;
+  return <DetailingControlCenter key={projectId} />;
+}
+
+function DetailingControlCenter() {
   const projectCtx = useProjectContext() as any;
   const activeProject = projectCtx.activeProject as any;
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  // A ?hub_tab=doccontrol link arrives through the route wrapper's redirect,
+  // which marks the entry (state.hubAliasedFrom). The Drawing Register then
+  // says, once, where Doc Control's views went. Read at mount: a view toggle
+  // rewrites the entry without that state, and the notice should survive it.
+  const [docControlNotice, setDocControlNotice] = useState(
+    () => (location.state as { hubAliasedFrom?: unknown } | null)?.hubAliasedFrom === "doccontrol",
+  );
+  // The marker is now in state. Clear it from the arrival entry so no later
+  // remount on that entry (Back after leaving the hub, or a reload) shows the
+  // notice again. Runs once, at mount.
+  useEffect(() => {
+    if ((location.state as { hubAliasedFrom?: unknown } | null)?.hubAliasedFrom === undefined) return;
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
   // Contextual escalation (Critical Work Queue / Next Decision → draft RFI / PCO)
-  const [escalateItem, setEscalateItem] = useState<any | null>(null);
+  const [escalateItem, setEscalateItem] = useState<TriageItem | null>(null);
   const [escalateKind, setEscalateKind] = useState<EscalationKind>("rfi");
   // Revision overlay compare (Revision Impact rows)
   const [compareDrawingId, setCompareDrawingId] = useState<string | null>(null);
@@ -119,26 +186,59 @@ export default function DrawingSubmittalHub() {
   const projectName = activeProject?.name || activeProject?.project_number || "";
 
   // The 3D model viewer is flag-gated until verified against real models in prod.
-  const show3d = useFlag("viewer_3d");
+  // The flag gates the 3D tab's body, not its link. Read straight off the
+  // flags query (the one useFlag reads, so no extra fetch), because useFlag
+  // reads false whenever the query isn't a success: "off", "not known yet" and
+  // "a background refetch just failed" would all look the same.
+  // - Ready means the flags are HERE. A failed background refetch keeps its
+  //   cached flags (TanStack v5: status "error" with data), so the viewer stays.
+  // - Failed with nothing cached: an error with Retry, never an endless load.
+  // show3d comes from the same data, so the tab strip, the body and the
+  // roster read always agree.
+  const flagsQuery = useAllFlags();
+  const flagsReady = flagsQuery.data !== undefined;
+  // TanStack v5 resets a data-less query to pending (isError false) the moment
+  // a Retry starts, which would swap the error for the loading line and drop
+  // the focused Retry button. errorUpdateCount survives that reset, so the
+  // error block stays mounted, in its retrying state, through the re-read.
+  const flagsFailed = !flagsReady
+    && (flagsQuery.isError || (flagsQuery.isFetching && flagsQuery.errorUpdateCount > 0));
+  const show3d = flagsQuery.data?.get("viewer_3d") === true;
   // Phase 5 display: count SUBMITTAL due-date countdowns in working days (Mon–Fri)
   // rather than calendar days when on. Drawing-set dues stay calendar-day. Threaded
   // as a param into the pure formatters (buildTriage / buildApprovalMatrixRows) and
   // as a prop into the submittal boards — pure fns never read the flag directly.
   const workdayDues = useFlag("submittal_workday_dues");
-  const tabs = useMemo(
-    () => (show3d ? [...TABS, { key: "model3d", label: "3D Model", icon: Box }] : TABS),
-    [show3d],
-  );
 
-  // Tab state from URL (persistent across navigation)
-  const tabParam = searchParams.get("hub_tab") || "overview";
-  const activeTab = tabs.find((t) => t.key === tabParam) ? tabParam : "overview";
+  // Tab state from URL (persistent across navigation). The route entry has
+  // already corrected unknown keys, so this is a hub tab. model3d opens its own
+  // tab in every flag state, flags still loading included, and the URL is never
+  // rewritten here.
+  const urlTab = parseHubTab(searchParams.get("hub_tab")).tab;
+  const activeTab = urlTab === "model3d" || TABS.some((t) => t.key === urlTab) ? urlTab : DEFAULT_HUB_TAB;
+  // The 3D tab is listed while the flag is on, or while it's the open tab. A 3D
+  // link always lands on its tab; nobody else sees a dead one.
+  const tabs = useMemo(
+    () => (show3d || activeTab === "model3d" ? [...TABS, MODEL3D_TAB] : TABS),
+    [show3d, activeTab],
+  );
+  // Leaving the Drawing Register, by any route (tab click, Back), ends the
+  // one-time notice. Adjusted during render rather than in an effect, so it
+  // can't flash back on a later visit to the tab.
+  if (docControlNotice && activeTab !== "drawings") setDocControlNotice(false);
+  // Tab changes PUSH a history entry (the 2026 hub keeps its tab in the path
+  // for the same reason), so Back returns to the previous tab instead of
+  // leaving the hub. ?hub_tab= stays the format, so old bookmarks keep
+  // working. nextTabSearch drops the tab-scoped params: a lazy tab's
+  // unconsumed record param must not fire later on some other visit, and the
+  // sub-view and the matrix's quick filter don't follow the user. It drops
+  // ?projectId= / ?project= too. ProjectScopedRoute has already synced them,
+  // and a pushed entry that re-pinned the project would make Back, after a
+  // project switch, quietly switch the app back.
   const setActiveTab = (key: string) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("hub_tab", key);
-      return next;
-    }, { replace: true });
+    const { tab } = parseHubTab(key);
+    if (tab === activeTab) return;
+    setSearchParams((prev) => nextTabSearch(prev, tab));
   };
 
   // ── Data for KPI strip & matrix ────────────────────────────────────────
@@ -156,6 +256,24 @@ export default function DrawingSubmittalHub() {
     staleTime: 60_000,
   });
 
+  // Holds: one query feeds the header badge, the Holds tab count and the
+  // matrix's On Hold column — the same key HoldsPanel reads, so all agree.
+  // "Known" means we HAVE rows. A failed background refetch keeps its cached
+  // rows (TanStack v5: status "error" with data), and those last-known values
+  // stay on screen — flipping cells to "?" while the hold filter still matched
+  // the same cached rows contradicted itself.
+  const holdsQuery = useDrawingHolds(projectId ?? null);
+  const holds = holdsQuery.data ?? NO_HOLDS;
+  const holdsStatus: HoldsStatus = holdsQuery.data !== undefined ? "ready" : holdsQuery.isError ? "error" : "loading";
+  const activeHolds = holdsStatus === "ready" ? activeHoldCount(holds) : null;
+  // The matrix's Last Transmittal column and Last sent line. It's a
+  // three-table read, so it loads only while the matrix is open (same key as
+  // the Transmittals tab).
+  const transmittalsQuery = useTransmittals(projectId ?? null, {
+    enabled: activeTab === "matrix",
+  });
+  const { data: transmittals, isPending: transmittalsPending } = transmittalsQuery;
+
   // Work packages (for the erection sequence date → backward scheduling) + RFIs
   // (to know which linked RFIs are still open → rfiBlocked readiness).
   const { data: workPackages = [] } = useQuery({
@@ -170,17 +288,18 @@ export default function DrawingSubmittalHub() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
-  const { data: drawingRevisions = [], isPending: revisionsLoading } = useQuery({
+  const revisionsQuery = useQuery({
     queryKey: ["drawing-revisions", projectId],
     queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
+  const { data: drawingRevisions = [], isPending: revisionsLoading } = revisionsQuery;
   // Latest persisted Revision Summary per set → the "revised · N" badge + re-open.
   const { data: summariesBySet = new Map() } = useQuery({
     queryKey: ["revision-summaries", projectId],
     queryFn: () => getLatestSummariesByProject(projectId as string),
-    enabled: !!projectId,
+    enabled: !!projectId && activeTab === "drawings",
     staleTime: 60_000,
   });
   // ── 3D model members (BIM integration Phase 0 — piece-mark mapping) ──────
@@ -203,8 +322,10 @@ export default function DrawingSubmittalHub() {
   // fetchAllModelElements pages with .range() — ~28 round-trips on the largest
   // live project. That cost is why it loads only where it is actually rendered:
   // the 3D tab, or when the user opens the mapping card on the Control Board.
+  // The 3D tab counts only with the flag ON: its gate (flag off, or flags still
+  // loading) renders no viewer, so it must never page the roster.
   const [mappingRosterRequested, setMappingRosterRequested] = useState(false);
-  const { data: modelElements = [], isFetching: modelElementsLoading } = useQuery({
+  const { data: modelElements = [], isFetching: modelElementsLoading, error: modelElementsError } = useQuery({
     queryKey: ["model-elements", projectId],
     queryFn: () => fetchAllModelElements(projectId),
     enabled: !!projectId && ((show3d && activeTab === "model3d") || mappingRosterRequested),
@@ -221,12 +342,27 @@ export default function DrawingSubmittalHub() {
 
   // Authoritative per-drawing current revision (§20-21): drawing_id → {code,
   // version} from drawing_revisions WHERE is_current=true. The Drawing Register's
-  // "Rev" column reads THIS (matching Doc Control) instead of the deprecated,
+  // "Rev" column reads THIS (matching the sheet register) instead of the deprecated,
   // drift-prone drawings.revision_number string.
   const currentRevByDrawingId = useMemo(
     () => buildCurrentRevisionMap(drawingRevisions as unknown as HubDrawingRevision[]),
     [drawingRevisions]
   );
+  // The matrix's Last sent line: drawing_id → current revision id, so a sheet
+  // sent at an older revision reads as revised since. Keyed on the query's
+  // own data, because the `= []` default above is a new array every render
+  // while loading.
+  const currentRevisionIdByDrawingId = useMemo(
+    () => buildCurrentRevisionIdMap(revisionsQuery.data as unknown as HubDrawingRevision[] | undefined),
+    [revisionsQuery.data]
+  );
+  // Known only once BOTH inputs are; with either missing, "Not sent yet" or
+  // "0 revised" would be a guess. Data first, like holdsStatus: a failed
+  // background refetch keeps its cached rows.
+  const lastSentStatus: LastSentStatus =
+    transmittals !== undefined && revisionsQuery.data !== undefined
+      ? "ready"
+      : transmittalsQuery.isError || revisionsQuery.isError ? "error" : "loading";
 
   // Per-set Drawing Health Score (slice 2) — deterministic; feeds the Register
   // Health column + the Control Board fleet rollup.
@@ -474,7 +610,8 @@ export default function DrawingSubmittalHub() {
     drawings: drawingKpis.totalSheets,
     submittals: kpis.total,
     matrix: drawingSets.filter((set) => !set?.is_deleted).length,
-  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSheets, kpis.total, drawingSets]);
+    holds: activeHolds ?? 0,
+  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSheets, kpis.total, drawingSets, activeHolds]);
 
   // ── Inline quick-action mutations (Next Decision card) ────────────────
   const invalidateHub = async () => {
@@ -489,7 +626,7 @@ export default function DrawingSubmittalHub() {
   };
 
   const updateOwnerMut = useMutation({
-    mutationFn: async ({ item, owner }: { item: any; owner: string }) => {
+    mutationFn: async ({ item, owner }: { item: TriageItem; owner: string }) => {
       if (item._submittalId) {
         await entities.Submittal.update(item._submittalId, { ball_in_court: owner });
       } else if (item._ownerScope === "First sheet owner" && item._firstSheetId) {
@@ -509,7 +646,7 @@ export default function DrawingSubmittalHub() {
   });
 
   const updateDueDateMut = useMutation({
-    mutationFn: async ({ item, date }: { item: any; date: string }) => {
+    mutationFn: async ({ item, date }: { item: TriageItem; date: string }) => {
       const dueDateError = validateDueDateWrite(item, date);
       if (dueDateError) throw new Error(dueDateError);
       // dueDateWriteTargets (format.ts, unit-tested) is the single source of truth
@@ -542,9 +679,10 @@ export default function DrawingSubmittalHub() {
   // Only meaningful when no submittal governs the package (the submittal
   // machine owns the middle of the flow); the UI gates the control accordingly.
   const updateDetailingStateMut = useMutation({
-    mutationFn: async ({ item, next }: { item: any; next: string }) => {
+    mutationFn: async ({ item, next }: { item: TriageItem; next: string }) => {
       const stateError = validateDetailingStateWrite(item, next);
       if (stateError) throw new Error(stateError);
+      if (!item._drawingSetId) throw new Error("No drawing set to update");
       await entities.DrawingSet.update(item._drawingSetId, { detailing_state: next } as any);
     },
     onSuccess: async (_data, { next }) => {
@@ -556,7 +694,7 @@ export default function DrawingSubmittalHub() {
 
   // Toggle a manual readiness flag (material_impacted / long_lead_impact).
   const updateReadinessFlagMut = useMutation({
-    mutationFn: async ({ item, field, value }: { item: any; field: "material_impacted" | "long_lead_impact"; value: boolean }) => {
+    mutationFn: async ({ item, field, value }: { item: TriageItem; field: "material_impacted" | "long_lead_impact"; value: boolean }) => {
       if (!item?._drawingSetId) throw new Error("No drawing set to update");
       await entities.DrawingSet.update(item._drawingSetId, { [field]: value } as any);
     },
@@ -593,24 +731,29 @@ export default function DrawingSubmittalHub() {
       <Suspense fallback={<LoadingSkeleton />}>
         {activeTab === "overview" && (
           <>
-          <FleetHealthStrip fleet={fleetHealth} onOpenRegister={() => setActiveTab("drawings")} />
+          {/* Needs-attention chips open Sets & revisions, where the Health
+              column is. A push, so Back returns to the board. */}
+          <FleetHealthStrip fleet={fleetHealth} onOpenRegister={() => navigate(hubHref("drawings", { hub_view: "sets" }))} />
           <ControlBoardPanel
             triage={triage}
             kpis={kpis}
             drawingKpis={drawingKpis}
             isLoading={isLoading}
             onOpenTab={setActiveTab}
-            onUpdateOwner={canEditDetailing ? (item: any, owner: string) => updateOwnerMut.mutate({ item, owner }) : undefined}
-            onUpdateDueDate={canEditDetailing ? (item: any, date: string) => updateDueDateMut.mutate({ item, date }) : undefined}
-            onAdvanceDetailing={canEditDetailing ? (item: any, next: string) => updateDetailingStateMut.mutate({ item, next }) : undefined}
-            onToggleReadiness={canEditDetailing ? (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => updateReadinessFlagMut.mutate({ item, field, value }) : undefined}
+            // Rows, Open Work and Create submittal open the record inside the
+            // hub (owner decision 3). A push, so Back returns to the board.
+            onOpenHref={(href: string) => navigate(href)}
+            onUpdateOwner={canEditDetailing ? (item: TriageItem, owner: string) => updateOwnerMut.mutate({ item, owner }) : undefined}
+            onUpdateDueDate={canEditDetailing ? (item: TriageItem, date: string) => updateDueDateMut.mutate({ item, date }) : undefined}
+            onAdvanceDetailing={canEditDetailing ? (item: TriageItem, next: string) => updateDetailingStateMut.mutate({ item, next }) : undefined}
+            onToggleReadiness={canEditDetailing ? (item: TriageItem, field: "material_impacted" | "long_lead_impact", value: boolean) => updateReadinessFlagMut.mutate({ item, field, value }) : undefined}
             sequenceReadiness={sequenceReadiness}
             revisionImpact={revisionImpact}
             isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
-            onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
+            onEscalate={canEscalate ? (item: TriageItem, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
             modelMapping={modelMappingSummary}
-            modelElementRows={modelElements as any[]}
+            modelElementRows={modelElements as ModelElementViewRow[]}
             modelRosterCount={modelElementCount}
             modelRosterCountLoading={modelElementCountLoading}
             modelRosterLoading={modelElementsLoading}
@@ -626,9 +769,13 @@ export default function DrawingSubmittalHub() {
             isLoading={isLoading}
             onOpenTab={setActiveTab}
             useWorkdays={workdayDues}
+            // Cards and Create submittal open the record inside the hub.
+            inHub
           />
         )}
         {activeTab === "drawings" && (
+          <>
+          {docControlNotice && <DocControlMovedNotice onDismiss={() => setDocControlNotice(false)} />}
           <DrawingRegisterPanel
             setPackages={setPackages}
             projectId={projectId}
@@ -641,6 +788,7 @@ export default function DrawingSubmittalHub() {
             onRevisionUploaded={handleRevisionUploaded}
             onOpenSummary={setSummaryCard}
           />
+          </>
         )}
         {activeTab === "submittals" && <SubmittalsPage embedded />}
         {activeTab === "matrix" && (
@@ -652,10 +800,19 @@ export default function DrawingSubmittalHub() {
             // "No drawing sets yet." while that key was still cold.
             isLoading={isLoading || drawingSetsLoading}
             useWorkdays={workdayDues}
+            setPackages={setPackages}
+            holds={holds}
+            holdsStatus={holdsStatus}
+            transmittals={transmittals}
+            transmittalsLoading={transmittalsPending}
+            currentRevisionIdByDrawingId={currentRevisionIdByDrawingId}
+            lastSentStatus={lastSentStatus}
+            canCreateSubmittal={can("create", "submittal")}
           />
         )}
         {activeTab === "revimpact" && (
-          <RevisionImpactPanel
+          <RevisionImpactViews
+            projectId={projectId || null}
             rows={revisionImpactRows}
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
             // Rows derive from drawingRevisions, which loads separately.
@@ -665,9 +822,20 @@ export default function DrawingSubmittalHub() {
             rosterLoaded={modelElements.length > 0}
           />
         )}
-        {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
+        {activeTab === "holds" && <HoldsPanel key={projectId} projectId={projectId || null} />}
+        {activeTab === "transmittals" && <TransmittalLogPanel key={projectId} projectId={projectId || null} />}
+        {activeTab === "validation" && <DetailingValidationPanel key={projectId} projectId={projectId || null} />}
+        {/* The flag gates the body, never the link. Until the flags are in, a
+            loading line (or, if the read failed, an error with Retry), never
+            "turned off". */}
         {activeTab === "model3d" && (
-          <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} />
+          !flagsReady ? (
+            flagsFailed
+              ? <Model3DGateError onRetry={() => { void flagsQuery.refetch(); }} retrying={flagsQuery.isFetching} />
+              : <Model3DGateLoading />
+          )
+          : !show3d ? <Model3DGateNotice />
+          : <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} rosterError={modelElementsError} />
         )}
       </Suspense>
     </ErrorBoundary>
@@ -768,8 +936,13 @@ export default function DrawingSubmittalHub() {
           openItems: triage.openItems.length,
           fleetAverageScore: fleetHealth.count > 0 ? fleetHealth.averageScore : null,
         }}
-        projectName={projectName}
+        // The header's eyebrow shows the number per the user's Show Project
+        // Numbers preference.
+        projectName={activeProject?.name}
+        projectNumber={activeProject?.project_number}
         tabCounts={tabCounts}
+        alertTabs={ALERT_TABS}
+        activeHolds={activeHolds}
         isLoading={isLoading}
         // Lead Times is the ONLY writer of projects.metadata.detailing_lead_days,
         // which drives the whole backward schedule (Submit by / Approval by / Fab

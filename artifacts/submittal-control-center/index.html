@@ -1,0 +1,1505 @@
+<title>Submittal Control Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* ---------- tokens: light is the base, dark redefines only values ---------- */
+:root{
+  color-scheme: light;
+  --ground:#F1EFEA; --surface:#FBFAF7; --raised:#FFFFFF; --sunken:#E7E4DC;
+  --ink:#191713; --ink-2:#45413A; --muted:#6E6A61; --faint:#918C81;
+  --line:#DCD8CF; --line-2:#C7C2B6; --track:#E2DFD6;
+
+  --accent:#C89B20; --accent-2:#A57F14; --accent-tint:#F6EBCB; --on-accent:#191713;
+
+  --lane-house:#1F6BAE;    /* in-house  */
+  --lane-review:#C4650C;   /* with reviewer */
+  --lane-released:#008068; /* released for fab */
+
+  --st-good:#008068; --st-warn:#C4650C; --st-serious:#A8461A; --st-crit:#9E2B20;
+
+  --t-blue-bg:#E4EEF7;  --t-blue-ink:#17527F;
+  --t-amber-bg:#F8EADA; --t-amber-ink:#8F4A08;
+  --t-teal-bg:#DDEFEA;  --t-teal-ink:#00604E;
+  --t-red-bg:#F7E3E0;   --t-red-ink:#8A2318;
+  --t-grey-bg:#E7E4DC;  --t-grey-ink:#5D594F;
+
+  --focus:#1F6BAE;
+  --shadow-1:0 1px 2px rgba(25,23,19,.07);
+  --shadow-2:0 2px 6px rgba(25,23,19,.08), 0 18px 40px -22px rgba(25,23,19,.35);
+  --font-display:"Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body:Inter, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --ground:#111110; --surface:#1A1A18; --raised:#212120; --sunken:#151514;
+    --ink:#EDEBE5; --ink-2:#C8C4BA; --muted:#98948A; --faint:#7B776D;
+    --line:#33322D; --line-2:#43413A; --track:#2A2925;
+    --accent:#E0B030; --accent-2:#C89B20; --accent-tint:#332A12; --on-accent:#141310;
+    --lane-house:#3A88C9; --lane-review:#D9761A; --lane-released:#0C8E77;
+    --st-good:#0C8E77; --st-warn:#D9761A; --st-serious:#C9611F; --st-crit:#D9564A;
+    --t-blue-bg:#132A3D;  --t-blue-ink:#8FC0EA;
+    --t-amber-bg:#3A2612; --t-amber-ink:#F0A961;
+    --t-teal-bg:#0E2B27;  --t-teal-ink:#5CC3AC;
+    --t-red-bg:#3A1A17;   --t-red-ink:#EE9186;
+    --t-grey-bg:#26251F;  --t-grey-ink:#A6A296;
+    --focus:#6FAEE4;
+    --shadow-1:0 1px 2px rgba(0,0,0,.4);
+    --shadow-2:0 2px 8px rgba(0,0,0,.5), 0 22px 44px -24px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --ground:#111110; --surface:#1A1A18; --raised:#212120; --sunken:#151514;
+  --ink:#EDEBE5; --ink-2:#C8C4BA; --muted:#98948A; --faint:#7B776D;
+  --line:#33322D; --line-2:#43413A; --track:#2A2925;
+  --accent:#E0B030; --accent-2:#C89B20; --accent-tint:#332A12; --on-accent:#141310;
+  --lane-house:#3A88C9; --lane-review:#D9761A; --lane-released:#0C8E77;
+  --st-good:#0C8E77; --st-warn:#D9761A; --st-serious:#C9611F; --st-crit:#D9564A;
+  --t-blue-bg:#132A3D;  --t-blue-ink:#8FC0EA;
+  --t-amber-bg:#3A2612; --t-amber-ink:#F0A961;
+  --t-teal-bg:#0E2B27;  --t-teal-ink:#5CC3AC;
+  --t-red-bg:#3A1A17;   --t-red-ink:#EE9186;
+  --t-grey-bg:#26251F;  --t-grey-ink:#A6A296;
+  --focus:#6FAEE4;
+  --shadow-1:0 1px 2px rgba(0,0,0,.4);
+  --shadow-2:0 2px 8px rgba(0,0,0,.5), 0 22px 44px -24px rgba(0,0,0,.8);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-body); font-size:14px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--accent-tint); color:var(--ink)}
+:focus-visible{outline:2px solid var(--focus); outline-offset:2px; border-radius:3px}
+@media (prefers-reduced-motion: reduce){ *{animation-duration:.01ms !important; transition-duration:.01ms !important} }
+
+/* ---------- primitives ---------- */
+.eyebrow{
+  font:600 10.5px/1 var(--font-body); letter-spacing:.11em; text-transform:uppercase;
+  color:var(--muted);
+}
+.mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums}
+.num{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:12.5px}
+h1,h2,h3{margin:0; font-family:var(--font-display); font-weight:600; letter-spacing:.005em; text-wrap:balance}
+
+.btn{
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  font:600 12.5px/1 var(--font-body); color:var(--ink-2);
+  background:var(--surface); border:1px solid var(--line-2); border-radius:5px;
+  padding:7px 11px; transition:background .12s, border-color .12s, color .12s;
+}
+.btn:hover{background:var(--raised); border-color:var(--faint); color:var(--ink)}
+.btn.primary{background:var(--accent); border-color:var(--accent-2); color:var(--on-accent)}
+.btn.primary:hover{background:var(--accent-2); color:var(--on-accent)}
+.btn.ghost{background:transparent; border-color:transparent; color:var(--muted); padding:6px 8px}
+.btn.ghost:hover{background:var(--sunken); color:var(--ink)}
+.btn.danger{color:var(--st-crit); border-color:var(--line-2)}
+.btn.danger:hover{background:var(--t-red-bg); border-color:var(--st-crit)}
+.btn[disabled]{opacity:.45; pointer-events:none}
+.btn.sm{padding:5px 8px; font-size:11.5px}
+
+input[type=text],input[type=url],input[type=number],input[type=date],select,textarea{
+  font:400 13px/1.3 var(--font-body); color:var(--ink);
+  background:var(--raised); border:1px solid var(--line-2); border-radius:4px;
+  padding:7px 8px; width:100%; min-width:0;
+}
+input[type=date],input[type=number],.field-mono input{font-family:var(--font-mono); font-size:12.5px; font-variant-numeric:tabular-nums}
+textarea{resize:vertical; min-height:70px; line-height:1.5}
+select{cursor:pointer; appearance:none; padding-right:22px;
+  background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-position:calc(100% - 12px) 52%, calc(100% - 8px) 52%;
+  background-size:4px 4px, 4px 4px; background-repeat:no-repeat;
+}
+label.fld{display:flex; flex-direction:column; gap:5px}
+label.fld > span{font:600 10.5px/1 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--muted)}
+
+.pill{
+  display:inline-flex; align-items:center; gap:5px; white-space:nowrap;
+  font:600 11px/1 var(--font-body); letter-spacing:.02em;
+  padding:4px 7px; border-radius:4px; background:var(--t-grey-bg); color:var(--t-grey-ink);
+}
+.pill .dot{width:6px; height:6px; border-radius:50%; background:currentColor; flex:none}
+.pill.blue{background:var(--t-blue-bg); color:var(--t-blue-ink)}
+.pill.amber{background:var(--t-amber-bg); color:var(--t-amber-ink)}
+.pill.teal{background:var(--t-teal-bg); color:var(--t-teal-ink)}
+.pill.red{background:var(--t-red-bg); color:var(--t-red-ink)}
+.pill.gold{background:var(--accent-tint); color:var(--accent-2)}
+
+/* ---------- masthead ---------- */
+.masthead{
+  position:sticky; top:0; z-index:40; background:var(--surface);
+  border-bottom:1px solid var(--line); box-shadow:var(--shadow-1);
+}
+.mast-row{
+  max-width:1560px; margin:0 auto; padding:0 20px; min-height:56px;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+}
+.mast-tools{display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:9px 0}
+.mast-tools select{width:auto; min-width:152px; max-width:240px; padding:6px 22px 6px 8px; font-size:12.5px}
+.btn.ghost{font-weight:500}
+.mast-tools .btn.ghost{padding:7px 9px}
+@media (max-width:1180px){ .mark .sub{display:none} }
+@media (max-width:860px){
+  .mast-row{padding:0 14px}
+  .mast-spacer{display:none}
+  .mast-tools{width:100%; padding:0 0 10px}
+  .mast-tools select{flex:1}
+}
+.mark{display:flex; align-items:baseline; gap:9px; margin-right:2px}
+.mark .beam{
+  width:19px; height:19px; flex:none; align-self:center;
+  background:var(--accent);
+  clip-path:polygon(0 0,100% 0,100% 26%,63% 26%,63% 74%,100% 74%,100% 100%,0 100%,0 74%,37% 74%,37% 26%,0 26%);
+}
+.mark .name{font-family:var(--font-display); font-weight:700; font-size:18px; letter-spacing:.03em; text-transform:uppercase; white-space:nowrap}
+.mark .sub{font:600 10px/1 var(--font-body); letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+.tabs{display:flex; gap:2px; margin-left:2px}
+.tab{
+  cursor:pointer; border:0; background:transparent; color:var(--muted);
+  font:600 12.5px/1 var(--font-body); padding:8px 11px; border-radius:5px;
+}
+.tab:hover{background:var(--sunken); color:var(--ink)}
+.tab[aria-current="true"]{background:var(--accent-tint); color:var(--accent-2)}
+.mast-spacer{flex:1}
+.whochip{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  border:1px solid var(--line-2); background:var(--raised); border-radius:20px;
+  padding:3px 10px 3px 4px; font:600 12px/1 var(--font-body); color:var(--ink-2);
+}
+.whochip.bare{padding:3px; border-color:transparent; background:transparent}
+.whochip.plain{padding:6px 11px}
+.whochip.bare:hover{border-color:var(--line-2)}
+.whochip:hover{border-color:var(--faint)}
+.whochip .ini{
+  width:21px; height:21px; border-radius:50%; background:var(--accent); color:var(--on-accent);
+  display:grid; place-items:center; font:700 9.5px/1 var(--font-body); letter-spacing:.02em;
+}
+.conn{display:inline-flex; align-items:center; gap:6px; font:500 11.5px/1 var(--font-body); color:var(--muted); padding:0 2px}
+.conn .led{width:7px; height:7px; border-radius:50%; background:var(--st-good); flex:none}
+.conn.off .led{background:var(--faint)}
+.conn.bad .led{background:var(--st-crit)}
+
+/* ---------- shell ---------- */
+.wrap{max-width:1560px; margin:0 auto; padding:16px 20px 72px}
+@media (max-width:860px){ .wrap{padding:14px 14px 60px} }
+.banner{
+  display:flex; gap:10px; align-items:flex-start;
+  border:1px solid var(--st-warn); background:var(--t-amber-bg); color:var(--t-amber-ink);
+  border-radius:6px; padding:10px 12px; font-size:12.5px; margin-bottom:16px;
+}
+.banner.info{border-color:var(--line-2); background:var(--sunken); color:var(--ink-2)}
+.banner b{font-weight:700}
+
+.section{margin-bottom:22px}
+.section-head{display:flex; align-items:baseline; gap:12px; margin-bottom:10px; flex-wrap:wrap}
+.section-head h2{font-size:17px; text-transform:uppercase; letter-spacing:.045em}
+.section-head .hint{font-size:12px; color:var(--muted)}
+
+/* ---------- KPI strip ---------- */
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:7px; overflow:hidden}
+.kpi{background:var(--surface); padding:11px 13px 10px; display:flex; flex-direction:column; gap:2px; min-width:0}
+.kpi .v{font-family:var(--font-display); font-weight:700; font-size:27px; line-height:1.05; font-variant-numeric:tabular-nums; letter-spacing:.01em}
+.kpi .u{font-family:var(--font-body); font-weight:600; font-size:12px; color:var(--muted); margin-left:3px}
+.kpi .l{font:600 10.5px/1.3 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--muted)}
+.kpi .s{font-size:11.5px; color:var(--faint); line-height:1.3}
+.kpi.alert .v{color:var(--st-crit)}
+.kpi.warn .v{color:var(--st-warn)}
+.kpi.good .v{color:var(--st-good)}
+
+/* ---------- panels ---------- */
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:7px}
+.panel-head{padding:12px 14px 10px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.panel-head h3{font-size:14px; text-transform:uppercase; letter-spacing:.05em}
+.panel-head .hint{font-size:11.5px; color:var(--muted); margin-left:auto}
+.panel-body{padding:14px}
+
+.grid-2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:14px; align-items:start}
+@media (max-width:1080px){ .grid-2{grid-template-columns:minmax(0,1fr)} }
+
+/* ---------- aging chart ---------- */
+.legend{display:flex; flex-wrap:wrap; gap:12px; align-items:center; font-size:11.5px; color:var(--muted)}
+.legend .k{display:inline-flex; align-items:center; gap:6px}
+.legend .sw{width:10px; height:10px; border-radius:2px; flex:none}
+.chart{display:flex; align-items:flex-end; gap:14px; height:120px}
+.chart .col{flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%; gap:0; min-width:0}
+.chart .cnt{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:12.5px; font-weight:500; text-align:center; margin-bottom:5px; color:var(--ink-2)}
+.chart .bar{
+  width:100%; border-radius:4px 4px 0 0; cursor:pointer; border:0; padding:0; flex:none;
+  transition:filter .12s;
+}
+.chart .bar:hover{filter:brightness(1.12)}
+.chart .bar.empty{background:var(--track) !important; cursor:default}
+.chart-x{display:flex; gap:14px; border-top:1px solid var(--line-2); padding-top:7px; margin-top:0}
+.chart-x .lx{flex:1; text-align:center; font:500 11px/1.25 var(--font-body); color:var(--muted); min-width:0}
+
+/* ---------- project cards ---------- */
+.pcards{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px}
+.pcard{
+  background:var(--surface); border:1px solid var(--line); border-radius:7px;
+  padding:13px 14px; display:flex; flex-direction:column; gap:10px; text-align:left;
+  cursor:pointer; font:inherit; color:inherit; transition:border-color .12s, box-shadow .12s;
+}
+.pcard:hover{border-color:var(--line-2); box-shadow:var(--shadow-1)}
+.pcard .top{display:flex; align-items:flex-start; gap:10px}
+.pcard h3{font-size:16px; letter-spacing:.01em; line-height:1.15; flex:1; min-width:0}
+.pcard .meta{font-size:11.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 10px; margin-bottom:auto}
+.stack{display:flex; height:9px; gap:2px; border-radius:3px; overflow:hidden; background:var(--track)}
+.stack i{display:block; height:100%; border-radius:2px}
+.stack-key{display:flex; flex-wrap:wrap; gap:3px 12px; font-size:11px; color:var(--muted)}
+.stack-key .k{display:inline-flex; align-items:center; gap:5px}
+.stack-key .sw{width:8px; height:8px; border-radius:2px; flex:none}
+.stack-key b{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-weight:500; color:var(--ink-2)}
+
+/* ---------- action list ---------- */
+.acts{display:flex; flex-direction:column}
+.act{
+  display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center;
+  padding:9px 14px; border-bottom:1px solid var(--line); cursor:pointer;
+  background:transparent; border-left:0; border-right:0; border-top:0; text-align:left; font:inherit; color:inherit; width:100%;
+}
+.act:last-child{border-bottom:0}
+.act:hover{background:var(--sunken)}
+.act .why{width:3px; align-self:stretch; border-radius:2px; min-height:26px}
+.act .t{min-width:0}
+.act .t b{display:block; font:600 13px/1.3 var(--font-body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.act .t span{display:block; font-size:11.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.empty-note{padding:22px 14px; text-align:center; color:var(--muted); font-size:12.5px}
+
+/* ---------- filters ---------- */
+.filters{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px}
+.filters select,.filters input[type=text]{width:auto; min-width:132px; padding:6px 8px; font-size:12.5px}
+.filters select{padding-right:22px}
+.filters .grow{flex:1; min-width:180px}
+.filters .eyebrow{white-space:nowrap}
+.filters input[type=text].grow{width:100%}
+.chipclear{font:500 11.5px/1 var(--font-body); color:var(--muted); background:transparent; border:0; cursor:pointer; text-decoration:underline; padding:6px 2px}
+.chipclear:hover{color:var(--ink)}
+
+/* ---------- table ---------- */
+.table-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:7px; background:var(--surface)}
+table.log{border-collapse:separate; border-spacing:0; width:100%; min-width:1560px}
+table.log th{
+  position:sticky; top:var(--mast-h,56px); z-index:10; background:var(--surface);
+  font:600 10px/1.2 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+  text-align:left; padding:9px 10px; border-bottom:1px solid var(--line-2); white-space:nowrap;
+}
+table.log td{padding:5px 10px; border-bottom:1px solid var(--line); vertical-align:middle; font-size:13px; height:44px; white-space:nowrap}
+table.log td.c-title{white-space:normal}
+table.log tbody tr:last-child td{border-bottom:0}
+table.log tbody tr:hover td{background:var(--sunken)}
+table.log tr.grp td{
+  background:var(--sunken); font:700 11px/1 var(--font-body); letter-spacing:.09em; text-transform:uppercase;
+  color:var(--ink-2); padding:9px 10px; border-bottom:1px solid var(--line-2);
+}
+table.log td.c-num{white-space:nowrap}
+table.log td.c-title{min-width:230px}
+table.log .rowlink{
+  background:none; border:0; padding:0; font:inherit; color:var(--ink); cursor:pointer; text-align:left;
+  display:block; max-width:330px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+table.log .rowlink:hover{color:var(--accent-2); text-decoration:underline}
+table.log select,table.log input[type=date]{
+  background:transparent; border:1px solid transparent; border-radius:4px; padding:4px 6px; font-size:12px; width:100%;
+}
+table.log select{padding-right:20px; width:100%}
+table.log td.c-proj{min-width:178px}
+table.log td.c-status{min-width:146px}
+table.log td.c-code{min-width:86px}
+table.log td.c-bic{min-width:116px}
+table.log input[type=date]{min-width:122px}
+table.log select:hover,table.log input[type=date]:hover{border-color:var(--line-2); background:var(--raised)}
+table.log input[type=date].blank:not(:focus)::-webkit-datetime-edit{opacity:0}
+table.log select:focus,table.log input[type=date]:focus{border-color:var(--focus); background:var(--raised)}
+.days{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:12.5px; font-weight:500; white-space:nowrap}
+.days.over{color:var(--st-crit); font-weight:600}
+.days.due-soon{color:var(--st-warn); font-weight:600}
+.linkchips{display:flex; gap:4px; flex-wrap:wrap}
+.linkchip{
+  display:inline-flex; align-items:center; gap:4px; text-decoration:none;
+  font:600 10.5px/1 var(--font-body); padding:4px 6px; border-radius:4px;
+  background:var(--t-blue-bg); color:var(--t-blue-ink); border:1px solid transparent; white-space:nowrap;
+}
+.linkchip:hover{border-color:currentColor}
+.linkchip.file{background:var(--accent-tint); color:var(--accent-2); cursor:pointer; border:1px solid transparent; font-family:var(--font-body)}
+.fabdot{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted); white-space:nowrap}
+.fabdot input{width:14px; height:14px; accent-color:var(--st-good); cursor:pointer}
+
+/* ---------- drawer ---------- */
+.scrim{position:fixed; inset:0; background:rgba(20,18,15,.42); z-index:60; backdrop-filter:blur(1.5px)}
+.drawer{
+  position:fixed; top:0; right:0; bottom:0; width:min(560px,100vw); z-index:61;
+  background:var(--surface); border-left:1px solid var(--line-2); box-shadow:var(--shadow-2);
+  display:flex; flex-direction:column;
+}
+.drawer-head{padding:14px 16px 12px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:flex-start}
+.drawer-head h2{font-size:19px; line-height:1.15; letter-spacing:.01em}
+.drawer-head .sub{font-size:12px; color:var(--muted); margin-top:3px}
+.drawer-body{overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:18px; flex:1}
+.drawer-foot{padding:11px 16px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.drawer-foot .stamp{font-size:11.5px; color:var(--faint); margin-right:auto}
+.fgrid{display:grid; grid-template-columns:1fr 1fr; gap:11px}
+.fgrid.three{grid-template-columns:1fr 1fr 1fr}
+.fgrid .span2{grid-column:span 2}
+.block{display:flex; flex-direction:column; gap:9px}
+.block > .eyebrow{padding-bottom:6px; border-bottom:1px solid var(--line)}
+.linkrow{display:grid; grid-template-columns:150px minmax(0,1fr) auto auto; gap:6px; align-items:center}
+.linkrow a.open{
+  font:600 11px/1 var(--font-body); text-decoration:none; color:var(--t-blue-ink);
+  background:var(--t-blue-bg); padding:6px 7px; border-radius:4px; white-space:nowrap;
+}
+.filerow{display:flex; gap:8px; align-items:center; border:1px solid var(--line); border-radius:5px; padding:7px 9px; background:var(--raised)}
+.filerow .fname{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px}
+.filerow .fsize{font-family:var(--font-mono); font-size:11px; color:var(--muted); white-space:nowrap}
+.hist{display:flex; flex-direction:column; gap:0; border:1px solid var(--line); border-radius:5px; overflow:hidden}
+.hist .h{display:grid; grid-template-columns:52px 1fr auto; gap:9px; padding:8px 10px; border-bottom:1px solid var(--line); align-items:center; background:var(--raised)}
+.hist .h:last-child{border-bottom:0}
+.hist .rv{font-family:var(--font-mono); font-weight:600; font-size:12px; color:var(--accent-2)}
+.hist .dt{font-size:11.5px; color:var(--muted)}
+.icon-x{
+  border:1px solid var(--line-2); background:var(--raised); color:var(--muted); cursor:pointer;
+  width:28px; height:28px; border-radius:4px; display:grid; place-items:center; font-size:14px; line-height:1; flex:none;
+}
+.icon-x:hover{color:var(--st-crit); border-color:var(--st-crit)}
+
+.start{display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 14px; align-items:start}
+.start .n{
+  font-family:var(--font-mono); font-weight:600; font-size:11px; color:var(--accent-2);
+  background:var(--accent-tint); border-radius:4px; padding:4px 7px; line-height:1;
+}
+.start b{display:block; font:600 13px/1.4 var(--font-body)}
+.start span.d{display:block; font-size:12.5px; color:var(--muted); line-height:1.5}
+
+/* ---------- in-page dialog (native confirm/prompt are blocked in the artifact frame) ---------- */
+#modal .scrim{z-index:70}
+.dialog{
+  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:71;
+  width:min(430px,92vw); background:var(--surface); border:1px solid var(--line-2);
+  border-radius:8px; box-shadow:var(--shadow-2); padding:18px 18px 15px;
+}
+.dialog h3{font-size:18px; letter-spacing:.01em; margin-bottom:7px}
+.dialog p{margin:0 0 14px; font-size:13px; color:var(--ink-2); line-height:1.5}
+.dialog .dlg-input{margin-bottom:14px}
+.dlg-foot{display:flex; gap:8px; justify-content:flex-end}
+
+/* ---------- toast ---------- */
+.toasts{position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:90; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
+.toast{
+  background:var(--ink); color:var(--ground); font:500 12.5px/1.35 var(--font-body);
+  padding:9px 14px; border-radius:6px; box-shadow:var(--shadow-2); max-width:min(520px,90vw);
+}
+.toast.bad{background:var(--st-crit); color:#fff}
+
+.skel{padding:60px 20px; text-align:center; color:var(--muted)}
+.skel .b{font-family:var(--font-display); font-size:20px; color:var(--ink-2); letter-spacing:.02em}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+</style>
+
+<header class="masthead">
+  <div class="mast-row">
+    <div class="mark">
+      <span class="beam" aria-hidden="true"></span>
+      <span class="name">Submittal</span>
+      <span class="sub">Control Center</span>
+    </div>
+    <nav class="tabs" aria-label="Views">
+      <button class="tab" id="tab-portfolio" data-view="portfolio" aria-current="true">Portfolio</button>
+      <button class="tab" id="tab-log" data-view="log" aria-current="false">Log</button>
+      <button class="tab" id="tab-projects" data-view="projects" aria-current="false">Projects</button>
+    </nav>
+    <div class="mast-spacer"></div>
+    <div class="mast-tools" id="mast-tools"></div>
+  </div>
+</header>
+
+<main class="wrap" id="view" data-live-guard>
+  <div class="skel"><div class="b">Loading the shared tracker…</div><p>Live data for every project loads from this artifact's shared store.</p></div>
+</main>
+
+<div id="overlay"></div>
+<div id="modal"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================ constants ============================ */
+const THEME_KEY = "sbp-theme";
+const WHO_KEY   = "sbp-submittal-who";
+const FILE_CAP  = 160 * 1024;   /* 160 KB raw — a db document holds 256 KiB serialized */
+const FILE_OK   = ".pdf,.png,.jpg,.jpeg,.webp,.gif,.csv,.txt,.md,.json,.xlsx,.docx,.svg";
+
+const STATUSES = [
+  { k:"not_started", label:"Not started",      lane:"house",    tone:"" },
+  { k:"detailing",   label:"In detailing",     lane:"house",    tone:"blue" },
+  { k:"internal",    label:"Internal review",  lane:"house",    tone:"blue" },
+  { k:"submitted",   label:"Submitted",        lane:"review",   tone:"amber" },
+  { k:"in_review",   label:"In review",        lane:"review",   tone:"amber" },
+  { k:"returned",    label:"Returned",         lane:"house",    tone:"blue" },
+  { k:"released",    label:"Released for fab", lane:"released", tone:"teal" },
+  { k:"void",        label:"Void",             lane:null,       tone:"" }
+];
+const CODES = [
+  { k:"",    label:"—",                      short:"—",   tone:"" },
+  { k:"NET", label:"No Exceptions Taken",    short:"NET", tone:"teal" },
+  { k:"MCN", label:"Make Corrections Noted", short:"MCN", tone:"teal" },
+  { k:"RR",  label:"Revise & Resubmit",      short:"R&R", tone:"amber" },
+  { k:"REJ", label:"Rejected",               short:"REJ", tone:"red" },
+  { k:"FRO", label:"For Reference Only",     short:"FRO", tone:"" }
+];
+const BICS  = ["", "Detailer", "S&H Steel", "GC", "Architect", "EOR", "Owner", "Vendor"];
+const TYPES = ["Shop drawings","Erection drawings","Anchor bolt plan","Connection calcs",
+  "Mill certs","Bolt certs","Weld procedures (WPS/PQR)","Welder certs","Paint / coatings",
+  "Galvanizing","Metal deck","Joists","Misc metals","Stairs & rails","Embeds","Field bolt list"];
+const LINK_LABELS = ["Submitted set","Returned / stamped set","Transmittal","Erection drawings",
+  "Model file","IFC background","Approved set","Other"];
+
+const LANES = [
+  { k:"house",    label:"In-house",      cssvar:"--lane-house" },
+  { k:"review",   label:"With reviewer", cssvar:"--lane-review" },
+  { k:"released", label:"Released",      cssvar:"--lane-released" }
+];
+const AGE_BUCKETS = [
+  { label:"0–7 days",   lo:0,  hi:7,        cssvar:"--st-good" },
+  { label:"8–14 days",  lo:8,  hi:14,       cssvar:"--st-warn" },
+  { label:"15–21 days", lo:15, hi:21,       cssvar:"--st-serious" },
+  { label:"22+ days",   lo:22, hi:1e9,      cssvar:"--st-crit" }
+];
+
+/* ============================ state ============================ */
+const state = {
+  db:null, dl:null, booted:false, conn:"connecting", canWrite:true,
+  projects:[], packages:[], files:{},
+  view:"portfolio", fProject:"all", fStatus:"all", fBic:"all", fFlag:"all", fBucket:null, q:"",
+  openPkg:null, openFiles:[],
+  who: (localStorage.getItem(WHO_KEY) || "").slice(0,40)
+};
+
+/* ============================ small helpers ============================ */
+const $  = (s, r) => (r || document).querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const attr = s => esc(s);
+const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset()*6e4).toISOString().slice(0,10); };
+const ms = iso => { if (!iso) return null; const t = Date.parse(iso + "T00:00:00"); return isNaN(t) ? null : t; };
+const dayDiff = (a, b) => { const x = ms(a), y = ms(b); return (x == null || y == null) ? null : Math.round((y - x) / 864e5); };
+function addDays(iso, n){ const t = ms(iso); if (t == null) return ""; return new Date(t + n*864e5).toISOString().slice(0,10); }
+function fmtDate(iso){ if (!iso) return ""; const t = ms(iso); if (t == null) return iso;
+  const d = new Date(t); return String(d.getMonth()+1).padStart(2,"0") + "/" + String(d.getDate()).padStart(2,"0") + "/" + String(d.getFullYear()).slice(2); }
+const kb = n => n >= 1024*1024 ? (n/1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n/1024)) + " KB";
+const statusOf = k => STATUSES.find(s => s.k === k) || STATUSES[0];
+const codeOf   = k => CODES.find(c => c.k === (k || "")) || CODES[0];
+const projOf   = id => state.projects.find(p => p.id === id) || null;
+const sortedProjects = () => state.projects.slice().sort((a, b) =>
+  ((a.sortIndex || 0) - (b.sortIndex || 0)) || String(a.name || "").localeCompare(String(b.name || "")));
+const projectOpts = () => sortedProjects().map(p => ({ v:p.id, t:p.name || "Untitled project" }));
+function themeMode(){ try { return localStorage.getItem(THEME_KEY) || "system"; } catch(_){ return "system"; } }
+const pkgOf    = id => state.packages.find(p => p.id === id) || null;
+const initials = n => (String(n||"").trim().split(/\s+/).slice(0,2).map(w => w[0]).join("") || "—").toUpperCase();
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+/* The artifact frame is sandboxed without allow-modals, so window.confirm /
+   window.prompt silently return without showing anything — every destructive
+   action and the name entry has to run through an in-page dialog instead. */
+let dlgResolve = null;
+function closeDialog(v){
+  const m = document.getElementById("modal");
+  if (m) m.innerHTML = "";
+  const r = dlgResolve; dlgResolve = null;
+  if (r) r(v);
+}
+function openDialog(o){
+  return new Promise(res => {
+    closeDialog(null);
+    dlgResolve = res;
+    document.getElementById("modal").innerHTML =
+      '<div class="scrim" data-mact="cancel"></div>' +
+      '<div class="dialog" role="dialog" aria-modal="true" aria-label="' + attr(o.title) + '">' +
+        "<h3>" + esc(o.title) + "</h3>" +
+        (o.body ? "<p>" + esc(o.body) + "</p>" : "") +
+        (o.input ? '<div class="dlg-input"><input type="text" id="dlg-input" value="' + attr(o.value || "") +
+          '" placeholder="' + attr(o.placeholder || "") + '" maxlength="40"></div>' : "") +
+        (o.select ? '<div class="dlg-input"><select id="dlg-select">' + o.select.map(x =>
+          '<option value="' + attr(x.v) + '"' + (String(x.v) === String(o.value || "") ? " selected" : "") + ">" +
+          esc(x.t) + "</option>").join("") + "</select></div>" : "") +
+        '<div class="dlg-foot">' +
+          '<button class="btn" data-mact="cancel">Cancel</button>' +
+          '<button class="btn ' + (o.danger ? "danger" : "primary") + '" data-mact="ok">' + esc(o.ok || "OK") + "</button>" +
+        "</div></div>";
+    setTimeout(() => {
+      const el = o.input ? document.getElementById("dlg-input")
+        : o.select ? document.getElementById("dlg-select")
+        : document.querySelector('#modal [data-mact="ok"]');
+      if (el){ el.focus(); if (o.input && el.select) el.select(); }
+    }, 30);
+  });
+}
+function dialogOk(){
+  const inp = document.getElementById("dlg-input");
+  if (inp) return closeDialog(inp.value.trim());
+  const sel = document.getElementById("dlg-select");
+  closeDialog(sel ? sel.value : true);
+}
+
+function toast(msg, bad){
+  const el = document.createElement("div");
+  el.className = "toast" + (bad ? " bad" : "");
+  el.textContent = msg;
+  $("#toasts").appendChild(el);
+  setTimeout(() => el.remove(), bad ? 6000 : 3200);
+}
+
+/* ============================ derivations ============================ */
+function reviewDays(p){ const pr = projOf(p.projectId); const n = pr && Number(pr.reviewDays); return (n > 0 ? n : 14); }
+function effDue(p){ return p.due || (p.submitted ? addDays(p.submitted, reviewDays(p)) : ""); }
+function dueIsAuto(p){ return !p.due && !!p.submitted; }
+function withReviewer(p){ return p.status === "submitted" || p.status === "in_review"; }
+function isLive(p){ return p.status !== "void"; }
+function daysOut(p){
+  if (!p.submitted) return null;
+  if (p.returned) return dayDiff(p.submitted, p.returned);
+  return dayDiff(p.submitted, todayISO());
+}
+function daysToDue(p){ const d = effDue(p); return d ? dayDiff(todayISO(), d) : null; }
+function isOverdue(p){ const n = daysToDue(p); return withReviewer(p) && n != null && n < 0; }
+function isDueSoon(p){ const n = daysToDue(p); return withReviewer(p) && n != null && n >= 0 && n <= 3; }
+function isBlocked(p){ return !!String(p.holds || "").trim() && p.status !== "released" && isLive(p); }
+function needsResubmit(p){ return p.status === "returned" && (p.code === "RR" || p.code === "REJ"); }
+function laneOf(p){ return statusOf(p.status).lane; }
+
+function scopedPackages(){
+  return state.packages.filter(p => state.fProject === "all" || p.projectId === state.fProject);
+}
+function actionReasons(p){
+  const out = [];
+  if (isOverdue(p))     out.push({ k:"overdue",  t:"Overdue with reviewer " + Math.abs(daysToDue(p)) + "d", css:"--st-crit" });
+  if (needsResubmit(p)) out.push({ k:"resubmit", t:"Returned " + codeOf(p.code).short + " — resubmit due", css:"--st-serious" });
+  if (isBlocked(p))     out.push({ k:"blocked",  t:"Held: " + String(p.holds).trim(), css:"--st-warn" });
+  if (!isOverdue(p) && isDueSoon(p)) out.push({ k:"due", t:"Due back in " + daysToDue(p) + "d", css:"--st-warn" });
+  return out;
+}
+function turnaroundSamples(list){
+  const out = [];
+  list.forEach(p => {
+    (p.history || []).forEach(h => { const d = dayDiff(h.submitted, h.returned); if (d != null && d >= 0) out.push(d); });
+    if (p.submitted && p.returned){ const d = dayDiff(p.submitted, p.returned); if (d != null && d >= 0) out.push(d); }
+  });
+  return out;
+}
+
+/* ============================ persistence ============================ */
+function stamp(patch){
+  patch.updatedAt = new Date().toISOString();
+  if (state.who) patch.updatedBy = state.who;
+  return patch;
+}
+function writeFailed(err){
+  const code = (err && err.code) || "unavailable";
+  if (code === "invalid_argument" || code === "not_granted"){
+    state.canWrite = false; render();
+    toast("Write refused — your access to this tracker looks view-only.", true);
+  } else if (code === "quota_exceeded"){
+    toast("The tracker's document limit is full. Delete old packages or attachments first.", true);
+  } else {
+    toast("Couldn't save that change (" + code + "). Try again.", true);
+  }
+}
+async function patchPkg(id, patch){
+  const p = pkgOf(id); if (!p) return;
+  Object.assign(p, patch);                       /* optimistic */
+  if (!state.db) return;
+  try { await state.db.doc("packages/" + id).update(stamp(patch)); } catch(e){ writeFailed(e); }
+}
+async function patchProject(id, patch){
+  const pr = projOf(id); if (!pr) return;
+  Object.assign(pr, patch);
+  if (!state.db) return;
+  try { await state.db.doc("projects/" + id).update(stamp(patch)); } catch(e){ writeFailed(e); }
+}
+
+const debounces = {};
+function patchDebounced(kind, id, patch, key){
+  const p = (kind === "pkg" ? pkgOf(id) : projOf(id)); if (p) Object.assign(p, patch);
+  const dk = kind + ":" + id + ":" + key;
+  clearTimeout(debounces[dk]);
+  debounces[dk] = setTimeout(() => { (kind === "pkg" ? patchPkg : patchProject)(id, patch); }, 450);
+}
+
+function suggestNum(projectId){
+  const nums = state.packages.filter(p => p.projectId === projectId).map(p => String(p.num || "")).filter(Boolean);
+  if (!nums.length) return "S-001";
+  let max = 0, width = 3, prefix = "S-";
+  nums.forEach(n => { const m = n.match(/^(.*?)(\d+)\s*$/); if (m){ const v = parseInt(m[2],10); if (v >= max){ max = v; width = m[2].length; prefix = m[1]; } } });
+  return prefix + String(max + 1).padStart(width, "0");
+}
+
+async function createProject(){
+  if (!state.db) return toast("Not connected to the shared store yet.", true);
+  const id = uid();
+  const body = stamp({ name:"New project", number:"", gc:"", eor:"", city:"",
+    reviewDays:14, archived:false, sortIndex:state.projects.length, createdAt:new Date().toISOString() });
+  try {
+    await state.db.doc("projects/" + id).set(body);
+    state.view = "projects"; render();
+    setTimeout(() => { const el = document.querySelector('[data-fk="proj:' + id + ':name"]'); if (el){ el.focus(); el.select && el.select(); } }, 60);
+  } catch(e){ writeFailed(e); }
+}
+async function createPackage(projectId){
+  if (!state.db) return toast("Not connected to the shared store yet.", true);
+  const ps = sortedProjects();
+  if (!ps.length) return toast("Add a project first \u2014 a package has to belong to a job.", true);
+  if (ps.length === 1) projectId = ps[0].id;
+  else {
+    const pick = await openDialog({ title:"New package \u2014 which job?",
+      body:"Pick the job this drawing set belongs to. You can change it later from the Job column or inside the package.",
+      select:projectOpts(),
+      value:(projectId && projectId !== "all") ? projectId : ps[0].id, ok:"Add package" });
+    if (!pick) return;
+    projectId = pick;
+  }
+  const id = uid();
+  const body = stamp({ projectId, num:suggestNum(projectId), title:"Untitled package",
+    type:"Shop drawings", seq:"", sheets:0, rev:0, status:"not_started", code:"", bic:"Detailer",
+    reviewer:"", submitted:"", due:"", returned:"", released:false, releasedOn:"", holds:"", notes:"",
+    links:[], files:[], history:[], createdAt:new Date().toISOString() });
+  try {
+    await state.db.doc("packages/" + id).set(body);
+    state.openPkg = id;
+    if (state.fProject !== "all" && state.fProject !== projectId) state.fProject = projectId;
+    render();
+    const pr = projOf(projectId);
+    toast(body.num + " added to " + (pr ? (pr.name || "the job") : "the job") + ".");
+    setTimeout(() => { const el = document.querySelector('[data-fk="pkg:' + id + ':title"]'); if (el){ el.focus(); el.select && el.select(); } }, 60);
+  } catch(e){ writeFailed(e); }
+}
+async function deletePackage(id){
+  const p = pkgOf(id); if (!p) return;
+  if (!state.db) return toast("Not connected to the shared store.", true);
+  const go = await openDialog({ title:"Delete " + (p.num || "this package") + "?",
+    body:(p.title || "Untitled package") + " and its links, attachments and history are removed for everyone.",
+    ok:"Delete package", danger:true });
+  if (!go) return;
+  try {
+    for (const f of (p.files || [])) { try { await state.db.doc("files/" + f.id).delete(); } catch(_){} }
+    await state.db.doc("packages/" + id).delete();
+    state.openPkg = null; render();
+  } catch(e){ writeFailed(e); }
+}
+async function deleteProject(id){
+  const pr = projOf(id); if (!pr) return;
+  if (!state.db) return toast("Not connected to the shared store.", true);
+  const kids = state.packages.filter(p => p.projectId === id);
+  const go = await openDialog({ title:"Delete " + (pr.name || "this project") + "?",
+    body:"The project and its " + kids.length + " package" + (kids.length === 1 ? "" : "s") + " are removed for everyone.",
+    ok:"Delete project", danger:true });
+  if (!go) return;
+  try {
+    for (const p of kids){
+      for (const f of (p.files || [])) { try { await state.db.doc("files/" + f.id).delete(); } catch(_){} }
+      await state.db.doc("packages/" + p.id).delete();
+    }
+    await state.db.doc("projects/" + id).delete();
+    if (state.fProject === id) state.fProject = "all";
+    render();
+  } catch(e){ writeFailed(e); }
+}
+async function removeSampleData(){
+  if (!state.db) return toast("Not connected to the shared store.", true);
+  const demo = state.projects.filter(p => p.demo);
+  const n = state.packages.filter(p => demo.some(d => d.id === p.projectId)).length;
+  const go = await openDialog({ title:"Remove sample data?",
+    body:"Deletes the " + demo.length + " demo job" + (demo.length === 1 ? "" : "s") + " and their " + n +
+      " packages. Your own projects are untouched.", ok:"Remove sample data", danger:true });
+  if (!go) return;
+  const ids = demo.map(p => p.id);
+  for (const id of ids){
+    for (const p of state.packages.filter(x => x.projectId === id)){
+      for (const f of (p.files || [])) { try { await state.db.doc("files/" + f.id).delete(); } catch(_){} }
+      try { await state.db.doc("packages/" + p.id).delete(); } catch(_){}
+    }
+    try { await state.db.doc("projects/" + id).delete(); } catch(_){}
+  }
+  toast("Sample data removed.");
+  render();
+}
+
+/* --- revision cycle: close the current submission and open the next rev --- */
+async function startNextRev(id){
+  const p = pkgOf(id); if (!p) return;
+  const hist = (p.history || []).slice();
+  hist.push({ rev:Number(p.rev) || 0, submitted:p.submitted || "", returned:p.returned || "",
+    code:p.code || "", days:daysOut(p), note:p.notes || "" });
+  await patchPkg(id, { history:hist, rev:(Number(p.rev) || 0) + 1, status:"detailing",
+    code:"", submitted:"", due:"", returned:"", bic:"Detailer" });
+  toast("Rev " + ((Number(p.rev) || 0) + 1) + " opened — previous cycle logged to history.");
+}
+
+/* ============================ attachments ============================ */
+function pickFile(pkgId){
+  if (!state.db) return toast("Not connected to the shared store.", true);
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = FILE_OK;
+  inp.addEventListener("change", async () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    if (f.size > FILE_CAP){
+      toast("“" + f.name + "” is " + kb(f.size) + ". Files stored here are capped at " + kb(FILE_CAP) +
+        " — link the full set instead.", true);
+      return;
+    }
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => { const s = String(fr.result); res(s.slice(s.indexOf(",") + 1)); };
+        fr.onerror = () => rej(new Error("read"));
+        fr.readAsDataURL(f);
+      });
+      const fid = uid();
+      await state.db.doc("files/" + fid).set({ packageId:pkgId, name:f.name, size:f.size,
+        mime:f.type || "application/octet-stream", b64, addedAt:new Date().toISOString(), addedBy:state.who || "" });
+      const p = pkgOf(pkgId);
+      const files = (p.files || []).concat([{ id:fid, name:f.name, size:f.size }]);
+      await patchPkg(pkgId, { files });
+      toast("Attached " + f.name + " (" + kb(f.size) + ").");
+    } catch(e){ writeFailed(e); }
+  });
+  inp.click();
+}
+async function downloadFile(fid, name){
+  if (!state.db) return toast("Not connected to the shared store.", true);
+  if (!state.dl) return toast("Saving files isn't available in this view.", true);
+  try {
+    const snap = await state.db.doc("files/" + fid).get();
+    if (!snap.exists) return toast("That attachment is no longer in the tracker.", true);
+    const b64 = String(snap.data().b64 || "");
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    await state.dl.save({ filename:name, data:arr.buffer });
+  } catch(e){
+    const c = (e && e.code) || "";
+    if (c === "declined") return;
+    if (c === "rejected_extension") return toast("That file type can't be saved from a published page.", true);
+    toast("Couldn't hand over that file (" + (c || "error") + ").", true);
+  }
+}
+async function removeFile(pkgId, fid){
+  const p = pkgOf(pkgId); if (!p || !state.db) return;
+  await patchPkg(pkgId, { files:(p.files || []).filter(f => f.id !== fid) });
+  try { await state.db.doc("files/" + fid).delete(); } catch(_){}
+}
+
+/* ============================ CSV ============================ */
+function csvCell(v){ const s = String(v == null ? "" : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+async function exportCsv(){
+  const rows = filteredRows();
+  const head = ["Project","Job #","Submittal #","Package","Type","Seq / area","Sheets","Rev","Status",
+    "Return code","Ball in court","Reviewer","Submitted","Due back","Returned","Days out","Days overdue",
+    "Released for fab","Released on","Holds / open RFIs","Links","Notes"];
+  const body = rows.map(p => {
+    const pr = projOf(p.projectId) || {};
+    const od = isOverdue(p) ? Math.abs(daysToDue(p)) : "";
+    return [pr.name || "", pr.number || "", p.num || "", p.title || "", p.type || "", p.seq || "",
+      p.sheets || 0, p.rev || 0, statusOf(p.status).label, codeOf(p.code).label === "—" ? "" : codeOf(p.code).label,
+      p.bic || "", p.reviewer || "", p.submitted || "", effDue(p), p.returned || "",
+      daysOut(p) == null ? "" : daysOut(p), od, p.released ? "Yes" : "No", p.releasedOn || "",
+      p.holds || "", (p.links || []).map(l => l.label + ": " + l.url).join(" | "), p.notes || ""].map(csvCell).join(",");
+  });
+  const csv = "\uFEFF" + [head.map(csvCell).join(","), ...body].join("\r\n");
+  const name = "submittal-log-" + todayISO() + ".csv";
+  if (!state.dl){
+    toast("File saving isn't available in this view — copy from the table instead.", true);
+    return;
+  }
+  try { await state.dl.save({ filename:name, data:csv }); }
+  catch(e){ if ((e && e.code) !== "declined") toast("Export failed (" + ((e && e.code) || "error") + ").", true); }
+}
+
+/* ============================ filtering ============================ */
+function filteredRows(){
+  const q = state.q.trim().toLowerCase();
+  return scopedPackages().filter(p => {
+    if (state.fStatus !== "all" && p.status !== state.fStatus) return false;
+    if (state.fBic !== "all" && (p.bic || "") !== state.fBic) return false;
+    if (state.fFlag === "overdue"  && !isOverdue(p)) return false;
+    if (state.fFlag === "reviewer" && !withReviewer(p)) return false;
+    if (state.fFlag === "blocked"  && !isBlocked(p)) return false;
+    if (state.fFlag === "resubmit" && !needsResubmit(p)) return false;
+    if (state.fFlag === "released" && !p.released) return false;
+    if (state.fFlag === "flagged"  && !actionReasons(p).length) return false;
+    if (state.fBucket){
+      const d = daysOut(p);
+      if (!withReviewer(p) || d == null || d < state.fBucket[0] || d > state.fBucket[1]) return false;
+    }
+    if (q){
+      const pr = projOf(p.projectId) || {};
+      const hay = [p.num, p.title, p.type, p.seq, p.reviewer, p.holds, p.notes, pr.name, pr.number]
+        .join(" ").toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  }).sort((a, b) => {
+    const pa = projOf(a.projectId), pb = projOf(b.projectId);
+    const sa = (pa ? pa.sortIndex : 99), sb = (pb ? pb.sortIndex : 99);
+    if (sa !== sb) return sa - sb;
+    return String(a.num || "").localeCompare(String(b.num || ""), undefined, { numeric:true });
+  });
+}
+
+/* ============================ render: fragments ============================ */
+function selectHtml(fk, value, options, cls){
+  return '<select data-fk="' + attr(fk) + '"' + (cls ? ' class="' + cls + '"' : "") + (state.canWrite ? "" : " disabled") + '>' +
+    options.map(o => '<option value="' + attr(o.v) + '"' + (String(o.v) === String(value == null ? "" : value) ? " selected" : "") + '>' + esc(o.t) + "</option>").join("") +
+    "</select>";
+}
+const statusOpts = STATUSES.map(s => ({ v:s.k, t:s.label }));
+const codeOpts   = CODES.map(c => ({ v:c.k, t:c.label }));
+const codeOptsShort = CODES.map(c => ({ v:c.k, t:c.short }));
+const bicOpts    = BICS.map(b => ({ v:b, t:b || "—" }));
+const typeOpts   = TYPES.map(t => ({ v:t, t }));
+
+function statusPill(p){
+  const s = statusOf(p.status);
+  return '<span class="pill ' + s.tone + '"><span class="dot"></span>' + esc(s.label) + "</span>";
+}
+function codePill(p){
+  const c = codeOf(p.code);
+  if (!c.k) return '<span class="num" style="color:var(--faint)">—</span>';
+  return '<span class="pill ' + c.tone + '" title="' + attr(c.label) + '">' + esc(c.short) + "</span>";
+}
+function daysCell(p){
+  const d = daysOut(p);
+  if (d == null) return '<span class="num" style="color:var(--faint)">—</span>';
+  if (p.returned) return '<span class="days" title="Turnaround, submitted to returned">' + d + "d</span>";
+  const cls = isOverdue(p) ? " over" : (isDueSoon(p) ? " due-soon" : "");
+  const t = isOverdue(p) ? "Out " + d + " days — " + Math.abs(daysToDue(p)) + " days past due" : "Out " + d + " days";
+  return '<span class="days' + cls + '" title="' + attr(t) + '">' + d + "d</span>";
+}
+function linksCell(p){
+  const bits = (p.links || []).filter(l => l.url).slice(0, 3).map(l =>
+    '<a class="linkchip" href="' + attr(l.url) + '" target="_blank" rel="noopener noreferrer" title="' + attr(l.url) + '">↗ ' + esc(l.label || "Link") + "</a>");
+  (p.files || []).slice(0, 2).forEach(f =>
+    bits.push('<button class="linkchip file" data-act="dlfile" data-fid="' + attr(f.id) + '" data-name="' + attr(f.name) + '" title="Save ' + attr(f.name) + '">⤓ ' + esc(f.name.length > 18 ? f.name.slice(0,16) + "…" : f.name) + "</button>"));
+  const extra = Math.max(0, (p.links || []).filter(l => l.url).length - 3) + Math.max(0, (p.files || []).length - 2);
+  if (extra) bits.push('<button class="linkchip" data-act="openpkg" data-id="' + attr(p.id) + '">+' + extra + "</button>");
+  if (!bits.length) return '<button class="linkchip" data-act="openpkg" data-id="' + attr(p.id) + '" style="background:var(--t-grey-bg);color:var(--t-grey-ink)">+ add</button>';
+  return '<div class="linkchips">' + bits.join("") + "</div>";
+}
+
+/* ============================ render: portfolio ============================ */
+function kpiStrip(list){
+  const live = list.filter(isLive);
+  const open = live.filter(p => p.status !== "released");
+  const rev  = live.filter(withReviewer);
+  const over = rev.filter(isOverdue);
+  const rel  = live.filter(p => p.released || p.status === "released");
+  const held = live.filter(isBlocked);
+  const ta   = turnaroundSamples(live);
+  const avg  = ta.length ? Math.round(ta.reduce((a,b) => a+b, 0) / ta.length) : null;
+  const relSheets = rel.reduce((a,p) => a + (Number(p.sheets) || 0), 0);
+  const allSheets = live.reduce((a,p) => a + (Number(p.sheets) || 0), 0);
+  const pct = live.length ? Math.round(rel.length / live.length * 100) : 0;
+  const tiles = [
+    { l:"Open packages", v:open.length, s:live.length + " tracked · " + allSheets + " sheets" },
+    { l:"With reviewer", v:rev.length,  s:rev.length ? "oldest " + Math.max.apply(null, rev.map(p => daysOut(p) || 0)) + " days out" : "nothing out" },
+    { l:"Overdue",       v:over.length, s:over.length ? "past contract review days" : "all inside review window", cls:over.length ? "alert" : "" },
+    { l:"Avg turnaround", v:(avg == null ? "—" : avg), u:(avg == null ? "" : "days"), s:ta.length ? ta.length + " completed cycles" : "no returns logged yet" },
+    { l:"Released for fab", v:pct, u:"%", s:rel.length + " of " + live.length + " · " + relSheets + " sheets", cls:pct >= 60 ? "good" : "" },
+    { l:"Held / blocked", v:held.length, s:held.length ? "open RFI or hold on record" : "no holds recorded", cls:held.length ? "warn" : "" }
+  ];
+  return '<div class="kpis">' + tiles.map(t =>
+    '<div class="kpi ' + (t.cls || "") + '"><span class="l">' + esc(t.l) + '</span>' +
+    '<span class="v">' + esc(t.v) + (t.u ? '<span class="u">' + esc(t.u) + "</span>" : "") + "</span>" +
+    '<span class="s">' + esc(t.s) + "</span></div>").join("") + "</div>";
+}
+
+function agingPanel(list){
+  const out = list.filter(p => isLive(p) && withReviewer(p) && p.submitted);
+  const buckets = AGE_BUCKETS.map(b => {
+    const items = out.filter(p => { const d = daysOut(p); return d != null && d >= b.lo && d <= b.hi; });
+    return { b, items };
+  });
+  const max = Math.max(1, ...buckets.map(x => x.items.length));
+  const scope = state.fProject === "all" ? null : projOf(state.fProject);
+  const cols = buckets.map(x => {
+    const n = x.items.length;
+    const h = n ? Math.max(6, Math.round(n / max * 92)) : 3;
+    const tip = n ? x.b.label + " out: " + x.items.slice(0,6).map(p => p.num).join(", ") + (n > 6 ? " +" + (n-6) + " more" : "") : "Nothing in this bucket";
+    return '<div class="col"><span class="cnt">' + n + "</span>" +
+      '<button class="bar' + (n ? "" : " empty") + '" style="height:' + h + 'px;background:var(' + x.b.cssvar + ')" ' +
+      'data-act="bucket" data-lo="' + x.b.lo + '" data-hi="' + x.b.hi + '" title="' + attr(tip) + '" aria-label="' + attr(x.b.label + ": " + n + " packages") + '"></button></div>';
+  }).join("");
+  const xs = AGE_BUCKETS.map(b => '<span class="lx">' + esc(b.label) + "</span>").join("");
+  return '<section class="panel"><div class="panel-head"><h3>Review aging</h3>' +
+    '<span class="hint">' + out.length + " package" + (out.length === 1 ? "" : "s") + " with the reviewer" +
+    (scope ? " · contract review " + (Number(scope.reviewDays) || 14) + " days" : "") + "</span></div>" +
+    '<div class="panel-body">' +
+      (out.length ? '<div class="chart">' + cols + '</div><div class="chart-x">' + xs + "</div>" +
+        '<p style="margin:12px 0 0;font-size:11.5px;color:var(--muted)">Calendar days since the date submitted. Click a bar to filter the log.</p>'
+        : '<div class="empty-note">Nothing is out for review right now.</div>') +
+    "</div></section>";
+}
+
+function actionPanel(list){
+  const rows = [];
+  list.filter(isLive).forEach(p => {
+    const rs = actionReasons(p);
+    if (rs.length) rows.push({ p, r:rs[0], n:rs.length });
+  });
+  const order = { overdue:0, resubmit:1, blocked:2, due:3 };
+  rows.sort((a,b) => (order[a.r.k] - order[b.r.k]) || (Math.abs(daysToDue(b.p) || 0) - Math.abs(daysToDue(a.p) || 0)));
+  const shown = rows.slice(0, 9);
+  return '<section class="panel"><div class="panel-head"><h3>Needs action</h3>' +
+    '<span class="hint">' + rows.length + " flagged</span></div>" +
+    (shown.length ? '<div class="acts">' + shown.map(x => {
+      const pr = projOf(x.p.projectId) || {};
+      return '<button class="act" data-act="openpkg" data-id="' + attr(x.p.id) + '">' +
+        '<span class="why" style="background:var(' + x.r.css + ')"></span>' +
+        '<span class="t"><b>' + esc(x.p.num || "—") + "  " + esc(x.p.title || "Untitled") + "</b>" +
+        "<span>" + esc(pr.name || "") + " · " + esc(x.r.t) + (x.n > 1 ? " (+" + (x.n-1) + " more)" : "") + "</span></span>" +
+        statusPill(x.p) + "</button>";
+    }).join("") + "</div>" : '<div class="empty-note">Nothing flagged — no overdue reviews, resubmits, or holds.</div>') +
+    (rows.length > shown.length ? '<div style="padding:10px 14px;border-top:1px solid var(--line)"><button class="btn sm" data-act="showflag">See all ' + rows.length + " in the log</button></div>" : "") +
+    "</section>";
+}
+
+function projectCards(){
+  const projs = sortedProjects();
+  if (!projs.length) return '<div class="panel"><div class="empty-note">No projects yet. Add one to start logging submittals.</div></div>';
+  return '<div class="pcards">' + projs.map(pr => {
+    const pk = state.packages.filter(p => p.projectId === pr.id && isLive(p));
+    const counts = LANES.map(l => ({ l, n:pk.filter(p => laneOf(p) === l.k).length }));
+    const over = pk.filter(isOverdue).length;
+    const sheets = pk.reduce((a,p) => a + (Number(p.sheets) || 0), 0);
+    return '<button class="pcard" data-act="scope" data-id="' + attr(pr.id) + '">' +
+      '<span class="top"><h3>' + esc(pr.name || "Untitled project") + "</h3>" +
+        (over ? '<span class="pill red"><span class="dot"></span>' + over + " overdue</span>" : "") + "</span>" +
+      '<span class="meta">' + (pr.number ? "<span>Job " + esc(pr.number) + "</span>" : "") +
+        (pr.gc ? "<span>GC " + esc(pr.gc) + "</span>" : "") +
+        "<span>" + pk.length + " package" + (pk.length === 1 ? "" : "s") + "</span><span>" + sheets + " sheets</span>" +
+        "<span>" + (Number(pr.reviewDays) || 14) + "-day review</span></span>" +
+      '<span class="stack">' + counts.map(c => c.n ? '<i style="flex:' + c.n + ';background:var(' + c.l.cssvar + ')"></i>' : "").join("") + "</span>" +
+      '<span class="stack-key">' + counts.map(c =>
+        '<span class="k"><span class="sw" style="background:var(' + c.l.cssvar + ')"></span>' + esc(c.l.label) + " <b>" + c.n + "</b></span>").join("") + "</span>" +
+      "</button>";
+  }).join("") + "</div>";
+}
+
+function portfolioHtml(){
+  const list = scopedPackages();
+  if (!state.packages.length) return banners() + startHereHtml();
+  return banners() +
+    '<section class="section">' + kpiStrip(list) + "</section>" +
+    '<section class="section grid-2">' + agingPanel(list) + actionPanel(list) + "</section>" +
+    '<section class="section"><div class="section-head"><h2>Projects</h2>' +
+      '<span class="hint">Each bar shows where that job’s packages sit right now. Click a job to open its log.</span></div>' +
+      projectCards() + "</section>";
+}
+
+/* ============================ render: log ============================ */
+function mastTools(){
+  const bad = state.conn !== "on";
+  return (bad ? '<span class="conn ' + (state.conn === "bad" ? "bad" : "off") + '"><span class="led"></span>' +
+      esc(state.conn === "bad" ? "Sync error" : state.conn === "off" ? "Not connected" : "Connecting\u2026") + "</span>" : "") +
+    selectHtml("flt:project", state.fProject, [{ v:"all", t:"All projects" }].concat(projectOpts())) +
+    '<button class="btn primary" data-act="newpkg">+ Package</button>' +
+    '<button class="btn ghost" data-act="theme" title="Colour theme — click to change">' +
+      esc({ system:"Auto", light:"Light", dark:"Dark" }[themeMode()] || "Auto") + "</button>" +
+    (state.who
+      ? '<button class="whochip bare" data-act="who" title="Your edits are stamped ' + attr(state.who) + '"><span class="ini">' + esc(initials(state.who)) + "</span></button>"
+      : '<button class="whochip plain" data-act="who" title="Stamp your edits with your name">Set name</button>');
+}
+function logHtml(){
+  const rows = filteredRows();
+  const flagOpts = [{v:"all",t:"All flags"},{v:"flagged",t:"Needs action"},{v:"overdue",t:"Overdue"},{v:"reviewer",t:"With reviewer"},
+    {v:"resubmit",t:"Needs resubmit"},{v:"blocked",t:"Held / blocked"},{v:"released",t:"Released for fab"}];
+  const stOpts = [{v:"all",t:"All statuses"}].concat(statusOpts);
+  const bcOpts = [{v:"all",t:"All ball-in-court"}].concat(BICS.filter(Boolean).map(b => ({v:b,t:b})));
+  const filtered = state.fStatus !== "all" || state.fBic !== "all" || state.fFlag !== "all" || state.q.trim() || state.fBucket;
+  const bucketChip = state.fBucket
+    ? '<span class="pill gold">Out ' + state.fBucket[0] + (state.fBucket[1] > 1000 ? "+" : "\u2013" + state.fBucket[1]) + ' days<button class="chipclear" data-act="clearbucket" style="padding:0 0 0 4px;text-decoration:none">\u2715</button></span>'
+    : "";
+
+  let body = "", lastProj = null;
+  if (!rows.length){
+    body = '<tr><td colspan="16"><div class="empty-note">No packages match these filters.</div></td></tr>';
+  } else {
+    rows.forEach(p => {
+      if (state.fProject === "all" && p.projectId !== lastProj){
+        lastProj = p.projectId;
+        const pr = projOf(p.projectId);
+        body += '<tr class="grp"><td colspan="16"><span style="position:sticky;left:10px;display:inline-block">' +
+          esc(pr ? (pr.name || "Untitled project") : "Unassigned") +
+          (pr && pr.number ? '  ·  Job ' + esc(pr.number) : "") + "</span></td></tr>";
+      }
+      const due = effDue(p);
+      const auto = dueIsAuto(p);
+      const dueCls = isOverdue(p) ? " over" : (isDueSoon(p) ? " due-soon" : "");
+      body += "<tr>" +
+        '<td class="c-num"><span class="num" style="font-weight:600">' + esc(p.num || "\u2014") + "</span></td>" +
+        '<td class="c-proj">' + selectHtml("pkg:" + p.id + ":projectId", p.projectId, projectOpts()) + "</td>" +
+        '<td class="c-title"><button class="rowlink" data-act="openpkg" data-id="' + attr(p.id) + '">' + esc(p.title || "Untitled package") + "</button></td>" +
+        "<td>" + esc(p.type || "") + "</td>" +
+        '<td><span class="num">' + esc(p.seq || "—") + "</span></td>" +
+        '<td><span class="num">' + (Number(p.sheets) || 0) + "</span></td>" +
+        '<td><span class="num">' + (Number(p.rev) || 0) + "</span></td>" +
+        '<td class="c-status">' + selectHtml("pkg:" + p.id + ":status", p.status, statusOpts) + "</td>" +
+        '<td class="c-code" title="' + attr(codeOf(p.code).label) + '">' + selectHtml("pkg:" + p.id + ":code", p.code || "", codeOptsShort) + "</td>" +
+        '<td class="c-bic">' + selectHtml("pkg:" + p.id + ":bic", p.bic || "", bicOpts) + "</td>" +
+        '<td><input type="date" class="' + (p.submitted ? "" : "blank") + '" data-fk="pkg:' + attr(p.id) + ':submitted" value="' + attr(p.submitted || "") + '"' + (state.canWrite ? "" : " disabled") + "></td>" +
+        '<td><span class="days' + dueCls + '" title="' + (auto ? "Auto: submitted + " + reviewDays(p) + " review days" : "Override entered in the package") + '">' +
+          (due ? fmtDate(due) + (auto ? '<sup style="color:var(--faint);font-weight:400">auto</sup>' : "") : "—") + "</span></td>" +
+        '<td><input type="date" class="' + (p.returned ? "" : "blank") + '" data-fk="pkg:' + attr(p.id) + ':returned" value="' + attr(p.returned || "") + '"' + (state.canWrite ? "" : " disabled") + "></td>" +
+        "<td>" + daysCell(p) + "</td>" +
+        '<td><label class="fabdot"><input type="checkbox" data-fk="pkg:' + attr(p.id) + ':released"' + (p.released ? " checked" : "") + (state.canWrite ? "" : " disabled") + ">" +
+          (p.released && p.releasedOn ? '<span class="num">' + fmtDate(p.releasedOn) + "</span>" : "<span>fab</span>") + "</label></td>" +
+        "<td>" + linksCell(p) + "</td>" +
+        "</tr>";
+    });
+  }
+  return banners() +
+    '<div class="filters">' +
+      '<input type="text" class="grow" data-fk="flt:q" placeholder="Search number, package, sequence, reviewer, holds…" value="' + attr(state.q) + '">' +
+      selectHtml("flt:status", state.fStatus, stOpts) +
+      selectHtml("flt:bic", state.fBic, bcOpts) +
+      selectHtml("flt:flag", state.fFlag, flagOpts) + bucketChip +
+      (filtered ? '<button class="chipclear" data-act="clearfilters">Clear filters</button>' : "") +
+      '<span style="flex:1"></span><span class="eyebrow">' + rows.length + " of " + scopedPackages().length + " packages</span>" +
+      '<button class="btn sm" data-act="export">Export CSV</button>' +
+    "</div>" +
+    '<div class="table-wrap"><table class="log"><thead><tr>' +
+      ["Sub #","Job","Package / drawing set","Type","Seq / area","Sht","Rev","Status","Code",
+       "Ball in court","Submitted","Due back","Returned","Days","Fab","Drawings"]
+      .map(h => "<th>" + esc(h) + "</th>").join("") +
+    "</tr></thead><tbody>" + body + "</tbody></table></div>" +
+    '<p style="font-size:11.5px;color:var(--muted);margin:10px 2px 0">Job, status, return code, ball-in-court and dates edit right in the grid and save for everyone \u2014 use the Job cell to move a package to the right project. ' +
+    'Open a row for drawing-set links, attachments, holds and revision history. Scroll the grid sideways for returned dates, days out, fab release and drawing links. ' +
+    'A due date marked <sup>auto</sup> is derived from the job’s contract review days; enter an override in the package.</p>';
+}
+
+function startHereHtml(){
+  const hasProj = state.projects.length > 0;
+  const steps = [
+    ["1", "Add the job", "Name, job number, GC and the contract review days out of the spec \u2014 that number drives every due-back date."],
+    ["2", "Add a package per drawing set", "One row per submittal, not per sheet: sequence or area, sheet count, and a link to wherever the set lives."],
+    ["3", "Log the submittal", "The date submitted starts the clock. Due back derives from the job\u2019s review days unless you override it."]
+  ];
+  return '<section class="panel section"><div class="panel-head"><h3>Start here</h3>' +
+    '<span class="hint">' + (hasProj ? state.projects.length + " job" + (state.projects.length === 1 ? "" : "s") + " set up \u00b7 no packages yet" : "empty tracker") + "</span></div>" +
+    '<div class="panel-body"><div class="start">' +
+      steps.map(x => '<span class="n">' + x[0] + '</span><span><b>' + esc(x[1]) + '</b><span class="d">' + esc(x[2]) + "</span></span>").join("") +
+    "</div>" +
+    '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">' +
+      (hasProj
+        ? '<button class="btn primary" data-act="newpkg">+ Package</button><button class="btn" data-act="view-projects">Edit jobs</button>'
+        : '<button class="btn primary" data-act="newproj">+ Project</button>') +
+    "</div></div></section>" +
+    (hasProj ? '<section class="section"><div class="section-head"><h2>Projects</h2></div>' + projectCards() + "</section>" : "");
+}
+
+/* ============================ render: projects ============================ */
+function projectsHtml(){
+  const projs = sortedProjects();
+  return banners() +
+    '<div class="filters"><button class="btn primary" data-act="newproj">+ Project</button>' +
+    '<span style="flex:1"></span><span class="eyebrow">' + projs.length + " project" + (projs.length===1?"":"s") + "</span></div>" +
+    (projs.length ? projs.map(pr => {
+      const pk = state.packages.filter(p => p.projectId === pr.id);
+      return '<section class="panel section"><div class="panel-head"><h3>' + esc(pr.name || "Untitled project") + "</h3>" +
+        '<span class="hint">' + pk.length + " packages · created " + fmtDate((pr.createdAt||"").slice(0,10)) + "</span></div>" +
+        '<div class="panel-body"><div class="fgrid three">' +
+          fldText("proj:" + pr.id + ":name", "Project name", pr.name) +
+          fldText("proj:" + pr.id + ":number", "Job number", pr.number) +
+          fldNum("proj:" + pr.id + ":reviewDays", "Contract review days", pr.reviewDays == null ? 14 : pr.reviewDays) +
+          fldText("proj:" + pr.id + ":gc", "General contractor", pr.gc) +
+          fldText("proj:" + pr.id + ":eor", "Engineer of record", pr.eor) +
+          fldText("proj:" + pr.id + ":city", "Location", pr.city) +
+        "</div>" +
+        '<div style="display:flex;gap:8px;margin-top:14px;align-items:center">' +
+          '<button class="btn" data-act="scope" data-id="' + attr(pr.id) + '">Open log</button>' +
+          '<button class="btn" data-act="newpkgfor" data-id="' + attr(pr.id) + '">+ Package</button>' +
+          '<span style="flex:1"></span>' +
+          '<button class="btn danger" data-act="delproj" data-id="' + attr(pr.id) + '">Delete project</button>' +
+        "</div></div></section>";
+    }).join("") : '<div class="panel"><div class="empty-note">No projects yet.</div></div>');
+}
+function fldText(fk, label, v){
+  return '<label class="fld"><span>' + esc(label) + '</span><input type="text" data-fk="' + attr(fk) + '" value="' + attr(v || "") + '"' + (state.canWrite?"":" disabled") + "></label>";
+}
+function fldNum(fk, label, v){
+  return '<label class="fld"><span>' + esc(label) + '</span><input type="number" min="0" step="1" data-fk="' + attr(fk) + '" value="' + attr(v == null ? "" : v) + '"' + (state.canWrite?"":" disabled") + "></label>";
+}
+function fldDate(fk, label, v, hint){
+  return '<label class="fld"><span>' + esc(label) + '</span><input type="date" data-fk="' + attr(fk) + '" value="' + attr(v || "") + '"' + (state.canWrite?"":" disabled") + ">" +
+    (hint ? '<span style="font:400 11px/1.3 var(--font-body);color:var(--faint);text-transform:none;letter-spacing:0">' + esc(hint) + "</span>" : "") + "</label>";
+}
+function fldSel(fk, label, v, opts){
+  return '<label class="fld"><span>' + esc(label) + "</span>" + selectHtml(fk, v, opts) + "</label>";
+}
+
+/* ============================ render: banners ============================ */
+function banners(){
+  let out = "";
+  if (state.conn === "off"){
+    out += '<div class="banner"><b>Offline copy.</b> This page can’t reach the shared store, so nothing you type here is saved. ' +
+      "Open the published artifact link to load and edit the live tracker.</div>";
+  }
+  if (!state.canWrite){
+    out += '<div class="banner"><b>View-only access.</b> You can read the log, but writes are being refused. ' +
+      "Ask the tracker’s owner for edit access.</div>";
+  }
+  if (state.projects.some(p => p.demo)){
+    out += '<div class="banner info"><span><b>Sample job loaded.</b> “' +
+      esc((state.projects.find(p => p.demo) || {}).name || "") + '” is example data so the tracker isn’t empty — delete it once your real jobs are in.</span>' +
+      '<button class="btn sm" data-act="rmdemo" style="margin-left:auto;flex:none">Remove sample data</button></div>';
+  }
+  return out;
+}
+
+/* ============================ render: drawer ============================ */
+function drawerHtml(){
+  const p = state.openPkg ? pkgOf(state.openPkg) : null;
+  if (!p) return "";
+  const pr = projOf(p.projectId) || {};
+  const due = effDue(p), auto = dueIsAuto(p), d = daysOut(p);
+  let clock = "Not submitted yet.";
+  if (p.returned && d != null) clock = "Turnaround " + d + " days (" + fmtDate(p.submitted) + " → " + fmtDate(p.returned) + ").";
+  else if (d != null) clock = "Out " + d + " days" + (due ? (isOverdue(p) ? " — " + Math.abs(daysToDue(p)) + " days past due " + fmtDate(due)
+    : ", due back " + fmtDate(due) + " (" + daysToDue(p) + " days)") : ".");
+  const projOpts = projectOpts();
+  const links = p.links || [], files = p.files || [], hist = p.history || [];
+
+  return '<div class="scrim" data-act="closedrawer"></div>' +
+  '<aside class="drawer" role="dialog" aria-modal="true" aria-label="Package detail" data-live-guard>' +
+    '<div class="drawer-head">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="eyebrow">' + esc(pr.name || "Unassigned") + (pr.number ? "  ·  Job " + esc(pr.number) : "") + "</div>" +
+        "<h2>" + esc(p.num || "—") + "  " + esc(p.title || "Untitled package") + "</h2>" +
+        '<div class="sub" style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:7px">' +
+          statusPill(p) + codePill(p) +
+          '<span class="pill gold">Rev ' + (Number(p.rev)||0) + "</span>" +
+          (p.released ? '<span class="pill teal"><span class="dot"></span>Released</span>' : "") +
+        "</div>" +
+      "</div>" +
+      '<button class="icon-x" data-act="closedrawer" aria-label="Close">✕</button>' +
+    "</div>" +
+    '<div class="drawer-body">' +
+
+      '<div class="block"><div class="eyebrow">Package</div>' +
+        '<div class="fgrid three">' +
+          fldText("pkg:" + p.id + ":num", "Submittal #", p.num) +
+          fldText("pkg:" + p.id + ":seq", "Sequence / area", p.seq) +
+          fldNum("pkg:" + p.id + ":sheets", "Sheet count", p.sheets) +
+        "</div>" +
+        '<div class="fgrid">' +
+          '<label class="fld span2"><span>Package / drawing set</span><input type="text" data-fk="pkg:' + attr(p.id) + ':title" value="' + attr(p.title || "") + '"' + (state.canWrite?"":" disabled") + "></label>" +
+          fldSel("pkg:" + p.id + ":type", "Type", p.type, typeOpts) +
+          fldSel("pkg:" + p.id + ":projectId", "Project", p.projectId, projOpts) +
+        "</div>" +
+      "</div>" +
+
+      '<div class="block"><div class="eyebrow">Review</div>' +
+        '<div class="fgrid">' +
+          fldSel("pkg:" + p.id + ":status", "Internal status", p.status, statusOpts) +
+          fldSel("pkg:" + p.id + ":code", "Return code", p.code || "", codeOpts) +
+          fldSel("pkg:" + p.id + ":bic", "Ball in court", p.bic || "", bicOpts) +
+          fldText("pkg:" + p.id + ":reviewer", "Reviewer / approver", p.reviewer) +
+        "</div>" +
+        '<div class="fgrid three">' +
+          fldDate("pkg:" + p.id + ":submitted", "Date submitted", p.submitted) +
+          fldDate("pkg:" + p.id + ":due", "Due back", p.due, auto && due ? "Auto " + fmtDate(due) + " (+" + reviewDays(p) + " days)" : "") +
+          fldDate("pkg:" + p.id + ":returned", "Date returned", p.returned) +
+        "</div>" +
+        '<p style="margin:0;font-size:12px;color:' + (isOverdue(p) ? "var(--st-crit)" : "var(--muted)") + '">' + esc(clock) + "</p>" +
+      "</div>" +
+
+      '<div class="block"><div class="eyebrow">Fabrication release</div>' +
+        '<label style="display:flex;gap:9px;align-items:center;font-size:13px;cursor:pointer">' +
+          '<input type="checkbox" data-fk="pkg:' + attr(p.id) + ':released"' + (p.released ? " checked" : "") + (state.canWrite?"":" disabled") +
+          ' style="width:16px;height:16px;accent-color:var(--st-good)">Released to the shop for fabrication</label>' +
+        '<div class="fgrid">' +
+          fldDate("pkg:" + p.id + ":releasedOn", "Release date", p.releasedOn) +
+          fldText("pkg:" + p.id + ":holds", "Holds / open RFIs blocking release", p.holds) +
+        "</div>" +
+        (isBlocked(p) ? '<p style="margin:0;font-size:12px;color:var(--st-warn)">Held — this package is flagged on the portfolio until the hold clears.</p>' : "") +
+      "</div>" +
+
+      '<div class="block"><div class="eyebrow">Drawing sets</div>' +
+        (links.length ? links.map((l, i) =>
+          '<div class="linkrow">' +
+            selectHtml("link:" + p.id + ":" + i + ":label", l.label || "Other", LINK_LABELS.map(x => ({ v:x, t:x }))) +
+            '<input type="url" data-fk="link:' + attr(p.id) + ":" + i + ':url" placeholder="https://…" value="' + attr(l.url || "") + '"' + (state.canWrite?"":" disabled") + ">" +
+            (l.url ? '<a class="open" href="' + attr(l.url) + '" target="_blank" rel="noopener noreferrer">Open ↗</a>' : "") +
+            '<button class="icon-x" data-act="dellink" data-id="' + attr(p.id) + '" data-i="' + i + '" aria-label="Remove link">✕</button>' +
+          "</div>").join("")
+          : '<p style="margin:0;font-size:12px;color:var(--muted)">No drawing-set links yet. Point at wherever the set lives — Procore, SharePoint, Dropbox, Egnyte, an FTP path.</p>') +
+        '<div><button class="btn sm" data-act="addlink" data-id="' + attr(p.id) + '">+ Drawing-set link</button></div>' +
+      "</div>" +
+
+      '<div class="block"><div class="eyebrow">Files kept in this tracker</div>' +
+        (files.length ? files.map(f =>
+          '<div class="filerow"><span class="fname">' + esc(f.name) + '</span><span class="fsize">' + kb(f.size) + "</span>" +
+            '<button class="btn sm" data-act="dlfile" data-fid="' + attr(f.id) + '" data-name="' + attr(f.name) + '">Save</button>' +
+            '<button class="icon-x" data-act="rmfile" data-id="' + attr(p.id) + '" data-fid="' + attr(f.id) + '" aria-label="Remove file">✕</button></div>').join("")
+          : "") +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<button class="btn sm" data-act="attach" data-id="' + attr(p.id) + '">+ Attach file</button>' +
+          '<span style="font-size:11.5px;color:var(--muted)">Up to ' + kb(FILE_CAP) + ' each — stamped cover sheets, transmittals, markup snapshots. Full sets belong on a link above.</span>' +
+        "</div>" +
+      "</div>" +
+
+      '<div class="block"><div class="eyebrow">Submission history</div>' +
+        (hist.length ? '<div class="hist">' + hist.slice().reverse().map(h =>
+          '<div class="h"><span class="rv">Rev ' + (h.rev || 0) + "</span>" +
+            '<span class="dt">' + (h.submitted ? fmtDate(h.submitted) : "—") + " → " + (h.returned ? fmtDate(h.returned) : "—") +
+            (h.days != null ? "  ·  " + h.days + " days" : "") + "</span>" +
+            (h.code ? '<span class="pill ' + codeOf(h.code).tone + '">' + esc(codeOf(h.code).short) + "</span>" : '<span class="num" style="color:var(--faint)">—</span>') +
+          "</div>").join("") + "</div>"
+          : '<p style="margin:0;font-size:12px;color:var(--muted)">Rev ' + (Number(p.rev)||0) + " is the first cycle — no resubmits logged.</p>") +
+        '<div><button class="btn sm" data-act="nextrev" data-id="' + attr(p.id) + '">Log this cycle &amp; open Rev ' + ((Number(p.rev)||0)+1) + "</button></div>" +
+      "</div>" +
+
+      '<div class="block"><div class="eyebrow">Notes</div>' +
+        '<textarea data-fk="pkg:' + attr(p.id) + ':notes" placeholder="Backcheck comments, connection assumptions, what the reviewer redlined…"' + (state.canWrite?"":" disabled") + ">" + esc(p.notes || "") + "</textarea>" +
+      "</div>" +
+
+    "</div>" +
+    '<div class="drawer-foot">' +
+      '<span class="stamp">' + (p.updatedBy ? "Last edited by " + esc(p.updatedBy) : "Last edited") +
+        (p.updatedAt ? " · " + new Date(p.updatedAt).toLocaleString() : "") + "</span>" +
+      '<button class="btn danger" data-act="delpkg" data-id="' + attr(p.id) + '">Delete</button>' +
+      '<button class="btn" data-act="closedrawer">Done</button>' +
+    "</div>" +
+  "</aside>";
+}
+
+/* ============================ render ============================ */
+function captureFocus(){
+  const ae = document.activeElement;
+  if (!ae || !ae.dataset || !ae.dataset.fk) return null;
+  const o = { fk: ae.dataset.fk };
+  const t = (ae.type || "").toLowerCase();
+  if ((ae.tagName === "TEXTAREA" || t === "text" || t === "url" || t === "search") && "selectionStart" in ae){
+    o.val = ae.value; o.s = ae.selectionStart; o.e = ae.selectionEnd;
+  }
+  return o;
+}
+function restoreFocus(o){
+  if (!o) return;
+  let el = null;
+  try { el = document.querySelector('[data-fk="' + (window.CSS && CSS.escape ? CSS.escape(o.fk) : o.fk) + '"]'); } catch(_){}
+  if (!el) return;
+  try { el.focus({ preventScroll:true }); } catch(_){ el.focus(); }
+  if (o.val != null && "value" in el){ el.value = o.val; try { el.setSelectionRange(o.s, o.e); } catch(_){} }
+}
+
+let rendering = false;
+function render(){
+  if (rendering) return;
+  rendering = true;
+  const foc = captureFocus();
+  const sy = window.scrollY;
+  const tw = document.querySelector(".table-wrap"); const twx = tw ? tw.scrollLeft : 0;
+  const dbEl = document.querySelector(".drawer-body"); const dby = dbEl ? dbEl.scrollTop : 0;
+
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-current", String(t.dataset.view === state.view)));
+  document.getElementById("mast-tools").innerHTML = mastTools();
+
+  document.getElementById("view").innerHTML =
+    state.view === "log" ? logHtml() : state.view === "projects" ? projectsHtml() : portfolioHtml();
+  document.getElementById("overlay").innerHTML = drawerHtml();
+
+  window.scrollTo(0, sy);
+  const tw2 = document.querySelector(".table-wrap"); if (tw2) tw2.scrollLeft = twx;
+  const db2 = document.querySelector(".drawer-body"); if (db2) db2.scrollTop = dby;
+  restoreFocus(foc);
+  const mh = document.querySelector(".masthead");
+  if (mh) document.documentElement.style.setProperty("--mast-h", mh.offsetHeight + "px");
+  rendering = false;
+}
+
+/* ============================ events ============================ */
+function fieldWrite(fk, el){
+  const parts = fk.split(":");
+  const kind = parts[0];
+
+  if (kind === "flt"){
+    const which = parts[1];
+    if (which === "project"){ state.fProject = el.value; }
+    else if (which === "status"){ state.fStatus = el.value; }
+    else if (which === "bic"){ state.fBic = el.value; }
+    else if (which === "flag"){ state.fFlag = el.value; state.fBucket = null; }
+    else if (which === "q"){ state.q = el.value; }
+    render(); return;
+  }
+  if (!state.canWrite) return;
+
+  if (kind === "link"){
+    const id = parts[1], i = Number(parts[2]), part = parts[3];
+    const p = pkgOf(id); if (!p) return;
+    const links = (p.links || []).map(l => Object.assign({}, l));
+    if (!links[i]) return;
+    links[i][part] = el.value;
+    p.links = links;
+    patchDebounced("pkg", id, { links }, "links");
+    return;
+  }
+  const id = parts[1], field = parts[2];
+  let v = el.type === "checkbox" ? el.checked : el.value;
+  if (field === "sheets" || field === "rev" || field === "reviewDays") v = Math.max(0, Number(v) || 0);
+
+  if (kind === "proj"){
+    if (el.type === "text" || el.type === "number") patchDebounced("proj", id, { [field]: v }, field);
+    else patchProject(id, { [field]: v });
+    return;
+  }
+  if (kind === "pkg"){
+    const patch = { [field]: v };
+    const p = pkgOf(id);
+    if (field === "released"){
+      patch.releasedOn = v ? (p && p.releasedOn ? p.releasedOn : todayISO()) : "";
+      if (v && p && p.status !== "released" && p.status !== "void") patch.status = "released";
+    }
+    if (field === "status"){
+      if (v === "released"){ patch.released = true; if (p && !p.releasedOn) patch.releasedOn = todayISO(); }
+      if ((v === "submitted") && p && !p.submitted) patch.submitted = todayISO();
+      if (v === "returned" && p && !p.returned) patch.returned = todayISO();
+    }
+    if (field === "code" && v && p && !p.returned) patch.returned = todayISO();
+    if (field === "returned" && v && p && (p.status === "submitted" || p.status === "in_review")) patch.status = "returned";
+    if (field === "submitted" && v && p && (p.status === "not_started" || p.status === "detailing" || p.status === "internal")) patch.status = "submitted";
+
+    const soft = (el.tagName === "TEXTAREA" || el.type === "text" || el.type === "url" || el.type === "number");
+    if (soft) patchDebounced("pkg", id, patch, field);
+    else { patchPkg(id, patch); render(); }
+    return;
+  }
+}
+
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (!el || !el.dataset || !el.dataset.fk) return;
+  if (el.tagName === "SELECT" || el.type === "date" || el.type === "checkbox") return;
+  fieldWrite(el.dataset.fk, el);
+});
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (!el || !el.dataset || !el.dataset.fk) return;
+  if (el.tagName === "SELECT" || el.type === "date" || el.type === "checkbox") fieldWrite(el.dataset.fk, el);
+});
+document.addEventListener("keydown", e => {
+  if (dlgResolve){
+    if (e.key === "Escape"){ e.preventDefault(); closeDialog(null); }
+    else if (e.key === "Enter" && e.target && e.target.id === "dlg-input"){ e.preventDefault(); dialogOk(); }
+    return;
+  }
+  if (e.key === "Escape" && state.openPkg){ state.openPkg = null; render(); }
+});
+document.addEventListener("click", e => {
+  const m = e.target.closest && e.target.closest("[data-mact]");
+  if (m){ if (m.dataset.mact === "ok") dialogOk(); else closeDialog(null); return; }
+  const tab = e.target.closest && e.target.closest(".tab");
+  if (tab){ state.view = tab.dataset.view; render(); return; }
+  const el = e.target.closest && e.target.closest("[data-act]");
+  if (!el) return;
+  const a = el.dataset.act, id = el.dataset.id;
+
+  if (a === "closedrawer"){ state.openPkg = null; render(); return; }
+  if (a === "openpkg"){ state.openPkg = id; render(); return; }
+  if (a === "scope"){ state.fProject = id; state.view = "log"; render(); return; }
+  if (a === "newproj"){ createProject(); return; }
+  if (a === "newpkg"){ createPackage(state.fProject); return; }
+  if (a === "newpkgfor"){ createPackage(id); return; }
+  if (a === "delpkg"){ deletePackage(id); return; }
+  if (a === "delproj"){ deleteProject(id); return; }
+  if (a === "rmdemo"){ removeSampleData(); return; }
+  if (a === "export"){ exportCsv(); return; }
+  if (a === "attach"){ pickFile(id); return; }
+  if (a === "rmfile"){ removeFile(id, el.dataset.fid); return; }
+  if (a === "dlfile"){ downloadFile(el.dataset.fid, el.dataset.name); return; }
+  if (a === "nextrev"){ startNextRev(id); return; }
+  if (a === "view-projects"){ state.view = "projects"; render(); return; }
+  if (a === "theme"){
+    const cur = themeMode();
+    const next = cur === "system" ? "light" : cur === "light" ? "dark" : "";
+    try { if (next) localStorage.setItem(THEME_KEY, next); else localStorage.removeItem(THEME_KEY); } catch(_){}
+    applyTheme(); render(); return;
+  }
+  if (a === "who"){
+    openDialog({ title:"Who's editing?",
+      body:"Your name stamps the changes you make, so the team can see who moved a package. Stored on this device only.",
+      input:true, value:state.who, placeholder:"Nick Lortz", ok:"Save" }).then(v => {
+        if (v == null) return;
+        state.who = String(v).slice(0, 40);
+        try { localStorage.setItem(WHO_KEY, state.who); } catch(_){}
+        render();
+      });
+    return;
+  }
+  if (a === "showflag"){ state.view = "log"; state.fFlag = "flagged"; state.fBucket = null; render(); return; }
+  if (a === "clearbucket"){ state.fBucket = null; render(); return; }
+  if (a === "clearfilters"){ state.fStatus = "all"; state.fBic = "all"; state.fFlag = "all"; state.q = ""; state.fBucket = null; render(); return; }
+  if (a === "bucket"){
+    state.view = "log"; state.fFlag = "all"; state.fStatus = "all"; state.fBic = "all"; state.q = "";
+    state.fBucket = [Number(el.dataset.lo), Number(el.dataset.hi)];
+    render(); return;
+  }
+  if (a === "addlink"){
+    const p = pkgOf(id); if (!p || !state.canWrite) return;
+    const links = (p.links || []).concat([{ label:"Submitted set", url:"" }]);
+    patchPkg(id, { links }).then(() => {
+      render();
+      const inp = document.querySelector('[data-fk="link:' + id + ":" + (links.length - 1) + ':url"]');
+      if (inp) inp.focus();
+    });
+    return;
+  }
+  if (a === "dellink"){
+    const p = pkgOf(id); if (!p || !state.canWrite) return;
+    const links = (p.links || []).filter((_, i) => i !== Number(el.dataset.i));
+    patchPkg(id, { links }).then(render);
+    return;
+  }
+});
+
+function applyTheme(){
+  let t = null;
+  try { t = localStorage.getItem(THEME_KEY); } catch(_){}
+  const root = document.documentElement;
+  if (t === "light" || t === "dark") root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
+}
+
+/* ============================ boot ============================ */
+async function boot(){
+  applyTheme();
+  render();
+  const c = window.claude;
+  if (!c || typeof c.use !== "function"){ state.conn = "off"; render(); return; }
+  let db = null, dl = null;
+  try { db = await c.use("db"); } catch(_){}
+  try { dl = await c.use("downloads"); } catch(_){}
+  state.dl = dl;
+  if (!db){ state.conn = "off"; render(); return; }
+  state.db = db;
+
+  const onErr = err => {
+    state.conn = "bad";
+    if (err && (err.code === "revoked" || err.code === "not_granted")) state.canWrite = false;
+    render();
+  };
+  db.collection("projects").onSnapshot(snap => {
+    state.projects = snap.docs.map(d => Object.assign({ id:d.id }, d.data()));
+    state.conn = "on"; render();
+  }, onErr);
+  db.collection("packages").onSnapshot(snap => {
+    state.packages = snap.docs.map(d => Object.assign({ id:d.id }, d.data()));
+    state.conn = "on"; render();
+  }, onErr);
+}
+boot();
+})();
+</script>

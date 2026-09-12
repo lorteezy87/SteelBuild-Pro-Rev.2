@@ -20,7 +20,7 @@
 | Signup clickwrap | Landing checkbox + AuthContext gate (this PR) | Counsel review; remove DRAFT markers |
 | Stripe Tax hooks | `automatic_tax` + address/tax-id on checkout (this PR) | AZ TPT registration; enable Stripe Tax in dashboard; redeploy `stripe-billing` |
 | CI owns frontend deploy | Gated Vercel deploy; `vercel.json` `main=false` (restored this PR) | Branch protection (GitHub Team); scoped `VERCEL_TOKEN` |
-| Supabase drift check | `npm run supabase:drift` + opt-in CI job (this PR) | Set `SUPABASE_ACCESS_TOKEN` + `SUPABASE_DRIFT_ENABLED=true` |
+| Supabase drift check | `npm run supabase:drift` + mandatory CI job + reviewed shared-project ownership manifest | Keep `SUPABASE_ACCESS_TOKEN` + `SUPABASE_PROJECT_REF` configured; resolve manifest blockers |
 | Dead edge fn delete helper | `npm run supabase:delete-deprecated-fns` (this PR) | Run with `DRY_RUN=0` against prod |
 
 ## Still blocked on humans (cannot close from a PR alone)

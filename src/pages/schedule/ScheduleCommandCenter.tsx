@@ -9,7 +9,7 @@
  * mutations, and does not touch ScheduleGantt, reparentTasks, or any
  * schedule data logic. All data/state/mutations stay in Schedule.tsx.
  */
-import { useMemo, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { CalendarDays, CalendarRange, Download, FileSpreadsheet, ListPlus, Plus, Sparkles, Upload } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -19,26 +19,15 @@ import {
   useCommandSkin,
   Pill,
 } from "@/components/command";
-import type { KpiCellDef } from "@/components/command";
-import { buildScheduleSummary } from "./scheduleCommandCenter.derive";
 import type { TaskRecord, ScheduleSummary } from "./scheduleCommandCenter.derive";
-import { parseDateUTC } from "@/components/schedule/scheduleDateUtils";
-
-// ---------------------------------------------------------------------------
-// Date formatting — uses TBD for null per CLAUDE.md §22
-// ---------------------------------------------------------------------------
-
-function fmtDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "TBD";
-  const d = parseDateUTC(dateStr);
-  if (!d) return "TBD";
-  return d.toLocaleDateString("en-US", {
-    month: "numeric",
-    day: "numeric",
-    year: "2-digit",
-    timeZone: "UTC",
-  });
-}
+import {
+  buildScheduleHeroChips,
+  buildScheduleHeroStats,
+  buildScheduleKpiCells,
+  buildScheduleRiskReasons,
+  formatScheduleDate,
+} from "./scheduleCommandCenter.presentation";
+import { useScheduleCommandSummary } from "./useScheduleCommandSummary";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -113,76 +102,12 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
 
   // Compute summary from tasks if not pre-computed by caller.
   // Memoised so the caller doesn't have to worry about reference stability.
-  const computedSummary = useMemo(
-    () => (summaryProp ? summaryProp : buildScheduleSummary(tasks)),
-    [tasks, summaryProp],
-  );
+  const computedSummary = useScheduleCommandSummary(tasks, summaryProp);
   const s = computedSummary;
 
-  // ── Hero chips ────────────────────────────────────────────────────────────
-  const chips = [
-    { label: `${s.total} Tasks` },
-    { label: `${s.critical} Critical`, tone: s.critical ? ("danger" as const) : undefined },
-    { label: `${s.tbd} TBD`, tone: s.tbd ? ("warn" as const) : undefined },
-  ];
-
-  // ── Hero stats ────────────────────────────────────────────────────────────
-  const heroStats = [
-    { value: `${pctComplete !== undefined ? pctComplete : s.pctComplete}%`, label: "Complete" },
-    { value: projectHealth || "—", label: "Project Health" },
-  ];
-
-  // ── KPI strip ─────────────────────────────────────────────────────────────
-  const kpiCells: KpiCellDef[] = [
-    {
-      label: "Critical Path",
-      value: s.critical,
-      sublabel: "tasks",
-      tone: s.critical ? "danger" : "neutral",
-    },
-    {
-      label: "Activities",
-      value: s.activities,
-      sublabel: "leaf tasks",
-      tone: "neutral",
-    },
-    {
-      label: "At Risk",
-      value: s.atRisk,
-      sublabel: "open",
-      tone: s.atRisk ? "danger" : "neutral",
-    },
-    {
-      label: "Overdue",
-      value: s.overdue,
-      sublabel: "tasks",
-      tone: s.overdue ? "danger" : "neutral",
-    },
-    {
-      label: "In Lookahead",
-      value: s.inLookahead,
-      sublabel: "14 days",
-      tone: "info",
-    },
-    {
-      label: "% Complete",
-      value: `${s.pctComplete}%`,
-      sublabel: "activities",
-      tone: s.pctComplete >= 75 ? "good" : s.pctComplete >= 40 ? "warn" : "neutral",
-    },
-    {
-      label: "TBD / Unscheduled",
-      value: s.tbd,
-      sublabel: "tasks",
-      tone: s.tbd ? "warn" : "neutral",
-    },
-    {
-      label: "Milestones",
-      value: s.milestones,
-      sublabel: "total",
-      tone: "neutral",
-    },
-  ];
+  const chips = buildScheduleHeroChips(s);
+  const heroStats = buildScheduleHeroStats(s, pctComplete, projectHealth);
+  const kpiCells = buildScheduleKpiCells(s);
 
   // ── Scroll helper ─────────────────────────────────────────────────────────
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -221,7 +146,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
                   <div className="cmd-row__meta">
                     {t.phase || "—"}
                     {" · "}
-                    {fmtDate(t.start_date)} – {fmtDate(t.end_date)}
+                    {formatScheduleDate(t.start_date)} – {formatScheduleDate(t.end_date)}
                   </div>
                 </div>
                 {(t.resource_names || t.assigned_to) ? (
@@ -251,7 +176,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
                   <div className="cmd-row__num">{t.task_name || "Untitled milestone"}</div>
                   <div className="cmd-row__meta">
                     {t.wbs_code ? `${t.wbs_code} · ` : ""}
-                    {fmtDate(t.start_date)}
+                    {formatScheduleDate(t.start_date)}
                   </div>
                 </div>
                 <Pill tone={t.status === "Complete" ? "good" : "neutral"}>
@@ -268,16 +193,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
             <div className="cmd-row__meta">No significant schedule risks detected.</div>
           ) : (
             s.riskQueue.map((t) => {
-              // Derive a concise risk reason for display
-              const reasons: string[] = [];
-              const endD = parseDateUTC(t.end_date);
-              const now = new Date();
-              now.setUTCHours(0, 0, 0, 0);
-              if (endD && endD < now) reasons.push("Overdue");
-              if (!t.end_date && !t.start_date) reasons.push("TBD dates");
-              if (t.priority === "Critical") reasons.push("Critical priority");
-              if (t.blockers && String(t.blockers).trim()) reasons.push("Blocked");
-              if (!t.resource_names && !t.assigned_to) reasons.push("Unassigned");
+              const reasons = buildScheduleRiskReasons(t);
 
               return (
                 <div

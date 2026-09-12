@@ -18,6 +18,7 @@
  */
 
 import { parseCsv as parseCsvRaw } from "@/lib/importRfiCsv";
+import { readFileText } from "@/lib/textDecoding";
 import { PHASES } from "@/utils/phases";
 import type { ParsedMppTask } from "@/pages/schedule/types";
 
@@ -621,6 +622,16 @@ export async function readScheduleCsvFile(file: File): Promise<ParseScheduleCsvR
     file.type === "text/tab-separated-values";
   if (!looksCsv) throw new Error("File must be a CSV (or plain text).");
   if (file.size > 8 * 1024 * 1024) throw new Error("CSV exceeds 8 MB.");
-  const text = await file.text();
-  return parseScheduleCsv(text, { fileName: file.name });
+  // Decode by byte-order mark / UTF-16 sniff, never `file.text()` (UTF-8
+  // only): a UTF-16 export (Excel "Unicode text", P6) read as UTF-8 carries
+  // U+0000 into task names, and Postgres rejects the insert (22P05). UTF-32
+  // and binary files throw TextDecodingError, which the modal shows as-is.
+  const { text, nulsRemoved } = await readFileText(file);
+  const result = parseScheduleCsv(text, { fileName: file.name });
+  if (nulsRemoved > 0) {
+    result.warnings.push(
+      `Removed ${nulsRemoved} null character${nulsRemoved === 1 ? "" : "s"} from the file.`,
+    );
+  }
+  return result;
 }

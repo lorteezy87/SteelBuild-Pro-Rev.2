@@ -19,17 +19,37 @@ type SearchableTaskPickerProps = {
   tasks: PickerTask[];
   onSelect: (taskId: string) => void;
   placeholder?: string;
+  /**
+   * Turns the picker into a single-value field: the chosen task is shown as a
+   * clearable chip instead of the search box.
+   *
+   * Passing `value` (even as null) is what distinguishes the two modes. Without
+   * it the picker keeps its original "add another one" behaviour — the search
+   * box stays, and it hides itself when there is nothing to pick.
+   */
+  value?: string | null;
+  /** Called with null when the user clears the selection. Value mode only. */
+  onClear?: () => void;
+  /** Shown in the chip when `value` names a task that no longer exists. */
+  missingLabel?: string;
 };
 
 /**
- * Searchable task picker — replaces the plain <select> for adding
- * predecessors / successors. Filters tasks by name or WBS code as
- * the user types. Keyboard-navigable (↑ ↓ Enter Escape).
+ * Searchable task picker — replaces the plain <select> for choosing a parent,
+ * a predecessor, or a successor. Filters by name, WBS code or phase as the user
+ * types. Keyboard-navigable (↑ ↓ Enter Escape).
+ *
+ * Audit §4.1. Both add paths used a flat `<select>` listing every task on the
+ * project — unsearchable, and unusable on the live schedules this is for: 427
+ * options in one dropdown, ordered by whatever the query returned.
  */
 export default function SearchableTaskPicker({
   tasks,
   onSelect,
   placeholder = "+ Search tasks...",
+  value,
+  onClear,
+  missingLabel = "(task no longer exists)",
 }: SearchableTaskPickerProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -111,7 +131,75 @@ export default function SearchableTaskPicker({
     }
   };
 
-  if (tasks.length === 0) return null;
+  const isValueMode = value !== undefined;
+  const selected = isValueMode && value ? tasks.find((t) => t.id === value) : undefined;
+
+  // The original behaviour: nothing to pick, so don't offer the control. Only
+  // in add mode — a value-mode field must keep rendering, or clearing the last
+  // task on a project would make the parent field vanish along with its value.
+  if (tasks.length === 0 && !isValueMode) return null;
+
+  if (isValueMode && value) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 8,
+          padding: "6px 8px",
+          background: drawerPanelStrong,
+          border: `1px solid ${drawerBorder}`,
+          borderRadius: 6,
+          minWidth: 0,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            fontWeight: 600,
+            color: "var(--accent)",
+            flexShrink: 0,
+          }}
+        >
+          {selected?.wbs_code || "—"}
+        </span>
+        <span
+          title={selected?.task_name || missingLabel}
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            color: selected ? drawerText : drawerMutedText,
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontStyle: selected ? "normal" : "italic",
+          }}
+        >
+          {selected?.task_name || missingLabel}
+        </span>
+        <button
+          type="button"
+          onClick={() => onClear?.()}
+          title="Clear"
+          style={{
+            background: "none",
+            border: "none",
+            color: drawerMutedText,
+            cursor: "pointer",
+            fontSize: 12,
+            lineHeight: 1,
+            padding: 2,
+            flexShrink: 0,
+          }}
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div ref={wrapperRef} style={{ position: "relative", marginTop: 8 }}>

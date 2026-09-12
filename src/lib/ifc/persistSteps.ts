@@ -19,6 +19,34 @@ export const STORAGE_OBJECT_MAX_BYTES = 50 * MB;
 
 export type PersistStep = "extract" | "compress" | "upload" | "register";
 
+/**
+ * What the roster import's rollback actually achieved.
+ *
+ * `"clean"` is only ever claimed when every statement of the rollback returned
+ * without an error, because supabase-js does NOT throw on a failed statement —
+ * postgrest-js converts even a dead connection into a RESOLVED `{ error }`
+ * (that is where a bare "TypeError: Failed to fetch" comes from). So "the
+ * rollback didn't throw" is not evidence the project was restored, and an
+ * unverified rollback must be reported as `"dirty"`, never as unchanged.
+ */
+export type RosterRollback = "clean" | "dirty" | "unknown";
+
+/** Field importIfcRoster stamps on the error it rethrows. */
+export const ROSTER_ROLLBACK_FIELD = "rosterRollback";
+
+/**
+ * Read the rollback outcome off a save error. Anything unstamped is `"unknown"`
+ * — we do not know the project's state, and "absence is not evidence", so the
+ * caller must give the operator the cautious advice, not the reassuring one.
+ */
+export function readRosterRollback(err: unknown): RosterRollback {
+  if (err && typeof err === "object") {
+    const v = (err as Record<string, unknown>)[ROSTER_ROLLBACK_FIELD];
+    if (v === "clean" || v === "dirty") return v;
+  }
+  return "unknown";
+}
+
 export function formatMb(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
   const mb = bytes / MB;
@@ -47,8 +75,16 @@ function errorText(err: unknown): string {
 /**
  * One sentence saying which step of the save failed and what to do. The step
  * matters: "register" means the file is already in storage but the roster did
- * not land, and (since the importer inserts before it supersedes) the project's
- * previous model is still active.
+ * not land, so what the operator must do next depends entirely on whether the
+ * import's rollback is known to have succeeded.
+ *
+ * The wording is NEVER hand-waved across that fork. The previous text asserted
+ * "the project's model list was left unchanged" on every register failure and
+ * then, in the same breath, told the operator what to do "if the piece count
+ * looks doubled" — an affirmative claim about state nobody had checked,
+ * contradicted by its own next clause. On the failure it was most likely to be
+ * printed for (a dead connection: every rollback statement fails too) it stated
+ * the exact opposite of the truth.
  */
 export function describePersistFailure(step: PersistStep, err: unknown): string {
   const detail = errorText(err);
@@ -60,14 +96,35 @@ export function describePersistFailure(step: PersistStep, err: unknown): string 
     case "upload":
       return `Couldn't upload the model to storage: ${detail}`;
     case "register":
-      // Deliberately does NOT say "the previous model is still active". The
-      // import rolls itself back on failure, but a rollback can itself fail
-      // (the same timeout that broke the save), and the old wording sent
-      // operators into a retry loop that stacked a third roster on the project.
-      return `Model uploaded, but the piece roster didn't save: ${detail}. The project's model list was left unchanged — check the 3D tab before retrying, and if the piece count looks doubled, tell an admin rather than saving again.`;
+      // Still deliberately does NOT say "the previous model is still active" —
+      // that wording sent operators into a retry loop that stacked a third
+      // roster on the project. Only a VERIFIED rollback earns a sentence that
+      // claims the project is unchanged.
+      return readRosterRollback(err) === "clean"
+        ? `Model uploaded, but the piece roster didn't save: ${detail}. The import was rolled back and this project's roster is back the way it was, so it is safe to save again.`
+        // "didn't FINISH saving": a dead connection proves the client saw no
+        // response, not that the server applied nothing. And the next step is a
+        // retry, not an escalation — importIfcRoster's retire phase supersedes
+        // every other active IFC model and soft-deletes every ifc row that is
+        // not the new model's, so a save that completes collapses any leftovers
+        // back to one roster. There is no admin cleanup tool to send them to.
+        : `Model uploaded, but the piece roster didn't finish saving: ${detail}. The undo couldn't be confirmed, so this attempt may have left rows behind and the piece count can read high until a save completes. A completed save replaces every earlier roster — retry once you're back online, and if the count still looks wrong after one completes, tell an admin.`;
     default:
       return `Couldn't save the model: ${detail}`;
   }
+}
+
+/**
+ * Whether this failure may have left rows on the project.
+ *
+ * The save banner keeps calling the model "Previewing — not saved yet" on any
+ * non-running state, which is a second false claim once the roster write has
+ * started and its undo is unconfirmed. Retrying stays available either way —
+ * a completed save replaces every earlier roster, so it is the repair, not the
+ * hazard — but the banner has to stop saying nothing was written.
+ */
+export function persistLeftPartialWrite(step: PersistStep, err: unknown): boolean {
+  return step === "register" && readRosterRollback(err) !== "clean";
 }
 
 export interface RosterDiagnostics {

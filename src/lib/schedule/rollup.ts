@@ -18,7 +18,7 @@
  * a one-line change at the call site rather than a rewrite here.
  */
 
-export type PercentFn<T> = (item: T) => number;
+export type PercentFn<T> = (item: T) => number | null | undefined;
 export type WeightFn<T> = (item: T) => number | null | undefined;
 
 /**
@@ -32,6 +32,14 @@ export type WeightFn<T> = (item: T) => number | null | undefined;
  * is the only honest answer. Mixing the two — treating an undated child as
  * weight 1 alongside a 60-day sibling — would silently near-erase it instead,
  * which is a different lie from the one being fixed.
+ *
+ * Items whose percent is **unknown** are excluded from the average entirely,
+ * rather than counted as 0. `percentOf` returning null says the caller does not
+ * know how far along that task is — most often a task just reopened from
+ * Complete, whose remaining work nobody has restated yet (§4.3). Averaging it
+ * in as zero would drag the roll-up down by asserting no work has been done on
+ * it, which is the same "absence is not evidence" error the weighting fixed.
+ * When no item has a known percent the result is null: nothing to average.
  */
 export function weightedPercentComplete<T>(
   items: readonly T[] | null | undefined,
@@ -43,9 +51,12 @@ export function weightedPercentComplete<T>(
   let weightedSum = 0;
   let totalWeight = 0;
   let plainSum = 0;
+  let known = 0;
 
   for (const item of items) {
     const pct = clampPercent(percentOf(item));
+    if (pct === null) continue;
+    known += 1;
     plainSum += pct;
 
     const weight = Number(weightOf(item));
@@ -55,8 +66,9 @@ export function weightedPercentComplete<T>(
     }
   }
 
+  if (known === 0) return null;
   if (totalWeight > 0) return Math.round(weightedSum / totalWeight);
-  return Math.round(plainSum / items.length);
+  return Math.round(plainSum / known);
 }
 
 /**
@@ -80,8 +92,15 @@ export function weightedCoverage<T>(
   return { weighted, total: items.length };
 }
 
-function clampPercent(value: unknown): number {
+/**
+ * Clamp to 0-100, or null when there is no number to clamp.
+ *
+ * Null in, null out — the distinction between "0% done" and "we don't know" is
+ * the whole reason this returns a nullable.
+ */
+function clampPercent(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
   const n = Number(value);
-  if (!Number.isFinite(n)) return 0;
+  if (!Number.isFinite(n)) return null;
   return Math.max(0, Math.min(100, n));
 }

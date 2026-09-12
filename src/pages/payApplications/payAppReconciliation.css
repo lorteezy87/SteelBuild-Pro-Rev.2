@@ -1,0 +1,11 @@
+.payapp-checks { margin: 0 0 16px; padding: 16px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--bg-surface-secondary); color: var(--text-primary); font-size: 12px; overflow-wrap: anywhere; }
+.payapp-checks-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.payapp-checks h3 { margin: 0; font-size: 15px; }
+.payapp-checks button { padding: 6px 10px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--bg-page); color: var(--text-primary); cursor: pointer; }
+.payapp-checks button:disabled { opacity: .5; cursor: wait; }
+.payapp-checks-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.payapp-checks p { margin: 8px 0 0; color: var(--text-secondary); }
+.payapp-checks ul { padding-left: 18px; margin: 8px 0 0; color: var(--text-secondary); }
+.payapp-checks li + li { margin-top: 4px; }
+.payapp-checks .payapp-checks-note { margin-top: 14px; font-size: 11px; color: var(--text-muted); }
+@media (max-width: 700px) { .payapp-checks-columns { grid-template-columns: minmax(0, 1fr); } }

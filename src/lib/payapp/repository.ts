@@ -14,6 +14,14 @@ import type { ContractContext, PayApplication, PayApplicationLine } from "./type
 const from = (table: string): any => (supabase.from as unknown as (t: string) => any)(table);
 const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
+/** Fresh project contract evidence, independent of the project switcher's local cache. */
+export async function getPayAppContract(projectId: string): Promise<{ original_contract_value: number | null; retainage_percent: number | null }> {
+  const { data, error } = await from("projects").select("original_contract_value, retainage_percent").eq("id", projectId).eq("is_deleted", false).single();
+  if (error) throw error;
+  if (!data) throw new Error("Current project contract is unavailable");
+  return data;
+}
+
 export async function listPayApplications(projectId: string): Promise<PayApplication[]> {
   const { data, error } = await from("pay_applications")
     .select("*").eq("project_id", projectId).eq("is_deleted", false)
@@ -28,14 +36,37 @@ export async function getPayApplication(id: string): Promise<PayApplication | nu
   return (data as PayApplication) || null;
 }
 
-export async function listLines(payApplicationId: string): Promise<PayApplicationLine[]> {
-  const { data, error } = await from("pay_application_lines")
-    .select("*").eq("pay_application_id", payApplicationId).order("sort_order", { ascending: true });
-  if (error) throw error;
-  return (data || []) as PayApplicationLine[];
+/** Read until an empty page, advancing by received rows (server caps may be lower). */
+async function readAll<T>(page: (start: number, end: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  const rows: T[] = [];
+  for (;;) {
+    const { data, error } = await page(rows.length, rows.length + 499);
+    if (error) throw error;
+    if (!data) throw new Error("Pay application evidence was not returned");
+    if (!data.length) return rows;
+    rows.push(...data);
+  }
 }
 
-interface SovLineLike { id?: string; line_item_number?: string | null; description?: string | null; scheduled_value?: number | string | null }
+export async function listLines(payApplicationId: string): Promise<PayApplicationLine[]> {
+  return readAll<PayApplicationLine>((start, end) => from("pay_application_lines")
+    .select("*").eq("pay_application_id", payApplicationId)
+    .order("sort_order", { ascending: true }).order("id", { ascending: true }).range(start, end));
+}
+
+export interface SovLineLike { id: string; line_item_number?: string | null; description?: string | null; scheduled_value: number | string | null }
+export async function listSovItems(projectId: string): Promise<SovLineLike[]> {
+  return readAll<SovLineLike>((start, end) => from("sov_items")
+    .select("id, line_item_number, description, scheduled_value").eq("project_id", projectId).eq("is_deleted", false)
+    .order("line_item_number", { ascending: true }).order("id", { ascending: true }).range(start, end));
+}
+
+interface PayAppChangeOrder { id: string; status: string | null; co_amount: number | null }
+export async function listPayAppChangeOrders(projectId: string): Promise<PayAppChangeOrder[]> {
+  return readAll<PayAppChangeOrder>((start, end) => from("change_orders")
+    .select("id, status, co_amount").eq("project_id", projectId).eq("is_deleted", false)
+    .order("id", { ascending: true }).range(start, end));
+}
 
 /**
  * Create the next pay application for a project: drafts G703 lines from the SOV,

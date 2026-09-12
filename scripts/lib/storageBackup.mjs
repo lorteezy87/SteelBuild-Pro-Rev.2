@@ -1,4 +1,15 @@
-const REQUIRED_BUCKETS = ["app-files", "email-attachments"];
+import { isAbsolute } from "node:path";
+
+export function rcloneRetryFlags(args) {
+  const sourceRead = args[1]?.startsWith("supabase:") && (
+    ["size", "lsjson"].includes(args[0]) ||
+    (args[0] === "copy" && isAbsolute(args[2] ?? ""))
+  );
+  // Read retries cannot create extra retained versions. Destination writes remain single-attempt.
+  return ["--retries", "1", "--low-level-retries", sourceRead ? "3" : "1"];
+}
+
+const REQUIRED_BUCKETS = ["app-files", "email-attachments", "sheets-files"];
 const REQUIRED_ENV_KEYS = [
   "OFFSITE_RCLONE_CONFIG_B64",
   "OFFSITE_ROOT",
@@ -35,7 +46,7 @@ function isReservedRcloneFlagEnv(key) {
 export function createRcloneChildEnvironment(environment) {
   const childEnvironment = { ...environment };
   for (const key of Object.keys(childEnvironment)) {
-    if (REQUIRED_ENV_KEYS.includes(key.toUpperCase()) || isReservedRcloneFlagEnv(key)) {
+    if (REQUIRED_ENV_KEYS.includes(key.toUpperCase()) || isReservedRcloneFlagEnv(key) || /^rclone_config_/i.test(key)) {
       delete childEnvironment[key];
     }
   }
@@ -64,13 +75,12 @@ export function createStorageBackupPlan({ destinationRoot, timestamp }) {
   return REQUIRED_BUCKETS.map((bucket) => ({
     bucket,
     source: `supabase:${bucket}`,
-    snapshot: `${normalizedRoot}/snapshots/${timestamp}/${bucket}`,
     current: `${normalizedRoot}/current/${bucket}`,
   }));
 }
 
 export function decodeOffsiteRcloneConfig(encodedConfig) {
-  const normalizedConfig = encodedConfig?.trim() ?? "";
+  const normalizedConfig = encodedConfig?.replace(/\s/g, "") ?? "";
   if (
     !normalizedConfig
     || normalizedConfig.length % 4 !== 0
@@ -126,142 +136,5 @@ export function validateStorageBackupEnvironment(environment) {
       provider: "supabase-storage",
       projectRef: expectedProjectRef,
     },
-  };
-}
-
-function assertStatsMatch(bucket, label, source, destination) {
-  if (source.count !== destination.count || source.bytes !== destination.bytes) {
-    throw new Error(
-      `${bucket} ${label} verification failed: source=${source.count} objects/${source.bytes} bytes, destination=${destination.count} objects/${destination.bytes} bytes`,
-    );
-  }
-}
-
-export function assertBackupVerified({ bucket, source, snapshot, current }) {
-  assertStatsMatch(bucket, "snapshot", source, snapshot);
-  assertStatsMatch(bucket, "current", source, current);
-}
-
-const TRANSFER_FLAGS = [
-  "--metadata",
-  "--fast-list",
-  "--transfers",
-  "8",
-  "--checkers",
-  "16",
-  "--stats",
-  "30s",
-  "--stats-one-line",
-];
-
-export function createRcloneBackupOperations(item) {
-  return [
-    {
-      label: `${item.bucket} snapshot copy`,
-      args: ["copy", item.source, item.snapshot, "--immutable", ...TRANSFER_FLAGS],
-    },
-    {
-      label: `${item.bucket} current sync`,
-      args: ["sync", item.source, item.current, ...TRANSFER_FLAGS],
-    },
-    {
-      label: `${item.bucket} snapshot check`,
-      args: ["check", item.source, item.snapshot, "--size-only"],
-    },
-    {
-      label: `${item.bucket} current check`,
-      args: ["check", item.source, item.current, "--size-only"],
-    },
-  ];
-}
-
-function parseRcloneSize(output, remote) {
-  let stats;
-  try {
-    stats = JSON.parse(output);
-  } catch {
-    throw new Error(`rclone size returned invalid JSON for ${remote}`);
-  }
-
-  if (
-    !Number.isSafeInteger(stats.count)
-    || stats.count < 0
-    || !Number.isSafeInteger(stats.bytes)
-    || stats.bytes < 0
-  ) {
-    throw new Error(`rclone size returned invalid object statistics for ${remote}`);
-  }
-
-  return { count: stats.count, bytes: stats.bytes };
-}
-
-function assertRequiredPlanCoverage(plan) {
-  const buckets = plan.map(({ bucket }) => bucket);
-  if (
-    buckets.length !== REQUIRED_BUCKETS.length
-    || REQUIRED_BUCKETS.some((bucket) => !buckets.includes(bucket))
-  ) {
-    throw new Error(`Storage backup plan must cover: ${REQUIRED_BUCKETS.join(", ")}`);
-  }
-}
-
-function createVerifiedSourceIdentity(source) {
-  if (
-    source?.provider !== "supabase-storage"
-    || !/^[a-z0-9]{20}$/.test(source.projectRef ?? "")
-  ) {
-    throw new Error("Verified Storage backup manifest requires a validated Supabase source identity");
-  }
-  return {
-    provider: "supabase-storage",
-    projectRef: source.projectRef,
-  };
-}
-
-async function readRemoteStats(remote, execute) {
-  const output = await execute(
-    ["size", remote, "--json"],
-    { captureOutput: true, label: `${remote} size` },
-  );
-  return parseRcloneSize(output, remote);
-}
-
-export async function executeStorageBackupPlan({
-  plan,
-  timestamp,
-  completedAt,
-  source,
-  execute,
-}) {
-  const verifiedSource = createVerifiedSourceIdentity(source);
-  assertRequiredPlanCoverage(plan);
-  const buckets = [];
-
-  for (const item of plan) {
-    for (const operation of createRcloneBackupOperations(item)) {
-      await execute(operation.args, { captureOutput: false, label: operation.label });
-    }
-
-    const source = await readRemoteStats(item.source, execute);
-    const snapshot = await readRemoteStats(item.snapshot, execute);
-    const current = await readRemoteStats(item.current, execute);
-    assertBackupVerified({ bucket: item.bucket, source, snapshot, current });
-
-    buckets.push({
-      bucket: item.bucket,
-      objects: source.count,
-      bytes: source.bytes,
-      snapshot: item.snapshot,
-      current: item.current,
-    });
-  }
-
-  return {
-    schemaVersion: 1,
-    status: "verified",
-    backupTimestamp: timestamp,
-    completedAt: completedAt ?? new Date().toISOString(),
-    source: verifiedSource,
-    buckets,
   };
 }

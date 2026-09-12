@@ -176,15 +176,15 @@ describe("functions.invoke", () => {
   });
 
   describe("number sequencing (rpc path)", () => {
-    it("returns default number 1 when project_id or record_type is missing", async () => {
+    it("fails closed when project_id or record_type is missing", async () => {
       await expect(
         functions.invoke("numberSequence", { project_id: "p1" }),
-      ).resolves.toEqual({ data: { number: 1 } });
+      ).rejects.toThrow(/Invalid numberSequence payload/i);
       expect(supabase.rpc).not.toHaveBeenCalled();
 
       await expect(
         functions.invoke("secureNumberSequence", { record_type: "rfi" }),
-      ).resolves.toEqual({ data: { number: 1 } });
+      ).rejects.toThrow(/Invalid numberSequence payload/i);
       expect(supabase.rpc).not.toHaveBeenCalled();
     });
 
@@ -196,13 +196,13 @@ describe("functions.invoke", () => {
 
       await expect(
         functions.invoke("numberSequence", {
-          project_id: "proj-1",
+          project_id: "11111111-1111-4111-8111-111111111111",
           record_type: "rfi",
         }),
       ).resolves.toEqual({ data: { number: 42 } });
 
       expect(supabase.rpc).toHaveBeenCalledWith("get_next_sequence_number", {
-        p_project_id: "proj-1",
+        p_project_id: "11111111-1111-4111-8111-111111111111",
         p_record_type: "rfi",
       });
       expect(supabase.functions.invoke).not.toHaveBeenCalled();

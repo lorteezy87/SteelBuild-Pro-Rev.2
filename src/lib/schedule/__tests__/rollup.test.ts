@@ -109,3 +109,69 @@ describe("weightedCoverage", () => {
     expect(weightedCoverage(null, taskDurationDays)).toEqual({ weighted: 0, total: 0 });
   });
 });
+
+/**
+ * Cover for §4.3 — a percent the caller does not know is excluded from the
+ * average, not folded in as zero.
+ *
+ * This became reachable when reopening a Complete task started clearing
+ * percent_complete to null (see taskStatus.reconcileStatusPercent): the
+ * transition says the task is no longer done, but nothing in it says how much
+ * remains. Counting that as 0 would drag every roll-up above it down by
+ * asserting no work had ever been done on the task.
+ */
+describe("weightedPercentComplete — when a percent is unknown", () => {
+  /** The honest accessor: null rather than 0 when nothing is recorded. */
+  const pctOrNull = (t: Row): number | null =>
+    t.status === "Complete"
+      ? 100
+      : t.percent_complete === null || t.percent_complete === undefined
+        ? null
+        : Math.max(0, Math.min(100, Number(t.percent_complete)));
+
+  const unknown = (days: number): Row => ({ ...task(days, 0), percent_complete: undefined });
+
+  it("skips the unknown item instead of averaging it in as 0", () => {
+    // One 10-day task at 80%, one 10-day task with no percent recorded.
+    // Counting the unknown as 0 would say 40%.
+    const rows = [task(10, 80), unknown(10)];
+    expect(weightedPercentComplete(rows, pctOrNull, taskDurationDays)).toBe(80);
+  });
+
+  it("drops the unknown from the weight total too, not just the numerator", () => {
+    // A 1-day task at 100% beside an unknown 60-day task is 100% of what is
+    // known — not 2%, which would be the answer if the 60 days stayed in the
+    // denominator carrying an implied zero.
+    const rows = [task(1, 100), unknown(60)];
+    expect(weightedPercentComplete(rows, pctOrNull, taskDurationDays)).toBe(100);
+  });
+
+  it("returns null when nothing in the set has a known percent", () => {
+    // Nothing to average. The caller decides what that means rather than being
+    // handed a 0 that reads as "no progress".
+    expect(weightedPercentComplete([unknown(5), unknown(10)], pctOrNull, taskDurationDays)).toBeNull();
+  });
+
+  it("excludes the unknown from the unweighted fallback as well", () => {
+    // No item carries a duration, so this is the plain-mean path — the unknown
+    // must not quietly become a third data point worth 0.
+    const rows: Row[] = [
+      { percent_complete: 60 },
+      { percent_complete: 40 },
+      { percent_complete: undefined },
+    ];
+    expect(weightedPercentComplete(rows, pctOrNull, taskDurationDays)).toBe(50);
+  });
+
+  it("still counts a real zero, which is not the same thing", () => {
+    const rows = [task(10, 80), task(10, 0)];
+    expect(weightedPercentComplete(rows, pctOrNull, taskDurationDays)).toBe(40);
+  });
+
+  it("leaves an accessor that never returns null behaving exactly as before", () => {
+    // The existing callers' behaviour is unchanged; only a null-returning
+    // accessor opts into the new exclusion.
+    const rows = [task(1, 100), task(60, 0)];
+    expect(weightedPercentComplete(rows, pct, taskDurationDays)).toBe(2);
+  });
+});

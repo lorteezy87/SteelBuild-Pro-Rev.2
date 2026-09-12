@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CLOSED_SUBMITTAL_STATUSES,
+  buildCurrentRevisionIdMap,
   buildCurrentRevisionMap,
   buildDrawingKpis,
   buildSetPackages,
@@ -471,11 +472,11 @@ describe("buildApprovalMatrixRows", () => {
     const rows = buildApprovalMatrixRows(sets, subs);
     expect(rows).toHaveLength(2); // s3 deleted → excluded
     const s1 = rows.find((r) => r.id === "s1");
-    expect(s1.submittals).toHaveLength(2);
-    expect(s1.latestSubmittal.id).toBe("b"); // round 2 wins
+    expect(s1?.submittals).toHaveLength(2);
+    expect(s1?.latestSubmittal?.id).toBe("b"); // round 2 wins
     const s2 = rows.find((r) => r.id === "s2");
-    expect(s2.submittals).toHaveLength(0); // its only submittal is deleted
-    expect(s2.latestSubmittal).toBeNull();
+    expect(s2?.submittals).toHaveLength(0); // its only submittal is deleted
+    expect(s2?.latestSubmittal).toBeNull();
   });
 
   it("filters by search across set name, discipline, and submittal number", () => {
@@ -635,6 +636,55 @@ describe("buildCurrentRevisionMap (authoritative current-revision lookup)", () =
       { revision_code: "2", version_number: 2, is_current: true },
     ]);
     expect(map.size).toBe(0);
+  });
+});
+
+// The Approval Matrix's Last sent line compares each transmittal item's
+// revision id with this map, so here the id (not the code) must be right.
+describe("buildCurrentRevisionIdMap (drawing_id → current revision id)", () => {
+  it("keeps only is_current=true rows", () => {
+    const map = buildCurrentRevisionIdMap([
+      { id: "r1", drawing_id: "d1", version_number: 1, is_current: false },
+      { id: "r2", drawing_id: "d1", version_number: 2, is_current: true },
+      { id: "r3", drawing_id: "d2", version_number: 1, is_current: true },
+      { id: "r4", drawing_id: "d3", version_number: 1 },
+    ]);
+    expect([...map.entries()]).toEqual([["d1", "r2"], ["d2", "r3"]]);
+  });
+
+  // Against the DB's one-current-row index, only a stale or merged read can
+  // do this. Both orders are checked, so "last row wins" can't pass.
+  it.each([
+    ["listed second", [0, 1]],
+    ["listed first", [1, 0]],
+  ])("picks the higher version when two rows are current (the higher one %s)", (_label, order) => {
+    const rows = [
+      { id: "older", drawing_id: "d1", version_number: 2, is_current: true, created_at: "2026-08-05T00:00:00Z" },
+      { id: "newer", drawing_id: "d1", version_number: 3, is_current: true, created_at: "2026-08-01T00:00:00Z" },
+    ];
+    expect(buildCurrentRevisionIdMap(order.map((i) => rows[i])).get("d1")).toBe("newer");
+  });
+
+  it("breaks a version tie on the later created_at, then the larger id, never on row order", () => {
+    const pick = (rows: Array<Record<string, unknown>>) => buildCurrentRevisionIdMap(rows).get("d1");
+    const early = { id: "b", drawing_id: "d1", version_number: 2, is_current: true, created_at: "2026-08-01T00:00:00Z" };
+    const late = { id: "a", drawing_id: "d1", version_number: 2, is_current: true, created_at: "2026-08-02T00:00:00Z" };
+    expect(pick([early, late])).toBe("a");
+    expect(pick([late, early])).toBe("a");
+    const x = { ...early, id: "x" };
+    const y = { ...early, id: "y" };
+    expect(pick([x, y])).toBe("y");
+    expect(pick([y, x])).toBe("y");
+  });
+
+  it("skips rows missing an id or a drawing_id, and tolerates null/undefined", () => {
+    expect(buildCurrentRevisionIdMap(null).size).toBe(0);
+    expect(buildCurrentRevisionIdMap(undefined).size).toBe(0);
+    expect(buildCurrentRevisionIdMap([
+      { drawing_id: "d1", version_number: 9, is_current: true },
+      { id: "r1", version_number: 9, is_current: true },
+      { id: "r2", drawing_id: "d2", version_number: 1, is_current: true },
+    ])).toEqual(new Map([["d2", "r2"]]));
   });
 });
 
@@ -833,8 +883,8 @@ describe("buildApprovalMatrixRows — governing submittal", () => {
       { id: "draft", drawing_set_ids: ["s1"], status: "Draft", round_number: 1, submitted_date: null },
       { id: "live", drawing_set_ids: ["s1"], status: "Under Review", round_number: 1, ball_in_court: "EOR", submitted_date: "2026-01-05", required_date: "2026-01-20" },
     ] as any);
-    expect(rows[0].latestSubmittal.id).toBe("live");
-    expect(rows[0].latestSubmittal.ball_in_court).toBe("EOR");
+    expect(rows[0]?.latestSubmittal?.id).toBe("live");
+    expect(rows[0]?.latestSubmittal?.ball_in_court).toBe("EOR");
   });
 
   it("does not let a Void submittal govern and render a green Closed", () => {
@@ -842,8 +892,8 @@ describe("buildApprovalMatrixRows — governing submittal", () => {
       { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 9 },
       { id: "live", drawing_set_ids: ["s1"], status: "Submitted", round_number: 1, submitted_date: "2026-01-05", required_date: "2000-01-01" },
     ] as any);
-    expect(rows[0].latestSubmittal.id).toBe("live");
-    expect(rows[0].due.overdue).toBe(true);
+    expect(rows[0]?.latestSubmittal?.id).toBe("live");
+    expect(rows[0]?.due.overdue).toBe(true);
   });
 
   it("still governs by the most recent submittal among usable ones", () => {
@@ -851,7 +901,7 @@ describe("buildApprovalMatrixRows — governing submittal", () => {
       { id: "older", drawing_set_ids: ["s1"], status: "Submitted", submitted_date: "2026-01-01" },
       { id: "newer", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-03-01" },
     ] as any);
-    expect(rows[0].latestSubmittal.id).toBe("newer");
+    expect(rows[0]?.latestSubmittal?.id).toBe("newer");
   });
 
   it("falls back to an unusable submittal rather than showing none linked", () => {

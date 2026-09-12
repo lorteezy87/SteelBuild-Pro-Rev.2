@@ -1,6 +1,7 @@
 import React from "react";
 import * as Sentry from "@sentry/react";
 import { logError } from "@/lib/telemetry";
+import { isStaleChunkError } from "@/lib/lazyRetry";
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -27,6 +28,9 @@ export default class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      // React.lazy retains a rejected import. Resetting this boundary cannot
+      // retry that request; a deliberate reload creates a fresh module graph.
+      const needsReload = isStaleChunkError(this.state.error);
       return (
         <div className="sbd-card" style={{
           padding: 24, textAlign: "center",
@@ -48,7 +52,9 @@ export default class ErrorBoundary extends React.Component {
           </div>
           <button
             className="sbd-btn"
-            onClick={() => this.setState({ hasError: false, error: null })}
+            onClick={() => needsReload
+              ? window.location.reload()
+              : this.setState({ hasError: false, error: null })}
             style={{
               padding: "6px 16px", borderRadius: 4,
               border: "1px solid var(--border-default)",
@@ -57,7 +63,7 @@ export default class ErrorBoundary extends React.Component {
               cursor: "pointer", textTransform: "uppercase"
             }}
           >
-            Retry
+            {needsReload ? "Reload page" : "Retry"}
           </button>
         </div>
       );

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { File as NodeFile } from "node:buffer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -9,14 +10,18 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import { supabase } from "@/lib/supabase";
+import { normalizeThrownQueryError } from "@/lib/postgrestErrors";
+import { classifyReportedError, mutationReportingInput } from "@/lib/sentry/reportedErrors";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import { fetchPieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceRepository";
 import type { PieceIntelligenceSnapshot } from "@/lib/pieceControl/pieceIntelligenceTypes";
 import { setPieceHold } from "@/lib/pieceControl/productionRepository";
 import {
+  archivePieceLots,
   fetchPieceImportBatches,
   fetchPieceImportRows,
   fetchPieceRegister,
+  stagePieceImportBatch,
   type PieceRegisterRow,
 } from "@/lib/pieceControl/repository";
 import PieceRegister from "../../PieceRegister";
@@ -1805,4 +1810,209 @@ describe("Piece Register command shell", () => {
       screen.getByRole("button", { name: "Apply, assign WP, and link drawings" }),
     ).toBeEnabled();
   });
+
+  // Sentry JAVASCRIPT-REACT-2C: a UTF-16 export decoded as UTF-8 staged
+  // p_i_e_c_e_m_a_r_k keys and U+0000 into jsonb p_rows (Postgres 22P05).
+  it("stages a UTF-16LE CSV without a BOM as its real rows", async () => {
+    vi.mocked(stagePieceImportBatch).mockResolvedValue({ batch_id: "batch-9" });
+    const csv = "piece_mark,quantity,profile\r\nB1,2,W12X26\r\nC2,1,W10X33\r\n";
+    const jsonNulEscape = `${String.fromCharCode(92)}u0000`;
+    renderPieceRegister();
+    fireEvent.click(screen.getByRole("button", { name: "Imports" }));
+
+    fireEvent.change(screen.getByLabelText("File"), {
+      target: { files: [importFileFromBytes(utf16le(csv), "tekla-export.csv")] },
+    });
+
+    expect(await screen.findByText("2 rows ready to stage")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stage for review" }));
+
+    await waitFor(() => expect(stagePieceImportBatch).toHaveBeenCalledTimes(1));
+    const [projectId, sourceType, sourceName, rows] =
+      vi.mocked(stagePieceImportBatch).mock.calls[0];
+    expect([projectId, sourceType, sourceName]).toEqual([
+      "project-1",
+      "csv",
+      "tekla-export.csv",
+    ]);
+    expect(rows).toEqual([
+      { piece_mark: "B1", quantity: "2", profile: "W12X26" },
+      { piece_mark: "C2", quantity: "1", profile: "W10X33" },
+    ]);
+    expect(JSON.stringify(rows)).not.toContain(jsonNulEscape);
+  });
+
+  it("tells the user when null characters were removed from an import file", async () => {
+    const encoder = new TextEncoder();
+    const bytes = new Uint8Array([
+      ...encoder.encode("piece_mark,quantity,profile\r\nB1"),
+      0,
+      ...encoder.encode(",2,W12X26\r\nC2,1,W10X33\r\n"),
+      0, 0, 0, 0,
+    ]);
+    renderPieceRegister();
+    fireEvent.click(screen.getByRole("button", { name: "Imports" }));
+
+    fireEvent.change(screen.getByLabelText("File"), {
+      target: { files: [importFileFromBytes(bytes, "pieces.csv")] },
+    });
+
+    const notice = await screen.findByText(
+      "Removed 5 null characters from pieces.csv. Check the staged rows before applying.",
+    );
+    expect(notice).toHaveAttribute("role", "status");
+    expect(screen.getByText("2 rows ready to stage")).toBeInTheDocument();
+  });
+
+  // Sentry JAVASCRIPT-REACT-2D: a held piece in the selection failed the whole
+  // archive with P0001 behind a generic toast.
+  it("excludes a held piece from archive and names it", async () => {
+    vi.mocked(archivePieceLots).mockResolvedValue({ archived: 1 });
+    const dialog = await openArchiveDialog(
+      [
+        { ...pieceRegisterRow("p1"), lifecycle_status: "not_started" },
+        {
+          ...pieceRegisterRow("p2"),
+          lifecycle_status: "not_started",
+          on_hold: true,
+          on_hold_reason: "RFI 12",
+        },
+      ],
+      ["P1", "P2"],
+    );
+
+    expect(within(dialog).getByRole("heading", { name: "Archive 1 piece?" }))
+      .toBeInTheDocument();
+    expect(within(dialog).getByRole("status")).toHaveTextContent(
+      "Skipped — can't be archived: P2 lot A (held)",
+    );
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Duplicate import" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Type ARCHIVE 1 PIECE to confirm/), {
+      target: { value: "ARCHIVE 1 PIECE" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Archive pieces" }));
+
+    await waitFor(() =>
+      expect(archivePieceLots).toHaveBeenCalledWith(
+        "project-1",
+        ["p1"],
+        "ARCHIVE 1 PIECE",
+        "Duplicate import",
+      ),
+    );
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("1 piece archived, 1 skipped"),
+    );
+  });
+
+  it("blocks archive when every selected piece is held", async () => {
+    const dialog = await openArchiveDialog(
+      [{ ...pieceRegisterRow("p2"), lifecycle_status: "not_started", on_hold: true }],
+      ["P2"],
+    );
+
+    expect(within(dialog).getByText("None of the selected pieces can be archived."))
+      .toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Duplicate import" },
+    });
+    // Type whatever phrase the dialog asks for; it must still refuse.
+    const confirmation = within(dialog).getByLabelText(/to confirm/);
+    fireEvent.change(confirmation, {
+      target: { value: confirmation.getAttribute("placeholder") },
+    });
+    const archive = within(dialog).getByRole("button", { name: "Archive pieces" });
+    expect(archive).toBeDisabled();
+    fireEvent.click(archive);
+    expect(archivePieceLots).not.toHaveBeenCalled();
+  });
+
+  // T14 — Sentry JAVASCRIPT-REACT-2D: this screen explains the archive guards,
+  // so it opts in to reporting them as expected (info level), not as crashes.
+  it("opts the archive mutation in to expected-guard reporting", async () => {
+    const guard = normalizeThrownQueryError({
+      code: "P0001",
+      message: "Pieces in a canonically released work package cannot be archived",
+    });
+    vi.mocked(archivePieceLots).mockRejectedValue(guard);
+    vi.mocked(fetchPieceRegister).mockResolvedValue([
+      { ...pieceRegisterRow("p1"), lifecycle_status: "not_started" },
+    ]);
+    const { queryClient } = renderPieceRegister("/PieceRegister?view=register");
+    fireEvent.click(await screen.findByLabelText("Select P1 lot A"));
+    fireEvent.click(screen.getByRole("button", { name: /Archive selected/i }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Duplicate import" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Type ARCHIVE 1 PIECE to confirm/), {
+      target: { value: "ARCHIVE 1 PIECE" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Archive pieces" }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Pieces in a work package released for fabrication can't be archived. Deselect them, then try again.",
+      ),
+    );
+    const archive = queryClient
+      .getMutationCache()
+      .getAll()
+      .find((mutation) => mutation.meta?.action === "pieceRegister.archive");
+    if (!archive) throw new Error("The archive mutation was never built.");
+    const { hasLocalHandler, expectedErrors } = mutationReportingInput(archive);
+    const classify = (error: Error) =>
+      classifyReportedError(error, {
+        source: "mutation",
+        rawIsError: true,
+        hasLocalHandler,
+        expectedErrors,
+      });
+    expect(classify(guard)).toEqual({
+      verdict: "expected",
+      reason: "matched-rule",
+      ruleId: "piece-archive.canonical-release",
+      code: "P0001",
+    });
+    // Consistent data never reaches the production-history guard, so a hit is
+    // drift and stays error-level even on this opted-in screen.
+    expect(
+      classify(
+        normalizeThrownQueryError({
+          code: "P0001",
+          message: "Pieces with production history cannot be archived",
+        }),
+      ),
+    ).toEqual({ verdict: "unexpected", reason: "no-rule-match", code: "P0001" });
+  });
 });
+
+async function openArchiveDialog(
+  rows: PieceRegisterRow[],
+  marks: string[],
+): Promise<HTMLElement> {
+  vi.mocked(fetchPieceRegister).mockResolvedValue(rows);
+  renderPieceRegister("/PieceRegister?view=register");
+  for (const mark of marks) {
+    fireEvent.click(await screen.findByLabelText(`Select ${mark} lot A`));
+  }
+  fireEvent.click(screen.getByRole("button", { name: /Archive selected/i }));
+  return screen.getByRole("alertdialog");
+}
+
+function utf16le(text: string): Uint8Array {
+  const bytes = new Uint8Array(text.length * 2);
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    bytes[2 * index] = unit & 0xff;
+    bytes[2 * index + 1] = unit >> 8;
+  }
+  return bytes;
+}
+
+// jsdom 25's File has no arrayBuffer()/text(); Node's File is a spec Blob.
+function importFileFromBytes(bytes: Uint8Array, name: string): File {
+  return new NodeFile([bytes], name) as unknown as File;
+}

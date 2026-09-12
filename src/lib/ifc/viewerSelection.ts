@@ -10,7 +10,7 @@
  */
 import { normalizePieceMark } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER, type FabStatus } from "@/lib/fabStatus";
-import { CANONICAL_PIECE_COLORS } from "@/lib/ifc/viewerColoring";
+import { CANONICAL_PIECE_COLORS, fabStatusForGuid } from "@/lib/ifc/viewerColoring";
 import {
   logisticsDisabledReason,
   pieceLifecycleLabel,
@@ -36,6 +36,7 @@ export interface ViewerCanonicalPiece {
   lifecycle_status?: string | null;
   on_hold?: boolean | null;
   on_hold_reason?: string | null;
+  parent_piece_id?: string | null;
   is_container?: boolean | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
@@ -146,21 +147,25 @@ export function buildFabLegend({
   rows,
   canonicalPieceByGuid,
   fabByGuid,
+  fabByMark, markByGuid, blockedGuids, perPieceFab = true,
 }: {
   rows?: ViewerRosterRow[] | null;
   canonicalPieceByGuid?: Map<string, ViewerCanonicalPiece> | null;
   fabByGuid?: Map<string, string> | null;
+  fabByMark?: Map<string, string>;
+  markByGuid?: Map<string, string>;
+  blockedGuids?: Set<string>;
+  perPieceFab?: boolean;
 } = {}): FabLegendRow[] {
   const guidsByBucket = new Map<FabLegendKey, string[]>(
     FAB_LEGEND_ORDER.map((k): [FabLegendKey, string[]] => [k, []]),
   );
+  const seen = new Set<string>();
   for (const r of rows || []) {
     const guid = r?.element_guid;
-    if (!guid || r.is_deleted) continue;
-    const piece = canonicalPieceByGuid?.get(guid);
-    let bucket: string | null | undefined;
-    if (piece) bucket = piece.on_hold ? "hold" : piece.lifecycle_status;
-    else bucket = fabByGuid?.get(guid) ?? null;
+    if (!guid || r.is_deleted || r.deleted_at || seen.has(guid)) continue;
+    seen.add(guid);
+    const bucket = fabStatusForGuid(guid, { canonicalPieceByGuid, blockedGuids, fabByGuid, fabByMark, markByGuid, perPieceFab });
     const key: FabLegendKey = bucket && guidsByBucket.has(bucket as FabLegendKey) ? (bucket as FabLegendKey) : "unlinked";
     guidsByBucket.get(key)!.push(String(guid));
   }

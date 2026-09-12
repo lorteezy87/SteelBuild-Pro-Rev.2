@@ -29,7 +29,7 @@ import { parseDeps } from "./scheduleDependencies";
 import {
   PHASES,
   normalizePhase,
-  displayPct,
+  percentCompleteOrNull,
   isMilestoneTask,
   sanitizeTaskName,
   statusColor,
@@ -38,7 +38,6 @@ import {
   addDaysUTC,
   getTaskBaseline, hasBaselineDrift, isCriticalTask,
   pluralize, taskOwner, isUnassignedTask, hasLogicGapTask,
-  isSummaryScheduleTask,
 } from "./scheduleGanttHelpers";
 import { buildBaselineRows, createBaseline } from "@/services/scheduleBaselines";
 import { todayLocalISO, todayUtcMidnightFromLocal } from "@/lib/dateMath";
@@ -53,6 +52,7 @@ import { useColumnResize } from "./useColumnResize";
 import { useGanttLayout } from "./useGanttLayout";
 import { useTaskBarDrag } from "./useTaskBarDrag";
 import { useTaskRowDnD } from "./useTaskRowDnD";
+import { useGanttInlineEdit } from "./useGanttInlineEdit";
 import {
   computeCycleTaskIdsKey,
   selectShiftedSyncTasks,
@@ -85,9 +85,16 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const [showSubmittals, setShowSubmittals] = useState(true);
   const [showDeliveries, setShowDeliveries] = useState(true);
   const [collapsedDeliveries, setCollapsedDeliveries] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState({});
-  const [saving, setSaving] = useState(false);
+  const {
+    editingId,
+    editDraft,
+    setEditDraft,
+    saving,
+    setSaving,
+    startInlineEdit,
+    commitEdit,
+    cancelEdit,
+  } = useGanttInlineEdit({ onSave });
   const [tooltip, setTooltip] = useState(null);
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const [collapsedTasks, setCollapsedTasks] = useState({});
@@ -126,44 +133,6 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   // (UTC-7) is already tomorrow from 5 PM local onward, so the today line
   // jumped a day early and overdue flipped with it (audit §2.5).
   const today = useMemo(() => todayUtcMidnightFromLocal(), []);
-
-  const startInlineEdit = (task, e) => {
-    e.stopPropagation();
-    // A summary row's start/end are derived from its children by the DB rollup
-    // trigger, so anything typed here is overwritten on the next child write.
-    // ScheduleTaskList already refuses this; the Gantt row did not.
-    if (isSummaryScheduleTask(task)) return;
-    setEditingId(task.id);
-    setEditDraft({
-      task_name: task.task_name || "",
-      start_date: task.start_date || "",
-      end_date: task.end_date || "",
-      status: task.status || "Not Started",
-      // Seed the editor with the same value the UI shows — Complete tasks
-      // round to 100 even if percent_complete is stale, otherwise the user
-      // sees a confusing "100% Complete" row that snaps back to 0 on edit.
-      percent_complete: displayPct(task),
-    });
-  };
-
-  const commitEdit = async (taskId) => {
-    if (!onSave || saving) return;
-    setSaving(true);
-    try {
-      await onSave({ id: taskId, ...editDraft });
-      setEditingId(null);
-      setEditDraft({});
-    } catch (err) {
-      console.error("Gantt save failed:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditDraft({});
-  };
 
   // Sync vertical scroll between left and right body
   const syncScroll = (from) => {
@@ -657,12 +626,17 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         insertDeliveryRows();
       }
 
-      // Phase % uses displayPct so Complete tasks always count as 100% even
-      // when their percent_complete field is stale.
+      // Complete tasks always count as 100% even when their percent_complete
+      // column is stale; tasks whose progress is UNKNOWN are left out of the
+      // mean rather than averaged in as 0 (§4.3). Falls back to 0 only as a bar
+      // width when nothing in the phase has a known percent.
       const phaseProgressTasks = tasks.filter((task) => !task._hasChildren);
       const progressBasis = phaseProgressTasks.length ? phaseProgressTasks : tasks;
-      const avgPct = progressBasis.length > 0
-        ? progressBasis.reduce((sum, t) => sum + displayPct(t), 0) / progressBasis.length
+      const knownPcts = progressBasis
+        .map((t) => percentCompleteOrNull(t))
+        .filter((pct) => pct !== null);
+      const avgPct = knownPcts.length > 0
+        ? knownPcts.reduce((sum, pct) => sum + pct, 0) / knownPcts.length
         : 0;
 
       // Phase summary bar spans from the earliest *effective* start to the
@@ -1411,7 +1385,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             );
           })()}
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isOverdue(tooltip.task) ? GANTT_STATUS_HEX.delayed : "var(--text-secondary)" }}>
-            {displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
+            {percentCompleteOrNull(tooltip.task) === null
+              ? "Progress not recorded"
+              : `${percentCompleteOrNull(tooltip.task)}% complete`}{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${GANTT_GRID_VAR}` }}>
             <div>

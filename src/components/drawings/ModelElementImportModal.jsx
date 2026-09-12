@@ -21,6 +21,7 @@ import { entities } from "@/api/supabaseClient";
 import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseModelElementsCsv } from "@/lib/importModelElements";
+import { readFileText } from "@/lib/textDecoding";
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -31,6 +32,26 @@ const MATCH_BADGE = {
   ambiguous: { label: "ambiguous", color: "var(--status-warning)" },
   none:      { label: "—",         color: "var(--text-muted)" },
 };
+
+/**
+ * Decode a member CSV and stage it against the project's roster. Decodes by
+ * byte-order mark / UTF-16 sniff and strips U+0000 — never `file.text()`,
+ * which is UTF-8 only: a UTF-16 Tekla / SDS2 export would stage piece marks
+ * full of U+0000 (so no dedupe match) and the insert fails with Postgres
+ * 22P05. Throws a TextDecodingError (re-save guidance) for UTF-32 or binary
+ * files, and an Error when no member rows parse; runParse shows either
+ * message in the error banner. Exported for tests.
+ *
+ * @param {Blob} file
+ * @param {{ drawings?: object[], existingElements?: object[] }} [context]
+ */
+export async function readModelElementCsv(file, { drawings = [], existingElements = [] } = {}) {
+  const { text } = await readFileText(file);
+  const res = parseModelElementsCsv(text, { drawings, existingElements });
+  if (!res.ok) throw new Error(res.error || "Could not parse the CSV.");
+  if (res.rows.length === 0) throw new Error("No member rows found in the CSV.");
+  return res;
+}
 
 export default function ModelElementImportModal({
   open,
@@ -112,11 +133,9 @@ export default function ModelElementImportModal({
     }
     setStep("parsing"); setErr(null);
     try {
-      const text = await file.text();
-      const res = parseModelElementsCsv(text, { drawings, existingElements });
-      if (!res.ok) throw new Error(res.error || "Could not parse the CSV.");
-      if (res.rows.length === 0) throw new Error("No member rows found in the CSV.");
-      setParsed(res);
+      // A TextDecodingError (UTF-32 / binary file) lands in the catch below,
+      // so its re-save guidance shows in the error banner.
+      setParsed(await readModelElementCsv(file, { drawings, existingElements }));
       setStep("preview");
     } catch (e) {
       setErr(e?.message || String(e));

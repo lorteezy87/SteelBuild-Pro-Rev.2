@@ -172,13 +172,14 @@ log). These are what is left.
 
 ### Platform maturity (longer-running)
 
-- **TypeScript conversion** — ~77% of `src` is still JS/JSX (≈275 TS/TSX vs ≈945
-  JS/JSX, verified 2026-07-01). `src/services/` is fully typed; convert
-  incrementally, shared-infra-first. Base `strict:false`, but **strictNullChecks
-  + noImplicitAny are CI-enforced ratchets** (shipped 2026-06-22). Burn-down
-  metric: ~96 `as any` boundary casts (the JS→TS tax — type the shared infra
-  first to shed them). Net-new JS is still being authored — a CI check blocking
-  new `.js/.jsx` under `src` is queued.
+- **TypeScript conversion (in progress)** — `src/services/` is fully typed and
+  the deterministic Production Control scoring boundary is now
+  `src/utils/pccEngine.ts`, with explicit source-record, normalized-item,
+  scoring, rollup, forecast-window, owner-load, briefing, and release-action
+  result types. Continue incrementally, shared-infra-first; do not mass-rename
+  UI modules whose shapes are still implicit. Base `strict:false`, while
+  **strictNullChecks + noImplicitAny are CI-enforced ratchets**, and
+  `check:no-new-js` blocks new `.js/.jsx` files under `src`.
 - **Large-component decomposition (in progress)** — the biggest components are
   being thinned by extracting their pure logic into named, unit-tested modules
   (behavior-preserving, validated against the full suite at each slice). Done so

@@ -14,10 +14,25 @@
  * https://developers.cloudflare.com/workers/static-assets/headers/
  */
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const repoRoot = resolve(__dirname, "..", "..");
+
+/**
+ * CSP hashes cover the bytes BETWEEN the script tags, exactly as authored —
+ * which is what makes them so easy to invalidate by accident. Recomputing them
+ * here means an edit to index.html's inline bootstrap fails this test with the
+ * replacement hash in the diff, instead of silently un-allowing the script.
+ */
+function inlineScriptHashes(html: string): string[] {
+  return [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>(.*?)<\/script>/gs)].map(
+    (m) => `sha256-${createHash("sha256").update(m[1]).digest("base64")}`,
+  );
+}
+
+const indexHtml = readFileSync(resolve(repoRoot, "index.html"), "utf8");
 
 type HeaderMap = Record<string, string>;
 
@@ -85,6 +100,42 @@ describe("public/_headers", () => {
     expect(csp, "web-ifc WebAssembly").toContain("'wasm-unsafe-eval'");
     // Violations are only useful if they are actually reported somewhere.
     expect(csp, "violation reporting endpoint").toContain("report-uri");
+  });
+
+  it("allows every inline script index.html actually ships", () => {
+    // Production was reporting a script-src violation on every page load: the
+    // anti-FOUC theme bootstrap in index.html is inline (it must run before
+    // first paint) and nothing allowed it. Report-Only hid that — enforcing the
+    // policy as written would have blocked it and brought the flash back.
+    //
+    // Recomputed from index.html rather than hard-coded, so editing that script
+    // fails HERE with the new hash rather than in production months later.
+    const csp = cloudflare["/*"]["Content-Security-Policy-Report-Only"];
+    const hashes = inlineScriptHashes(indexHtml);
+
+    expect(hashes.length, "index.html has no inline <script> — is the hash still needed?").toBeGreaterThan(0);
+    for (const hash of hashes) {
+      expect(
+        csp,
+        `index.html ships an inline script that script-src does not allow.\n` +
+          `Add '${hash}' to script-src in public/_headers.`,
+      ).toContain(`'${hash}'`);
+    }
+    // A hash is only meaningful while 'unsafe-inline' is absent — browsers
+    // ignore hashes entirely once it is present.
+    expect(csp, "'unsafe-inline' in script-src would make the hashes dead weight")
+      .not.toMatch(/script-src[^;]*'unsafe-inline'/);
+  });
+
+  it("allows the Cloudflare Web Analytics beacon Cloudflare injects itself", () => {
+    // Nothing in this repo requests this script; Cloudflare adds it at the edge
+    // when the feature is enabled for the zone. It was the second violation
+    // reported on every page load.
+    const csp = cloudflare["/*"]["Content-Security-Policy-Report-Only"];
+    expect(csp, "beacon script origin").toContain("https://static.cloudflareinsights.com");
+    // Allowing the script without its reporting endpoint just moves the
+    // violation from script-src to connect-src.
+    expect(csp, "beacon RUM endpoint").toContain("https://cloudflareinsights.com");
   });
 
   it("caches hashed build output immutably", () => {

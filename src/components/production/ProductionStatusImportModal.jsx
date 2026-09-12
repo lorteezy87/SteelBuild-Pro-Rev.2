@@ -16,10 +16,26 @@ import { toast } from "sonner";
 import { parseProductionCsv } from "@/lib/importProductionStatus";
 import { commitProductionRows } from "@/lib/production/repository";
 import { describeProductionSync } from "@/lib/production/productionStageStations";
+import { readFileText } from "@/lib/textDecoding";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 const ACCENT = "var(--accent, #3B82F6)";
+
+/**
+ * Read and stage an uploaded production CSV. Decodes by byte-order mark /
+ * UTF-16 sniff, never `file.text()` (UTF-8 only): a UTF-16 or NUL-bearing
+ * export would otherwise carry U+0000 into piece_production, which Postgres
+ * rejects with 22P05. Throws with a user-facing message: a TextDecodingError
+ * for UTF-32 or binary files, else the parse failure.
+ */
+export async function readProductionStatusFile(file, existing = []) {
+  const { text } = await readFileText(file);
+  const res = parseProductionCsv(text, { existing });
+  if (!res.ok) throw new Error(res.error || "Could not parse the CSV.");
+  if (res.rows.length === 0) throw new Error("No piece rows found in the CSV.");
+  return res;
+}
 
 export default function ProductionStatusImportModal({
   open,
@@ -60,10 +76,7 @@ export default function ProductionStatusImportModal({
     if (!file) return;
     setStep("parsing"); setErr(null);
     try {
-      const text = await file.text();
-      const res = parseProductionCsv(text, { existing });
-      if (!res.ok) throw new Error(res.error || "Could not parse the CSV.");
-      if (res.rows.length === 0) throw new Error("No piece rows found in the CSV.");
+      const res = await readProductionStatusFile(file, existing);
       setParsed(res);
       setStep("preview");
     } catch (e) {

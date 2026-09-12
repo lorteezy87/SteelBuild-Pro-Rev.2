@@ -147,6 +147,17 @@ jobs:
       - name: Run Vitest tests
         run: npm test
 
+      - name: Install Chromium for foundation acceptance
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify shell recovery (desktop and mobile, no backend)
+        run: npm run test:e2e:foundation
+
+      - name: Verify database helper search paths
+        run: |
+          npm ci --prefix supabase/tests/function-search-path --ignore-scripts
+          npm test --prefix supabase/tests/function-search-path
+
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure
@@ -162,13 +173,23 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 
-  # ── Dependency audit (ADVISORY — never blocks a deploy) ──────────────────
-  # `npm audit` over PRODUCTION dependencies, failing on high+ advisories.
+  # ── Dependency audit ────────────────────────────────────────────────────
+  # `npm audit` over PRODUCTION dependencies, via scripts/audit-gate.mjs.
   # Deliberately NOT in `deploy.needs`: a CVE disclosed overnight in a
   # transitive dep should alarm the run (red job, red run), but must not stop
   # an unrelated fix from shipping. Works straight off the lockfile — no
-  # `npm ci` needed. Baseline at introduction: 0 vulnerabilities. (Audit L13,
-  # dependency-audit slice; gitleaks/SAST still queued.)
+  # `npm ci` needed. (Audit L13, dependency-audit slice; gitleaks/SAST queued.)
+  #
+  # This job used to run `npm audit --omit=dev --audit-level=high` and exit 0
+  # while three real production advisories sat one step below the bar at
+  # moderate — green precisely because the issues that mattered were the wrong
+  # severity. Lowering the threshold alone would have replaced a silent gate
+  # with a permanently red one (react-router's two moderates have no patched
+  # 6.x), which is the same thing: a job nobody reads.
+  #
+  # audit-gate.mjs fails on any moderate+ production advisory that is not named
+  # in its ALLOWLIST, with a reason and a review date, and fails again when a
+  # waiver goes stale. Exceptions live in the diff instead of under a threshold.
   dependency-audit:
     name: Dependency audit (advisory)
     runs-on: ubuntu-latest
@@ -182,18 +203,23 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Audit production dependencies (high+)
-        run: npm audit --omit=dev --audit-level=high
+      - name: Audit production dependencies (moderate+, waivers reviewed in-repo)
+        run: node scripts/audit-gate.mjs
 
-  # ── Supabase migration + edge-function drift (opt-in) ────────────────────
-  # H4/H5: catches repo vs remote drift for migrations and edge functions, and
-  # fails when deprecated orphan functions are still deployed. Opt-in via repo
-  # variable SUPABASE_DRIFT_ENABLED=true + secret SUPABASE_ACCESS_TOKEN.
+      - name: Audit all dependencies (high+, including build and native tooling)
+        if: ${{ !cancelled() }}
+        run: npm audit --audit-level=high
+
+  # ── Supabase migration + edge-function drift (enforced) ──────────────────
+  # H4/H5: compares production with the reviewed shared-project ownership
+  # manifest plus active Rev.2 assets. Unknown/unresolved assets, missing
+  # required assets, and deployed deprecated/staging-only functions fail closed.
+  # Inventory green does not prove SQL or deployed-source equivalence.
   supabase-drift:
-    name: Supabase drift check (opt-in)
+    name: Supabase drift check
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: ${{ vars.SUPABASE_DRIFT_ENABLED == 'true' }}
+    if: ${{ github.repository == 'lorteezy87/SteelBuild-Pro-Rev.2' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -213,8 +239,13 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
         run: |
           if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
-            echo "SUPABASE_DRIFT_ENABLED=true but SUPABASE_ACCESS_TOKEN is empty."
-            echo "Add the secret (owner-checklist §1) or unset the variable."
+            echo "SUPABASE_ACCESS_TOKEN is empty."
+            echo "Configure the secret to keep production drift checks enforced."
+            exit 1
+          fi
+          if [ -z "$SUPABASE_PROJECT_REF" ]; then
+            echo "SUPABASE_PROJECT_REF is empty."
+            echo "Configure the repository variable to keep production drift checks enforced."
             exit 1
           fi
           npm run supabase:drift

@@ -1,4 +1,4 @@
-import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldCheck, Workflow } from "lucide-react";
+import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldAlert, Send, ListChecks, Workflow } from "lucide-react";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { DRAFTING_STATES, effectiveDetailingState, hasGoverningSubmittal, isPackageReleasedForFab, isPackageRR } from "@/lib/detailingPackageState";
@@ -8,7 +8,18 @@ import { workingDaysBetween } from "@/lib/workingDays";
 import { todayLocalISO } from "@/lib/dateMath";
 import { pickMostRecentSubmittal, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
-import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
+import type {
+  ApprovalMatrixRow,
+  CurrentRevisionInfo,
+  Drawing,
+  DrawingRevision,
+  DrawingSet,
+  DueInfo,
+  SetPackage,
+  Submittal,
+  TriageItem,
+  TriageModel,
+} from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
 // Use the SAME CSS custom-property names as the rest of the app (Submittals,
@@ -31,9 +42,11 @@ export const TABS = [
   { key: "process", label: "Process Board", icon: Layers3 },
   { key: "drawings", label: "Drawing Register", icon: FileStack },
   { key: "submittals", label: "Submittal Register", icon: ClipboardList },
+  { key: "transmittals", label: "Transmittals", icon: Send },
   { key: "matrix", label: "Approval Matrix", icon: Workflow },
   { key: "revimpact", label: "Revision Impact", icon: GitCompareArrows },
-  { key: "doccontrol", label: "Doc Control", icon: ShieldCheck },
+  { key: "holds", label: "Holds & Blockers", icon: ShieldAlert },
+  { key: "validation", label: "Validation", icon: ListChecks },
 ];
 
 // ── Status colors for matrix ───────────────────────────────────────────────
@@ -438,7 +451,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
   };
 
   for (const parent of parentsById.values()) {
-    ensurePackage({ setId: parent.id, legacyName: parent.set_name, parent });
+    ensurePackage({ setId: parent.id, legacyName: parent.set_name ?? undefined, parent });
   }
 
   for (const drawing of drawings || []) {
@@ -464,7 +477,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
     if (ids.length) {
       ids.forEach((setId) => {
         const parent = parentsById.get(setId);
-        if (parent) ensurePackage({ setId, legacyName: parent.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
+        if (parent) ensurePackage({ setId, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent }).submittals.push(submittal);
       });
       continue;
     }
@@ -472,7 +485,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
       const parent = parentsByName.get(submittal.drawing_set_name.trim().toLowerCase()) || null;
       // No unique active parent means this is an actionable unlinked
       // Submittal, not a synthetic package that could imply the wrong owner.
-      if (parent) ensurePackage({ setId: parent.id, legacyName: parent.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
+      if (parent) ensurePackage({ setId: parent.id, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent }).submittals.push(submittal);
     }
   }
 
@@ -506,6 +519,43 @@ export function buildCurrentRevisionMap(
       version: Number(rev.version_number) || 0,
     });
   }
+  return map;
+}
+
+/**
+ * drawing_id → the id of its CURRENT drawing_revisions row. A transmittal item
+ * carries the immutable revision id it sent, so "revised since it was sent"
+ * is an id comparison against this map (the Approval Matrix's Last sent line).
+ *
+ * Only is_current=true rows with an id and a drawing_id count. The DB allows
+ * one current row per drawing (ux_drawing_revisions_one_current), so two can
+ * only come from a stale or merged read: then the highest version_number
+ * wins, then the later created_at, then the larger id — never input order.
+ * A drawing with no current row loaded is simply absent: unknown, not
+ * "unrevised".
+ */
+export function buildCurrentRevisionIdMap(
+  drawingRevisions: DrawingRevision[] | null | undefined,
+): Map<string, string> {
+  const best = new Map<string, { id: string; version: number; createdAt: string }>();
+  for (const rev of drawingRevisions || []) {
+    if (!rev || rev.is_current !== true || !rev.id || !rev.drawing_id) continue;
+    const candidate = {
+      id: String(rev.id),
+      version: Number(rev.version_number) || 0,
+      createdAt: String(rev.created_at || ""),
+    };
+    const drawingId = String(rev.drawing_id);
+    const held = best.get(drawingId);
+    const newer = !held || (
+      candidate.version - held.version ||
+      candidate.createdAt.localeCompare(held.createdAt) ||
+      candidate.id.localeCompare(held.id)
+    ) > 0;
+    if (newer) best.set(drawingId, candidate);
+  }
+  const map = new Map<string, string>();
+  for (const [drawingId, entry] of best) map.set(drawingId, entry.id);
   return map;
 }
 
@@ -614,10 +664,10 @@ export function buildTriage(
   setPackages: SetPackage[],
   readinessByKey: Map<string, any>,
   useWorkdays = false,
-) {
+): TriageModel {
     const activeSubmittals = submittals.filter((s) => !s.is_deleted) as any[];
 
-    const setItems = setPackages.map((pkg) => {
+    const setItems: TriageItem[] = setPackages.map((pkg) => {
       const {
         governingSubmittal,
         closed,
@@ -698,7 +748,7 @@ export function buildTriage(
     const linkedSubmittalIds = new Set(
       setPackages.flatMap((pkg) => pkg.submittals.map((submittal) => submittal.id).filter(Boolean))
     );
-    const unlinkedSubmittalItems = activeSubmittals
+    const unlinkedSubmittalItems: TriageItem[] = activeSubmittals
       .filter((submittal) => !linkedSubmittalIds.has(submittal.id))
       .map((submittal) => {
       const closed = isClosedSubmittal(submittal);
@@ -843,11 +893,16 @@ export function submittalRoundCount(submittal: any): number {
   return Number(submittal?.total_rounds) || Number(submittal?.round_number) || 1;
 }
 
-export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], search = "", useWorkdays = false): any[] {
+export function buildApprovalMatrixRows(
+  drawingSets: DrawingSet[],
+  submittals: Submittal[],
+  search = "",
+  useWorkdays = false,
+): ApprovalMatrixRow[] {
    
   const activeSubmittals = (submittals || []).filter((s: any) => !s.is_deleted);
    
-  const setSubmittalMap: Record<string, any[]> = {};
+  const setSubmittalMap: Record<string, Submittal[]> = {};
   for (const sub of activeSubmittals) {
     const setIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
     for (const sid of setIds) {
@@ -872,7 +927,7 @@ export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], s
       // submittal plus a fresh Draft rendered Status "Draft", BIC "—", Due "No
       // date", and vanished from the Overdue and Pending pills. A Void submittal
       // did the same, rendering a green "Closed".
-      const usable = linked.filter((s: any) =>
+      const usable = linked.filter((s) =>
         submittalStatusToStage(s?.status, s?.ball_in_court, s?.approved_date) !== null,
       );
       const latestSubmittal = pickMostRecentSubmittal(usable) || pickMostRecentSubmittal(linked) || null;
@@ -897,22 +952,36 @@ export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], s
         pendingEorResponse: hasUnansweredApproverNotes(latestSubmittal),
       };
     })
-    .filter((set: any) => {
+    .filter((set) => {
       if (!search) return true;
       const q = search.toLowerCase();
       return (
         formatDrawingSetNumber(set).toLowerCase().includes(q) ||
         (set.set_name || "").toLowerCase().includes(q) ||
         (set.discipline || "").toLowerCase().includes(q) ||
-        set.submittals.some((s: any) => (s.submittal_number || "").toLowerCase().includes(q))
+        set.submittals.some((s: Submittal) => (s.submittal_number || "").toLowerCase().includes(q))
       );
     })
-    .sort((a: any, b: any) => compareDrawingSetPackages(a, b));
+    .sort((a, b) => compareDrawingSetPackages(a, b));
 }
 
 export interface ApprovalMatrixSummary {
   noSubmittal: number; pending: number; approved: number; rejected: number;
   overdue: number; dueSoon: number; total: number; pendingEor: number;
+}
+
+export type MatrixStatusBucket = "approved" | "rejected" | "pending" | "void";
+
+/**
+ * The Approval Matrix's status buckets. Shared by summarizeApprovalMatrix and
+ * the matrix's click-through filters, so a pill's count is always the number
+ * of rows its filter shows.
+ */
+export function matrixStatusBucket(status: string | null | undefined): MatrixStatusBucket {
+  if (status === "Approved" || status === "Approved as Noted" || status === "Released for Fabrication") return "approved";
+  if (status === "Rejected" || status === "Revise and Resubmit") return "rejected";
+  if (status === "Void") return "void"; // Void is terminal — never "pending"
+  return "pending";
 }
 
 /**
@@ -925,10 +994,10 @@ export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummar
   let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0, pendingEor = 0;
   for (const row of matrixRows || []) {
     if (!row.latestSubmittal) { noSubmittal++; continue; }
-    const st = row.latestSubmittal.status;
-    if (st === "Approved" || st === "Approved as Noted" || st === "Released for Fabrication") approved++;
-    else if (st === "Rejected" || st === "Revise and Resubmit") rejected++;
-    else if (st !== "Void") pending++; // Void is terminal — never "pending"
+    const bucket = matrixStatusBucket(row.latestSubmittal.status);
+    if (bucket === "approved") approved++;
+    else if (bucket === "rejected") rejected++;
+    else if (bucket === "pending") pending++;
     if (row.due.overdue) overdue++;
     if (row.due.dueSoon) dueSoon++;
     if (row.pendingEorResponse || hasUnansweredApproverNotes(row.latestSubmittal)) pendingEor++;

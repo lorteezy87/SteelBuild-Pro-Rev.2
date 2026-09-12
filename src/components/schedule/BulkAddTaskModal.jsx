@@ -1,33 +1,29 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { todayLocalISO } from "@/lib/dateMath";
 import { PHASES } from "../../utils/phases";
+import {
+  SCHEDULE_STATUSES,
+  SCHEDULE_TASK_TYPES,
+  SCHEDULE_PRIORITIES,
+  DEFAULT_SCHEDULE_STATUS,
+  DEFAULT_SCHEDULE_PRIORITY,
+} from "@/lib/schedule/taskStatus";
+import { durationFromDates, finishFromDuration } from "@/lib/schedule/duration";
 import DateOrTbdInput from "./DateOrTbdInput";
-import { addDaysIso } from "../../services/scheduleCascade";
+import SearchableTaskPicker from "./SearchableTaskPicker";
 
-const TASK_TYPES = ["Task", "Fabrication", "Delivery", "Install", "Submittal", "RFI", "Milestone"];
-const STATUSES   = ["Not Started", "In Progress", "Complete", "On Hold", "Cancelled"];
-const PRIORITIES = ["Low", "Normal", "High", "Critical"];
+// One vocabulary, shared with every other schedule surface (§4.1). This list
+// used to carry "Cancelled", which chk_schedule_tasks_status rejects — and
+// because handleBulkAdd is a sequential loop with no rollback, one such row at
+// position 40 of 60 left 39 tasks written and an error that named neither the
+// row nor the rows already created.
+const TASK_TYPES = SCHEDULE_TASK_TYPES;
+const STATUSES   = SCHEDULE_STATUSES;
+const PRIORITIES = SCHEDULE_PRIORITIES;
 
 // Local, not UTC: a task added at 6 PM in Arizona was defaulting to
 // tomorrow (§2.5).
 const today = () => todayLocalISO();
-
-/** Add `days` calendar days to a YYYY-MM-DD string. Returns YYYY-MM-DD. */
-function addDays(dateStr, days) {
-  if (!dateStr || !Number.isFinite(days)) return null;
-  // UTC-safe: local-parse (new Date(str+"T00:00:00")) + toISOString() shifts the
-  // day under a non-zero UTC offset. addDaysIso does the arithmetic in UTC.
-  return addDaysIso(dateStr, days);
-}
-
-/** Compute the day-count between two YYYY-MM-DD strings. */
-function daysBetween(start, end) {
-  if (!start || !end) return null;
-  const s = new Date(start + "T00:00:00");
-  const e = new Date(end + "T00:00:00");
-  if (isNaN(s) || isNaN(e)) return null;
-  return Math.round((e - s) / 86400000);
-}
 
 function emptyRow(id) {
   return {
@@ -37,9 +33,12 @@ function emptyRow(id) {
     phase:          "Fabrication",
     start_date:     today(),
     end_date:       today(),
-    duration:       0,
-    status:         "Not Started",
-    priority:       "Normal",
+    // Inclusive days: a task that starts and ends today is 1 day, not 0
+    // (§2.4). The old default of 0 also drove the grid's finish column,
+    // so every row opened claiming a zero-length task.
+    duration:       1,
+    status:         DEFAULT_SCHEDULE_STATUS,
+    priority:       DEFAULT_SCHEDULE_PRIORITY,
     resource_names: "",
     parent_task_id: null,
   };
@@ -122,24 +121,27 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
       if (r._id !== id) return r;
       const next = { ...r, [key]: val };
 
-      // ── Duration ↔ date coupling ──────────────────────────────
+      // ── Duration ↔ date coupling, on the inclusive convention (§2.4) ──
+      //
+      // This grid was left on the old EXCLUSIVE arithmetic when duration was
+      // unified: `end = start + days` and `days = end - start`. Typing 5 gave a
+      // Mon → Sat bar, and because the database trigger then recomputed the
+      // column inclusively, the row came back saying 6. Every duration entered
+      // here was one day long.
       if (key === "duration") {
-        // Duration edited → recompute end_date from start + duration
+        const end = finishFromDuration(next.start_date, val);
+        if (end) next.end_date = end;
         const days = parseInt(val, 10);
-        if (Number.isFinite(days) && days >= 0 && next.start_date) {
-          next.end_date = addDays(next.start_date, days);
-        }
-        next.duration = Number.isFinite(days) && days >= 0 ? days : val;
+        next.duration = Number.isFinite(days) && days >= 1 ? days : val;
       } else if (key === "start_date") {
-        // Start moved → if duration is set, recompute end_date
+        // Start moved → hold the duration and carry the finish with it.
         const dur = parseInt(next.duration, 10);
-        if (Number.isFinite(dur) && dur >= 0 && val) {
-          next.end_date = addDays(val, dur);
-        }
+        const end = Number.isFinite(dur) && dur >= 1 ? finishFromDuration(val, dur) : null;
+        if (end) next.end_date = end;
       } else if (key === "end_date") {
-        // End date edited directly → recompute duration from the two dates
-        const diff = daysBetween(next.start_date, val);
-        if (diff != null && diff >= 0) next.duration = diff;
+        // Finish edited directly → the dates win and the duration mirrors them.
+        const days = durationFromDates(next.start_date, val);
+        if (days !== null) next.duration = days;
       }
 
       return next;
@@ -204,10 +206,25 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
     setNextId((n) => n + 1);
   };
 
+  /**
+   * A row nobody has touched — one of the three the grid opens with, or one
+   * added and then left alone. It is an empty slot, not an incomplete task.
+   *
+   * The dates, type, phase, status and priority all carry defaults, so they
+   * cannot distinguish a blank row from a filled one; only the fields a user
+   * has to enter can.
+   */
+  const isBlankRow = (r) =>
+    !r.task_name.trim() && !String(r.resource_names || "").trim() && !r.parent_task_id;
+
   const handleSave = () => {
+    // Only rows the user actually started are required to have a name. The
+    // grid opens with three rows, so validating all of them meant filling one
+    // and pressing a button that said "SAVE 1 TASKS" and then refused,
+    // reddening two rows that had never been touched.
     const errs = {};
     rows.forEach((r) => {
-      if (!r.task_name.trim()) errs[r._id] = "Name required";
+      if (!r.task_name.trim() && !isBlankRow(r)) errs[r._id] = "Name required";
     });
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
@@ -217,7 +234,10 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
       ...rest,
       start_date: rest.start_date || null,
       end_date: rest.end_date || null,
-      duration: Number.isFinite(parseInt(rest.duration, 10)) ? parseInt(rest.duration, 10) : null,
+      // Derived from the dates when they are both present — they are the
+      // source of truth and the column mirrors them (§2.4).
+      duration: durationFromDates(rest.start_date, rest.end_date)
+        ?? (Number.isFinite(parseInt(rest.duration, 10)) ? parseInt(rest.duration, 10) : null),
       resource_names: rest.resource_names || null,
       parent_task_id: rest.parent_task_id || null,
     }));
@@ -343,13 +363,13 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                 <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
                   <input
                     type="number"
-                    min="0"
+                    min="1"
                     value={row.duration ?? ""}
                     onChange={(e) => updateRow(row._id, "duration", e.target.value)}
                     onKeyDown={handleCellKeyDown}
                     data-row={idx}
                     data-col="duration"
-                    placeholder="0"
+                    placeholder="1"
                     style={{ ...INPUT_STYLE, fontSize: 11, textAlign: "center", padding: "7px 4px", fontFamily: "var(--font-mono)" }}
                   />
                 </div>
@@ -394,21 +414,21 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   />
                 </div>
 
-                {/* Parent Task */}
+                {/* Parent Task — searchable (§4.1). A flat <select> of every
+                    task on the project is 427 unordered options on a live
+                    schedule; SearchableTaskPicker filters by name, WBS code or
+                    phase. It owns Enter for choosing the highlighted row, so
+                    handleCellKeyDown is deliberately not wired here. */}
                 <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
-                  <select
-                    value={row.parent_task_id || ""}
-                    onChange={(e) => updateRow(row._id, "parent_task_id", e.target.value || null)}
-                    onKeyDown={handleCellKeyDown}
-                    data-row={idx}
-                    data-col="parent_task"
-                    style={SELECT_STYLE}
-                  >
-                    <option value="">— None —</option>
-                    {(existingTasks || []).map(t => (
-                      <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ""}{t.task_name}</option>
-                    ))}
-                  </select>
+                  <div style={{ width: "100%", minWidth: 0, marginTop: -8 }}>
+                    <SearchableTaskPicker
+                      tasks={existingTasks || []}
+                      value={row.parent_task_id}
+                      onSelect={(id) => updateRow(row._id, "parent_task_id", id)}
+                      onClear={() => updateRow(row._id, "parent_task_id", null)}
+                      placeholder="Search…"
+                    />
+                  </div>
                 </div>
 
                 {/* Actions */}

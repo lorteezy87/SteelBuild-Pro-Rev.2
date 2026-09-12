@@ -5,6 +5,7 @@ import { COST_CODES } from '../shared/costCodes';
 import { getNextNumber } from '../shared/numberSequencing';
 import { toast } from 'sonner';
 import { withProjectId } from '@/lib/mutations/standardMutation';
+import { readFileText } from '@/lib/textDecoding';
 
 const EXPENSE_TYPES = ['Labor', 'Materials', 'Equipment', 'Subcontractor', 'Misc.', 'Overhead'];
 const PAYMENT_STATUSES = ['Unpaid', 'Paid', 'Pending Approval', 'Disputed', 'Voided'];
@@ -214,6 +215,15 @@ function parseRowsToExpenses(rows, workPackages) {
   return { headers: rawHeaders, records };
 }
 
+/**
+ * Text of an uploaded expense CSV. Decodes UTF-16 exports by byte-order mark
+ * or sniff and drops U+0000, which Postgres rejects (22P05). Throws
+ * TextDecodingError for UTF-32 and for binary files such as .xlsx.
+ */
+export async function readExpenseImportFile(file) {
+  return (await readFileText(file)).text;
+}
+
 export default function ExpenseImportModal({ open, onClose, activeProject, workPackages = [], onImported }) {
   const fileInputRef = useRef(null);
   const [csvText, setCsvText] = useState('');
@@ -236,9 +246,15 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
 
   const handleFile = async (file) => {
     if (!file) return;
-    setFileName(file.name);
-    const text = await file.text();
-    setCsvText(text);
+    try {
+      const text = await readExpenseImportFile(file);
+      setFileName(file.name);
+      setCsvText(text);
+    } catch (e) {
+      toast.error(e?.message || 'Could not read import file');
+      // Clear the picker so the re-saved file can be chosen again.
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const reset = () => {

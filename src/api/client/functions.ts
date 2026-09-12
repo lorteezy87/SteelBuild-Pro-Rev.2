@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { numberSequenceArgsSchema } from '@/lib/securitySchemas';
 import { SupabaseOperationError } from './errors';
 import type { FunctionInvokeResult } from './supabaseTypes';
 
@@ -26,8 +27,12 @@ export const functions = {
       // The DB function uses INSERT...ON CONFLICT with RETURNING for atomicity.
       case 'secureNumberSequence':
       case 'numberSequence': {
-        const { project_id, record_type } = params as { project_id?: string; record_type?: string };
-        if (!project_id || !record_type) return { data: { number: 1 } };
+        const parsed = numberSequenceArgsSchema.safeParse(params);
+        if (!parsed.success) {
+          const detail = parsed.error.issues.map((i) => i.message).join('; ');
+          throw new Error(`Invalid numberSequence payload: ${detail}`);
+        }
+        const { project_id, record_type } = parsed.data;
         // Atomic, server-side ONLY. The RPC does INSERT...ON CONFLICT DO UPDATE
         // ...RETURNING under a row lock, so concurrent callers serialize and get
         // DISTINCT official numbers (and it re-checks project access). NEVER fall

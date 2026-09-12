@@ -1,91 +1,64 @@
-# Offsite Storage Backup Setup and Restore Rehearsal
+# Supabase Storage backups to Backblaze B2
 
-**SteelBuild Pro**
-Date: 2026-07-22
-Finding: [H25]
+The Storage backup workflow backs up `app-files`, `email-attachments`, and `sheets-files` from the expected Supabase project. It keeps one current copy and B2's native historical versions, rather than creating a full copy every day. It never permanently deletes versions or runs cleanup. Expiration lifecycle rules cause the job to fail before transferring data.
 
-This runbook activates the implemented backup workflow for the Supabase Storage buckets `app-files` and `email-attachments`. The implementation is code-verified, but H25 remains open until a successful backup and staging restore are recorded.
+## Configuration
 
-## 1. Control design
+GitHub Actions environment: `storage-backup-production`. Repository secrets are inherited; environment secrets take precedence.
 
-The nightly workflow runs at 08:17 UTC and can also be started manually. For each required bucket it creates:
+Secrets:
+- `OFFSITE_ROOT`: `offsite:YOUR-BUCKET/steelbuild-pro-storage`
+- `OFFSITE_RCLONE_CONFIG_B64`: Base64 of the following native rclone configuration (no additional options):
 
-- `snapshots/<UTC timestamp>/<bucket>` — a non-overwriting point-in-time copy;
-- `current/<bucket>` — a mirror for the fastest latest-state restore; and
-- `manifests/<UTC timestamp>.json` — object counts, byte totals, and exact destination paths after verification.
+```ini
+[offsite]
+type = b2
+account = APPLICATION_KEY_ID
+key = APPLICATION_KEY
+```
 
-A run fails unless both buckets pass `rclone check --size-only` against the snapshot and current mirror and their object counts and byte totals match the source. An empty bucket is valid only when all three locations report zero objects and zero bytes.
+- `SUPABASE_S3_ACCESS_KEY_ID` and `SUPABASE_S3_SECRET_ACCESS_KEY`: generated Supabase Storage S3 credentials, not frontend API keys.
+- `SUPABASE_S3_ENDPOINT`: `https://kjrwqagyeswwoxpjkcko.storage.supabase.co/storage/v1/s3`
+- `SUPABASE_S3_REGION`: `us-east-1`
 
-## 2. Owner setup
+Environment variable: `SUPABASE_EXPECTED_PROJECT_REF=kjrwqagyeswwoxpjkcko`.
 
-1. **Provision the destination outside Supabase.** Use a company-owned Azure Blob, S3, or other rclone-supported object-storage account with separate administrator access. Do not use a student account or the production Supabase project as the destination.
-2. **Enable destination protections.** Turn on provider-side versioning or soft delete, restrict public access, and configure a documented lifecycle policy. The workflow does not delete timestamped snapshots; the provider lifecycle policy is the retention authority. Start with at least 35 daily snapshots until cost and recovery needs are measured.
-3. **Generate Supabase Storage S3 access keys.** Create a dedicated key pair in the Supabase dashboard for this job. Store it only in the GitHub environment below and the approved company password/secret manager. Treat it as privileged server-side material and rotate it on personnel change or suspected exposure.
-4. **Create an rclone destination configuration locally.** The remote must be named exactly `[offsite]`. Configure it interactively with `rclone config`, test read/write access to the dedicated backup container/bucket, and save only that remote in a temporary configuration file.
-5. **Base64-encode the temporary configuration.** On PowerShell:
+Use a private B2 bucket and a bucket-restricted read/write application key without a filename-prefix restriction. The key must permit listing the bucket and its versions, reading objects, writing objects, and hiding deleted objects. The job reads the whole bucket for accounting. Remove lifecycle rules that automatically hide current files or delete hidden versions. The job checks rules but does not alter them. Keep this bucket exclusive to this workflow; concurrent external uploads invalidate any client-side projection.
 
-   ```powershell
-   $configText = Get-Content -LiteralPath C:\secure-temp\rclone.conf -Raw
-   [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($configText))
-   ```
+## Storage budget and limitations
 
-   Copy the result directly into GitHub Secrets, then securely remove the temporary file. Never commit the decoded configuration or paste it into an issue, log, or chat.
-6. **Create the GitHub environment** `storage-backup-production`. Before adding secrets, set deployment branches/tags to **selected branches** with `main` only. The workflow additionally guards the job to `main`, so a feature-branch `workflow_dispatch` must be rejected/skipped and must not receive production credentials. Add these environment settings:
+The default budget is **9,000,000,000 bytes** for this bucket. Before destination writes the job reads all native B2 versions, across every prefix in the bucket. It rejects incomplete pagination, unavailable inventory, or unfinished multipart uploads. Unfinished uploads must be inspected by an operator; nothing is automatically purged.
 
-   | Setting | Value |
-   |---|---|
-   | `OFFSITE_RCLONE_CONFIG_B64` | Base64 configuration containing the `[offsite]` remote |
-   | `OFFSITE_ROOT` | `offsite:<container-or-bucket>/steelbuild-pro-storage` |
-   | `SUPABASE_S3_ACCESS_KEY_ID` | Dedicated Supabase Storage S3 access key ID |
-   | `SUPABASE_S3_SECRET_ACCESS_KEY` | Dedicated Supabase Storage S3 secret key |
-   | `SUPABASE_S3_ENDPOINT` | `https://kjrwqagyeswwoxpjkcko.storage.supabase.co/storage/v1/s3` |
-   | `SUPABASE_S3_REGION` | `us-east-1` |
-   | Environment variable `SUPABASE_EXPECTED_PROJECT_REF` | `kjrwqagyeswwoxpjkcko` (non-secret production project identity) |
+The GitHub-hosted runner must provide AWS CLI (`aws --version` is checked before downloads). Ordinary objects are copied with rclone. Real objects ending in `/`, or sharing a name with a directory, are downloaded by exact S3 key with `aws s3api get-object` into a reserved `__steelbuild_object_keys__/SHA256(key)` path. The manifest retains both the stored `path` and exact original `sourcePath`; nothing is renamed in Supabase. A source using the reserved namespace fails closed.
 
-7. **Configure failure ownership.** Ensure at least two owners receive failed GitHub Actions workflow notifications and know how to rotate both credential sets.
+It stages the three source buckets in the runner's temporary directory, calculates SHA-1 checksums, and compares them with the destination. The projection is retained bytes + changed/new file bytes + a 10 MB manifest/probe reserve. Deletions never subtract retained bytes. Over-budget runs fail before syncing and appear as failed GitHub Actions runs. Enable GitHub Actions failure notifications to receive alerts. Old verified manifests remain usable; no new successful backup is claimed.
 
-## 3. First-run acceptance
+This is a conservative client-side storage guard, **not an account billing cap**. Other B2 buckets, simultaneous external writers, provider accounting, request fees, and source egress are outside this calculation. At the measured 6.4 GB source size, staging downloads about 6.4 GB per daily run (roughly 192 GB over 30 days), plus failed-run retries. Check the Supabase project's remaining egress allowance. Only new/changed content is uploaded to B2. The job removes its local staging directory on completion/failure; an `always()` workflow step cleans up on cancellation.
 
-1. Open GitHub Actions → **Storage backup** → **Run workflow** from the default branch.
-2. Confirm the job installed rclone only after the pinned SHA-256 checksum passed.
-3. Confirm the log reports `Verified app-files` and `Verified email-attachments` without displaying credentials.
-4. Download the `storage-backup-manifest-<run id>` artifact and confirm `status` is `verified`, `source.projectRef` matches the intended production project, both buckets are present, and the counts are plausible.
-5. Confirm the same manifest exists under `manifests/<timestamp>.json` at the offsite destination.
-6. Confirm snapshot objects exist beneath both timestamped bucket paths and the `current` paths.
-7. Record the workflow URL, manifest timestamp, counts, bytes, and reviewer in the H25 evidence record. Do not close H25 yet; complete the restore rehearsal.
+At capacity, the scheduled job continues to fail and notify; it does not disable itself or delete history. Review storage growth, then explicitly choose a larger budget or a retention policy. Free storage cannot preserve unlimited changes indefinitely.
 
-## 4. Restore rehearsal
+## Verification and recovery evidence
 
-Rehearse only into the staging Supabase project. Never overwrite production to test recovery.
+Each bucket is checked by SHA-1 against the staged source. The job restores one file from each nonempty bucket using `--b2-version-at` and checks its contents. A synthetic probe is uploaded, overwritten, hidden, and recovered from its earlier version; its original contents must match. Probe history consumes a small amount of storage and is included in later budgets.
 
-1. Choose a successful manifest timestamp and start the RTO clock.
-2. In staging, create private `app-files` and `email-attachments` buckets with the same file-size and MIME restrictions as production.
-3. Create a temporary rclone configuration with:
-   - the existing read-only-capable `[offsite]` destination remote; and
-   - a `[staging]` S3 remote pointed at the staging Supabase Storage S3 endpoint using dedicated staging keys.
-4. Preview both restores:
+Only after verification is a schema-version-2 manifest written to `manifests/<timestamp>.json` and retained as a GitHub artifact. It contains source identity, object paths/sizes/SHA-1 hashes, a per-bucket `restoreAt`, storage projection, and restore-test evidence. Files contain the staged source observed during the run; this is not an atomic database-and-storage snapshot. Database backups remain separate. A failed run may partially update current objects, but prior versions remain retained.
 
-   ```powershell
-   rclone copy "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/app-files" "staging:app-files" --metadata --dry-run
-   rclone copy "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/email-attachments" "staging:email-attachments" --metadata --dry-run
-   ```
+## Restore without touching production
 
-5. Review the dry-run, remove `--dry-run`, and run both copies.
-6. Verify exact object paths and sizes:
+Never overwrite production to test recovery.
 
-   ```powershell
-   rclone check "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/app-files" "staging:app-files" --size-only
-   rclone check "offsite:<container-or-bucket>/steelbuild-pro-storage/snapshots/<timestamp>/email-attachments" "staging:email-attachments" --size-only
-   ```
+Download a verified manifest from GitHub Actions. For each bucket, use that bucket's exact `restoreAt` timestamp. Use a fresh empty local destination, never the production Supabase remote:
 
-7. Complete every applicable post-restore check in `backup-dr.md` Section 3.C, including opening real signed drawing and attachment URLs from staging.
-8. Stop the RTO clock. Record measured RTO/RPO, manifest timestamp, bucket counts, verification results, and gaps in `backup-dr.md` Section 4.
-9. Securely remove all temporary rclone configurations and rotate any credential that was exposed outside the approved secret manager.
+```bash
+rclone copy offsite:YOUR-BUCKET/steelbuild-pro-storage/current/app-files ./restore/app-files --b2-version-at 'RESTORE_AT_FROM_APP_FILES'
+rclone copy offsite:YOUR-BUCKET/steelbuild-pro-storage/current/email-attachments ./restore/email-attachments --b2-version-at 'RESTORE_AT_FROM_EMAIL_ATTACHMENTS'
+rclone copy offsite:YOUR-BUCKET/steelbuild-pro-storage/current/sheets-files ./restore/sheets-files --b2-version-at 'RESTORE_AT_FROM_SHEETS_FILES'
+```
 
-## 5. Recurring operation
+Compare every restored file's SHA-1, size, and stored `path` with the manifest before any production restoration. When restoring to object storage, upload each file using its exact `sourcePath` as the object key. A key ending in `/` contains real file bytes and cannot be represented by an ordinary local filename; keep its reserved local path until uploading by exact key. `--b2-version-at` resolves actual object history and avoids selecting synthetic version filenames. Do not run `rclone cleanup`, `cleanup-hidden`, `purge`, or enable `--b2-hard-delete`: those remove recovery history.
 
-- Review the backup workflow every business day until failure alerting is proven, then at least weekly.
-- Rehearse a restore quarterly and after material Storage path, bucket policy, or provider changes.
-- Review lifecycle cost and retention quarterly. Do not shorten retention without an owner-approved recovery requirement.
-- Rotate credentials at least annually and immediately on suspected exposure.
-- H25 can be marked complete only while recent green manifests, working failure notifications, and a successful restore rehearsal are retained as evidence.
+## Activation
+
+Keep the workflow disabled until the updated code has passed a manual run and is merged to `main`. Manual dispatch can test a reviewed branch; schedules use `main`. Re-enable the workflow only after the new implementation is on `main`, then confirm the next scheduled run. Schedule: daily at 08:17 UTC (GitHub can delay execution).
+
+References: [rclone B2 versions](https://rclone.org/b2/#versions), [B2 native inventory](https://www.backblaze.com/apidocs/b2-list-file-versions), [Supabase S3 authentication](https://supabase.com/docs/guides/storage/s3/authentication).

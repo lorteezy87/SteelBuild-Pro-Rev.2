@@ -53,6 +53,7 @@ const DrawingLogImportModal = lazyWithRetry(() => import("@/components/drawings/
 // element differs (<td> in the table, grid <div> in the virtual list).
 interface RegisterRowHandlers {
   rowBtn: CSSProperties;
+  canEdit: boolean;
   aiDiffEnabled: boolean;
   onOpenSummary?: (summary: any) => void;
   setHealthDetail: (h: any) => void;
@@ -102,7 +103,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
       <GridCell><DueChip info={r.due} /></GridCell>
       <GridCell align="right" style={{ color: textMuted }}>{r.maxRev || "—"}</GridCell>
       <GridCell align="right" style={{ whiteSpace: "nowrap" }}>
-        {r.pkg.parent && (
+        {h.canEdit && r.pkg.parent && (
           <button
             type="button"
             disabled={r.locked}
@@ -142,7 +143,7 @@ function RegisterVirtualList({
   });
 
   return (
-    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
+    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflowX: "auto", background: surface1 }}>
       <div style={{
         display: "grid", gridTemplateColumns: REGISTER_GRID_COLS,
         borderBottom: `1px solid ${border}`, borderLeft: "3px solid transparent",
@@ -326,7 +327,7 @@ export function DrawingRegisterTable({
   const VIRTUALIZE_THRESHOLD = 100;
   const shouldVirtualize = rows.length > VIRTUALIZE_THRESHOLD;
   const rowHandlers: RegisterRowHandlers = {
-    rowBtn, aiDiffEnabled, onOpenSummary, setHealthDetail, setRevisionSet, setReportSet,
+    rowBtn, canEdit, aiDiffEnabled, onOpenSummary, setHealthDetail, setRevisionSet, setReportSet,
   };
 
   if (isLoading) return <LoadingSkeleton />;
@@ -365,7 +366,7 @@ export function DrawingRegisterTable({
         // kit table styling without breaking the virtual renderer's grid geometry.
         <RegisterVirtualList rows={rows} sortByHealth={sortByHealth} setSortByHealth={setSortByHealth} h={rowHandlers} />
       ) : (
-      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
+      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflowX: "auto", background: surface1 }}>
         {/* desk-table: kit table class — plain-table codepath only (see note on RegisterVirtualList above). */}
         <table className="desk-table" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -446,7 +447,7 @@ export function DrawingRegisterTable({
                 <Td><DueChip info={r.due} /></Td>
                 <Td className="is-num" style={{ textAlign: "right", color: textMuted }}>{r.maxRev || "—"}</Td>
                 <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                  {r.pkg.parent && (
+                  {canEdit && r.pkg.parent && (
                     <button
                       type="button"
                       disabled={r.locked}
@@ -468,9 +469,9 @@ export function DrawingRegisterTable({
 
       {healthDetail && <HealthBreakdownDialog health={healthDetail} onClose={() => setHealthDetail(null)} />}
 
-      {revisionSet && (
+      {canEdit && revisionSet && (
         <Suspense fallback={<ModalLoadingFallback />}>
-          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => { onRevisionUploaded?.(revisionSet?.key); setRevisionSet(null); }} activeProject={activeProject} preSelectedSet={revisionSet?.parent || revisionSet} drawingSets={drawingSets} />
+          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => { refetchDrawings(); onRevisionUploaded?.(revisionSet?.key); setRevisionSet(null); }} activeProject={activeProject} preSelectedSet={revisionSet?.parent || revisionSet} drawingSets={drawingSets} />
         </Suspense>
       )}
       {reportSet && (

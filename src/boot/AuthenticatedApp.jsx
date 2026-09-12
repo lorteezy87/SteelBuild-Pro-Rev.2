@@ -59,6 +59,8 @@ export default function AuthenticatedApp() {
     isAuthenticated,
     isLoadingAuth, isLoadingPublicSettings, authError, isLoggingIn,
     loginWithPassword, signUpWithPassword, sendPasswordReset, isPasswordRecovery, mfaRequired,
+    mfaStatusDegraded, mfaStatusMessage, retryMfaStatus,
+    logout,
   } = useAuth();
 
   const onDesktopConnect = isDesktopConnectPath();
@@ -76,6 +78,27 @@ export default function AuthenticatedApp() {
       <Suspense fallback={<AppLoader />}>
         <UpdatePassword />
       </Suspense>
+    );
+  }
+
+  if (mfaStatusDegraded) {
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, background: "var(--bg-page)" }}>
+        <div style={{ width: "100%", maxWidth: 420, border: "1px solid var(--border-default)", borderRadius: 16, background: "var(--bg-surface)", padding: 24 }}>
+          <h1 style={{ margin: "0 0 8px", fontSize: 22, color: "var(--text-primary)" }}>Verify your sign-in</h1>
+          <p style={{ margin: "0 0 16px", color: "var(--text-muted)", lineHeight: 1.5 }}>
+            {mfaStatusMessage || "We could not verify your MFA status. Retry to continue."}
+          </p>
+          <div style={{ display: "grid", gap: 10 }}>
+            <button className="sbd-btn sbd-btn-primary" onClick={() => { void retryMfaStatus(); }}>
+              Retry MFA check
+            </button>
+            <button className="sbd-btn sbd-btn-ghost" onClick={() => { void logout(); }}>
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 

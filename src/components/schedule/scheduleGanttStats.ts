@@ -3,7 +3,7 @@
  * Behavior-preserving — the useMemo wrappers in ScheduleGantt keep the same deps.
  */
 import { parseDateUTC } from "./scheduleDateUtils";
-import { displayPct, isMilestoneTask } from "./scheduleTaskUtils";
+import { percentCompleteOrNull, isMilestoneTask } from "./scheduleTaskUtils";
 import { parseDeps } from "./scheduleDependencies";
 import {
   isActionableScheduleTask,
@@ -129,8 +129,13 @@ export function computeScheduleStats(
     if (actionable && taskId && weatherRiskByTask[taskId]) stats.weatherRiskTasks += 1;
     if (actionable) stats.dependencyLinks += parseDeps(task.dependencies).length;
     if (actionable) {
-      stats.progressTotal += displayPct(task);
-      stats.progressCount += 1;
+      // Only tasks with a known percent count toward the average. Adding an
+      // unknown as 0 would drag the headline down by asserting no progress.
+      const pct = percentCompleteOrNull(task);
+      if (pct !== null) {
+        stats.progressTotal += pct;
+        stats.progressCount += 1;
+      }
     }
   }
 

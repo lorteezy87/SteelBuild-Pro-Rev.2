@@ -1,3 +1,4 @@
+import React from "react";
 import { entities } from "@/api/supabaseClient";
 import { invalidateEntities } from "@/services/cacheRegistry";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
@@ -6,24 +7,70 @@ import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
 import { newUploadBatchId } from "@/lib/drawingUploadUtils";
 import { logActivity } from "@/services/auditLogger";
 import { recordSheetSlipSheet } from "@/lib/drawingHub";
+import { toast } from "sonner";
+import {
+  applyCrossSetSupersede,
+  describeSupersedeActivity,
+  describeSupersedeProblem,
+  describeSupersededSet,
+  groupSupersedeItemsBySet,
+  resolveUploadSetName,
+} from "@/lib/crossSetSupersede";
+import { fetchCrossSetSource } from "@/lib/crossSetSupersedeRepository";
 import {
   buildDrawingRecord,
   detectMultiSheetSamePageRegression,
   planExistingSetSheetReplace,
 } from "../drawingSetUploadHelpers";
 
-export function useDrawingSetCreation({ meta, activeProject, fileResults, uploadBatchId, onComplete, qc, state }) {
+// sonner renders toast text with white-space: normal, so "\n" would run the
+// lines together; give each line its own block instead.
+const toastLines = (lines) =>
+  React.createElement("div", null, lines.map((line, i) => React.createElement("div", { key: i }, line)));
+
+// The wizard was reset while the supersede phase ran — the Success step is gone,
+// so say what happened to the old pages in a toast instead, one line per item.
+function notifySupersedeAfterCancel(result) {
+  const lines = groupSupersedeItemsBySet(result.superseded).map(describeSupersededSet);
+  const problems = [...result.failed, ...result.skipped].map(describeSupersedeProblem);
+  if (problems.length > 0) {
+    toast.warning("Upload finished with problems", { description: toastLines([...lines, ...problems]) });
+  } else if (lines.length > 0) {
+    toast.success(toastLines(lines));
+  }
+}
+
+export function useDrawingSetCreation({ meta, activeProject, fileResults, uploadBatchId, onComplete, qc, state, canSupersede = false }) {
   const {
-    cancelledRef, setProcessError, setStep, setProcessingStatus, setCreatedCount,
+    cancelledRef, setProcessError, setStep, setProcessingStatus, setCreatedCount, setSupersedeResult,
   } = state;
 
-  const handleCreate = async (selectedSheets) => {
+  const invalidateAfterSave = async (supersedeResult) => {
+    await invalidateEntities(qc, ["drawing", "drawingSet", "submittal", "drawing_revision"], activeProject?.id);
+    if (supersedeResult?.superseded?.length) {
+      // Piece approval and the canonical release gate both read is_superseded.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["piece-register", activeProject?.id] }),
+        qc.invalidateQueries({ queryKey: ["canonical-release-gate"] }),
+      ]);
+    }
+  };
+
+  // supersedeIds: old drawings in OTHER sets the user left ticked in Review.
+  // supersedeLabels: their preview sheet numbers / set names, used only to name
+  // them if the commit-time re-read fails.
+  /**
+   * @param {Array<Record<string, unknown>>} selectedSheets
+   * @param {{ supersedeIds?: string[], supersedeLabels?: Record<string, { sheetNumber?: string, setName?: string }> | null }} [options]
+   */
+  const handleCreate = async (selectedSheets, { supersedeIds = [], supersedeLabels = null } = {}) => {
     cancelledRef.current = false;
     setProcessError(null);
+    if (setSupersedeResult) setSupersedeResult(null);
     setStep(3);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
 
-    const resolvedSetName = (meta.setName || "").trim() || meta.revision || "Drawing Set";
+    const resolvedSetName = resolveUploadSetName(meta);
     const batchId = uploadBatchId || newUploadBatchId();
     const setNumber = (meta.setNumber || "").trim();
 
@@ -244,6 +291,44 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         }
       }
 
+      // ── Cross-set supersede ─────────────────────────────────────────
+      // The pages this upload replaces in OTHER sets of the project. Runs only
+      // after the new rows are written, only for ids the user confirmed, and
+      // only for users who may write drawings. Cancel is checked once, here —
+      // a started phase always finishes, so no page is left half-done.
+      let supersedeResult = null;
+      const confirmedIds = Array.isArray(supersedeIds) ? supersedeIds.filter(Boolean) : [];
+      if (canSupersede && confirmedIds.length > 0 && !cancelledRef.current) {
+        setProcessingStatus(prev => ({
+          ...prev,
+          progress: 88,
+          message: `Marking ${confirmedIds.length} replaced page${confirmedIds.length === 1 ? "" : "s"} superseded…`,
+        }));
+        supersedeResult = await applyCrossSetSupersede({
+          confirmedIds,
+          labels: supersedeLabels,
+          savedRows: insertedRows,
+          parentSetId,
+          resolvedSetName,
+          batchId,
+          now,
+          fetchSource: () => fetchCrossSetSource(activeProject?.id),
+          update: (id, patch) => entities.Drawing.update(id, patch),
+        });
+        for (const summary of groupSupersedeItemsBySet(supersedeResult.superseded)) {
+          void logActivity(
+            "drawing",
+            "updated",
+            { id: summary.setId, project_id: activeProject?.id, name: summary.setName },
+            {
+              projectId: activeProject?.id,
+              projectName: activeProject?.name,
+              description: describeSupersedeActivity(summary, resolvedSetName),
+            },
+          );
+        }
+      }
+
       if (insertedRows.length > 0 && !cancelledRef.current) {
         setProcessingStatus(prev => ({
           ...prev,
@@ -269,8 +354,17 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         message:  `Saved ${createdRows} of ${selectedSheets.length} entries`,
       }));
 
-      if (cancelledRef.current) return;
+      if (cancelledRef.current) {
+        // Reset while saving. If the supersede phase ran, its writes landed:
+        // refresh the caches and report it in a toast.
+        if (supersedeResult) {
+          await invalidateAfterSave(supersedeResult);
+          notifySupersedeAfterCancel(supersedeResult);
+        }
+        return;
+      }
       setCreatedCount(createdRows);
+      if (setSupersedeResult) setSupersedeResult(supersedeResult);
 
       if (createdRows > 0) {
         const needsReviewCount = sanitizedRecords.filter((r) => r.ai_extraction_status === "NeedsReview").length;
@@ -293,7 +387,7 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         setProcessError(`${failedRows} sheet(s) failed to save. ${createdRows} saved successfully.`);
       }
 
-      await invalidateEntities(qc, ["drawing", "drawingSet", "submittal", "drawing_revision"], activeProject?.id);
+      await invalidateAfterSave(supersedeResult);
       setStep(5);
       if (onComplete) onComplete();
     } catch (err) {
