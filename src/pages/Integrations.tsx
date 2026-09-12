@@ -1,24 +1,18 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
-  Box,
   Cable,
-  CalendarDays,
   CheckCircle2,
   Clock3,
   Code2,
   Database,
-  DollarSign,
   ExternalLink,
   FileText,
-  FolderOpen,
   KeyRound,
   ListChecks,
-  Mail,
   RefreshCw,
-  Search,
   ShieldCheck,
   UploadCloud,
 } from "lucide-react";
@@ -26,47 +20,15 @@ import {
 import { createPageUrl } from "@/utils";
 import { useProjectId } from "@/hooks/useProjectId";
 import { usePermissions } from "@/services/permissions";
-import EmailAccountSettings from "@/components/email/EmailAccountSettings";
-import DocumentStorageSettings from "@/components/dms/DocumentStorageSettings";
 import {
-  INTEGRATION_AREAS,
   INTEGRATION_BUILD_ORDER,
-  INTEGRATION_CATEGORIES,
-  INTEGRATION_STATUSES,
-  CUSTOMER_STATUS_FILTERS,
-  filterIntegrations,
-  filterByCustomerStatus,
-  getIntegrationByKey,
-  integrationSummary,
-  customerIntegrationSummary,
-  customerStatusMeta,
+  type IntegrationKey,
 } from "@/lib/integrationCatalog";
-
-const AREA_ICONS = {
-  email: Mail,
-  accounting: DollarSign,
-  "document-storage": FolderOpen,
-  scheduling: CalendarDays,
-  "autodesk-bim": Box,
-};
-
-const STATUS_STYLES = {
-  "Partially Live": { color: "var(--success)", bg: "var(--success-muted)", border: "var(--success-border)" },
-  Planned: { color: "var(--warning)", bg: "var(--warning-muted)", border: "var(--warning-border)" },
-  "Adapter Required": { color: "var(--info)", bg: "var(--info-muted)", border: "var(--info-border)" },
-};
-
-// Customer-facing readiness tones → SteelBuild Dark tokens.
-const CUSTOMER_TONE_STYLES = {
-  success: { color: "var(--success)", bg: "var(--success-muted)", border: "var(--success-border)" },
-  info: { color: "var(--info)", bg: "var(--info-muted)", border: "var(--info-border)" },
-  warning: { color: "var(--warning)", bg: "var(--warning-muted)", border: "var(--warning-border)" },
-  muted: { color: "var(--text-muted)", bg: "var(--bg-surface-high)", border: "var(--border-default)" },
-};
-
-function customerToneStyle(statusKey) {
-  return CUSTOMER_TONE_STYLES[customerStatusMeta(statusKey).tone] || CUSTOMER_TONE_STYLES.muted;
-}
+import {
+  IntegrationCatalogPanel,
+  IntegrationDetailPanel,
+} from "@/pages/integrations/IntegrationCatalogPanels";
+import { deriveIntegrationPageModel } from "@/pages/integrations/integrationPageModel";
 
 const QUICK_LINKS = [
   { label: "Documents", page: "Documents" },
@@ -75,59 +37,17 @@ const QUICK_LINKS = [
   { label: "Change Orders", page: "ChangeOrders" },
 ];
 
-function statusStyle(status) {
-  return STATUS_STYLES[status] || STATUS_STYLES.Planned;
-}
-
-function IntegrationCard({ area, selected, onSelect, devView }) {
-  const Icon = AREA_ICONS[area.key] || Cable;
-  const style = devView ? statusStyle(area.status) : customerToneStyle(area.customerStatus);
-  const customerLabel = customerStatusMeta(area.customerStatus).label;
-  return (
-    <button
-      type="button"
-      className={`integrations-card ${selected ? "is-selected" : ""}`}
-      onClick={onSelect}
-      style={{ "--integration-accent": style.color, "--integration-accent-bg": style.bg, "--integration-accent-border": style.border }}
-    >
-      <div className="integrations-card-top">
-        <div className="integrations-card-icon"><Icon size={18} /></div>
-        <span>{area.category}</span>
-      </div>
-      <strong>{area.name}</strong>
-      <p>{area.shortDescription}</p>
-      <div className="integrations-card-footer">
-        {devView ? (
-          <>
-            <span>{area.status}</span>
-            <small>{area.risk} risk</small>
-          </>
-        ) : (
-          <span>{customerLabel}</span>
-        )}
-      </div>
-    </button>
-  );
-}
-
-// A small per-provider readiness row used in the detail panel (customer view).
-function ProviderRow({ name, status }) {
-  const tone = customerToneStyle(status);
-  const meta = customerStatusMeta(status);
-  return (
-    <div className="integrations-provider-row">
-      <span className="integrations-provider-name">{name}</span>
-      <span
-        className="integrations-provider-status"
-        style={{ color: tone.color, background: tone.bg, borderColor: tone.border }}
-      >
-        {meta.label}
-      </span>
-    </div>
-  );
-}
-
-function Kpi({ label, value, detail, icon: Icon }) {
+function Kpi({
+  label,
+  value,
+  detail,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+  icon: typeof Cable;
+}) {
   return (
     <div className="integrations-kpi">
       <div className="integrations-kpi-icon"><Icon size={18} /></div>
@@ -140,25 +60,6 @@ function Kpi({ label, value, detail, icon: Icon }) {
   );
 }
 
-function BulletList({ items }) {
-  return (
-    <ul className="integrations-bullet-list">
-      {items.map((item) => <li key={item}>{item}</li>)}
-    </ul>
-  );
-}
-
-function SelectPill({ label, value, onChange, options }) {
-  return (
-    <label className="integrations-select">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => <option key={option} value={option}>{option}</option>)}
-      </select>
-    </label>
-  );
-}
-
 export default function Integrations() {
   const navigate = useNavigate();
   const projectId = useProjectId();
@@ -167,21 +68,25 @@ export default function Integrations() {
   const [status, setStatus] = useState("All");
   const [customerStatusFilter, setCustomerStatusFilter] = useState("All");
   const [query, setQuery] = useState("");
-  const [selectedKey, setSelectedKey] = useState("document-storage");
+  const [selectedKey, setSelectedKey] = useState<IntegrationKey>("document-storage");
   // Customers see clean product language by default; admins can flip to the
   // developer/internal view (real status + risk + the technical roadmap).
   const [devView, setDevView] = useState(false);
   const showDev = isAdmin && devView;
 
-  const filteredAreas = useMemo(() => {
-    const byText = filterIntegrations({ category, status: showDev ? status : "All", query });
-    return showDev ? byText : filterByCustomerStatus(byText, customerStatusFilter);
-  }, [category, status, query, showDev, customerStatusFilter]);
-  const selectedArea = useMemo(() => getIntegrationByKey(selectedKey), [selectedKey]);
-  const devSummary = useMemo(() => integrationSummary(INTEGRATION_AREAS), []);
-  const custSummary = useMemo(() => customerIntegrationSummary(INTEGRATION_AREAS), []);
-  const selectedStyle = showDev ? statusStyle(selectedArea.status) : customerToneStyle(selectedArea.customerStatus);
-  const selectedCustomerLabel = customerStatusMeta(selectedArea.customerStatus).label;
+  const pageModel = useMemo(
+    () => deriveIntegrationPageModel({
+      filters: {
+        category,
+        status,
+        customerStatus: customerStatusFilter,
+        query,
+      },
+      selectedKey,
+      showDev,
+    }),
+    [category, customerStatusFilter, query, selectedKey, showDev, status],
+  );
 
   return (
     <div className="sb-dashboard-reference-page integrations-page">
@@ -222,137 +127,44 @@ export default function Integrations() {
       <section className="integrations-kpis">
         {showDev ? (
           <>
-            <Kpi icon={Cable} label="Integration areas" value={devSummary.total} detail="cataloged and scoped" />
-            <Kpi icon={CheckCircle2} label="Partially live" value={devSummary.partiallyLive} detail="existing SteelBuild capability" />
-            <Kpi icon={AlertTriangle} label="High-risk adapters" value={devSummary.highRisk} detail="OAuth, cost, or model permissions" />
+            <Kpi icon={Cable} label="Integration areas" value={pageModel.devSummary.total} detail="cataloged and scoped" />
+            <Kpi icon={CheckCircle2} label="Partially live" value={pageModel.devSummary.partiallyLive} detail="existing SteelBuild capability" />
+            <Kpi icon={AlertTriangle} label="High-risk adapters" value={pageModel.devSummary.highRisk} detail="OAuth, cost, or model permissions" />
             <Kpi icon={KeyRound} label="Credential policy" value="Server side" detail="no browser-stored provider secrets" />
           </>
         ) : (
           <>
-            <Kpi icon={CheckCircle2} label="Available now" value={custSummary.availableAreas} detail="integration areas you can use today" />
-            <Kpi icon={Cable} label="Connectors live" value={custSummary.availableProviders} detail="providers ready to connect" />
-            <Kpi icon={Clock3} label="Coming soon" value={custSummary.comingSoonProviders} detail="connectors on the roadmap" />
+            <Kpi icon={CheckCircle2} label="Available now" value={pageModel.customerSummary.availableAreas} detail="integration areas you can use today" />
+            <Kpi icon={Cable} label="Connectors live" value={pageModel.customerSummary.availableProviders} detail="providers ready to connect" />
+            <Kpi icon={Clock3} label="Coming soon" value={pageModel.customerSummary.comingSoonProviders} detail="connectors on the roadmap" />
             <Kpi icon={KeyRound} label="Your data is safe" value="Reviewed" detail="nothing writes without your approval" />
           </>
         )}
       </section>
 
       <main className="integrations-layout">
-        <section className="integrations-panel integrations-catalog-panel">
-          <div className="integrations-panel-heading">
-            <div>
-              <h2>{showDev ? "Integration Catalog" : "Available Integrations"}</h2>
-              <p>
-                {showDev
-                  ? "Provider choices stay separated from business workflows so each adapter can be reviewed safely."
-                  : "Pick a connection to see what's available today and what's coming soon."}
-              </p>
-            </div>
-          </div>
+        <IntegrationCatalogPanel
+          category={category}
+          customerStatus={customerStatusFilter}
+          filteredAreas={pageModel.filteredAreas}
+          query={query}
+          selectedKey={pageModel.selectedArea.key}
+          showDev={showDev}
+          status={status}
+          onCategoryChange={setCategory}
+          onCustomerStatusChange={setCustomerStatusFilter}
+          onQueryChange={setQuery}
+          onSelect={setSelectedKey}
+          onStatusChange={setStatus}
+        />
 
-          <div className="integrations-filters">
-            <label className="integrations-search">
-              <Search size={15} />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search providers, systems, or modules" />
-            </label>
-            <SelectPill label="Category" value={category} onChange={setCategory} options={INTEGRATION_CATEGORIES} />
-            {showDev ? (
-              <SelectPill label="Status" value={status} onChange={setStatus} options={INTEGRATION_STATUSES} />
-            ) : (
-              <SelectPill label="Readiness" value={customerStatusFilter} onChange={setCustomerStatusFilter} options={CUSTOMER_STATUS_FILTERS} />
-            )}
-          </div>
-
-          <div className="integrations-card-grid">
-            {filteredAreas.map((area) => (
-              <IntegrationCard
-                key={area.key}
-                area={area}
-                selected={area.key === selectedArea.key}
-                onSelect={() => setSelectedKey(area.key)}
-                devView={showDev}
-              />
-            ))}
-          </div>
-        </section>
-
-        <aside className="integrations-panel integrations-detail-panel" style={{ "--detail-accent": selectedStyle.color, "--detail-bg": selectedStyle.bg, "--detail-border": selectedStyle.border }}>
-          <div className="integrations-detail-header">
-            <div className="integrations-detail-icon">
-              {React.createElement(AREA_ICONS[selectedArea.key] || Cable, { size: 22 })}
-            </div>
-            <div>
-              <span>{selectedArea.category}</span>
-              <h2>{selectedArea.name}</h2>
-            </div>
-          </div>
-
-          <div className="integrations-status-row">
-            {showDev ? (
-              <>
-                <span>{selectedArea.status}</span>
-                <strong>{selectedArea.risk} risk</strong>
-              </>
-            ) : (
-              <span>{selectedCustomerLabel}</span>
-            )}
-          </div>
-
-          {!showDev && (
-            <p className="integrations-customer-summary">{selectedArea.customerSummary}</p>
-          )}
-
-          <div className="integrations-detail-section">
-            <h3>{showDev ? "Systems" : "What's included"}</h3>
-            {showDev ? (
-              <div className="integrations-chip-list">
-                {selectedArea.systems.map((system) => <span key={system}>{system}</span>)}
-              </div>
-            ) : (
-              <div className="integrations-provider-list">
-                {selectedArea.providers.map((p) => <ProviderRow key={p.name} name={p.name} status={p.status} />)}
-              </div>
-            )}
-          </div>
-
-          {showDev && (
-            <>
-              <div className="integrations-detail-section">
-                <h3>Existing SteelBuild Surface</h3>
-                <BulletList items={selectedArea.existingCapabilities} />
-              </div>
-
-              <div className="integrations-detail-section">
-                <h3>Target Workflows</h3>
-                <BulletList items={selectedArea.targetWorkflows} />
-              </div>
-
-              <div className="integrations-detail-section">
-                <h3>Prerequisites</h3>
-                <BulletList items={selectedArea.prerequisites} />
-              </div>
-
-              <div className="integrations-detail-section">
-                <h3>Next Sprint</h3>
-                <BulletList items={selectedArea.nextSprint} />
-              </div>
-            </>
-          )}
-
-          {/* Live management panels — appear when a project is active */}
-          {projectId && selectedKey === "email" && (
-            <div className="integrations-detail-section" style={{ marginTop: 20 }}>
-              <h3>Live Configuration</h3>
-              <EmailAccountSettings projectId={projectId} />
-            </div>
-          )}
-          {projectId && selectedKey === "document-storage" && (
-            <div className="integrations-detail-section" style={{ marginTop: 20 }}>
-              <h3>Live Configuration</h3>
-              <DocumentStorageSettings projectId={projectId} />
-            </div>
-          )}
-        </aside>
+        <IntegrationDetailPanel
+          area={pageModel.selectedArea}
+          customerLabel={pageModel.selectedCustomerLabel}
+          projectId={projectId}
+          showDev={showDev}
+          style={pageModel.selectedStyle}
+        />
 
         {showDev && (
           <section className="integrations-panel integrations-wide">
