@@ -6,11 +6,15 @@
  * route entry (no-project state) and tab-history semantics.
  */
 import React from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, it, expect, vi } from "vitest";
+
+// Lazy panel chunks can take seconds under a loaded full-suite run, and
+// several waits below allow 8s, so the per-test budget has to exceed that.
+vi.setConfig({ testTimeout: 15000 });
 
 vi.mock("@/api/supabaseClient", () => {
   const noop = {
@@ -54,6 +58,11 @@ vi.mock("@/hooks/useFeatureFlag", () => ({ useFlag: () => false, useFeatureFlag:
 vi.mock("@/components/shared/useAppSecurity", () => ({
   useAppSecurity: () => ({ user: { email: "test@example.com", id: "test-user-id" } }),
 }));
+// HoldsPanel (the holds tab) reads the signed-in user for hold attribution.
+vi.mock("@/lib/AuthContext", async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuth: () => ({ user: { email: "test@example.com", id: "test-user-id" } }),
+}));
 vi.mock("@/services/permissions", () => ({
   usePermissions: () => ({
     can: () => true,
@@ -81,6 +90,19 @@ vi.mock("@/hooks/useDrawingHolds", async (importOriginal) => {
   };
 });
 
+// The real Fleet Health strip renders only for scored sets, and the entity
+// mock returns none. A stub exposes its one callback, so the needs-attention
+// chip's destination is testable.
+vi.mock("@/pages/drawingSubmittalHub/components", async (importOriginal) => {
+  const actual = await importOriginal();
+  const { createElement } = await import("react");
+  return {
+    ...actual,
+    FleetHealthStrip: ({ onOpenRegister }) =>
+      createElement("button", { type: "button", onClick: onOpenRegister }, "fleet-needs-attention"),
+  };
+});
+
 import DrawingSubmittalHub from "@/pages/DrawingSubmittalHub";
 import { ProjectContext } from "@/components/shared/ProjectContext";
 
@@ -97,6 +119,7 @@ function LocationProbe() {
   const navigate = useNavigate();
   return (
     <div>
+      <output data-testid="pathname">{location.pathname}</output>
       <output data-testid="search">{location.search}</output>
       <output data-testid="nav-type">{navigationType}</output>
       <button type="button" onClick={() => navigate(-1)}>probe-back</button>
@@ -219,6 +242,172 @@ describe("DrawingSubmittalHub — tab history", () => {
     await user.click(await screen.findByRole("tab", { name: /Control Board/ }));
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=overview");
   });
+
+  it("drops the sub-view and the matrix filter on every switch, even into the matrix, and keeps unrelated params", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=overview&hub_view=sets&matrix_filter=hold&keep=1"] });
+
+    await user.click(await screen.findByRole("tab", { name: /Approval Matrix/ }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=matrix&keep=1");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
+  });
+});
+
+// Every live ?hub_tab= key but model3d (its body is flag-gated, and the flag is
+// off here). Pinned rather than imported, so a key that stops resolving fails
+// loudly. doccontrol was retired into an alias; its redirect is tested below.
+const NON_3D_KEYS = ["overview", "process", "drawings", "submittals", "transmittals", "matrix", "revimpact", "holds", "validation"];
+
+// The hub's own tab strip; some panels (Holds) render a tablist of their own.
+async function selectedTab() {
+  const tablist = await screen.findByRole("tablist", { name: "Detailing Control Center tabs" });
+  return within(tablist).getByRole("tab", { selected: true });
+}
+
+describe("DrawingSubmittalHub — ?hub_tab= links", () => {
+  it.each(NON_3D_KEYS)("?hub_tab=%s opens its tab and leaves the URL alone", async (key) => {
+    renderHub({ entries: [`/DrawingSubmittalHub?hub_tab=${key}`] });
+    expect(await selectedTab()).toHaveAttribute("id", `dcc-tab-${key}`);
+    expect(screen.getByTestId("search").textContent).toBe(`?hub_tab=${key}`);
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
+  });
+
+  it("drops an unknown ?hub_tab= before mounting, without adding a history entry", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/Dashboard", "/DrawingSubmittalHub?hub_tab=bogus"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    expect(screen.getByTestId("pathname").textContent).toBe("/DrawingSubmittalHub");
+    expect(screen.getByTestId("search").textContent).toBe("");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+
+    // The bogus entry was replaced, not stacked on: Back leaves the hub.
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/Dashboard");
+  });
+
+  it("keeps a ?hub_tab=model3d link while the 3D flag is off, showing the Control Board", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=model3d");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
+  });
+});
+
+const SHEET_GRID_FILTER = /Filter sheet, title, discipline, set/i;
+const MOVED_NOTICE = { name: "Doc Control has moved" };
+
+describe("DrawingSubmittalHub — Doc Control retired", () => {
+  it("has no Doc Control tab", async () => {
+    renderHub();
+    const tablist = await screen.findByRole("tablist", { name: "Detailing Control Center tabs" });
+    expect(within(tablist).getByRole("tab", { name: /Drawing Register/ })).toBeInTheDocument();
+    expect(within(tablist).queryByRole("tab", { name: /Doc Control/ })).not.toBeInTheDocument();
+  });
+
+  it("sends a ?hub_tab=doccontrol bookmark to the Drawing Register's sheets, in place, with a notice", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/Dashboard", "/DrawingSubmittalHub?hub_tab=doccontrol"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-drawings");
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=drawings");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+    expect(await screen.findByPlaceholderText(SHEET_GRID_FILTER)).toBeInTheDocument();
+    expect(screen.getByRole("heading", MOVED_NOTICE)).toBeInTheDocument();
+    expect(screen.getByText(/Drawing Register › Reviews/)).toBeInTheDocument();
+    expect(screen.getByText(/Revision Impact › Impact log/)).toBeInTheDocument();
+
+    // Replaced, not stacked: Back leaves the hub.
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/Dashboard");
+  });
+
+  it("keeps the notice while the new views are tried, until it's dismissed", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=doccontrol"] });
+    expect(await screen.findByRole("heading", MOVED_NOTICE)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Reviews" }));
+    expect(await screen.findByRole("heading", { name: "Review Queue" }, { timeout: 8000 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", MOVED_NOTICE)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Dismiss the Doc Control notice/ }));
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+  });
+
+  it("shows the notice once: leaving the tab ends it, and Back doesn't bring it back", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=doccontrol"] });
+    expect(await screen.findByRole("heading", MOVED_NOTICE)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /Holds & Blockers/ }));
+    await user.click(screen.getByRole("tab", { name: /Drawing Register/ }));
+    expect(await screen.findByPlaceholderText(SHEET_GRID_FILTER)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+
+    // Back twice returns to the arrival entry, which still carries the alias state.
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-drawings");
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+  });
+
+  it("shows no notice on an ordinary Drawing Register visit, or after an unknown-key redirect", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=drawings"] });
+    expect(await screen.findByPlaceholderText(SHEET_GRID_FILTER)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+    cleanup();
+
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=bogus"] });
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+    expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
+  });
+});
+
+describe("DrawingSubmittalHub — tab sub-views (?hub_view=)", () => {
+  it("?hub_tab=drawings&hub_view=reviews opens the Review Queue", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=drawings&hub_view=reviews"] });
+    expect(await screen.findByRole("heading", { name: "Review Queue" }, { timeout: 8000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reviews" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("?hub_tab=revimpact&hub_view=log opens the manual impact log", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=revimpact&hub_view=log"] });
+    expect(await screen.findByRole("heading", { name: "Impact Board" }, { timeout: 8000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Impact log" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/Manually logged drawing impacts/)).toBeInTheDocument();
+  });
+
+  it("switches views without adding history entries", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/Dashboard", "/DrawingSubmittalHub?hub_tab=drawings"] });
+
+    await user.click(await screen.findByRole("button", { name: "Reviews" }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=drawings&hub_view=reviews");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+
+    await user.click(screen.getByRole("button", { name: "Sheets" }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=drawings");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/Dashboard");
+  });
+
+  it("opens Sets & revisions from a needs-attention chip, and Back returns to the Control Board", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/DrawingSubmittalHub"] });
+
+    await user.click(await screen.findByRole("button", { name: "fleet-needs-attention" }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=drawings&hub_view=sets");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-drawings");
+    expect(screen.getByRole("button", { name: "Sets & revisions" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
+  });
 });
 
 describe("DrawingSubmittalHub — holds", () => {
@@ -246,7 +435,9 @@ describe("DrawingSubmittalHub — holds", () => {
     holdsState.data = undefined;
     holdsState.isError = true;
     renderHub();
-    expect(await screen.findByText("Nothing overdue")).toBeInTheDocument(); // band has rendered
+    // The header has rendered (its tabs are here) but shows no holds badge.
+    expect(await screen.findByRole("tab", { name: /Holds & Blockers/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /On Hold$|^No holds$/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/On Hold$|No holds/)).not.toBeInTheDocument();
   });
 
@@ -254,5 +445,86 @@ describe("DrawingSubmittalHub — holds", () => {
     renderHub({ ctx: { activeProject: { id: "p-2", name: "Mesa Gateway", project_number: "24-117" } } });
     expect(await screen.findByText("24-117 · Mesa Gateway")).toBeInTheDocument();
     cleanup();
+  });
+});
+
+// Owner decision 2 (2026-09-11): 2026's compact header, with the KPI strip
+// moved into the Control Board tab.
+const STATUS_LINE = /sets · .+ open · .+ overdue · .+ at risk · Fab Ready/;
+
+describe("DrawingSubmittalHub — compact header", () => {
+  it("shows the KPI strip on the Control Board, beside the board's own scoped tile", async () => {
+    renderHub();
+    expect(await screen.findByText("Submittals Needing Action")).toBeInTheDocument();
+    expect(await screen.findByText("Items Needing Action")).toBeInTheDocument();
+    expect(screen.queryByText("Needs Action")).not.toBeInTheDocument();
+    expect(screen.queryByText(STATUS_LINE)).not.toBeInTheDocument();
+  });
+
+  it("shows the status line instead of the KPI strip on other tabs", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=holds"] });
+    expect(await screen.findByText(STATUS_LINE)).toBeInTheDocument();
+    expect(screen.queryByText("Submittals Needing Action")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["overview", () => screen.findByText("Items Needing Action", {}, { timeout: 8000 })],
+    ["submittals", () => screen.findByPlaceholderText("Search # / title / spec section", {}, { timeout: 8000 })],
+    ["holds", () => screen.findByRole("heading", { name: "Holds & Blockers" }, { timeout: 8000 })],
+    ["validation", () => screen.findByRole("heading", { name: "Drawing and piece validation" }, { timeout: 8000 })],
+  ])("has exactly one h1 on ?hub_tab=%s once its panel has loaded", async (key, panelLoaded) => {
+    renderHub({ entries: [`/DrawingSubmittalHub?hub_tab=${key}`] });
+    await panelLoaded();
+    const h1s = screen.getAllByRole("heading", { level: 1 });
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0]).toHaveTextContent("Detailing Control Center");
+  });
+
+  it("opens Holds & Blockers from the header's holds badge, as a new history entry", async () => {
+    const user = userEvent.setup();
+    holdsState.data = [{ id: "h1", drawing_id: "d1", is_active: true, placed_at: "2026-09-01T00:00:00Z" }];
+    renderHub();
+
+    await user.click(await screen.findByRole("button", { name: "1 Sheet On Hold" }));
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=holds");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-holds");
+  });
+
+  it("names the project in the eyebrow without a project number the project doesn't have", async () => {
+    renderHub();
+    expect(await screen.findByText("Test Project")).toHaveClass("detailing-cc__eyebrow");
+  });
+});
+
+// Control Board and Process Board clicks land on these URLs (owner decision 3).
+describe("DrawingSubmittalHub — record deep links", () => {
+  it("opens ?hub_tab=submittals&recordId= on the Submittal Register, which consumes recordId and keeps hub_tab", async () => {
+    const user = userEvent.setup();
+    renderHub({ entries: ["/Dashboard", "/DrawingSubmittalHub?hub_tab=submittals&recordId=sub-404"] });
+
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-submittals");
+    // The embedded register strips recordId once its rows settle (a miss here:
+    // the entity mock has no rows), rewriting the entry rather than pushing.
+    await waitFor(
+      () => expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals"),
+      { timeout: 8000 },
+    );
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-submittals");
+
+    // Nothing was stacked: Back leaves the hub.
+    await user.click(screen.getByRole("button", { name: "probe-back" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/Dashboard");
+  });
+
+  it("opens ?hub_tab=submittals&targetSetId= as create on the Submittal Register, stripping targetSetId in place", async () => {
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=submittals&targetSetId=set-1"] });
+
+    expect(await screen.findByRole("dialog", { name: "New Submittal" }, { timeout: 8000 })).toBeInTheDocument();
+    // The modal hides the page behind it from the accessibility tree.
+    expect(screen.getByRole("tab", { name: /Submittal Register/, hidden: true })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals");
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
   });
 });

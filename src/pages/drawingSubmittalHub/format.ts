@@ -1,4 +1,4 @@
-import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldCheck, ShieldAlert, Send, ListChecks, Workflow } from "lucide-react";
+import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldAlert, Send, ListChecks, Workflow } from "lucide-react";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { DRAFTING_STATES, effectiveDetailingState, hasGoverningSubmittal, isPackageReleasedForFab, isPackageRR } from "@/lib/detailingPackageState";
@@ -36,7 +36,6 @@ export const TABS = [
   { key: "revimpact", label: "Revision Impact", icon: GitCompareArrows },
   { key: "holds", label: "Holds & Blockers", icon: ShieldAlert },
   { key: "validation", label: "Validation", icon: ListChecks },
-  { key: "doccontrol", label: "Doc Control", icon: ShieldCheck },
 ];
 
 // ── Status colors for matrix ───────────────────────────────────────────────
