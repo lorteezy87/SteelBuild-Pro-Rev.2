@@ -9,6 +9,8 @@ import {
   type PilotReadinessSnapshot,
 } from "@/lib/pieceControl/pilotReadinessRepository";
 import { exportToCSV } from "@/lib/csv";
+import { normalizeThrownQueryError } from "@/lib/postgrestErrors";
+import { classifyReportedError, mutationReportingInput } from "@/lib/sentry/reportedErrors";
 import { PieceControlPilotReadiness } from "../PieceControlPilotReadiness";
 import { toast } from "sonner";
 
@@ -27,6 +29,10 @@ vi.mock("sonner", () => ({
     success: vi.fn(),
   },
 }));
+
+// Reached only when a test swaps in the real setPieceControlMode (T18).
+const rpc = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/supabase", () => ({ supabase: { rpc } }));
 
 const rpcReadinessCopy = {
   modelLinks: "3 active model elements are not linked to canonical pieces",
@@ -82,7 +88,7 @@ function renderReadiness(snapshot: PilotReadinessSnapshot = blockedSnapshot) {
     },
   });
 
-  return render(
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <PieceControlPilotReadiness
         projectId="project-1"
@@ -90,6 +96,7 @@ function renderReadiness(snapshot: PilotReadinessSnapshot = blockedSnapshot) {
       />
     </QueryClientProvider>,
   );
+  return { ...rendered, queryClient };
 }
 
 describe("PieceControlPilotReadiness", () => {
@@ -241,5 +248,112 @@ describe("PieceControlPilotReadiness", () => {
     expect(toast.error).not.toHaveBeenCalledWith(
       expect.stringMatching(/canonical|transition blocked/i),
     );
+  });
+
+  // T15: this screen explains readiness guards, so it opts in to reporting
+  // them as expected (info level), not as crashes.
+  it("opts the mode mutation in to expected-guard reporting", async () => {
+    const guard = normalizeThrownQueryError({
+      code: "P0001",
+      message: 'Pilot transition blocked: ["x"]',
+    });
+    vi.mocked(setPieceControlMode).mockRejectedValue(guard);
+    const { queryClient } = renderReadiness();
+
+    fireEvent.change(await screen.findByRole("combobox"), {
+      target: { value: "pilot" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Type: CHANGE SHADOW TO PILOT"),
+      { target: { value: "CHANGE SHADOW TO PILOT" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm mode change" }),
+    );
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Pilot workflow is blocked. Review the readiness checks and try again.",
+      ),
+    );
+    const modeChange = queryClient
+      .getMutationCache()
+      .getAll()
+      .find((mutation) => mutation.meta?.action === "pieceControl.setMode");
+    if (!modeChange) throw new Error("The mode mutation was never built.");
+    const { hasLocalHandler, expectedErrors } = mutationReportingInput(modeChange);
+    expect(
+      classifyReportedError(guard, {
+        source: "mutation",
+        rawIsError: true,
+        hasLocalHandler,
+        expectedErrors,
+      }),
+    ).toEqual({
+      verdict: "expected",
+      reason: "matched-rule",
+      ruleId: "piece-mode.pilot-blocked",
+      code: "P0001",
+    });
+  });
+
+  // T18: the server's own admin check fires when the cached role is stale. The
+  // real repository throws a normalized Error whose message ends in "— 42501",
+  // so the toast is the permission message, not the generic fallback.
+  it("explains the server admin check (42501) as a permission problem", async () => {
+    const actual = await vi.importActual<
+      typeof import("@/lib/pieceControl/pilotReadinessRepository")
+    >("@/lib/pieceControl/pilotReadinessRepository");
+    vi.mocked(setPieceControlMode).mockImplementation(actual.setPieceControlMode);
+    rpc.mockReset();
+    rpc.mockResolvedValue({
+      data: null,
+      error: {
+        message: "Only a project admin may change Piece Control mode",
+        code: "42501",
+        details: null,
+        hint: null,
+      },
+    });
+    const { queryClient } = renderReadiness();
+
+    fireEvent.change(await screen.findByRole("combobox"), {
+      target: { value: "pilot" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Type: CHANGE SHADOW TO PILOT"),
+      { target: { value: "CHANGE SHADOW TO PILOT" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm mode change" }),
+    );
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "You do not have permission to complete this Piece Register action.",
+      ),
+    );
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("set_piece_control_mode", {
+      p_project_id: "project-1",
+      p_next_mode: "pilot",
+      p_confirmation: "CHANGE SHADOW TO PILOT",
+    });
+
+    // Outside the P0001 ceiling, so Sentry still gets it at error level.
+    const modeChange = queryClient
+      .getMutationCache()
+      .getAll()
+      .find((mutation) => mutation.meta?.action === "pieceControl.setMode");
+    if (!modeChange) throw new Error("The mode mutation was never built.");
+    const { hasLocalHandler, expectedErrors } = mutationReportingInput(modeChange);
+    expect(
+      classifyReportedError(modeChange.state.error, {
+        source: "mutation",
+        rawIsError: modeChange.state.error instanceof Error,
+        hasLocalHandler,
+        expectedErrors,
+      }),
+    ).toEqual({ verdict: "unexpected", reason: "code-not-eligible", code: "42501" });
   });
 });
