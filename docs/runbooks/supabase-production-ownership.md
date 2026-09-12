@@ -45,6 +45,23 @@ configuration.
    repair migration history or deploy/delete functions merely to make inventory
    green.
 
+## Reconciliation rehearsal
+
+Save a read-only Management API inventory as JSON with `projectRef`,
+`migrations` (`version` strings), and `functions` (`slug` strings), then run:
+
+```bash
+npm run supabase:reconcile:plan -- /absolute/path/to/saved-inventory.json
+```
+
+The planner performs no network requests and cannot execute migration repairs,
+schema changes, function deploys, or deletes. It exits nonzero when the
+inventory has blockers or proposed changes and prints only review categories:
+required migrations/functions missing from the environment, prohibited
+deprecated/staging-only functions, unknown remote assets, and unresolved
+lineage. Use saved evidence from the intended disposable environment first.
+Never feed a generated action list directly to a shell.
+
 ## Current reconciliation blockers
 
 The manifest intentionally remains red for these source/lineage gaps:
