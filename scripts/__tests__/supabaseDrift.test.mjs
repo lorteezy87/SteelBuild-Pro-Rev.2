@@ -30,9 +30,9 @@ describe('Supabase production ownership evidence', () => {
     expect(repositoryManifest.migrations
       .filter(entry => entry.lifecycle === 'unresolved')
       .map(entry => entry.version)).toEqual([
-      '20260802090000',
-      '20260802090500',
-      '20260906040515',
+      '20260909062016',
+      '20260909073500',
+      '20260909090445',
       '20260910034739',
       '20260910044641',
     ]);

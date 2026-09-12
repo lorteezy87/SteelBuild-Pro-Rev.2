@@ -45,23 +45,51 @@ configuration.
    repair migration history or deploy/delete functions merely to make inventory
    green.
 
+## Reconciliation rehearsal
+
+Save a read-only Management API inventory as JSON with `projectRef`,
+`migrations` (`version` strings), and `functions` (`slug` strings), then run:
+
+```bash
+npm run supabase:reconcile:plan -- /absolute/path/to/saved-inventory.json
+```
+
+The planner performs no network requests and cannot execute migration repairs,
+schema changes, function deploys, or deletes. It exits nonzero when the
+inventory has blockers or proposed changes and prints only review categories:
+required migrations/functions missing from the environment, prohibited
+deprecated/staging-only functions, unknown remote assets, and unresolved
+lineage. Use saved evidence from the intended disposable environment first.
+Never feed a generated action list directly to a shell.
+
+Deprecated Edge Function deletion is derived from the same reviewed manifest.
+The helper first requires a successful remote inventory read and defaults to a
+dry run:
+
+```bash
+npm run supabase:delete-deprecated-fns
+DRY_RUN=0 \
+  CONFIRM_DELETE_DEPRECATED_FUNCTIONS=kjrwqagyeswwoxpjkcko \
+  npm run supabase:delete-deprecated-fns
+```
+
+Apply mode refuses a missing/mismatched project ref or confirmation value.
+Function-list failures abort; the helper never continues from a stale fixed
+deletion list.
+
 ## Current reconciliation blockers
 
-The manifest intentionally remains red for these source/lineage gaps:
+The two evidence-backed Rev.2 Planner migrations are restored in active
+inventory as `20260802090000_planner_action_control.sql` and
+`20260802090500_planner_offline_idempotency.sql`. Their contents remain
+byte-identical to git objects `8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef` and
+`26216f3247b0cc63dc0ff03e7f756b0f64c9b762`, respectively.
 
-- `20260802090000` (`planner_action_control`): exact Rev.2 SQL survives as git
-  object `8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef`, but is absent from active
-  replay migrations.
-- `20260802090500` (`planner_offline_idempotency`): exact Rev.2 SQL survives as
-  git object `26216f3247b0cc63dc0ff03e7f756b0f64c9b762`, but is absent from active
-  replay migrations.
-- `20260906040515` (`fix_alerts_superseded_status`): production
-  `generate_operational_alerts` is byte-identical to active Rev.2
-  `20260819002000` (SHA-256
-  `d6da4d5d559bfca074cbcd0228e484d2155e0c7b26682f8e7fc7a551b40d8280`),
-  so the stamp has no surviving distinct function-body effect and is an
-  overwritten/orphan candidate. Exact SQL and authoritative ownership remain
-  unresolved, so migration-history repair is not safe.
+The manifest intentionally remains red for these five source/lineage gaps:
+
+- `20260909062016`, `20260909073500`, and `20260909090445`: authenticated
+  production inventory identifies these as remote-only restamps. Exact SQL,
+  canonical source versions, and authoritative owners remain unresolved.
 - `20260910034739` (`hard_delete_records`): ledger order places it in the
   SteelBuild-Pro-2026 sequence. Its isolated live footprint is six
   `hard_delete_*` functions plus `data_erasure_log` record metadata changes,
@@ -71,6 +99,35 @@ The manifest intentionally remains red for these source/lineage gaps:
   `scope_items` columns, four functions, two foreign keys, two checks, three
   indexes, two triggers, and replacement field/access RLS, none present in the
   Rev.2 baseline or 38 accessible sibling migrations; exact source is absent.
+
+Recovered Rev.2 lineage now includes
+`20260906040515_fix_alerts_superseded_status.sql`. The original
+`apply_migration` payload was recovered from local Claude `tool_use` line 1775
+and committed byte-identically: 4,899 bytes, SHA-256
+`f1c7c1b81c6cd0a451b1e896ab9f2e9ebc120704f21699c80a5d723caaaf3358`.
+Its `escalate_rfi_sla` and `notify_rfi_bic_handoff` bodies were independently
+matched to production at SHA-256
+`0ef63f248c1d8aaa4559c192e58b5f7aae65f4c58a6e3bc887d0604f6d36c2b0`
+and `30143ad37ed0f2bbf8bc066d13ced9643b6b41c1de284d55aa2ee03578b2a959`.
+Bookkeeping repair remains gated on disposable replay, second review, and a
+maintenance window.
+
+## Authenticated drift snapshot
+
+The CI run against commit `bb5dc6c41` on 2026-09-12 authenticated successfully
+and failed closed as designed. It reported:
+
+- 42 active local migration versions absent from the production ledger;
+- the three remote restamps above as unknown before they were recorded as
+  explicit unresolved blockers;
+- the two source-absent SteelBuild-Pro-2026 migrations above; and
+- six deployed deprecated functions: `bluebeam-proxy`, `schedule-assistant`,
+  `sharepoint-proxy`, `stripe-setup`, `stripe-webhook`, and `stripe-worker`.
+
+The 42 missing ledger versions do not by themselves distinguish unapplied SQL
+from already-present schema with missing bookkeeping. Resolve that distinction
+through disposable replay and reviewed live-schema evidence before proposing
+`migration repair` or applying SQL.
 
 The two Rev.2 apply-time restamps `20260817072554` and `20260817083550` are
 explicitly frozen and point to their active canonical migration sources in the

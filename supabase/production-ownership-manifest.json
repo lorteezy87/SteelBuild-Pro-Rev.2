@@ -26,18 +26,6 @@
   },
   "migrations": [
     {
-      "version": "20260802090000",
-      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
-      "lifecycle": "unresolved",
-      "evidence": "Exact planner_action_control SQL survives as git object 8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef, but replay source is absent from active migrations"
-    },
-    {
-      "version": "20260802090500",
-      "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
-      "lifecycle": "unresolved",
-      "evidence": "Exact planner_offline_idempotency SQL survives as git object 26216f3247b0cc63dc0ff03e7f756b0f64c9b762, but replay source is absent from active migrations"
-    },
-    {
       "version": "20260817072554",
       "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
       "lifecycle": "intentionally-frozen",
@@ -48,12 +36,6 @@
       "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
       "lifecycle": "intentionally-frozen",
       "evidence": "Production apply-time restamp of active supabase/migrations/20260817020000_repair_bimc_rfi_and_schedule_dates.sql"
-    },
-    {
-      "version": "20260906040515",
-      "owner": "unresolved",
-      "lifecycle": "unresolved",
-      "evidence": "Remote fix_alerts_superseded_status stamp predates the sibling repository lineage. Production generate_operational_alerts is byte-identical to active Rev.2 20260819002000 (SHA-256 d6da4d5d559bfca074cbcd0228e484d2155e0c7b26682f8e7fc7a551b40d8280), leaving no distinct live function-body effect; exact SQL and authoritative owner remain absent, so repair is unsafe"
     },
     {
       "version": "20260909011728",
@@ -152,6 +134,12 @@
       "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060100_m2_1_scope_project_number_uniqueness_to_org.sql"
     },
     {
+      "version": "20260909062016",
+      "owner": "unresolved",
+      "lifecycle": "unresolved",
+      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
+    },
+    {
       "version": "20260909062929",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
       "lifecycle": "required",
@@ -180,6 +168,12 @@
       "owner": "lorteezy87/SteelBuild-Pro-2026",
       "lifecycle": "required",
       "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909073142_m14_quality.sql"
+    },
+    {
+      "version": "20260909073500",
+      "owner": "unresolved",
+      "lifecycle": "unresolved",
+      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
     },
     {
       "version": "20260909074754",
@@ -216,6 +210,12 @@
       "owner": "lorteezy87/SteelBuild-Pro-2026",
       "lifecycle": "required",
       "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909090000_m19_reset_org_data.sql"
+    },
+    {
+      "version": "20260909090445",
+      "owner": "unresolved",
+      "lifecycle": "unresolved",
+      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
     },
     {
       "version": "20260909091118",
