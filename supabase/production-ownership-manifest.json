@@ -135,9 +135,9 @@
     },
     {
       "version": "20260909062016",
-      "owner": "unresolved",
-      "lifecycle": "unresolved",
-      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Apply-time restamp of sibling 20260909060000_m3_7_auto_archive_empty_drawing_sets.sql, unchanged since commit a8560ab5447a0b8d564f9a7264d24b528a954076; normalized recount_drawing_set body matches production at SHA-256 d49a40cfddda1e84f47bfd8cc3346ceae37b593b9cc9a141bdc9034da5c5a54a"
     },
     {
       "version": "20260909062929",
@@ -171,9 +171,9 @@
     },
     {
       "version": "20260909073500",
-      "owner": "unresolved",
-      "lifecycle": "unresolved",
-      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Apply-time restamp of sibling 20260909060100_m2_1_scope_project_number_uniqueness_to_org.sql, unchanged since commit 1222ad55b073fcfefeae7788fb03d230af5afb3c; production has the semantically identical unique partial index and source commentary records the live MCP apply"
     },
     {
       "version": "20260909074754",
@@ -213,9 +213,9 @@
     },
     {
       "version": "20260909090445",
-      "owner": "unresolved",
+      "owner": "lorteezy87/SteelBuild-Pro-2026",
       "lifecycle": "unresolved",
-      "evidence": "Authenticated production drift inventory on 2026-09-12 identifies this remote-only restamp; exact SQL, canonical source version, and authoritative owner are absent"
+      "evidence": "Lineage to sibling 20260909090000_m19_reset_org_data.sql is explicitly confirmed by Rev.2 migration 20260912042823. Production was superseded by later Rev.2 replacements, so the original body is no longer observable and bookkeeping repair remains unsafe without full replay"
     },
     {
       "version": "20260909091118",
