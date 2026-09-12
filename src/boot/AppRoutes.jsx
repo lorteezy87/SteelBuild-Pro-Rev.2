@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { hasResolvableProjectSelection } from "@/lib/projectSelection";
 import { PAGES, PROJECT_SCOPED_PAGES, STATIC_ROUTE_METADATA } from "@/config/routes";
 import PageNotFound from "@/lib/PageNotFound";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
@@ -130,8 +131,17 @@ export function IndexRoute() {
   // Will an active project (and thus a per-project role) resolve this load?
   // A saved localStorage pick or the Settings "Default Project" pref both
   // resolve into an active project after ProjectContext loads.
-  let savedSelection = false;
-  try { savedSelection = !!localStorage.getItem("activeProjectId"); } catch { /* ignore */ }
+  //
+  // The saved pick has to be CHECKED, not just counted. `activeProjectId`
+  // outlives the project it names — ProjectContext clears a stale id only once
+  // a fetch resolves, and it retries an empty list three times with 1.5s + 3s
+  // of backoff first. Testing the bare presence of the key therefore made every
+  // zero-project user (a fresh signup, or anyone whose projects were erased)
+  // wait out that backoff on a spinner: the exact stall the block above says
+  // this logic exists to prevent. hasResolvableProjectSelection cross-checks
+  // the pick against the cached project list, whose absence specifically means
+  // "the last successful load returned no live projects".
+  const savedSelection = hasResolvableProjectSelection();
   const projectPending = savedSelection || !!default_project_id;
 
   // roleReady: the inputs a role decision needs are in. With an active project

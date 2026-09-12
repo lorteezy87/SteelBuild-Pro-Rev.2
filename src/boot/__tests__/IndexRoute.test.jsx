@@ -47,6 +47,18 @@ function renderIndex() {
 const proj = (over = {}) => ({ activeProject: null, loading: false, ...over });
 const roleResolved = (role) => ({ role, isLoading: false });
 
+/**
+ * Write the pair of keys a saved project pick actually consists of. IndexRoute
+ * reads BOTH — the id alone outlives the project it names, so the cached list
+ * is what makes the pick resolvable. Deliberately not mocked: this is real
+ * localStorage against the real helper, since the bug being pinned lived in
+ * treating the id as sufficient on its own.
+ */
+function saveSelection(activeProjectId, cachedProjects) {
+  localStorage.setItem("activeProjectId", activeProjectId);
+  localStorage.setItem("sbp_projects_cache", JSON.stringify(cachedProjects));
+}
+
 describe("IndexRoute — default landing precedence (boot invariants)", () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -67,11 +79,57 @@ describe("IndexRoute — default landing precedence (boot invariants)", () => {
   });
 
   it("holds the loader (and does NOT set the guard) while a pending project's role resolves", () => {
-    localStorage.setItem("activeProjectId", "p1"); // a saved pick is pending
+    // A saved pick counts as pending only when the cached list still contains
+    // it — see the stale-id cases below for why presence alone is not enough.
+    saveSelection("p1", [{ id: "p1" }]);
     projState = proj({ activeProject: null, loading: true });
     renderIndex();
     expect(screen.getByText("LOADER")).toBeInTheDocument();
     expect(screen.queryByText("DASHBOARD")).not.toBeInTheDocument();
+    expect(sessionStorage.getItem(LANDING_REDIRECT_KEY)).toBeNull();
+  });
+
+  it("does NOT hold the loader for a stale activeProjectId with no cached projects", async () => {
+    // The state every user is in right after their projects are erased, and
+    // every brand-new signup who once had a project elsewhere. ProjectContext
+    // clears the stale id, but only AFTER a fetch that retries an empty list
+    // three times with 1.5s + 3s of backoff — so counting the bare key made
+    // exactly the users this logic protects wait out that spinner.
+    localStorage.setItem("activeProjectId", "gone");
+    // No sbp_projects_cache: ProjectContext removes it when a load returns
+    // zero live projects, so its absence means "the server said none".
+    projState = proj({ activeProject: null, loading: true });
+    renderIndex();
+    expect(await screen.findByText("DASHBOARD")).toBeInTheDocument();
+    expect(screen.queryByText("LOADER")).not.toBeInTheDocument();
+  });
+
+  it("does NOT hold the loader when the cached list no longer contains the saved pick", async () => {
+    // The user still has projects, but the one they last opened was erased.
+    saveSelection("gone", [{ id: "p2" }]);
+    projState = proj({ activeProject: null, loading: true });
+    renderIndex();
+    expect(await screen.findByText("DASHBOARD")).toBeInTheDocument();
+    expect(screen.queryByText("LOADER")).not.toBeInTheDocument();
+  });
+
+  it("does NOT treat an archived cached project as a resolvable pick", async () => {
+    // Tombstones never seed a selection — same rule ProjectContext's cache
+    // reader applies when it hydrates the switcher.
+    saveSelection("p1", [{ id: "p1", is_deleted: true }]);
+    projState = proj({ activeProject: null, loading: true });
+    renderIndex();
+    expect(await screen.findByText("DASHBOARD")).toBeInTheDocument();
+    expect(screen.queryByText("LOADER")).not.toBeInTheDocument();
+  });
+
+  it("still waits when the Settings default-project pref is set, cache or no cache", () => {
+    // The pref resolves into an active project independently of the saved pick,
+    // so it must keep holding the loader even with no cache to cross-check.
+    prefsState = { default_landing: "Dashboard", default_project_id: "p9" };
+    projState = proj({ activeProject: null, loading: true });
+    renderIndex();
+    expect(screen.getByText("LOADER")).toBeInTheDocument();
     expect(sessionStorage.getItem(LANDING_REDIRECT_KEY)).toBeNull();
   });
 

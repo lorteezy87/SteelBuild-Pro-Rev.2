@@ -2,6 +2,7 @@ import { createContext, useState, useEffect, useContext, useMemo, useRef } from 
 import { entities } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 import { subscribeProjectUpdated } from "@/services/projectUpdateEvents";
+import { PROJECTS_CACHE_KEY } from "@/lib/projectSelection";
 
 export const ProjectContext = createContext({
   activeProject: null,
@@ -25,8 +26,6 @@ export const ProjectContext = createContext({
   loading: false,
   projectLoadError: null,
 });
-
-const PROJECTS_CACHE_KEY = "sbp_projects_cache";
 
 /** Live (non-archived) projects only — never seed the switcher from tombstones. */
 function isLiveProject(project) {
