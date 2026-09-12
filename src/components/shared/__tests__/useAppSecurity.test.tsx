@@ -94,4 +94,37 @@ describe("useAppSecurity", () => {
     });
     warn.mockRestore();
   });
+
+  it("preserves the legacy payload when no project is active", () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AuthContext.Provider value={authValue({ user: null, isAuthenticated: false })}>
+        {children}
+      </AuthContext.Provider>
+    );
+    const { result } = renderHook(() => useAppSecurity(), { wrapper });
+    const payload = { project_id: "legacy-project", name: "x" };
+
+    expect(result.current.assertProjectId(payload, null)).toBe(payload);
+  });
+
+  it("stamps identity from the authenticated DB-backed user", () => {
+    const user: AppUser = {
+      id: "u1",
+      email: "pm@example.com",
+      full_name: "PM User",
+      role: "pm",
+    };
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AuthContext.Provider value={authValue({ user, isAuthenticated: true })}>
+        {children}
+      </AuthContext.Provider>
+    );
+    const { result } = renderHook(() => useAppSecurity(), { wrapper });
+
+    expect(result.current.stamp({ name: "x" })).toEqual({
+      name: "x",
+      created_by: "pm@example.com",
+      created_uid: "u1",
+    });
+  });
 });

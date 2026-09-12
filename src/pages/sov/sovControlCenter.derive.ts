@@ -85,7 +85,7 @@ export interface DivisionRow {
   balance: number;
 }
 
-/** Round to 2 decimal places — matches roundCurrency in formatters.jsx */
+/** Round to 2 decimal places — matches the shared roundCurrency helper. */
 export function roundCents(value: number): number {
   return Math.round(value * 100) / 100;
 }
