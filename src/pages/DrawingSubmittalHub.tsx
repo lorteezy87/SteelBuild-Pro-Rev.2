@@ -35,15 +35,17 @@ import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
 import { Box, CalendarCog } from "lucide-react";
-import { useFlag } from "@/hooks/useFeatureFlag";
+import { useAllFlags, useFlag } from "@/hooks/useFeatureFlag";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import { DetailingCommandShell, DetailingNoProject } from "./drawingSubmittalHub/DetailingCommandShell";
 import { DEFAULT_HUB_TAB, canonicalHubSearch, hubHref, nextTabSearch, parseHubTab } from "./drawingSubmittalHub/hubLinks";
 import { DocControlMovedNotice } from "./drawingSubmittalHub/DocControlMovedNotice";
+import { Model3DGateError, Model3DGateLoading, Model3DGateNotice } from "./drawingSubmittalHub/Model3DGateNotice";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
+  buildCurrentRevisionIdMap,
   buildCurrentRevisionMap,
   buildDrawingKpis,
   buildSequenceReadiness,
@@ -59,7 +61,7 @@ import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
 import RevisionImpactViews from "./drawingSubmittalHub/RevisionImpactViews";
 import { ApprovalMatrixPanel } from "./drawingSubmittalHub/ApprovalMatrixPanel";
-import type { HoldsStatus } from "./drawingSubmittalHub/ApprovalMatrixPanel";
+import type { HoldsStatus, LastSentStatus } from "./drawingSubmittalHub/ApprovalMatrixPanel";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
@@ -105,6 +107,9 @@ const ModelElementImportModal = ModelElementImportModalRaw as unknown as Compone
 // Tabs whose count is a warning, not a row tally (header badge's twin).
 const ALERT_TABS = ["holds"] as const;
 const NO_HOLDS: DrawingHoldRow[] = [];
+// The flag-gated 3D tab. Listed while viewer_3d is on, or while it's the open
+// tab (see the tabs memo), so a 3D link always opens it.
+const MODEL3D_TAB = { key: "model3d", label: "3D Model", icon: Box };
 
 /**
  * Route entry. An unknown (or aliased) ?hub_tab= is corrected first, before
@@ -174,23 +179,42 @@ function DetailingControlCenter() {
   const projectName = activeProject?.name || activeProject?.project_number || "";
 
   // The 3D model viewer is flag-gated until verified against real models in prod.
-  const show3d = useFlag("viewer_3d");
+  // The flag gates the 3D tab's body, not its link. Read straight off the
+  // flags query (the one useFlag reads, so no extra fetch), because useFlag
+  // reads false whenever the query isn't a success: "off", "not known yet" and
+  // "a background refetch just failed" would all look the same.
+  // - Ready means the flags are HERE. A failed background refetch keeps its
+  //   cached flags (TanStack v5: status "error" with data), so the viewer stays.
+  // - Failed with nothing cached: an error with Retry, never an endless load.
+  // show3d comes from the same data, so the tab strip, the body and the
+  // roster read always agree.
+  const flagsQuery = useAllFlags();
+  const flagsReady = flagsQuery.data !== undefined;
+  // TanStack v5 resets a data-less query to pending (isError false) the moment
+  // a Retry starts, which would swap the error for the loading line and drop
+  // the focused Retry button. errorUpdateCount survives that reset, so the
+  // error block stays mounted, in its retrying state, through the re-read.
+  const flagsFailed = !flagsReady
+    && (flagsQuery.isError || (flagsQuery.isFetching && flagsQuery.errorUpdateCount > 0));
+  const show3d = flagsQuery.data?.get("viewer_3d") === true;
   // Phase 5 display: count SUBMITTAL due-date countdowns in working days (Mon–Fri)
   // rather than calendar days when on. Drawing-set dues stay calendar-day. Threaded
   // as a param into the pure formatters (buildTriage / buildApprovalMatrixRows) and
   // as a prop into the submittal boards — pure fns never read the flag directly.
   const workdayDues = useFlag("submittal_workday_dues");
-  const tabs = useMemo(
-    () => (show3d ? [...TABS, { key: "model3d", label: "3D Model", icon: Box }] : TABS),
-    [show3d],
-  );
 
   // Tab state from URL (persistent across navigation). The route entry has
-  // already corrected unknown keys. A key this session doesn't show — model3d
-  // with the flag off, or while flags load — opens the Control Board and the
-  // URL is left alone.
+  // already corrected unknown keys, so this is a hub tab. model3d opens its own
+  // tab in every flag state, flags still loading included, and the URL is never
+  // rewritten here.
   const urlTab = parseHubTab(searchParams.get("hub_tab")).tab;
-  const activeTab = tabs.some((t) => t.key === urlTab) ? urlTab : DEFAULT_HUB_TAB;
+  const activeTab = urlTab === "model3d" || TABS.some((t) => t.key === urlTab) ? urlTab : DEFAULT_HUB_TAB;
+  // The 3D tab is listed while the flag is on, or while it's the open tab. A 3D
+  // link always lands on its tab; nobody else sees a dead one.
+  const tabs = useMemo(
+    () => (show3d || activeTab === "model3d" ? [...TABS, MODEL3D_TAB] : TABS),
+    [show3d, activeTab],
+  );
   // Leaving the Drawing Register, by any route (tab click, Back), ends the
   // one-time notice. Adjusted during render rather than in an effect, so it
   // can't flash back on a later visit to the tab.
@@ -235,11 +259,13 @@ function DetailingControlCenter() {
   const holds = holdsQuery.data ?? NO_HOLDS;
   const holdsStatus: HoldsStatus = holdsQuery.data !== undefined ? "ready" : holdsQuery.isError ? "error" : "loading";
   const activeHolds = holdsStatus === "ready" ? activeHoldCount(holds) : null;
-  // The matrix's Last Transmittal column. It's a three-table read, so it
-  // loads only while the matrix is open (same key as the Transmittals tab).
-  const { data: transmittals, isPending: transmittalsPending } = useTransmittals(projectId ?? null, {
+  // The matrix's Last Transmittal column and Last sent line. It's a
+  // three-table read, so it loads only while the matrix is open (same key as
+  // the Transmittals tab).
+  const transmittalsQuery = useTransmittals(projectId ?? null, {
     enabled: activeTab === "matrix",
   });
+  const { data: transmittals, isPending: transmittalsPending } = transmittalsQuery;
 
   // Work packages (for the erection sequence date → backward scheduling) + RFIs
   // (to know which linked RFIs are still open → rfiBlocked readiness).
@@ -255,12 +281,13 @@ function DetailingControlCenter() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
-  const { data: drawingRevisions = [], isPending: revisionsLoading } = useQuery({
+  const revisionsQuery = useQuery({
     queryKey: ["drawing-revisions", projectId],
     queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
+  const { data: drawingRevisions = [], isPending: revisionsLoading } = revisionsQuery;
   // Latest persisted Revision Summary per set → the "revised · N" badge + re-open.
   const { data: summariesBySet = new Map() } = useQuery({
     queryKey: ["revision-summaries", projectId],
@@ -288,6 +315,8 @@ function DetailingControlCenter() {
   // fetchAllModelElements pages with .range() — ~28 round-trips on the largest
   // live project. That cost is why it loads only where it is actually rendered:
   // the 3D tab, or when the user opens the mapping card on the Control Board.
+  // The 3D tab counts only with the flag ON: its gate (flag off, or flags still
+  // loading) renders no viewer, so it must never page the roster.
   const [mappingRosterRequested, setMappingRosterRequested] = useState(false);
   const { data: modelElements = [], isFetching: modelElementsLoading, error: modelElementsError } = useQuery({
     queryKey: ["model-elements", projectId],
@@ -312,6 +341,21 @@ function DetailingControlCenter() {
     () => buildCurrentRevisionMap(drawingRevisions as unknown as HubDrawingRevision[]),
     [drawingRevisions]
   );
+  // The matrix's Last sent line: drawing_id → current revision id, so a sheet
+  // sent at an older revision reads as revised since. Keyed on the query's
+  // own data, because the `= []` default above is a new array every render
+  // while loading.
+  const currentRevisionIdByDrawingId = useMemo(
+    () => buildCurrentRevisionIdMap(revisionsQuery.data as unknown as HubDrawingRevision[] | undefined),
+    [revisionsQuery.data]
+  );
+  // Known only once BOTH inputs are; with either missing, "Not sent yet" or
+  // "0 revised" would be a guess. Data first, like holdsStatus: a failed
+  // background refetch keeps its cached rows.
+  const lastSentStatus: LastSentStatus =
+    transmittals !== undefined && revisionsQuery.data !== undefined
+      ? "ready"
+      : transmittalsQuery.isError || revisionsQuery.isError ? "error" : "loading";
 
   // Per-set Drawing Health Score (slice 2) — deterministic; feeds the Register
   // Health column + the Control Board fleet rollup.
@@ -753,6 +797,8 @@ function DetailingControlCenter() {
             holdsStatus={holdsStatus}
             transmittals={transmittals}
             transmittalsLoading={transmittalsPending}
+            currentRevisionIdByDrawingId={currentRevisionIdByDrawingId}
+            lastSentStatus={lastSentStatus}
             canCreateSubmittal={can("create", "submittal")}
           />
         )}
@@ -771,8 +817,17 @@ function DetailingControlCenter() {
         {activeTab === "holds" && <HoldsPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "transmittals" && <TransmittalLogPanel key={projectId} projectId={projectId || null} />}
         {activeTab === "validation" && <DetailingValidationPanel key={projectId} projectId={projectId || null} />}
+        {/* The flag gates the body, never the link. Until the flags are in, a
+            loading line (or, if the read failed, an error with Retry), never
+            "turned off". */}
         {activeTab === "model3d" && (
-          <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} rosterError={modelElementsError} />
+          !flagsReady ? (
+            flagsFailed
+              ? <Model3DGateError onRetry={() => { void flagsQuery.refetch(); }} retrying={flagsQuery.isFetching} />
+              : <Model3DGateLoading />
+          )
+          : !show3d ? <Model3DGateNotice />
+          : <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} rosterError={modelElementsError} />
         )}
       </Suspense>
     </ErrorBoundary>

@@ -1,11 +1,14 @@
 /**
- * Local-vs-UTC day keys for Last Transmittal ordering, pinned to a fixed
- * UTC-7 "local" zone.
+ * Local-vs-UTC day keys for transmittal ordering, pinned to a fixed UTC-7
+ * "local" zone.
  *
  * The suite runs under TZ=UTC (vite.config.js), which hides exactly this
- * difference. So toDateInputValue — the one local-day conversion
- * approvalMatrix.derive uses — is swapped for a UTC-7 version here. Each case
- * fails on the regression it names, whatever zone the runner is in.
+ * difference. approvalMatrix.derive keys a dated row on its entered date as
+ * written and gives an undated row no day at all, so it needs no local-day
+ * conversion. toDateInputValue, the project's local-day helper, is swapped
+ * for a UTC-7 version here, so a change that routes an entered date through
+ * it fails these cases whatever zone the runner is in. Each case fails on the
+ * regression it names.
  */
 import { describe, expect, it, vi } from "vitest";
 import type { TransmittalRow } from "@/hooks/useTransmittals";
@@ -19,7 +22,7 @@ vi.mock("../format", async (importOriginal) => {
   return { ...actual, toDateInputValue: utcMinus7Day };
 });
 
-import { buildLastTransmittalBySet } from "../approvalMatrix.derive";
+import { buildLastOutgoingBySet, buildLastTransmittalBySet } from "../approvalMatrix.derive";
 import { buildSetPackages } from "../format";
 
 function transmittal(overrides: Partial<TransmittalRow> & { drawingIds?: string[] }): TransmittalRow {
@@ -59,25 +62,38 @@ const packages = buildSetPackages(
 );
 
 describe("Last Transmittal day keys (fixed UTC-7 local zone)", () => {
-  it("files an undated transmittal under the local day it was logged, not its UTC day", () => {
-    // Logged 18:30 on Aug 2 local, which is already Aug 3 in UTC. Slicing
-    // created_at tied it with a transmittal dated Aug 3, and it then won on
-    // created_at.
+  it("keeps an entered date on the day it names, even stored as a midnight-UTC timestamp", () => {
+    // Shifting the entered Aug 3 (00:00Z) to local would make it Aug 2 at
+    // UTC-7. That ties with one dated noon UTC on Aug 2 and logged later,
+    // which then wins on created_at.
+    const last = buildLastTransmittalBySet([
+      transmittal({ id: "entered", transmittal_number: "T-001", date_sent: "2026-08-03T00:00:00+00:00", created_at: "2026-07-30T15:00:00Z", drawingIds: ["d1"] }),
+      transmittal({ id: "day-before", transmittal_number: "T-002", date_sent: "2026-08-02T12:00:00+00:00", created_at: "2026-08-02T19:00:00Z", drawingIds: ["d1"] }),
+    ], packages);
+    expect(last.get("s1")?.id).toBe("entered");
+  });
+
+  it("never lets an undated row logged in the local evening outrank a dated one", () => {
+    // Logged 18:30 on Aug 2 local, which is already Aug 3 in UTC. Keying it on
+    // created_at's UTC day tied it with the transmittal dated Aug 3, and it
+    // then won on created_at. An undated row has no day, so it can't tie.
     const last = buildLastTransmittalBySet([
       transmittal({ id: "dated", transmittal_number: "T-001", date_sent: "2026-08-03", created_at: "2026-08-01T15:00:00Z", drawingIds: ["d1"] }),
       transmittal({ id: "undated", transmittal_number: "T-002", date_sent: null, created_at: "2026-08-03T01:30:00Z", drawingIds: ["d1"] }),
     ], packages);
     expect(last.get("s1")?.id).toBe("dated");
   });
+});
 
-  it("keeps an entered date on the day it names, even stored as a midnight-UTC timestamp", () => {
-    // Converting the entered Aug 3 (00:00Z) to local would make it Aug 2 at
-    // UTC-7. That ties with an undated entry logged at noon on Aug 2, which
-    // then wins on created_at.
-    const last = buildLastTransmittalBySet([
+describe("Last sent day keys (fixed UTC-7 local zone)", () => {
+  it("keeps an entered send date on the day it names, for ordering and for display", () => {
+    // Shifting the entered Aug 3 (00:00Z) to local would make it Aug 2 at
+    // UTC-7. That ties with one sent at noon UTC on Aug 2 and logged later,
+    // which then wins on created_at, and the line would print Aug 2.
+    const { bySet } = buildLastOutgoingBySet([
       transmittal({ id: "entered", transmittal_number: "T-001", date_sent: "2026-08-03T00:00:00+00:00", created_at: "2026-07-30T15:00:00Z", drawingIds: ["d1"] }),
-      transmittal({ id: "undated", transmittal_number: "T-002", date_sent: null, created_at: "2026-08-02T19:00:00Z", drawingIds: ["d1"] }),
-    ], packages);
-    expect(last.get("s1")?.id).toBe("entered");
+      transmittal({ id: "day-before", transmittal_number: "T-002", date_sent: "2026-08-02T12:00:00+00:00", created_at: "2026-08-02T19:00:00Z", drawingIds: ["d1"] }),
+    ], packages, new Map());
+    expect(bySet.get("s1")).toMatchObject({ id: "entered", dateSent: "2026-08-03" });
   });
 });
