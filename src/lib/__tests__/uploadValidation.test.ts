@@ -5,6 +5,8 @@ import {
   sanitizeFilename,
   fileExtension,
   getUploadProfile,
+  effectiveMaxBytes,
+  STORAGE_BUCKET_MAX_BYTES,
   DANGEROUS_EXTENSIONS,
 } from "../uploadValidation";
 
@@ -74,13 +76,18 @@ describe("validateUpload — size caps", () => {
     expect(r.error).toMatch(/too large/i);
   });
 
-  it("accepts a file at/under the workflow cap", () => {
-    expect(validateUpload(f("ok.pdf", 100 * MB), "drawings").ok).toBe(true); // 150 MB cap
+  it("accepts a file at/under the enforced cap", () => {
+    // Was 100 MB against the drawings profile's 150 MB cap. That never
+    // actually worked: the app-files bucket stops at 50 MB, so a 100 MB PDF
+    // passed here and then died mid-POST with an unreadable network error.
+    // The enforced cap is now min(workflow, bucket) — see "the Storage bucket
+    // ceiling" below.
+    expect(validateUpload(f("ok.pdf", 40 * MB), "drawings").ok).toBe(true);
   });
 
   it("applies the absolute ceiling on the default backstop", () => {
     expect(validateUpload(f("blob.dat", 700 * MB), "default").ok).toBe(false);
-    expect(validateUpload(f("blob.dat", 100 * MB), "default").ok).toBe(true);
+    expect(validateUpload(f("blob.dat", 40 * MB), "default").ok).toBe(true);
   });
 });
 
@@ -188,5 +195,64 @@ describe("sanitizeFilename", () => {
     const out = sanitizeFilename(long);
     expect(out.length).toBeLessThanOrEqual(200);
     expect(out.endsWith(".pdf")).toBe(true);
+  });
+});
+
+describe("the Storage bucket ceiling", () => {
+  // The per-workflow caps are generous DoS limits, not the real ceiling: the
+  // app-files bucket stops at 50 MB. Anything in between passed client
+  // validation and then died mid-upload, because a single-shot POST over the
+  // bucket limit is cut off in flight — the browser reports a protocol error
+  // and supabase-js reports "Failed to fetch", telling the user nothing about
+  // size. These pin the clamp that turns that into an instant, readable no.
+  const MB = 1024 * 1024;
+
+  it("matches the app-files bucket's configured file_size_limit", () => {
+    // Verified against storage.buckets on 2026-09-12: file_size_limit is
+    // 52428800. If the bucket is raised, raise this in the same change.
+    expect(STORAGE_BUCKET_MAX_BYTES).toBe(52428800);
+  });
+
+  it("never enforces more than the bucket will accept", () => {
+    for (const workflow of [
+      "drawings", "documents", "photo", "ocr",
+      "model3d", "import", "attachment", "default",
+    ] as const) {
+      const profile = getUploadProfile(workflow);
+      expect(effectiveMaxBytes(profile), workflow).toBeLessThanOrEqual(STORAGE_BUCKET_MAX_BYTES);
+    }
+  });
+
+  it("keeps a workflow cap that is already tighter than the bucket", () => {
+    // ocr is 25 MB — the bucket must not loosen it.
+    expect(effectiveMaxBytes(getUploadProfile("ocr"))).toBe(25 * MB);
+  });
+
+  it("rejects a file over the bucket limit even when the workflow allows it", () => {
+    // drawings claims 150 MB. An 80 MB PDF used to sail through here and fail
+    // mid-POST with an unreadable network error.
+    const res = validateUpload({ name: "set.pdf", size: 80 * MB }, "drawings");
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/too large \(80 MB\)/i);
+    expect(res.error).toMatch(/limit for drawing uploads is 50 MB/i);
+  });
+
+  it("quotes the ENFORCED limit, not the workflow's advertised one", () => {
+    // Saying "the limit is 150 MB" while refusing at 50 MB is worse than no
+    // message at all.
+    const res = validateUpload({ name: "model.ifc", size: 200 * MB }, "model3d");
+    expect(res.ok).toBe(false);
+    expect(res.error).not.toMatch(/600 MB/);
+    expect(res.error).toMatch(/50 MB/);
+  });
+
+  it("still accepts a file inside the bucket limit", () => {
+    expect(validateUpload({ name: "rev.pdf", size: 385 * 1024 }, "drawings").ok).toBe(true);
+    expect(validateUpload({ name: "big.pdf", size: 49 * MB }, "drawings").ok).toBe(true);
+  });
+
+  it("rejects exactly at the boundary, not one byte early", () => {
+    expect(validateUpload({ name: "a.pdf", size: STORAGE_BUCKET_MAX_BYTES }, "drawings").ok).toBe(true);
+    expect(validateUpload({ name: "a.pdf", size: STORAGE_BUCKET_MAX_BYTES + 1 }, "drawings").ok).toBe(false);
   });
 });

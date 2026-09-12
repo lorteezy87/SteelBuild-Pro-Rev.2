@@ -139,6 +139,33 @@ const PROFILES: Record<UploadWorkflow, UploadProfile> = {
   },
 };
 
+/**
+ * The `app-files` Storage bucket's own `file_size_limit`, in bytes.
+ *
+ * This is the REAL ceiling. The per-workflow caps above are generous DoS
+ * limits, and several of them sit far above it — drawings and documents claim
+ * 150 MB, model3d and the default backstop claim 600 MB. Anything between this
+ * value and a workflow's cap passed client validation and then failed
+ * mid-upload, because a single-shot POST that exceeds the bucket limit is cut
+ * off in flight: the browser reports a protocol error and supabase-js reports
+ * `Failed to fetch`, so the user is told nothing about size at all.
+ *
+ * Clamping here converts that into an immediate, readable rejection.
+ *
+ * KEEP IN SYNC with the bucket. Raising one without the other re-opens the
+ * gap — upward it silently rejects files Storage would have taken, downward it
+ * restores the mid-upload failure this exists to prevent.
+ */
+export const STORAGE_BUCKET_MAX_BYTES = 50 * MB;
+
+/**
+ * The cap actually enforced for a workflow: the tighter of its own limit and
+ * what Storage will accept.
+ */
+export function effectiveMaxBytes(profile: UploadProfile): number {
+  return Math.min(profile.maxBytes, STORAGE_BUCKET_MAX_BYTES);
+}
+
 /** Resolve a workflow key to its profile, falling back to the backstop. */
 export function getUploadProfile(workflow?: UploadWorkflow | null): UploadProfile {
   return (workflow && PROFILES[workflow]) || PROFILES.default;
@@ -211,11 +238,15 @@ export function validateUpload(
     }
   }
 
-  // 3. Size ceiling.
-  if (typeof size === "number" && size > profile.maxBytes) {
+  // 3. Size ceiling — the tighter of the workflow cap and what the Storage
+  // bucket will actually accept. Reporting the workflow cap alone would tell a
+  // user with a 120 MB drawing that the limit is 150 MB, right before Storage
+  // cut the upload off mid-flight with an unreadable network error.
+  const maxBytes = effectiveMaxBytes(profile);
+  if (typeof size === "number" && size > maxBytes) {
     return {
       ok: false,
-      error: `File is too large (${formatBytes(size)}). The limit for ${profile.label.toLowerCase()} is ${formatBytes(profile.maxBytes)}.`,
+      error: `File is too large (${formatBytes(size)}). The limit for ${profile.label.toLowerCase()} is ${formatBytes(maxBytes)}.`,
     };
   }
 
