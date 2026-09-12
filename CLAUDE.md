@@ -1,15 +1,27 @@
 # SteelBuild Pro
 
 ## Stack
-Vite, React 18, TypeScript, Supabase (project: kjrwqagyeswwoxpjkcko), Tailwind, Vercel.
+Vite, React 18, TypeScript, Supabase (project: kjrwqagyeswwoxpjkcko), Tailwind. Hosted on Cloudflare Workers (see Deploy).
 
 Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` from `@/api/supabaseClient` — a thin re-export barrel. The implementation lives in `src/api/client/*` domain modules (entities, auth, storage, uploads, llm, functions, entityClient, fieldMapping, …), not inline in supabaseClient.ts.
 
 ## Commands
 - `npm run dev` — local dev server
 - `npm run lint` — lint (must be clean before commit)
-- `npm run test` — full test suite (4,417 tests / 479 files as of 2026-09-07)
+- `npm run test` — full test suite (4,932 tests / 525 files on `main` as of 2026-09-11)
 - `npm run build` — production build
+- CI gates — every PR must pass all of them: `lint`, `typecheck`, `typecheck:js`, `typecheck:strict`, `typecheck:noimplicitany`, `check:no-new-js`, `test`, `build`.
+  - New source files must be `.ts`/`.tsx` (enforced by `check:no-new-js`). Editing existing `.js`/`.jsx` files is fine.
+- Tests run with `TZ=UTC` (`vite.config.js`), which hides local-vs-UTC bugs.
+  - A test that must prove local-day behaviour has to inject the zone, for example by stubbing the date conversion or the `Date` getters.
+  - Building dates from local parts passes vacuously on the UTC runner.
+
+## Deploy — Cloudflare Workers
+- **Production:** the static-asset Worker `steelbuild-pro-rev-2`, configured in `wrangler.jsonc`.
+- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after a green `ci` run. PRs get a Cloudflare preview.
+- **Custom domains:** `steelbuild-pro.com` and `www.steelbuild-pro.com`.
+- **Vercel is retired.** Don't reintroduce it.
+- **`wrangler.jsonc`:** keep `workers_dev` and `preview_urls` set explicitly. Adding `routes` silently turns both off, which once broke the post-deploy health check.
 
 ## Design system: SteelBuild dual theme
 - Colors: CSS variables only (`var(--bg-*)`, `var(--text-*)`, `var(--accent)`, `var(--cmd-*)`, `var(--sbd-*)`). Never hardcode surface/text/border hex in components.
@@ -43,6 +55,18 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 - **Gate controls on the write validator**, not a hand-written weaker condition — use the `canWrite*` predicates in `format.ts`.
 - **Row caps:** `LIST_ROW_CAP` (2000) is what a request *asks* for; `SERVER_MAX_ROWS` (1000) is PostgREST's `db-max-rows`. Truncation detectors must compare against `EFFECTIVE_LIST_CAP` (the min), or they can never fire.
 
+## Drawings & submittals — how the team works
+- **Submittals are the workflow source of truth** for a set's stage, not `drawings.stage`. Fab release requires IFC / Released.
+- **One submittal per drawing set.** When a few pages need revising, the team creates a **new drawing set (new name) with a new submittal**, not new rounds on the original set.
+  - Nothing in the data links the new set to the one it revises.
+  - So the old pages stay live unless something explicitly marks them superseded.
+  - Design drawing features around set-per-revision.
+
+## Sibling app: SteelBuild-Pro-2026
+- `lorteezy87/SteelBuild-Pro-2026` is a **reference only**. Borrow ideas, layout and logic from it, not code wholesale; Rev.2 is the product.
+- Both apps share the production Supabase project, and which repo owns the schema is still undecided.
+- Without the owner's say-so, don't add migrations for 2026-only tables or columns: `gc_drawings`, `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
+
 ## MCP server
 `steelbuild-mcp-server` — 18 tools across portfolio/coordination/commercial/logistics domains. Authenticates via user JWT so RLS applies automatically. Don't bypass this with service-role calls in application code.
 
@@ -50,7 +74,7 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 `main` is the integration and GitHub default branch (verified 2026-09-11). Open PRs against `main`. Check the live default branch and `git rev-list --count origin/main..HEAD` before opening a PR; older notes naming `codex/base44-deploy-nick` are stale.
 
 ## Workflow rules
-- Employment/IP conflict with S&H Steel is unresolved — do not add billing, multi-tenant signup, or public marketing copy without being told this has cleared legal review.
+- There is no legal issue or legal hold involving S&H Steel and this app (confirmed by the owner, 2026-09-11). An earlier version of this file said otherwise; that was false. Don't reintroduce it, and don't treat billing, multi-tenant signup or marketing work as blocked. (S&H Steel is the founding customer org; references to it in the repo are ordinary domain and seed data.)
 - Before touching Stripe/webhook code: idempotency is already implemented, don't remove it.
 - Playwright E2E spec for the fab-release gate must stay green — this is a P0 path.
 
