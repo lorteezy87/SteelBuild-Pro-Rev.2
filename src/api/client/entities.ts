@@ -48,8 +48,11 @@ export const entities = {
       // Atomic, admin-gated archive: the RPC soft-deletes every project-scoped
       // child + the project root in one transaction, so the project can never be
       // left half-archived (#13). Replaces the old best-effort multi-step delete.
-      const payload = softDeleteProjectArgsSchema.parse({ p_project_id: id });
-      const { error } = await supabase.rpc('soft_delete_project', payload);
+      // Validate for its own sake — the parsed output infers p_project_id as
+      // optional under this tsconfig, so pass the already-typed `id` to the RPC
+      // rather than the parse result.
+      softDeleteProjectArgsSchema.parse({ p_project_id: id });
+      const { error } = await supabase.rpc('soft_delete_project', { p_project_id: id });
       if (error) throw new SupabaseOperationError('projects', 'delete', error);
       return { success: true };
     },
@@ -58,8 +61,8 @@ export const entities = {
       // stranding every child record live (the half-archive bug #13). Route
       // each project through the atomic soft_delete_project RPC instead.
       for (const id of ids) {
-        const payload = softDeleteProjectArgsSchema.parse({ p_project_id: id });
-        const { error } = await supabase.rpc('soft_delete_project', payload);
+        softDeleteProjectArgsSchema.parse({ p_project_id: id });
+        const { error } = await supabase.rpc('soft_delete_project', { p_project_id: id });
         if (error) throw new SupabaseOperationError('projects', 'bulkDelete', error);
       }
       return { success: true };
