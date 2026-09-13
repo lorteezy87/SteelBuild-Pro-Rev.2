@@ -334,11 +334,13 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
       if (!patch.transmittal_number) throw new Error("Transmittal number is required");
       await entities.DrawingTransmittal.update(transmittal.id, patch as never);
 
-      const existingByRevision = new Map(
-        transmittal.items.map((item) => [item.drawing_revision_id, item]),
+      const existingRevisionIds = new Set(
+        transmittal.items.flatMap((item) => (item.drawing_revision_id ? [item.drawing_revision_id] : [])),
       );
-      const additions = [...selected].filter((revisionId) => !existingByRevision.has(revisionId));
-      const removals = transmittal.items.filter((item) => !selected.has(item.drawing_revision_id));
+      const additions = [...selected].filter((revisionId) => !existingRevisionIds.has(revisionId));
+      // An item with no revision recorded isn't in the picker, so it was never
+      // deselectable: leave it alone rather than delete it.
+      const removals = transmittal.items.filter((item) => item.drawing_revision_id && !selected.has(item.drawing_revision_id));
       await Promise.all([
         ...additions.map((revisionId) => {
           // See createMutation above: drawing_id is required alongside
