@@ -493,6 +493,7 @@ export default function ExpensesPage() {
           dateRangeFilter={dateRangeFilter} onDateRangeFilter={setDateRangeFilter}
           activeKPI={activeKPI}
           onClearKPI={() => { setActiveKPI(null); setStatusFilter("all"); }}
+          onAdd={() => { setEditing(null); setModalOpen(true); }}
           onImport={() => setImportOpen(true)}
           onExport={handleExportCSV}
         />
