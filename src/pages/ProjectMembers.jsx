@@ -1,7 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
-import { entities } from "@/api/supabaseClient";
-import { supabase } from "@/lib/supabase";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import React, { useContext, useState } from "react";
 import { CommandBar, KpiTile, Button as DSButton } from "@/components/design-system";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,15 +15,15 @@ import { ProjectContext } from "@/components/shared/ProjectContext";
 import { useAuth } from "@/lib/AuthContext";
 import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
 import { RefreshCw, Plus, Trash2, Users, History } from "lucide-react";
-import { toast } from "sonner";
 import {
   DEFAULT_ROLE,
   formatRole,
+  formatActivityEvent,
   getRoleOptions,
   isCurrentUser,
   isProjectAdminRole,
-  isValidEmail,
 } from "@/lib/projectMembers";
+import { useProjectMembersEditor } from "@/pages/projectMembers/useProjectMembersEditor";
 
 /**
  * ProjectMembers — RBAC Phase C admin surface.
@@ -68,17 +65,10 @@ const cellLabelStyle = {
 };
 
 function ProjectMembersContent() {
-  const qc = useQueryClient();
   const { user: currentUser } = useAuth();
   const projectCtx = useContext(ProjectContext);
 
   // ── project picker ────────────────────────────────────────────────
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
-    queryKey: ["projects-for-member-admin"],
-    queryFn: () => entities.Project.list("name"),
-    staleTime: 5 * 60 * 1000,
-  });
-
   // Default to the active project if there is one — otherwise leave
   // unselected so admin sees the full list and picks consciously. We
   // can't use useState(activeProject?.id) directly because the cached
@@ -98,267 +88,39 @@ function ProjectMembersContent() {
   const accessCheckLoading =
     !!selectedProjectId && !isSystemAdmin && projectRoleLoading;
 
-  // ── members ───────────────────────────────────────────────────────
   const {
-    data: memberRows = [],
-    isLoading: membersLoading,
+    projects,
+    projectsLoading,
+    selectedProject,
+    members,
+    membersLoading,
+    memberActivity,
+    activityLoading,
+    adminCount,
+    selectedMemberIds,
+    selectedMembers,
+    allMembersSelected,
+    newMemberEmail,
+    removeTarget,
+    bulkRole,
+    updateRoleMut,
+    bulkRoleMut,
+    addMemberMut,
     refetch,
-  } = useQuery({
-    queryKey: ["project-members", selectedProjectId],
-    enabled: !!selectedProjectId && canManageSelectedProject,
-    queryFn: () =>
-      entities.UserProject.filter(
-        { project_id: selectedProjectId },
-        "created_at",
-      ),
-    staleTime: 30 * 1000,
+    setNewMemberEmail,
+    setRemoveTarget,
+    setSelectedMemberIds,
+    setBulkRole,
+    toggleMemberSelection,
+    toggleAllMembers,
+    handleRoleChange,
+    handleAddMember,
+    handleBulkRoleUpdate,
+    handleRemoveMember,
+  } = useProjectMembersEditor({
+    selectedProjectId,
+    canManageSelectedProject,
   });
-
-  // Hydrate member rows with email / full_name from user_profiles.
-  // user_profiles.id mirrors auth.users.id, so a single .in() lookup
-  // covers every UUID in the page-level member list.
-  const userIds = useMemo(
-    () => Array.from(new Set(memberRows.map((m) => m.user_id).filter(Boolean))),
-    [memberRows],
-  );
-
-  const { data: profilesById = {} } = useQuery({
-    queryKey: ["user-profiles-by-ids", userIds],
-    enabled: canManageSelectedProject && userIds.length > 0,
-    queryFn: async () => {
-      const profiles = await entities.User.filter({ id: userIds });
-      const byId = {};
-      for (const p of profiles) byId[p.id] = p;
-      return byId;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const members = useMemo(
-    () =>
-      memberRows.map((row) => {
-        const profile = profilesById[row.user_id] || null;
-        return {
-          ...row,
-          email: profile?.email || null,
-          full_name: profile?.full_name || null,
-        };
-      }),
-    [memberRows, profilesById],
-  );
-
-  const adminCount = useMemo(
-    () => members.filter((m) => m.role === "owner" || m.role === "admin").length,
-    [members],
-  );
-
-  const { data: memberActivity = [], isLoading: activityLoading } = useQuery({
-    queryKey: ["member-activity", selectedProjectId],
-    enabled: !!selectedProjectId && canManageSelectedProject,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("member_activity")
-        .select("*")
-        .eq("project_id", selectedProjectId)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data || [];
-    },
-    staleTime: 30 * 1000,
-  });
-
-  // ── invalidation helper ───────────────────────────────────────────
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["project-members", selectedProjectId] });
-    qc.invalidateQueries({ queryKey: ["member-activity", selectedProjectId] });
-  };
-
-  // ── mutations ─────────────────────────────────────────────────────
-  const updateRoleMut = useMutation({
-    mutationFn: ({ id, role }) =>
-      entities.UserProject.update(id, { role }),
-    onSuccess: () => {
-      invalidate();
-      toast.success("Role updated");
-    },
-    onError: (err) => {
-      toast.error(err?.message || "Failed to update role");
-    },
-  });
-
-  const removeMemberMut = useMutation({
-    mutationFn: (id) => entities.UserProject.delete(id),
-    onSuccess: () => {
-      invalidate();
-      setRemoveTarget(null);
-      toast.success("Member removed");
-    },
-    onError: (err) => {
-      toast.error(err?.message || "Failed to remove member");
-    },
-  });
-
-  const bulkRoleMut = useMutation({
-    mutationFn: async ({ membersToUpdate, role }) => {
-      const changedMembers = membersToUpdate.filter((member) => member.role !== role);
-      await Promise.all(
-        changedMembers.map((member) =>
-          entities.UserProject.update(member.id, { role }),
-        ),
-      );
-      return changedMembers.length;
-    },
-    onSuccess: (changedCount) => {
-      invalidate();
-      setSelectedMemberIds(new Set());
-      toast.success(
-        changedCount === 1
-          ? "Updated 1 member"
-          : `Updated ${changedCount} members`,
-      );
-    },
-    onError: (err) => {
-      toast.error(err?.message || "Failed to update selected members");
-    },
-  });
-
-  const addMemberMut = useMutation({
-    mutationFn: async (email) => {
-      const trimmed = email.trim().toLowerCase();
-      // Look up the user_profiles row for this email — RLS allows
-      // authenticated reads on user_profiles, so a single .filter()
-      // is enough. We deliberately do NOT auto-create a profile here;
-      // the user must have signed up first.
-      const profiles = await entities.User.filter({ email: trimmed }, undefined, 1);
-      if (profiles.length === 0) {
-        throw new Error("User must sign up first.");
-      }
-      const profile = profiles[0];
-      // Guard against duplicates — RLS would let it through and the
-      // (user_id, project_id) UNIQUE constraint would 409 us, but a
-      // friendlier message is worth the round-trip.
-      const existing = members.find((m) => m.user_id === profile.id);
-      if (existing) {
-        throw new Error(`${trimmed} is already a member.`);
-      }
-      return entities.UserProject.create({
-        user_id: profile.id,
-        project_id: selectedProjectId,
-        role: DEFAULT_ROLE,
-      });
-    },
-    onSuccess: () => {
-      invalidate();
-      setNewMemberEmail("");
-      toast.success("Member added");
-    },
-    onError: (err) => {
-      toast.error(err?.message || "Failed to add member");
-    },
-  });
-
-  // ── form state ────────────────────────────────────────────────────
-  const [newMemberEmail, setNewMemberEmail] = useState("");
-  const [removeTarget, setRemoveTarget] = useState(null);
-  const [selectedMemberIds, setSelectedMemberIds] = useState(() => new Set());
-  const [bulkRole, setBulkRole] = useState(DEFAULT_ROLE);
-
-  useEffect(() => {
-    setSelectedMemberIds((prev) => {
-      const liveIds = new Set(members.map((member) => member.id));
-      const next = new Set([...prev].filter((id) => liveIds.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [members]);
-
-  const selectedMembers = useMemo(
-    () => members.filter((member) => selectedMemberIds.has(member.id)),
-    [members, selectedMemberIds],
-  );
-
-  const allMembersSelected =
-    members.length > 0 && selectedMemberIds.size === members.length;
-
-  const wouldLeaveProjectWithoutAdmin = (targetMembers, nextRole) => {
-    if (isProjectAdminRole(nextRole)) return false;
-    const targetIds = new Set(targetMembers.map((member) => member.id));
-    const remainingAdminCount = members.filter(
-      (member) => isProjectAdminRole(member.role) && !targetIds.has(member.id),
-    ).length;
-    return remainingAdminCount === 0;
-  };
-
-  const toggleMemberSelection = (memberId, checked) => {
-    setSelectedMemberIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(memberId);
-      else next.delete(memberId);
-      return next;
-    });
-  };
-
-  const toggleAllMembers = (checked) => {
-    setSelectedMemberIds(checked ? new Set(members.map((member) => member.id)) : new Set());
-  };
-
-  const handleRoleChange = (member, nextRole) => {
-    if (nextRole === member.role) return;
-    if (wouldLeaveProjectWithoutAdmin([member], nextRole)) {
-      toast.error("A project must keep at least one admin or owner.");
-      return;
-    }
-    updateRoleMut.mutate({ id: member.id, role: nextRole });
-  };
-
-  const handleAddMember = () => {
-    if (!selectedProjectId) {
-      toast.error("Pick a project first");
-      return;
-    }
-    if (!isValidEmail(newMemberEmail)) {
-      toast.error("Enter a valid email");
-      return;
-    }
-    addMemberMut.mutate(newMemberEmail);
-  };
-
-  const handleBulkRoleUpdate = () => {
-    if (selectedMembers.length === 0) {
-      toast.error("Select at least one member");
-      return;
-    }
-    if (wouldLeaveProjectWithoutAdmin(selectedMembers, bulkRole)) {
-      toast.error("A project must keep at least one admin or owner.");
-      return;
-    }
-    bulkRoleMut.mutate({ membersToUpdate: selectedMembers, role: bulkRole });
-  };
-
-  const handleRemoveMember = () => {
-    if (!removeTarget) return;
-    if (isProjectAdminRole(removeTarget.role) && adminCount <= 1) {
-      toast.error("A project must keep at least one admin or owner.");
-      return;
-    }
-    removeMemberMut.mutate(removeTarget.id);
-  };
-
-  const formatActivityEvent = (activity) => {
-    const target = activity.target_email || activity.target_user_id || "Member";
-    if (activity.event_type === "member_added") {
-      return `${target} added as ${formatRole(activity.new_role)}`;
-    }
-    if (activity.event_type === "role_changed") {
-      return `${target} changed from ${formatRole(activity.old_role)} to ${formatRole(activity.new_role)}`;
-    }
-    if (activity.event_type === "member_removed") {
-      return `${target} removed from the project`;
-    }
-    return `${target} updated`;
-  };
-
-  const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
   return (
     <div className="sb-dashboard-reference-page">
