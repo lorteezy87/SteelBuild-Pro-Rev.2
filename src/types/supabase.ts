@@ -1756,7 +1756,7 @@ export type Database = {
           assigned_to: string | null
           created_at: string
           created_by: string | null
-          drawing_revision_id: string
+          drawing_revision_id: string | null
           due_date: string | null
           id: string
           impact_type: string
@@ -1772,7 +1772,7 @@ export type Database = {
           assigned_to?: string | null
           created_at?: string
           created_by?: string | null
-          drawing_revision_id: string
+          drawing_revision_id?: string | null
           due_date?: string | null
           id?: string
           impact_type: string
@@ -2663,26 +2663,39 @@ export type Database = {
       drawing_transmittal_items: {
         Row: {
           created_at: string
+          drawing_id: string | null
           drawing_revision_id: string
+          gc_drawing_id: string | null
           id: string
           project_id: string
           transmittal_id: string
         }
         Insert: {
           created_at?: string
+          drawing_id?: string | null
           drawing_revision_id: string
+          gc_drawing_id?: string | null
           id?: string
           project_id: string
           transmittal_id: string
         }
         Update: {
           created_at?: string
+          drawing_id?: string | null
           drawing_revision_id?: string
+          gc_drawing_id?: string | null
           id?: string
           project_id?: string
           transmittal_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "drawing_transmittal_items_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "drawing_transmittal_items_drawing_revision_id_fkey"
             columns: ["drawing_revision_id"]

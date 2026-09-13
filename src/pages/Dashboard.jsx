@@ -2,6 +2,7 @@ import React, { Suspense, useCallback, useEffect, useMemo, useState } from "reac
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { useAuth } from "@/lib/AuthContext";
@@ -138,6 +139,22 @@ export default function Dashboard() {
     staleTime: 30 * 1000,
     enabled: !!pid,
   });
+  const {
+    data: hasRecordedFabRelease = false,
+    isSuccess: fabReleaseEvidenceLoaded,
+  } = useQuery({
+    queryKey: ["fab-release-evidence", pid],
+    queryFn: async () => {
+      if (!pid) return false;
+      const { count, error } = await supabase
+        .from("fab_release_log")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", pid);
+      if (error) throw error;
+      return (count ?? 0) > 0;
+    },
+    enabled: !!pid,
+  });
   // Cash-flow figures (total billed / collected / pending payment /
   // retention) on the Financial Controls section come from SOV items.
   const { data: allSovItems = [] } = useQuery({
@@ -256,12 +273,15 @@ export default function Dashboard() {
 
   // ── Canonical single-project Dashboard Control Center ─────────────────────
   if (pid) {
+    const hasReleasedSubmittal = submittals.some(
+      (submittal) => submittal.status === "Released for Fabrication",
+    );
     const signals = {
       hasDrawings: drawings.length > 0,
       hasSubmittal: submittals.length > 0,
       hasRfi: rfis.length > 0,
       rfiSkipped: false,
-      hasFabRelease: submittals.some(s => s.status === "Released for Fabrication"),
+      hasFabRelease: hasRecordedFabRelease || hasReleasedSubmittal,
     };
 
     const onNavigateDash = (target, opts = {}) => {
@@ -303,10 +323,12 @@ export default function Dashboard() {
       <ErrorBoundary label="Dashboard Control Center">
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
           <>
-            <GettingStartedChecklist
-              signals={signals}
-              userMetadata={user}
-            />
+            {(fabReleaseEvidenceLoaded || hasReleasedSubmittal) && (
+              <GettingStartedChecklist
+                signals={signals}
+                userMetadata={user}
+              />
+            )}
             <DashboardControlCenter
               project={activeProject}
               rfis={rfis}
