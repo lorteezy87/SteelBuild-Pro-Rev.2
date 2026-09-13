@@ -165,6 +165,21 @@ function classifyQueryFailure(error: unknown): DesktopConnectFailure {
   return "query";
 }
 
+function classifyConnectFailure(stage: DesktopConnectFailure, error: unknown): DesktopConnectFailure {
+  if (stage === "query") {
+    return classifyQueryFailure(error);
+  }
+  if (stage === "crypto") {
+    if (error instanceof DesktopSessionValidationError) {
+      return `session-${error.field}`;
+    }
+    if (error instanceof DesktopSessionCryptoError) {
+      return `crypto-${error.stage}`;
+    }
+  }
+  return stage;
+}
+
 export function DesktopConnect({
   dependencies = defaultDependencies,
   search,
@@ -219,15 +234,7 @@ export function DesktopConnect({
         dependencies.attemptSoftRedirect?.(callback);
       } catch (error) {
         if (active) {
-          setFailure(
-            failureStage === "query"
-              ? classifyQueryFailure(error)
-              : failureStage === "crypto" && error instanceof DesktopSessionValidationError
-              ? `session-${error.field}`
-              : failureStage === "crypto" && error instanceof DesktopSessionCryptoError
-                ? `crypto-${error.stage}`
-                : failureStage,
-          );
+          setFailure(classifyConnectFailure(failureStage, error));
           setStatus("error");
         }
       }
