@@ -183,7 +183,20 @@ describe("problem-tracker database security hardening", () => {
     expect(cutoverSql).toMatch(/alter\s+policy\s+auth_read\s+on\s+storage\.objects/);
     expect(cutoverSql).toMatch(/alter\s+policy\s+auth_upload\s+on\s+storage\.objects/);
 
-    const alteredPolicies = cutoverSql.slice(cutoverSql.indexOf("alter policy auth_read"));
+    // Scope to the two ALTER POLICY statements themselves, the same way the
+    // next test does. Slicing to end-of-file also swallowed the maintenance-job
+    // block below them, which counts retained legacy objects with
+    // `name like 'uploads/%'` — a telemetry read, not a grant — so the
+    // assertion failed on a migration whose policies are in fact clean.
+    const policyStatement = (policy) =>
+      cutoverSql.match(
+        new RegExp(`alter\\s+policy\\s+${policy}\\s+on\\s+storage\\.objects[\\s\\S]*?\\);\\s*`, "i"),
+      )?.[0] ?? "";
+    const alteredPolicies = policyStatement("auth_read") + policyStatement("auth_upload");
+    // Both statements must actually be captured, or every negative assertion
+    // below would pass against an empty string.
+    expect(policyStatement("auth_read")).not.toBe("");
+    expect(policyStatement("auth_upload")).not.toBe("");
     expect(alteredPolicies).not.toContain("founding_org_id");
     expect(alteredPolicies).not.toContain("= 'uploads'");
     expect(alteredPolicies).not.toContain("like 'uploads/%'");
