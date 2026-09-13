@@ -280,7 +280,46 @@ export const entities = {
   SubmittalCommentDisposition: createEntityClient('submittal_comment_dispositions'),
   SubmittalActivity:     createEntityClient('submittal_activity'),
   Comment:               createEntityClient('comments'),
-  Expense:               createEntityClient('expenses'),
+  // Expense numbers are official project records. create_expense() allocates
+  // the number and inserts the row in one transaction; direct table inserts
+  // are rejected by the database guard.
+  Expense:               (() => {
+    const base = createEntityClient('expenses');
+    const create = async (
+      record: Insert<'expenses'>,
+    ): Promise<RowWithAliases<'expenses'>> => {
+      const payload = cleanRecord(record as Record<string, unknown>);
+      const projectId = payload.project_id;
+      if (typeof projectId !== 'string' || projectId === '') {
+        throw new Error('project_id is required to create an expense');
+      }
+      delete payload.project_id;
+      delete payload.project_name;
+      delete payload.expense_number;
+
+      const { data, error } = await supabase.rpc('create_expense', {
+        p_project_id: projectId,
+        p_payload: payload as Json,
+      });
+      if (error) throw new SupabaseOperationError('expenses', 'create', error);
+      return addAliases<RowWithAliases<'expenses'>>(
+        data as RowWithAliases<'expenses'>,
+        'expenses',
+      );
+    };
+
+    return {
+      ...base,
+      create,
+      bulkCreate: async (
+        records: Insert<'expenses'>[],
+      ): Promise<Array<RowWithAliases<'expenses'>>> => {
+        const created: Array<RowWithAliases<'expenses'>> = [];
+        for (const record of records) created.push(await create(record));
+        return created;
+      },
+    };
+  })(),
   Delivery:              createEntityClient('deliveries'),
   WorkPackage:           createEntityClient('work_packages'),
   // 062: per-project budget vs actual hours (Estimating Kickoff scope items).
