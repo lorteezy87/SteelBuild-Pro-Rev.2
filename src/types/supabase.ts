@@ -7859,6 +7859,10 @@ export type Database = {
             } & "Could not choose the best candidate function between: public.add_updated_at_trigger(tbl => text), public.add_updated_at_trigger(tbl => regclass). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
       create_project: { Args: { project_data: Json }; Returns: Json }
+      create_expense: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["expenses"]["Row"]
+      }
       create_sov_item: {
         Args: { p_project_id: string; p_payload: Json }
         Returns: Database["public"]["Tables"]["sov_items"]["Row"]

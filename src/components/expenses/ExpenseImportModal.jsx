@@ -2,7 +2,6 @@ import React, { useState, useMemo, useRef } from 'react';
 import { Download, Upload, FileText, X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { entities } from "@/api/supabaseClient";
 import { COST_CODES } from '../shared/costCodes';
-import { getNextNumber } from '../shared/numberSequencing';
 import { toast } from 'sonner';
 import { withProjectId } from '@/lib/mutations/standardMutation';
 import { readFileText } from '@/lib/textDecoding';
@@ -283,24 +282,8 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
     for (let i = 0; i < valid.length; i++) {
       const rec = valid[i];
       try {
-        let expenseNumber;
-        try {
-          expenseNumber = await getNextNumber(activeProject.id, "EXPENSE");
-        } catch (err) {
-          failed += 1;
-          console.error("Unable to reserve expense number for import row:", rec, err);
-          setProgress({ done: i + 1, total: valid.length, failed });
-          continue;
-        }
-        if (!expenseNumber) {
-          failed += 1;
-          setProgress({ done: i + 1, total: valid.length, failed });
-          continue;
-        }
-
         const payload = withProjectId({
           project_name: activeProject.name || '',
-          expense_number: expenseNumber,
           expense_date: rec.expense_date,
           description: rec.description,
           expense_type: rec.expense_type,

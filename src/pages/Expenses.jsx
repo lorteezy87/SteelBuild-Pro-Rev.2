@@ -25,7 +25,6 @@ import ExpenseImportModal from "../components/expenses/ExpenseImportModal";
 import { formatCurrencyShort, roundCurrency } from "../components/shared/formatters";
 import { COST_CODES } from "../components/shared/costCodes";
 import { toast } from "sonner";
-import { getNextNumber } from "../components/shared/numberSequencing";
 // Invalidate the FULL expense family (project list + ["expenses-all"] used by
 // Dashboard/Reports + cost rollups), not just the unscoped ["expenses"] prefix.
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -112,16 +111,9 @@ export default function ExpensesPage() {
 
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: async (d) => {
+    mutationFn: (d) => {
       const scoped = withProjectId(d, activeProject?.id);
-      let expenseNumber;
-      try {
-        expenseNumber = await getNextNumber(scoped.project_id, "EXPENSE");
-      } catch {
-        throw new Error("Unable to reserve an expense number. Please retry.");
-      }
-      if (!expenseNumber) throw new Error("Unable to reserve an expense number. Please retry.");
-      return entities.Expense.create({ ...scoped, expense_number: expenseNumber });
+      return entities.Expense.create(scoped);
     },
     onSuccess: () => {
       invalidateEntity(qc, "expense", activeProject?.id);
