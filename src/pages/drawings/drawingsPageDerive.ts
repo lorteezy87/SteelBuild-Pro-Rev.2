@@ -112,7 +112,7 @@ export function deriveDrawingsPageModel({
       : {}
     : drawingSetMap;
   const drawingSets = groupByDrawingSetName(
-    drawings,
+    filtered,
   ) as Record<string, Drawing[]>;
 
   return {

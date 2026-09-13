@@ -616,7 +616,6 @@ export function useDrawingsPageController({
 
   const handleDrawingImportComplete = () => {
     void invalidate();
-    queryClient.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
   };
 
   const handleAttachRevision = async (submittalId: string) => {
