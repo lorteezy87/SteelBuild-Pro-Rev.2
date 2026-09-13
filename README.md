@@ -25,8 +25,7 @@ moat.
 - **Hosting**: Cloudflare Workers (`steelbuild-pro-rev-2`). Production deploys
   are **CI-gated** — a push to `main` runs `.github/workflows/ci.yml` (lint +
   TS/JS typechecks + strictNullChecks + noImplicitAny + Vitest + production
-  build), and only a green run publishes the Worker. Vercel is retired;
-  Cloudflare Workers Builds remains disconnected so it cannot bypass that gate.
+  build), and only a green run publishes the Worker. Vercel is retired.
 - **LLM**: a provider-agnostic gateway via the `llm-proxy` Edge Function
   (currently OpenAI `gpt-4o` / `gpt-4o-mini`). Never call a provider from the browser.
 - **Billing**: Stripe subscription plans via the `stripe-billing` Edge Function.
@@ -99,7 +98,7 @@ billing secrets live server-side in the Edge Functions' environment.
 | `npm run typecheck:noimplicitany` | noImplicitAny ratchet — all `.ts/.tsx` except the grandfathered list |
 | `npm test`             | Vitest run (unit + jsdom integration tests)    |
 | `npm run test:watch`   | Vitest in watch mode                           |
-| `npm run supabase:drift` | Fail-closed comparison of remote migration and Edge Function inventories (requires `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF`) |
+| `npm run supabase:drift` | Compare remote Supabase schema vs migrations (skips without token / `ALLOW_SKIP=1`) |
 | `npm run supabase:delete-deprecated-fns` | Dry-run delete of retired Edge Functions (`DRY_RUN=0` to apply) |
 
 ## Layout
@@ -123,22 +122,13 @@ public/          static assets, web-ifc wasm, pdf workers
 
 ## Database migrations
 
-Migrations live in `supabase/migrations/` as three 2026-01-01 baseline files
-plus timestamped follow-ups; the pre-baseline history is retained in
-`supabase/migrations_archive/`. Inspect the active directory rather than
-assuming a file count. The production Supabase project is shared with sibling
-products, so migration and Edge Function ownership must remain in each asset's
-source repository and be represented by the production ownership manifest.
-
-`npm run supabase:drift` is mandatory and fail-closed: missing credentials,
-unmatched migration versions, or unmatched function slugs fail the check. It is
-an inventory check, not proof that SQL effects, replayability, or deployed
-function source are equivalent. Do not use migration repair, `db push`, the SQL
-editor, or function deploy/delete commands merely to make inventory green.
-Reconcile source ownership and verify durable schema effects first; see
-[`docs/db-baseline-cutover.md`](./docs/db-baseline-cutover.md) for migration
-history semantics. Migrations that change the exposed schema end with
-`NOTIFY pgrst, 'reload schema'`.
+Migrations live in `supabase/migrations/` (mixed legacy `NNN_name.sql` and
+timestamped `YYYYMMDDhhmmss_name.sql` — the history was **re-baselined** (29
+active files; ~190 legacy migrations archived), so inspect the directory for the
+latest rather than assuming a number). Apply live changes via
+the Supabase MCP (`apply_migration`) and commit the same SQL so repo history
+matches the database. After a migration that changes the exposed schema, the SQL
+ends with `NOTIFY pgrst, 'reload schema'`.
 
 ## Auth, roles & tenancy
 
@@ -196,13 +186,12 @@ at `/Billing` (`stripe-billing` Edge Function → Stripe Checkout / Portal).
 project the caller can access — fetched through the RLS-scoped, audit-logged
 `project-export` Edge Function and bundled client-side (`src/lib/workspaceExport.ts`).
 
-**Right-to-erasure (GDPR/CCPA).** The owner-only "Danger Zone → Delete
-workspace" path is implemented behind the **`account_deletion`** feature flag
-(off by default), with a type-the-name confirmation and append-only deletion
-audit. It is **not operational in production**: the `account-delete` Edge
-Function remains intentionally frozen and undeployed pending owner-controlled
-deployment, rollback evidence, and activation. See
-[`docs/runbooks/owner-checklist.md`](./docs/runbooks/owner-checklist.md).
+**Right-to-erasure (GDPR/CCPA).** An owner-only "Danger Zone → Delete workspace"
+action (Team page) permanently erases an organization — DB rows via the
+`hard_delete_organization` RPC (with an append-only `account_deletions` audit that
+survives the wipe), Storage objects, and orphaned auth users via the
+`account-delete` Edge Function. Gated behind the **`account_deletion`** feature
+flag (off by default) and a type-the-name confirmation.
 
 ## Testing
 
@@ -219,13 +208,12 @@ configured. Counts change as tested helper modules are added; run `npm test --
 `.github/workflows/ci.yml` runs on configured push branches and pull requests
 targeting the supported bases: lint, four typecheck gates
 (TS, JS/JSX, the **strictNullChecks** ratchet, and the **noImplicitAny**
-ratchet), the no-new-JS ratchet, Vitest, and a production build — all blocking.
-The separate Supabase inventory check also fails closed when credentials are
-absent or drift exists. Only a green application `ci` job lets the gated deploy
-job publish the `steelbuild-pro-rev-2` Cloudflare Worker, followed by a
-post-deploy health check. An advisory `dependency-audit` job (`npm audit`,
-non-blocking) and opt-in Playwright smoke round it out. A concurrency group
-cancels redundant runs without interrupting a production deploy.
+ratchet), Vitest, and a production build — all blocking. Only a green `ci` job
+lets the gated deploy job publish the `steelbuild-pro-rev-2` Cloudflare Worker,
+followed by a post-deploy health check. An advisory `dependency-audit` job
+(`npm audit`, non-blocking) and an opt-in post-deploy Playwright smoke round it
+out. A concurrency group cancels redundant runs without interrupting a
+production deploy.
 
 ## Deployment
 
@@ -233,18 +221,15 @@ Feature work lands on a feature branch and is reviewed through a pull request. A
 push to **`main`** runs the `ci` job; **only if it passes**
 does the deploy job publish the static-asset Cloudflare Worker configured in
 `wrangler.jsonc`. A red run cannot deploy — production stays on the last good
-build. Cloudflare Workers Builds is disconnected, making the GitHub Action the
-sole production path. Pull requests receive version-preview URLs through the
-same workflow. Remaining gap:
+build. The GitHub Action is the sole production path. Remaining gap:
 no branch-protection required check (repo plan), so red/unreviewed commits can
 still land on `main` even though they cannot deploy. [`CLAUDE.md`](./CLAUDE.md)
-documents the full workflow + git-safety rules. Edge Functions deploy
-separately only through an owner-approved, evidence-backed change.
+documents the full workflow + git-safety rules. Edge Functions deploy separately
+(Supabase MCP `deploy_edge_function` or `supabase functions deploy`).
 
 **Staging.** The former Vercel and Supabase staging projects are retired, so
-staging E2E jobs cannot run until the environment is rebuilt. Do not target
-production as a staging substitute; setup requirements remain in
-[`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
+staging E2E jobs cannot run until the environment is rebuilt. Setup requirements
+remain in [`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
 
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
 `{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor

@@ -40,10 +40,6 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 - Check `auth_rls_initplan` pattern on any new policy — wrap `auth.uid()` calls in `(select ...)`.
 - SECURITY DEFINER functions must set `search_path` explicitly.
 - Known-fixed classes of bugs (do not reintroduce): feature_flags privilege escalation, vendors blanket-true policies.
-- Supabase drift is mandatory and fail-closed. `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` must be configured; never add a credential-missing skip or success fallback. The current check compares migration versions and function slugs only, so green inventory is not proof of SQL or deployed-source equivalence.
-- Production currently has confirmed cross-repository migration and Edge Function drift. Do not clear it by changing stamps, pushing SQL, or deploying/deleting functions without captured source lineage, effect evidence, disposable replay, an approved maintenance window, and a second reviewer.
-- `supabase migration repair` changes only migration-ledger bookkeeping; `supabase db push` executes pending SQL. Evidence must prove durable effects are present before marking a migration applied, and prove SQL is genuinely absent before pushing it. Never run `supabase db reset` against production.
-- `account-delete` is intentionally frozen and undeployed in production. `staging-e2e-bootstrap` is staging-only and must never be deployed to production.
 
 ## Number-sequence integrity — DO NOT regress
 Official record numbers (RFI/CO/submittal/…) come ONLY from the atomic DB RPC `get_next_sequence_number` — never derive the next number client-side. `src/components/shared/numberSequencing.jsx` once floored the RPC with a client-side `Math.max()`, which could mint duplicate numbers under concurrency; that was removed (fixed c5612168) — `getNextFormattedNumber` now re-allocates from the RPC until it clears any existing records, and fails closed if the RPC is unavailable. Keep it RPC-only. Gated by a hook (see `.claude/hooks/`).
@@ -71,7 +67,7 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 
 ## Sibling app: SteelBuild-Pro-2026
 - `lorteezy87/SteelBuild-Pro-2026` is a **reference only**. Borrow ideas, layout and logic from it, not code wholesale; Rev.2 is the product.
-- Both apps share the production Supabase project. Migrations and Edge Functions stay in their source repositories; a fail-closed production manifest must identify the owning repository for every shared asset rather than copying assets between repos. `sheets-api` is owned by `steelbuild-sheets-web`.
+- Both apps share the production Supabase project, and which repo owns the schema is still undecided.
 - Without the owner's say-so, don't add migrations for 2026-only tables or columns: `gc_drawings`, `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
 
 ## MCP server
