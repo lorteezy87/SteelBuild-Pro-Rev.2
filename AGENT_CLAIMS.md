@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+- 2026-09-13 · codex-expense-drift-compat · Expense workflow compatibility with guarded live M15 RPCs · src/api/client/entities.ts, src/types/supabase.ts, src/lib/expenses/**, src/components/expenses/**, src/pages/Expenses.jsx, src/pages/expenses/**, expense status read consumers/tests · isolated branch; preserve financial approvals, tenant guards and atomic numbering.
+
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
 | ~~2026-09-13T08:33:29Z~~ released | copilot-merge-conflicts-5652236907 | Merge conflict resolution | AGENT_CLAIMS.md; conflicted files from merge with main | Merged current main, preserved workflow behavior, and reconciled the concurrent PR-head resolution. |
