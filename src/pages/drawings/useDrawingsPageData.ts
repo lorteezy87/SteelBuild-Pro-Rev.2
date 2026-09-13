@@ -91,7 +91,11 @@ export function useDrawingsPageData({
     rfis,
     submittals,
     drawingSetRecords,
-    isLoading: drawingsQuery.isLoading,
+    isLoading:
+      drawingsQuery.isLoading ||
+      rfisQuery.isLoading ||
+      submittalsQuery.isLoading ||
+      drawingSetsQuery.isLoading,
     queryError:
       drawingsQuery.error ??
       rfisQuery.error ??

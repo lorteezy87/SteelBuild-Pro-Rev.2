@@ -216,7 +216,7 @@ function recordHref(
   routeTab: string | null | undefined,
 ): string {
   if (submittalId) return submittalRecordHref(submittalId);
-  if (drawingSetId) return hubHref("drawings", { hub_view: "sets" });
+  if (drawingSetId) return hubHref("drawings", { hub_view: "sets", set: drawingSetId });
   return hubHref(parseHubTab(routeTab).tab);
 }
 
