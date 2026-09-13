@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-09-13 | codex-rev2-frontend-audit | Existing Rev2 frontend audit and repairs | src/pages/{drawingSubmittalHub,submittals,drawings}/**; related tests; src/boot/**; src/main.jsx; index.html; shared theme/error states | Audit current app, repair reproduced frontend defects, preserve Rev2 authorities and 2026-inspired workflow. |
 | ~~2026-09-13T08:33:29Z~~ released | copilot-merge-conflicts-5652236907 | Merge conflict resolution | AGENT_CLAIMS.md; conflicted files from merge with main | Merged current main, preserved workflow behavior, and reconciled the concurrent PR-head resolution. |
 | 2026-08-13T20:10:00Z | grok-notes-apple-pencil | Tools Notes Apple Pencil ink | src/pages/Notes.jsx; src/lib/notesInk/**; src/components/notes/InkCanvas.tsx | Upgrade Notes ink: coalesced/predicted strokes, pressure+tilt, palm rejection, highlighter, undo/redo, vector persistence. |
 | 2026-08-09T00:07:05Z | codex-ui-ux-liquid-glass | Professional UI/UX cleanup + native iOS Liquid Glass | docs/superpowers/{specs,plans}/2026-08-09-professional-ui-liquid-glass*; src/styles/{tokens,base,command,responsive}.css; src/pages/Settings.jsx; src/pages/settings/**; src/components/{settings,nav,ui,design-system}/**; src/lib/native/**; capacitor.config.ts; ios/**; mobile/ios/**; related tests/docs | Normalize typography, dark-theme contrast, spacing, icons and shared settings patterns; add an iOS 26 SwiftUI Liquid Glass command dock with earlier-iOS fallback. |
