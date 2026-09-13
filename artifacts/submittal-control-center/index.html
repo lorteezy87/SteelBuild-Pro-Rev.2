@@ -68,7 +68,8 @@
 
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0; background:var(--ground); color:var(--ink); font-family:var(--f-body);
-  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased}
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  min-height:100dvh; display:flex; flex-direction:column}
 ::selection{background:var(--accent-tint); color:var(--ink)}
 :focus-visible{outline:2px solid var(--focus); outline-offset:2px; border-radius:3px}
 @media (prefers-reduced-motion: reduce){ *{animation-duration:.01ms !important; transition-duration:.01ms !important} }
@@ -125,7 +126,7 @@ label.fld > span:first-child{font:600 10px/1 var(--f-body); letter-spacing:.1em;
 /* ===== masthead ===== */
 .masthead{position:sticky; top:0; z-index:40; background:var(--surface);
   border-bottom:1px solid var(--line); box-shadow:var(--sh-1)}
-.mast-row{max-width:1640px; margin:0 auto; padding:0 22px; min-height:56px;
+.mast-row{width:100%; padding:0 22px; min-height:56px;
   display:flex; align-items:center; gap:12px; flex-wrap:wrap}
 .mark{display:flex; align-items:center; gap:9px; margin-right:4px}
 .mark .beam{width:18px; height:18px; flex:none; background:var(--accent);
@@ -162,8 +163,10 @@ label.fld > span:first-child{font:600 10px/1 var(--f-body); letter-spacing:.1em;
 }
 
 /* ===== shell ===== */
-.wrap{max-width:1640px; margin:0 auto; padding:18px 22px 80px}
-@media (max-width:880px){ .wrap{padding:14px 14px 60px} }
+.wrap{width:100%; padding:16px 22px 20px; flex:1 1 auto; min-height:0;
+  display:flex; flex-direction:column}
+@media (max-width:880px){ .wrap{padding:12px 14px 16px} }
+.wrap > .section:last-child{margin-bottom:0}
 .section{margin-bottom:20px}
 .section-head{display:flex; align-items:baseline; gap:12px; margin-bottom:10px; flex-wrap:wrap}
 .section-head h2{font-size:16px; text-transform:uppercase; letter-spacing:.06em}
@@ -258,8 +261,9 @@ table.mini th.n{text-align:right}
 .chipclear:hover{color:var(--ink)}
 
 /* ===== the log grid ===== */
-.grid-shell{border:1px solid var(--line); border-radius:var(--r); background:var(--surface); overflow:hidden}
-.table-wrap{overflow:auto; max-height:var(--grid-h,62vh)}
+.grid-shell{border:1px solid var(--line); border-radius:var(--r); background:var(--surface);
+  overflow:hidden; display:flex; flex-direction:column; flex:1 1 auto; min-height:280px}
+.table-wrap{overflow:auto; flex:1 1 auto; min-height:0}
 table.log{border-collapse:separate; border-spacing:0; width:100%; min-width:1580px}
 table.log th{position:sticky; top:0; z-index:5; background:var(--well);
   font:600 9.5px/1.2 var(--f-body); letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
@@ -1541,17 +1545,6 @@ function restoreFocus(o){
   if (o.val != null && "value" in el){ el.value = o.val; try { el.setSelectionRange(o.s, o.e); } catch(_){} }
 }
 
-/* The grid scrolls inside itself, so its header pins to the grid, not the page. */
-function sizeGrid(){
-  const tw = document.querySelector(".table-wrap");
-  if (!tw) return;
-  const top = tw.getBoundingClientRect().top + window.scrollY;
-  document.documentElement.style.setProperty("--grid-h",
-    Math.max(280, window.innerHeight - top - 96) + "px");
-}
-let resizeTimer = null;
-window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(sizeGrid, 120); });
-
 let rendering = false;
 function render(){
   if (rendering) return;
@@ -1574,7 +1567,6 @@ function render(){
   restoreFocus(foc);
   const mh = document.querySelector(".masthead");
   if (mh) document.documentElement.style.setProperty("--mast-h", mh.offsetHeight + "px");
-  sizeGrid();
   rendering = false;
 }
 
