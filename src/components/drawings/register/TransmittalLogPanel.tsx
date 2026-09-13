@@ -301,10 +301,16 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
       );
       const transmittalId = (transmittal as { id: string }).id;
       for (const revisionId of selected) {
+        // drawing_transmittal_items_one_target requires exactly one of
+        // drawing_id / gc_drawing_id to be set (added directly to the shared
+        // prod schema; drawing_revision_id is no longer part of that check).
+        // sheetOptions already resolves drawingId per revisionId.
+        const drawingId = sheetOptions.find((o) => o.revisionId === revisionId)?.drawingId ?? null;
         await entities.DrawingTransmittalItem.create(
           withProjectId({
             transmittal_id: transmittalId,
             drawing_revision_id: revisionId,
+            drawing_id: drawingId,
           }, projectId) as never,
         );
       }
@@ -334,12 +340,18 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
       const additions = [...selected].filter((revisionId) => !existingByRevision.has(revisionId));
       const removals = transmittal.items.filter((item) => !selected.has(item.drawing_revision_id));
       await Promise.all([
-        ...additions.map((revisionId) => entities.DrawingTransmittalItem.create(
-          withProjectId({
-            transmittal_id: transmittal.id,
-            drawing_revision_id: revisionId,
-          }, projectId) as never,
-        )),
+        ...additions.map((revisionId) => {
+          // See createMutation above: drawing_id is required alongside
+          // drawing_revision_id to satisfy drawing_transmittal_items_one_target.
+          const drawingId = sheetOptions.find((o) => o.revisionId === revisionId)?.drawingId ?? null;
+          return entities.DrawingTransmittalItem.create(
+            withProjectId({
+              transmittal_id: transmittal.id,
+              drawing_revision_id: revisionId,
+              drawing_id: drawingId,
+            }, projectId) as never,
+          );
+        }),
         ...removals.map((item) => entities.DrawingTransmittalItem.delete(item.id)),
       ]);
       return selected.size;

@@ -539,7 +539,19 @@ export default function Drawings({ embedded = false } = {}) {
     const fieldCount = Object.keys(payload).length;
     const { succeeded, failed } = await batchProcess(
       ids,
-      (id) => entities.Drawing.update(id, payload),
+      (id) => {
+        const current = drawings.find((d) => d.id === id);
+        if (current && payload.stage) {
+          const v = validateStageTransition(current.stage, payload.stage);
+          if (!v.ok) throw new Error(v.reason);
+
+          const classification = classifyDrawingStageMutation(current, payload.stage, submittalsBySetId);
+          if (!classification.allowed) {
+            throw new Error(classification.reason);
+          }
+        }
+        return entities.Drawing.update(id, payload);
+      },
     );
     await invalidate();
     const toastInfo = formatBulkUpdateToast(succeeded.length, failed.length, { fieldCount });

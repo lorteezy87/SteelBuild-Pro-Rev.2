@@ -307,6 +307,7 @@ Remaining:
 
 ## Recently-resolved (last 30 days, kept here for context)
 
+- 2026-09-13 **Bulk-edit approval gate enforcement:** added stage transition and submittal-link checks to `handleBulkEdit` in `Drawings.jsx` to prevent bypassing the fabrication-release gate during bulk updates.
 - 2026-06-20 **Security batch (audit #5/#6/#7/#11/#12 + #21/#14):** edge-function
   hardening — quota fail-closed + `LLM_KILL_SWITCH`, email-classify per-project cap,
   inbound-attachment count/size/extension guards + filename sanitize, CORS opt-in

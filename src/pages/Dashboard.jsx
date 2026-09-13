@@ -4,9 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
+import { useAuth } from "@/lib/AuthContext";
 import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import GettingStartedChecklist from "@/components/dashboard/GettingStartedChecklist";
 // Canonical control-center loading uses the same query set for all project views.
 const DashboardControlCenter = lazyWithRetry(() => import("./dashboardCC/DashboardControlCenter"));
 const PortfolioControlCenter = lazyWithRetry(() => import("./portfolio/PortfolioControlCenter"));
@@ -253,6 +255,15 @@ export default function Dashboard() {
 
   // ── Canonical single-project Dashboard Control Center ─────────────────────
   if (pid) {
+    const { user } = useAuth();
+    const signals = useMemo(() => ({
+      hasDrawings: drawings.length > 0,
+      hasSubmittal: submittals.length > 0,
+      hasRfi: rfis.length > 0,
+      rfiSkipped: false,
+      hasFabRelease: submittals.some(s => s.status === "Released for Fabrication"),
+    }), [drawings, submittals, rfis]);
+
     const onNavigateDash = (target, opts = {}) => {
       const paths = {
         rfis: "/RFIs",
@@ -291,29 +302,35 @@ export default function Dashboard() {
     return (
       <ErrorBoundary label="Dashboard Control Center">
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <DashboardControlCenter
-            project={activeProject}
-            rfis={rfis}
-            cos={cos}
-            codes={codes}
-            wps={wps}
-            deliveries={deliveries}
-            actionItems={actionItems}
-            expenses={expenses}
-            submittals={submittals}
-            drawings={drawings}
-            sovItems={sovItems}
-            scheduleTasks={scheduleTasks}
-            drawingActivity={drawingActivity}
-            punchlistItems={punchlistItems}
-            inspections={inspections}
-            safetyIncidents={safetyIncidents}
-            qualityRecords={qualityRecords}
-            todayIso={new Date().toISOString().slice(0, 10)}
-            rfiEvidenceLoaded={rfisSuccess}
-            scheduleEvidenceLoaded={scheduleTasksSuccess}
-            onNavigate={onNavigateDash}
-          />
+          <>
+            <GettingStartedChecklist
+              signals={signals}
+              userMetadata={user?.user_metadata}
+            />
+            <DashboardControlCenter
+              project={activeProject}
+              rfis={rfis}
+              cos={cos}
+              codes={codes}
+              wps={wps}
+              deliveries={deliveries}
+              actionItems={actionItems}
+              expenses={expenses}
+              submittals={submittals}
+              drawings={drawings}
+              sovItems={sovItems}
+              scheduleTasks={scheduleTasks}
+              drawingActivity={drawingActivity}
+              punchlistItems={punchlistItems}
+              inspections={inspections}
+              safetyIncidents={safetyIncidents}
+              qualityRecords={qualityRecords}
+              todayIso={new Date().toISOString().slice(0, 10)}
+              rfiEvidenceLoaded={rfisSuccess}
+              scheduleEvidenceLoaded={scheduleTasksSuccess}
+              onNavigate={onNavigateDash}
+            />
+          </>
         </Suspense>
       </ErrorBoundary>
     );

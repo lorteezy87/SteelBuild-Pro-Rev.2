@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import type { ComponentType } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./uiCompat";
@@ -6,6 +6,7 @@ import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import DrawingSetSelectorRaw from "@/components/submittals/DrawingSetSelector";
 import { STATUSES, TYPES, BIC_CHOICES } from "./format";
 import { DRAWING_TYPES, type DrawingType } from "@/lib/submittalComponents";
+import { functions } from "@/api/supabaseClient";
 import type { DrawingSet, Submittal } from "./types";
 
 // DrawingSetSelector is still .jsx, so TS infers its array props from `[]`
@@ -77,6 +78,26 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
     notes:            initial.notes            || "",
     drawing_set_ids:  Array.isArray(initial.drawing_set_ids) ? initial.drawing_set_ids : [],
   });
+
+  // Auto-number new submittals on mount
+  useEffect(() => {
+    if (!initial.id && projectId) {
+      (async () => {
+        try {
+          const { data } = await functions.invoke("numberSequence", {
+            project_id: projectId,
+            record_type: "submittal",
+          });
+          if (data?.number) {
+            setField("submittal_number", data.number);
+          }
+        } catch (err) {
+          console.error("Failed to auto-number submittal:", err);
+          // We don't toast here to avoid interrupting the user; they can still type it manually.
+        }
+      })();
+    }
+  }, [initial.id, projectId]);
 
   const setField = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
   const isEdit = !!initial.id;

@@ -42,6 +42,7 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 - **`drawings` has only `reviewer`** — no `assigned_to`, no `ball_in_court`. Those exist on `submittals` only.
 - **Gate controls on the write validator**, not a hand-written weaker condition — use the `canWrite*` predicates in `format.ts`.
 - **Row caps:** `LIST_ROW_CAP` (2000) is what a request *asks* for; `SERVER_MAX_ROWS` (1000) is PostgREST's `db-max-rows`. Truncation detectors must compare against `EFFECTIVE_LIST_CAP` (the min), or they can never fire.
+- **Bulk edit must respect gates.** `handleBulkEdit` in `Drawings.jsx` must use `validateStageTransition` and `classifyDrawingStageMutation` when updating `stage` to prevent bypassing submittal approval gates (fixed 2026-09-13).
 
 ## MCP server
 `steelbuild-mcp-server` — 18 tools across portfolio/coordination/commercial/logistics domains. Authenticates via user JWT so RLS applies automatically. Don't bypass this with service-role calls in application code.
