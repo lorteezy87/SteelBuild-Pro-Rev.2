@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Stable mock object — the engine captures `supabase` once at import, then
 // reads `.from` / `.functions.invoke` off it at call time, so per-test we just
 // repoint those two members.
-const env = vi.hoisted(() => ({ supabase: { from: null, functions: { invoke: null } } }));
+const env = vi.hoisted(() => ({ supabase: { from: null, rpc: null, functions: { invoke: null } } }));
 vi.mock("@/lib/supabase", () => ({ supabase: env.supabase }));
 
 import {
@@ -127,12 +127,36 @@ function makeBuilder(resolved) {
   return builder;
 }
 
-function wireSupabase({ comparisons, deltas, invoke }) {
+/**
+ * The comparison tables reject direct writes — a guard trigger routes every
+ * status/delta write through create_revision_comparison() and
+ * record_revision_comparison(). The default rpc mock mirrors that contract so a
+ * regression back to `.insert()` / `.update()` fails here instead of shipping a
+ * 403 that reads as "the review found nothing".
+ */
+function makeRpc(overrides = {}) {
+  const rpc = vi.fn((fn, args) => {
+    if (fn === "create_revision_comparison") {
+      return Promise.resolve({ data: overrides.created ?? { id: "c1", compare_status: "processing" }, error: null });
+    }
+    if (fn === "record_revision_comparison") {
+      return Promise.resolve({
+        data: overrides.recorded ?? { id: "c1", compare_status: args?.p_status, ai_summary: args?.p_summary ?? null },
+        error: overrides.recordError ?? null,
+      });
+    }
+    return Promise.resolve({ data: null, error: { message: `unexpected rpc: ${fn}` } });
+  });
+  return rpc;
+}
+
+function wireSupabase({ comparisons, deltas, invoke, rpc }) {
   const builders = {
     drawing_revision_comparisons: makeBuilder(comparisons),
     drawing_revision_deltas: makeBuilder(deltas),
   };
   env.supabase.from = (table) => builders[table] || makeBuilder({});
+  env.supabase.rpc = rpc || makeRpc();
   env.supabase.functions.invoke = invoke;
   return builders;
 }
@@ -140,6 +164,7 @@ function wireSupabase({ comparisons, deltas, invoke }) {
 describe("generateRevisionDiff", () => {
   beforeEach(() => {
     env.supabase.from = null;
+    env.supabase.rpc = null;
     env.supabase.functions.invoke = null;
   });
 
@@ -161,7 +186,7 @@ describe("generateRevisionDiff", () => {
     expect(res.deltas.map((d) => d.id)).toEqual(["d2", "d1"]); // severity-sorted
   });
 
-  it("runs the LLM, persists normalized deltas with the gpt-4o override, and reports cached=false", async () => {
+  it("opens and records the comparison through the RPCs, never writing the tables directly", async () => {
     const invoke = vi.fn(() => Promise.resolve({
       data: {
         tool_use: { input: { summary: "Beam upsized.", deltas: [
@@ -171,10 +196,12 @@ describe("generateRevisionDiff", () => {
       },
       error: null,
     }));
+    const rpc = makeRpc();
     const builders = wireSupabase({
-      comparisons: { maybeSingle: null, single: { id: "c1", compare_status: "pending" } },
+      comparisons: { maybeSingle: null },
       deltas: { list: [{ id: "d1", severity: "critical", delta_type: "material_change", dismissed: false }] },
       invoke,
+      rpc,
     });
 
     const res = await generateRevisionDiff({
@@ -188,10 +215,24 @@ describe("generateRevisionDiff", () => {
     expect(body).toMatchObject({ useCase: "revision-compare", provider: "openai", model: "gpt-4o" });
     expect(body.messages[0].content.filter((b) => b.type === "image")).toHaveLength(2);
 
-    // The AI's loose "Material Change"/"Critical" got coerced to the CHECK set,
-    // and the comparison id was stamped on the inserted row.
-    const inserted = builders.drawing_revision_deltas._calls.insert[0][0];
-    expect(inserted).toMatchObject({ delta_type: "material_change", severity: "critical", comparison_id: "c1" });
+    // The comparison is opened by RPC, with the sheet + revision pair only —
+    // project_id and the requester are stamped server-side.
+    expect(rpc).toHaveBeenCalledWith("create_revision_comparison", {
+      p_drawing_id: "dw1", p_from_revision_id: "r1", p_to_revision_id: "r2",
+    });
+
+    // Results go back through record_revision_comparison(), which inserts the
+    // deltas itself. The AI's loose "Material Change"/"Critical" is coerced to
+    // the CHECK set before it is handed over.
+    const record = rpc.mock.calls.find(([fn]) => fn === "record_revision_comparison");
+    expect(record).toBeTruthy();
+    expect(record[1]).toMatchObject({ p_comparison_id: "c1", p_status: "complete", p_model: "gpt-4o" });
+    expect(record[1].p_deltas[0]).toMatchObject({ delta_type: "material_change", severity: "critical" });
+
+    // The guard trigger rejects these outright — the client must never try.
+    expect(builders.drawing_revision_deltas._calls.insert).toHaveLength(0);
+    expect(builders.drawing_revision_deltas._calls.delete).toBe(0);
+    expect(builders.drawing_revision_comparisons._calls.update).toHaveLength(0);
     expect(res.cached).toBe(false);
   });
 
