@@ -1,0 +1,303 @@
+{
+  "projectRef": "kjrwqagyeswwoxpjkcko",
+  "recoveredOn": "2026-09-13",
+  "source": "Authenticated read-only Supabase query of supabase_migrations.schema_migrations.statements (text[])",
+  "sourceQuery": "select version, name, statements, md5(array_to_string(statements, E'\\n')) as statements_md5 from supabase_migrations.schema_migrations where version in ('20260909090445','20260910034739','20260910044641') order by version;",
+  "originalAuthor": null,
+  "originalCommit": null,
+  "migrations": [
+    {
+      "version": "20260909090445",
+      "file": "20260909090445_m19_reset_org_data.sql",
+      "statements": 1,
+      "utf8Bytes": 3466,
+      "ledgerMd5": "7d4f0fa54bf8c8f8e3eae455ca9381ad",
+      "sha256": "ae1cc33e8a33185eba25e7d6935d4cb05e7f6f178d216cfb03e551310c1cd0bd"
+    },
+    {
+      "version": "20260910034739",
+      "file": "20260910034739_hard_delete_records.sql",
+      "statements": 1,
+      "utf8Bytes": 20682,
+      "ledgerMd5": "87fc84004540218ac0bd8e1ea2a4e904",
+      "sha256": "c9754d64671cdfc27be6871bb326777af7ff8ca25790c81dfba0f12850fabbe9"
+    },
+    {
+      "version": "20260910044641",
+      "file": "20260910044641_m30_scope_items.sql",
+      "statements": 1,
+      "utf8Bytes": 12309,
+      "ledgerMd5": "fd2c7884f9434856dd6de2b9c84fe999",
+      "sha256": "942871f2a0f9c04659c54d25d418eac57f4cb639505865c9779c4830d8eb29c5"
+    }
+  ],
+  "liveFunctionComparison": [
+    {
+      "migration": "20260909090445_m19_reset_org_data.sql",
+      "function": "reset_org_data",
+      "exact_body_match": false,
+      "trimmed_body_match": false,
+      "source_body_sha256": "fe902d2d72870b7347a28e463a4c1ad5dbb8482196280a9961e08c10057275e9",
+      "live_body_sha256": "c68730ce6bc3dfea7e4613a5608c4a18eb936d7ea860af613011eaed4617a92b",
+      "later_exact_body_sources": [
+        "20260912052502_reset_org_data_suppress_triggers_in_org_tail.sql"
+      ]
+    },
+    {
+      "migration": "20260910034739_hard_delete_records.sql",
+      "function": "hard_delete_allowlist",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "2880dc0a3a5bca65cb45ecf6ab0a72bea5ce0376e9a7cce6a02024755771767f",
+      "live_body_sha256": "2880dc0a3a5bca65cb45ecf6ab0a72bea5ce0376e9a7cce6a02024755771767f"
+    },
+    {
+      "migration": "20260910034739_hard_delete_records.sql",
+      "function": "hard_delete_merge_counts",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "cc9175bfe406212f51764a461dfce3d6b6eff5b031dd85d4f385cc4f6b497058",
+      "live_body_sha256": "cc9175bfe406212f51764a461dfce3d6b6eff5b031dd85d4f385cc4f6b497058"
+    },
+    {
+      "migration": "20260910034739_hard_delete_records.sql",
+      "function": "hard_delete_toggle_triggers",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "d788b217320a50a1212d04eaae0198ec29139387747672cb599ef720f27aee85",
+      "live_body_sha256": "d788b217320a50a1212d04eaae0198ec29139387747672cb599ef720f27aee85"
+    },
+    {
+      "migration": "20260910034739_hard_delete_records.sql",
+      "function": "hard_delete_release_dependents",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "824f2bd76540cc1f695304628126c8d1584a78921e84f4c3f0035a03424c3628",
+      "live_body_sha256": "824f2bd76540cc1f695304628126c8d1584a78921e84f4c3f0035a03424c3628"
+    },
+    {
+      "migration": "20260910034739_hard_delete_records.sql",
+      "function": "hard_delete_records",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "3c31e8167fe41e79492e9ac6ad1349abae7ba67e72a236b25a9c17f33fc8a5f5",
+      "live_body_sha256": "3c31e8167fe41e79492e9ac6ad1349abae7ba67e72a236b25a9c17f33fc8a5f5"
+    },
+    {
+      "migration": "20260910034739_hard_delete_records.sql",
+      "function": "hard_delete_record",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "cb7c5eaeee795a74a73306be1ae3f152438b2ca41b6104d06d29baa7e57be653",
+      "live_body_sha256": "cb7c5eaeee795a74a73306be1ae3f152438b2ca41b6104d06d29baa7e57be653"
+    },
+    {
+      "migration": "20260910044641_m30_scope_items.sql",
+      "function": "scope_item_apply_progress",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "209d9500182bf635f6eefa8ab39ef568546bae690f413dbd0bf683b3cc8ee431",
+      "live_body_sha256": "209d9500182bf635f6eefa8ab39ef568546bae690f413dbd0bf683b3cc8ee431"
+    },
+    {
+      "migration": "20260910044641_m30_scope_items.sql",
+      "function": "scope_item_check_links",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "3ee61ed241fe9073cc4c1d5a1b25ff3bb140e23c180b56619166de4ec6bc4c55",
+      "live_body_sha256": "3ee61ed241fe9073cc4c1d5a1b25ff3bb140e23c180b56619166de4ec6bc4c55"
+    },
+    {
+      "migration": "20260910044641_m30_scope_items.sql",
+      "function": "prepare_scope_item_row",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "925ed1980fb4321d1ac78384c40c14bdd91fd0ee6bdfdc17fc88b2d70dcd4a6f",
+      "live_body_sha256": "925ed1980fb4321d1ac78384c40c14bdd91fd0ee6bdfdc17fc88b2d70dcd4a6f"
+    },
+    {
+      "migration": "20260910044641_m30_scope_items.sql",
+      "function": "enforce_scope_item_guards",
+      "exact_body_match": true,
+      "trimmed_body_match": true,
+      "source_body_sha256": "fd9f514b7327b52b6bf1feb2d85723509eb0f77337288a87efea33fc01227c88",
+      "live_body_sha256": "fd9f514b7327b52b6bf1feb2d85723509eb0f77337288a87efea33fc01227c88"
+    }
+  ],
+  "liveStructure": {
+    "columns": [
+      {
+        "type": "text",
+        "table": "data_erasure_log",
+        "column": "reason",
+        "nullable": "YES"
+      },
+      {
+        "type": "text",
+        "table": "data_erasure_log",
+        "column": "table_name",
+        "nullable": "YES"
+      },
+      {
+        "type": "uuid",
+        "table": "data_erasure_log",
+        "column": "record_id",
+        "nullable": "YES"
+      },
+      {
+        "type": "text",
+        "table": "data_erasure_log",
+        "column": "record_label",
+        "nullable": "YES"
+      },
+      {
+        "type": "text",
+        "table": "scope_items",
+        "column": "scope_number",
+        "nullable": "YES"
+      },
+      {
+        "type": "uuid",
+        "table": "scope_items",
+        "column": "created_by",
+        "nullable": "YES"
+      },
+      {
+        "type": "uuid",
+        "table": "scope_items",
+        "column": "completed_by_id",
+        "nullable": "YES"
+      },
+      {
+        "type": "uuid",
+        "table": "scope_items",
+        "column": "document_id",
+        "nullable": "YES"
+      },
+      {
+        "type": "uuid",
+        "table": "scope_items",
+        "column": "change_order_id",
+        "nullable": "YES"
+      },
+      {
+        "type": "integer",
+        "table": "scope_items",
+        "column": "sort_order",
+        "nullable": "YES"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "idx_data_erasure_log_record",
+        "definition": "CREATE INDEX idx_data_erasure_log_record ON public.data_erasure_log USING btree (table_name, record_id) WHERE (kind = 'record'::text)"
+      },
+      {
+        "name": "idx_scope_items_change_order",
+        "definition": "CREATE INDEX idx_scope_items_change_order ON public.scope_items USING btree (change_order_id) WHERE (change_order_id IS NOT NULL)"
+      },
+      {
+        "name": "idx_scope_items_project_live",
+        "definition": "CREATE INDEX idx_scope_items_project_live ON public.scope_items USING btree (project_id, item_type, sort_order) WHERE (is_deleted = false)"
+      },
+      {
+        "name": "uq_scope_items_project_number",
+        "definition": "CREATE UNIQUE INDEX uq_scope_items_project_number ON public.scope_items USING btree (project_id, scope_number)"
+      }
+    ],
+    "policies": [
+      {
+        "cmd": "INSERT",
+        "name": "scope_items_insert",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "with_check": "user_has_project_role_at_least(project_id, 'field'::text)"
+      },
+      {
+        "cmd": "SELECT",
+        "name": "scope_items_select",
+        "qual": "user_has_project_access(project_id)",
+        "roles": [
+          "authenticated"
+        ],
+        "with_check": null
+      },
+      {
+        "cmd": "UPDATE",
+        "name": "scope_items_update",
+        "qual": "user_has_project_role_at_least(project_id, 'field'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "with_check": "user_has_project_role_at_least(project_id, 'field'::text)"
+      }
+    ],
+    "triggers": [
+      {
+        "name": "trg_a_scope_items_guard",
+        "enabled": "O",
+        "definition": "CREATE TRIGGER trg_a_scope_items_guard BEFORE DELETE OR UPDATE ON public.scope_items FOR EACH ROW EXECUTE FUNCTION enforce_scope_item_guards()"
+      },
+      {
+        "name": "trg_a_scope_items_prepare",
+        "enabled": "O",
+        "definition": "CREATE TRIGGER trg_a_scope_items_prepare BEFORE INSERT ON public.scope_items FOR EACH ROW EXECUTE FUNCTION prepare_scope_item_row()"
+      }
+    ],
+    "scope_rls": true,
+    "constraints": [
+      {
+        "name": "chk_scope_items_co_is_exclusion",
+        "table": "scope_items",
+        "validated": false,
+        "definition": "CHECK (((change_order_id IS NULL) OR (item_type = 'Exclusion'::text))) NOT VALID"
+      },
+      {
+        "name": "chk_scope_items_progress",
+        "table": "scope_items",
+        "validated": false,
+        "definition": "CHECK ((NOT (is_completed AND in_progress))) NOT VALID"
+      },
+      {
+        "name": "data_erasure_log_kind_check",
+        "table": "data_erasure_log",
+        "validated": true,
+        "definition": "CHECK ((kind = ANY (ARRAY['project'::text, 'organization'::text, 'account'::text, 'record'::text])))"
+      },
+      {
+        "name": "data_erasure_log_reason_check",
+        "table": "data_erasure_log",
+        "validated": true,
+        "definition": "CHECK (((kind = 'record'::text) OR ((reason IS NOT NULL) AND (length(btrim(reason)) >= 12))))"
+      },
+      {
+        "name": "scope_items_change_order_id_fkey",
+        "table": "scope_items",
+        "validated": true,
+        "definition": "FOREIGN KEY (change_order_id) REFERENCES change_orders(id) ON DELETE SET NULL"
+      },
+      {
+        "name": "scope_items_document_id_fkey",
+        "table": "scope_items",
+        "validated": true,
+        "definition": "FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL"
+      }
+    ],
+    "scope_grants": [
+      {
+        "grantee": "authenticated",
+        "privilege": "INSERT"
+      },
+      {
+        "grantee": "authenticated",
+        "privilege": "SELECT"
+      },
+      {
+        "grantee": "authenticated",
+        "privilege": "UPDATE"
+      }
+    ]
+  }
+}
