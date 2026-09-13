@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "projectRef": "kjrwqagyeswwoxpjkcko",
-  "reviewedAt": "2026-09-12",
+  "reviewedAt": "2026-09-13",
   "local": {
     "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
     "migrationLifecycle": "required",
@@ -214,8 +214,8 @@
     {
       "version": "20260909090445",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "unresolved",
-      "evidence": "Lineage to sibling 20260909090000_m19_reset_org_data.sql is explicitly confirmed by Rev.2 migration 20260912042823. Production was superseded by later Rev.2 replacements, so the original body is no longer observable and bookkeeping repair remains unsafe without full replay"
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Exact production ledger payload archived at supabase/migrations_external/20260909090445_m19_reset_org_data.sql, SHA-256 ae1cc33e8a33185eba25e7d6935d4cb05e7f6f178d216cfb03e551310c1cd0bd; equals sibling 20260909090000_m19_reset_org_data.sql except its final newline. Historical alias superseded by Rev.2 replacements; current body matches 20260912052502. See migrations_external/provenance.json; do not replay or rewrite the ledger"
     },
     {
       "version": "20260909091118",
@@ -279,9 +279,9 @@
     },
     {
       "version": "20260910034739",
-      "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "unresolved",
-      "evidence": "Remote hard_delete_records stamp follows committed M28 and precedes M29. Its live footprint is six functions absent from all 38 sibling migrations (hard_delete_allowlist, hard_delete_merge_counts, hard_delete_record, hard_delete_records, hard_delete_release_dependents, hard_delete_toggle_triggers) plus data_erasure_log record_kind/table_name/record_id/record_label changes; exact source is absent"
+      "owner": "shared-production/kjrwqagyeswwoxpjkcko",
+      "lifecycle": "required",
+      "evidence": "Authenticated production ledger source archived at supabase/migrations_external/20260910034739_hard_delete_records.sql, SHA-256 c9754d64671cdfc27be6871bb326777af7ff8ca25790c81dfba0f12850fabbe9. All six function bodies and data_erasure_log columns/checks/index match live structure. Original author/repository commit unproven; see migrations_external/provenance.json. Already applied; archive is not deployment input"
     },
     {
       "version": "20260910040138",
@@ -291,9 +291,9 @@
     },
     {
       "version": "20260910044641",
-      "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "unresolved",
-      "evidence": "Remote m30_scope_items stamp follows committed M29. Its live footprint is six scope_items columns, four guard/progress/link functions, two FKs, two checks, three indexes, prepare/guard triggers, and field-plus/access RLS absent from the Rev.2 baseline and all 38 sibling migrations; exact source is absent"
+      "owner": "shared-production/kjrwqagyeswwoxpjkcko",
+      "lifecycle": "required",
+      "evidence": "Authenticated production ledger source archived at supabase/migrations_external/20260910044641_m30_scope_items.sql, SHA-256 942871f2a0f9c04659c54d25d418eac57f4cb639505865c9779c4830d8eb29c5. Four function bodies, six columns, constraints/indexes/triggers and RLS/grants match production. Original author/repository commit unproven; see migrations_external/provenance.json. Already applied; do not rerun its data backfill"
     }
   ],
   "functions": [
