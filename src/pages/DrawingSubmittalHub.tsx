@@ -1,3 +1,4 @@
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 /**
  * DrawingSubmittalHub — Unified Drawings & Submittals command center.
  *
@@ -242,14 +243,14 @@ function DetailingControlCenter() {
   };
 
   // ── Data for KPI strip & matrix ────────────────────────────────────────
-  const { drawings, isLoading: drawingsLoading } = useDrawings(projectId);
+  const { drawings, isLoading: drawingsLoading, error: drawingsError, refetch: refetchDrawings } = useDrawings(projectId);
   const {
     submittals, kpis, roundsBySubmittal,
-    isLoading: submittalsLoading,
+    isLoading: submittalsLoading, error: submittalsError, refetch: refetchSubmittals,
   } = useSubmittals(projectId);
 
   // Drawing sets (for matrix)
-  const { data: drawingSets = [], isPending: drawingSetsLoading } = useQuery({
+  const { data: drawingSets = [], isPending: drawingSetsLoading, error: drawingSetsError, refetch: refetchDrawingSets } = useQuery({
     queryKey: ["drawing-sets", projectId],
     queryFn: () => entities.DrawingSet.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -276,13 +277,13 @@ function DetailingControlCenter() {
 
   // Work packages (for the erection sequence date → backward scheduling) + RFIs
   // (to know which linked RFIs are still open → rfiBlocked readiness).
-  const { data: workPackages = [] } = useQuery({
+  const { data: workPackages = [], isPending: workPackagesLoading, error: workPackagesError, refetch: refetchWorkPackages } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
-  const { data: rfis = [] } = useQuery({
+  const { data: rfis = [], isPending: rfisLoading, error: rfisError, refetch: refetchRfis } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () => entities.RFI.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -594,7 +595,7 @@ function DetailingControlCenter() {
     [drawings, submittals]
   );
 
-  const isLoading = drawingsLoading || submittalsLoading;
+  const isLoading = drawingsLoading || submittalsLoading || drawingSetsLoading || workPackagesLoading || rfisLoading;
 
   const triage = useMemo(
     () => buildTriage(submittals, setPackages, readinessByKey, workdayDues),
@@ -910,6 +911,13 @@ function DetailingControlCenter() {
       )}
     </>
   );
+
+  const workflowError = drawingsError ?? submittalsError ?? drawingSetsError ?? workPackagesError ?? rfisError;
+  if (workflowError || isLoading) {
+    return <WorkflowFetchState label="Detailing workflow" error={workflowError} onRetry={() => {
+      void Promise.all([refetchDrawings(), refetchSubmittals(), refetchDrawingSets(), refetchWorkPackages(), refetchRfis()]);
+    }} />;
+  }
 
   return (
     <>

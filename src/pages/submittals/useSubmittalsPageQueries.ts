@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { groupSubmittalRounds } from "@/hooks/submittals/queries";
-import { isMissingSchemaObjectError } from "@/lib/postgrestErrors";
 import type { DrawingSet, DrawingSetsById, Submittal, SubmittalRoundRecord } from "./types";
 
 export interface SubmittalSheetResponseRecord {
@@ -41,7 +40,7 @@ export function indexDrawingSets(drawingSets: DrawingSet[]): DrawingSetsById {
 export { groupSubmittalRounds };
 
 export function useSubmittalsPageQueries(projectId: string | undefined) {
-  const { data: rows = [], isLoading } = useQuery({
+  const rowsQuery = useQuery({
     queryKey: ["submittals", projectId],
     queryFn: async () => projectId
       ? await entities.Submittal.filter({ project_id: projectId }, "-submitted_date") as Submittal[]
@@ -50,7 +49,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
     staleTime: 30_000,
   });
 
-  const { data: drawingSets = [] } = useQuery({
+  const drawingSetsQuery = useQuery({
     queryKey: ["drawing_sets", projectId],
     queryFn: async () => projectId
       ? await entities.DrawingSet.filter({ project_id: projectId }) as DrawingSet[]
@@ -59,7 +58,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
     staleTime: 60_000,
   });
 
-  const { data: allRounds = [] } = useQuery({
+  const allRoundsQuery = useQuery({
     queryKey: ["submittal-rounds", projectId],
     queryFn: async () => projectId
       ? await entities.SubmittalRound.filter(
@@ -71,7 +70,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
     staleTime: 30_000,
   });
 
-  const { data: allRfis = [] } = useQuery({
+  const allRfisQuery = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: async () => projectId
       ? await entities.RFI.filter({ project_id: projectId }) as SubmittalLinkedRecord[]
@@ -80,7 +79,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
     staleTime: 60_000,
   });
 
-  const { data: allTasks = [] } = useQuery({
+  const allTasksQuery = useQuery({
     queryKey: ["schedule-tasks", projectId],
     queryFn: async () => projectId
       ? await entities.ScheduleTask.filter({ project_id: projectId }) as SubmittalLinkedRecord[]
@@ -89,7 +88,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
     staleTime: 60_000,
   });
 
-  const { data: allDrawings = [] } = useQuery({
+  const allDrawingsQuery = useQuery({
     queryKey: ["drawings", projectId],
     queryFn: async () => projectId
       ? await entities.Drawing.filter({ project_id: projectId }) as SubmittalDrawingRecord[]
@@ -98,7 +97,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
     staleTime: 60_000,
   });
 
-  const { data: allSheetResponses = [] } = useQuery({
+  const allSheetResponsesQuery = useQuery({
     queryKey: ["sheet-responses", projectId],
     queryFn: async () => projectId
       ? await entities.SubmittalSheetResponse.filter({
@@ -109,28 +108,30 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
     staleTime: 30_000,
   });
 
-  const { data: allCommentDispositions = [] } = useQuery({
+  const allCommentDispositionsQuery = useQuery({
     queryKey: ["comment-dispositions", projectId],
     queryFn: async () => {
       if (!projectId) return [];
-      try {
-        return await entities.SubmittalCommentDisposition.filter({
-          project_id: projectId,
-        }) as SubmittalCommentDispositionRecord[];
-      } catch (error) {
-        if (isMissingSchemaObjectError(error)) {
-          console.warn(
-            "[submittals] comment dispositions unavailable — apply pending migration",
-            error,
-          );
-          return [];
-        }
-        throw error;
-      }
+      return await entities.SubmittalCommentDisposition.filter({
+        project_id: projectId,
+      }) as SubmittalCommentDispositionRecord[];
     },
     enabled: !!projectId,
     staleTime: 30_000,
   });
+
+  const rows = rowsQuery.data ?? [];
+  const drawingSets = drawingSetsQuery.data ?? [];
+  const allRounds = allRoundsQuery.data ?? [];
+  const allRfis = allRfisQuery.data ?? [];
+  const allTasks = allTasksQuery.data ?? [];
+  const allDrawings = allDrawingsQuery.data ?? [];
+  const allSheetResponses = allSheetResponsesQuery.data ?? [];
+  const allCommentDispositions = allCommentDispositionsQuery.data ?? [];
+  const queries = [rowsQuery, drawingSetsQuery, allRoundsQuery, allRfisQuery, allTasksQuery, allDrawingsQuery, allSheetResponsesQuery, allCommentDispositionsQuery];
+  const isLoading = !!projectId && queries.some(query => query.isPending);
+  const queryError = queries.find(query => query.isError)?.error ?? null;
+  const refetch = () => Promise.all(queries.map(query => query.refetch()));
 
   const drawingSetsById = useMemo(() => indexDrawingSets(drawingSets), [drawingSets]);
   const roundsBySubmittal = useMemo(() => groupSubmittalRounds(allRounds), [allRounds]);
@@ -138,6 +139,8 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
   return {
     rows,
     isLoading,
+    queryError,
+    refetch,
     drawingSets,
     drawingSetsById,
     allRounds,

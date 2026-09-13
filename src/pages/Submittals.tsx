@@ -1,3 +1,4 @@
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ensureCriticalAgingActionItems } from "@/lib/submittalAgingTriggers";
@@ -61,6 +62,8 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
   const {
     rows,
     isLoading,
+    queryError,
+    refetch,
     drawingSets,
     drawingSetsById,
     allRounds,
@@ -104,7 +107,7 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
   useAutoOpenEdit(rows, (submittal) => {
     if (submittal.id) setSelectedId(submittal.id);
   }, {
-    enabled: !isLoading,
+    enabled: !isLoading && !queryError,
     param: "recordId",
   });
 
@@ -137,7 +140,7 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
   // Slice 7: draft ActionItems for Critical R&R/OFS/BFA aging (deduped).
   // Honest path — never invents Alerts Center rows / generate-alerts.
   useEffect(() => {
-    if (!projectId || isLoading || rows.length === 0) return;
+    if (!projectId || isLoading || queryError || rows.length === 0) return;
     void ensureCriticalAgingActionItems(
       rows
         .filter((row): row is Submittal & { id: string } => typeof row.id === "string")
@@ -147,7 +150,7 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
           project_name: activeProject?.name || activeProject?.project_name || null,
         })),
     );
-  }, [projectId, isLoading, rows, activeProject?.name, activeProject?.project_name]);
+  }, [projectId, isLoading, queryError, rows, activeProject?.name, activeProject?.project_name]);
 
   // Opt-in routing correction: when on, a BFA "Approved" flows through the
   // detailer scrub (OFS → IFC → Released) exactly like "Approved as Noted".
@@ -183,6 +186,7 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
 
   const {
     bySubmittal: componentsBySubmittal,
+    isLoading: componentsLoading, error: componentsError, refetch: refetchComponents,
     setReceived: setComponentReceived,
     setReleased: setComponentReleased,
     addType: addComponentType,
@@ -421,10 +425,19 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
     </div>
   );
 
+  const workflowError = queryError ?? (drawingTypesEnabled ? componentsError : null);
+  if (workflowError || isLoading || (drawingTypesEnabled && componentsLoading)) {
+    return <WorkflowFetchState label="Submittals" error={workflowError} onRetry={() => {
+      void refetch();
+      if (drawingTypesEnabled) void refetchComponents();
+    }} />;
+  }
+
   return (
     <div className="submittals-page" style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
       <SubmittalRegisterPanel
         embedded={embedded}
+        detailOpen={!!selectedView}
         filtered={filteredView}
         rows={rowsView}
         stats={stats}
