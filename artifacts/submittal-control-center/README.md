@@ -11,12 +11,23 @@ Multi-project submittal log at the **drawing-set** level (not individual sheets)
 
 - Portfolio rollup — open packages, with-reviewer count, overdue, avg turnaround, released-for-fab %, held/blocked
 - Review-aging chart (0–7 / 8–14 / 15–21 / 22+ days out) and a "needs action" queue
-- Editable log grid — internal status, GC return code (NET / MCN / R&R / REJ / FRO), ball-in-court, dates
+- **Ball-in-court scorecard** — who is holding work, how many of theirs are overdue, and their real average
+  turnaround metered against the job's contract review days
+- **Return forecast** — what comes back overdue / today / this week / next week, with sheet counts
+- Editable log grid — job, spec section, internal status, GC return code (NET / MCN / R&R / REJ / FRO),
+  ball-in-court, dates. Sortable columns, quick-filter chips, per-row severity stripe
 - Due-back auto-derived from each job's contract review days, overridable per package
 - Fab release flag plus holds / open RFIs blocking release
 - Revision history — each submit→return cycle logged with its return code and turnaround
 - Drawing sets by external link (Procore / SharePoint / Dropbox / …) plus small in-tracker attachments
+- **Transmittal generator** — a formatted, printable submittal transmittal per package
+- **Chase note generator** — a ready-to-paste follow-up for every overdue return, grouped by job
 - CSV export of the filtered log
+
+## Layout notes that are load-bearing
+The log grid scrolls inside itself (`.table-wrap` with a JS-measured `--grid-h`) so its header pins to the
+grid. `position: sticky` resolves against the nearest scrolling ancestor, and `.table-wrap` is one — a
+header offset from the *page* renders below the first rows instead of above them.
 
 ## Runtime capabilities
 Declared at publish time, not in this file:

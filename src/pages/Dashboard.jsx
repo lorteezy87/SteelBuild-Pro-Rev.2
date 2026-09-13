@@ -37,6 +37,7 @@ function FirstProjectWelcome({ onStart }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { activeProject, setActiveProject } = useProjectContext();
+  const { user } = useAuth();
   const pid = activeProject?.id;
   const [portfolioSearch, setPortfolioSearch] = useState("");
   const [portfolioHealthFilter, setPortfolioHealthFilter] = useState("All");
@@ -255,14 +256,13 @@ export default function Dashboard() {
 
   // ── Canonical single-project Dashboard Control Center ─────────────────────
   if (pid) {
-    const { user } = useAuth();
-    const signals = useMemo(() => ({
+    const signals = {
       hasDrawings: drawings.length > 0,
       hasSubmittal: submittals.length > 0,
       hasRfi: rfis.length > 0,
       rfiSkipped: false,
       hasFabRelease: submittals.some(s => s.status === "Released for Fabrication"),
-    }), [drawings, submittals, rfis]);
+    };
 
     const onNavigateDash = (target, opts = {}) => {
       const paths = {
@@ -305,7 +305,7 @@ export default function Dashboard() {
           <>
             <GettingStartedChecklist
               signals={signals}
-              userMetadata={user?.user_metadata}
+              userMetadata={user}
             />
             <DashboardControlCenter
               project={activeProject}

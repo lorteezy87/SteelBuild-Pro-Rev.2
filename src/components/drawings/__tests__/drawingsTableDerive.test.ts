@@ -2,7 +2,12 @@
  * Unit tests for drawingsTableDerive.ts — pure sort/row helpers only.
  */
 import { describe, it, expect, beforeEach } from "vitest";
+import type { Drawing } from "@/hooks/useDrawings";
 import {
+  buildDrawingTableViewModel,
+  deriveGroupSelectionState,
+  deriveSelectionState,
+  getGroupSelectionToggleIds,
   nextSortState,
   sortDrawingGroups,
   buildFlatDrawingRows,
@@ -14,10 +19,43 @@ import {
   saveExpandedSets,
   EXPAND_LS_KEY,
   TABLE_COLUMNS,
+  type DrawingGroup,
+  type FlatDrawingRow,
 } from "../drawingsTableDerive";
 
-function makeGroup(key: any, sheets: any[] = []) {
-  return { key, name: key, sheets, setOnly: false, isUngrouped: false, aggregates: { total: sheets.length } };
+function makeGroup(key: string, sheets: Array<Partial<Drawing>> = []): DrawingGroup {
+  return {
+    key,
+    setId: null,
+    setNumber: "",
+    name: key,
+    parent: null,
+    sheets: sheets as Drawing[],
+    setOnly: false,
+    isUngrouped: false,
+    aggregates: {
+      total: sheets.length,
+      stageCounts: {},
+      releasedCount: 0,
+      percentReleased: 0,
+      earliestSubmitted: null,
+      earliestDue: null,
+      overdueCount: 0,
+      maxLate: 0,
+      aggregateStatus: null,
+      disciplines: [],
+      hasPriority: false,
+      maxRev: 0,
+      aiProcessed: 0,
+      aiNeedsReview: 0,
+      aiExtracting: 0,
+      aiFailed: 0,
+      stageSummary: null,
+      driveUrl: null,
+      revisionHistory: null,
+      eventCount: null,
+    },
+  };
 }
 
 describe("nextSortState", () => {
@@ -57,7 +95,7 @@ describe("buildFlatDrawingRows", () => {
     const rows = buildFlatDrawingRows(groups, new Set());
     expect(rows).toHaveLength(1);
     expect(rows[0].type).toBe("group");
-    expect((rows[0] as any).isExpanded).toBe(false);
+    expect((rows[0] as Extract<FlatDrawingRow, { type: "group" }>).isExpanded).toBe(false);
   });
 
   it("includes sheet rows when expanded", () => {
@@ -75,9 +113,46 @@ describe("buildFlatDrawingRows", () => {
 
 describe("estimateFlatRowHeight", () => {
   it("returns height by row type", () => {
-    expect(estimateFlatRowHeight({ type: "group" } as any)).toBe(48);
-    expect(estimateFlatRowHeight({ type: "setOnlyInfo" } as any)).toBe(120);
-    expect(estimateFlatRowHeight({ type: "sheet" } as any)).toBe(44);
+    expect(estimateFlatRowHeight({ type: "group" } as FlatDrawingRow)).toBe(48);
+    expect(estimateFlatRowHeight({ type: "setOnlyInfo" } as FlatDrawingRow)).toBe(120);
+    expect(estimateFlatRowHeight({ type: "sheet" } as FlatDrawingRow)).toBe(44);
+  });
+});
+
+describe("table view-model selection", () => {
+  const group = makeGroup("A", [{ id: "s1" }, { id: "s2" }]);
+
+  it("derives visible and group checkbox state from only rendered sheets", () => {
+    expect(deriveSelectionState(group.sheets, new Set(["s1", "outside"]))).toEqual({
+      selectedCount: 1,
+      allSelected: false,
+      indeterminate: true,
+    });
+    expect(deriveGroupSelectionState(group, new Set(["s1", "s2"]))).toEqual({
+      selectedCount: 2,
+      allSelected: true,
+      indeterminate: false,
+    });
+  });
+
+  it("returns only ids whose controlled selection state must toggle", () => {
+    expect(getGroupSelectionToggleIds(group, new Set(["s1"]))).toEqual(["s2"]);
+    expect(getGroupSelectionToggleIds(group, new Set(["s1", "s2"]))).toEqual(["s1", "s2"]);
+  });
+
+  it("builds sorted flat rows without mutating the grouped source", () => {
+    const source = makeGroup("A", [
+      { id: "s1", title: "Zulu" },
+      { id: "s2", title: "Alpha" },
+    ]);
+    const model = buildDrawingTableViewModel(
+      [source],
+      { field: "title", dir: "asc" },
+      new Set(["A"]),
+    );
+    expect(model.rows.filter((row) => row.type === "sheet").map((row) => row.drawing.id))
+      .toEqual(["s2", "s1"]);
+    expect(source.sheets.map((drawing) => drawing.id)).toEqual(["s1", "s2"]);
   });
 });
 

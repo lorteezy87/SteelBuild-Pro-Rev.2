@@ -6,11 +6,20 @@
  *  - flat sheet rows by default; optional group-by-set
  *  - click sheet # / View to open DrawingViewer
  */
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  Suspense,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
-import { Star, Loader2, ChevronDown, ChevronRight, Eye, ExternalLink } from "lucide-react";
+import { Star, Loader2, ChevronDown, ChevronRight, Eye, ExternalLink, FileUp } from "lucide-react";
 import { useDrawingRegister, type DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { usePublishRevision, type ReleaseStatus } from "@/hooks/usePublishRevision";
 import { useMyDrawingWatches, useToggleDrawingWatch } from "@/hooks/useDrawingWatch";
@@ -22,13 +31,42 @@ import { createPageUrl } from "@/utils";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
+import { lazyWithRetry } from "@/lib/lazyRetry";
+import type { SavedRevisionSummary } from "@/lib/revisionSummaryRepo";
+import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
 import { registerRowToDrawing, rowsNeedingProvisioning } from "./registerProvision";
 import {
-  filterRegisterRows,
-  listDrawingSetNames,
-  groupRegisterRowsBySet,
+  buildRegisterDisplayRows,
+  createDrawingRegisterIndex,
+  filterIndexedRegisterRows,
+  firstVisibleDrawingByPackage as deriveFirstVisibleDrawingByPackage,
   SET_FILTER_NONE,
+  type IndexedRegisterRow,
+  type RegisterDisplayRow,
 } from "./docControl.derive";
+
+interface RevisionUploadModalProps {
+  open: boolean;
+  onClose: () => void;
+  onComplete: () => void;
+  activeProject: { id?: string | null; name?: string | null } | null | undefined;
+  preSelectedSet: DrawingSet;
+  drawingSets: unknown[];
+}
+
+const RevisionUploadModal = lazyWithRetry(
+  () => import("@/components/drawings/RevisionUploadModal"),
+) as unknown as ComponentType<RevisionUploadModalProps>;
+
+export interface DrawingRegisterGridPanelProps {
+  projectId: string | null;
+  activeProject?: { id?: string | null; name?: string | null } | null;
+  drawingSets?: unknown[];
+  setPackages?: SetPackage[];
+  summariesBySet?: Map<string, SavedRevisionSummary>;
+  onRevisionUploaded?: (pkgKey: string) => void | Promise<void>;
+  onOpenSummary?: (summary: SavedRevisionSummary["summary"]) => void;
+}
 
 const STATUS_FILTERS = [
   "all", "received", "pending_review", "reviewed", "released_for_estimate",
@@ -40,6 +78,22 @@ const RELEASE_OPTIONS: { value: ReleaseStatus; label: string }[] = [
   { value: "released_for_shop", label: "Shop" },
   { value: "released_for_field", label: "Field" },
 ];
+
+const EMPTY_REGISTER_ROWS: DrawingRegisterRow[] = [];
+const EMPTY_DRAWING_SETS: unknown[] = [];
+const EMPTY_SET_PACKAGES: SetPackage[] = [];
+const EMPTY_SUMMARIES = new Map<string, SavedRevisionSummary>();
+
+export const DRAWING_REGISTER_VIRTUALIZE_THRESHOLD = 100;
+
+const REGISTER_GRID_COLUMNS =
+  "28px minmax(76px,.75fr) minmax(220px,2fr) minmax(64px,.65fr) minmax(180px,1.5fr) minmax(56px,.55fr) minmax(118px,1fr) 72px 72px minmax(108px,1fr) 56px";
+
+function registerGridColumns(canRelease: boolean) {
+  return canRelease
+    ? `${REGISTER_GRID_COLUMNS} minmax(150px,1.2fr)`
+    : REGISTER_GRID_COLUMNS;
+}
 
 function statusTone(status: string | null): PillTone {
   if (!status) return "neutral";
@@ -64,12 +118,46 @@ function Count({ n, danger, info }: { n: number | null; danger?: boolean; info?:
   return <span style={{ fontVariantNumeric: "tabular-nums", fontSize: 12, color }}>{v}</span>;
 }
 
+function RegisterCell({
+  virtual,
+  children,
+  style,
+}: {
+  virtual: boolean;
+  children?: ReactNode;
+  style?: CSSProperties;
+}) {
+  if (!virtual) return <td style={style}>{children}</td>;
+  return (
+    <div
+      role="cell"
+      style={{
+        padding: "11px 14px",
+        minWidth: 0,
+        display: "flex",
+        alignItems: "center",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function viewerHref(drawingId: string) {
   return `${createPageUrl("DrawingViewer")}?recordId=${encodeURIComponent(drawingId)}`;
 }
 
-export function DrawingRegisterGridPanel({ projectId }: { projectId: string | null }) {
-  const { data = [], isLoading, error } = useDrawingRegister(projectId);
+export function DrawingRegisterGridPanel({
+  projectId,
+  activeProject,
+  drawingSets = EMPTY_DRAWING_SETS,
+  setPackages = EMPTY_SET_PACKAGES,
+  summariesBySet = EMPTY_SUMMARIES,
+  onRevisionUploaded,
+  onOpenSummary,
+}: DrawingRegisterGridPanelProps) {
+  const { data = EMPTY_REGISTER_ROWS, isLoading, error } = useDrawingRegister(projectId);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [setFilter, setSetFilter] = useState("all");
@@ -78,6 +166,7 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
   /** Flat clean table by default (Doc Control look). Group headers optional. */
   const [groupBySet, setGroupBySet] = useState(false);
   const { can } = usePermissions();
+  const canEdit = can("edit", "drawing");
   const canRelease = can("approve", "drawing");
   const publish = usePublishRevision();
   const { data: watches } = useMyDrawingWatches(projectId);
@@ -87,6 +176,7 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
 
   const [provisioning, setProvisioning] = useState<Set<string>>(new Set());
   const [bulkProvisioning, setBulkProvisioning] = useState(false);
+  const [revisionPackage, setRevisionPackage] = useState<SetPackage | null>(null);
 
   const invalidateRegister = () =>
     queryClient.invalidateQueries({ queryKey: ["drawing-register", projectId] });
@@ -141,28 +231,25 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
     }
   };
 
-  const setNames = useMemo(() => listDrawingSetNames(data), [data]);
-  // Sheet counts per set, computed ONCE per data change. The <option> list used
-  // to run `data.filter(…)` per set inside the render, i.e. O(sets × rows) on
-  // every keystroke in the search box — 148 sets × 148 rows on a big register.
-  const setCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    let unassigned = 0;
-    for (const r of data) {
-      const name = (r.drawing_set_name || "").trim();
-      if (!name) { unassigned += 1; continue; }
-      counts.set(r.drawing_set_name || "", (counts.get(r.drawing_set_name || "") || 0) + 1);
-    }
-    return { counts, unassigned };
-  }, [data]);
-  const hasUnassigned = setCounts.unassigned > 0;
-
-  const rows = useMemo(
-    () => filterRegisterRows(data, query, statusFilter, setFilter),
-    [data, query, statusFilter, setFilter],
+  const registerIndex = useMemo(
+    () => createDrawingRegisterIndex(data, setPackages),
+    [data, setPackages],
   );
-  const groups = useMemo(() => groupRegisterRowsBySet(rows), [rows]);
-  const untrackedRows = useMemo(() => rowsNeedingProvisioning(rows), [rows]);
+  const rows = useMemo(
+    () => filterIndexedRegisterRows(registerIndex, query, statusFilter, setFilter),
+    [registerIndex, query, statusFilter, setFilter],
+  );
+  const displayRows = useMemo(
+    () => buildRegisterDisplayRows(rows, groupBySet, collapsed),
+    [rows, groupBySet, collapsed],
+  );
+  const untrackedRows = useMemo(
+    () => rowsNeedingProvisioning(rows.map((entry) => entry.row)),
+    [rows],
+  );
+  const firstVisibleDrawingByPackage = useMemo(() => {
+    return deriveFirstVisibleDrawingByPackage(rows);
+  }, [rows]);
 
   const toggleGroup = (key: string) => {
     setCollapsed((prev) => {
@@ -175,12 +262,16 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
 
   const colCount = canRelease ? 12 : 11;
 
-  const renderSheetRow = (r: DrawingRegisterRow) => {
+  const renderSheetCells = (entry: IndexedRegisterRow, virtual: boolean) => {
+    const r = entry.row;
     const watched = !!watches?.has(r.drawing_id);
     const href = viewerHref(r.drawing_id);
+    const pkg = entry.pkg;
+    const showRevisionActions = !!pkg && firstVisibleDrawingByPackage.get(pkg.key) === r.drawing_id;
+    const savedSummary = pkg?.setId ? summariesBySet.get(String(pkg.setId)) : undefined;
     return (
-      <tr key={r.drawing_id}>
-        <td style={{ textAlign: "center" }}>
+      <>
+        <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}>
           <button
             type="button"
             title={watched ? "Unwatch this sheet" : "Watch this sheet"}
@@ -194,8 +285,8 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
           >
             <Star size={14} fill={watched ? "var(--cmd-gold)" : "none"} />
           </button>
-        </td>
-        <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+        </RegisterCell>
+        <RegisterCell virtual={virtual} style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
           <Link
             to={href}
             style={{ color: "var(--cmd-accent, var(--accent))", textDecoration: "none" }}
@@ -203,16 +294,58 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
           >
             {r.sheet_number || "—"}
           </Link>
-        </td>
-        <td style={{ color: "var(--cmd-text)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sheet_title || "—"}</td>
-        <td style={{ color: "var(--cmd-text-muted)" }}>{r.discipline || "—"}</td>
-        <td style={{ color: "var(--cmd-text-muted)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.drawing_set_name || "—"}</td>
-        <td style={{ fontVariantNumeric: "tabular-nums", color: "var(--cmd-text)", whiteSpace: "nowrap" }}>{r.current_revision || "—"}</td>
-        <td><StatusCell status={r.current_status} /></td>
-        <td style={{ textAlign: "center" }}><Count n={r.open_impact_count} danger /></td>
-        <td style={{ textAlign: "center" }}><Count n={r.pending_review_count} info /></td>
-        <td style={{ color: "var(--cmd-text-muted)", whiteSpace: "nowrap" }}>{r.last_activity ? fmtDate(r.last_activity) : "—"}</td>
-        <td style={{ textAlign: "center" }}>
+        </RegisterCell>
+        <RegisterCell virtual={virtual} style={{ color: "var(--cmd-text)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sheet_title || "—"}</RegisterCell>
+        <RegisterCell virtual={virtual} style={{ color: "var(--cmd-text-muted)" }}>{r.discipline || "—"}</RegisterCell>
+        <RegisterCell
+          virtual={virtual}
+          style={{
+            color: "var(--cmd-text-muted)",
+            maxWidth: 220,
+            ...(virtual ? { display: "block" } : {}),
+          }}
+        >
+          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {r.drawing_set_name || "—"}
+          </div>
+          {showRevisionActions && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+              {savedSummary && onOpenSummary && (
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  title={`View the latest revision summary for ${pkg.name}`}
+                  onClick={() => onOpenSummary(savedSummary.summary)}
+                  style={{ padding: "2px 6px", fontSize: 9 }}
+                >
+                  Revised · {savedSummary.sheets_changed}
+                </button>
+              )}
+              {canEdit && pkg.parent && (
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  disabled={!!pkg.parent.is_locked}
+                  title={pkg.parent.is_locked
+                    ? `Locked — ${pkg.parent.locked_reason || "an admin must unlock before a new revision"}`
+                    : `Upload a new revision for ${pkg.name}`}
+                  aria-label={`Upload revision for ${pkg.name}`}
+                  onClick={() => setRevisionPackage(pkg)}
+                  style={{ padding: "2px 6px", fontSize: 9 }}
+                >
+                  <FileUp size={11} />
+                  New revision
+                </button>
+              )}
+            </div>
+          )}
+        </RegisterCell>
+        <RegisterCell virtual={virtual} style={{ fontVariantNumeric: "tabular-nums", color: "var(--cmd-text)", whiteSpace: "nowrap" }}>{r.current_revision || "—"}</RegisterCell>
+        <RegisterCell virtual={virtual}><StatusCell status={r.current_status} /></RegisterCell>
+        <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}><Count n={r.open_impact_count} danger /></RegisterCell>
+        <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}><Count n={r.pending_review_count} info /></RegisterCell>
+        <RegisterCell virtual={virtual} style={{ color: "var(--cmd-text-muted)", whiteSpace: "nowrap" }}>{r.last_activity ? fmtDate(r.last_activity) : "—"}</RegisterCell>
+        <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}>
           <Link
             to={href}
             className="cmd-btn cmd-btn--ghost"
@@ -225,9 +358,9 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
           >
             <Eye size={14} />
           </Link>
-        </td>
+        </RegisterCell>
         {canRelease && (
-          <td>
+          <RegisterCell virtual={virtual}>
             {r.current_revision_id ? (
               <select
                 className="sbd-select"
@@ -259,9 +392,9 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
                 {provisioning.has(r.drawing_id) ? "Setting up…" : "Set up release tracking"}
               </button>
             )}
-          </td>
+          </RegisterCell>
         )}
-      </tr>
+      </>
     );
   };
 
@@ -333,12 +466,12 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
             aria-label="Filter by drawing set"
           >
             <option value="all">All sets ({data.length})</option>
-            {setNames.map((name) => (
-              <option key={name} value={name}>{name} ({setCounts.counts.get(name) || 0})</option>
+            {registerIndex.setNames.map((name) => (
+              <option key={name} value={name}>{name} ({registerIndex.setCounts.get(name) || 0})</option>
             ))}
-            {hasUnassigned && (
+            {registerIndex.unassignedCount > 0 && (
               <option value={SET_FILTER_NONE}>
-                Unassigned ({setCounts.unassigned})
+                Unassigned ({registerIndex.unassignedCount})
               </option>
             )}
           </select>
@@ -377,6 +510,14 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
           </div>
         </div>
       ) : (
+        rows.length > DRAWING_REGISTER_VIRTUALIZE_THRESHOLD ? (
+          <VirtualRegisterRows
+            rows={displayRows}
+            canRelease={canRelease}
+            onToggleGroup={toggleGroup}
+            renderSheetCells={renderSheetCells}
+          />
+        ) : (
         <div className="cmd-table-wrap">
           <table className="cmd-table">
             <thead>
@@ -396,30 +537,183 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
               </tr>
             </thead>
             <tbody>
-              {groupBySet
-                ? groups.map((g) => {
-                    const groupKey = g.setName ?? SET_FILTER_NONE;
-                    const isCollapsed = collapsed.has(groupKey);
-                    const label = g.setName || "Unassigned";
-                    return (
-                      <GroupBlock
-                        key={groupKey}
-                        label={label}
-                        count={g.rows.length}
-                        collapsed={isCollapsed}
-                        onToggle={() => toggleGroup(groupKey)}
-                        colCount={colCount}
-                      >
-                        {g.rows.map(renderSheetRow)}
-                      </GroupBlock>
-                    );
-                  })
-                : rows.map(renderSheetRow)}
+              {displayRows.map((displayRow) => displayRow.kind === "group" ? (
+                <GroupBlock
+                  key={`group:${displayRow.key}`}
+                  label={displayRow.label}
+                  count={displayRow.count}
+                  collapsed={displayRow.collapsed}
+                  onToggle={() => toggleGroup(displayRow.key)}
+                  colCount={colCount}
+                />
+              ) : (
+                <tr key={displayRow.entry.row.drawing_id}>
+                  {renderSheetCells(displayRow.entry, false)}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+        )
+      )}
+      {canEdit && revisionPackage?.parent && (
+        <Suspense fallback={<p role="status" style={{ color: "var(--cmd-text-muted)", fontSize: 12 }}>Loading revision upload…</p>}>
+          <RevisionUploadModal
+            open
+            onClose={() => setRevisionPackage(null)}
+            onComplete={() => {
+              const pkgKey = revisionPackage.key;
+              setRevisionPackage(null);
+              void invalidateRegister();
+              void onRevisionUploaded?.(pkgKey);
+            }}
+            activeProject={activeProject}
+            preSelectedSet={revisionPackage.parent}
+            drawingSets={drawingSets}
+          />
+        </Suspense>
       )}
     </section>
+  );
+}
+
+function VirtualRegisterRows({
+  rows,
+  canRelease,
+  onToggleGroup,
+  renderSheetCells,
+}: {
+  rows: RegisterDisplayRow[];
+  canRelease: boolean;
+  onToggleGroup: (key: string) => void;
+  renderSheetCells: (entry: IndexedRegisterRow, virtual: boolean) => ReactNode;
+}) {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: (index) => rows[index]?.kind === "group" ? 37 : 54,
+    overscan: 10,
+    getItemKey: (index) => {
+      const displayRow = rows[index];
+      return displayRow.kind === "group"
+        ? `group:${displayRow.key}`
+        : `sheet:${displayRow.entry.row.drawing_id}`;
+    },
+    initialRect: { width: 1400, height: 600 },
+  });
+  const columns = [
+    { label: "Watch", align: "center" },
+    { label: "Sheet" },
+    { label: "Title" },
+    { label: "Disc." },
+    { label: "Set" },
+    { label: "Rev" },
+    { label: "Status" },
+    { label: "Impacts", align: "center" },
+    { label: "Reviews", align: "center" },
+    { label: "Last activity" },
+    { label: "View", align: "center" },
+    ...(canRelease ? [{ label: "Release" }] : []),
+  ];
+  const gridTemplateColumns = registerGridColumns(canRelease);
+
+  return (
+    <div
+      className="cmd-table-wrap"
+      role="table"
+      aria-label="Drawing Register"
+      aria-rowcount={rows.length + 1}
+      style={{ overflowX: "auto", overflowY: "hidden" }}
+    >
+      <div role="rowgroup" style={{ minWidth: 1400 }}>
+        <div
+          role="row"
+          aria-rowindex={1}
+          style={{
+            display: "grid",
+            gridTemplateColumns,
+            borderBottom: "1px solid var(--cmd-border)",
+          }}
+        >
+          {columns.map((column, index) => (
+            <div
+              key={column.label}
+              role="columnheader"
+              aria-colindex={index + 1}
+              aria-label={column.label === "Watch" ? "Watch" : undefined}
+              style={{
+                padding: "10px 14px",
+                color: "var(--cmd-text-muted)",
+                fontSize: 10,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                whiteSpace: "nowrap",
+                textAlign: column.align === "center" ? "center" : "left",
+              }}
+            >
+              {column.label === "Watch" ? null : column.label}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div
+        ref={parentRef}
+        role="rowgroup"
+        data-testid="drawing-register-virtual-body"
+        style={{ maxHeight: 600, overflowY: "auto", minWidth: 1400 }}
+      >
+        <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const displayRow = rows[virtualRow.index];
+            const sharedStyle: CSSProperties = {
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${virtualRow.start}px)`,
+              display: "grid",
+              gridTemplateColumns,
+              borderBottom: "1px solid var(--cmd-border)",
+            };
+            if (displayRow.kind === "group") {
+              return (
+                <div
+                  key={`group:${displayRow.key}`}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  role="row"
+                  aria-rowindex={virtualRow.index + 2}
+                  style={sharedStyle}
+                >
+                  <div role="cell" style={{ gridColumn: "1 / -1" }}>
+                    <GroupButton
+                      label={displayRow.label}
+                      count={displayRow.count}
+                      collapsed={displayRow.collapsed}
+                      onToggle={() => onToggleGroup(displayRow.key)}
+                    />
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div
+                key={`sheet:${displayRow.entry.row.drawing_id}`}
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
+                role="row"
+                aria-rowindex={virtualRow.index + 2}
+                style={sharedStyle}
+              >
+                {renderSheetCells(displayRow.entry, true)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -429,40 +723,56 @@ function GroupBlock({
   collapsed,
   onToggle,
   colCount,
-  children,
 }: {
   label: string;
   count: number;
   collapsed: boolean;
   onToggle: () => void;
   colCount: number;
-  children: ReactNode;
 }) {
   return (
-    <>
-      <tr className="cmd-table__group">
-        <td colSpan={colCount} style={{ padding: 0, borderBottom: "1px solid var(--cmd-border, var(--border-default))" }}>
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={!collapsed}
-            style={{
-              display: "flex", alignItems: "center", gap: 8, width: "100%",
-              padding: "8px 12px", background: "var(--cmd-surface-2, color-mix(in srgb, var(--bg-surface-high, #1a1f27) 80%, transparent))",
-              border: "none", cursor: "pointer", textAlign: "left",
-              color: "var(--cmd-text)", fontFamily: "var(--font-mono, inherit)",
-              fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
-            }}
-          >
-            {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-            <span style={{ flex: 1 }}>{label}</span>
-            <span style={{ color: "var(--cmd-text-muted)", fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>
-              {count} sheet{count === 1 ? "" : "s"}
-            </span>
-          </button>
-        </td>
-      </tr>
-      {!collapsed && children}
-    </>
+    <tr className="cmd-table__group">
+      <td colSpan={colCount} style={{ padding: 0, borderBottom: "1px solid var(--cmd-border, var(--border-default))" }}>
+        <GroupButton
+          label={label}
+          count={count}
+          collapsed={collapsed}
+          onToggle={onToggle}
+        />
+      </td>
+    </tr>
+  );
+}
+
+function GroupButton({
+  label,
+  count,
+  collapsed,
+  onToggle,
+}: {
+  label: string;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      style={{
+        display: "flex", alignItems: "center", gap: 8, width: "100%",
+        padding: "8px 12px", background: "var(--cmd-surface-2, color-mix(in srgb, var(--bg-surface-high, #1a1f27) 80%, transparent))",
+        border: "none", cursor: "pointer", textAlign: "left",
+        color: "var(--cmd-text)", fontFamily: "var(--font-mono, inherit)",
+        fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
+      }}
+    >
+      {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+      <span style={{ flex: 1 }}>{label}</span>
+      <span style={{ color: "var(--cmd-text-muted)", fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>
+        {count} sheet{count === 1 ? "" : "s"}
+      </span>
+    </button>
   );
 }

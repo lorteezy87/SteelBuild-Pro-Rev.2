@@ -2,6 +2,7 @@ import React from "react";
 import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, FileCheck2, Search } from "lucide-react";
 import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import { STAGES, mono } from "@/pages/drawingViewer/drawingViewerUtils";
+import { deriveSidebarViewModel } from "@/pages/drawingViewer/drawingViewerDerivations";
 
 export default function SheetListSidebar({
   sidebarOpen,
@@ -14,12 +15,11 @@ export default function SheetListSidebar({
   setActiveId,
   activeIndex,
 }) {
-  const attachedCount = drawings.filter((drawing) => drawing.file_url).length;
-  const priorityCount = drawings.filter((drawing) => drawing.priority_flag).length;
-  const stageCounts = STAGE_ORDER.reduce((acc, stage) => {
-    acc[stage] = drawings.filter((drawing) => drawing.stage === stage).length;
-    return acc;
-  }, {});
+  const {
+    attachedCount,
+    priorityCount,
+    stageCounts,
+  } = deriveSidebarViewModel(drawings, filtered.length);
 
   return (
     <aside

@@ -1,39 +1,73 @@
 /**
  * DrawingRegisterPanel — Drawing Register tab in the Detailing Control Center.
  *
- * Defaults to the sheet register. The set view exposes the existing revision
- * upload and summary workflow without discarding the hub callbacks.
+ * Three views, kept in ?hub_view= (useHubView: replace, never adds history):
+ *   sheets (default)  the sheet register (DrawingRegisterGridPanel).
+ *   sets              sets & revisions: the revision upload and summary
+ *                     workflow, without discarding the hub callbacks.
+ *   reviews           the role-based Review Queue (formerly Doc Control's
+ *                     Reviews view).
  */
 import { DrawingRegisterGridPanel } from "@/components/drawings/register/DrawingRegisterGridPanel";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazyRetry";
+import { HubViewToggle } from "./HubViewToggle";
+import type { HubViewOption } from "./HubViewToggle";
+import { useHubView } from "./useHubView";
+import type { HubView } from "./hubLinks";
+import type { SavedRevisionSummary } from "@/lib/revisionSummaryRepo";
+import type { SetPackage } from "./types";
 
 const DrawingRegisterTable = lazy(() => import("./drawingRegisterTable").then(module => ({ default: module.DrawingRegisterTable })));
+const ReviewQueuePanel = lazyWithRetry(() =>
+  import("@/components/drawings/register/ReviewQueuePanel").then((m) => ({ default: m.ReviewQueuePanel })),
+);
+
+const VIEWS: readonly HubViewOption<HubView<"drawings">>[] = [
+  { key: "sheets", label: "Sheets" },
+  { key: "sets", label: "Sets & revisions" },
+  { key: "reviews", label: "Reviews" },
+];
 
 /** Shared evidence and callbacks for the sheet and set views. */
 export interface DrawingRegisterPanelProps {
-  setPackages?: any[];
+  setPackages?: SetPackage[];
   projectId?: string;
-  activeProject?: any;
-  drawingSets?: any[];
+  activeProject?: { id?: string | null; name?: string | null } | null;
+  drawingSets?: unknown[];
   isLoading?: boolean;
   healthByKey?: Map<string, any>;
   currentRevByDrawingId?: Map<string, any>;
-  summariesBySet?: Map<string, any>;
-  onRevisionUploaded?: (pkgKey: string) => void;
-  onOpenSummary?: (summary: any) => void;
+  summariesBySet?: Map<string, SavedRevisionSummary>;
+  onRevisionUploaded?: (pkgKey: string) => void | Promise<void>;
+  onOpenSummary?: (summary: SavedRevisionSummary["summary"]) => void;
 }
 
 export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
   const projectId = props.projectId ?? props.activeProject?.id ?? null;
-  const [view, setView] = useState<"sheets" | "sets">("sheets");
+  const [view, setView] = useHubView("drawings");
   return <>
-    <div className="cmd-filterbar" role="group" aria-label="Drawing register view">
-      <button type="button" className="cmd-btn" aria-pressed={view === "sheets"} onClick={() => setView("sheets")}>Sheets</button>
-      <button type="button" className="cmd-btn" aria-pressed={view === "sets"} onClick={() => setView("sets")}>Sets &amp; revisions</button>
-    </div>
-    {view === "sheets" ? <DrawingRegisterGridPanel projectId={projectId} /> :
+    <HubViewToggle label="Drawing register view" options={VIEWS} value={view} onChange={setView} />
+    {view === "sheets" && (
+      <DrawingRegisterGridPanel
+        projectId={projectId}
+        activeProject={props.activeProject}
+        drawingSets={props.drawingSets}
+        setPackages={props.setPackages}
+        summariesBySet={props.summariesBySet}
+        onRevisionUploaded={props.onRevisionUploaded}
+        onOpenSummary={props.onOpenSummary}
+      />
+    )}
+    {view === "sets" && (
       <Suspense fallback={<p role="status">Loading drawing sets…</p>}>
         <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []} />
-      </Suspense>}
+      </Suspense>
+    )}
+    {view === "reviews" && (
+      <Suspense fallback={<p role="status">Loading reviews…</p>}>
+        <ReviewQueuePanel key={projectId} projectId={projectId} />
+      </Suspense>
+    )}
   </>;
 }

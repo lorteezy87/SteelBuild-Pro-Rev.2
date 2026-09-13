@@ -16,7 +16,7 @@
  * wrong 48h / 10-day window.
  *
  * Anything that does day-math should import from here. Display
- * formatting can still use toLocaleDateString / formatters.jsx.
+ * formatting can still use toLocaleDateString / shared formatters.
  */
 
 const MS_PER_DAY = 86_400_000;

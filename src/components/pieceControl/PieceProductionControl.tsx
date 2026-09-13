@@ -1,10 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useMemo, type ChangeEvent } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -14,38 +8,14 @@ import {
   Loader2,
   ShieldAlert,
 } from 'lucide-react';
-import {
-  advancePieceStation,
-  advancePieceStations,
-  fetchProductionSnapshot,
-  setPieceHold,
-  splitPieceLot,
-  type LotAllocation,
-} from '../../lib/pieceControl/productionRepository';
-import {
-  nextIncompleteStationKey,
-  planBulkStationAdvance,
-} from '../../lib/pieceControl/bulkStationAdvance';
-import {
-  calculateWeightedProductionProgress,
-  earnedPercentForPiece,
-  groupPiecesByCurrentStation,
-} from '../../lib/pieceControl/stationProgress';
-import { toast } from 'sonner';
+import { earnedPercentForPiece } from '../../lib/pieceControl/stationProgress';
 import { DecisionPanel } from '@/components/command';
 import { presentPieceControlError } from '@/lib/pieceControl/errorPresentation';
-import {
-  invalidatePieceControlQueries,
-  pieceControlKeys,
-} from '@/lib/pieceControl/queryKeys';
-import { entities } from '@/api/supabaseClient';
 import { formatWorkPackageTitle } from '@/lib/workPackages/formatWorkPackageTitle';
-import {
-  productionScopeFetchArg,
-  productionScopeQueryKey,
-  resolveProductionWorkPackageScope,
-  UNASSIGNED_WP_FILTER,
-} from '@/lib/pieceControl/productionScope';
+import { UNASSIGNED_WP_FILTER } from '@/lib/pieceControl/productionScope';
+import type { ProductionSnapshot } from '@/lib/pieceControl/productionRepository';
+import { derivePieceProductionView } from './pieceProductionControl.derive';
+import { usePieceProductionControl } from './usePieceProductionControl';
 
 const Button = ({ variant: _variant, size: _size, ...props }: any) => (
   <button type="button" {...props} />
@@ -62,180 +32,86 @@ const compactNumber = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+const EMPTY_PRODUCTION_SNAPSHOT: ProductionSnapshot = {
+  pieces: [],
+  stations: [],
+  completions: [],
+  canonicalReleaseWorkPackageIds: [],
+};
+
 export function PieceProductionControl({
   projectId,
   pieceControlMode,
   workPackageId,
 }: PieceProductionControlProps) {
-  const queryClient = useQueryClient();
-  const enabled = pieceControlMode !== 'off';
-  const lockedToWorkPackage = Boolean(workPackageId);
-  const [boardWorkPackageFilter, setBoardWorkPackageFilter] = useState<string>(
-    workPackageId ?? '',
-  );
-  const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
-  const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([]);
-  const [bulkStationKey, setBulkStationKey] = useState<string>('');
-  const [bulkOverrideReason, setBulkOverrideReason] = useState('');
-  const [splitRows, setSplitRows] = useState<LotAllocation[]>([
-    { lot_code: 'A', quantity: 0 },
-    { lot_code: 'B', quantity: 0 },
-  ]);
-  const [overrideStationKey, setOverrideStationKey] = useState<string | null>(null);
-  const [overrideReason, setOverrideReason] = useState('');
-  const [holdReason, setHoldReason] = useState('');
-
-  useEffect(() => {
-    if (workPackageId) setBoardWorkPackageFilter(workPackageId);
-  }, [workPackageId]);
-
-  const scopedWorkPackageId = useMemo(
-    () =>
-      resolveProductionWorkPackageScope(workPackageId, boardWorkPackageFilter),
-    [workPackageId, boardWorkPackageFilter],
-  );
-  const productionScopeKey = productionScopeQueryKey(scopedWorkPackageId);
-
-  const workPackagesQuery = useQuery({
-    queryKey: pieceControlKeys.productionWorkPackages(projectId),
-    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
-    enabled: enabled && !lockedToWorkPackage,
-    staleTime: 30_000,
+  const controller = usePieceProductionControl({
+    projectId,
+    pieceControlMode,
+    workPackageId,
   });
-
-  const snapshotQuery = useQuery({
-    // Distinct from legacy EPM key ['piece-production', projectId].
-    queryKey: pieceControlKeys.productionBoard(projectId, productionScopeKey),
-    queryFn: () =>
-      fetchProductionSnapshot(
-        projectId,
-        productionScopeFetchArg(productionScopeKey),
-      ),
+  const {
     enabled,
-    // Keep the filter bar mounted while the scoped snapshot refetches.
-    placeholderData: keepPreviousData,
-  });
-  const snapshot = snapshotQuery.data;
-  const pieces = useMemo(
-    () => snapshot?.pieces ?? [],
-    [snapshot?.pieces],
+    lockedToWorkPackage,
+    boardWorkPackageFilter,
+    selectedPieceId,
+    bulkSelectedIds,
+    bulkStationKey,
+    bulkOverrideReason,
+    splitRows,
+    overrideStationKey,
+    overrideReason,
+    holdReason,
+    workPackagesQuery,
+    snapshotQuery,
+    splitMutation,
+    advanceMutation,
+    bulkAdvanceMutation,
+    holdMutation,
+    setSelectedPieceId,
+    setBulkSelectedIds,
+    setBulkStationKey,
+    setBulkOverrideReason,
+    setSplitRows,
+    setOverrideStationKey,
+    setOverrideReason,
+    setHoldReason,
+    toggleBulkSelected,
+    onBoardWorkPackageFilterChange,
+  } = controller;
+  const view = useMemo(
+    () =>
+      derivePieceProductionView({
+        snapshot: snapshotQuery.data ?? EMPTY_PRODUCTION_SNAPSHOT,
+        selectedPieceId,
+        splitRows,
+        bulkSelectedIds,
+        bulkStationKey,
+      }),
+    [
+      bulkSelectedIds,
+      bulkStationKey,
+      selectedPieceId,
+      snapshotQuery.data,
+      splitRows,
+    ],
   );
-  const stations = snapshot?.stations ?? [];
-  const completions = snapshot?.completions ?? [];
-  const selectedPiece =
-    pieces.find((piece) => piece.id === selectedPieceId) ??
-    pieces.find((piece) => !piece.is_container) ??
-    null;
-  const grouped = useMemo(
-    () => groupPiecesByCurrentStation(pieces),
-    [pieces],
-  );
-  const progress = calculateWeightedProductionProgress(
-    pieces,
+  const {
     stations,
     completions,
-  );
-
-  const invalidateProduction = async () => {
-    await invalidatePieceControlQueries(queryClient, projectId, 'production');
-  };
-
-  const splitMutation = useMutation({
-    mutationFn: () => splitPieceLot(projectId, selectedPiece!.id, splitRows),
-    onSuccess: async () => {
-      toast.success('Piece lot split into production lots.');
-      setSelectedPieceId(null);
-      await invalidateProduction();
-    },
-    onError: (error: Error) =>
-      toast.error(
-        presentPieceControlError(error, 'The piece lot could not be split.'),
-      ),
-  });
-
-  const advanceMutation = useMutation({
-    mutationFn: ({
-      stationKey,
-      override,
-      reason,
-    }: {
-      stationKey: string;
-      override: boolean;
-      reason?: string;
-    }) =>
-      advancePieceStation(
-        projectId,
-        selectedPiece!.id,
-        stationKey,
-        override,
-        reason,
-      ),
-    onSuccess: async () => {
-      toast.success('Production station recorded.');
-      setOverrideStationKey(null);
-      setOverrideReason('');
-      await invalidateProduction();
-    },
-    onError: (error: Error) =>
-      toast.error(
-        presentPieceControlError(
-          error,
-          'The production station could not be recorded.',
-        ),
-      ),
-  });
-
-  const bulkAdvanceMutation = useMutation({
-    mutationFn: ({
-      pieceIds,
-      stationKey,
-      override,
-      reason,
-    }: {
-      pieceIds: string[];
-      stationKey?: string | null;
-      override?: boolean;
-      reason?: string;
-    }) =>
-      advancePieceStations(projectId, pieceIds, {
-        stationKey,
-        override,
-        overrideReason: reason,
-      }),
-    onSuccess: async (result) => {
-      const advanced = result.advanced ?? 0;
-      const unchanged = result.unchanged ?? 0;
-      toast.success(
-        unchanged > 0
-          ? `Advanced ${advanced} lot${advanced === 1 ? '' : 's'} (${unchanged} already complete).`
-          : `Advanced ${advanced} lot${advanced === 1 ? '' : 's'}.`,
-      );
-      setBulkSelectedIds([]);
-      setBulkOverrideReason('');
-      await invalidateProduction();
-    },
-    onError: (error: Error) =>
-      toast.error(
-        presentPieceControlError(
-          error,
-          'The bulk production update could not be recorded.',
-        ),
-      ),
-  });
-
-  const holdMutation = useMutation({
-    mutationFn: ({ onHold, reason }: { onHold: boolean; reason?: string }) =>
-      setPieceHold(projectId, [selectedPiece!.id], onHold, reason),
-    onSuccess: async (_data, variables) => {
-      toast.success(variables.onHold ? 'Hold applied.' : 'Hold released.');
-      setHoldReason('');
-      await invalidateProduction();
-    },
-    onError: (error: Error) =>
-      toast.error(
-        presentPieceControlError(error, 'The hold state could not be updated.'),
-      ),
-  });
+    selectedPiece,
+    grouped,
+    progress,
+    selectedCompletions,
+    nextStation,
+    splitTotal,
+    splitValid,
+    released,
+    stationDisabledReason,
+    leafPieces,
+    bulkNextPlan,
+    bulkStationPlan,
+    bulkNeedsOverride,
+  } = view;
 
   if (!enabled) {
     return (
@@ -279,75 +155,6 @@ export function PieceProductionControl({
     );
   }
 
-  const selectedCompletions = selectedPiece
-    ? completions.filter((completion) => completion.piece_id === selectedPiece.id)
-    : [];
-  const completedKeys = new Set(
-    selectedCompletions.map((completion) => completion.station_key),
-  );
-  const nextStation = stations.find((station) => !completedKeys.has(station.station_key));
-  const splitTotal = splitRows.reduce(
-    (total, row) => total + (Number(row.quantity) || 0),
-    0,
-  );
-  const normalizedLotCodes = splitRows.map((row) => row.lot_code.trim().toUpperCase());
-  const splitValid =
-    Boolean(selectedPiece) &&
-    !selectedPiece!.is_container &&
-    splitRows.length >= 2 &&
-    splitRows.every(
-      (row) =>
-        row.lot_code.trim() &&
-        row.lot_code.trim().toUpperCase() !== 'ALL' &&
-        Number(row.quantity) > 0,
-    ) &&
-    new Set(normalizedLotCodes).size === normalizedLotCodes.length &&
-    splitTotal === Number(selectedPiece!.quantity);
-  const released =
-    Boolean(selectedPiece?.work_package_id) &&
-    snapshot!.canonicalReleaseWorkPackageIds.includes(selectedPiece!.work_package_id!);
-  const stationDisabledReason = selectedPiece?.on_hold
-    ? 'Release the hold before recording production.'
-    : selectedPiece?.is_container
-      ? 'Tracking rows are not physical piece lots.'
-      : !released
-        ? 'Work-package release required'
-        : null;
-
-  const leafPieces = pieces.filter((piece) => !piece.is_container);
-  const bulkNextPlan = planBulkStationAdvance({
-    mode: 'next',
-    selectedPieceIds: bulkSelectedIds,
-    pieces,
-    stations,
-    completions,
-    releasedWorkPackageIds: snapshot?.canonicalReleaseWorkPackageIds ?? [],
-  });
-  const bulkStationPlan = planBulkStationAdvance({
-    mode: 'station',
-    stationKey: bulkStationKey || null,
-    selectedPieceIds: bulkSelectedIds,
-    pieces,
-    stations,
-    completions,
-    releasedWorkPackageIds: snapshot?.canonicalReleaseWorkPackageIds ?? [],
-  });
-  const bulkNeedsOverride =
-    Boolean(bulkStationKey) &&
-    bulkStationPlan.eligiblePieceIds.some((pieceId) => {
-      const nextKey = nextIncompleteStationKey(pieceId, stations, completions);
-      return Boolean(nextKey && nextKey !== bulkStationKey);
-    });
-
-  const toggleBulkSelected = (pieceId: string, checked: boolean) => {
-    setBulkSelectedIds((current) => {
-      if (checked) {
-        return current.includes(pieceId) ? current : [...current, pieceId];
-      }
-      return current.filter((id) => id !== pieceId);
-    });
-  };
-
   const selectColumnLots = (columnKey: string) => {
     const columnLots = (grouped[columnKey as keyof typeof grouped] ?? [])
       .filter((piece) => !piece.is_container)
@@ -355,14 +162,6 @@ export function PieceProductionControl({
     setBulkSelectedIds((current) =>
       Array.from(new Set([...current, ...columnLots])),
     );
-  };
-
-  const onBoardWorkPackageFilterChange = (value: string) => {
-    setBoardWorkPackageFilter(value);
-    setBulkSelectedIds([]);
-    setSelectedPieceId(null);
-    setOverrideStationKey(null);
-    setOverrideReason('');
   };
 
   return (

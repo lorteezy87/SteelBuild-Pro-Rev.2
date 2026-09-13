@@ -3,126 +3,110 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
 <style>
-/* ---------- tokens: light is the base, dark redefines only values ---------- */
+/* ===== tokens — light is the base; dark redefines values only ===== */
 :root{
   color-scheme: light;
-  --ground:#F1EFEA; --surface:#FBFAF7; --raised:#FFFFFF; --sunken:#E7E4DC;
-  --ink:#191713; --ink-2:#45413A; --muted:#6E6A61; --faint:#918C81;
-  --line:#DCD8CF; --line-2:#C7C2B6; --track:#E2DFD6;
+  --ground:#F2F0EC; --surface:#FBFAF8; --raised:#FFFFFF; --sunken:#E8E5DE; --well:#EEEBE4;
+  --ink:#17150F; --ink-2:#403C34; --muted:#6C685E; --faint:#938E82;
+  --line:#DFDBD2; --line-2:#CAC5B8; --track:#E3DFD6;
 
-  --accent:#C89B20; --accent-2:#A57F14; --accent-tint:#F6EBCB; --on-accent:#191713;
+  --accent:#C89B20; --accent-2:#9C7710; --accent-tint:#F7EDD0; --on-accent:#17150F;
 
-  --lane-house:#1F6BAE;    /* in-house  */
-  --lane-review:#C4650C;   /* with reviewer */
-  --lane-released:#008068; /* released for fab */
-
+  --lane-house:#1F6BAE; --lane-review:#C4650C; --lane-released:#008068;
   --st-good:#008068; --st-warn:#C4650C; --st-serious:#A8461A; --st-crit:#9E2B20;
 
-  --t-blue-bg:#E4EEF7;  --t-blue-ink:#17527F;
-  --t-amber-bg:#F8EADA; --t-amber-ink:#8F4A08;
+  --t-blue-bg:#E5EEF7;  --t-blue-ink:#15527F;
+  --t-amber-bg:#F9EBDB; --t-amber-ink:#8D4907;
   --t-teal-bg:#DDEFEA;  --t-teal-ink:#00604E;
-  --t-red-bg:#F7E3E0;   --t-red-ink:#8A2318;
-  --t-grey-bg:#E7E4DC;  --t-grey-ink:#5D594F;
+  --t-red-bg:#F8E4E1;   --t-red-ink:#8A2318;
+  --t-grey-bg:#E8E5DE;  --t-grey-ink:#5B574D;
 
   --focus:#1F6BAE;
-  --shadow-1:0 1px 2px rgba(25,23,19,.07);
-  --shadow-2:0 2px 6px rgba(25,23,19,.08), 0 18px 40px -22px rgba(25,23,19,.35);
-  --font-display:"Barlow Condensed", "Arial Narrow", sans-serif;
-  --font-body:Inter, "Helvetica Neue", Arial, sans-serif;
-  --font-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sh-1:0 1px 2px rgba(23,21,15,.06);
+  --sh-2:0 1px 3px rgba(23,21,15,.08), 0 14px 34px -18px rgba(23,21,15,.32);
+  --f-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-body:Inter,"Helvetica Neue",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --r:7px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme: dark;
-    --ground:#111110; --surface:#1A1A18; --raised:#212120; --sunken:#151514;
-    --ink:#EDEBE5; --ink-2:#C8C4BA; --muted:#98948A; --faint:#7B776D;
-    --line:#33322D; --line-2:#43413A; --track:#2A2925;
-    --accent:#E0B030; --accent-2:#C89B20; --accent-tint:#332A12; --on-accent:#141310;
+    --ground:#0F0F0E; --surface:#181816; --raised:#1F1F1C; --sunken:#141413; --well:#131312;
+    --ink:#EFEDE7; --ink-2:#CAC6BC; --muted:#98948A; --faint:#78746B;
+    --line:#302F2A; --line-2:#413F38; --track:#28271F;
+    --accent:#E0B030; --accent-2:#E7BE4C; --accent-tint:#352C12; --on-accent:#141310;
     --lane-house:#3A88C9; --lane-review:#D9761A; --lane-released:#0C8E77;
-    --st-good:#0C8E77; --st-warn:#D9761A; --st-serious:#C9611F; --st-crit:#D9564A;
-    --t-blue-bg:#132A3D;  --t-blue-ink:#8FC0EA;
-    --t-amber-bg:#3A2612; --t-amber-ink:#F0A961;
-    --t-teal-bg:#0E2B27;  --t-teal-ink:#5CC3AC;
-    --t-red-bg:#3A1A17;   --t-red-ink:#EE9186;
-    --t-grey-bg:#26251F;  --t-grey-ink:#A6A296;
+    --st-good:#0C8E77; --st-warn:#D9761A; --st-serious:#C9611F; --st-crit:#DF5B4D;
+    --t-blue-bg:#14293B;  --t-blue-ink:#8FC0EA;
+    --t-amber-bg:#38250F; --t-amber-ink:#F0A961;
+    --t-teal-bg:#0D2A26;  --t-teal-ink:#5CC3AC;
+    --t-red-bg:#381916;   --t-red-ink:#F09287;
+    --t-grey-bg:#24231E;  --t-grey-ink:#A6A296;
     --focus:#6FAEE4;
-    --shadow-1:0 1px 2px rgba(0,0,0,.4);
-    --shadow-2:0 2px 8px rgba(0,0,0,.5), 0 22px 44px -24px rgba(0,0,0,.8);
+    --sh-1:0 1px 2px rgba(0,0,0,.45);
+    --sh-2:0 1px 3px rgba(0,0,0,.5), 0 18px 40px -20px rgba(0,0,0,.85);
   }
 }
 :root[data-theme="dark"]{
   color-scheme: dark;
-  --ground:#111110; --surface:#1A1A18; --raised:#212120; --sunken:#151514;
-  --ink:#EDEBE5; --ink-2:#C8C4BA; --muted:#98948A; --faint:#7B776D;
-  --line:#33322D; --line-2:#43413A; --track:#2A2925;
-  --accent:#E0B030; --accent-2:#C89B20; --accent-tint:#332A12; --on-accent:#141310;
+  --ground:#0F0F0E; --surface:#181816; --raised:#1F1F1C; --sunken:#141413; --well:#131312;
+  --ink:#EFEDE7; --ink-2:#CAC6BC; --muted:#98948A; --faint:#78746B;
+  --line:#302F2A; --line-2:#413F38; --track:#28271F;
+  --accent:#E0B030; --accent-2:#E7BE4C; --accent-tint:#352C12; --on-accent:#141310;
   --lane-house:#3A88C9; --lane-review:#D9761A; --lane-released:#0C8E77;
-  --st-good:#0C8E77; --st-warn:#D9761A; --st-serious:#C9611F; --st-crit:#D9564A;
-  --t-blue-bg:#132A3D;  --t-blue-ink:#8FC0EA;
-  --t-amber-bg:#3A2612; --t-amber-ink:#F0A961;
-  --t-teal-bg:#0E2B27;  --t-teal-ink:#5CC3AC;
-  --t-red-bg:#3A1A17;   --t-red-ink:#EE9186;
-  --t-grey-bg:#26251F;  --t-grey-ink:#A6A296;
+  --st-good:#0C8E77; --st-warn:#D9761A; --st-serious:#C9611F; --st-crit:#DF5B4D;
+  --t-blue-bg:#14293B;  --t-blue-ink:#8FC0EA;
+  --t-amber-bg:#38250F; --t-amber-ink:#F0A961;
+  --t-teal-bg:#0D2A26;  --t-teal-ink:#5CC3AC;
+  --t-red-bg:#381916;   --t-red-ink:#F09287;
+  --t-grey-bg:#24231E;  --t-grey-ink:#A6A296;
   --focus:#6FAEE4;
-  --shadow-1:0 1px 2px rgba(0,0,0,.4);
-  --shadow-2:0 2px 8px rgba(0,0,0,.5), 0 22px 44px -24px rgba(0,0,0,.8);
+  --sh-1:0 1px 2px rgba(0,0,0,.45);
+  --sh-2:0 1px 3px rgba(0,0,0,.5), 0 18px 40px -20px rgba(0,0,0,.85);
 }
 
 *,*::before,*::after{box-sizing:border-box}
-body{
-  margin:0; background:var(--ground); color:var(--ink);
-  font-family:var(--font-body); font-size:14px; line-height:1.45;
-  -webkit-font-smoothing:antialiased;
-}
+body{margin:0; background:var(--ground); color:var(--ink); font-family:var(--f-body);
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  min-height:100dvh; display:flex; flex-direction:column}
 ::selection{background:var(--accent-tint); color:var(--ink)}
 :focus-visible{outline:2px solid var(--focus); outline-offset:2px; border-radius:3px}
 @media (prefers-reduced-motion: reduce){ *{animation-duration:.01ms !important; transition-duration:.01ms !important} }
+h1,h2,h3{margin:0; font-family:var(--f-display); font-weight:600; letter-spacing:.01em; text-wrap:balance}
 
-/* ---------- primitives ---------- */
-.eyebrow{
-  font:600 10.5px/1 var(--font-body); letter-spacing:.11em; text-transform:uppercase;
-  color:var(--muted);
-}
-.mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums}
-.num{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:12.5px}
-h1,h2,h3{margin:0; font-family:var(--font-display); font-weight:600; letter-spacing:.005em; text-wrap:balance}
+.eyebrow{font:600 10px/1 var(--f-body); letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.num{font-family:var(--f-mono); font-variant-numeric:tabular-nums; font-size:12.5px}
 
-.btn{
-  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
-  font:600 12.5px/1 var(--font-body); color:var(--ink-2);
-  background:var(--surface); border:1px solid var(--line-2); border-radius:5px;
-  padding:7px 11px; transition:background .12s, border-color .12s, color .12s;
-}
+/* ===== controls ===== */
+.btn{display:inline-flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap;
+  font:600 12.5px/1 var(--f-body); color:var(--ink-2); background:var(--surface);
+  border:1px solid var(--line-2); border-radius:5px; padding:7px 11px;
+  transition:background .12s,border-color .12s,color .12s}
 .btn:hover{background:var(--raised); border-color:var(--faint); color:var(--ink)}
-.btn.primary{background:var(--accent); border-color:var(--accent-2); color:var(--on-accent)}
-.btn.primary:hover{background:var(--accent-2); color:var(--on-accent)}
-.btn.ghost{background:transparent; border-color:transparent; color:var(--muted); padding:6px 8px}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:var(--on-accent)}
+.btn.primary:hover{filter:brightness(1.07); color:var(--on-accent)}
+.btn.ghost{background:transparent; border-color:transparent; color:var(--muted); font-weight:500}
 .btn.ghost:hover{background:var(--sunken); color:var(--ink)}
-.btn.danger{color:var(--st-crit); border-color:var(--line-2)}
+.btn.danger{color:var(--st-crit)}
 .btn.danger:hover{background:var(--t-red-bg); border-color:var(--st-crit)}
+.btn.sm{padding:5px 9px; font-size:11.5px}
 .btn[disabled]{opacity:.45; pointer-events:none}
-.btn.sm{padding:5px 8px; font-size:11.5px}
 
-input[type=text],input[type=url],input[type=number],input[type=date],select,textarea{
-  font:400 13px/1.3 var(--font-body); color:var(--ink);
-  background:var(--raised); border:1px solid var(--line-2); border-radius:4px;
-  padding:7px 8px; width:100%; min-width:0;
-}
-input[type=date],input[type=number],.field-mono input{font-family:var(--font-mono); font-size:12.5px; font-variant-numeric:tabular-nums}
-textarea{resize:vertical; min-height:70px; line-height:1.5}
-select{cursor:pointer; appearance:none; padding-right:22px;
+input[type=text],input[type=search],input[type=url],input[type=number],input[type=date],select,textarea{
+  font:400 13px/1.3 var(--f-body); color:var(--ink); background:var(--raised);
+  border:1px solid var(--line-2); border-radius:5px; padding:7px 9px; width:100%; min-width:0}
+input[type=date],input[type=number]{font-family:var(--f-mono); font-size:12.5px; font-variant-numeric:tabular-nums}
+textarea{resize:vertical; min-height:74px; line-height:1.55}
+select{cursor:pointer; appearance:none; padding-right:24px;
   background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
-  background-position:calc(100% - 12px) 52%, calc(100% - 8px) 52%;
-  background-size:4px 4px, 4px 4px; background-repeat:no-repeat;
-}
+  background-position:calc(100% - 13px) 52%, calc(100% - 9px) 52%; background-size:4px 4px,4px 4px; background-repeat:no-repeat}
 label.fld{display:flex; flex-direction:column; gap:5px}
-label.fld > span{font:600 10.5px/1 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--muted)}
+label.fld > span:first-child{font:600 10px/1 var(--f-body); letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
 
-.pill{
-  display:inline-flex; align-items:center; gap:5px; white-space:nowrap;
-  font:600 11px/1 var(--font-body); letter-spacing:.02em;
-  padding:4px 7px; border-radius:4px; background:var(--t-grey-bg); color:var(--t-grey-ink);
-}
+.pill{display:inline-flex; align-items:center; gap:5px; white-space:nowrap;
+  font:600 11px/1 var(--f-body); padding:4px 8px; border-radius:4px;
+  background:var(--t-grey-bg); color:var(--t-grey-ink)}
 .pill .dot{width:6px; height:6px; border-radius:50%; background:currentColor; flex:none}
 .pill.blue{background:var(--t-blue-bg); color:var(--t-blue-ink)}
 .pill.amber{background:var(--t-amber-bg); color:var(--t-amber-ink)}
@@ -130,273 +114,296 @@ label.fld > span{font:600 10.5px/1 var(--font-body); letter-spacing:.09em; text-
 .pill.red{background:var(--t-red-bg); color:var(--t-red-ink)}
 .pill.gold{background:var(--accent-tint); color:var(--accent-2)}
 
-/* ---------- masthead ---------- */
-.masthead{
-  position:sticky; top:0; z-index:40; background:var(--surface);
-  border-bottom:1px solid var(--line); box-shadow:var(--shadow-1);
-}
-.mast-row{
-  max-width:1560px; margin:0 auto; padding:0 20px; min-height:56px;
-  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-}
+.chips{display:flex; gap:6px; flex-wrap:wrap}
+.chip{display:inline-flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap;
+  border:1px solid var(--line-2); background:var(--surface); border-radius:20px;
+  padding:5px 11px; font:600 11.5px/1 var(--f-body); color:var(--muted); transition:all .12s}
+.chip:hover{border-color:var(--faint); color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--accent-tint); border-color:var(--accent); color:var(--accent-2)}
+.chip b{font-family:var(--f-mono); font-size:11px; font-weight:600}
+.chip .sw{width:7px; height:7px; border-radius:50%; flex:none}
+
+/* ===== masthead ===== */
+.masthead{position:sticky; top:0; z-index:40; background:var(--surface);
+  border-bottom:1px solid var(--line); box-shadow:var(--sh-1)}
+.mast-row{width:100%; padding:0 22px; min-height:56px;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.mark{display:flex; align-items:center; gap:9px; margin-right:4px}
+.mark .beam{width:18px; height:18px; flex:none; background:var(--accent);
+  clip-path:polygon(0 0,100% 0,100% 26%,63% 26%,63% 74%,100% 74%,100% 100%,0 100%,0 74%,37% 74%,37% 26%,0 26%)}
+.mark .name{font-family:var(--f-display); font-weight:700; font-size:18px; letter-spacing:.04em;
+  text-transform:uppercase; white-space:nowrap; line-height:1}
+.mark .sub{font:600 9.5px/1 var(--f-body); letter-spacing:.15em; text-transform:uppercase; color:var(--muted)}
+.tabs{display:flex; gap:2px}
+.tab{cursor:pointer; border:0; background:transparent; color:var(--muted);
+  font:600 12.5px/1 var(--f-body); padding:8px 11px; border-radius:5px}
+.tab:hover{background:var(--sunken); color:var(--ink)}
+.tab[aria-current="true"]{background:var(--accent-tint); color:var(--accent-2)}
+.mast-spacer{flex:1}
 .mast-tools{display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:9px 0}
-.mast-tools select{width:auto; min-width:152px; max-width:240px; padding:6px 22px 6px 8px; font-size:12.5px}
-.btn.ghost{font-weight:500}
-.mast-tools .btn.ghost{padding:7px 9px}
-@media (max-width:1180px){ .mark .sub{display:none} }
-@media (max-width:860px){
+.mast-tools select{width:auto; min-width:158px; max-width:250px; padding:6px 24px 6px 9px; font-size:12.5px}
+.whochip{display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  border:1px solid var(--line-2); background:var(--raised); border-radius:20px;
+  padding:3px 11px 3px 4px; font:600 12px/1 var(--f-body); color:var(--ink-2)}
+.whochip.plain{padding:6px 11px}
+.whochip.bare{padding:3px; border-color:transparent; background:transparent}
+.whochip.bare:hover{border-color:var(--line-2)}
+.whochip .ini{width:22px; height:22px; border-radius:50%; background:var(--accent); color:var(--on-accent);
+  display:grid; place-items:center; font:700 9.5px/1 var(--f-body)}
+.conn{display:inline-flex; align-items:center; gap:6px; font:500 11.5px/1 var(--f-body); color:var(--muted)}
+.conn .led{width:7px; height:7px; border-radius:50%; background:var(--st-good); flex:none}
+.conn.off .led{background:var(--faint)}
+.conn.bad .led{background:var(--st-crit)}
+@media (max-width:1200px){ .mark .sub{display:none} }
+@media (max-width:880px){
   .mast-row{padding:0 14px}
   .mast-spacer{display:none}
   .mast-tools{width:100%; padding:0 0 10px}
   .mast-tools select{flex:1}
 }
-.mark{display:flex; align-items:baseline; gap:9px; margin-right:2px}
-.mark .beam{
-  width:19px; height:19px; flex:none; align-self:center;
-  background:var(--accent);
-  clip-path:polygon(0 0,100% 0,100% 26%,63% 26%,63% 74%,100% 74%,100% 100%,0 100%,0 74%,37% 74%,37% 26%,0 26%);
-}
-.mark .name{font-family:var(--font-display); font-weight:700; font-size:18px; letter-spacing:.03em; text-transform:uppercase; white-space:nowrap}
-.mark .sub{font:600 10px/1 var(--font-body); letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
-.tabs{display:flex; gap:2px; margin-left:2px}
-.tab{
-  cursor:pointer; border:0; background:transparent; color:var(--muted);
-  font:600 12.5px/1 var(--font-body); padding:8px 11px; border-radius:5px;
-}
-.tab:hover{background:var(--sunken); color:var(--ink)}
-.tab[aria-current="true"]{background:var(--accent-tint); color:var(--accent-2)}
-.mast-spacer{flex:1}
-.whochip{
-  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
-  border:1px solid var(--line-2); background:var(--raised); border-radius:20px;
-  padding:3px 10px 3px 4px; font:600 12px/1 var(--font-body); color:var(--ink-2);
-}
-.whochip.bare{padding:3px; border-color:transparent; background:transparent}
-.whochip.plain{padding:6px 11px}
-.whochip.bare:hover{border-color:var(--line-2)}
-.whochip:hover{border-color:var(--faint)}
-.whochip .ini{
-  width:21px; height:21px; border-radius:50%; background:var(--accent); color:var(--on-accent);
-  display:grid; place-items:center; font:700 9.5px/1 var(--font-body); letter-spacing:.02em;
-}
-.conn{display:inline-flex; align-items:center; gap:6px; font:500 11.5px/1 var(--font-body); color:var(--muted); padding:0 2px}
-.conn .led{width:7px; height:7px; border-radius:50%; background:var(--st-good); flex:none}
-.conn.off .led{background:var(--faint)}
-.conn.bad .led{background:var(--st-crit)}
 
-/* ---------- shell ---------- */
-.wrap{max-width:1560px; margin:0 auto; padding:16px 20px 72px}
-@media (max-width:860px){ .wrap{padding:14px 14px 60px} }
-.banner{
-  display:flex; gap:10px; align-items:flex-start;
-  border:1px solid var(--st-warn); background:var(--t-amber-bg); color:var(--t-amber-ink);
-  border-radius:6px; padding:10px 12px; font-size:12.5px; margin-bottom:16px;
-}
-.banner.info{border-color:var(--line-2); background:var(--sunken); color:var(--ink-2)}
-.banner b{font-weight:700}
-
-.section{margin-bottom:22px}
+/* ===== shell ===== */
+.wrap{width:100%; padding:16px 22px 20px; flex:1 1 auto; min-height:0;
+  display:flex; flex-direction:column}
+@media (max-width:880px){ .wrap{padding:12px 14px 16px} }
+.wrap > .section:last-child{margin-bottom:0}
+.section{margin-bottom:20px}
 .section-head{display:flex; align-items:baseline; gap:12px; margin-bottom:10px; flex-wrap:wrap}
-.section-head h2{font-size:17px; text-transform:uppercase; letter-spacing:.045em}
+.section-head h2{font-size:16px; text-transform:uppercase; letter-spacing:.06em}
 .section-head .hint{font-size:12px; color:var(--muted)}
+.banner{display:flex; gap:10px; align-items:flex-start; border:1px solid var(--st-warn);
+  background:var(--t-amber-bg); color:var(--t-amber-ink); border-radius:6px;
+  padding:10px 13px; font-size:12.5px; margin-bottom:14px}
+.banner.info{border-color:var(--line-2); background:var(--sunken); color:var(--ink-2)}
 
-/* ---------- KPI strip ---------- */
-.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:7px; overflow:hidden}
-.kpi{background:var(--surface); padding:11px 13px 10px; display:flex; flex-direction:column; gap:2px; min-width:0}
-.kpi .v{font-family:var(--font-display); font-weight:700; font-size:27px; line-height:1.05; font-variant-numeric:tabular-nums; letter-spacing:.01em}
-.kpi .u{font-family:var(--font-body); font-weight:600; font-size:12px; color:var(--muted); margin-left:3px}
-.kpi .l{font:600 10.5px/1.3 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--muted)}
-.kpi .s{font-size:11.5px; color:var(--faint); line-height:1.3}
-.kpi.alert .v{color:var(--st-crit)}
-.kpi.warn .v{color:var(--st-warn)}
-.kpi.good .v{color:var(--st-good)}
-
-/* ---------- panels ---------- */
-.panel{background:var(--surface); border:1px solid var(--line); border-radius:7px}
-.panel-head{padding:12px 14px 10px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
-.panel-head h3{font-size:14px; text-transform:uppercase; letter-spacing:.05em}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
+.panel-head{padding:12px 14px 11px; border-bottom:1px solid var(--line);
+  display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.panel-head h3{font-size:13.5px; text-transform:uppercase; letter-spacing:.07em}
 .panel-head .hint{font-size:11.5px; color:var(--muted); margin-left:auto}
 .panel-body{padding:14px}
-
-.grid-2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:14px; align-items:start}
+.grid-2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:14px; align-items:start}
+.grid-3{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; align-items:start}
 @media (max-width:1080px){ .grid-2{grid-template-columns:minmax(0,1fr)} }
 
-/* ---------- aging chart ---------- */
-.legend{display:flex; flex-wrap:wrap; gap:12px; align-items:center; font-size:11.5px; color:var(--muted)}
-.legend .k{display:inline-flex; align-items:center; gap:6px}
-.legend .sw{width:10px; height:10px; border-radius:2px; flex:none}
-.chart{display:flex; align-items:flex-end; gap:14px; height:120px}
-.chart .col{flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%; gap:0; min-width:0}
-.chart .cnt{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:12.5px; font-weight:500; text-align:center; margin-bottom:5px; color:var(--ink-2)}
-.chart .bar{
-  width:100%; border-radius:4px 4px 0 0; cursor:pointer; border:0; padding:0; flex:none;
-  transition:filter .12s;
-}
-.chart .bar:hover{filter:brightness(1.12)}
-.chart .bar.empty{background:var(--track) !important; cursor:default}
-.chart-x{display:flex; gap:14px; border-top:1px solid var(--line-2); padding-top:7px; margin-top:0}
-.chart-x .lx{flex:1; text-align:center; font:500 11px/1.25 var(--font-body); color:var(--muted); min-width:0}
+/* ===== KPI ===== */
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:1px;
+  background:var(--line); border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
+.kpi{background:var(--surface); padding:11px 13px 11px; display:flex; flex-direction:column; gap:2px; min-width:0;
+  border-top:2px solid transparent}
+.kpi .l{font:600 10px/1.3 var(--f-body); letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+.kpi .v{font-family:var(--f-display); font-weight:700; font-size:27px; line-height:1.08; font-variant-numeric:tabular-nums}
+.kpi .u{font-family:var(--f-body); font-weight:600; font-size:12px; color:var(--muted); margin-left:3px}
+.kpi .s{font-size:11.5px; color:var(--faint); line-height:1.35}
+.kpi.alert{border-top-color:var(--st-crit)} .kpi.alert .v{color:var(--st-crit)}
+.kpi.warn{border-top-color:var(--st-warn)}  .kpi.warn .v{color:var(--st-warn)}
+.kpi.good{border-top-color:var(--st-good)}  .kpi.good .v{color:var(--st-good)}
 
-/* ---------- project cards ---------- */
+/* ===== aging chart ===== */
+.chart{display:flex; align-items:flex-end; gap:14px; height:118px}
+.chart .col{flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%; min-width:0}
+.chart .cnt{font-family:var(--f-mono); font-variant-numeric:tabular-nums; font-size:12.5px;
+  text-align:center; margin-bottom:5px; color:var(--ink-2)}
+.chart .bar{width:100%; border-radius:4px 4px 0 0; cursor:pointer; border:0; padding:0; flex:none; transition:filter .12s}
+.chart .bar:hover{filter:brightness(1.14)}
+.chart .bar.empty{background:var(--track) !important; cursor:default}
+.chart-x{display:flex; gap:14px; border-top:1px solid var(--line-2); padding-top:7px}
+.chart-x .lx{flex:1; text-align:center; font:500 11px/1.25 var(--f-body); color:var(--muted); min-width:0}
+
+/* ===== mini tables (scorecard / forecast) ===== */
+table.mini{width:100%; border-collapse:collapse; font-size:12.5px}
+table.mini th{text-align:left; font:600 9.5px/1 var(--f-body); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); padding:0 10px 8px; border-bottom:1px solid var(--line); white-space:nowrap}
+table.mini td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:middle}
+table.mini tr:last-child td{border-bottom:0}
+table.mini td.n{font-family:var(--f-mono); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap}
+table.mini th.n{text-align:right}
+.meter{display:block; height:6px; border-radius:3px; background:var(--track); overflow:hidden; min-width:56px}
+.meter i{display:block; height:100%; border-radius:3px; min-width:2px}
+
+/* ===== project cards ===== */
 .pcards{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px}
-.pcard{
-  background:var(--surface); border:1px solid var(--line); border-radius:7px;
+.pcard{background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
   padding:13px 14px; display:flex; flex-direction:column; gap:10px; text-align:left;
-  cursor:pointer; font:inherit; color:inherit; transition:border-color .12s, box-shadow .12s;
-}
-.pcard:hover{border-color:var(--line-2); box-shadow:var(--shadow-1)}
+  cursor:pointer; font:inherit; color:inherit; transition:border-color .12s, box-shadow .12s}
+.pcard:hover{border-color:var(--line-2); box-shadow:var(--sh-1)}
 .pcard .top{display:flex; align-items:flex-start; gap:10px}
-.pcard h3{font-size:16px; letter-spacing:.01em; line-height:1.15; flex:1; min-width:0}
-.pcard .meta{font-size:11.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 10px; margin-bottom:auto}
+.pcard h3{font-size:15.5px; line-height:1.18; flex:1; min-width:0}
+.pcard .meta{font-size:11.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:3px 10px; margin-bottom:auto}
 .stack{display:flex; height:9px; gap:2px; border-radius:3px; overflow:hidden; background:var(--track)}
 .stack i{display:block; height:100%; border-radius:2px}
 .stack-key{display:flex; flex-wrap:wrap; gap:3px 12px; font-size:11px; color:var(--muted)}
 .stack-key .k{display:inline-flex; align-items:center; gap:5px}
 .stack-key .sw{width:8px; height:8px; border-radius:2px; flex:none}
-.stack-key b{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-weight:500; color:var(--ink-2)}
+.stack-key b{font-family:var(--f-mono); font-weight:500; color:var(--ink-2)}
 
-/* ---------- action list ---------- */
+/* ===== action list ===== */
 .acts{display:flex; flex-direction:column}
-.act{
-  display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center;
+.act{display:grid; grid-template-columns:3px minmax(0,1fr) auto; gap:11px; align-items:center;
   padding:9px 14px; border-bottom:1px solid var(--line); cursor:pointer;
-  background:transparent; border-left:0; border-right:0; border-top:0; text-align:left; font:inherit; color:inherit; width:100%;
-}
+  background:transparent; border-left:0; border-right:0; border-top:0; text-align:left; font:inherit; color:inherit; width:100%}
 .act:last-child{border-bottom:0}
 .act:hover{background:var(--sunken)}
-.act .why{width:3px; align-self:stretch; border-radius:2px; min-height:26px}
+.act .why{align-self:stretch; border-radius:2px; min-height:26px}
 .act .t{min-width:0}
-.act .t b{display:block; font:600 13px/1.3 var(--font-body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.act .t b{display:block; font:600 13px/1.35 var(--f-body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .act .t span{display:block; font-size:11.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.empty-note{padding:22px 14px; text-align:center; color:var(--muted); font-size:12.5px}
+.empty-note{padding:24px 14px; text-align:center; color:var(--muted); font-size:12.5px}
 
-/* ---------- filters ---------- */
+/* ===== filters ===== */
 .filters{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px}
-.filters select,.filters input[type=text]{width:auto; min-width:132px; padding:6px 8px; font-size:12.5px}
-.filters select{padding-right:22px}
-.filters .grow{flex:1; min-width:180px}
+.filters select,.filters input[type=text],.filters input[type=search]{width:auto; min-width:136px; padding:6px 9px; font-size:12.5px}
+.filters select{padding-right:24px}
+.filters .grow{flex:1; min-width:190px; width:100%}
 .filters .eyebrow{white-space:nowrap}
-.filters input[type=text].grow{width:100%}
-.chipclear{font:500 11.5px/1 var(--font-body); color:var(--muted); background:transparent; border:0; cursor:pointer; text-decoration:underline; padding:6px 2px}
+.chipclear{font:500 11.5px/1 var(--f-body); color:var(--muted); background:transparent; border:0;
+  cursor:pointer; text-decoration:underline; padding:6px 2px}
 .chipclear:hover{color:var(--ink)}
 
-/* ---------- table ---------- */
-.table-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:7px; background:var(--surface)}
-table.log{border-collapse:separate; border-spacing:0; width:100%; min-width:1560px}
-table.log th{
-  position:sticky; top:var(--mast-h,56px); z-index:10; background:var(--surface);
-  font:600 10px/1.2 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
-  text-align:left; padding:9px 10px; border-bottom:1px solid var(--line-2); white-space:nowrap;
-}
-table.log td{padding:5px 10px; border-bottom:1px solid var(--line); vertical-align:middle; font-size:13px; height:44px; white-space:nowrap}
+/* ===== the log grid ===== */
+.grid-shell{border:1px solid var(--line); border-radius:var(--r); background:var(--surface);
+  overflow:hidden; display:flex; flex-direction:column; flex:1 1 auto; min-height:280px}
+.table-wrap{overflow:auto; flex:1 1 auto; min-height:0}
+table.log{border-collapse:separate; border-spacing:0; width:100%; min-width:1720px}
+table.log th{position:sticky; top:0; z-index:5; background:var(--well);
+  font:600 9.5px/1.2 var(--f-body); letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  text-align:left; padding:0; border-bottom:1px solid var(--line-2); white-space:nowrap}
+table.log th .sortbtn{display:flex; align-items:center; gap:5px; width:100%; padding:10px;
+  background:none; border:0; cursor:pointer; font:inherit; color:inherit; letter-spacing:inherit; text-transform:inherit}
+table.log th .sortbtn:hover{color:var(--ink)}
+table.log th .arw{font-size:8px; opacity:0; transition:opacity .12s}
+table.log th[aria-sort] .sortbtn{color:var(--accent-2)}
+table.log th[aria-sort] .arw{opacity:1}
+table.log th.plain{padding:10px}
+table.log td{padding:5px 10px; border-bottom:1px solid var(--line); vertical-align:middle;
+  font-size:13px; height:42px; white-space:nowrap; background:var(--surface)}
 table.log td.c-title{white-space:normal}
 table.log tbody tr:last-child td{border-bottom:0}
 table.log tbody tr:hover td{background:var(--sunken)}
-table.log tr.grp td{
-  background:var(--sunken); font:700 11px/1 var(--font-body); letter-spacing:.09em; text-transform:uppercase;
-  color:var(--ink-2); padding:9px 10px; border-bottom:1px solid var(--line-2);
-}
-table.log td.c-num{white-space:nowrap}
-table.log td.c-title{min-width:230px}
-table.log .rowlink{
-  background:none; border:0; padding:0; font:inherit; color:var(--ink); cursor:pointer; text-align:left;
-  display:block; max-width:330px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
+table.log tr.grp td{background:var(--well); font:700 10px/1 var(--f-body); letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-2); padding:9px 10px; height:auto;
+  border-top:1px solid var(--line-2); border-bottom:1px solid var(--line-2)}
+table.log tr[data-sev="crit"] td:first-child{box-shadow:inset 3px 0 0 var(--st-crit)}
+table.log tr[data-sev="warn"] td:first-child{box-shadow:inset 3px 0 0 var(--st-warn)}
+table.log tr[data-sev="good"] td:first-child{box-shadow:inset 3px 0 0 var(--st-good)}
+table.log th:first-child, table.log td.c-num{
+  position:sticky; left:0; z-index:4; border-right:1px solid var(--line)}
+table.log thead th:first-child{z-index:6; border-right:1px solid var(--line-2)}
+table.log td.c-proj{min-width:178px} table.log td.c-status{min-width:146px}
+table.log td.c-code{min-width:88px} table.log td.c-bic{min-width:118px} table.log td.c-spec{min-width:96px}
+table.log .rowlink{background:none; border:0; padding:0; font:inherit; color:var(--ink); cursor:pointer;
+  text-align:left; display:block; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500}
 table.log .rowlink:hover{color:var(--accent-2); text-decoration:underline}
-table.log select,table.log input[type=date]{
-  background:transparent; border:1px solid transparent; border-radius:4px; padding:4px 6px; font-size:12px; width:100%;
-}
-table.log select{padding-right:20px; width:100%}
-table.log td.c-proj{min-width:178px}
-table.log td.c-status{min-width:146px}
-table.log td.c-code{min-width:86px}
-table.log td.c-bic{min-width:116px}
-table.log input[type=date]{min-width:122px}
+table.log select,table.log input[type=date]{background:transparent; border:1px solid transparent;
+  border-radius:4px; padding:4px 6px; font-size:12px; width:100%}
+table.log select{padding-right:20px}
+table.log input[type=date]{min-width:124px}
 table.log select:hover,table.log input[type=date]:hover{border-color:var(--line-2); background:var(--raised)}
-table.log input[type=date].blank:not(:focus)::-webkit-datetime-edit{opacity:0}
 table.log select:focus,table.log input[type=date]:focus{border-color:var(--focus); background:var(--raised)}
-.days{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:12.5px; font-weight:500; white-space:nowrap}
+table.log input[type=date].blank:not(:focus)::-webkit-datetime-edit{opacity:0}
+table.log input[type=date].ofs-late{color:var(--st-crit); font-weight:600}
+table.log input[type=date].ofs-soon{color:var(--st-warn); font-weight:600}
+.days{font-family:var(--f-mono); font-variant-numeric:tabular-nums; font-size:12.5px; white-space:nowrap}
 .days.over{color:var(--st-crit); font-weight:600}
 .days.due-soon{color:var(--st-warn); font-weight:600}
 .linkchips{display:flex; gap:4px; flex-wrap:wrap}
-.linkchip{
-  display:inline-flex; align-items:center; gap:4px; text-decoration:none;
-  font:600 10.5px/1 var(--font-body); padding:4px 6px; border-radius:4px;
-  background:var(--t-blue-bg); color:var(--t-blue-ink); border:1px solid transparent; white-space:nowrap;
-}
+.linkchip{display:inline-flex; align-items:center; gap:4px; text-decoration:none;
+  font:600 10.5px/1 var(--f-body); padding:4px 7px; border-radius:4px;
+  background:var(--t-blue-bg); color:var(--t-blue-ink); border:1px solid transparent; white-space:nowrap; cursor:pointer}
 .linkchip:hover{border-color:currentColor}
-.linkchip.file{background:var(--accent-tint); color:var(--accent-2); cursor:pointer; border:1px solid transparent; font-family:var(--font-body)}
+.linkchip.file{background:var(--accent-tint); color:var(--accent-2)}
 .fabdot{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted); white-space:nowrap}
 .fabdot input{width:14px; height:14px; accent-color:var(--st-good); cursor:pointer}
-
-/* ---------- drawer ---------- */
-.scrim{position:fixed; inset:0; background:rgba(20,18,15,.42); z-index:60; backdrop-filter:blur(1.5px)}
-.drawer{
-  position:fixed; top:0; right:0; bottom:0; width:min(560px,100vw); z-index:61;
-  background:var(--surface); border-left:1px solid var(--line-2); box-shadow:var(--shadow-2);
-  display:flex; flex-direction:column;
+/* Column priority as the viewport shrinks. The drawer still holds every field,
+   so hiding a column here costs nothing but the sideways drag. */
+@media (max-width:1100px){
+  table.log{min-width:1480px}
+  table.log th:nth-child(4),  table.log td:nth-child(4),
+  table.log th:nth-child(6),  table.log td:nth-child(6){display:none}
 }
+@media (max-width:820px){
+  table.log{min-width:1080px}
+  table.log th:nth-child(5),  table.log td:nth-child(5),
+  table.log th:nth-child(7),  table.log td:nth-child(7),
+  table.log th:nth-child(8),  table.log td:nth-child(8),
+  table.log th:nth-child(17), table.log td:nth-child(17){display:none}
+}
+@media (max-width:620px){
+  table.log{min-width:820px}
+  table.log th:nth-child(2),  table.log td:nth-child(2),
+  table.log th:nth-child(10), table.log td:nth-child(10){display:none}
+  table.log td.c-title{min-width:180px}
+  table.log .rowlink{max-width:180px}
+}
+.gridfoot{display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:9px 12px;
+  border-top:1px solid var(--line); background:var(--well); font-size:11.5px; color:var(--muted)}
+.gridfoot b{font-family:var(--f-mono); font-weight:600; color:var(--ink-2)}
+.narrow-only{display:none}
+@media (max-width:820px){ .wide-only{display:none} .narrow-only{display:inline} }
+
+/* ===== drawer ===== */
+.scrim{position:fixed; inset:0; background:rgba(18,16,12,.46); z-index:60; backdrop-filter:blur(2px)}
+.drawer{position:fixed; top:0; right:0; bottom:0; width:min(580px,100vw); z-index:61;
+  background:var(--surface); border-left:1px solid var(--line-2); box-shadow:var(--sh-2);
+  display:flex; flex-direction:column}
 .drawer-head{padding:14px 16px 12px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:flex-start}
-.drawer-head h2{font-size:19px; line-height:1.15; letter-spacing:.01em}
+.drawer-head h2{font-size:19px; line-height:1.18}
 .drawer-head .sub{font-size:12px; color:var(--muted); margin-top:3px}
 .drawer-body{overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:18px; flex:1}
 .drawer-foot{padding:11px 16px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; flex-wrap:wrap}
 .drawer-foot .stamp{font-size:11.5px; color:var(--faint); margin-right:auto}
 .fgrid{display:grid; grid-template-columns:1fr 1fr; gap:11px}
 .fgrid.three{grid-template-columns:1fr 1fr 1fr}
+.fgrid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:560px){ .fgrid.four{grid-template-columns:1fr 1fr} }
 .fgrid .span2{grid-column:span 2}
 .block{display:flex; flex-direction:column; gap:9px}
 .block > .eyebrow{padding-bottom:6px; border-bottom:1px solid var(--line)}
 .linkrow{display:grid; grid-template-columns:150px minmax(0,1fr) auto auto; gap:6px; align-items:center}
-.linkrow a.open{
-  font:600 11px/1 var(--font-body); text-decoration:none; color:var(--t-blue-ink);
-  background:var(--t-blue-bg); padding:6px 7px; border-radius:4px; white-space:nowrap;
-}
-.filerow{display:flex; gap:8px; align-items:center; border:1px solid var(--line); border-radius:5px; padding:7px 9px; background:var(--raised)}
+.linkrow a.open{font:600 11px/1 var(--f-body); text-decoration:none; color:var(--t-blue-ink);
+  background:var(--t-blue-bg); padding:6px 8px; border-radius:4px; white-space:nowrap}
+.filerow{display:flex; gap:8px; align-items:center; border:1px solid var(--line);
+  border-radius:5px; padding:7px 9px; background:var(--raised)}
 .filerow .fname{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px}
-.filerow .fsize{font-family:var(--font-mono); font-size:11px; color:var(--muted); white-space:nowrap}
-.hist{display:flex; flex-direction:column; gap:0; border:1px solid var(--line); border-radius:5px; overflow:hidden}
-.hist .h{display:grid; grid-template-columns:52px 1fr auto; gap:9px; padding:8px 10px; border-bottom:1px solid var(--line); align-items:center; background:var(--raised)}
+.filerow .fsize{font-family:var(--f-mono); font-size:11px; color:var(--muted); white-space:nowrap}
+.hist{display:flex; flex-direction:column; border:1px solid var(--line); border-radius:5px; overflow:hidden}
+.hist .h{display:grid; grid-template-columns:54px 1fr auto; gap:9px; padding:8px 10px;
+  border-bottom:1px solid var(--line); align-items:center; background:var(--raised)}
 .hist .h:last-child{border-bottom:0}
-.hist .rv{font-family:var(--font-mono); font-weight:600; font-size:12px; color:var(--accent-2)}
+.hist .rv{font-family:var(--f-mono); font-weight:600; font-size:12px; color:var(--accent-2)}
 .hist .dt{font-size:11.5px; color:var(--muted)}
-.icon-x{
-  border:1px solid var(--line-2); background:var(--raised); color:var(--muted); cursor:pointer;
-  width:28px; height:28px; border-radius:4px; display:grid; place-items:center; font-size:14px; line-height:1; flex:none;
-}
+.icon-x{border:1px solid var(--line-2); background:var(--raised); color:var(--muted); cursor:pointer;
+  width:28px; height:28px; border-radius:4px; display:grid; place-items:center; font-size:14px; line-height:1; flex:none}
 .icon-x:hover{color:var(--st-crit); border-color:var(--st-crit)}
 
-.start{display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 14px; align-items:start}
-.start .n{
-  font-family:var(--font-mono); font-weight:600; font-size:11px; color:var(--accent-2);
-  background:var(--accent-tint); border-radius:4px; padding:4px 7px; line-height:1;
-}
-.start b{display:block; font:600 13px/1.4 var(--font-body)}
+/* ===== start here ===== */
+.start{display:grid; grid-template-columns:auto minmax(0,1fr); gap:11px 14px; align-items:start}
+.start .n{font-family:var(--f-mono); font-weight:600; font-size:11px; color:var(--accent-2);
+  background:var(--accent-tint); border-radius:4px; padding:5px 8px; line-height:1}
+.start b{display:block; font:600 13px/1.4 var(--f-body)}
 .start span.d{display:block; font-size:12.5px; color:var(--muted); line-height:1.5}
 
-/* ---------- in-page dialog (native confirm/prompt are blocked in the artifact frame) ---------- */
+/* ===== dialog (native modals are blocked in the artifact frame) ===== */
 #modal .scrim{z-index:70}
-.dialog{
-  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:71;
-  width:min(430px,92vw); background:var(--surface); border:1px solid var(--line-2);
-  border-radius:8px; box-shadow:var(--shadow-2); padding:18px 18px 15px;
-}
-.dialog h3{font-size:18px; letter-spacing:.01em; margin-bottom:7px}
-.dialog p{margin:0 0 14px; font-size:13px; color:var(--ink-2); line-height:1.5}
+.dialog{position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:71;
+  width:min(440px,92vw); background:var(--surface); border:1px solid var(--line-2);
+  border-radius:8px; box-shadow:var(--sh-2); padding:18px 18px 15px}
+.dialog.wide{width:min(760px,94vw)}
+.dialog h3{font-size:18px; margin-bottom:7px}
+.dialog p{margin:0 0 14px; font-size:13px; color:var(--ink-2); line-height:1.55}
 .dialog .dlg-input{margin-bottom:14px}
-.dlg-foot{display:flex; gap:8px; justify-content:flex-end}
+.dialog textarea.out{font-family:var(--f-mono); font-size:11.5px; line-height:1.55; min-height:280px; background:var(--raised)}
+.dlg-foot{display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap}
 
-/* ---------- toast ---------- */
-.toasts{position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:90; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
-.toast{
-  background:var(--ink); color:var(--ground); font:500 12.5px/1.35 var(--font-body);
-  padding:9px 14px; border-radius:6px; box-shadow:var(--shadow-2); max-width:min(520px,90vw);
-}
+/* ===== toast ===== */
+.toasts{position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:90;
+  display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
+.toast{background:var(--ink); color:var(--ground); font:500 12.5px/1.4 var(--f-body);
+  padding:9px 15px; border-radius:6px; box-shadow:var(--sh-2); max-width:min(520px,90vw)}
 .toast.bad{background:var(--st-crit); color:#fff}
 
-.skel{padding:60px 20px; text-align:center; color:var(--muted)}
-.skel .b{font-family:var(--font-display); font-size:20px; color:var(--ink-2); letter-spacing:.02em}
-.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+.skel{padding:64px 20px; text-align:center; color:var(--muted)}
+.skel .b{font-family:var(--f-display); font-size:20px; color:var(--ink-2); letter-spacing:.02em}
 </style>
 
 <header class="masthead">
@@ -475,7 +482,8 @@ const AGE_BUCKETS = [
 const state = {
   db:null, dl:null, booted:false, conn:"connecting", canWrite:true,
   projects:[], packages:[], files:{},
-  view:"portfolio", fProject:"all", fStatus:"all", fBic:"all", fFlag:"all", fBucket:null, q:"",
+  view:"portfolio", fProject:"all", fStatus:"all", fBic:"all", fType:"all", fFlag:"all", fBucket:null, q:"",
+  sortKey:null, sortDir:"asc",
   openPkg:null, openFiles:[],
   who: (localStorage.getItem(WHO_KEY) || "").slice(0,40)
 };
@@ -519,16 +527,18 @@ function openDialog(o){
     dlgResolve = res;
     document.getElementById("modal").innerHTML =
       '<div class="scrim" data-mact="cancel"></div>' +
-      '<div class="dialog" role="dialog" aria-modal="true" aria-label="' + attr(o.title) + '">' +
+      '<div class="dialog' + (o.wide ? " wide" : "") + '" role="dialog" aria-modal="true" aria-label="' + attr(o.title) + '">' +
         "<h3>" + esc(o.title) + "</h3>" +
         (o.body ? "<p>" + esc(o.body) + "</p>" : "") +
         (o.input ? '<div class="dlg-input"><input type="text" id="dlg-input" value="' + attr(o.value || "") +
           '" placeholder="' + attr(o.placeholder || "") + '" maxlength="40"></div>' : "") +
+        (o.text != null ? '<div class="dlg-input"><textarea class="out" id="dlg-text" spellcheck="false">' + esc(o.text) + "</textarea></div>" : "") +
         (o.select ? '<div class="dlg-input"><select id="dlg-select">' + o.select.map(x =>
           '<option value="' + attr(x.v) + '"' + (String(x.v) === String(o.value || "") ? " selected" : "") + ">" +
           esc(x.t) + "</option>").join("") + "</select></div>" : "") +
         '<div class="dlg-foot">' +
-          '<button class="btn" data-mact="cancel">Cancel</button>' +
+          (o.extra ? '<button class="btn" data-act="' + attr(o.extra.act) + '">' + esc(o.extra.label) + "</button>" : "") +
+          (o.hideCancel ? "" : '<button class="btn" data-mact="cancel">Cancel</button>') +
           '<button class="btn ' + (o.danger ? "danger" : "primary") + '" data-mact="ok">' + esc(o.ok || "OK") + "</button>" +
         "</div></div>";
     setTimeout(() => {
@@ -569,6 +579,12 @@ function daysToDue(p){ const d = effDue(p); return d ? dayDiff(todayISO(), d) : 
 function isOverdue(p){ const n = daysToDue(p); return withReviewer(p) && n != null && n < 0; }
 function isDueSoon(p){ const n = daysToDue(p); return withReviewer(p) && n != null && n >= 0 && n <= 3; }
 function isBlocked(p){ return !!String(p.holds || "").trim() && p.status !== "released" && isLive(p); }
+/* The OFS date is the detailer's deadline to us, so it only runs until the
+   package is actually submitted — after that the reviewer owns the clock. */
+function awaitingOfs(p){ return !p.submitted && p.status !== "released" && isLive(p); }
+function daysToOfs(p){ return p.ofsDue ? dayDiff(todayISO(), p.ofsDue) : null; }
+function isLateFromOfs(p){ const n = daysToOfs(p); return awaitingOfs(p) && n != null && n < 0; }
+function isOfsDueSoon(p){ const n = daysToOfs(p); return awaitingOfs(p) && n != null && n >= 0 && n <= 3; }
 function needsResubmit(p){ return p.status === "returned" && (p.code === "RR" || p.code === "REJ"); }
 function laneOf(p){ return statusOf(p.status).lane; }
 
@@ -578,9 +594,11 @@ function scopedPackages(){
 function actionReasons(p){
   const out = [];
   if (isOverdue(p))     out.push({ k:"overdue",  t:"Overdue with reviewer " + Math.abs(daysToDue(p)) + "d", css:"--st-crit" });
+  if (isLateFromOfs(p)) out.push({ k:"ofs",      t:"Late from OFS " + Math.abs(daysToOfs(p)) + "d", css:"--st-crit" });
   if (needsResubmit(p)) out.push({ k:"resubmit", t:"Returned " + codeOf(p.code).short + " — resubmit due", css:"--st-serious" });
   if (isBlocked(p))     out.push({ k:"blocked",  t:"Held: " + String(p.holds).trim(), css:"--st-warn" });
   if (!isOverdue(p) && isDueSoon(p)) out.push({ k:"due", t:"Due back in " + daysToDue(p) + "d", css:"--st-warn" });
+  if (!isLateFromOfs(p) && isOfsDueSoon(p)) out.push({ k:"ofsdue", t:"Due from OFS in " + daysToOfs(p) + "d", css:"--st-warn" });
   return out;
 }
 function turnaroundSamples(list){
@@ -591,6 +609,25 @@ function turnaroundSamples(list){
   });
   return out;
 }
+
+const SORTS = {
+  num:       p => String(p.num || ""),
+  job:       p => (projOf(p.projectId) || {}).name || "",
+  title:     p => String(p.title || ""),
+  spec:      p => String(p.spec || ""),
+  type:      p => String(p.type || ""),
+  seq:       p => String(p.seq || ""),
+  sheets:    p => Number(p.sheets) || 0,
+  rev:       p => Number(p.rev) || 0,
+  status:    p => STATUSES.findIndex(x => x.k === p.status),
+  code:      p => CODES.findIndex(x => x.k === (p.code || "")),
+  bic:       p => String(p.bic || ""),
+  ofsDue:    p => p.ofsDue || "",
+  submitted: p => p.submitted || "",
+  due:       p => effDue(p) || "",
+  returned:  p => p.returned || "",
+  days:      p => daysOut(p) == null ? -1 : daysOut(p)
+};
 
 /* ============================ persistence ============================ */
 function stamp(patch){
@@ -664,8 +701,8 @@ async function createPackage(projectId){
   }
   const id = uid();
   const body = stamp({ projectId, num:suggestNum(projectId), title:"Untitled package",
-    type:"Shop drawings", seq:"", sheets:0, rev:0, status:"not_started", code:"", bic:"Detailer",
-    reviewer:"", submitted:"", due:"", returned:"", released:false, releasedOn:"", holds:"", notes:"",
+    spec:"", type:"Shop drawings", seq:"", sheets:0, rev:0, status:"not_started", code:"", bic:"Detailer",
+    reviewer:"", ofsDue:"", submitted:"", due:"", returned:"", released:false, releasedOn:"", holds:"", notes:"",
     links:[], files:[], history:[], createdAt:new Date().toISOString() });
   try {
     await state.db.doc("packages/" + id).set(body);
@@ -797,15 +834,15 @@ async function removeFile(pkgId, fid){
 function csvCell(v){ const s = String(v == null ? "" : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 async function exportCsv(){
   const rows = filteredRows();
-  const head = ["Project","Job #","Submittal #","Package","Type","Seq / area","Sheets","Rev","Status",
-    "Return code","Ball in court","Reviewer","Submitted","Due back","Returned","Days out","Days overdue",
+  const head = ["Project","Job #","Submittal #","Package","Spec section","Type","Seq / area","Sheets","Rev","Status",
+    "Return code","Ball in court","Reviewer","Date submitted","Date due","Date returned","Date due from OFS","Days out","Days overdue",
     "Released for fab","Released on","Holds / open RFIs","Links","Notes"];
   const body = rows.map(p => {
     const pr = projOf(p.projectId) || {};
     const od = isOverdue(p) ? Math.abs(daysToDue(p)) : "";
-    return [pr.name || "", pr.number || "", p.num || "", p.title || "", p.type || "", p.seq || "",
+    return [pr.name || "", pr.number || "", p.num || "", p.title || "", p.spec || "", p.type || "", p.seq || "",
       p.sheets || 0, p.rev || 0, statusOf(p.status).label, codeOf(p.code).label === "—" ? "" : codeOf(p.code).label,
-      p.bic || "", p.reviewer || "", p.submitted || "", effDue(p), p.returned || "",
+      p.bic || "", p.reviewer || "", p.submitted || "", effDue(p), p.returned || "", p.ofsDue || "",
       daysOut(p) == null ? "" : daysOut(p), od, p.released ? "Yes" : "No", p.releasedOn || "",
       p.holds || "", (p.links || []).map(l => l.label + ": " + l.url).join(" | "), p.notes || ""].map(csvCell).join(",");
   });
@@ -819,17 +856,140 @@ async function exportCsv(){
   catch(e){ if ((e && e.code) !== "declined") toast("Export failed (" + ((e && e.code) || "error") + ").", true); }
 }
 
+/* ============================ transmittal & chase note ============================ */
+/* A submittal is only as good as the paper that goes with it, so the tracker
+   emits the transmittal rather than making someone retype the log into Word. */
+function transmittalDoc(p){
+  const pr = projOf(p.projectId) || {};
+  const row = (k, v) => "<tr><th>" + esc(k) + "</th><td>" + (v || "&mdash;") + "</td></tr>";
+  const links = (p.links || []).filter(l => l.url);
+  return "<!doctype html><html><head><meta charset=\"utf-8\">" +
+    "<title>Transmittal " + esc(p.num || "") + " — " + esc(pr.name || "") + "</title><style>" +
+    "@page{margin:18mm}" +
+    "body{font:12px/1.55 'Helvetica Neue',Arial,sans-serif;color:#17150F;margin:0;padding:26px}" +
+    ".hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #C89B20;padding-bottom:12px;margin-bottom:18px}" +
+    ".hd h1{font:700 24px/1 'Arial Narrow',Arial,sans-serif;letter-spacing:.06em;text-transform:uppercase;margin:0}" +
+    ".hd .co{font-size:11px;color:#6C685E;margin-top:5px}" +
+    ".no{text-align:right;font:700 15px/1.3 monospace}" +
+    "h2{font:700 11px/1 Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#6C685E;margin:22px 0 8px;border-bottom:1px solid #DFDBD2;padding-bottom:6px}" +
+    "table{width:100%;border-collapse:collapse;margin-bottom:4px}" +
+    "th{text-align:left;font:700 10px/1.4 Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#6C685E;width:168px;padding:6px 10px 6px 0;vertical-align:top}" +
+    "td{padding:6px 0;vertical-align:top;border-bottom:1px solid #EFEDE7}" +
+    "ul{margin:4px 0;padding-left:18px} a{color:#15527F}" +
+    ".codes{font-size:10.5px;color:#6C685E;line-height:1.7}" +
+    ".sig{display:flex;gap:34px;margin-top:34px}" +
+    ".sig div{flex:1;border-top:1px solid #17150F;padding-top:6px;font-size:10.5px;color:#6C685E}" +
+    "</style></head><body>" +
+    "<div class=\"hd\"><div><h1>Submittal Transmittal</h1>" +
+      "<div class=\"co\">S&amp;H Steel Co. &middot; structural steel fabrication &amp; erection</div></div>" +
+      "<div class=\"no\">" + esc(p.num || "") + "<br><span style=\"font-size:11px;font-weight:400\">Rev " + (Number(p.rev) || 0) + "</span></div></div>" +
+    "<h2>Project</h2><table>" +
+      row("Project", esc(pr.name || "")) +
+      row("Job number", esc(pr.number || "")) +
+      row("General contractor", esc(pr.gc || "")) +
+      row("Engineer of record", esc(pr.eor || "")) +
+      row("Location", esc(pr.city || "")) +
+    "</table>" +
+    "<h2>Package</h2><table>" +
+      row("Drawing set", esc(p.title || "")) +
+      row("Submittal type", esc(p.type || "")) +
+      row("Spec section", esc(p.spec || "")) +
+      row("Sequence / area", esc(p.seq || "")) +
+      row("Sheet count", String(Number(p.sheets) || 0)) +
+      row("Revision", String(Number(p.rev) || 0)) +
+    "</table>" +
+    "<h2>Review</h2><table>" +
+      row("Date submitted", esc(fmtDate(p.submitted))) +
+      row("Due back", esc(fmtDate(effDue(p))) + (dueIsAuto(p) ? " <span style=\"color:#6C685E\">(" + reviewDays(p) + " contract review days)</span>" : "")) +
+      row("Reviewer", esc(p.reviewer || "")) +
+      row("Ball in court", esc(p.bic || "")) +
+      row("Status", esc(statusOf(p.status).label)) +
+      row("Return code", p.code ? esc(codeOf(p.code).label) : "") +
+    "</table>" +
+    (links.length ? "<h2>Drawing sets</h2><ul>" + links.map(l =>
+      "<li>" + esc(l.label || "Link") + " &mdash; <a href=\"" + attr(l.url) + "\">" + esc(l.url) + "</a></li>").join("") + "</ul>" : "") +
+    (String(p.holds || "").trim() ? "<h2>Holds / open RFIs</h2><p>" + esc(p.holds) + "</p>" : "") +
+    (String(p.notes || "").trim() ? "<h2>Notes</h2><p>" + esc(p.notes) + "</p>" : "") +
+    "<h2>Action codes</h2><div class=\"codes\">" +
+      CODES.filter(c => c.k).map(c => "<b>" + esc(c.short) + "</b> &mdash; " + esc(c.label)).join("<br>") + "</div>" +
+    "<div class=\"sig\"><div>Transmitted by &middot; date</div><div>Received by &middot; date</div></div>" +
+    "<p style=\"margin-top:26px;font-size:10px;color:#938E82\">Generated " + esc(fmtDate(todayISO())) +
+      (state.who ? " by " + esc(state.who) : "") + " from the Submittal Control Center.</p>" +
+    "</body></html>";
+}
+async function makeTransmittal(id){
+  const p = pkgOf(id); if (!p) return;
+  if (!state.dl) return toast("File saving isn't available in this view.", true);
+  const name = "Transmittal " + (p.num || "package").replace(/[^\w.-]+/g, "-") + " Rev " + (Number(p.rev) || 0) + ".html";
+  try { await state.dl.save({ filename:name, data:transmittalDoc(p) }); }
+  catch(e){ const c = (e && e.code) || ""; if (c !== "declined") toast("Couldn't save the transmittal (" + (c || "error") + ").", true); }
+}
+
+/* The follow-up nobody wants to retype at 6am. */
+let chaseBuffer = "";
+function buildChase(){
+  const late = scopedPackages().filter(p => isLive(p) && isOverdue(p))
+    .sort((a,b) => (daysToDue(a) || 0) - (daysToDue(b) || 0));
+  if (!late.length) return "";
+  const byProj = {};
+  late.forEach(p => (byProj[p.projectId] = byProj[p.projectId] || []).push(p));
+  const out = [];
+  Object.keys(byProj).forEach(pid => {
+    const pr = projOf(pid) || {};
+    const items = byProj[pid];
+    out.push("Subject: " + (pr.number ? pr.number + " " : "") + (pr.name || "Project") + " — overdue submittal returns (" + items.length + ")");
+    out.push("");
+    out.push((pr.gc ? pr.gc : "Team") + ",");
+    out.push("");
+    out.push("Following up on the submittals below. Contract review period is " + (Number(pr.reviewDays) || 14) +
+      " calendar days; each of these is past that. Fabrication release is held until they come back.");
+    out.push("");
+    items.forEach(p => {
+      out.push("  " + (p.num || "—") + "  " + (p.title || "Untitled") +
+        (p.spec ? "  [" + p.spec + "]" : "") +
+        (Number(p.sheets) ? "  (" + p.sheets + " sheets)" : ""));
+      out.push("      submitted " + fmtDate(p.submitted) + " · due " + fmtDate(effDue(p)) +
+        " · " + Math.abs(daysToDue(p)) + " days past due · with " + (p.bic || "reviewer") +
+        (p.reviewer ? " (" + p.reviewer + ")" : ""));
+    });
+    out.push("");
+    out.push("Please advise on a return date for each so we can hold the fabrication and erection sequence.");
+    out.push("");
+    out.push("Thanks,");
+    out.push(state.who || "");
+    out.push("S&H Steel Co.");
+    out.push("");
+    out.push("— — —");
+    out.push("");
+  });
+  return out.join("\n").trim();
+}
+function showChase(){
+  chaseBuffer = buildChase();
+  if (!chaseBuffer) return toast("Nothing is overdue in this scope — no chase note needed.");
+  openDialog({ title:"Chase overdue returns", wide:true, hideCancel:true, ok:"Done",
+    body:"Ready to paste into Outlook. One block per job, sorted by how late each package is.",
+    text:chaseBuffer, extra:{ act:"chase-save", label:"Save as .txt" } });
+}
+async function saveChase(){
+  if (!state.dl) return toast("File saving isn't available in this view.", true);
+  try { await state.dl.save({ filename:"overdue-submittals-" + todayISO() + ".txt", data:chaseBuffer }); }
+  catch(e){ const c = (e && e.code) || ""; if (c !== "declined") toast("Couldn't save the note (" + (c || "error") + ").", true); }
+}
+
 /* ============================ filtering ============================ */
 function filteredRows(){
   const q = state.q.trim().toLowerCase();
   return scopedPackages().filter(p => {
     if (state.fStatus !== "all" && p.status !== state.fStatus) return false;
     if (state.fBic !== "all" && (p.bic || "") !== state.fBic) return false;
+    if (state.fType !== "all" && (p.type || "") !== state.fType) return false;
     if (state.fFlag === "overdue"  && !isOverdue(p)) return false;
     if (state.fFlag === "reviewer" && !withReviewer(p)) return false;
     if (state.fFlag === "blocked"  && !isBlocked(p)) return false;
     if (state.fFlag === "resubmit" && !needsResubmit(p)) return false;
     if (state.fFlag === "released" && !p.released) return false;
+    if (state.fFlag === "ofs"      && !isLateFromOfs(p)) return false;
     if (state.fFlag === "flagged"  && !actionReasons(p).length) return false;
     if (state.fBucket){
       const d = daysOut(p);
@@ -837,12 +997,18 @@ function filteredRows(){
     }
     if (q){
       const pr = projOf(p.projectId) || {};
-      const hay = [p.num, p.title, p.type, p.seq, p.reviewer, p.holds, p.notes, pr.name, pr.number]
+      const hay = [p.num, p.title, p.spec, p.type, p.seq, p.reviewer, p.holds, p.notes, pr.name, pr.number]
         .join(" ").toLowerCase();
       if (hay.indexOf(q) === -1) return false;
     }
     return true;
   }).sort((a, b) => {
+    if (state.sortKey && SORTS[state.sortKey]){
+      const f = SORTS[state.sortKey], va = f(a), vb = f(b);
+      const c = (typeof va === "number" && typeof vb === "number")
+        ? va - vb : String(va).localeCompare(String(vb), undefined, { numeric:true });
+      return state.sortDir === "desc" ? -c : c;
+    }
     const pa = projOf(a.projectId), pb = projOf(b.projectId);
     const sa = (pa ? pa.sortIndex : 99), sb = (pb ? pb.sortIndex : 99);
     if (sa !== sb) return sa - sb;
@@ -898,59 +1064,57 @@ function kpiStrip(list){
   const over = rev.filter(isOverdue);
   const rel  = live.filter(p => p.released || p.status === "released");
   const held = live.filter(isBlocked);
+  const lateOfs = live.filter(isLateFromOfs);
   const ta   = turnaroundSamples(live);
   const avg  = ta.length ? Math.round(ta.reduce((a,b) => a+b, 0) / ta.length) : null;
   const relSheets = rel.reduce((a,p) => a + (Number(p.sheets) || 0), 0);
   const allSheets = live.reduce((a,p) => a + (Number(p.sheets) || 0), 0);
-  const pct = live.length ? Math.round(rel.length / live.length * 100) : 0;
+  const pct  = live.length ? Math.round(rel.length / live.length * 100) : 0;
+  const oldest = rev.length ? Math.max.apply(null, rev.map(p => daysOut(p) || 0)) : 0;
   const tiles = [
     { l:"Open packages", v:open.length, s:live.length + " tracked · " + allSheets + " sheets" },
-    { l:"With reviewer", v:rev.length,  s:rev.length ? "oldest " + Math.max.apply(null, rev.map(p => daysOut(p) || 0)) + " days out" : "nothing out" },
-    { l:"Overdue",       v:over.length, s:over.length ? "past contract review days" : "all inside review window", cls:over.length ? "alert" : "" },
+    { l:"With reviewer", v:rev.length,  s:rev.length ? "oldest " + oldest + " days out" : "nothing out" },
+    { l:"Overdue",       v:over.length, s:over.length ? "past contract review days" : "all inside the window", cls:over.length ? "alert" : "" },
     { l:"Avg turnaround", v:(avg == null ? "—" : avg), u:(avg == null ? "" : "days"), s:ta.length ? ta.length + " completed cycles" : "no returns logged yet" },
     { l:"Released for fab", v:pct, u:"%", s:rel.length + " of " + live.length + " · " + relSheets + " sheets", cls:pct >= 60 ? "good" : "" },
+    { l:"Late from OFS", v:lateOfs.length, s:lateOfs.length ? "past the detailer's due date" : "detailer on schedule", cls:lateOfs.length ? "alert" : "" },
     { l:"Held / blocked", v:held.length, s:held.length ? "open RFI or hold on record" : "no holds recorded", cls:held.length ? "warn" : "" }
   ];
   return '<div class="kpis">' + tiles.map(t =>
-    '<div class="kpi ' + (t.cls || "") + '"><span class="l">' + esc(t.l) + '</span>' +
+    '<div class="kpi ' + (t.cls || "") + '"><span class="l">' + esc(t.l) + "</span>" +
     '<span class="v">' + esc(t.v) + (t.u ? '<span class="u">' + esc(t.u) + "</span>" : "") + "</span>" +
     '<span class="s">' + esc(t.s) + "</span></div>").join("") + "</div>";
 }
 
 function agingPanel(list){
   const out = list.filter(p => isLive(p) && withReviewer(p) && p.submitted);
-  const buckets = AGE_BUCKETS.map(b => {
-    const items = out.filter(p => { const d = daysOut(p); return d != null && d >= b.lo && d <= b.hi; });
-    return { b, items };
-  });
+  const buckets = AGE_BUCKETS.map(b => ({ b, items: out.filter(p => {
+    const d = daysOut(p); return d != null && d >= b.lo && d <= b.hi; }) }));
   const max = Math.max(1, ...buckets.map(x => x.items.length));
   const scope = state.fProject === "all" ? null : projOf(state.fProject);
   const cols = buckets.map(x => {
-    const n = x.items.length;
-    const h = n ? Math.max(6, Math.round(n / max * 92)) : 3;
-    const tip = n ? x.b.label + " out: " + x.items.slice(0,6).map(p => p.num).join(", ") + (n > 6 ? " +" + (n-6) + " more" : "") : "Nothing in this bucket";
+    const n = x.items.length, h = n ? Math.max(6, Math.round(n / max * 90)) : 3;
+    const tip = n ? x.b.label + ": " + x.items.slice(0,6).map(p => p.num).join(", ") + (n > 6 ? " +" + (n-6) + " more" : "") : "Nothing in this bucket";
     return '<div class="col"><span class="cnt">' + n + "</span>" +
-      '<button class="bar' + (n ? "" : " empty") + '" style="height:' + h + 'px;background:var(' + x.b.cssvar + ')" ' +
+      '<button class="bar' + (n ? "" : " empty") + '" style="height:' + h + "px;background:var(" + x.b.cssvar + ')" ' +
       'data-act="bucket" data-lo="' + x.b.lo + '" data-hi="' + x.b.hi + '" title="' + attr(tip) + '" aria-label="' + attr(x.b.label + ": " + n + " packages") + '"></button></div>';
   }).join("");
-  const xs = AGE_BUCKETS.map(b => '<span class="lx">' + esc(b.label) + "</span>").join("");
   return '<section class="panel"><div class="panel-head"><h3>Review aging</h3>' +
-    '<span class="hint">' + out.length + " package" + (out.length === 1 ? "" : "s") + " with the reviewer" +
-    (scope ? " · contract review " + (Number(scope.reviewDays) || 14) + " days" : "") + "</span></div>" +
+    '<span class="hint">' + out.length + " with the reviewer" +
+    (scope ? " · " + (Number(scope.reviewDays) || 14) + "-day contract review" : "") + "</span></div>" +
     '<div class="panel-body">' +
-      (out.length ? '<div class="chart">' + cols + '</div><div class="chart-x">' + xs + "</div>" +
-        '<p style="margin:12px 0 0;font-size:11.5px;color:var(--muted)">Calendar days since the date submitted. Click a bar to filter the log.</p>'
+      (out.length
+        ? '<div class="chart">' + cols + '</div><div class="chart-x">' +
+          AGE_BUCKETS.map(b => '<span class="lx">' + esc(b.label) + "</span>").join("") + "</div>" +
+          '<p style="margin:12px 0 0;font-size:11.5px;color:var(--muted)">Calendar days since submitted. Click a bar to filter the log.</p>'
         : '<div class="empty-note">Nothing is out for review right now.</div>') +
     "</div></section>";
 }
 
 function actionPanel(list){
   const rows = [];
-  list.filter(isLive).forEach(p => {
-    const rs = actionReasons(p);
-    if (rs.length) rows.push({ p, r:rs[0], n:rs.length });
-  });
-  const order = { overdue:0, resubmit:1, blocked:2, due:3 };
+  list.filter(isLive).forEach(p => { const rs = actionReasons(p); if (rs.length) rows.push({ p, r:rs[0], n:rs.length }); });
+  const order = { overdue:0, ofs:1, resubmit:2, blocked:3, due:4, ofsdue:5 };
   rows.sort((a,b) => (order[a.r.k] - order[b.r.k]) || (Math.abs(daysToDue(b.p) || 0) - Math.abs(daysToDue(a.p) || 0)));
   const shown = rows.slice(0, 9);
   return '<section class="panel"><div class="panel-head"><h3>Needs action</h3>' +
@@ -962,8 +1126,70 @@ function actionPanel(list){
         '<span class="t"><b>' + esc(x.p.num || "—") + "  " + esc(x.p.title || "Untitled") + "</b>" +
         "<span>" + esc(pr.name || "") + " · " + esc(x.r.t) + (x.n > 1 ? " (+" + (x.n-1) + " more)" : "") + "</span></span>" +
         statusPill(x.p) + "</button>";
-    }).join("") + "</div>" : '<div class="empty-note">Nothing flagged — no overdue reviews, resubmits, or holds.</div>') +
-    (rows.length > shown.length ? '<div style="padding:10px 14px;border-top:1px solid var(--line)"><button class="btn sm" data-act="showflag">See all ' + rows.length + " in the log</button></div>" : "") +
+    }).join("") + "</div>"
+      : '<div class="empty-note">Nothing flagged — no overdue reviews, resubmits, or holds.</div>') +
+    (rows.length > shown.length
+      ? '<div style="padding:10px 14px;border-top:1px solid var(--line)"><button class="btn sm" data-act="showflag">See all ' + rows.length + " in the log</button></div>" : "") +
+    "</section>";
+}
+
+/* Who is sitting on work, and how long they actually take against the contract. */
+function scorecardPanel(list){
+  const live = list.filter(isLive);
+  const byCourt = {};
+  live.forEach(p => {
+    const k = p.bic || "Unassigned";
+    const b = byCourt[k] || (byCourt[k] = { k, holding:0, overdue:0, samples:[] });
+    if (withReviewer(p) || p.status !== "released") b.holding++;
+    if (isOverdue(p)) b.overdue++;
+    (p.history || []).forEach(h => { const d = dayDiff(h.submitted, h.returned); if (d != null && d >= 0) b.samples.push(d); });
+    if (p.submitted && p.returned){ const d = dayDiff(p.submitted, p.returned); if (d != null && d >= 0) b.samples.push(d); }
+  });
+  const rows = Object.values(byCourt).filter(b => b.holding || b.samples.length)
+    .sort((a,b) => (b.overdue - a.overdue) || (b.holding - a.holding));
+  const contract = state.fProject === "all" ? 14 : (Number((projOf(state.fProject) || {}).reviewDays) || 14);
+  return '<section class="panel"><div class="panel-head"><h3>Ball-in-court scorecard</h3>' +
+    '<span class="hint">turnaround vs ' + contract + "-day contract</span></div>" +
+    (rows.length
+      ? '<div class="panel-body" style="padding:14px 4px 4px"><table class="mini"><thead><tr>' +
+        '<th>Court</th><th class="n">Holding</th><th class="n">Overdue</th><th class="n">Avg days</th><th style="width:90px">vs contract</th>' +
+        "</tr></thead><tbody>" + rows.map(b => {
+          const avg = b.samples.length ? Math.round(b.samples.reduce((x,y) => x+y, 0) / b.samples.length) : null;
+          const ratio = avg == null ? 0 : Math.min(1.6, avg / contract);
+          const col = avg == null ? "--track" : ratio > 1 ? "--st-crit" : ratio > .8 ? "--st-warn" : "--st-good";
+          return "<tr><td>" + esc(b.k) + '</td><td class="n">' + b.holding + "</td>" +
+            '<td class="n"' + (b.overdue ? ' style="color:var(--st-crit);font-weight:600"' : "") + ">" + b.overdue + "</td>" +
+            '<td class="n">' + (avg == null ? "—" : avg) + "</td>" +
+            '<td><span class="meter" title="' + attr(avg == null ? "no completed cycles" : avg + " days vs " + contract + "-day contract") +
+            '"><i style="width:' + Math.round(Math.min(1, ratio/1.6) * 100) + "%;background:var(" + col + ')"></i></span></td></tr>';
+        }).join("") + "</tbody></table></div>"
+      : '<div class="empty-note">No cycles logged yet — turnaround appears once packages come back.</div>') +
+    "</section>";
+}
+
+/* What lands on the desk this week and next, so nothing is a surprise. */
+function forecastPanel(list){
+  const out = list.filter(p => isLive(p) && withReviewer(p) && effDue(p));
+  const bands = [
+    { t:"Overdue",      lo:-9999, hi:-1, css:"--st-crit" },
+    { t:"Due today",    lo:0,     hi:0,  css:"--st-warn" },
+    { t:"This week",    lo:1,     hi:7,  css:"--st-warn" },
+    { t:"Next week",    lo:8,     hi:14, css:"--lane-house" },
+    { t:"Beyond",       lo:15,    hi:9999, css:"--st-good" }
+  ].map(b => ({ ...b, items: out.filter(p => { const n = daysToDue(p); return n != null && n >= b.lo && n <= b.hi; }) }))
+   .filter(b => b.items.length);
+  return '<section class="panel"><div class="panel-head"><h3>Return forecast</h3>' +
+    '<span class="hint">' + out.length + " awaiting return</span></div>" +
+    (bands.length
+      ? '<div class="panel-body" style="padding:14px 4px 4px"><table class="mini"><thead><tr>' +
+        '<th>When</th><th>Packages</th><th class="n">Sheets</th></tr></thead><tbody>' +
+        bands.map(b => "<tr><td><span class=\"pill\" style=\"background:transparent;color:var(" + b.css + ");padding-left:0\">" +
+          '<span class="dot"></span>' + esc(b.t) + "</span></td>" +
+          "<td>" + b.items.slice(0,4).map(p => '<button class="linkchip" data-act="openpkg" data-id="' + attr(p.id) + '">' + esc(p.num || "—") + "</button>").join(" ") +
+          (b.items.length > 4 ? ' <span class="num" style="color:var(--muted)">+' + (b.items.length - 4) + "</span>" : "") + "</td>" +
+          '<td class="n">' + b.items.reduce((a,p) => a + (Number(p.sheets) || 0), 0) + "</td></tr>").join("") +
+        "</tbody></table></div>"
+      : '<div class="empty-note">Nothing is out for review.</div>') +
     "</section>";
 }
 
@@ -982,7 +1208,7 @@ function projectCards(){
         (pr.gc ? "<span>GC " + esc(pr.gc) + "</span>" : "") +
         "<span>" + pk.length + " package" + (pk.length === 1 ? "" : "s") + "</span><span>" + sheets + " sheets</span>" +
         "<span>" + (Number(pr.reviewDays) || 14) + "-day review</span></span>" +
-      '<span class="stack">' + counts.map(c => c.n ? '<i style="flex:' + c.n + ';background:var(' + c.l.cssvar + ')"></i>' : "").join("") + "</span>" +
+      '<span class="stack">' + counts.map(c => c.n ? '<i style="flex:' + c.n + ";background:var(" + c.l.cssvar + ')"></i>' : "").join("") + "</span>" +
       '<span class="stack-key">' + counts.map(c =>
         '<span class="k"><span class="sw" style="background:var(' + c.l.cssvar + ')"></span>' + esc(c.l.label) + " <b>" + c.n + "</b></span>").join("") + "</span>" +
       "</button>";
@@ -995,6 +1221,7 @@ function portfolioHtml(){
   return banners() +
     '<section class="section">' + kpiStrip(list) + "</section>" +
     '<section class="section grid-2">' + agingPanel(list) + actionPanel(list) + "</section>" +
+    '<section class="section grid-2">' + scorecardPanel(list) + forecastPanel(list) + "</section>" +
     '<section class="section"><div class="section-head"><h2>Projects</h2>' +
       '<span class="hint">Each bar shows where that job’s packages sit right now. Click a job to open its log.</span></div>' +
       projectCards() + "</section>";
@@ -1004,7 +1231,7 @@ function portfolioHtml(){
 function mastTools(){
   const bad = state.conn !== "on";
   return (bad ? '<span class="conn ' + (state.conn === "bad" ? "bad" : "off") + '"><span class="led"></span>' +
-      esc(state.conn === "bad" ? "Sync error" : state.conn === "off" ? "Not connected" : "Connecting\u2026") + "</span>" : "") +
+      esc(state.conn === "bad" ? "Sync error" : state.conn === "off" ? "Not connected" : "Connecting…") + "</span>" : "") +
     selectHtml("flt:project", state.fProject, [{ v:"all", t:"All projects" }].concat(projectOpts())) +
     '<button class="btn primary" data-act="newpkg">+ Package</button>' +
     '<button class="btn ghost" data-act="theme" title="Colour theme — click to change">' +
@@ -1013,36 +1240,82 @@ function mastTools(){
       ? '<button class="whochip bare" data-act="who" title="Your edits are stamped ' + attr(state.who) + '"><span class="ini">' + esc(initials(state.who)) + "</span></button>"
       : '<button class="whochip plain" data-act="who" title="Stamp your edits with your name">Set name</button>');
 }
+
+const COLS = [
+  { k:"num",       t:"Sub #" },
+  { k:"job",       t:"Job" },
+  { k:"title",     t:"Package / drawing set" },
+  { k:"spec",      t:"Spec §" },
+  { k:"type",      t:"Type" },
+  { k:"seq",       t:"Seq / area" },
+  { k:"sheets",    t:"Sht" },
+  { k:"rev",       t:"Rev" },
+  { k:"status",    t:"Status" },
+  { k:"code",      t:"Code" },
+  { k:"bic",       t:"Ball in court" },
+  { k:"submitted", t:"Date submitted" },
+  { k:"due",       t:"Date due" },
+  { k:"returned",  t:"Date returned" },
+  { k:"ofsDue",    t:"Date due from OFS" },
+  { k:"days",      t:"Days" },
+  { k:null,        t:"Fab" },
+  { k:null,        t:"Drawings" }
+];
+
+function quickChips(){
+  const all = scopedPackages().filter(isLive);
+  const defs = [
+    { k:"all",      t:"All",            n:all.length,                                 sw:"" },
+    { k:"flagged",  t:"Needs action",   n:all.filter(p => actionReasons(p).length).length, sw:"--st-serious" },
+    { k:"overdue",  t:"Overdue",        n:all.filter(isOverdue).length,               sw:"--st-crit" },
+    { k:"ofs",      t:"Late from OFS",  n:all.filter(isLateFromOfs).length,           sw:"--st-crit" },
+    { k:"reviewer", t:"With reviewer",  n:all.filter(withReviewer).length,            sw:"--lane-review" },
+    { k:"resubmit", t:"Needs resubmit", n:all.filter(needsResubmit).length,           sw:"--st-warn" },
+    { k:"blocked",  t:"Held",           n:all.filter(isBlocked).length,               sw:"--st-warn" },
+    { k:"released", t:"Released",       n:all.filter(p => p.released).length,         sw:"--lane-released" }
+  ];
+  return '<div class="chips">' + defs.map(d =>
+    '<button class="chip" data-act="flag" data-k="' + attr(d.k) + '" aria-pressed="' + (state.fFlag === d.k) + '">' +
+    (d.sw ? '<span class="sw" style="background:var(' + d.sw + ')"></span>' : "") +
+    esc(d.t) + " <b>" + d.n + "</b></button>").join("") + "</div>";
+}
+
+function sevOf(p){
+  if (isOverdue(p) || isLateFromOfs(p)) return "crit";
+  if (needsResubmit(p) || isBlocked(p) || isDueSoon(p) || isOfsDueSoon(p)) return "warn";
+  if (p.released) return "good";
+  return "";
+}
+
 function logHtml(){
   const rows = filteredRows();
-  const flagOpts = [{v:"all",t:"All flags"},{v:"flagged",t:"Needs action"},{v:"overdue",t:"Overdue"},{v:"reviewer",t:"With reviewer"},
-    {v:"resubmit",t:"Needs resubmit"},{v:"blocked",t:"Held / blocked"},{v:"released",t:"Released for fab"}];
-  const stOpts = [{v:"all",t:"All statuses"}].concat(statusOpts);
-  const bcOpts = [{v:"all",t:"All ball-in-court"}].concat(BICS.filter(Boolean).map(b => ({v:b,t:b})));
-  const filtered = state.fStatus !== "all" || state.fBic !== "all" || state.fFlag !== "all" || state.q.trim() || state.fBucket;
-  const bucketChip = state.fBucket
-    ? '<span class="pill gold">Out ' + state.fBucket[0] + (state.fBucket[1] > 1000 ? "+" : "\u2013" + state.fBucket[1]) + ' days<button class="chipclear" data-act="clearbucket" style="padding:0 0 0 4px;text-decoration:none">\u2715</button></span>'
-    : "";
+  const scoped = scopedPackages();
+  const stOpts = [{ v:"all", t:"All statuses" }].concat(statusOpts);
+  const bcOpts = [{ v:"all", t:"All ball-in-court" }].concat(BICS.filter(Boolean).map(b => ({ v:b, t:b })));
+  const tyOpts = [{ v:"all", t:"All types" }].concat(TYPES.map(t => ({ v:t, t })));
+  const filtered = state.fStatus !== "all" || state.fBic !== "all" || state.fType !== "all" ||
+    state.fFlag !== "all" || state.q.trim() || state.fBucket;
 
   let body = "", lastProj = null;
   if (!rows.length){
-    body = '<tr><td colspan="16"><div class="empty-note">No packages match these filters.</div></td></tr>';
+    body = '<tr><td colspan="18"><div class="empty-note">' +
+      (scoped.length ? "No packages match these filters." : "No packages on this job yet — add the first drawing set.") + "</div></td></tr>";
   } else {
     rows.forEach(p => {
-      if (state.fProject === "all" && p.projectId !== lastProj){
+      if (state.fProject === "all" && !state.sortKey && p.projectId !== lastProj){
         lastProj = p.projectId;
         const pr = projOf(p.projectId);
-        body += '<tr class="grp"><td colspan="16"><span style="position:sticky;left:10px;display:inline-block">' +
+        body += '<tr class="grp"><td colspan="18"><span style="position:sticky;left:10px;display:inline-block">' +
           esc(pr ? (pr.name || "Untitled project") : "Unassigned") +
-          (pr && pr.number ? '  ·  Job ' + esc(pr.number) : "") + "</span></td></tr>";
+          (pr && pr.number ? "  ·  Job " + esc(pr.number) : "") + "</span></td></tr>";
       }
-      const due = effDue(p);
-      const auto = dueIsAuto(p);
+      const due = effDue(p), auto = dueIsAuto(p);
       const dueCls = isOverdue(p) ? " over" : (isDueSoon(p) ? " due-soon" : "");
-      body += "<tr>" +
-        '<td class="c-num"><span class="num" style="font-weight:600">' + esc(p.num || "\u2014") + "</span></td>" +
+      body += '<tr data-sev="' + sevOf(p) + '">' +
+        '<td class="c-num"><span class="num" style="font-weight:600">' + esc(p.num || "—") + "</span></td>" +
         '<td class="c-proj">' + selectHtml("pkg:" + p.id + ":projectId", p.projectId, projectOpts()) + "</td>" +
         '<td class="c-title"><button class="rowlink" data-act="openpkg" data-id="' + attr(p.id) + '">' + esc(p.title || "Untitled package") + "</button></td>" +
+        '<td class="c-spec"><span class="num">' + esc(p.spec || "—") + "</span></td>" +
         "<td>" + esc(p.type || "") + "</td>" +
         '<td><span class="num">' + esc(p.seq || "—") + "</span></td>" +
         '<td><span class="num">' + (Number(p.sheets) || 0) + "</span></td>" +
@@ -1054,6 +1327,8 @@ function logHtml(){
         '<td><span class="days' + dueCls + '" title="' + (auto ? "Auto: submitted + " + reviewDays(p) + " review days" : "Override entered in the package") + '">' +
           (due ? fmtDate(due) + (auto ? '<sup style="color:var(--faint);font-weight:400">auto</sup>' : "") : "—") + "</span></td>" +
         '<td><input type="date" class="' + (p.returned ? "" : "blank") + '" data-fk="pkg:' + attr(p.id) + ':returned" value="' + attr(p.returned || "") + '"' + (state.canWrite ? "" : " disabled") + "></td>" +
+        '<td><input type="date" class="' + (p.ofsDue ? (isLateFromOfs(p) ? "ofs-late" : isOfsDueSoon(p) ? "ofs-soon" : "") : "blank") +
+          '" title="Date the drawing set is due to us from the detailer" data-fk="pkg:' + attr(p.id) + ':ofsDue" value="' + attr(p.ofsDue || "") + '"' + (state.canWrite ? "" : " disabled") + "></td>" +
         "<td>" + daysCell(p) + "</td>" +
         '<td><label class="fabdot"><input type="checkbox" data-fk="pkg:' + attr(p.id) + ':released"' + (p.released ? " checked" : "") + (state.canWrite ? "" : " disabled") + ">" +
           (p.released && p.releasedOn ? '<span class="num">' + fmtDate(p.releasedOn) + "</span>" : "<span>fab</span>") + "</label></td>" +
@@ -1061,35 +1336,53 @@ function logHtml(){
         "</tr>";
     });
   }
+
+  const head = COLS.map(c => {
+    if (!c.k) return '<th class="plain">' + esc(c.t) + "</th>";
+    const on = state.sortKey === c.k;
+    return "<th" + (on ? ' aria-sort="' + (state.sortDir === "asc" ? "ascending" : "descending") + '"' : "") + ">" +
+      '<button class="sortbtn" data-act="sort" data-k="' + attr(c.k) + '">' + esc(c.t) +
+      '<span class="arw">' + (on && state.sortDir === "desc" ? "▼" : "▲") + "</span></button></th>";
+  }).join("");
+
+  const sheets = rows.reduce((a,p) => a + (Number(p.sheets) || 0), 0);
+  const overdue = rows.filter(isOverdue).length;
+
   return banners() +
     '<div class="filters">' +
-      '<input type="text" class="grow" data-fk="flt:q" placeholder="Search number, package, sequence, reviewer, holds…" value="' + attr(state.q) + '">' +
+      '<input type="search" class="grow" data-fk="flt:q" aria-label="Search the submittal log" ' +
+        'placeholder="Search number, package, spec, sequence, reviewer…" value="' + attr(state.q) + '">' +
       selectHtml("flt:status", state.fStatus, stOpts) +
+      selectHtml("flt:type", state.fType, tyOpts) +
       selectHtml("flt:bic", state.fBic, bcOpts) +
-      selectHtml("flt:flag", state.fFlag, flagOpts) + bucketChip +
-      (filtered ? '<button class="chipclear" data-act="clearfilters">Clear filters</button>' : "") +
-      '<span style="flex:1"></span><span class="eyebrow">' + rows.length + " of " + scopedPackages().length + " packages</span>" +
+      (state.fBucket ? '<span class="pill gold">Out ' + state.fBucket[0] + (state.fBucket[1] > 1000 ? "+" : "–" + state.fBucket[1]) +
+        ' days<button class="chipclear" data-act="clearbucket" style="padding:0 0 0 5px;text-decoration:none">✕</button></span>' : "") +
+      (filtered ? '<button class="chipclear" data-act="clearfilters">Clear</button>' : "") +
+      '<span style="flex:1"></span>' +
+      '<button class="btn sm" data-act="chase">Chase overdue</button>' +
       '<button class="btn sm" data-act="export">Export CSV</button>' +
     "</div>" +
-    '<div class="table-wrap"><table class="log"><thead><tr>' +
-      ["Sub #","Job","Package / drawing set","Type","Seq / area","Sht","Rev","Status","Code",
-       "Ball in court","Submitted","Due back","Returned","Days","Fab","Drawings"]
-      .map(h => "<th>" + esc(h) + "</th>").join("") +
-    "</tr></thead><tbody>" + body + "</tbody></table></div>" +
-    '<p style="font-size:11.5px;color:var(--muted);margin:10px 2px 0">Job, status, return code, ball-in-court and dates edit right in the grid and save for everyone \u2014 use the Job cell to move a package to the right project. ' +
-    'Open a row for drawing-set links, attachments, holds and revision history. Scroll the grid sideways for returned dates, days out, fab release and drawing links. ' +
-    'A due date marked <sup>auto</sup> is derived from the job’s contract review days; enter an override in the package.</p>';
+    '<div class="filters">' + quickChips() + "</div>" +
+    '<div class="grid-shell"><div class="table-wrap"><table class="log"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table></div>" +
+    '<div class="gridfoot">' +
+      "<span><b>" + rows.length + "</b> of <b>" + scoped.length + "</b> packages</span>" +
+      "<span><b>" + sheets + "</b> sheets shown</span>" +
+      (overdue ? '<span style="color:var(--st-crit)"><b style="color:var(--st-crit)">' + overdue + "</b> overdue</span>" : "") +
+      '<span style="flex:1"></span>' +
+      '<span class="wide-only">Scroll sideways for date returned, date due from OFS, days out, fab release and drawings · click a column head to sort · edits save for everyone</span>' +
+      '<span class="narrow-only">Sub # stays pinned — scroll sideways for the rest. Open a row for every field.</span>' +
+    "</div></div>";
 }
 
 function startHereHtml(){
   const hasProj = state.projects.length > 0;
   const steps = [
-    ["1", "Add the job", "Name, job number, GC and the contract review days out of the spec \u2014 that number drives every due-back date."],
-    ["2", "Add a package per drawing set", "One row per submittal, not per sheet: sequence or area, sheet count, and a link to wherever the set lives."],
-    ["3", "Log the submittal", "The date submitted starts the clock. Due back derives from the job\u2019s review days unless you override it."]
+    ["1", "Add the job", "Name, job number, GC and the contract review days out of the spec — that number drives every due-back date."],
+    ["2", "Add a package per drawing set", "One row per submittal, not per sheet: spec section, sequence or area, sheet count, and a link to wherever the set lives."],
+    ["3", "Log the submittal", "The date submitted starts the clock. Due back derives from the job’s review days unless you override it."]
   ];
   return '<section class="panel section"><div class="panel-head"><h3>Start here</h3>' +
-    '<span class="hint">' + (hasProj ? state.projects.length + " job" + (state.projects.length === 1 ? "" : "s") + " set up \u00b7 no packages yet" : "empty tracker") + "</span></div>" +
+    '<span class="hint">' + (hasProj ? state.projects.length + " job" + (state.projects.length === 1 ? "" : "s") + " set up · no packages yet" : "empty tracker") + "</span></div>" +
     '<div class="panel-body"><div class="start">' +
       steps.map(x => '<span class="n">' + x[0] + '</span><span><b>' + esc(x[1]) + '</b><span class="d">' + esc(x[2]) + "</span></span>").join("") +
     "</div>" +
@@ -1100,7 +1393,6 @@ function startHereHtml(){
     "</div></div></section>" +
     (hasProj ? '<section class="section"><div class="section-head"><h2>Projects</h2></div>' + projectCards() + "</section>" : "");
 }
-
 /* ============================ render: projects ============================ */
 function projectsHtml(){
   const projs = sortedProjects();
@@ -1190,13 +1482,16 @@ function drawerHtml(){
     '<div class="drawer-body">' +
 
       '<div class="block"><div class="eyebrow">Package</div>' +
-        '<div class="fgrid three">' +
-          fldText("pkg:" + p.id + ":num", "Submittal #", p.num) +
-          fldText("pkg:" + p.id + ":seq", "Sequence / area", p.seq) +
-          fldNum("pkg:" + p.id + ":sheets", "Sheet count", p.sheets) +
-        "</div>" +
         '<div class="fgrid">' +
           '<label class="fld span2"><span>Package / drawing set</span><input type="text" data-fk="pkg:' + attr(p.id) + ':title" value="' + attr(p.title || "") + '"' + (state.canWrite?"":" disabled") + "></label>" +
+        "</div>" +
+        '<div class="fgrid three">' +
+          fldText("pkg:" + p.id + ":num", "Submittal #", p.num) +
+          fldText("pkg:" + p.id + ":spec", "Spec section", p.spec) +
+          fldText("pkg:" + p.id + ":seq", "Sequence / area", p.seq) +
+        "</div>" +
+        '<div class="fgrid three">' +
+          fldNum("pkg:" + p.id + ":sheets", "Sheet count", p.sheets) +
           fldSel("pkg:" + p.id + ":type", "Type", p.type, typeOpts) +
           fldSel("pkg:" + p.id + ":projectId", "Project", p.projectId, projOpts) +
         "</div>" +
@@ -1209,10 +1504,12 @@ function drawerHtml(){
           fldSel("pkg:" + p.id + ":bic", "Ball in court", p.bic || "", bicOpts) +
           fldText("pkg:" + p.id + ":reviewer", "Reviewer / approver", p.reviewer) +
         "</div>" +
-        '<div class="fgrid three">' +
+        '<div class="fgrid four">' +
           fldDate("pkg:" + p.id + ":submitted", "Date submitted", p.submitted) +
-          fldDate("pkg:" + p.id + ":due", "Due back", p.due, auto && due ? "Auto " + fmtDate(due) + " (+" + reviewDays(p) + " days)" : "") +
+          fldDate("pkg:" + p.id + ":due", "Date due", p.due, auto && due ? "Auto " + fmtDate(due) + " (+" + reviewDays(p) + " days)" : "") +
           fldDate("pkg:" + p.id + ":returned", "Date returned", p.returned) +
+          fldDate("pkg:" + p.id + ":ofsDue", "Date due from OFS", p.ofsDue,
+            isLateFromOfs(p) ? Math.abs(daysToOfs(p)) + " days late from the detailer" : "") +
         "</div>" +
         '<p style="margin:0;font-size:12px;color:' + (isOverdue(p) ? "var(--st-crit)" : "var(--muted)") + '">' + esc(clock) + "</p>" +
       "</div>" +
@@ -1271,6 +1568,7 @@ function drawerHtml(){
     '<div class="drawer-foot">' +
       '<span class="stamp">' + (p.updatedBy ? "Last edited by " + esc(p.updatedBy) : "Last edited") +
         (p.updatedAt ? " · " + new Date(p.updatedAt).toLocaleString() : "") + "</span>" +
+      '<button class="btn" data-act="transmittal" data-id="' + attr(p.id) + '">Transmittal</button>' +
       '<button class="btn danger" data-act="delpkg" data-id="' + attr(p.id) + '">Delete</button>' +
       '<button class="btn" data-act="closedrawer">Done</button>' +
     "</div>" +
@@ -1332,6 +1630,7 @@ function fieldWrite(fk, el){
     if (which === "project"){ state.fProject = el.value; }
     else if (which === "status"){ state.fStatus = el.value; }
     else if (which === "bic"){ state.fBic = el.value; }
+    else if (which === "type"){ state.fType = el.value; }
     else if (which === "flag"){ state.fFlag = el.value; state.fBucket = null; }
     else if (which === "q"){ state.q = el.value; }
     render(); return;
@@ -1423,6 +1722,16 @@ document.addEventListener("click", e => {
   if (a === "dlfile"){ downloadFile(el.dataset.fid, el.dataset.name); return; }
   if (a === "nextrev"){ startNextRev(id); return; }
   if (a === "view-projects"){ state.view = "projects"; render(); return; }
+  if (a === "sort"){
+    const k = el.dataset.k;
+    if (state.sortKey === k) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    else { state.sortKey = k; state.sortDir = "asc"; }
+    render(); return;
+  }
+  if (a === "flag"){ state.fFlag = el.dataset.k; state.fBucket = null; render(); return; }
+  if (a === "chase"){ showChase(); return; }
+  if (a === "chase-save"){ saveChase(); return; }
+  if (a === "transmittal"){ makeTransmittal(id); return; }
   if (a === "theme"){
     const cur = themeMode();
     const next = cur === "system" ? "light" : cur === "light" ? "dark" : "";
@@ -1442,9 +1751,9 @@ document.addEventListener("click", e => {
   }
   if (a === "showflag"){ state.view = "log"; state.fFlag = "flagged"; state.fBucket = null; render(); return; }
   if (a === "clearbucket"){ state.fBucket = null; render(); return; }
-  if (a === "clearfilters"){ state.fStatus = "all"; state.fBic = "all"; state.fFlag = "all"; state.q = ""; state.fBucket = null; render(); return; }
+  if (a === "clearfilters"){ state.fStatus = "all"; state.fBic = "all"; state.fType = "all"; state.fFlag = "all"; state.q = ""; state.fBucket = null; render(); return; }
   if (a === "bucket"){
-    state.view = "log"; state.fFlag = "all"; state.fStatus = "all"; state.fBic = "all"; state.q = "";
+    state.view = "log"; state.fFlag = "all"; state.fStatus = "all"; state.fBic = "all"; state.fType = "all"; state.q = "";
     state.fBucket = [Number(el.dataset.lo), Number(el.dataset.hi)];
     render(); return;
   }

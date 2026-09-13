@@ -11,8 +11,8 @@
  */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi } from "vitest";
 
@@ -79,10 +79,16 @@ function renderDrawings() {
       <MemoryRouter initialEntries={["/Drawings"]}>
         <ProjectContext.Provider value={ctxValue}>
           <Drawings />
+          <LocationProbe />
         </ProjectContext.Provider>
       </MemoryRouter>
     </QueryClientProvider>
   );
+}
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location">{location.pathname + location.search}</output>;
 }
 
 describe("Drawings page (smoke)", () => {
@@ -95,5 +101,11 @@ describe("Drawings page (smoke)", () => {
     renderDrawings();
     // Eyebrow text is `DESIGN & DOCUMENTS · TEST PROJECT`
     expect(screen.getByText(/DESIGN & DOCUMENTS/)).toBeInTheDocument();
+  });
+
+  it("sends 'Back to the Hub' to the Detailing Control Center's Drawing Register", () => {
+    renderDrawings();
+    fireEvent.click(screen.getByRole("button", { name: /Back to the Hub/ }));
+    expect(screen.getByTestId("location").textContent).toBe("/DrawingSubmittalHub?hub_tab=drawings");
   });
 });

@@ -22,10 +22,10 @@ import {
   ArrowRight, FileQuestion, CircleDollarSign,
   AlertTriangle, Clock3, ShieldCheck, CalendarClock, ClipboardList,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { DecisionPanel, Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
-import { buildControlBoardModel } from "./drawingControlCenter.derive";
+import { adaptControlBoardFocus, buildControlBoardModel } from "./drawingControlCenter.derive";
+import type { HubTabKey } from "./hubLinks";
 import {
   InlineOwnerControl,
   InlineDateControl,
@@ -44,14 +44,21 @@ import {
   EmptyState,
 } from "./primitives";
 import {
-  canWriteDetailingState,
-  canWriteDueDate,
-  canWriteOwner,
-  canWriteReadinessFlags,
   error, warning, review, textMuted,
 } from "./format";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import type { ComponentType } from "react";
+import type { ElementStatusSummary } from "@/services/modelElementStatus";
+import type {
+  DrawingKpis,
+  ModelElementViewRow,
+  RevisionImpactViewRow,
+  SequenceReadinessRow,
+  SubmittalKpis,
+  TriageItem,
+  TriageModel,
+} from "./types";
+import { useControlBoardNavigation } from "./useControlBoardNavigation";
 
 type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
@@ -59,23 +66,31 @@ const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>
 type EscalationKind = "rfi" | "pco";
 
 export interface ControlBoardPanelProps {
-  triage: any;
-  kpis: any;
-  drawingKpis: any;
+  triage: TriageModel;
+  kpis: SubmittalKpis;
+  drawingKpis: DrawingKpis;
   isLoading: boolean;
-  onOpenTab: (key: string) => void;
+  onOpenTab: (key: HubTabKey) => void;
+  /**
+   * Opens an in-hub href (the hub passes a push-navigate). When given, queue
+   * rows and Open Work open the item's record (hubHrefForTriageItem), and
+   * Create submittal opens create on the hub's Submittal Register. Absent:
+   * rows and Open Work fall back to onOpenTab(routeTab), and Create
+   * submittal to the standalone /Submittals page.
+   */
+  onOpenHref?: (href: string) => void;
   /** Absent = the viewer lacks the project role these writes need (RLS: field+). */
-  onUpdateOwner?: (item: any, owner: string) => void;
-  onUpdateDueDate?: (item: any, date: string) => void;
-  onAdvanceDetailing?: (item: any, next: string) => void;
-  onToggleReadiness?: (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
-  sequenceReadiness: any[];
-  revisionImpact: any[];
+  onUpdateOwner?: (item: TriageItem, owner: string) => void;
+  onUpdateDueDate?: (item: TriageItem, date: string) => void;
+  onAdvanceDetailing?: (item: TriageItem, next: string) => void;
+  onToggleReadiness?: (item: TriageItem, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
+  sequenceReadiness: SequenceReadinessRow[];
+  revisionImpact: RevisionImpactViewRow[];
   isSaving: boolean;
-  onEscalate?: (item: any, kind: EscalationKind) => void;
+  onEscalate?: (item: TriageItem, kind: EscalationKind) => void;
   onCompareRevision?: (drawingId: string) => void;
-  modelMapping?: any;
-  modelElementRows?: any[];
+  modelMapping?: ElementStatusSummary | null;
+  modelElementRows?: ModelElementViewRow[];
   /** Live member count from the HEAD-count query; null while it is still loading. */
   modelRosterCount?: number | null;
   modelRosterCountLoading?: boolean;
@@ -88,25 +103,34 @@ export interface ControlBoardPanelProps {
 /** Map a triage item's due/action state to a kit Pill tone.
  *  board's colour semantics (overdue → danger, needs-action → review,
  *  due-soon → warn, else neutral). */
-function itemTone(item: any): PillTone {
+function itemTone(item: TriageItem): PillTone {
   if (item?.due?.overdue) return "danger";
   if (item?.needsAction) return "review";
   if (item?.due?.dueSoon) return "warn";
   return "neutral";
 }
 
-/** One clickable queue row that routes to the item's tab. */
-function QueueRow({ item, onOpenTab }: { item: any; onOpenTab: (k: string) => void }) {
+/** One clickable queue row. In the hub it opens the item's record (its
+ *  governing submittal, else its set's Sets & revisions view, else its tab);
+ *  without onOpenHref it routes to the item's tab. */
+function QueueRow({
+  item,
+  onOpen,
+}: {
+  item: TriageItem;
+  onOpen: (item: TriageItem) => void;
+}) {
+  const open = () => onOpen(item);
   return (
     <div
       className="cmd-row is-clickable"
       role="button"
       tabIndex={0}
-      onClick={() => onOpenTab(item.routeTab)}
+      onClick={open}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onOpenTab(item.routeTab);
+          open();
         }
       }}
     >
@@ -122,25 +146,21 @@ function QueueRow({ item, onOpenTab }: { item: any; onOpenTab: (k: string) => vo
 }
 
 export default function ControlBoardPanel(props: ControlBoardPanelProps) {
-  const navigate = useNavigate();
   const {
-    triage, kpis, isLoading, onOpenTab,
+    triage, kpis, isLoading, onOpenTab, onOpenHref,
     onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness,
     sequenceReadiness, revisionImpact, isSaving,
     onEscalate, onCompareRevision, modelMapping, modelElementRows,
     modelRosterCount, modelRosterCountLoading, modelRosterLoading, onLoadModelRoster,
     onImportModelElements,
   } = props;
+  const { openItem, createSubmittal } = useControlBoardNavigation({ onOpenTab, onOpenHref });
 
   if (isLoading) return <LoadingSkeleton />;
 
   const model = buildControlBoardModel(triage);
-  // `focus` carries runtime-only fields the container augments (isRR,
-  // _canDraft, _detailingStateRaw, _readiness) that aren't on the strict
-  // TriageItem type — accessed loosely here at the read-model boundary
-  // does (its triage prop is `any`). The derive layer stays strictly typed.
-  const focus: any = model.focusItem;
-  const focusRoute = focus?.routeTab || "matrix";
+  const focusView = adaptControlBoardFocus(model.focusItem);
+  const focus = focusView?.item ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -167,14 +187,14 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
               <InlineOwnerControl
                 currentOwner={focus.owner}
                 onAssign={(owner: string) => onUpdateOwner?.(focus, owner)}
-                disabled={isSaving || !onUpdateOwner || !canWriteOwner(focus)}
-                label={focus._ownerScope || "Owner"}
+                disabled={isSaving || !onUpdateOwner || !focusView?.writeAccess.owner}
+                label={focusView?.ownerLabel || "Owner"}
               />
               <InlineDateControl
                 currentDate={focus.dueDate}
                 isOverdue={focus.due?.overdue}
                 onSetDate={(date: string) => onUpdateDueDate?.(focus, date)}
-                disabled={isSaving || !onUpdateDueDate || !canWriteDueDate(focus)}
+                disabled={isSaving || !onUpdateDueDate || !focusView?.writeAccess.dueDate}
               />
             </div>
 
@@ -182,7 +202,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
                 validator, not on _canDraft: the latter is satisfied by packages
                 with no drawing_set_id, or whose effective state has already
                 reached the formal workflow, both of which the write rejects. */}
-            {focus.kind === "Drawing Set" && onAdvanceDetailing && canWriteDetailingState(focus) && (
+            {focus.kind === "Drawing Set" && onAdvanceDetailing && focusView?.writeAccess.detailingState && (
               <InlineDetailingControl
                 current={focus._detailingStateRaw}
                 onAdvance={(next: string) => onAdvanceDetailing?.(focus, next)}
@@ -198,7 +218,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
               <ReadinessPanel
                 readiness={focus._readiness}
                 onToggle={(field: "material_impacted" | "long_lead_impact", value: boolean) => onToggleReadiness?.(focus, field, value)}
-                disabled={isSaving || !onToggleReadiness || !canWriteReadinessFlags(focus)}
+                disabled={isSaving || !onToggleReadiness || !focusView?.writeAccess.readinessFlags}
               />
             )}
 
@@ -206,15 +226,15 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
               <button
                 type="button"
                 className="cmd-btn cmd-btn--primary"
-                onClick={() => onOpenTab(focusRoute)}
+                onClick={() => openItem(focus)}
               >
                 Open Work <ArrowRight size={14} />
               </button>
-              {focus.kind === "Drawing Set" && focus._drawingSetId && (focus._canDraft || focus._needsUnlinkedHint) && (
+              {focusView?.canCreateSubmittal && focus._drawingSetId && (
                 <button
                   type="button"
                   className="cmd-btn cmd-btn--ghost"
-                  onClick={() => navigate(`/Submittals?targetSetId=${encodeURIComponent(focus._drawingSetId)}`)}
+                  onClick={() => createSubmittal(focus._drawingSetId!)}
                   title="Create a submittal linked to this drawing set"
                 >
                   Create submittal
@@ -252,7 +272,10 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
             them list drawing sets AND unlinked submittals — tile said 2, list
             showed 6. Their labels are unscoped, so the value must be too. */}
         <TriageMetric icon={Clock3} label="Due This Week" value={triage.dueSoon.length} color={warning} sub="Next 7 days" />
-        <TriageMetric icon={ShieldCheck} label="Needs Action" value={triage.needsAction.length} color={review} sub="Rejected / resubmit" />
+        {/* Scoped like the KPI strip's "Submittals Needing Action" above the
+            board: this tile counts triage items, that one submittal rows.
+            One unscoped name for both read as a contradiction. */}
+        <TriageMetric icon={ShieldCheck} label="Items Needing Action" value={triage.needsAction.length} color={review} sub="Rejected / resubmit" />
         <TriageMetric icon={CalendarClock} label="Missing Dates" value={triage.noDate.length} color={textMuted} sub="Needs cleanup" />
         <TriageMetric icon={ClipboardList} label="Pending Review" value={kpis.pending} color={warning} sub={`${kpis.total} total submittals`} />
       </div>
@@ -262,7 +285,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
         <DecisionPanel title="Critical Work Queue" onViewAll={() => onOpenTab("matrix")}>
           {model.criticalItems.length === 0
             ? <EmptyState text="No critical work is currently queued." />
-            : model.criticalItems.map((it) => <QueueRow key={it.id} item={it} onOpenTab={onOpenTab} />)}
+            : model.criticalItems.map((it) => <QueueRow key={it.id} item={it} onOpen={openItem} />)}
         </DecisionPanel>
         <DecisionPanel title="Pipeline">
           {model.topStatuses.length === 0
@@ -280,12 +303,12 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
         <DecisionPanel title="Due Next 7 Days">
           {model.dueSoon.length === 0
             ? <EmptyState text="No drawing or submittal due dates in the next week." />
-            : model.dueSoon.map((it) => <QueueRow key={it.id} item={it} onOpenTab={onOpenTab} />)}
+            : model.dueSoon.map((it) => <QueueRow key={it.id} item={it} onOpen={openItem} />)}
         </DecisionPanel>
         <DecisionPanel title="Missing Due Dates">
           {model.noDate.length === 0
             ? <EmptyState text="All open items have due dates." />
-            : model.noDate.map((it) => <QueueRow key={it.id} item={it} onOpenTab={onOpenTab} />)}
+            : model.noDate.map((it) => <QueueRow key={it.id} item={it} onOpen={openItem} />)}
         </DecisionPanel>
       </div>
 

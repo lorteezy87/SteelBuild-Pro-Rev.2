@@ -12,6 +12,7 @@ import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import type { DrawingReviewRow } from "@/hooks/useDrawingReviews";
 import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import type { TransmittalRow } from "@/hooks/useTransmittals";
+import type { SetPackage } from "@/pages/drawingSubmittalHub/types";
 
 /** The six impact-board columns, in board order. Mirrors ImpactBoard's STATUSES. */
 export const IMPACT_STATUSES = ["open", "in_review", "ready", "blocked", "resolved", "closed"] as const;
@@ -28,36 +29,139 @@ export type ImpactStatus = (typeof IMPACT_STATUSES)[number];
 /** Sentinel for the set filter: rows with no drawing_set_name. */
 export const SET_FILTER_NONE = "__none__";
 
+export interface IndexedRegisterRow {
+  row: DrawingRegisterRow;
+  setName: string | null;
+  searchText: string;
+  pkg: SetPackage | null;
+}
+
+export interface DrawingRegisterIndex {
+  entries: IndexedRegisterRow[];
+  setNames: string[];
+  setCounts: ReadonlyMap<string, number>;
+  unassignedCount: number;
+}
+
+/**
+ * Build all dataset-scoped register lookups in one linear pass. Consumers keep
+ * this object memoized by register/package identity, so filtering only scans
+ * normalized strings and never repeats drawing-to-package joins.
+ */
+export function createDrawingRegisterIndex(
+  rows: DrawingRegisterRow[],
+  setPackages: SetPackage[] = [],
+): DrawingRegisterIndex {
+  const packageByDrawingId = new Map<string, SetPackage>();
+  const packageBySetId = new Map<string, SetPackage>();
+  for (const pkg of setPackages) {
+    if (pkg.setId) packageBySetId.set(String(pkg.setId), pkg);
+    for (const drawing of [...pkg.sheets, ...pkg.supersededSheets]) {
+      if (drawing.id) packageByDrawingId.set(String(drawing.id), pkg);
+    }
+  }
+
+  const names = new Set<string>();
+  const setCounts = new Map<string, number>();
+  let unassignedCount = 0;
+  const entries = rows.map((row): IndexedRegisterRow => {
+    const setName = (row.drawing_set_name || "").trim() || null;
+    if (setName) {
+      names.add(setName);
+      setCounts.set(setName, (setCounts.get(setName) || 0) + 1);
+    } else {
+      unassignedCount += 1;
+    }
+    const pkg = packageByDrawingId.get(row.drawing_id)
+      ?? (row.drawing_set_id ? packageBySetId.get(String(row.drawing_set_id)) : undefined)
+      ?? null;
+    return {
+      row,
+      setName,
+      pkg,
+      searchText: [
+        row.sheet_number,
+        row.sheet_title,
+        row.discipline,
+        row.drawing_set_name,
+        row.current_status,
+      ].map((value) => value || "").join("\n").toLowerCase(),
+    };
+  });
+
+  return {
+    entries,
+    setNames: [...names].sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })),
+    setCounts,
+    unassignedCount,
+  };
+}
+
+export function filterIndexedRegisterRows(
+  index: DrawingRegisterIndex,
+  query: string,
+  statusFilter: string,
+  setFilter: string = "all",
+): IndexedRegisterRow[] {
+  const q = query.trim().toLowerCase();
+  return index.entries.filter((entry) => {
+    if (statusFilter !== "all" && entry.row.current_status !== statusFilter) return false;
+    if (setFilter !== "all") {
+      if (setFilter === SET_FILTER_NONE) {
+        if (entry.setName) return false;
+      } else if (entry.row.drawing_set_name !== setFilter) {
+        return false;
+      }
+    }
+    return !q || entry.searchText.includes(q);
+  });
+}
+
 export function filterRegisterRows(
   rows: DrawingRegisterRow[],
   query: string,
   statusFilter: string,
   setFilter: string = "all",
 ): DrawingRegisterRow[] {
-  const q = query.trim().toLowerCase();
-  return rows.filter((r) => {
-    if (statusFilter !== "all" && r.current_status !== statusFilter) return false;
-    if (setFilter !== "all") {
-      if (setFilter === SET_FILTER_NONE) {
-        if (r.drawing_set_name) return false;
-      } else if ((r.drawing_set_name || "") !== setFilter) {
-        return false;
-      }
-    }
-    if (!q) return true;
-    return [r.sheet_number, r.sheet_title, r.discipline, r.drawing_set_name, r.current_status]
-      .some((v) => (v || "").toLowerCase().includes(q));
-  });
+  return filterIndexedRegisterRows(
+    createDrawingRegisterIndex(rows),
+    query,
+    statusFilter,
+    setFilter,
+  ).map((entry) => entry.row);
 }
 
 /** Unique non-empty set names from the register, sorted for the set filter dropdown. */
 export function listDrawingSetNames(rows: DrawingRegisterRow[]): string[] {
-  const names = new Set<string>();
-  for (const r of rows) {
-    const n = (r.drawing_set_name || "").trim();
-    if (n) names.add(n);
+  return createDrawingRegisterIndex(rows).setNames;
+}
+
+export interface IndexedRegisterSetGroup {
+  /** Null = unassigned (no set name). */
+  setName: string | null;
+  rows: IndexedRegisterRow[];
+}
+
+/**
+ * Group filtered rows by drawing_set_name. Named sets first (A–Z), unassigned last.
+ * Within each group, preserve the input order (already sheet_number-sorted by the view).
+ */
+export function groupIndexedRegisterRowsBySet(
+  rows: IndexedRegisterRow[],
+): IndexedRegisterSetGroup[] {
+  const map = new Map<string | null, IndexedRegisterRow[]>();
+  for (const entry of rows) {
+    const key = entry.setName;
+    const list = map.get(key);
+    if (list) list.push(entry);
+    else map.set(key, [entry]);
   }
-  return [...names].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+  const named = [...map.keys()].filter((k): k is string => k != null)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+  const out: IndexedRegisterSetGroup[] = named.map((setName) => ({ setName, rows: map.get(setName)! }));
+  if (map.has(null)) out.push({ setName: null, rows: map.get(null)! });
+  return out;
 }
 
 export interface RegisterSetGroup {
@@ -66,23 +170,53 @@ export interface RegisterSetGroup {
   rows: DrawingRegisterRow[];
 }
 
-/**
- * Group filtered rows by drawing_set_name. Named sets first (A–Z), unassigned last.
- * Within each group, preserve the input order (already sheet_number-sorted by the view).
- */
 export function groupRegisterRowsBySet(rows: DrawingRegisterRow[]): RegisterSetGroup[] {
-  const map = new Map<string | null, DrawingRegisterRow[]>();
-  for (const r of rows) {
-    const key = (r.drawing_set_name || "").trim() || null;
-    const list = map.get(key);
-    if (list) list.push(r);
-    else map.set(key, [r]);
+  return groupIndexedRegisterRowsBySet(createDrawingRegisterIndex(rows).entries)
+    .map((group) => ({
+      setName: group.setName,
+      rows: group.rows.map((entry) => entry.row),
+    }));
+}
+
+export type RegisterDisplayRow =
+  | { kind: "sheet"; entry: IndexedRegisterRow }
+  | { kind: "group"; key: string; label: string; count: number; collapsed: boolean };
+
+export function buildRegisterDisplayRows(
+  rows: IndexedRegisterRow[],
+  groupBySet: boolean,
+  collapsed: ReadonlySet<string>,
+): RegisterDisplayRow[] {
+  if (!groupBySet) return rows.map((entry) => ({ kind: "sheet", entry }));
+
+  const displayRows: RegisterDisplayRow[] = [];
+  for (const group of groupIndexedRegisterRowsBySet(rows)) {
+    const key = group.setName ?? SET_FILTER_NONE;
+    const isCollapsed = collapsed.has(key);
+    displayRows.push({
+      kind: "group",
+      key,
+      label: group.setName || "Unassigned",
+      count: group.rows.length,
+      collapsed: isCollapsed,
+    });
+    if (!isCollapsed) {
+      for (const entry of group.rows) displayRows.push({ kind: "sheet", entry });
+    }
   }
-  const named = [...map.keys()].filter((k): k is string => k != null)
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-  const out: RegisterSetGroup[] = named.map((setName) => ({ setName, rows: map.get(setName)! }));
-  if (map.has(null)) out.push({ setName: null, rows: map.get(null)! });
-  return out;
+  return displayRows;
+}
+
+export function firstVisibleDrawingByPackage(
+  rows: IndexedRegisterRow[],
+): ReadonlyMap<string, string> {
+  const first = new Map<string, string>();
+  for (const entry of rows) {
+    if (entry.pkg && !first.has(entry.pkg.key)) {
+      first.set(entry.pkg.key, entry.row.drawing_id);
+    }
+  }
+  return first;
 }
 
 // ── Review queue ────────────────────────────────────────────────────────────

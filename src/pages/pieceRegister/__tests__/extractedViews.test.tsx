@@ -84,6 +84,45 @@ describe("PieceRegisterArchiveDialog", () => {
     fireEvent.mouseDown(dialog.parentElement!);
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
+
+  it("names skipped pieces and blocks confirm when nothing is archivable", () => {
+    const onConfirm = vi.fn();
+    const blockedPieces = Array.from({ length: 10 }, (_, index) => ({
+      id: `p${index}`,
+      pieceMark: `B${index}`,
+      lotCode: "A",
+      reason: "held" as const,
+    }));
+
+    render(
+      <PieceRegisterArchiveDialog
+        selectedCount={10}
+        archivableCount={0}
+        blockedPieces={blockedPieces}
+        archiveReason="Duplicate import"
+        archiveConfirmation="ARCHIVE 0 PIECES"
+        archiveConfirmationText="ARCHIVE 0 PIECES"
+        isPending={false}
+        onReasonChange={vi.fn()}
+        onConfirmationChange={vi.fn()}
+        onCancel={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Archive 0 pieces?" })).toBeInTheDocument();
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("None of the selected pieces can be archived.");
+    expect(status).toHaveTextContent(
+      "Skipped — can't be archived: B0 lot A (held), B1 lot A (held)",
+    );
+    expect(status).toHaveTextContent("B7 lot A (held), +2 more");
+    expect(status).not.toHaveTextContent("B8 lot A");
+    const confirm = screen.getByRole("button", { name: "Archive pieces" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });
 
 describe("PieceRegisterImportView", () => {

@@ -37,7 +37,9 @@
     "cap:copy": "cap copy ios",
     "cap:open": "cap open ios",
     "ios": "npm run cap:sync && cap open ios",
-    "supabase:drift": "node scripts/supabase-drift-check.mjs"
+    "supabase:drift": "node scripts/supabase-drift-check.mjs",
+    "supabase:reconcile:plan": "node scripts/supabase-reconciliation-plan.mjs",
+    "supabase:delete-deprecated-fns": "node scripts/delete-deprecated-edge-functions.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

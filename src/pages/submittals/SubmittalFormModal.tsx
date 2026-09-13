@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import type { ComponentType } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./uiCompat";
@@ -6,7 +6,7 @@ import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import DrawingSetSelectorRaw from "@/components/submittals/DrawingSetSelector";
 import { STATUSES, TYPES, BIC_CHOICES } from "./format";
 import { DRAWING_TYPES, type DrawingType } from "@/lib/submittalComponents";
-import { functions } from "@/api/supabaseClient";
+import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import type { DrawingSet, Submittal } from "./types";
 
 // DrawingSetSelector is still .jsx, so TS infers its array props from `[]`
@@ -79,72 +79,68 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
     drawing_set_ids:  Array.isArray(initial.drawing_set_ids) ? initial.drawing_set_ids : [],
   });
 
-  // Auto-number new submittals on mount
-  useEffect(() => {
-    if (!initial.id && projectId) {
-      (async () => {
-        try {
-          const { data } = await functions.invoke("numberSequence", {
-            project_id: projectId,
-            record_type: "submittal",
-          });
-          if (data?.number) {
-            setField("submittal_number", data.number);
-          }
-        } catch (err) {
-          console.error("Failed to auto-number submittal:", err);
-          // We don't toast here to avoid interrupting the user; they can still type it manually.
-        }
-      })();
-    }
-  }, [initial.id, projectId]);
-
   const setField = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
   const isEdit = !!initial.id;
   const submitInFlight = useRef(false);
 
   const handleSubmit = async () => {
     if (saving || submitInFlight.current) return;
-    const number = form.submittal_number.trim();
-    if (!number || !form.title.trim()) {
-      toast.error("Submittal number + title are required");
+    let number = form.submittal_number.trim();
+    if (!form.title.trim()) {
+      toast.error("Title is required");
       return;
     }
-    // Block a duplicate up front (the DB enforces unique (project_id,
-    // submittal_number); without this the user gets a raw 409). The set the
-    // parent passes already excludes the row being edited, so re-saving an
-    // edit with its own number is fine.
-    if (existingNumbers?.has(number)) {
-      toast.error(`Submittal # "${number}" already exists in this project — use a different number.`);
+    if (isEdit && !number) {
+      toast.error("Submittal number is required");
       return;
     }
     if (requireLinkedSet && (!Array.isArray(form.drawing_set_ids) || form.drawing_set_ids.length === 0)) {
       toast.error("Link at least one drawing set — this submittal was opened from a set.");
       return;
     }
-    const record: Record<string, any> = {
-      ...form,
-      project_id:    projectId,
-      project_name:  projectName,
-      round_number:  Number(form.round_number) || 1,
-      submitted_date: form.submitted_date || null,
-      required_date:  form.required_date  || null,
-    };
-    // Phase 3 splitting: on a spin-off, stamp the parent link + reason so the
-    // new child's lineage is set at create time. Not a spin-off ⇒ these keys
-    // are omitted entirely (a plain create is byte-identical to today).
-    if (isSplit && parentSubmittal?.id) {
-      record.parent_submittal_id = parentSubmittal.id;
-      record.split_reason = splitReason.trim() || null;
-    }
-    // Phase 4: on CREATE, hand the caller the chosen drawing types so it can
-    // create the component rows after the submittal insert. Omitted on edit and
-    // when the flag is off (never emitted empty ⇒ plain create is unchanged).
-    if (drawingTypesEnabled && !isEdit && drawingTypes.length > 0) {
-      record.drawing_types = drawingTypes;
-    }
     submitInFlight.current = true;
     try {
+      if (!number) {
+        if (!projectId) {
+          toast.error("Select a project before creating a submittal.");
+          return;
+        }
+        try {
+          number = await getNextFormattedNumber({
+            projectId,
+            recordType: "Submittal",
+            entityName: "Submittal",
+            fieldName: "submittal_number",
+            prefix: "SUB-",
+          });
+        } catch (error) {
+          console.error("Failed to auto-number submittal:", error);
+          toast.error("Could not allocate a submittal number. Try again.");
+          return;
+        }
+      }
+      // The DB enforces unique (project_id, submittal_number). The parent set
+      // excludes the row being edited, so re-saving its own number is valid.
+      if (existingNumbers?.has(number)) {
+        toast.error(`Submittal # "${number}" already exists in this project — use a different number.`);
+        return;
+      }
+      const record: Record<string, any> = {
+        ...form,
+        submittal_number: number,
+        project_id: projectId,
+        project_name: projectName,
+        round_number: Number(form.round_number) || 1,
+        submitted_date: form.submitted_date || null,
+        required_date: form.required_date || null,
+      };
+      if (isSplit && parentSubmittal?.id) {
+        record.parent_submittal_id = parentSubmittal.id;
+        record.split_reason = splitReason.trim() || null;
+      }
+      if (drawingTypesEnabled && !isEdit && drawingTypes.length > 0) {
+        record.drawing_types = drawingTypes;
+      }
       await onSubmit(record);
     } finally {
       submitInFlight.current = false;
@@ -164,7 +160,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 8 }}>
           <div style={{ gridColumn: "1 / span 1" }}>
             <Label>Submittal # *</Label>
-            <Input value={form.submittal_number} onChange={(e) => setField("submittal_number", e.target.value)} placeholder="e.g. 05-1000" />
+            <Input value={form.submittal_number} onChange={(e) => setField("submittal_number", e.target.value)} placeholder="Auto-assigned if blank" />
           </div>
           <div>
             <Label>Revision</Label>

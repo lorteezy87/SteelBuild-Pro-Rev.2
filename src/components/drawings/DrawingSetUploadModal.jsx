@@ -10,6 +10,7 @@ import SuccessStep from "./uploadSteps/SuccessStep";
 import { useUploadWizardState } from "./upload/useUploadWizardState";
 import { useFileUploadAndExtract } from "./upload/useFileUploadAndExtract";
 import { useDrawingSetCreation } from "./upload/useDrawingSetCreation";
+import { usePermissions } from "@/services/permissions";
 
 // ─── Main Modal ──────────────────────────────────────────────────────
 //
@@ -32,6 +33,12 @@ export default function DrawingSetUploadModal({
 }) {
   const qc = useQueryClient();
   const state = useUploadWizardState({ onClose });
+  // Marking another set's pages superseded writes drawings. Production RLS
+  // requires pm for drawings INSERT/UPDATE, so gate on create (pm), not the
+  // client's looser drawing:edit override. RLS and the set-lock trigger stay
+  // authoritative; any refusal is reported per page on the Success step.
+  const { can } = usePermissions();
+  const canSupersede = can("create", "drawing");
   const {
     step, setStep,
     files, setFiles,
@@ -41,6 +48,7 @@ export default function DrawingSetUploadModal({
     fileResults,
     createdCount,
     processError,
+    supersedeResult,
     aiFilledFields,
     uploadBatchId,
     reset,
@@ -48,7 +56,7 @@ export default function DrawingSetUploadModal({
   } = state;
 
   const { handleUploadAndProcess } = useFileUploadAndExtract({ files, meta, activeProject, state });
-  const { handleCreate } = useDrawingSetCreation({ meta, activeProject, fileResults, uploadBatchId, onComplete, qc, state });
+  const { handleCreate } = useDrawingSetCreation({ meta, activeProject, fileResults, uploadBatchId, onComplete, qc, state, canSupersede });
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -73,8 +81,8 @@ export default function DrawingSetUploadModal({
           {step === 1 && <SetInfoStep meta={meta} setMeta={setMeta} onBack={() => setStep(0)} onNext={() => setStep(2)} projectName={activeProject?.name} existingSetNames={existingSetNames} />}
           {step === 2 && <FileDropStep files={files} setFiles={setFiles} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} setName={meta.setName} />}
           {step === 3 && <ProcessingStep processingStatus={processingStatus} onCancel={reset} error={processError} />}
-          {step === 4 && <ReviewStep sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} setMeta={setMeta} aiFilledFields={aiFilledFields} onBack={() => setStep(2)} onCreate={handleCreate} existingDrawings={existingDrawings} />}
-          {step === 5 && <SuccessStep createdCount={createdCount} fileResults={fileResults} onViewLog={handleClose} onUploadAnother={reset} />}
+          {step === 4 && <ReviewStep sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} setMeta={setMeta} aiFilledFields={aiFilledFields} onBack={() => setStep(2)} onCreate={handleCreate} existingDrawings={existingDrawings} canSupersede={canSupersede} projectId={activeProject?.id ?? null} />}
+          {step === 5 && <SuccessStep createdCount={createdCount} fileResults={fileResults} processError={processError} supersedeResult={supersedeResult} onViewLog={handleClose} onUploadAnother={reset} />}
         </div>
       </DialogContent>
     </Dialog>

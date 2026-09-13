@@ -19,70 +19,27 @@
  * Deferred: print/PDF export, AI-generated bullets, drag-to-reorder.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Trash2, X, Highlighter, CalendarDays, FolderTree as FolderTreeIcon } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, X, CalendarDays, FolderTree as FolderTreeIcon } from "lucide-react";
 import { toast } from "sonner";
-import { entities } from "@/api/supabaseClient";
 import { CommandBar, Button } from "@/components/design-system";
-import { logActivity } from "@/services/auditLogger";
-import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { useOrg } from "@/components/shared/OrgContext";
 import { usePermissions } from "@/services/permissions";
-import { invalidateEntity } from "@/services/cacheRegistry";
 import { FolderTree } from "@/components/productionnotes/FolderTree";
 import { FolderLinkDialog } from "@/components/productionnotes/FolderLinkDialog";
-import {
-  archiveNoteFolder,
-  createNoteFolder,
-  listVisibleNoteFolders,
-  renameNoteFolder,
-  setNoteFolderLinks,
-} from "@/lib/noteFolders/repository";
-import { noteFolderQueryKeys } from "@/lib/noteFolders/queryKeys";
+import { ProductionNoteRows } from "@/components/productionnotes/ProductionNoteRows";
 import { canManageFolderLinks, canOrganizeFolders } from "@/lib/noteFolders/domain";
-
-// ─── Date helpers ──────────────────────────────────────────────────────────
-const toISODate = (d) => {
-  const dt = d instanceof Date ? d : new Date(d);
-  const yyyy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-/**
- * Default meeting date = the most recent Tuesday on or before today.
- * (User runs the meeting on Tuesdays per the OneNote example "4/21/2026"
- * which was a Tuesday. This is documented in the commit body.)
- */
-const mostRecentTuesday = () => {
-  const today = new Date();
-  const dow = today.getDay(); // 0 = Sun, 2 = Tue
-  const diff = (dow - 2 + 7) % 7;
-  today.setDate(today.getDate() - diff);
-  return toISODate(today);
-};
-
-const formatLongDate = (iso) => {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt
-    .toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
-    .toUpperCase()
-    .replace(",", "");
-};
-
-const shiftDate = (iso, days) => {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + days);
-  return toISODate(dt);
-};
+import {
+  deriveProductionNotesViewModel,
+  formatLongDate,
+  mostRecentTuesday,
+  shiftDate,
+} from "@/pages/productionNotes/productionNotesDerive";
+import { useProductionNotesWorkspace } from "@/pages/productionNotes/useProductionNotesWorkspace";
 
 export default function ProductionNotes() {
-  const qc = useQueryClient();
   const { currentOrg } = useOrg();
   const { role } = usePermissions();
   const orgId = currentOrg?.id ?? null;
@@ -92,34 +49,41 @@ export default function ProductionNotes() {
   const [meetingDate, setMeetingDate] = useState(mostRecentTuesday());
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectPickerQuery, setProjectPickerQuery] = useState("");
-  const [draftBullet, setDraftBullet] = useState({}); // { [projectId]: string }
-  const draftInputRefs = useRef({});
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [folderNavOpen, setFolderNavOpen] = useState(false);
   const [linkingFolder, setLinkingFolder] = useState(null);
 
-  // ─── Data ───────────────────────────────────────────────────────────────
-  const { data: projects = [] } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => entities.Project.list(),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const foldersQuery = useQuery({
-    queryKey: noteFolderQueryKeys.workspace(orgId, false),
-    queryFn: () => listVisibleNoteFolders({ orgId }),
-    enabled: Boolean(orgId),
-    staleTime: 30 * 1000,
+  const {
+    projectsQuery,
+    foldersQuery,
+    notesQuery,
+    selectedFolder,
+    activeFolderId,
+    createNote: createMut,
+    updateNote: updateMut,
+    deleteNote: deleteMut,
+    createFolder: createFolderMut,
+    renameFolder: renameFolderMut,
+    archiveFolder: archiveFolderMut,
+    linkFolder: linkFolderMut,
+  } = useProductionNotesWorkspace({
+    orgId,
+    meetingDate,
+    selectedFolderId,
+    onSelectedFolderArchived: setSelectedFolderId,
+    onLinksUpdated: () => setLinkingFolder(null),
   });
   const folderWorkspace = foldersQuery.data;
   const folders = folderWorkspace?.folders ?? [];
   const folderWorkspaceReady = Boolean(folderWorkspace && !foldersQuery.isError);
-  const selectedFolder =
-    folders.find((folder) => folder.id === selectedFolderId) ||
-    folders.find((folder) => folder.id === folderWorkspace?.general_notes_id) ||
-    folders[0] ||
-    null;
-  const activeFolderId = selectedFolder?.id ?? null;
+  const projects = projectsQuery.data ?? [];
+  const notes = notesQuery.data ?? [];
+  const {
+    isLoading: notesLoading,
+    isError: notesError,
+    error: notesErrorValue,
+    refetch: refetchNotes,
+  } = notesQuery;
 
   useEffect(() => {
     if (!selectedFolderId && folderWorkspace?.general_notes_id) {
@@ -127,177 +91,11 @@ export default function ProductionNotes() {
     }
   }, [selectedFolderId, folderWorkspace?.general_notes_id]);
 
-  // All notes for the selected meeting date + folder (RLS also hides folders
-  // the caller cannot access via the every-job rule).
-  const {
-    data: notes = [],
-    isLoading: notesLoading,
-    isError: notesError,
-    error: notesErrorValue,
-    refetch: refetchNotes,
-  } = useQuery({
-    queryKey: ["production-notes", meetingDate, activeFolderId],
-    queryFn: () =>
-      entities.ProductionNote.filter(
-        activeFolderId ? { note_date: meetingDate, folder_id: activeFolderId } : { note_date: meetingDate },
-        "created_at",
-      ),
-    enabled: Boolean(activeFolderId),
-    staleTime: 30 * 1000,
-  });
-
-  const notesKey = ["production-notes", meetingDate, activeFolderId];
-
-  const refreshFolders = () => {
-    qc.invalidateQueries({ queryKey: ["note-folders"] });
-    invalidateEntity(qc, "note_folder");
-    invalidateEntity(qc, "production_note");
-  };
-
-  // ─── Mutations ──────────────────────────────────────────────────────────
-  const createMut = useMutation({
-    // Multi-project workspace: stamp the row's selected project, not nav project.
-    mutationFn: (data) => entities.ProductionNote.create(withProjectId(data, data.project_id)),
-    onMutate: async (data) => {
-      await qc.cancelQueries({ queryKey: notesKey });
-      const previous = qc.getQueryData(notesKey);
-      const optimistic = { ...data, id: `tmp-${Date.now()}-${Math.random()}`, _optimistic: true };
-      qc.setQueryData(notesKey, (old = []) => [...old, optimistic]);
-      return { previous, optimisticId: optimistic.id };
-    },
-    onError: (err, _data, ctx) => {
-      if (ctx?.previous) qc.setQueryData(notesKey, ctx.previous);
-      toast.error(toUserErrorMessage(err, "Failed to add bullet"));
-    },
-    onSuccess: (record, vars) => {
-      qc.invalidateQueries({ queryKey: ["production-notes"] });
-      logActivity("production_note", "created", record, {
-        projectId: vars.project_id,
-        projectName: vars.project_name,
-        description: `Added bullet to ${vars.project_name} (${meetingDate})`,
-      });
-    },
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }) => entities.ProductionNote.update(id, data),
-    onMutate: async ({ id, data }) => {
-      await qc.cancelQueries({ queryKey: notesKey });
-      const previous = qc.getQueryData(notesKey);
-      qc.setQueryData(notesKey, (old = []) =>
-        old.map((n) => (n.id === id ? { ...n, ...data } : n))
-      );
-      return { previous };
-    },
-    onError: (err, _data, ctx) => {
-      if (ctx?.previous) qc.setQueryData(notesKey, ctx.previous);
-      toast.error(toUserErrorMessage(err, "Update failed"));
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes"] }),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id) => entities.ProductionNote.delete(id),
-    onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: notesKey });
-      const previous = qc.getQueryData(notesKey);
-      qc.setQueryData(notesKey, (old = []) => old.filter((n) => n.id !== id));
-      return { previous };
-    },
-    onError: (err, _id, ctx) => {
-      if (ctx?.previous) qc.setQueryData(notesKey, ctx.previous);
-      toast.error(toUserErrorMessage(err, "Delete failed"));
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes"] }),
-  });
-
-  const createFolderMut = useMutation({
-    mutationFn: ({ parentFolderId, name }) =>
-      createNoteFolder({ orgId, name, parentFolderId }),
-    onSuccess: () => {
-      refreshFolders();
-      toast.success("Folder created");
-    },
-    onError: (err) => toast.error(toUserErrorMessage(err, "Could not create folder")),
-  });
-
-  const renameFolderMut = useMutation({
-    mutationFn: ({ folder, name }) =>
-      renameNoteFolder({ folderId: folder.id, name, expectedVersion: folder.version }),
-    onSuccess: () => {
-      refreshFolders();
-      toast.success("Folder renamed");
-    },
-    onError: (err) => toast.error(toUserErrorMessage(err, "Could not rename folder")),
-  });
-
-  const archiveFolderMut = useMutation({
-    mutationFn: (folder) =>
-      archiveNoteFolder({ folderId: folder.id, expectedVersion: folder.version }),
-    onSuccess: (_data, folder) => {
-      if (selectedFolderId === folder.id) setSelectedFolderId(folderWorkspace?.general_notes_id ?? null);
-      refreshFolders();
-      toast.success("Folder archived");
-    },
-    onError: (err) => toast.error(toUserErrorMessage(err, "Could not archive folder")),
-  });
-
-  const linkFolderMut = useMutation({
-    mutationFn: ({ folder, projectIds, makeIndependent }) =>
-      setNoteFolderLinks({
-        folderId: folder.id,
-        projectIds,
-        expectedVersion: folder.version,
-        makeIndependent,
-      }),
-    onSuccess: () => {
-      setLinkingFolder(null);
-      refreshFolders();
-      qc.invalidateQueries({ queryKey: ["production-notes"] });
-      toast.success("Job links updated");
-    },
-    onError: (err) => toast.error(toUserErrorMessage(err, "Could not update job links")),
-  });
-
-  // ─── Derived: group notes by project ────────────────────────────────────
-  const projectsById = useMemo(() => {
-    const m = new Map();
-    projects.forEach((p) => m.set(p.id, p));
-    return m;
-  }, [projects]);
-
-  // Each project's bullets, in insertion order. Skip optimistic-only projects.
-  const projectRows = useMemo(() => {
-    const grouped = new Map();
-    notes.forEach((n) => {
-      if (!n.project_id) return;
-      if (!grouped.has(n.project_id)) grouped.set(n.project_id, []);
-      grouped.get(n.project_id).push(n);
-    });
-    // Sort by project name for stable ordering.
-    return Array.from(grouped.entries())
-      .map(([projectId, bullets]) => ({
-        projectId,
-        project: projectsById.get(projectId),
-        bullets,
-      }))
-      .filter((r) => r.project) // hide rows whose project was deleted
-      .sort((a, b) => (a.project?.name || "").localeCompare(b.project?.name || ""));
-  }, [notes, projectsById]);
-
-  const projectsWithRows = useMemo(() => new Set(projectRows.map((r) => r.projectId)), [projectRows]);
-
-  const availableProjects = useMemo(() => {
-    const q = projectPickerQuery.trim().toLowerCase();
-    return projects
-      .filter((p) => !projectsWithRows.has(p.id))
-      .filter((p) =>
-        !q ||
-        (p.name || "").toLowerCase().includes(q) ||
-        (p.project_number || "").toLowerCase().includes(q)
-      )
-      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  }, [projects, projectsWithRows, projectPickerQuery]);
+  const { projectsById, projectRows, availableProjects, totalBullets, highlightedCount } =
+    useMemo(
+      () => deriveProductionNotesViewModel(projects, notes, projectPickerQuery),
+      [notes, projectPickerQuery, projects],
+    );
 
   // ─── Actions ────────────────────────────────────────────────────────────
   const addProjectRow = (project) => {
@@ -358,10 +156,6 @@ export default function ProductionNotes() {
   const deleteBullet = (note) => {
     deleteMut.mutate(note.id);
   };
-
-  // ─── Render ─────────────────────────────────────────────────────────────
-  const totalBullets = notes.length;
-  const highlightedCount = notes.filter((n) => n.is_high_priority).length;
 
   return (
     <div className="sb-dashboard-reference-page" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-page)" }}>
@@ -612,17 +406,14 @@ export default function ProductionNotes() {
               </Button>
             </div>
           ) : (
-            projectRows.map((row) => (
-              <ProjectRow
-                key={row.projectId}
-                row={row}
-                onUpdateBulletText={updateBulletText}
-                onUpdateBulletDates={updateBulletDates}
-                onToggleHighlight={toggleHighlight}
-                onDeleteBullet={deleteBullet}
-                onAddBullet={addBullet}
-              />
-            ))
+            <ProductionNoteRows
+              rows={projectRows}
+              onUpdateBulletText={updateBulletText}
+              onUpdateBulletDates={updateBulletDates}
+              onToggleHighlight={toggleHighlight}
+              onDeleteBullet={deleteBullet}
+              onAddBullet={addBullet}
+            />
           )}
         </div>
       </div>
@@ -795,188 +586,6 @@ export default function ProductionNotes() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ─── H4 fix: BulletRow + ProjectRow extracted to module scope ────────────────
-// Previously defined INSIDE ProductionNotes, causing re-creation on every
-// render which destroyed input focus and defeated optimistic updates.
-
-function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, onUpdateBulletDates, onToggleHighlight, onDeleteBullet }) {
-  const [text, setText] = useState(note.content || "");
-  // Local state so optimistic/refetch races cannot clear the date inputs mid-edit.
-  const [dateNoted, setDateNoted] = useState(note.date_noted || "");
-  const [dateDue, setDateDue] = useState(note.date_due || "");
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    setText(note.content || "");
-  }, [note.id, note.content]);
-
-  useEffect(() => {
-    setDateNoted(note.date_noted || "");
-    setDateDue(note.date_due || "");
-  }, [note.id, note.date_noted, note.date_due]);
-
-  const isTempId = !!note._optimistic || String(note.id || "").startsWith("tmp-");
-
-  const commit = () => {
-    const trimmed = text.replace(/\s+$/, "");
-    if (trimmed !== (note.content || "")) {
-      onUpdateBulletText(note, trimmed);
-    }
-  };
-
-  const commitDate = (field, value) => {
-    if (isTempId) return;
-    const next = value || null;
-    const prev = note[field] || null;
-    if (next === prev) return;
-    onUpdateBulletDates(note, { [field]: next });
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      commit();
-      if (isLast) {
-        if (text.trim()) onCreateNext();
-      } else {
-        const all = document.querySelectorAll(`[data-bullet-project="${projectId}"] [data-bullet-input]`);
-        const idx = Array.from(all).indexOf(e.currentTarget);
-        if (idx >= 0 && all[idx + 1]) all[idx + 1].focus();
-      }
-    } else if (e.key === "Backspace" && text === "" && !note._optimistic) {
-      e.preventDefault();
-      const all = document.querySelectorAll(`[data-bullet-project="${projectId}"] [data-bullet-input]`);
-      const idx = Array.from(all).indexOf(e.currentTarget);
-      onDeleteBullet(note);
-      setTimeout(() => {
-        const updated = document.querySelectorAll(`[data-bullet-project="${projectId}"] [data-bullet-input]`);
-        if (updated[idx - 1]) updated[idx - 1].focus();
-      }, 50);
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h") {
-      e.preventDefault();
-      onToggleHighlight(note);
-    }
-  };
-
-  const highlighted = !!note.is_high_priority;
-
-  return (
-    <div
-      style={{
-        display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 6px",
-        borderRadius: 4,
-        background: highlighted ? "color-mix(in srgb, var(--status-warning) 18%, transparent)" : "transparent",
-        borderLeft: highlighted ? "3px solid var(--status-warning)" : "3px solid transparent",
-        transition: "background 0.15s",
-      }}
-      className="bullet-row"
-    >
-      <span style={{ color: highlighted ? "var(--status-warning)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 14, lineHeight: 1.5, paddingTop: 1, userSelect: "none" }}>•</span>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-        <textarea
-          ref={inputRef}
-          data-bullet-input
-          value={text}
-          rows={1}
-          onChange={(e) => { setText(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
-          onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
-          onBlur={commit}
-          onKeyDown={handleKeyDown}
-          placeholder={isLast ? "Type a bullet — Enter for next, Ctrl+H to highlight" : ""}
-          style={{ width: "100%", background: "transparent", border: "none", outline: "none", resize: "none", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.55, padding: "1px 0", fontWeight: highlighted ? 600 : 400 }}
-        />
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.06em", color: "var(--text-muted)", textTransform: "uppercase" }}>
-            Noted
-            <input
-              type="date"
-              value={dateNoted}
-              onChange={(e) => {
-                const v = e.target.value;
-                setDateNoted(v);
-                commitDate("date_noted", v);
-              }}
-              style={{
-                background: "var(--bg-surface-low)",
-                border: "1px solid var(--border-default)",
-                borderRadius: 4,
-                color: "var(--text-primary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                padding: "2px 6px",
-                colorScheme: "dark",
-              }}
-            />
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.06em", color: "var(--text-muted)", textTransform: "uppercase" }}>
-            Due
-            <input
-              type="date"
-              value={dateDue}
-              onChange={(e) => {
-                const v = e.target.value;
-                setDateDue(v);
-                commitDate("date_due", v);
-              }}
-              style={{
-                background: "var(--bg-surface-low)",
-                border: "1px solid var(--border-default)",
-                borderRadius: 4,
-                color: "var(--text-primary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                padding: "2px 6px",
-                colorScheme: "dark",
-              }}
-            />
-          </label>
-        </div>
-      </div>
-      <div className="bullet-actions" style={{ display: "flex", gap: 4, opacity: 0.65, transition: "opacity 0.15s" }}>
-        <button title="Highlight (Ctrl+H)" onClick={() => onToggleHighlight(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: highlighted ? "color-mix(in srgb, var(--status-warning) 25%, transparent)" : "transparent", color: highlighted ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Highlighter size={12} />
-        </button>
-        <button title="Delete bullet" onClick={() => onDeleteBullet(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: "transparent", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--status-error)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
-          <Trash2 size={12} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ProjectRow({ row, onUpdateBulletText, onUpdateBulletDates, onToggleHighlight, onDeleteBullet, onAddBullet }) {
-  const { project, bullets, projectId } = row;
-  const renderable = bullets.length > 0 ? bullets : [];
-
-  return (
-    <div data-bullet-project={projectId} style={{ display: "grid", gridTemplateColumns: "260px 1fr", borderTop: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
-      <div style={{ padding: "14px 18px", borderRight: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column", gap: 4, minHeight: 60 }}>
-        {project.project_number && (<span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em" }}>{project.project_number}</span>)}
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3, wordBreak: "break-word" }}>{project.name}</span>
-        {project.gc_name && (<span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.05em" }}>{project.gc_name}</span>)}
-      </div>
-      <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 2 }}>
-        {renderable.map((note, idx) => (
-          <BulletRow
-            key={note.id}
-            note={note}
-            projectId={projectId}
-            isLast={idx === renderable.length - 1}
-            onCreateNext={() => onAddBullet(projectId, "")}
-            onUpdateBulletText={onUpdateBulletText}
-            onUpdateBulletDates={onUpdateBulletDates}
-            onToggleHighlight={onToggleHighlight}
-            onDeleteBullet={onDeleteBullet}
-          />
-        ))}
-        <button onClick={() => onAddBullet(projectId, "")} style={{ alignSelf: "flex-start", marginTop: 4, padding: "3px 8px", borderRadius: 4, border: "1px dashed var(--divider)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--divider)"; }}>
-          <Plus size={11} /> Add bullet
-        </button>
-      </div>
     </div>
   );
 }

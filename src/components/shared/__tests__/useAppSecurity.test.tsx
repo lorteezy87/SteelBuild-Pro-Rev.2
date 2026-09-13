@@ -13,6 +13,12 @@ function authValue(partial: Partial<AuthContextValue>): AuthContextValue {
     isLoggingIn: false,
     isLoadingPublicSettings: false,
     authError: null,
+    // H23 MFA surface. Added when AuthContextValue gained the degraded-status
+    // fields; the stub must satisfy the whole contract or every consumer test
+    // fails to typecheck.
+    mfaStatusDegraded: false,
+    mfaStatusMessage: null,
+    retryMfaStatus: async () => {},
     appPublicSettings: null,
     logout: async () => {},
     loginWithPassword: async () => ({ success: false, error: { type: "auth_required", message: "n/a" } }),
@@ -87,5 +93,38 @@ describe("useAppSecurity", () => {
       name: "x",
     });
     warn.mockRestore();
+  });
+
+  it("preserves the legacy payload when no project is active", () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AuthContext.Provider value={authValue({ user: null, isAuthenticated: false })}>
+        {children}
+      </AuthContext.Provider>
+    );
+    const { result } = renderHook(() => useAppSecurity(), { wrapper });
+    const payload = { project_id: "legacy-project", name: "x" };
+
+    expect(result.current.assertProjectId(payload, null)).toBe(payload);
+  });
+
+  it("stamps identity from the authenticated DB-backed user", () => {
+    const user: AppUser = {
+      id: "u1",
+      email: "pm@example.com",
+      full_name: "PM User",
+      role: "pm",
+    };
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AuthContext.Provider value={authValue({ user, isAuthenticated: true })}>
+        {children}
+      </AuthContext.Provider>
+    );
+    const { result } = renderHook(() => useAppSecurity(), { wrapper });
+
+    expect(result.current.stamp({ name: "x" })).toEqual({
+      name: "x",
+      created_by: "pm@example.com",
+      created_uid: "u1",
+    });
   });
 });

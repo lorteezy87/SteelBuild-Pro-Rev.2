@@ -1,109 +1,31 @@
 /**
- * SVG overlay that renders persisted markup on top of the PDF canvas, and
- * captures pointer input to create new markup.
+ * SVG overlay for persisted drawing markup and in-progress pointer input.
  *
- * Sits inside the canvas wrapper (`position: relative; display: inline-block`)
- * in DrawingViewer. Sized exactly to the canvas so pointer coords map 1:1
- * to canvas pixels before we convert them to PDF user units via the
- * pdfjs `viewport`.
- *
- * Tools it handles directly (activeTool passed as a prop):
- *   select   — hit-test + delete key removes hovered/selected item
- *   pen      — freehand stroke; mousedown starts, mousemove extends,
- *              mouseup commits (with point simplification)
- *   rect     — click-drag rectangle
- *   cloud    — click-drag revision cloud (scalloped rectangle)
- *   arrow    — click-drag line with arrowhead at end
- *   note     — click once to drop a pin + open inline editor
- *   stamp    — click once to place a review stamp (APPROVED / REJECTED / …)
- *
- * The layer doesn't own zoom or rotation — it just reads the current
- * viewport and re-projects. That keeps zoom / rotate behavior consistent
- * with the canvas underneath.
+ * The legacy JSX boundary remains because DrawingViewer and useMarkup are
+ * still JavaScript. Typed derivations, rendering, and interaction state live
+ * in focused TypeScript modules beside it.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React from "react";
 import {
-  eventToPdfPoint,
-  newMarkupId,
-  pdfRectToCanvas,
-  pdfToCanvas,
-  pointsToSvgAttr,
-  simplifyStroke,
-} from "./coords";
-import { formatMeasureLabel } from "./measureLabel";
+  ARROW_HEAD_SIZE,
+  MARKUP_STATUS_COLOR,
+  MARKUP_STATUS_ORDER,
+  STAMP_TYPES,
+  cloudPathFromRect,
+} from "./annotationDerive";
+import {
+  AnnotationDraftPreview,
+  AnnotationItemView,
+} from "./AnnotationViews";
+import { useAnnotationInteraction } from "./useAnnotationInteraction";
 
-const ARROW_HEAD_SIZE = 10; // canvas pixels
-const NOTE_PIN_SIZE = 22;   // canvas pixels
-
-// Review stamps — sheet-anchored (PDF units) so they scale with zoom like a
-// real rubber stamp on the page. Keys persist in item.stamp.
-export const STAMP_TYPES = [
-  { key: "APPROVED",          label: "APPROVED",          color: "var(--status-success)" },
-  { key: "APPROVED_AS_NOTED", label: "APPROVED AS NOTED", color: "var(--status-success-bright)" },
-  { key: "REVISE_RESUBMIT",   label: "REVISE & RESUBMIT", color: "var(--status-warning)" },
-  { key: "REJECTED",          label: "REJECTED",          color: "var(--status-error)" },
-  { key: "FOR_REVIEW",        label: "FOR REVIEW",        color: "var(--status-info)" },
-];
-const ANNOTATION_NOTE_TEXT = "#111";
-const STAMP_BY_KEY = Object.fromEntries(STAMP_TYPES.map((s) => [s.key, s]));
-const STAMP_W_PDF = 170; // PDF points (~2.4in wide)
-const STAMP_H_PDF = 44;
-
-/**
- * Revision-cloud path: walk the rect perimeter clockwise with semicircular
- * scallops bulging outward (sweep-flag 0 bulges away from the interior on
- * every clockwise edge). Exported for tests + the PDF exporter.
- */
-export function cloudPathFromRect(left, top, width, height, scallop = 9) {
-  const parts = [`M ${left.toFixed(2)} ${top.toFixed(2)}`];
-  const edge = (x0, y0, x1, y1) => {
-    const len = Math.hypot(x1 - x0, y1 - y0);
-    const n = Math.max(1, Math.round(len / (scallop * 2)));
-    const stepX = (x1 - x0) / n;
-    const stepY = (y1 - y0) / n;
-    const r = Math.hypot(stepX, stepY) / 2;
-    for (let i = 1; i <= n; i++) {
-      parts.push(`A ${r.toFixed(2)} ${r.toFixed(2)} 0 0 0 ${(x0 + stepX * i).toFixed(2)} ${(y0 + stepY * i).toFixed(2)}`);
-    }
-  };
-  edge(left, top, left + width, top);
-  edge(left + width, top, left + width, top + height);
-  edge(left + width, top + height, left, top + height);
-  edge(left, top + height, left, top);
-  parts.push("Z");
-  return parts.join(" ");
-}
-
-/** Tooltip text: who drew this mark and when. */
-function authorTitle(item) {
-  const who = item.author || "Unknown";
-  if (!item.created_at) return who;
-  const when = new Date(item.created_at);
-  return Number.isNaN(when.getTime()) ? who : `${who} · ${when.toLocaleString()}`;
-}
-
-// Markup status (3a — code-only, no migration). Cycles open → addressed
-// → rejected → clarification → open. Status colors mirror the comment
-// thread palette (D + E in the spec) so the resolution semantics read
-// the same across surfaces.
-export const MARKUP_STATUS_ORDER = ["open", "addressed", "rejected", "clarification"];
-export const MARKUP_STATUS_COLOR = {
-  open:          "#9ca3af",
-  addressed:     "#10b981",
-  rejected:      "#ef4444",
-  clarification: "#f59e0b",
+export {
+  MARKUP_STATUS_COLOR,
+  MARKUP_STATUS_ORDER,
+  STAMP_TYPES,
+  cloudPathFromRect,
 };
-const MARKUP_STATUS_LABEL = {
-  open:          "OPEN",
-  addressed:     "DONE",
-  rejected:      "NO",
-  clarification: "?",
-};
-function nextStatus(current) {
-  const idx = MARKUP_STATUS_ORDER.indexOf(current || "open");
-  return MARKUP_STATUS_ORDER[(idx + 1) % MARKUP_STATUS_ORDER.length];
-}
 
 export default function AnnotationLayer({
   viewport,
@@ -113,262 +35,32 @@ export default function AnnotationLayer({
   items,
   activeTool,
   activeColor,
-  activeStamp = "APPROVED", // STAMP_TYPES key used by the stamp tool
-  markupScale,       // real_inches_per_pdf_inch; null = not calibrated
+  activeStamp = "APPROVED",
+  markupScale,
   onAddItem,
   onRemoveItem,
   onUpdateItem,
-  onCalibrate,       // (pdfDist) => void — parent prompts user + persists scale
-  hideResolved = false, // 3a — filters note items whose status is addressed/rejected
+  onCalibrate,
+  hideResolved = false,
 }) {
-  const svgRef = useRef(null);
-
-  // In-progress drawing state (not persisted until mouseup).
-  // draft shape depends on activeTool.
-  const [draft, setDraft] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
-  const [editingNoteId, setEditingNoteId] = useState(null);
-
-  // Filter to only this page's markup. Memo'd so React.memo at render time
-  // doesn't re-diff the full list.
-  const pageItems = useMemo(() => {
-    let list = items.filter((m) => (m.pdf_page || 1) === pdfPage);
-    if (hideResolved) {
-      // Only filter notes — drawing markup like a redline/rect doesn't
-      // carry meaningful resolution semantics, and hiding them on the
-      // "show unresolved" toggle would surprise users.
-      list = list.filter((m) => {
-        if (m.kind !== "note") return true;
-        return !(m.status === "addressed" || m.status === "rejected");
-      });
-    }
-    return list;
-  }, [items, pdfPage, hideResolved]);
-
-  const isDrawingTool = activeTool && activeTool !== "select";
-  const cursor = cursorFor(activeTool);
-
-  // ── Pointer handlers ─────────────────────────────────────────────────
-  const handlePointerDown = useCallback((e) => {
-    if (!viewport || !isDrawingTool) return;
-    // Left button only.
-    if (e.button !== 0) return;
-    e.preventDefault();
-    const [x, y] = eventToPdfPoint(e, svgRef.current, viewport);
-
-    if (activeTool === "pen") {
-      setDraft({ kind: "pen", points: [{ x, y }] });
-    } else if (activeTool === "rect") {
-      setDraft({ kind: "rect", x0: x, y0: y, x1: x, y1: y });
-    } else if (activeTool === "cloud") {
-      setDraft({ kind: "cloud", x0: x, y0: y, x1: x, y1: y });
-    } else if (activeTool === "highlight") {
-      setDraft({ kind: "highlight", x0: x, y0: y, x1: x, y1: y });
-    } else if (activeTool === "arrow") {
-      setDraft({ kind: "arrow", x0: x, y0: y, x1: x, y1: y });
-    } else if (activeTool === "measure" || activeTool === "calibrate") {
-      // Both are two-click tools sharing the same draft state. On commit:
-      //   - measure    → persists as a markup_item with kind="measure"
-      //   - calibrate  → dispatches onCalibrate(pdfDist) to the parent,
-      //                  which prompts the user for the real-world length
-      //                  and saves the scale factor to the drawing row.
-      if (!draft || (draft.kind !== "measure" && draft.kind !== "calibrate") || draft.committed) {
-        setDraft({
-          kind: activeTool,        // "measure" | "calibrate"
-          x0: x, y0: y, x1: x, y1: y,
-          tracking: true,
-        });
-      } else if (draft.tracking) {
-        const dx = x - draft.x0;
-        const dy = y - draft.y0;
-        if (dx * dx + dy * dy > 1) {
-          if (activeTool === "calibrate") {
-            // PDF points → PDF inches (points are 1/72 inch)
-            const pdfInches = Math.sqrt(dx * dx + dy * dy) / 72;
-            onCalibrate?.(pdfInches);
-          } else {
-            onAddItem({
-              id: newMarkupId(),
-              kind: "measure",
-              pdf_page: pdfPage,
-              color: activeColor,
-              geom: { x1: draft.x0, y1: draft.y0, x2: x, y2: y },
-              created_at: new Date().toISOString(),
-            });
-          }
-        }
-        setDraft(null);
-      }
-      return; // two-click tools manage their own state — skip default capture
-    } else if (activeTool === "note") {
-      const id = newMarkupId();
-      onAddItem({
-        id,
-        kind: "note",
-        pdf_page: pdfPage,
-        color: activeColor,
-        geom: { x, y },
-        text: "",
-        created_at: new Date().toISOString(),
-      });
-      setEditingNoteId(id);
-    } else if (activeTool === "stamp") {
-      const stampSpec = STAMP_BY_KEY[activeStamp] || STAMP_TYPES[0];
-      onAddItem({
-        id: newMarkupId(),
-        kind: "stamp",
-        pdf_page: pdfPage,
-        color: stampSpec.color,
-        stamp: stampSpec.key,
-        geom: {
-          x: x - STAMP_W_PDF / 2,
-          y: y - STAMP_H_PDF / 2,
-          w: STAMP_W_PDF,
-          h: STAMP_H_PDF,
-        },
-        created_at: new Date().toISOString(),
-      });
-    }
-
-    if (activeTool === "pen" || activeTool === "rect" || activeTool === "cloud" || activeTool === "highlight" || activeTool === "arrow") {
-      // Capture subsequent pointer events so we get mouseup even when the
-      // pointer leaves the SVG bounds. Measure uses a different gesture
-      // (click → move → click) so it doesn't need pointer capture.
-      try { svgRef.current?.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
-    }
-  }, [activeTool, activeColor, isDrawingTool, onAddItem, onCalibrate, pdfPage, viewport, draft]);
-
-  const handlePointerMove = useCallback((e) => {
-    if (!draft || !viewport) return;
-    const [x, y] = eventToPdfPoint(e, svgRef.current, viewport);
-    setDraft((prev) => {
-      if (!prev) return prev;
-      if (prev.kind === "pen") {
-        return { ...prev, points: [...prev.points, { x, y }] };
-      }
-      if (prev.kind === "rect" || prev.kind === "cloud" || prev.kind === "highlight" || prev.kind === "arrow") {
-        return { ...prev, x1: x, y1: y };
-      }
-      if ((prev.kind === "measure" || prev.kind === "calibrate") && prev.tracking) {
-        return { ...prev, x1: x, y1: y };
-      }
-      return prev;
-    });
-  }, [draft, viewport]);
-
-  const handlePointerUp = useCallback((e) => {
-    if (!draft) return;
-    try { svgRef.current?.releasePointerCapture?.(e.pointerId); } catch { /* ignore */ }
-
-    if (draft.kind === "pen") {
-      // Need at least 2 distinct points for a visible stroke.
-      const pts = simplifyStroke(draft.points, 0.5);
-      if (pts.length >= 2) {
-        onAddItem({
-          id: newMarkupId(),
-          kind: "pen",
-          pdf_page: pdfPage,
-          color: activeColor,
-          geom: { points: pts },
-          created_at: new Date().toISOString(),
-        });
-      }
-    } else if (draft.kind === "rect") {
-      const x = Math.min(draft.x0, draft.x1);
-      const y = Math.min(draft.y0, draft.y1);
-      const w = Math.abs(draft.x1 - draft.x0);
-      const h = Math.abs(draft.y1 - draft.y0);
-      if (w > 2 && h > 2) {
-        onAddItem({
-          id: newMarkupId(),
-          kind: "rect",
-          pdf_page: pdfPage,
-          color: activeColor,
-          geom: { x, y, w, h },
-          created_at: new Date().toISOString(),
-        });
-      }
-    } else if (draft.kind === "cloud") {
-      const x = Math.min(draft.x0, draft.x1);
-      const y = Math.min(draft.y0, draft.y1);
-      const w = Math.abs(draft.x1 - draft.x0);
-      const h = Math.abs(draft.y1 - draft.y0);
-      if (w > 4 && h > 4) {
-        onAddItem({
-          id: newMarkupId(),
-          kind: "cloud",
-          pdf_page: pdfPage,
-          color: activeColor,
-          geom: { x, y, w, h },
-          created_at: new Date().toISOString(),
-        });
-      }
-    } else if (draft.kind === "highlight") {
-      const x = Math.min(draft.x0, draft.x1);
-      const y = Math.min(draft.y0, draft.y1);
-      const w = Math.abs(draft.x1 - draft.x0);
-      const h = Math.abs(draft.y1 - draft.y0);
-      if (w > 2 && h > 2) {
-        // Highlight uses yellow by default even if activeColor is a
-        // stroke-appropriate color (red/blue), because highlight needs
-        // a translucent warm tone to read as "marked" without
-        // obscuring the underlying PDF. If the user explicitly picked
-        // a non-default color we honor it.
-        onAddItem({
-          id: newMarkupId(),
-          kind: "highlight",
-          pdf_page: pdfPage,
-          color: activeColor,
-          geom: { x, y, w, h },
-          created_at: new Date().toISOString(),
-        });
-      }
-    } else if (draft.kind === "arrow") {
-      const dx = draft.x1 - draft.x0;
-      const dy = draft.y1 - draft.y0;
-      if (dx * dx + dy * dy > 4) {
-        onAddItem({
-          id: newMarkupId(),
-          kind: "arrow",
-          pdf_page: pdfPage,
-          color: activeColor,
-          geom: { x1: draft.x0, y1: draft.y0, x2: draft.x1, y2: draft.y1 },
-          created_at: new Date().toISOString(),
-        });
-      }
-    }
-
-    setDraft(null);
-  }, [draft, activeColor, onAddItem, pdfPage]);
-
-  // Escape cancels an in-progress draft; Delete removes the selected item.
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-      if (e.key === "Escape") {
-        setDraft(null);
-        setSelectedId(null);
-        setEditingNoteId(null);
-      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
-        e.preventDefault();
-        onRemoveItem(selectedId);
-        setSelectedId(null);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onRemoveItem, selectedId]);
+  const interaction = useAnnotationInteraction({
+    viewport,
+    pdfPage,
+    items,
+    activeTool,
+    activeColor,
+    activeStamp,
+    hideResolved,
+    onAddItem,
+    onRemoveItem,
+    onCalibrate,
+  });
 
   if (!viewport || !canvasWidth || !canvasHeight) return null;
 
-  // Build the draft preview once per render. Non-draft items are projected
-  // individually inside the <MarkupItem/> component — that lets a single
-  // re-render from zoom or rotate still be cheap.
-  const draftPreview = draft ? renderDraft(draft, viewport, activeColor, markupScale) : null;
-
   return (
     <svg
-      ref={svgRef}
+      ref={interaction.svgRef}
       width={canvasWidth}
       height={canvasHeight}
       viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
@@ -378,26 +70,23 @@ export default function AnnotationLayer({
         left: 0,
         width: canvasWidth,
         height: canvasHeight,
-        // Select mode passes clicks through to things below (nothing below
-        // needs them right now, but the existing callout + link layers
-        // already capture their own hotspots before we get here).
         pointerEvents: "auto",
-        cursor,
+        cursor: interaction.cursor,
         touchAction: "none",
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onClick={(e) => {
-        // In select mode, a click on empty SVG clears the selection.
-        if (activeTool === "select" && e.target === svgRef.current) {
-          setSelectedId(null);
-          setEditingNoteId(null);
+      onPointerDown={interaction.handlePointerDown}
+      onPointerMove={interaction.handlePointerMove}
+      onPointerUp={interaction.handlePointerUp}
+      onPointerCancel={interaction.handlePointerUp}
+      onClick={(event) => {
+        if (
+          activeTool === "select"
+          && event.target === interaction.svgRef.current
+        ) {
+          interaction.clearSelection();
         }
       }}
     >
-      {/* Arrowhead marker, reusable */}
       <defs>
         <marker
           id="sbp-arrowhead"
@@ -412,514 +101,34 @@ export default function AnnotationLayer({
         </marker>
       </defs>
 
-      {pageItems.map((m) => (
-        <MarkupItem
-          key={m.id}
-          item={m}
+      {interaction.pageItems.map((item) => (
+        <AnnotationItemView
+          key={item.id}
+          item={item}
           viewport={viewport}
           markupScale={markupScale}
-          selected={selectedId === m.id}
-          editing={editingNoteId === m.id}
+          selected={interaction.selectedId === item.id}
+          editing={interaction.editingNoteId === item.id}
           interactive={activeTool === "select"}
-          onSelect={() => {
-            if (activeTool === "select") setSelectedId(m.id);
-          }}
-          onNoteDoubleClick={() => {
-            if (activeTool === "select" && m.kind === "note") setEditingNoteId(m.id);
-          }}
-          onNoteTextChange={(text) => onUpdateItem(m.id, { text })}
-          onNoteBlur={() => setEditingNoteId(null)}
+          onSelect={() => interaction.selectItem(item)}
+          onNoteDoubleClick={() => interaction.editNote(item)}
+          onNoteTextChange={(text) => onUpdateItem(item.id, { text })}
+          onNoteBlur={interaction.stopEditingNote}
           onCycleStatus={() => {
-            if (m.kind !== "note") return;
-            onUpdateItem(m.id, { status: nextStatus(m.status) });
+            const patch = interaction.cycleNoteStatus(item);
+            if (patch) onUpdateItem(item.id, patch);
           }}
         />
       ))}
 
-      {draftPreview}
+      {interaction.draft && (
+        <AnnotationDraftPreview
+          draft={interaction.draft}
+          viewport={viewport}
+          color={activeColor}
+          markupScale={markupScale}
+        />
+      )}
     </svg>
   );
 }
-
-function renderDraft(draft, viewport, color, scaleForLabel) {
-  if (draft.kind === "pen") {
-    return (
-      <polyline
-        points={pointsToSvgAttr(draft.points, viewport)}
-        stroke={color}
-        strokeWidth={2.25}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        opacity={0.85}
-      />
-    );
-  }
-  if (draft.kind === "rect") {
-    const r = pdfRectToCanvas(viewport, {
-      x: Math.min(draft.x0, draft.x1),
-      y: Math.min(draft.y0, draft.y1),
-      w: Math.abs(draft.x1 - draft.x0),
-      h: Math.abs(draft.y1 - draft.y0),
-    });
-    return (
-      <rect
-        x={r.left}
-        y={r.top}
-        width={r.width}
-        height={r.height}
-        stroke={color}
-        strokeWidth={2}
-        fill={color}
-        fillOpacity={0.10}
-        strokeDasharray="4 3"
-      />
-    );
-  }
-  if (draft.kind === "cloud") {
-    const r = pdfRectToCanvas(viewport, {
-      x: Math.min(draft.x0, draft.x1),
-      y: Math.min(draft.y0, draft.y1),
-      w: Math.abs(draft.x1 - draft.x0),
-      h: Math.abs(draft.y1 - draft.y0),
-    });
-    return (
-      <path
-        d={cloudPathFromRect(r.left, r.top, r.width, r.height)}
-        stroke={color}
-        strokeWidth={2}
-        fill="none"
-        strokeDasharray="4 3"
-        opacity={0.9}
-      />
-    );
-  }
-  if (draft.kind === "highlight") {
-    const r = pdfRectToCanvas(viewport, {
-      x: Math.min(draft.x0, draft.x1),
-      y: Math.min(draft.y0, draft.y1),
-      w: Math.abs(draft.x1 - draft.x0),
-      h: Math.abs(draft.y1 - draft.y0),
-    });
-    return (
-      <rect
-        x={r.left}
-        y={r.top}
-        width={r.width}
-        height={r.height}
-        stroke="none"
-        fill={color}
-        fillOpacity={0.28}
-      />
-    );
-  }
-  if ((draft.kind === "measure" || draft.kind === "calibrate") && draft.tracking) {
-    const [x1, y1] = pdfToCanvas(viewport, draft.x0, draft.y0);
-    const [x2, y2] = pdfToCanvas(viewport, draft.x1, draft.y1);
-    const dx = draft.x1 - draft.x0;
-    const dy = draft.y1 - draft.y0;
-    const pdfDist = Math.sqrt(dx * dx + dy * dy);
-    // Calibration preview shows raw page inches (that's what the user is
-    // about to assign a real value to). Measure preview honors the
-    // current scale if set — reading in real units while aiming.
-    const label = draft.kind === "calibrate"
-      ? formatMeasureLabel(pdfDist, null)
-      : formatMeasureLabel(pdfDist, scaleForLabel);
-    const midX = (x1 + x2) / 2;
-    const midY = (y1 + y2) / 2;
-    const stroke = draft.kind === "calibrate" ? "#00E5FF" : color;  // cyan for calibrate
-    return (
-      <g>
-        {/* Endpoint crosshairs so the anchor point is obvious */}
-        <circle cx={x1} cy={y1} r={5} fill="none" stroke={stroke} strokeWidth={2} />
-        <circle cx={x2} cy={y2} r={5} fill="none" stroke={stroke} strokeWidth={2} />
-        <line
-          x1={x1} y1={y1} x2={x2} y2={y2}
-          stroke={stroke}
-          strokeWidth={2}
-          strokeDasharray="6 4"
-          opacity={0.9}
-        />
-        <rect
-          x={midX - 56} y={midY - 11}
-          width={112} height={22}
-          rx={3}
-          fill="rgba(12,14,17,0.88)"
-          stroke={stroke}
-          strokeWidth={1}
-        />
-        <text
-          x={midX} y={midY + 4}
-          textAnchor="middle"
-          fontFamily="var(--font-mono)"
-          fontSize={11}
-          fontWeight={700}
-          fill="#fff"
-        >
-          {draft.kind === "calibrate" ? `SET: ${label}` : label}
-        </text>
-      </g>
-    );
-  }
-  if (draft.kind === "arrow") {
-    const [x1, y1] = pdfToCanvas(viewport, draft.x0, draft.y0);
-    const [x2, y2] = pdfToCanvas(viewport, draft.x1, draft.y1);
-    return (
-      <line
-        x1={x1} y1={y1} x2={x2} y2={y2}
-        stroke={color}
-        strokeWidth={2.25}
-        strokeLinecap="round"
-        markerEnd="url(#sbp-arrowhead)"
-        opacity={0.85}
-        strokeDasharray="4 3"
-      />
-    );
-  }
-  return null;
-}
-
-function MarkupItem({
-  item,
-  viewport,
-  markupScale,
-  selected,
-  editing,
-  interactive,
-  onSelect,
-  onNoteDoubleClick,
-  onNoteTextChange,
-  onNoteBlur,
-  onCycleStatus,
-}) {
-  const color = item.color || "#FF3D3D";
-  const selectionOutline = selected
-    ? { filter: "drop-shadow(0 0 3px rgba(200,155,32,0.9))" }
-    : {};
-  const handleClick = (e) => {
-    if (!interactive) return;
-    e.stopPropagation();
-    onSelect?.();
-  };
-
-  if (item.kind === "pen") {
-    return (
-      <polyline
-        points={pointsToSvgAttr(item.geom?.points || [], viewport)}
-        stroke={color}
-        strokeWidth={selected ? 3 : 2.25}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
-        onClick={handleClick}
-      >
-        <title>{authorTitle(item)}</title>
-      </polyline>
-    );
-  }
-
-  if (item.kind === "rect") {
-    const r = pdfRectToCanvas(viewport, item.geom);
-    return (
-      <rect
-        x={r.left}
-        y={r.top}
-        width={r.width}
-        height={r.height}
-        stroke={color}
-        strokeWidth={selected ? 2.5 : 2}
-        fill={color}
-        fillOpacity={0.12}
-        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
-        onClick={handleClick}
-      >
-        <title>{authorTitle(item)}</title>
-      </rect>
-    );
-  }
-
-  if (item.kind === "cloud") {
-    const r = pdfRectToCanvas(viewport, item.geom);
-    return (
-      <path
-        d={cloudPathFromRect(r.left, r.top, r.width, r.height)}
-        stroke={color}
-        strokeWidth={selected ? 3 : 2.25}
-        strokeLinejoin="round"
-        fill={color}
-        fillOpacity={0.05}
-        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
-        onClick={handleClick}
-      >
-        <title>{authorTitle(item)}</title>
-      </path>
-    );
-  }
-
-  if (item.kind === "stamp") {
-    const r = pdfRectToCanvas(viewport, item.geom);
-    const spec = STAMP_BY_KEY[item.stamp] || null;
-    const stampColor = spec?.color || color;
-    const label = spec?.label || item.stamp || "STAMP";
-    const fontSize = Math.max(8, Math.min(r.height * 0.34, r.width / Math.max(6, label.length * 0.62)));
-    return (
-      <g
-        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
-        onClick={handleClick}
-      >
-        <title>{authorTitle(item)}</title>
-        <rect
-          x={r.left} y={r.top} width={r.width} height={r.height}
-          rx={r.height * 0.12}
-          fill="#ffffff" fillOpacity={0.82}
-          stroke={stampColor} strokeWidth={Math.max(1.5, r.height * 0.055)}
-        />
-        <rect
-          x={r.left + r.height * 0.09} y={r.top + r.height * 0.09}
-          width={Math.max(0, r.width - r.height * 0.18)} height={Math.max(0, r.height - r.height * 0.18)}
-          rx={r.height * 0.08}
-          fill="none"
-          stroke={stampColor} strokeWidth={Math.max(0.75, r.height * 0.025)}
-        />
-        <text
-          x={r.left + r.width / 2}
-          y={r.top + r.height / 2 + fontSize * 0.36}
-          textAnchor="middle"
-          fontFamily="var(--font-mono)"
-          fontSize={fontSize}
-          fontWeight={800}
-          letterSpacing="0.08em"
-          fill={stampColor}
-        >
-          {label}
-        </text>
-      </g>
-    );
-  }
-
-  if (item.kind === "highlight") {
-    const r = pdfRectToCanvas(viewport, item.geom);
-    return (
-      <rect
-        x={r.left}
-        y={r.top}
-        width={r.width}
-        height={r.height}
-        stroke={selected ? color : "none"}
-        strokeWidth={selected ? 1.5 : 0}
-        fill={color}
-        fillOpacity={0.28}
-        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
-        onClick={handleClick}
-      >
-        <title>{authorTitle(item)}</title>
-      </rect>
-    );
-  }
-
-  if (item.kind === "measure") {
-    const [x1, y1] = pdfToCanvas(viewport, item.geom.x1, item.geom.y1);
-    const [x2, y2] = pdfToCanvas(viewport, item.geom.x2, item.geom.y2);
-    const dx = item.geom.x2 - item.geom.x1;
-    const dy = item.geom.y2 - item.geom.y1;
-    const label = formatMeasureLabel(Math.sqrt(dx * dx + dy * dy), markupScale);
-    const midX = (x1 + x2) / 2;
-    const midY = (y1 + y2) / 2;
-    return (
-      <g
-        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
-        onClick={handleClick}
-      >
-        <circle cx={x1} cy={y1} r={4} fill={color} />
-        <circle cx={x2} cy={y2} r={4} fill={color} />
-        <line
-          x1={x1} y1={y1} x2={x2} y2={y2}
-          stroke={color}
-          strokeWidth={selected ? 2.5 : 2}
-        />
-        <rect
-          x={midX - 42} y={midY - 11}
-          width={84} height={22}
-          rx={3}
-          fill="rgba(12,14,17,0.88)"
-          stroke={color}
-          strokeWidth={1}
-        />
-        <text
-          x={midX} y={midY + 4}
-          textAnchor="middle"
-          fontFamily="var(--font-mono)"
-          fontSize={11}
-          fontWeight={700}
-          fill="#fff"
-        >
-          {label}
-        </text>
-      </g>
-    );
-  }
-
-  if (item.kind === "arrow") {
-    const [x1, y1] = pdfToCanvas(viewport, item.geom.x1, item.geom.y1);
-    const [x2, y2] = pdfToCanvas(viewport, item.geom.x2, item.geom.y2);
-    return (
-      <line
-        x1={x1} y1={y1} x2={x2} y2={y2}
-        stroke={color}
-        strokeWidth={selected ? 3 : 2.25}
-        strokeLinecap="round"
-        markerEnd="url(#sbp-arrowhead)"
-        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
-        onClick={handleClick}
-      >
-        <title>{authorTitle(item)}</title>
-      </line>
-    );
-  }
-
-  if (item.kind === "note") {
-    const [cx, cy] = pdfToCanvas(viewport, item.geom.x, item.geom.y);
-    const size = NOTE_PIN_SIZE;
-    const statusKey = item.status || "open";
-    const statusColor = MARKUP_STATUS_COLOR[statusKey] || MARKUP_STATUS_COLOR.open;
-    const statusLabel = MARKUP_STATUS_LABEL[statusKey] || statusKey.toUpperCase();
-    return (
-      <g
-        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
-        onClick={handleClick}
-        onDoubleClick={onNoteDoubleClick}
-      >
-        {/* Pin body */}
-        <circle cx={cx} cy={cy} r={size / 2} fill={color} opacity={0.92} />
-        <circle cx={cx} cy={cy} r={size / 2 - 3} fill="#fff" opacity={0.85} />
-        <circle cx={cx} cy={cy} r={3} fill={color} />
-
-        {/* Status pill — above and slightly right of the pin. Click in
-            select mode cycles open → addressed → rejected → clarification. */}
-        {interactive && (
-          <g
-            transform={`translate(${cx + size / 2 - 6}, ${cy - size / 2 - 12})`}
-            style={{ cursor: "pointer" }}
-            onClick={(e) => { e.stopPropagation(); onCycleStatus?.(); }}
-          >
-            <rect
-              x={0} y={0}
-              width={36} height={12}
-              rx={6}
-              fill={statusColor}
-              stroke="rgba(0,0,0,0.35)"
-              strokeWidth={0.75}
-            />
-            <text
-              x={18} y={9}
-              textAnchor="middle"
-              fontFamily="var(--font-mono)"
-              fontSize={8}
-              fontWeight={700}
-              fill="#fff"
-              style={{ letterSpacing: "0.06em" }}
-            >
-              {statusLabel}
-            </text>
-          </g>
-        )}
-
-        {editing ? (
-          <foreignObject
-            x={cx + size / 2 + 4}
-            y={cy - size / 2}
-            width={220}
-            height={90}
-          >
-            <textarea
-              xmlns="http://www.w3.org/1999/xhtml"
-              id={`sbp-note-${item.id}`}
-              name={`sbp-note-${item.id}`}
-              aria-label="Markup note"
-              autoFocus
-              defaultValue={item.text || ""}
-              onChange={(e) => onNoteTextChange?.(e.target.value)}
-              onBlur={onNoteBlur}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") { e.currentTarget.blur(); }
-              }}
-              style={{
-                width: 220,
-                height: 86,
-                padding: "6px 8px",
-                fontFamily: "var(--font-body)",
-                fontSize: 12,
-                color: "var(--text-primary)",
-                background: "var(--bg-surface)",
-                border: "1px solid var(--accent)",
-                borderRadius: 4,
-                resize: "none",
-                outline: "none",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
-                boxSizing: "border-box",
-              }}
-              placeholder="Note…"
-            />
-          </foreignObject>
-        ) : item.text ? (
-          // Read-only label to the right of the pin
-          <foreignObject
-            x={cx + size / 2 + 4}
-            y={cy - size / 2}
-            width={220}
-            height={92}
-            pointerEvents="none"
-          >
-            <div
-              xmlns="http://www.w3.org/1999/xhtml"
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 11,
-                color: ANNOTATION_NOTE_TEXT,
-                background: "rgba(255,240,180,0.95)",
-                border: "1px solid rgba(0,0,0,0.25)",
-                borderRadius: 3,
-                padding: "4px 6px",
-                maxWidth: 220,
-                boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-                whiteSpace: "pre-wrap",
-                lineHeight: 1.35,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {item.text}
-              {/* Attribution footer — who said it, when (collaborative
-                  redlining requirement: every comment tracked by user +
-                  timestamp). */}
-              {(item.author || item.created_at) && (
-                <div style={{ marginTop: 3, fontSize: 9, color: "rgba(0,0,0,0.55)", fontFamily: "var(--font-mono)" }}>
-                  {[item.author, item.created_at ? new Date(item.created_at).toLocaleDateString() : null].filter(Boolean).join(" · ")}
-                </div>
-              )}
-            </div>
-          </foreignObject>
-        ) : null}
-      </g>
-    );
-  }
-
-  return null;
-}
-
-function cursorFor(tool) {
-  switch (tool) {
-    case "pen":       return "crosshair";
-    case "rect":      return "crosshair";
-    case "cloud":     return "crosshair";
-    case "highlight": return "crosshair";
-    case "arrow":     return "crosshair";
-    case "measure":   return "crosshair";
-    case "calibrate": return "crosshair";
-    case "note":      return "copy";
-    case "stamp":     return "copy";
-    default:          return "default";
-  }
-}
-

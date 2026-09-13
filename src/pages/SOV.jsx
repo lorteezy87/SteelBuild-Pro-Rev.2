@@ -6,7 +6,6 @@ import { Check, Trash2 } from "lucide-react";
 import { BulkActionBar } from "@/components/design-system";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import SOVFormModal from "../components/sov/SOVFormModal";
-import { getNextNumber } from "../components/shared/numberSequencing";
 import { toast } from "sonner";
 import { usePermissions } from "@/services/permissions";
 import SovImportReviewModal from "../components/sov/SovImportReviewModal";
@@ -26,6 +25,18 @@ import {
   calcSovLine,
   SOV_CSV_HEADERS,
 } from "./sov/format";
+import { readFileText } from "@/lib/textDecoding";
+
+/**
+ * CSV branch of the SOV import. Decodes by byte-order mark / UTF-16 sniff,
+ * never `file.text()` (UTF-8 only): a UTF-16 export read as UTF-8 carries
+ * U+0000 into SOVItem.bulkCreate, which Postgres rejects (22P05). A UTF-32 or
+ * binary file throws a TextDecodingError, which handleImportFile toasts.
+ * The XLSX branch reads bytes with SheetJS and never comes through here.
+ */
+export async function readSovCsvRows(file) {
+  return aoaToRows(parseCsvToAoa((await readFileText(file)).text));
+}
 
 export default function SOV() {
   const qc = useQueryClient();
@@ -82,17 +93,8 @@ export default function SOV() {
       if (!activeProject?.id) {
         throw new Error("Select a project before creating a SOV item.");
       }
-      let sovId;
-      try {
-        sovId = await getNextNumber(activeProject.id, "SOV");
-      } catch (e) {
-        console.warn("[SOV] getNextNumber failed:", e?.message);
-        throw new Error("Unable to reserve a SOV id. Please retry.");
-      }
-      if (!sovId) throw new Error("Unable to reserve a SOV id. Please retry.");
       return entities.SOVItem.create({
         ...d,
-        sov_id: sovId,
         project_id: d.project_id || activeProject?.id,
       });
     },
@@ -189,7 +191,7 @@ export default function SOV() {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         rows = aoaToRows(XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" }));
       } else {
-        rows = aoaToRows(parseCsvToAoa(await file.text()));
+        rows = await readSovCsvRows(file);
       }
       if (rows.length === 0) {
         toast.error("File is empty — nothing to import");

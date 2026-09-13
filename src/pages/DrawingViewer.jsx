@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { supabase } from "@/lib/supabase";
@@ -33,7 +33,7 @@ import { mono, normalizeSN, parseZonePayload } from "@/pages/drawingViewer/drawi
 import { parseAnnotationLink } from "@/pages/drawingViewer/annotationLinks";
 import { useAutoScaleOnLoad } from "@/pages/drawingViewer/useAutoScaleOnLoad";
 import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
-import { useDrawingsList } from "@/pages/drawingViewer/useDrawingsList";
+import { useDrawingViewerSelection } from "@/pages/drawingViewer/useDrawingViewerSelection";
 import { usePdfLoader } from "@/pages/drawingViewer/usePdfLoader";
 import { usePdfRenderer } from "@/pages/drawingViewer/usePdfRenderer";
 import { useViewerKeyboardShortcuts } from "@/pages/drawingViewer/useViewerKeyboardShortcuts";
@@ -43,8 +43,11 @@ import ViewerToolbar from "@/pages/drawingViewer/ViewerToolbar";
 import CalloutOverlay from "@/pages/drawingViewer/CalloutOverlay";
 import PdfLinkHotspotLayer from "@/pages/drawingViewer/PdfLinkHotspotLayer";
 import { useZoneData } from "@/pages/drawingViewer/useZoneData";
-import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { drawingViewerStyles } from "@/pages/drawingViewer/drawingViewerStyles";
+import {
+  deriveOverlayViewModel,
+  deriveZonePanelSheet,
+} from "@/pages/drawingViewer/drawingViewerDerivations";
 import {
   createZone as createZoneSvc,
   updateZone as updateZoneSvc,
@@ -60,21 +63,15 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const PDF_PAGE_BACKGROUND = "#fff";
 
 export default function DrawingViewer() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
-
-  const initialId = searchParams.get("recordId") || searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
-  const requestedRevisionId = searchParams.get("revisionId");
 
   const [userId, setUserId] = useState(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null)).catch(() => {});
   }, []);
 
-  const [activeId, setActiveId] = useState(initialId || null);
-  const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Closed by default — the bottom thumbnail filmstrip duplicates the left
@@ -113,55 +110,16 @@ export default function DrawingViewer() {
   // Sprint 4 — markup PDF export modal trigger.
   const [exportMarkupOpen, setExportMarkupOpen] = useState(false);
 
-  // ── Load all drawings for this project ──────────────────────────────────────
-  // useDrawingsList encapsulates the project drawings query, the search
-  // filter, and the active-drawing lookup. activeIndex (used below by the
-  // keyboard shortcuts effect) also lives in there.
-  const { drawings, filtered, activeDrawing, activeIndex, isLoading: drawingsLoading } = useDrawingsList({ projectId, activeId, search });
-  useAutoOpenEdit(drawings, (drawing) => setActiveId(drawing.id), {
-    enabled: !drawingsLoading,
-    param: "recordId",
-  });
-
-  const { data: requestedRevision, isFetched: requestedRevisionFetched } = useQuery({
-    queryKey: ["drawing-revision-deep-link", requestedRevisionId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("drawing_revisions")
-        .select("id,drawing_id")
-        .eq("id", requestedRevisionId)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!requestedRevisionId,
-    staleTime: 5 * 60 * 1000,
-  });
-  useEffect(() => {
-    if (!requestedRevisionId || !requestedRevisionFetched || drawingsLoading) return;
-    const targetDrawingId = requestedRevision?.drawing_id || null;
-    const stripParam = () => {
-      const next = new URLSearchParams(searchParams);
-      next.delete("revisionId");
-      setSearchParams(next, { replace: true });
-    };
-    if (targetDrawingId && targetDrawingId !== activeId) {
-      // The revision belongs to another sheet in this project — follow the
-      // deep link there instead of erroring. The effect re-runs once the
-      // active drawing has switched and then strips the param.
-      if (drawings.some((d) => d.id === targetDrawingId)) {
-        setActiveId(targetDrawingId);
-        return;
-      }
-      toast.error("The requested drawing revision is unavailable for this project.");
-      stripParam();
-      return;
-    }
-    if (!targetDrawingId) {
-      toast.error("The requested drawing revision is unavailable for this project.");
-    }
-    stripParam();
-  }, [activeId, drawings, drawingsLoading, requestedRevision, requestedRevisionFetched, requestedRevisionId, searchParams, setSearchParams]);
+  const {
+    drawings,
+    filtered,
+    activeDrawing,
+    activeIndex,
+    activeId,
+    setActiveId,
+    search,
+    setSearch,
+  } = useDrawingViewerSelection(projectId);
   const markupScale = activeDrawing?.markup_scale || null;
 
   // PDF lifecycle: file_url → signed URL → pdfjs document. Owns currentPage
@@ -309,6 +267,18 @@ export default function DrawingViewer() {
     projectId,
     drawingRevisionId: currentRevision?.id || null,
   });
+  const overlayView = deriveOverlayViewModel({
+    activeDrawing,
+    renderMode,
+    pdfError,
+    markupItems: markup.items,
+    currentPage,
+    zoneMode,
+    zoneCount: zones.length,
+    filteredZoneCount: filteredZones.length,
+    computedZoneCount: zonesWithComputed.length,
+  });
+  const zonePanelSheet = deriveZonePanelSheet(currentRevision, activeDrawing);
 
   // Handler: user clicked "+ Rev" — mint a new revision, carry
   // zones + links over, flip is_current, and force a refetch so
@@ -574,7 +544,7 @@ export default function DrawingViewer() {
           {/* Markup toolbar — fixed to the viewer pane, NOT to the scroll
               content. Stays visible no matter how far the user pans the
               sheet. Only shown when we actually have a drawing to mark up. */}
-          {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && (
+          {overlayView.hasCanvas && (
             <>
               <AnnotationToolbar
                 activeTool={activeTool}
@@ -583,7 +553,7 @@ export default function DrawingViewer() {
                 onColorChange={setActiveColor}
                 activeStamp={activeStamp}
                 onStampChange={setActiveStamp}
-                markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
+                markupCount={overlayView.currentPageMarkupCount}
                 onClearPage={() => {
                   markup.items
                     .filter((m) => (m.pdf_page || 1) === currentPage)
@@ -594,7 +564,7 @@ export default function DrawingViewer() {
               />
               {/* Resolution-status filter chip (3a). Only meaningful when
                   there's at least one note on the page. */}
-              {markup.items.some((m) => m.kind === "note" && (m.pdf_page || 1) === currentPage) && (
+              {overlayView.hasCurrentPageNotes && (
                 <button
                   type="button"
                   onClick={() => setHideResolved((v) => !v)}
@@ -626,7 +596,7 @@ export default function DrawingViewer() {
           {/* Zones toggle — floats top-right of the viewer pane. Three-state:
               OFF → VIEW (show saved zones) → DRAW (drag to create). Left
               ghostly in the layout when we don't have a renderable sheet. */}
-          {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && (
+          {overlayView.hasCanvas && (
             <ZonesFloatingToolbar
               zoneMode={zoneMode}
               setZoneMode={setZoneMode}
@@ -651,13 +621,13 @@ export default function DrawingViewer() {
           {/* Zone filter bar — only useful when the overlay is
               actually rendering (VIEW / DRAW). Hidden in OFF mode to
               keep the viewer chrome quiet. */}
-          {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && zoneMode !== "off" && zones.length > 0 && (
+          {overlayView.showZoneFilter && (
             <ZoneFilterBar
               filter={zoneFilter}
               onChange={setZoneFilter}
               statusCounts={zoneStatusCounts}
-              totalVisible={filteredZones.length}
-              totalAll={zonesWithComputed.length}
+              totalVisible={overlayView.visibleZoneCount}
+              totalAll={overlayView.totalZoneCount}
             />
           )}
         <div
@@ -932,11 +902,7 @@ export default function DrawingViewer() {
 
       <ZonePanel
         zone={panelZoneId ? zones.find((z) => z.id === panelZoneId) : null}
-        sheet={currentRevision
-          ? { sheet_number: currentRevision.sheet_number, sheet_title: currentRevision.sheet_title, revision_code: currentRevision.revision_code }
-          : activeDrawing
-            ? { sheet_number: activeDrawing.sheet_number || activeDrawing.drawing_number, sheet_title: activeDrawing.title }
-            : null}
+        sheet={zonePanelSheet}
         open={!!panelZoneId}
         onClose={() => setPanelZoneId(null)}
         userId={userId}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { assignPdfPages, validatePdfPage } from "../pdfSheetExtractor.js";
+import { assignPdfPages, validatePdfPage } from "../pdfSheetExtractor";
 
 describe("validatePdfPage", () => {
   it("accepts positive integers", () => {

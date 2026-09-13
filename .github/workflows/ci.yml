@@ -210,15 +210,16 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm audit --audit-level=high
 
-  # ── Supabase migration + edge-function drift (opt-in) ────────────────────
-  # H4/H5: catches repo vs remote drift for migrations and edge functions, and
-  # fails when deprecated orphan functions are still deployed. Opt-in via repo
-  # variable SUPABASE_DRIFT_ENABLED=true + secret SUPABASE_ACCESS_TOKEN.
+  # ── Supabase migration + edge-function drift (enforced) ──────────────────
+  # H4/H5: compares production with the reviewed shared-project ownership
+  # manifest plus active Rev.2 assets. Unknown/unresolved assets, missing
+  # required assets, and deployed deprecated/staging-only functions fail closed.
+  # Inventory green does not prove SQL or deployed-source equivalence.
   supabase-drift:
-    name: Supabase drift check (opt-in)
+    name: Supabase drift check
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: ${{ vars.SUPABASE_DRIFT_ENABLED == 'true' }}
+    if: ${{ github.repository == 'lorteezy87/SteelBuild-Pro-Rev.2' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -238,8 +239,13 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
         run: |
           if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
-            echo "SUPABASE_DRIFT_ENABLED=true but SUPABASE_ACCESS_TOKEN is empty."
-            echo "Add the secret (owner-checklist §1) or unset the variable."
+            echo "SUPABASE_ACCESS_TOKEN is empty."
+            echo "Configure the secret to keep production drift checks enforced."
+            exit 1
+          fi
+          if [ -z "$SUPABASE_PROJECT_REF" ]; then
+            echo "SUPABASE_PROJECT_REF is empty."
+            echo "Configure the repository variable to keep production drift checks enforced."
             exit 1
           fi
           npm run supabase:drift

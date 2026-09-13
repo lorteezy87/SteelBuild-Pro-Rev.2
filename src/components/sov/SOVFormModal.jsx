@@ -127,7 +127,12 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
           <div>
             <Label>SOV ID</Label>
-            <Input value={form.sov_id || nextId || ""} disabled style={{background:"var(--bg-surface-low)"}} />
+            <Input
+              value={form.sov_id || nextId || ""}
+              placeholder="Assigned on save"
+              disabled
+              style={{background:"var(--bg-surface-low)"}}
+            />
           </div>
           <div>
             <Label>Project *</Label>
@@ -143,7 +148,13 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
           </div>
           <div>
             <Label>Line Item #</Label>
-            <Input type="number" value={form.line_item_number} onChange={e => set("line_item_number", e.target.value)} />
+            <Input
+              type="number"
+              value={sov ? form.line_item_number : ""}
+              placeholder="Assigned on save"
+              disabled
+              style={{background:"var(--bg-surface-low)"}}
+            />
           </div>
           <div>
             <Label>Period From</Label>
