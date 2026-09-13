@@ -264,7 +264,7 @@ table.mini th.n{text-align:right}
 .grid-shell{border:1px solid var(--line); border-radius:var(--r); background:var(--surface);
   overflow:hidden; display:flex; flex-direction:column; flex:1 1 auto; min-height:280px}
 .table-wrap{overflow:auto; flex:1 1 auto; min-height:0}
-table.log{border-collapse:separate; border-spacing:0; width:100%; min-width:1580px}
+table.log{border-collapse:separate; border-spacing:0; width:100%; min-width:1720px}
 table.log th{position:sticky; top:0; z-index:5; background:var(--well);
   font:600 9.5px/1.2 var(--f-body); letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
   text-align:left; padding:0; border-bottom:1px solid var(--line-2); white-space:nowrap}
@@ -298,6 +298,8 @@ table.log input[type=date]{min-width:124px}
 table.log select:hover,table.log input[type=date]:hover{border-color:var(--line-2); background:var(--raised)}
 table.log select:focus,table.log input[type=date]:focus{border-color:var(--focus); background:var(--raised)}
 table.log input[type=date].blank:not(:focus)::-webkit-datetime-edit{opacity:0}
+table.log input[type=date].ofs-late{color:var(--st-crit); font-weight:600}
+table.log input[type=date].ofs-soon{color:var(--st-warn); font-weight:600}
 .days{font-family:var(--f-mono); font-variant-numeric:tabular-nums; font-size:12.5px; white-space:nowrap}
 .days.over{color:var(--st-crit); font-weight:600}
 .days.due-soon{color:var(--st-warn); font-weight:600}
@@ -326,6 +328,8 @@ table.log input[type=date].blank:not(:focus)::-webkit-datetime-edit{opacity:0}
 .drawer-foot .stamp{font-size:11.5px; color:var(--faint); margin-right:auto}
 .fgrid{display:grid; grid-template-columns:1fr 1fr; gap:11px}
 .fgrid.three{grid-template-columns:1fr 1fr 1fr}
+.fgrid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:560px){ .fgrid.four{grid-template-columns:1fr 1fr} }
 .fgrid .span2{grid-column:span 2}
 .block{display:flex; flex-direction:column; gap:9px}
 .block > .eyebrow{padding-bottom:6px; border-bottom:1px solid var(--line)}
@@ -549,6 +553,12 @@ function daysToDue(p){ const d = effDue(p); return d ? dayDiff(todayISO(), d) : 
 function isOverdue(p){ const n = daysToDue(p); return withReviewer(p) && n != null && n < 0; }
 function isDueSoon(p){ const n = daysToDue(p); return withReviewer(p) && n != null && n >= 0 && n <= 3; }
 function isBlocked(p){ return !!String(p.holds || "").trim() && p.status !== "released" && isLive(p); }
+/* The OFS date is the detailer's deadline to us, so it only runs until the
+   package is actually submitted — after that the reviewer owns the clock. */
+function awaitingOfs(p){ return !p.submitted && p.status !== "released" && isLive(p); }
+function daysToOfs(p){ return p.ofsDue ? dayDiff(todayISO(), p.ofsDue) : null; }
+function isLateFromOfs(p){ const n = daysToOfs(p); return awaitingOfs(p) && n != null && n < 0; }
+function isOfsDueSoon(p){ const n = daysToOfs(p); return awaitingOfs(p) && n != null && n >= 0 && n <= 3; }
 function needsResubmit(p){ return p.status === "returned" && (p.code === "RR" || p.code === "REJ"); }
 function laneOf(p){ return statusOf(p.status).lane; }
 
@@ -558,9 +568,11 @@ function scopedPackages(){
 function actionReasons(p){
   const out = [];
   if (isOverdue(p))     out.push({ k:"overdue",  t:"Overdue with reviewer " + Math.abs(daysToDue(p)) + "d", css:"--st-crit" });
+  if (isLateFromOfs(p)) out.push({ k:"ofs",      t:"Late from OFS " + Math.abs(daysToOfs(p)) + "d", css:"--st-crit" });
   if (needsResubmit(p)) out.push({ k:"resubmit", t:"Returned " + codeOf(p.code).short + " — resubmit due", css:"--st-serious" });
   if (isBlocked(p))     out.push({ k:"blocked",  t:"Held: " + String(p.holds).trim(), css:"--st-warn" });
   if (!isOverdue(p) && isDueSoon(p)) out.push({ k:"due", t:"Due back in " + daysToDue(p) + "d", css:"--st-warn" });
+  if (!isLateFromOfs(p) && isOfsDueSoon(p)) out.push({ k:"ofsdue", t:"Due from OFS in " + daysToOfs(p) + "d", css:"--st-warn" });
   return out;
 }
 function turnaroundSamples(list){
@@ -584,6 +596,7 @@ const SORTS = {
   status:    p => STATUSES.findIndex(x => x.k === p.status),
   code:      p => CODES.findIndex(x => x.k === (p.code || "")),
   bic:       p => String(p.bic || ""),
+  ofsDue:    p => p.ofsDue || "",
   submitted: p => p.submitted || "",
   due:       p => effDue(p) || "",
   returned:  p => p.returned || "",
@@ -663,7 +676,7 @@ async function createPackage(projectId){
   const id = uid();
   const body = stamp({ projectId, num:suggestNum(projectId), title:"Untitled package",
     spec:"", type:"Shop drawings", seq:"", sheets:0, rev:0, status:"not_started", code:"", bic:"Detailer",
-    reviewer:"", submitted:"", due:"", returned:"", released:false, releasedOn:"", holds:"", notes:"",
+    reviewer:"", ofsDue:"", submitted:"", due:"", returned:"", released:false, releasedOn:"", holds:"", notes:"",
     links:[], files:[], history:[], createdAt:new Date().toISOString() });
   try {
     await state.db.doc("packages/" + id).set(body);
@@ -796,14 +809,14 @@ function csvCell(v){ const s = String(v == null ? "" : v); return /[",\n]/.test(
 async function exportCsv(){
   const rows = filteredRows();
   const head = ["Project","Job #","Submittal #","Package","Spec section","Type","Seq / area","Sheets","Rev","Status",
-    "Return code","Ball in court","Reviewer","Submitted","Due back","Returned","Days out","Days overdue",
+    "Return code","Ball in court","Reviewer","Date submitted","Date due","Date returned","Date due from OFS","Days out","Days overdue",
     "Released for fab","Released on","Holds / open RFIs","Links","Notes"];
   const body = rows.map(p => {
     const pr = projOf(p.projectId) || {};
     const od = isOverdue(p) ? Math.abs(daysToDue(p)) : "";
     return [pr.name || "", pr.number || "", p.num || "", p.title || "", p.spec || "", p.type || "", p.seq || "",
       p.sheets || 0, p.rev || 0, statusOf(p.status).label, codeOf(p.code).label === "—" ? "" : codeOf(p.code).label,
-      p.bic || "", p.reviewer || "", p.submitted || "", effDue(p), p.returned || "",
+      p.bic || "", p.reviewer || "", p.submitted || "", effDue(p), p.returned || "", p.ofsDue || "",
       daysOut(p) == null ? "" : daysOut(p), od, p.released ? "Yes" : "No", p.releasedOn || "",
       p.holds || "", (p.links || []).map(l => l.label + ": " + l.url).join(" | "), p.notes || ""].map(csvCell).join(",");
   });
@@ -950,6 +963,7 @@ function filteredRows(){
     if (state.fFlag === "blocked"  && !isBlocked(p)) return false;
     if (state.fFlag === "resubmit" && !needsResubmit(p)) return false;
     if (state.fFlag === "released" && !p.released) return false;
+    if (state.fFlag === "ofs"      && !isLateFromOfs(p)) return false;
     if (state.fFlag === "flagged"  && !actionReasons(p).length) return false;
     if (state.fBucket){
       const d = daysOut(p);
@@ -1024,6 +1038,7 @@ function kpiStrip(list){
   const over = rev.filter(isOverdue);
   const rel  = live.filter(p => p.released || p.status === "released");
   const held = live.filter(isBlocked);
+  const lateOfs = live.filter(isLateFromOfs);
   const ta   = turnaroundSamples(live);
   const avg  = ta.length ? Math.round(ta.reduce((a,b) => a+b, 0) / ta.length) : null;
   const relSheets = rel.reduce((a,p) => a + (Number(p.sheets) || 0), 0);
@@ -1036,6 +1051,7 @@ function kpiStrip(list){
     { l:"Overdue",       v:over.length, s:over.length ? "past contract review days" : "all inside the window", cls:over.length ? "alert" : "" },
     { l:"Avg turnaround", v:(avg == null ? "—" : avg), u:(avg == null ? "" : "days"), s:ta.length ? ta.length + " completed cycles" : "no returns logged yet" },
     { l:"Released for fab", v:pct, u:"%", s:rel.length + " of " + live.length + " · " + relSheets + " sheets", cls:pct >= 60 ? "good" : "" },
+    { l:"Late from OFS", v:lateOfs.length, s:lateOfs.length ? "past the detailer's due date" : "detailer on schedule", cls:lateOfs.length ? "alert" : "" },
     { l:"Held / blocked", v:held.length, s:held.length ? "open RFI or hold on record" : "no holds recorded", cls:held.length ? "warn" : "" }
   ];
   return '<div class="kpis">' + tiles.map(t =>
@@ -1072,7 +1088,7 @@ function agingPanel(list){
 function actionPanel(list){
   const rows = [];
   list.filter(isLive).forEach(p => { const rs = actionReasons(p); if (rs.length) rows.push({ p, r:rs[0], n:rs.length }); });
-  const order = { overdue:0, resubmit:1, blocked:2, due:3 };
+  const order = { overdue:0, ofs:1, resubmit:2, blocked:3, due:4, ofsdue:5 };
   rows.sort((a,b) => (order[a.r.k] - order[b.r.k]) || (Math.abs(daysToDue(b.p) || 0) - Math.abs(daysToDue(a.p) || 0)));
   const shown = rows.slice(0, 9);
   return '<section class="panel"><div class="panel-head"><h3>Needs action</h3>' +
@@ -1211,9 +1227,10 @@ const COLS = [
   { k:"status",    t:"Status" },
   { k:"code",      t:"Code" },
   { k:"bic",       t:"Ball in court" },
-  { k:"submitted", t:"Submitted" },
-  { k:"due",       t:"Due back" },
-  { k:"returned",  t:"Returned" },
+  { k:"submitted", t:"Date submitted" },
+  { k:"due",       t:"Date due" },
+  { k:"returned",  t:"Date returned" },
+  { k:"ofsDue",    t:"Date due from OFS" },
   { k:"days",      t:"Days" },
   { k:null,        t:"Fab" },
   { k:null,        t:"Drawings" }
@@ -1225,6 +1242,7 @@ function quickChips(){
     { k:"all",      t:"All",            n:all.length,                                 sw:"" },
     { k:"flagged",  t:"Needs action",   n:all.filter(p => actionReasons(p).length).length, sw:"--st-serious" },
     { k:"overdue",  t:"Overdue",        n:all.filter(isOverdue).length,               sw:"--st-crit" },
+    { k:"ofs",      t:"Late from OFS",  n:all.filter(isLateFromOfs).length,           sw:"--st-crit" },
     { k:"reviewer", t:"With reviewer",  n:all.filter(withReviewer).length,            sw:"--lane-review" },
     { k:"resubmit", t:"Needs resubmit", n:all.filter(needsResubmit).length,           sw:"--st-warn" },
     { k:"blocked",  t:"Held",           n:all.filter(isBlocked).length,               sw:"--st-warn" },
@@ -1237,8 +1255,8 @@ function quickChips(){
 }
 
 function sevOf(p){
-  if (isOverdue(p)) return "crit";
-  if (needsResubmit(p) || isBlocked(p) || isDueSoon(p)) return "warn";
+  if (isOverdue(p) || isLateFromOfs(p)) return "crit";
+  if (needsResubmit(p) || isBlocked(p) || isDueSoon(p) || isOfsDueSoon(p)) return "warn";
   if (p.released) return "good";
   return "";
 }
@@ -1254,14 +1272,14 @@ function logHtml(){
 
   let body = "", lastProj = null;
   if (!rows.length){
-    body = '<tr><td colspan="17"><div class="empty-note">' +
+    body = '<tr><td colspan="18"><div class="empty-note">' +
       (scoped.length ? "No packages match these filters." : "No packages on this job yet — add the first drawing set.") + "</div></td></tr>";
   } else {
     rows.forEach(p => {
       if (state.fProject === "all" && !state.sortKey && p.projectId !== lastProj){
         lastProj = p.projectId;
         const pr = projOf(p.projectId);
-        body += '<tr class="grp"><td colspan="17"><span style="position:sticky;left:10px;display:inline-block">' +
+        body += '<tr class="grp"><td colspan="18"><span style="position:sticky;left:10px;display:inline-block">' +
           esc(pr ? (pr.name || "Untitled project") : "Unassigned") +
           (pr && pr.number ? "  ·  Job " + esc(pr.number) : "") + "</span></td></tr>";
       }
@@ -1283,6 +1301,8 @@ function logHtml(){
         '<td><span class="days' + dueCls + '" title="' + (auto ? "Auto: submitted + " + reviewDays(p) + " review days" : "Override entered in the package") + '">' +
           (due ? fmtDate(due) + (auto ? '<sup style="color:var(--faint);font-weight:400">auto</sup>' : "") : "—") + "</span></td>" +
         '<td><input type="date" class="' + (p.returned ? "" : "blank") + '" data-fk="pkg:' + attr(p.id) + ':returned" value="' + attr(p.returned || "") + '"' + (state.canWrite ? "" : " disabled") + "></td>" +
+        '<td><input type="date" class="' + (p.ofsDue ? (isLateFromOfs(p) ? "ofs-late" : isOfsDueSoon(p) ? "ofs-soon" : "") : "blank") +
+          '" title="Date the drawing set is due to us from the detailer" data-fk="pkg:' + attr(p.id) + ':ofsDue" value="' + attr(p.ofsDue || "") + '"' + (state.canWrite ? "" : " disabled") + "></td>" +
         "<td>" + daysCell(p) + "</td>" +
         '<td><label class="fabdot"><input type="checkbox" data-fk="pkg:' + attr(p.id) + ':released"' + (p.released ? " checked" : "") + (state.canWrite ? "" : " disabled") + ">" +
           (p.released && p.releasedOn ? '<span class="num">' + fmtDate(p.releasedOn) + "</span>" : "<span>fab</span>") + "</label></td>" +
@@ -1322,7 +1342,7 @@ function logHtml(){
       "<span><b>" + sheets + "</b> sheets shown</span>" +
       (overdue ? '<span style="color:var(--st-crit)"><b style="color:var(--st-crit)">' + overdue + "</b> overdue</span>" : "") +
       '<span style="flex:1"></span>' +
-      "<span>Scroll sideways for returned, days out, fab release and drawings · click a column head to sort · edits save for everyone</span>" +
+      "<span>Scroll sideways for date returned, date due from OFS, days out, fab release and drawings · click a column head to sort · edits save for everyone</span>" +
     "</div></div>";
 }
 
@@ -1456,10 +1476,12 @@ function drawerHtml(){
           fldSel("pkg:" + p.id + ":bic", "Ball in court", p.bic || "", bicOpts) +
           fldText("pkg:" + p.id + ":reviewer", "Reviewer / approver", p.reviewer) +
         "</div>" +
-        '<div class="fgrid three">' +
+        '<div class="fgrid four">' +
           fldDate("pkg:" + p.id + ":submitted", "Date submitted", p.submitted) +
-          fldDate("pkg:" + p.id + ":due", "Due back", p.due, auto && due ? "Auto " + fmtDate(due) + " (+" + reviewDays(p) + " days)" : "") +
+          fldDate("pkg:" + p.id + ":due", "Date due", p.due, auto && due ? "Auto " + fmtDate(due) + " (+" + reviewDays(p) + " days)" : "") +
           fldDate("pkg:" + p.id + ":returned", "Date returned", p.returned) +
+          fldDate("pkg:" + p.id + ":ofsDue", "Date due from OFS", p.ofsDue,
+            isLateFromOfs(p) ? Math.abs(daysToOfs(p)) + " days late from the detailer" : "") +
         "</div>" +
         '<p style="margin:0;font-size:12px;color:' + (isOverdue(p) ? "var(--st-crit)" : "var(--muted)") + '">' + esc(clock) + "</p>" +
       "</div>" +
