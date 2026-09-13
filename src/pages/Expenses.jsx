@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
@@ -66,13 +67,7 @@ export default function ExpensesPage() {
   }, [search]);
 
   /* ── Queries ── */
-  const {
-    data: expenses = [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
+  const expensesQuery = useQuery({
     queryKey: ["expenses", activeProject?.id],
     queryFn: async () => {
       if (!activeProject?.id) return [];
@@ -82,24 +77,24 @@ export default function ExpensesPage() {
     enabled: !!activeProject?.id,
   });
 
-  const { data: projects = [] } = useQuery({
+  const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
   });
 
-  const { data: sovItems = [] } = useQuery({
+  const sovQuery = useQuery({
     queryKey: ["sov-items", activeProject?.id],
     queryFn: () => (activeProject?.id ? entities.SOVItem.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
   });
 
-  const { data: workPackages = [] } = useQuery({
+  const workPackagesQuery = useQuery({
     queryKey: ["work-packages", activeProject?.id],
     queryFn: () => (activeProject?.id ? entities.WorkPackage.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
   });
 
-  const { data: costCodes = [] } = useQuery({
+  const costCodesQuery = useQuery({
     queryKey: ["cost-codes", activeProject?.id],
     queryFn: () =>
       activeProject?.id
@@ -108,6 +103,15 @@ export default function ExpensesPage() {
     select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!activeProject?.id,
   });
+
+  const { data: expenses = [], isLoading, isError, error, refetch } = expensesQuery;
+  const projects = projectsQuery.data ?? [];
+  const sovItems = sovQuery.data ?? [];
+  const workPackages = workPackagesQuery.data ?? [];
+  const costCodes = costCodesQuery.data ?? [];
+  const expenseQueries = [expensesQuery, projectsQuery, sovQuery, workPackagesQuery, costCodesQuery];
+  const expenseError = expenseQueries.find((query) => query.isError)?.error ?? null;
+  const expenseLoading = expenseQueries.some((query) => query.isPending);
 
   /* ── Mutations ── */
   const createMut = useMutation({
@@ -427,6 +431,10 @@ export default function ExpensesPage() {
         </div>
       </div>
     );
+  }
+
+  if (expenseError || expenseLoading) {
+    return <WorkflowFetchState label="Expenses" error={expenseError} onRetry={() => { void Promise.all(expenseQueries.map((query) => query.refetch())); }} />;
   }
 
   return (

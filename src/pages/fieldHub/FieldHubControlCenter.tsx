@@ -12,7 +12,7 @@
  *   4. FilterBar — search + type chips + "Log Field Activity" primary action
  *   5. DataTable — flat activity feed (all sources merged)
  */
-import { useMemo } from "react";
+import { useMemo, type KeyboardEvent } from "react";
 import { HardHat, Users, AlertTriangle, ClipboardCheck, ShieldAlert, Wrench, Flame } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -43,6 +43,13 @@ import type {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function activateDecisionRow(event: KeyboardEvent<HTMLDivElement>) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    event.currentTarget.click();
+  }
+}
 
 const TYPE_CHIPS = ["All", "Daily Log", "Inspection", "Safety", "Punchlist"];
 const PHASE_CHIPS = ["All", ...FIELD_PHASES];
@@ -327,6 +334,9 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
             s.todayQueue.map((item: SiteCoordRow) => (
               <div
                 className="cmd-row is-clickable"
+                role="button"
+                tabIndex={0}
+                onKeyDown={activateDecisionRow}
                 key={item.id}
                 onClick={() => onOpenPunchlist?.(item.id)}
               >
@@ -370,6 +380,9 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
               return (
                 <div
                   className="cmd-row is-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={activateDecisionRow}
                   key={insp.id}
                   onClick={() => onOpenInspection?.(insp.id)}
                 >
@@ -409,6 +422,9 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
             s.coordinationQueue.map((item: SiteCoordRow) => (
               <div
                 className="cmd-row is-clickable"
+                role="button"
+                tabIndex={0}
+                onKeyDown={activateDecisionRow}
                 key={item.id}
                 onClick={() => {
                   if (item.type === "safety") onOpenIncident?.(item.id);

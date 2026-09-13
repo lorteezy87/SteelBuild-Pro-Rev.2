@@ -21,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { usePermissions } from "@/services/permissions";
 import FieldHubControlCenter from "./fieldHub/FieldHubControlCenter";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 
 const FieldTodayPage = lazyWithRetry(() => import("@/pages/FieldToday"));
 const FieldOverview = lazyWithRetry(() => import("@/pages/Field"));
@@ -60,7 +61,7 @@ export default function FieldHub() {
 
   // Field Hub aggregate data mirrors the existing register sources and is only
   // loaded while the Command Center overview is active.
-  const { data: rawLogs = [], isLoading: logsLoading } = useQuery({
+  const { data: rawLogs = [], isPending: logsLoading, error: logsError, refetch: refetchLogs } = useQuery({
     queryKey: ["daily-logs", projectId],
     queryFn: () =>
       projectId
@@ -69,7 +70,7 @@ export default function FieldHub() {
     enabled: hubActive,
   });
 
-  const { data: rawInspections = [], isLoading: inspectionsLoading } = useQuery({
+  const { data: rawInspections = [], isPending: inspectionsLoading, error: inspectionsError, refetch: refetchInspections } = useQuery({
     queryKey: ["inspections", projectId],
     queryFn: () =>
       projectId
@@ -78,7 +79,7 @@ export default function FieldHub() {
     enabled: hubActive,
   });
 
-  const { data: rawIncidents = [], isLoading: incidentsLoading } = useQuery({
+  const { data: rawIncidents = [], isPending: incidentsLoading, error: incidentsError, refetch: refetchIncidents } = useQuery({
     queryKey: ["safety-incidents", projectId],
     queryFn: () =>
       projectId
@@ -90,7 +91,7 @@ export default function FieldHub() {
   // Key must match the cacheRegistry `punchlist` primary (["punchlist", pid]).
   // It was ["punchlist-items", pid], which no invalidation ever touched, so
   // the hub feed went stale the moment anyone edited an item in the register.
-  const { data: rawPunchlist = [], isLoading: punchlistLoading } = useQuery({
+  const { data: rawPunchlist = [], isPending: punchlistLoading, error: punchlistError, refetch: refetchPunchlist } = useQuery({
     queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
@@ -102,7 +103,7 @@ export default function FieldHub() {
   // Daily logs reference schedule tasks (daily_logs.schedule_task_ids), and
   // schedule_tasks is the only field-adjacent table with a real `phase`
   // column — so it's how a log gets a phase we can actually stand behind.
-  const { data: scheduleTasks = [], isLoading: scheduleTasksLoading } = useQuery({
+  const { data: scheduleTasks = [], isPending: scheduleTasksLoading, error: scheduleTasksError, refetch: refetchScheduleTasks } = useQuery({
     queryKey: ["schedule-tasks", projectId],
     queryFn: () =>
       projectId ? entities.ScheduleTask.filter({ project_id: projectId }) : [],
@@ -110,7 +111,7 @@ export default function FieldHub() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  const { data: projects = [], isPending: projectsLoading, error: projectsError, refetch: refetchProjects } = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
@@ -125,6 +126,14 @@ export default function FieldHub() {
     || projectsLoading
     || (projectId ? scheduleTasksLoading : false)
   );
+  const hubError = logsError || inspectionsError || incidentsError || punchlistError
+    || projectsError || (projectId ? scheduleTasksError : null);
+  const retryHub = () => {
+    void Promise.all([
+      refetchLogs(), refetchInspections(), refetchIncidents(), refetchPunchlist(), refetchProjects(),
+      ...(projectId ? [refetchScheduleTasks()] : []),
+    ]);
+  };
 
   // Soft-delete filter — mirrors the pattern used in DailyLogs / Inspections / Safety.
   const logs = useMemo(() => rawLogs.filter((r) => !r.is_deleted), [rawLogs]);
@@ -258,8 +267,8 @@ export default function FieldHub() {
         <ErrorBoundary label="Field">
           <Suspense fallback={<LoadingSkeleton variant="page" />}>
             {activeKey === "hub"
-              ? hubLoading
-                ? <LoadingSkeleton variant="page" />
+              ? hubLoading || hubError
+                ? <WorkflowFetchState label="Field Hub" error={hubError} onRetry={retryHub} />
                 : controlCenter
               : Active
                 ? <Active />

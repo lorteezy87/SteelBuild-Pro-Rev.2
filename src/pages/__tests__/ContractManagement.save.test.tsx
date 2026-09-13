@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   projectList: vi.fn(),
   projectUpdate: vi.fn(),
+  activeProjectId: "project-1",
 }));
 
 vi.mock("@/api/supabaseClient", () => ({
@@ -24,7 +25,7 @@ vi.mock("@/api/supabaseClient", () => ({
 }));
 
 vi.mock("@/components/shared/ProjectContext", () => ({
-  useProjectContext: () => ({ activeProject: { id: "project-1" } }),
+  useProjectContext: () => ({ activeProject: { id: mocks.activeProjectId } }),
 }));
 
 vi.mock("@/hooks/useRealtimeInvalidation", () => ({
@@ -64,16 +65,29 @@ function renderPage() {
     },
   });
 
-  return render(
+  const page = (
     <QueryClientProvider client={queryClient}>
       <ContractManagement />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(page);
+  return {
+    ...view,
+    selectProject(projectId: string) {
+      mocks.activeProjectId = projectId;
+      view.rerender(
+        <QueryClientProvider client={queryClient}>
+          <ContractManagement />
+        </QueryClientProvider>,
+      );
+    },
+  };
 }
 
 describe("ContractManagement contract save", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.activeProjectId = "project-1";
     mocks.projectList.mockResolvedValue([
       {
         id: "project-1",
@@ -81,7 +95,43 @@ describe("ContractManagement contract save", () => {
         original_contract_value: 100000,
         contract_type: "Lump Sum",
       },
+      {
+        id: "project-2",
+        name: "Second Project",
+        original_contract_value: 200000,
+        contract_type: "Unit Price",
+      },
     ]);
+  });
+
+  it("discards the first project's contract draft before editing the selected project", async () => {
+    const user = userEvent.setup();
+    mocks.projectUpdate.mockResolvedValue({ id: "project-2" });
+    const page = renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /edit/i }));
+    await user.clear(screen.getByRole("spinbutton"));
+    await user.type(screen.getByRole("spinbutton"), "125000");
+    await user.selectOptions(screen.getByRole("combobox"), "GMP");
+
+    page.selectProject("project-2");
+
+    await screen.findByRole("button", { name: /edit/i });
+    expect(screen.queryByRole("button", { name: "Save Changes" })).not.toBeInTheDocument();
+    expect(mocks.projectUpdate).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /edit/i }));
+    expect(screen.getByRole("spinbutton")).toHaveValue(200000);
+    expect(screen.getByRole("combobox")).toHaveValue("Unit Price");
+    await user.clear(screen.getByRole("spinbutton"));
+    await user.type(screen.getByRole("spinbutton"), "225000");
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    await waitFor(() => expect(mocks.projectUpdate).toHaveBeenCalledWith("project-2", {
+      original_contract_value: 225000,
+      contract_type: "Unit Price",
+    }));
+    expect(mocks.projectUpdate).toHaveBeenCalledTimes(1);
   });
 
   it("keeps contract edit mode open until the project update succeeds", async () => {

@@ -9,7 +9,7 @@
  * mutations, and does not touch ScheduleGantt, reparentTasks, or any
  * schedule data logic. All data/state/mutations stay in Schedule.tsx.
  */
-import { useRef, type ReactNode } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { CalendarDays, CalendarRange, Download, FileSpreadsheet, ListPlus, Plus, Sparkles, Upload } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -28,6 +28,13 @@ import {
   formatScheduleDate,
 } from "./scheduleCommandCenter.presentation";
 import { useScheduleCommandSummary } from "./useScheduleCommandSummary";
+
+function activateDecisionRow(event: KeyboardEvent<HTMLDivElement>) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    event.currentTarget.click();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -138,6 +145,9 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
             s.lookaheadQueue.map((t) => (
               <div
                 className="cmd-row is-clickable"
+                role="button"
+                tabIndex={0}
+                onKeyDown={activateDecisionRow}
                 key={t.id ?? t.task_name}
                 onClick={() => onOpenTask(t)}
               >
@@ -169,6 +179,9 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
             s.milestoneQueue.map((t) => (
               <div
                 className="cmd-row is-clickable"
+                role="button"
+                tabIndex={0}
+                onKeyDown={activateDecisionRow}
                 key={t.id ?? t.task_name}
                 onClick={() => onOpenTask(t)}
               >
@@ -198,6 +211,9 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
               return (
                 <div
                   className="cmd-row is-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={activateDecisionRow}
                   key={t.id ?? t.task_name}
                   onClick={() => onOpenTask(t)}
                 >

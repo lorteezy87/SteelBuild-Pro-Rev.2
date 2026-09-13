@@ -7,7 +7,6 @@
  * mutations remain in Schedule.jsx for now and will move in later increments.
  *
  * @param {string|null|undefined} projectId
- * @returns {{ scheduleTasks: any[], isLoading: boolean }}
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -27,5 +26,12 @@ export function useScheduleTasks(projectId) {
   // Keep the cached list fresh when other clients mutate schedule tasks.
   useRealtimeInvalidation("schedule_tasks", projectId, [["schedule-tasks", projectId]]);
 
-  return { scheduleTasks: query.data ?? [], isLoading: query.isLoading };
+  return {
+    scheduleTasks: query.data ?? [],
+    isLoading: query.isLoading,
+    isPending: query.isPending,
+    isPaused: query.fetchStatus === "paused",
+    error: query.error,
+    refetch: query.refetch,
+  };
 }
