@@ -126,6 +126,14 @@ export interface FieldTaskRow {
   _task: ScheduleTaskRecord;
 }
 
+export interface FieldRecoveryRow {
+  id: string;
+  activity: string;
+  location: string;
+  dueDate: string;
+  _task: ScheduleTaskRecord;
+}
+
 export interface OpenPunchRow {
   id: string;
   title: string;
@@ -145,8 +153,12 @@ export interface FieldTodaySummary {
   kpis: FieldKpiSummary;
   /** Used for Today's Plan panel (top 6 by urgency rank) */
   planQueue: ScheduleTaskRecord[];
+  /** Presentation rows for Today's Plan, in the same order as planQueue. */
+  planRows: FieldTaskRow[];
   /** Overdue work, separate from today's plan. */
   recoveryQueue: ScheduleTaskRecord[];
+  /** Presentation rows for the complete recovery backlog. */
+  recoveryRows: FieldRecoveryRow[];
   /** Work missing the start date needed for trustworthy planning. */
   planningGapCount: number;
   /** Future work beginning within seven days. */
@@ -176,22 +188,85 @@ function nextActionForTask(task: ScheduleTaskRecord, bucket: UrgencyBucket): str
 }
 
 /** Formats an ISO date as short date (Jun 28) for the time column. Returns "TBD" when absent. */
-function fmtTableDate(iso?: string | null): string {
+export function formatFieldDay(iso?: string | null): string {
   if (!iso) return "TBD";
-  try {
-    const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
-    if (Number.isNaN(d.getTime())) return "TBD";
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch {
-    return "TBD";
-  }
+  const day = String(iso).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return "TBD";
+  const [year, month, date] = day.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, date));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== date
+  ) return "TBD";
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
-function isoPlusDays(iso: string, days: number): string {
-  const date = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+export function isoDatePlusDays(iso: string, days: number): string {
+  const date = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return iso;
-  date.setDate(date.getDate() + days);
+  date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+export function deriveFieldTaskPhase(
+  task: ScheduleTaskRecord,
+): Pick<FieldTaskRow, "phase" | "phaseSource"> {
+  const storedPhase = task.phase || null;
+  return {
+    phase: canonicalFieldPhase(
+      storedPhase || derivePhase({ task_name: taskLabel(task), phase: storedPhase }),
+    ),
+    phaseSource: storedPhase ? PHASE_SOURCE.STORED : PHASE_SOURCE.DERIVED,
+  };
+}
+
+export function deriveFieldTaskRows(
+  tasks: ScheduleTaskRecord[],
+  todayIso: string,
+): FieldTaskRow[] {
+  return tasks.map((task, index) => {
+    const bucket = taskUrgency(task, todayIso) as UrgencyBucket;
+    const pct = clampPercent(task.percent_complete);
+    return {
+      id: task.id ? String(task.id) : `task-${index}`,
+      time: formatFieldDay(task.end_date),
+      activity: taskLabel(task),
+      type: String(task.task_type || task.type || "Task"),
+      location: String(task.location || task.area || ""),
+      status: pct >= 100 ? "Complete" : pct > 0 ? "In Progress" : "Not Started",
+      urgencyBucket: bucket,
+      nextAction: nextActionForTask(task, bucket),
+      reportedBy: taskCrew(task),
+      pct,
+      ...deriveFieldTaskPhase(task),
+      _task: task,
+    };
+  });
+}
+
+export function filterFieldTaskRows(
+  rows: FieldTaskRow[],
+  search: string,
+  statusFilter: string,
+): FieldTaskRow[] {
+  const statusRows =
+    statusFilter && statusFilter !== "all"
+      ? rows.filter((row) => row.urgencyBucket === statusFilter)
+      : rows;
+  const query = search.trim().toLowerCase();
+  if (!query) return statusRows;
+  return statusRows.filter(
+    (row) =>
+      row.activity.toLowerCase().includes(query) ||
+      row.type.toLowerCase().includes(query) ||
+      row.location.toLowerCase().includes(query) ||
+      row.reportedBy.toLowerCase().includes(query),
+  );
 }
 
 /**
@@ -208,7 +283,7 @@ export function buildFieldTodaySummary(
 ): FieldTodaySummary {
   const partition = partitionFieldTasks(allTasks, todayIso);
   const todaysWork = partition.today;
-  const lookaheadEnd = isoPlusDays(todayIso, 7);
+  const lookaheadEnd = isoDatePlusDays(todayIso, 7);
   const upcomingCount = partition.upcoming.filter((task) => {
     const start = String(task.start_date || "").slice(0, 10);
     return start > todayIso && start <= lookaheadEnd;
@@ -246,16 +321,16 @@ export function buildFieldTodaySummary(
       : 0;
 
   // Daily Photos panel — up to 6 thumbnails from today
-  const photoThumbnails: PhotoThumbnailRow[] = photosToday.slice(0, 6).map((p) => ({
-    id: p.id || String(Math.random()),
+  const photoThumbnails: PhotoThumbnailRow[] = photosToday.slice(0, 6).map((p, index) => ({
+    id: p.id || `photo-${index}`,
     fileUrl: p.file_url || null,
     title: p.title || null,
     takenDate: p.taken_date || null,
   }));
 
   // Open punch rows — top 5 for the panel
-  const openPunchRows: OpenPunchRow[] = openPunches.slice(0, 5).map((p) => ({
-    id: p.id || String(Math.random()),
+  const openPunchRows: OpenPunchRow[] = openPunches.slice(0, 5).map((p, index) => ({
+    id: p.id || `punch-${index}`,
     title: p.title || "(untitled)",
     priority: p.priority || null,
     location: p.location || null,
@@ -263,32 +338,22 @@ export function buildFieldTodaySummary(
   }));
 
   // Full table rows — every task in todaysWork
-  const tableRows: FieldTaskRow[] = todaysWork.map((task) => {
-    const bucket = taskUrgency(task, todayIso) as UrgencyBucket;
-    const pct = clampPercent(task.percent_complete);
-    return {
-      id: String(task.id || Math.random()),
-      time: fmtTableDate(task.end_date),
-      activity: taskLabel(task),
-      type: String(task.task_type || task.type || "Task"),
-      location: String(task.location || task.area || ""),
-      status: pct >= 100 ? "Complete" : pct > 0 ? "In Progress" : "Not Started",
-      urgencyBucket: bucket,
-      nextAction: nextActionForTask(task, bucket),
-      reportedBy: taskCrew(task),
-      pct,
-      phase: canonicalFieldPhase(
-        task.phase || derivePhase({ task_name: taskLabel(task), phase: task.phase }),
-      ),
-      phaseSource: task.phase ? PHASE_SOURCE.STORED : PHASE_SOURCE.DERIVED,
-      _task: task,
-    };
-  });
+  const tableRows = deriveFieldTaskRows(todaysWork, todayIso);
+  const planRows = tableRows.slice(0, 6);
+  const recoveryRows: FieldRecoveryRow[] = recoveryQueue.map((task, index) => ({
+    id: task.id ? String(task.id) : `recovery-${index}`,
+    activity: taskLabel(task),
+    location: String(task.location || task.area || "Location not provided"),
+    dueDate: String(task.end_date || "Due date unavailable"),
+    _task: task,
+  }));
 
   return {
     kpis,
     planQueue,
+    planRows,
     recoveryQueue,
+    recoveryRows,
     planningGapCount: partition.unscheduled.length,
     upcomingCount,
     todayProgressPct,

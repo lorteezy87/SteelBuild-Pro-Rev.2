@@ -1,20 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
   buildFieldTodaySummary,
+  deriveFieldTaskPhase,
+  filterFieldTaskRows,
+  formatFieldDay,
+  isoDatePlusDays,
   ScheduleTaskRecord,
   PhotoRecord,
   PunchlistItemRecord,
 } from "../fieldTodayControlCenter.derive";
 
-// Build an ISO date string offset from today (YYYY-MM-DD).
-function isoOffset(days: number): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-const TODAY = isoOffset(0);
+const TODAY = "2026-09-08";
+const isoOffset = (days: number): string => isoDatePlusDays(TODAY, days);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -148,14 +145,11 @@ describe("buildFieldTodaySummary", () => {
   describe("planQueue", () => {
     it("contains at most 6 items and is a subset of todaysWork", () => {
       expect(s.planQueue.length).toBeLessThanOrEqual(6);
+      expect(s.planRows.map((row) => row.id)).toEqual(s.planQueue.map((task) => task.id));
     });
-    it("puts overdue tasks ahead of active tasks", () => {
-      // t1 is overdue (end_date past), t3 is active — t1 must precede t3 in planQueue.
-      const t1idx = s.planQueue.findIndex((t) => t.id === "t1");
-      const t3idx = s.planQueue.findIndex((t) => t.id === "t3");
-      if (t1idx >= 0 && t3idx >= 0) {
-        expect(t1idx).toBeLessThan(t3idx);
-      }
+    it("keeps recovery work out of the plan queue", () => {
+      expect(s.planQueue.some((task) => task.id === "t1")).toBe(false);
+      expect(s.recoveryRows.map((row) => row.id)).toEqual(["t1"]);
     });
   });
 
@@ -194,5 +188,64 @@ describe("buildFieldTodaySummary", () => {
       expect(empty.openPunchRows).toHaveLength(0);
       expect(empty.photoThumbnails).toHaveLength(0);
     });
+  });
+
+  describe("typed view models", () => {
+    it("preserves stored phases and marks inferred phases honestly", () => {
+      expect(deriveFieldTaskPhase({ task_name: "Set columns", phase: "Installation" }))
+        .toEqual({ phase: "Erection", phaseSource: "stored" });
+      expect(deriveFieldTaskPhase({ task_name: "Detail connection plates" }))
+        .toEqual({ phase: "Detailing", phaseSource: "derived" });
+    });
+
+    it("filters rows across status and searchable field text", () => {
+      expect(filterFieldTaskRows(s.tableRows, "crew", "all")).toEqual([]);
+      expect(filterFieldTaskRows(s.tableRows, "column", "due-today").map((row) => row.id))
+        .toEqual(["t2"]);
+      expect(filterFieldTaskRows(s.tableRows, "", "active").map((row) => row.id))
+        .toEqual(["t3"]);
+    });
+
+    it("uses deterministic fallback ids for records without database ids", () => {
+      const first = buildFieldTodaySummary(
+        [{ task_name: "Unnamed id task", start_date: TODAY, end_date: TODAY }],
+        [{ taken_date: TODAY }],
+        [{ status: "Open" }],
+        TODAY,
+        0,
+      );
+      const second = buildFieldTodaySummary(
+        [{ task_name: "Unnamed id task", start_date: TODAY, end_date: TODAY }],
+        [{ taken_date: TODAY }],
+        [{ status: "Open" }],
+        TODAY,
+        0,
+      );
+      expect(first.tableRows[0].id).toBe("task-0");
+      expect(first.photoThumbnails[0].id).toBe("photo-0");
+      expect(first.openPunchRows[0].id).toBe("punch-0");
+      expect(second).toEqual(first);
+    });
+  });
+});
+
+describe("Field Today local-day semantics", () => {
+  const TOKYO_OFFSET_MINUTES = -540;
+
+  function oldLocalRoundTrip(iso: string, days: number, offsetMinutes: number): string {
+    const [year, month, date] = iso.split("-").map(Number);
+    return new Date(
+      Date.UTC(year, month - 1, date + days) + offsetMinutes * 60_000,
+    ).toISOString().slice(0, 10);
+  }
+
+  it("keeps a local day token stable where local-midnight UTC serialization shifted it", () => {
+    expect(oldLocalRoundTrip("2026-09-08", 7, TOKYO_OFFSET_MINUTES)).toBe("2026-09-14");
+    expect(isoDatePlusDays("2026-09-08", 7)).toBe("2026-09-15");
+  });
+
+  it("formats the entered calendar day independently of the runner timezone", () => {
+    expect(formatFieldDay("2026-09-08T00:00:00Z")).toBe("Sep 8");
+    expect(formatFieldDay("2026-02-31")).toBe("TBD");
   });
 });
