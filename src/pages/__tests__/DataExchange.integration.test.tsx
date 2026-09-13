@@ -89,4 +89,39 @@ describe("DataExchange page integration", () => {
     });
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Imported 1 rfis");
   });
+
+  it("resets staged approval and source content when the dataset changes", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DataExchange />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.filter).toHaveBeenCalledWith(
+        { project_id: "project-1" },
+        "-created_at",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Load sample rows" }));
+    const approval = screen.getByRole("checkbox");
+    fireEvent.click(approval);
+    expect(approval).toBeChecked();
+    expect(screen.getByPlaceholderText("Paste CSV or TSV rows here...")).not.toHaveValue("");
+
+    fireEvent.change(screen.getByLabelText("Dataset"), {
+      target: { value: "scheduleTasks" },
+    });
+
+    expect(screen.getByPlaceholderText("Paste CSV or TSV rows here...")).toHaveValue("");
+    expect(approval).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Commit 0 rows" })).toBeDisabled();
+  });
 });
