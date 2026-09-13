@@ -421,27 +421,23 @@ export function useDrawingsPageController({
     if (selected.size === 0 || Object.keys(payload).length === 0) return;
     setBulkEditOpen(false);
     const fieldCount = Object.keys(payload).length;
-    const targetStage = typeof payload.stage === "string"
-      ? payload.stage
-      : null;
     const { succeeded, failed } = await batchProcess(
       [...selected],
       (id: string) => {
         const current = drawings.find((drawing) => drawing.id === id);
-        if (current && targetStage) {
-          const transition = validateStageTransition(
-            current.stage ?? "",
-            targetStage,
-          );
-          if (!transition.ok) throw new Error(transition.reason);
-
+        const nextStage = typeof payload.stage === "string" ? payload.stage : null;
+        if (current && nextStage) {
+          const validation = validateStageTransition(current.stage ?? "", nextStage);
+          if (!validation.ok) {
+            throw new Error(validation.reason || "Invalid stage transition");
+          }
           const classification = classifyDrawingStageMutation(
             current,
-            targetStage,
+            nextStage,
             submittalsBySetId,
           );
           if (!classification.allowed) {
-            throw new Error(classification.reason);
+            throw new Error(classification.reason || "Stage transition blocked");
           }
         }
         return entities.Drawing.update(id, payload as DrawingUpdate);

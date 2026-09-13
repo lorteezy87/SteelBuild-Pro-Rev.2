@@ -32,15 +32,15 @@ vi.mock("../uiCompat", () => ({
   SelectContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   SelectItem: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   SelectTrigger: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-  SelectValue: () => null,
+  SelectValue: (): React.ReactNode => null,
 }));
 
 vi.mock("@/components/shared/AutoLinkSuggestions", () => ({
-  default: () => null,
+  default: (): React.ReactNode => null,
 }));
 
 vi.mock("@/components/submittals/DrawingSetSelector", () => ({
-  default: () => null,
+  default: (): React.ReactNode => null,
 }));
 
 import SubmittalFormModal from "../SubmittalFormModal";
