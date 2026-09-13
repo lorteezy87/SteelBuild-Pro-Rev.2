@@ -221,7 +221,10 @@ export default function DrawingsPageView({
           data.filtered.length === 0
           && (
             data.drawingSetRecords.length === 0
-            || Object.keys(data.visibleSetMap).length === 0
+            || (
+              !!state.setFilterId
+              && Object.keys(data.visibleSetMap).length === 0
+            )
           )
         ) ? (
           <div style={{ ...surface, padding: 48, textAlign: "center" }}>
