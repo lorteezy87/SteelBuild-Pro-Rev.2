@@ -20,7 +20,7 @@ import { evaluateApproverNotes } from "@/lib/approverNotes";
 
 // ── Virtual list wrapper ───────────────────────────────────────────────
 
-interface SubmittalVirtualListProps {
+export interface SubmittalVirtualListProps {
   filtered: Submittal[];
   isLoading: boolean;
   rows: Submittal[];
