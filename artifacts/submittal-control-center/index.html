@@ -93,7 +93,7 @@ h1,h2,h3{margin:0; font-family:var(--f-display); font-weight:600; letter-spacing
 .btn.sm{padding:5px 9px; font-size:11.5px}
 .btn[disabled]{opacity:.45; pointer-events:none}
 
-input[type=text],input[type=url],input[type=number],input[type=date],select,textarea{
+input[type=text],input[type=search],input[type=url],input[type=number],input[type=date],select,textarea{
   font:400 13px/1.3 var(--f-body); color:var(--ink); background:var(--raised);
   border:1px solid var(--line-2); border-radius:5px; padding:7px 9px; width:100%; min-width:0}
 input[type=date],input[type=number]{font-family:var(--f-mono); font-size:12.5px; font-variant-numeric:tabular-nums}
@@ -252,7 +252,7 @@ table.mini th.n{text-align:right}
 
 /* ===== filters ===== */
 .filters{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px}
-.filters select,.filters input[type=text]{width:auto; min-width:136px; padding:6px 9px; font-size:12.5px}
+.filters select,.filters input[type=text],.filters input[type=search]{width:auto; min-width:136px; padding:6px 9px; font-size:12.5px}
 .filters select{padding-right:24px}
 .filters .grow{flex:1; min-width:190px; width:100%}
 .filters .eyebrow{white-space:nowrap}
@@ -286,6 +286,9 @@ table.log tr.grp td{background:var(--well); font:700 10px/1 var(--f-body); lette
 table.log tr[data-sev="crit"] td:first-child{box-shadow:inset 3px 0 0 var(--st-crit)}
 table.log tr[data-sev="warn"] td:first-child{box-shadow:inset 3px 0 0 var(--st-warn)}
 table.log tr[data-sev="good"] td:first-child{box-shadow:inset 3px 0 0 var(--st-good)}
+table.log th:first-child, table.log td.c-num{
+  position:sticky; left:0; z-index:4; border-right:1px solid var(--line)}
+table.log thead th:first-child{z-index:6; border-right:1px solid var(--line-2)}
 table.log td.c-proj{min-width:178px} table.log td.c-status{min-width:146px}
 table.log td.c-code{min-width:88px} table.log td.c-bic{min-width:118px} table.log td.c-spec{min-width:96px}
 table.log .rowlink{background:none; border:0; padding:0; font:inherit; color:var(--ink); cursor:pointer;
@@ -311,9 +314,32 @@ table.log input[type=date].ofs-soon{color:var(--st-warn); font-weight:600}
 .linkchip.file{background:var(--accent-tint); color:var(--accent-2)}
 .fabdot{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted); white-space:nowrap}
 .fabdot input{width:14px; height:14px; accent-color:var(--st-good); cursor:pointer}
+/* Column priority as the viewport shrinks. The drawer still holds every field,
+   so hiding a column here costs nothing but the sideways drag. */
+@media (max-width:1100px){
+  table.log{min-width:1480px}
+  table.log th:nth-child(4),  table.log td:nth-child(4),
+  table.log th:nth-child(6),  table.log td:nth-child(6){display:none}
+}
+@media (max-width:820px){
+  table.log{min-width:1080px}
+  table.log th:nth-child(5),  table.log td:nth-child(5),
+  table.log th:nth-child(7),  table.log td:nth-child(7),
+  table.log th:nth-child(8),  table.log td:nth-child(8),
+  table.log th:nth-child(17), table.log td:nth-child(17){display:none}
+}
+@media (max-width:620px){
+  table.log{min-width:820px}
+  table.log th:nth-child(2),  table.log td:nth-child(2),
+  table.log th:nth-child(10), table.log td:nth-child(10){display:none}
+  table.log td.c-title{min-width:180px}
+  table.log .rowlink{max-width:180px}
+}
 .gridfoot{display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:9px 12px;
   border-top:1px solid var(--line); background:var(--well); font-size:11.5px; color:var(--muted)}
 .gridfoot b{font-family:var(--f-mono); font-weight:600; color:var(--ink-2)}
+.narrow-only{display:none}
+@media (max-width:820px){ .wide-only{display:none} .narrow-only{display:inline} }
 
 /* ===== drawer ===== */
 .scrim{position:fixed; inset:0; background:rgba(18,16,12,.46); z-index:60; backdrop-filter:blur(2px)}
@@ -1324,7 +1350,8 @@ function logHtml(){
 
   return banners() +
     '<div class="filters">' +
-      '<input type="text" class="grow" data-fk="flt:q" placeholder="Search number, package, spec, sequence, reviewer…" value="' + attr(state.q) + '">' +
+      '<input type="search" class="grow" data-fk="flt:q" aria-label="Search the submittal log" ' +
+        'placeholder="Search number, package, spec, sequence, reviewer…" value="' + attr(state.q) + '">' +
       selectHtml("flt:status", state.fStatus, stOpts) +
       selectHtml("flt:type", state.fType, tyOpts) +
       selectHtml("flt:bic", state.fBic, bcOpts) +
@@ -1342,7 +1369,8 @@ function logHtml(){
       "<span><b>" + sheets + "</b> sheets shown</span>" +
       (overdue ? '<span style="color:var(--st-crit)"><b style="color:var(--st-crit)">' + overdue + "</b> overdue</span>" : "") +
       '<span style="flex:1"></span>' +
-      "<span>Scroll sideways for date returned, date due from OFS, days out, fab release and drawings · click a column head to sort · edits save for everyone</span>" +
+      '<span class="wide-only">Scroll sideways for date returned, date due from OFS, days out, fab release and drawings · click a column head to sort · edits save for everyone</span>' +
+      '<span class="narrow-only">Sub # stays pinned — scroll sideways for the rest. Open a row for every field.</span>' +
     "</div></div>";
 }
 
