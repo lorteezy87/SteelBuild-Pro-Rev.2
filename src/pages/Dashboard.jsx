@@ -2,11 +2,14 @@ import React, { Suspense, useCallback, useEffect, useMemo, useState } from "reac
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
+import { useAuth } from "@/lib/AuthContext";
 import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import GettingStartedChecklist from "@/components/dashboard/GettingStartedChecklist";
 // Canonical control-center loading uses the same query set for all project views.
 const DashboardControlCenter = lazyWithRetry(() => import("./dashboardCC/DashboardControlCenter"));
 const PortfolioControlCenter = lazyWithRetry(() => import("./portfolio/PortfolioControlCenter"));
@@ -35,6 +38,7 @@ function FirstProjectWelcome({ onStart }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { activeProject, setActiveProject } = useProjectContext();
+  const { user } = useAuth();
   const pid = activeProject?.id;
   const [portfolioSearch, setPortfolioSearch] = useState("");
   const [portfolioHealthFilter, setPortfolioHealthFilter] = useState("All");
@@ -52,7 +56,7 @@ export default function Dashboard() {
   const refetchMs = refetchIntervalFromPref(auto_refresh_secs);
 
   /* ── Portfolio-wide queries (always loaded) ── */
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading, isSuccess: projectsSuccess } = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
@@ -66,10 +70,10 @@ export default function Dashboard() {
   const activeProjectIsLive = !pid || projectsLoading || liveProjectIds.has(pid);
 
   useEffect(() => {
-    if (pid && !projectsLoading && !activeProjectIsLive) {
+    if (pid && projectsSuccess && !activeProjectIsLive) {
       setActiveProject(null);
     }
-  }, [activeProjectIsLive, pid, projectsLoading, setActiveProject]);
+  }, [activeProjectIsLive, pid, projectsSuccess, setActiveProject]);
 
   const scopePortfolioRows = useCallback(
     (rows) => pid ? rows : rows.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
@@ -133,6 +137,22 @@ export default function Dashboard() {
     queryKey: ["drawings-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.Drawing),
     staleTime: 30 * 1000,
+    enabled: !!pid,
+  });
+  const {
+    data: hasRecordedFabRelease = false,
+    isSuccess: fabReleaseEvidenceLoaded,
+  } = useQuery({
+    queryKey: ["fab-release-evidence", pid],
+    queryFn: async () => {
+      if (!pid) return false;
+      const { count, error } = await supabase
+        .from("fab_release_log")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", pid);
+      if (error) throw error;
+      return (count ?? 0) > 0;
+    },
     enabled: !!pid,
   });
   // Cash-flow figures (total billed / collected / pending payment /
@@ -253,6 +273,17 @@ export default function Dashboard() {
 
   // ── Canonical single-project Dashboard Control Center ─────────────────────
   if (pid) {
+    const hasReleasedSubmittal = submittals.some(
+      (submittal) => submittal.status === "Released for Fabrication",
+    );
+    const signals = {
+      hasDrawings: drawings.length > 0,
+      hasSubmittal: submittals.length > 0,
+      hasRfi: rfis.length > 0,
+      rfiSkipped: false,
+      hasFabRelease: hasRecordedFabRelease || hasReleasedSubmittal,
+    };
+
     const onNavigateDash = (target, opts = {}) => {
       const paths = {
         rfis: "/RFIs",
@@ -291,29 +322,37 @@ export default function Dashboard() {
     return (
       <ErrorBoundary label="Dashboard Control Center">
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <DashboardControlCenter
-            project={activeProject}
-            rfis={rfis}
-            cos={cos}
-            codes={codes}
-            wps={wps}
-            deliveries={deliveries}
-            actionItems={actionItems}
-            expenses={expenses}
-            submittals={submittals}
-            drawings={drawings}
-            sovItems={sovItems}
-            scheduleTasks={scheduleTasks}
-            drawingActivity={drawingActivity}
-            punchlistItems={punchlistItems}
-            inspections={inspections}
-            safetyIncidents={safetyIncidents}
-            qualityRecords={qualityRecords}
-            todayIso={new Date().toISOString().slice(0, 10)}
-            rfiEvidenceLoaded={rfisSuccess}
-            scheduleEvidenceLoaded={scheduleTasksSuccess}
-            onNavigate={onNavigateDash}
-          />
+          <>
+            {(fabReleaseEvidenceLoaded || hasReleasedSubmittal) && (
+              <GettingStartedChecklist
+                signals={signals}
+                userMetadata={user}
+              />
+            )}
+            <DashboardControlCenter
+              project={activeProject}
+              rfis={rfis}
+              cos={cos}
+              codes={codes}
+              wps={wps}
+              deliveries={deliveries}
+              actionItems={actionItems}
+              expenses={expenses}
+              submittals={submittals}
+              drawings={drawings}
+              sovItems={sovItems}
+              scheduleTasks={scheduleTasks}
+              drawingActivity={drawingActivity}
+              punchlistItems={punchlistItems}
+              inspections={inspections}
+              safetyIncidents={safetyIncidents}
+              qualityRecords={qualityRecords}
+              todayIso={new Date().toISOString().slice(0, 10)}
+              rfiEvidenceLoaded={rfisSuccess}
+              scheduleEvidenceLoaded={scheduleTasksSuccess}
+              onNavigate={onNavigateDash}
+            />
+          </>
         </Suspense>
       </ErrorBoundary>
     );

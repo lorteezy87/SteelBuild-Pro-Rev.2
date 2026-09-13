@@ -4,7 +4,7 @@ import './instrument'
 import { Capacitor } from '@capacitor/core'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from '@/App.jsx'
+import AppBootstrap from '@/boot/AppBootstrap'
 import { installDateOnlyShim } from '@/lib/dateOnly'
 import { logError } from '@/lib/telemetry'
 import { isPreviewDeployHost } from '@/lib/deployHost'
@@ -75,7 +75,7 @@ if (typeof window !== 'undefined') {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <App />
+  <AppBootstrap />
 )
 
 // Native (Capacitor iOS) bootstrap. No-op on web: the module and its native

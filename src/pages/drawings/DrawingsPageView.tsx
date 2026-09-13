@@ -1,3 +1,4 @@
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import type { ComponentType } from "react";
 import type { RowWithAliases } from "@/api/supabaseClient";
 import type { Drawing } from "@/hooks/useDrawings";
@@ -81,6 +82,10 @@ export default function DrawingsPageView({
         </p>
       </div>
     );
+  }
+
+  if (data.queryError || data.isLoading) {
+    return <WorkflowFetchState label="Drawings" error={data.queryError} onRetry={() => { void data.refetch(); }} />;
   }
 
   const openSheetEditor = (drawing: Drawing) => {
@@ -217,7 +222,16 @@ export default function DrawingsPageView({
           <div style={{ padding: 48, textAlign: "center", ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>
             LOADING SHEETS…
           </div>
-        ) : (data.filtered.length === 0 && data.drawingSetRecords.length === 0) ? (
+        ) : (
+          data.filtered.length === 0
+          && (
+            data.drawingSetRecords.length === 0
+            || (
+              !!state.setFilterId
+              && Object.keys(data.visibleSetMap).length === 0
+            )
+          )
+        ) ? (
           <div style={{ ...surface, padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>▦</div>
             <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em", margin: 0 }}>
@@ -247,7 +261,7 @@ export default function DrawingsPageView({
         ) : (
           <TypedDrawingsGrid
             drawings={data.filtered}
-            drawingSets={data.drawingSetRecords}
+            drawingSets={Object.values(data.visibleSetMap)}
             selected={state.selected}
             onToggleSelect={controller.toggleSelect}
             onEdit={canEditDrawing ? openSheetEditor : null}

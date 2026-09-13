@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useMemo } from "react";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -75,44 +76,56 @@ export default function PortfolioOverview() {
   const [kpiFilter, setKpiFilter] = useState(null);
   const [viewMode, setViewMode] = useState("pm");
 
-  const { data: rawProjects = [] } = useQuery({
+  const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
-    initialData: [],
     staleTime: 5 * 60 * 1000,
   });
-  const { data: rawRfis = [] } = useQuery({
+  const rfisQuery = useQuery({
     queryKey: ["rfis"],
     queryFn: () => entities.RFI.list(),
   });
-  const { data: rawCOs = [] } = useQuery({
+  const changesQuery = useQuery({
     queryKey: ["change-orders-global"],
     queryFn: () => entities.ChangeOrder.list(),
   });
-  const { data: rawActions = [] } = useQuery({
+  const actionsQuery = useQuery({
     queryKey: ["action-items-all"],
     queryFn: () => entities.ActionItem.list(),
   });
-  const { data: rawDeliveries = [] } = useQuery({
+  const deliveriesQuery = useQuery({
     queryKey: ["deliveries-all"],
     queryFn: () => entities.Delivery.list(),
   });
-  const { data: rawWPs = [] } = useQuery({
+  const workPackagesQuery = useQuery({
     queryKey: ["work-packages-global"],
     queryFn: () => entities.WorkPackage.list(),
   });
-  const { data: rawCostCodes = [] } = useQuery({
+  const costCodesQuery = useQuery({
     queryKey: ["cost-codes-global"],
     queryFn: () => entities.CostCode.list(),
   });
-  const { data: rawExpenses = [] } = useQuery({
+  const expensesQuery = useQuery({
     queryKey: ["expenses-all"],
     queryFn: () => entities.Expense.list(),
   });
-  const { data: rawRisks = [] } = useQuery({
+  const risksQuery = useQuery({
     queryKey: ["risks-all"],
     queryFn: () => entities.Risk.list(),
   });
+
+  const rawProjects = projectsQuery.data ?? [];
+  const rawRfis = rfisQuery.data ?? [];
+  const rawCOs = changesQuery.data ?? [];
+  const rawActions = actionsQuery.data ?? [];
+  const rawDeliveries = deliveriesQuery.data ?? [];
+  const rawWPs = workPackagesQuery.data ?? [];
+  const rawCostCodes = costCodesQuery.data ?? [];
+  const rawExpenses = expensesQuery.data ?? [];
+  const rawRisks = risksQuery.data ?? [];
+  const reportQueries = [projectsQuery, rfisQuery, changesQuery, actionsQuery, deliveriesQuery, workPackagesQuery, costCodesQuery, expensesQuery, risksQuery];
+  const reportError = reportQueries.find((query) => query.isError)?.error ?? null;
+  const reportLoading = reportQueries.some((query) => query.isPending);
 
   const projects = useMemo(() => filterNotDeleted(rawProjects), [rawProjects]);
   const rfis = useMemo(() => filterNotDeleted(rawRfis), [rawRfis]);
@@ -288,6 +301,10 @@ export default function PortfolioOverview() {
       pendingCOs.length,
       budgetVariance,
     );
+
+  if (reportError || reportLoading) {
+    return <WorkflowFetchState label="Portfolio overview" error={reportError} onRetry={() => { void Promise.all(reportQueries.map((query) => query.refetch())); }} />;
+  }
 
   if (projects.length === 0) {
     return (

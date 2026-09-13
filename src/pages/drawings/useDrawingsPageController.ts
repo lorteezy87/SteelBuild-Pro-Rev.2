@@ -423,7 +423,25 @@ export function useDrawingsPageController({
     const fieldCount = Object.keys(payload).length;
     const { succeeded, failed } = await batchProcess(
       [...selected],
-      (id: string) => entities.Drawing.update(id, payload as DrawingUpdate),
+      (id: string) => {
+        const current = drawings.find((drawing) => drawing.id === id);
+        const nextStage = typeof payload.stage === "string" ? payload.stage : null;
+        if (current && nextStage) {
+          const validation = validateStageTransition(current.stage ?? "", nextStage);
+          if (!validation.ok) {
+            throw new Error(validation.reason || "Invalid stage transition");
+          }
+          const classification = classifyDrawingStageMutation(
+            current,
+            nextStage,
+            submittalsBySetId,
+          );
+          if (!classification.allowed) {
+            throw new Error(classification.reason || "Stage transition blocked");
+          }
+        }
+        return entities.Drawing.update(id, payload as DrawingUpdate);
+      },
     );
     await invalidate();
     const toastInfo = formatBulkUpdateToast(
@@ -598,7 +616,6 @@ export function useDrawingsPageController({
 
   const handleDrawingImportComplete = () => {
     void invalidate();
-    queryClient.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
   };
 
   const handleAttachRevision = async (submittalId: string) => {

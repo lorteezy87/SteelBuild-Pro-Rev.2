@@ -91,7 +91,12 @@ export function useDrawingsPageData({
     rfis,
     submittals,
     drawingSetRecords,
-    isLoading: drawingsQuery.isLoading,
+    refetch: () => Promise.all([drawingsQuery.refetch(), rfisQuery.refetch(), submittalsQuery.refetch(), drawingSetsQuery.refetch()]),
+    isLoading: !!projectId && (
+      drawingsQuery.isPending ||
+      rfisQuery.isPending ||
+      submittalsQuery.isPending ||
+      drawingSetsQuery.isPending),
     queryError:
       drawingsQuery.error ??
       rfisQuery.error ??

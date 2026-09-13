@@ -877,3 +877,19 @@ describe("DrawingSubmittalHub — the matrix's Last sent line", () => {
     );
   });
 });
+
+describe('core workflow evidence recovery', () => {
+  for (const source of ['Drawing', 'Submittal', 'SubmittalRound', 'DrawingSet', 'RFI', 'WorkPackage']) {
+    it(`does not show workflow readiness after ${source} fails`, async () => {
+      const filter = vi.fn().mockRejectedValue(new Error('Read unavailable'));
+      entityOverrides[source] = { filter };
+      renderHub();
+      const failure = await screen.findByRole('alert', { name: 'Detailing workflow' });
+      expect(failure).toHaveTextContent('Unable to load detailing workflow');
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+      filter.mockResolvedValue([]);
+      await userEvent.setup().click(within(failure).getByRole('button', { name: 'Retry' }));
+      expect(await screen.findByRole('tablist')).toBeVisible();
+    });
+  }
+});

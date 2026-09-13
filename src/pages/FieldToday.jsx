@@ -70,14 +70,14 @@ export default function FieldToday() {
 
   // Control-center supplementary queries (photos + punchlist).
   const todayIsoForQuery = localToday();
-  const { data: allPhotos = [] } = useQuery({
+  const { data: allPhotos = [], isPending: photosPending, fetchStatus: photosFetchStatus, error: photosError, refetch: refetchPhotos } = useQuery({
     queryKey: ["field-hub-photos", projectId],
     queryFn: () =>
       projectId ? entities.Photo.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });
-  const { data: allPunchItems = [] } = useQuery({
+  const { data: allPunchItems = [], isPending: punchlistPending, fetchStatus: punchlistFetchStatus, error: punchlistError, refetch: refetchPunchlist } = useQuery({
     queryKey: ["field-hub-punchlist", projectId],
     queryFn: () =>
       projectId ? entities.PunchlistItem.filter({ project_id: projectId }) : [],
@@ -88,7 +88,7 @@ export default function FieldToday() {
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
 
-  const { scheduleTasks, isLoading } = useScheduleTasks(projectId);
+  const { scheduleTasks, isPending: tasksPending, isPaused: tasksPaused, error: tasksError, refetch: refetchTasks } = useScheduleTasks(projectId);
 
   // ── Offline outbox: queued idempotent captures replay (in order) on reconnect.
   // The single app-wide instance lives in OutboxProvider so the queue drains from
@@ -236,6 +236,18 @@ export default function FieldToday() {
     reconcilePendingPhotos(new Set(loadQueue().map((op) => op.id)));
   }, []);
 
+  if (!projectId) {
+    return <section role="status" style={{ padding: 32 }}>
+      <h2>Select a project</h2>
+      <p>Choose a project from the project selector to view today's field work.</p>
+    </section>;
+  }
+  const fieldError = tasksError || photosError || punchlistError;
+  const taskEvidenceUnavailable = Boolean(tasksError) || tasksPaused;
+  const photoEvidenceUnavailable = Boolean(photosError) || photosPending || photosFetchStatus === "paused";
+  const punchEvidenceUnavailable = Boolean(punchlistError) || punchlistPending || punchlistFetchStatus === "paused";
+  const incompleteEvidence = tasksPending || taskEvidenceUnavailable || photoEvidenceUnavailable || punchEvidenceUnavailable;
+
   // ── Canonical Field Today control center ──────────────────────────────────────────────────
   // All existing offline outbox + photo sync logic above is UNTOUCHED.
   // We pass the real handlers through as props so the Control Center's capture
@@ -256,12 +268,23 @@ export default function FieldToday() {
         <input
           ref={photoInputRef}
           type="file"
+          aria-label="Capture field photo"
           accept="image/*"
           capture="environment"
           multiple
           style={{ display: "none" }}
           onChange={(e) => handlePhotoFiles(e.target.files)}
         />
+        {incompleteEvidence && (
+          <section role={fieldError ? "alert" : "status"} aria-label="Field Today" style={{ padding: 16, marginBottom: 12, background: "var(--bg-surface)", borderRadius: "var(--radius-card)" }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18 }}>{fieldError ? "Some field records are unavailable" : "Waiting for field records"}</h2>
+            <p>Photo and punch capture remain available. Current totals are unavailable for records that have not refreshed.</p>
+            {taskEvidenceUnavailable && scheduleTasks.length > 0 && <p>Showing cached schedule tasks; dates and progress may be stale.</p>}
+            {fieldError && <button type="button" className="sbd-btn sbd-btn-secondary" onClick={() => {
+              void Promise.all([refetchTasks(), refetchPhotos(), refetchPunchlist()]);
+            }}>Retry</button>}
+          </section>
+        )}
         <FieldTodayControlCenter
           projectName={activeProject?.name || "Field"}
           todayIso={todayIsoForQuery}
@@ -269,7 +292,10 @@ export default function FieldToday() {
           photos={todayPhotos}
           punchItems={allPunchItems}
           pendingSync={pendingSync}
-          isLoading={isLoading}
+          isLoading={tasksPending}
+          tasksUnavailable={taskEvidenceUnavailable}
+          photosUnavailable={photoEvidenceUnavailable}
+          punchItemsUnavailable={punchEvidenceUnavailable}
           search={ccSearch}
           onSearch={setCcSearch}
           statusFilter={ccStatusFilter}

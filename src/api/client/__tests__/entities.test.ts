@@ -63,6 +63,68 @@ describe("entities.SOVItem", () => {
     });
   });
 
+  describe("entities.Expense", () => {
+    beforeEach(() => {
+      vi.mocked(supabase.rpc).mockReset();
+    });
+
+    it("creates through the expense RPC and strips client-controlled numbers", async () => {
+      vi.mocked(supabase.rpc).mockResolvedValue({
+        data: {
+          id: "expense-1",
+          project_id: "project-1",
+          project_name: "Test Project",
+          expense_number: "7",
+          description: "Fuel",
+          created_at: "2026-09-13T08:47:00Z",
+        },
+        error: null,
+      } as never);
+
+      const created = await entities.Expense.create({
+        project_id: "project-1",
+        project_name: "Client value",
+        expense_number: "999",
+        description: "Fuel",
+        amount: 125,
+      });
+
+      expect(supabase.rpc).toHaveBeenCalledWith("create_expense", {
+        p_project_id: "project-1",
+        p_payload: {
+          description: "Fuel",
+          amount: 125,
+        },
+      });
+      expect(created).toMatchObject({
+        expense_number: "7",
+        project_name: "Test Project",
+        created_date: "2026-09-13T08:47:00Z",
+      });
+    });
+
+    it("rejects a create with no project id before calling the RPC", async () => {
+      await expect(
+        entities.Expense.create({ description: "Fuel" } as never),
+      ).rejects.toThrow("project_id is required to create an expense");
+      expect(supabase.rpc).not.toHaveBeenCalled();
+    });
+
+    it("preserves expense operation context when the RPC fails", async () => {
+      vi.mocked(supabase.rpc).mockResolvedValue({
+        data: null,
+        error: { message: "description is required", code: "23514" },
+      } as never);
+
+      await expect(
+        entities.Expense.create({
+          project_id: "project-1",
+          description: "",
+        }),
+      ).rejects.toThrow("[expenses.create] description is required");
+    });
+  });
+
   it("never forwards a client-supplied line number", async () => {
     vi.mocked(supabase.rpc).mockResolvedValue({
       data: { id: "sov-1", project_id: "project-1", line_item_number: 1 },

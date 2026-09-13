@@ -1756,7 +1756,7 @@ export type Database = {
           assigned_to: string | null
           created_at: string
           created_by: string | null
-          drawing_revision_id: string
+          drawing_revision_id: string | null
           due_date: string | null
           id: string
           impact_type: string
@@ -1772,7 +1772,7 @@ export type Database = {
           assigned_to?: string | null
           created_at?: string
           created_by?: string | null
-          drawing_revision_id: string
+          drawing_revision_id?: string | null
           due_date?: string | null
           id?: string
           impact_type: string
@@ -2663,26 +2663,39 @@ export type Database = {
       drawing_transmittal_items: {
         Row: {
           created_at: string
+          drawing_id: string | null
           drawing_revision_id: string
+          gc_drawing_id: string | null
           id: string
           project_id: string
           transmittal_id: string
         }
         Insert: {
           created_at?: string
+          drawing_id?: string | null
           drawing_revision_id: string
+          gc_drawing_id?: string | null
           id?: string
           project_id: string
           transmittal_id: string
         }
         Update: {
           created_at?: string
+          drawing_id?: string | null
           drawing_revision_id?: string
+          gc_drawing_id?: string | null
           id?: string
           project_id?: string
           transmittal_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "drawing_transmittal_items_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "drawing_transmittal_items_drawing_revision_id_fkey"
             columns: ["drawing_revision_id"]
@@ -7859,6 +7872,10 @@ export type Database = {
             } & "Could not choose the best candidate function between: public.add_updated_at_trigger(tbl => text), public.add_updated_at_trigger(tbl => regclass). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
       create_project: { Args: { project_data: Json }; Returns: Json }
+      create_expense: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["expenses"]["Row"]
+      }
       create_sov_item: {
         Args: { p_project_id: string; p_payload: Json }
         Returns: Database["public"]["Tables"]["sov_items"]["Row"]

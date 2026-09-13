@@ -61,6 +61,7 @@ function ThemeProbe() {
 describe("ThemeContext", () => {
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     window.localStorage.clear();
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.className = "";
@@ -96,4 +97,24 @@ describe("ThemeContext", () => {
     expect(screen.getByText("theme:dark")).toBeInTheDocument();
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
   });
+
+  it("follows system theme when the localStorage getter throws", () => {
+    installMatchMedia(false);
+    vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
+      throw new DOMException("Storage unavailable", "SecurityError");
+    });
+    render(<ThemeProvider><ThemeProbe /></ThemeProvider>);
+    expect(screen.getByText("theme:light")).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    fireEvent.click(screen.getByText("Toggle"));
+    expect(screen.getByText("theme:dark")).toBeInTheDocument();
+  });
+
+  it("uses the safe fallback when matchMedia is unavailable", () => {
+    vi.spyOn(window, "matchMedia");
+    Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: undefined });
+    render(<ThemeProvider><ThemeProbe /></ThemeProvider>);
+    expect(screen.getByText("theme:dark")).toBeInTheDocument();
+  });
+
 });

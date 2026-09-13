@@ -114,3 +114,48 @@ test('a failed public chunk stops automatic reloads and can recover with Reload 
   expect(documentLoads).toBe(3); // explicit user action, not another automatic retry
   await expect(page.getByRole('button', { name: 'Reload page', exact: true })).toHaveCount(0);
 });
+
+test('missing startup configuration renders recovery instead of stranding the boot screen', async ({ page }, testInfo) => {
+  await page.route('**/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.origin === 'http://127.0.0.1:4187') await route.continue();
+    else await route.fulfill({ status: 200, contentType: 'text/plain', body: '' });
+  });
+  await page.goto('http://127.0.0.1:4187/privacy');
+  await expect(page.getByRole('heading', { name: 'Something went wrong' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reload page', exact: true })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Loading application' })).toHaveCount(0);
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('startup-recovery.png') });
+});
+
+for (const preference of [null, 'system', 'invalid', 'dark', 'denied'] as const) {
+  test(`initial theme honors ${preference ?? 'unset'} preference before the app loads`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.addInitScript(value => {
+      localStorage.clear();
+      if (value === 'denied') {
+        Object.defineProperty(window, 'localStorage', {
+          configurable: true,
+          get() { throw new DOMException('Storage denied', 'SecurityError'); },
+        });
+      } else if (value) localStorage.setItem('sbp-theme', value);
+    }, preference);
+    await page.route('**/*', async route => {
+      if (new URL(route.request().url()).origin === 'http://127.0.0.1:4186') await route.continue();
+      else await route.fulfill({ status: 200, contentType: 'text/plain', body: '' });
+    });
+    let releaseApp: (() => void) | undefined;
+    const gate = new Promise<void>(resolve => { releaseApp = resolve; });
+    await page.route('**/src/main.jsx*', async route => { await gate; await route.continue(); });
+    const expected = preference === 'dark' ? 'dark' : 'light';
+    await page.goto('/privacy', { waitUntil: 'commit' });
+    try {
+      await expect(page.locator('#root')).toBeEmpty();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', expected);
+      await expect(page.locator('body')).toHaveCSS('background-color', expected === 'dark' ? 'rgb(11, 14, 17)' : 'rgb(241, 245, 249)');
+    } finally { releaseApp?.(); }
+    await expect(page.getByRole('heading', { name: /Privacy Policy/i })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', expected);
+  });
+}

@@ -26,12 +26,15 @@
  *     upstream; the countdown/stamping logic is untouched write-side code).
  *   - Revision (row R{total_rounds}; the text `revision` shows in SubmittalDetail).
  * Passing the identical props keeps every one of those behaviors byte-identical.
- * SubmittalDetail's internal re-skin is deferred to a later slice (see the panel
- * docstring note) — it is reused unchanged here, already tinted by the cascade.
+ * Detail workflow controls are reused; narrow screens switch between the
+ * register and selected detail without changing the owning page state.
  */
-import type { ComponentType, ReactNode } from "react";
+import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardList, Clock3, ShieldAlert, TrendingUp } from "lucide-react";
 import { FilterBar, useCommandSkin } from "@/components/command";
+import { useResponsiveBreakpoint } from "@/components/nav/useResponsiveBreakpoint";
+import "@/styles/command.css";
+import "./submittalWorkspace.css";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { BIC_CHOICES, STATUSES } from "./format";
 import type { SubmittalStats } from "./submittalRegister.derive";
@@ -113,6 +116,8 @@ export interface SubmittalRegisterPanelProps {
    *  revision — is byte-identical. This panel only owns the CHROME. */
   list: ReactNode;
   detail: ReactNode;
+  /** True only when the owning page has resolved a selected record. */
+  detailOpen: boolean;
 }
 
 export default function SubmittalRegisterPanel({
@@ -121,9 +126,21 @@ export default function SubmittalRegisterPanel({
   filterStatus, filterBIC, search, onFilterStatus, onFilterBIC, onSearch,
   selectedIds, allSelected, toggleAll,
   projectLabel, canCreate, onNewSubmittal, onBulkAdd,
-  list, detail,
+  list, detail, detailOpen,
 }: SubmittalRegisterPanelProps) {
   useCommandSkin();
+  const { isDesktop } = useResponsiveBreakpoint();
+  const compact = !isDesktop;
+  const listRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const wasDetailOpen = useRef(false);
+  useEffect(() => {
+    if (compact) {
+      if (detailOpen) detailRef.current?.focus();
+      else if (wasDetailOpen.current) listRef.current?.focus();
+    }
+    wasDetailOpen.current = detailOpen;
+  }, [compact, detailOpen]);
   const countUnit = filtered.length !== rows.length ? ` of ${rows.length}` : "";
   const subtitle = stats.overdue > 0
     ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
@@ -132,7 +149,12 @@ export default function SubmittalRegisterPanel({
       : `${stats.pending} awaiting review · ${stats.approved} approved`;
 
   return (
-    <div className="detailing-cc" style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0, overflow: "hidden" }}>
+    <div
+      className="detailing-cc submittal-register"
+      data-compact={compact}
+      style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0, overflow: compact && !detailOpen ? "auto" : "hidden" }}
+    >
+      <div className="submittal-register__controls" hidden={compact && detailOpen}>
       {!embedded && (
         <>
           {/* ── Header ─────────────────────────────────────────────────── */}
@@ -152,7 +174,7 @@ export default function SubmittalRegisterPanel({
           </div>
 
           {/* ── KPI strip (click-to-filter, kit cmd-kpi cells) ─────────── */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${compact ? 100 : 150}px, 1fr))`, gap: compact ? 8 : 12 }}>
             <KpiCell
               label="Total" value={stats.total} Icon={ClipboardList} tone="info"
               active={filterStatus === "all" && filterBIC === "all"}
@@ -246,10 +268,31 @@ export default function SubmittalRegisterPanel({
         }
       />
 
-      {/* ── Register body: list + detail (reused verbatim) ─────────────── */}
-      <div className="cmd-table-wrap" style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden", padding: 0 }}>
-        {list}
-        {detail}
+      </div>
+
+      {/* Keep both panes mounted to preserve list scroll and in-progress detail
+          state. Hidden panes leave the mobile tab order and accessibility tree. */}
+      <div className="cmd-table-wrap submittal-register__body" style={{ flex: compact && !detailOpen ? "1 0 360px" : 1, minHeight: 0, display: "flex", overflow: "hidden", padding: 0 }}>
+        <div
+          ref={listRef}
+          className="submittal-register__list"
+          role="region"
+          aria-label="Submittal register list"
+          tabIndex={-1}
+          hidden={compact && detailOpen}
+        >
+          {list}
+        </div>
+        <div
+          ref={detailRef}
+          className="submittal-register__detail"
+          role="region"
+          aria-label="Submittal details"
+          tabIndex={-1}
+          hidden={compact && !detailOpen}
+        >
+          {detail}
+        </div>
       </div>
     </div>
   );

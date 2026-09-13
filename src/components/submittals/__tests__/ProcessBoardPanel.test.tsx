@@ -47,7 +47,7 @@ const SUBMITTALS = [
 const PROCESS = "/DrawingSubmittalHub?hub_tab=process";
 const RECORD_SUB_1 = "/DrawingSubmittalHub?hub_tab=submittals&recordId=sub-1";
 const RECORD_SUB_2 = "/DrawingSubmittalHub?hub_tab=submittals&recordId=sub-2";
-const SETS_VIEW = "/DrawingSubmittalHub?hub_tab=drawings&hub_view=sets";
+const SETS_VIEW = "/DrawingSubmittalHub?hub_tab=drawings&hub_view=sets&set=set-open";
 const CREATE_SET_OPEN = "/DrawingSubmittalHub?hub_tab=submittals&targetSetId=set-open";
 
 // Every location the router lands on, in order, so a second navigation (the
