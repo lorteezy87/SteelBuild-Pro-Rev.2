@@ -217,7 +217,7 @@ export default function DrawingsPageView({
           <div style={{ padding: 48, textAlign: "center", ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>
             LOADING SHEETS…
           </div>
-        ) : (data.filtered.length === 0 && Object.keys(data.visibleSetMap).length === 0) ? (
+        ) : data.filtered.length === 0 ? (
           <div style={{ ...surface, padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>▦</div>
             <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em", margin: 0 }}>
