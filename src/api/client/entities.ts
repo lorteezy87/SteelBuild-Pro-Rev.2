@@ -17,9 +17,16 @@ import {
   serializeDependencies as serializeScheduleDependencies,
 } from '@/services/scheduleCascade';
 import { SupabaseOperationError } from './errors';
-import { addAliases, normalizeIdArray, normalizeJsonbArray } from './fieldMapping';
+import {
+  addAliases,
+  addAliasesToList,
+  cleanRecord,
+  normalizeIdArray,
+  normalizeJsonbArray,
+} from './fieldMapping';
 import { createEntityClient } from './entityClient';
 import type { Insert, RowWithAliases, Update } from './supabaseTypes';
+import type { Json } from '@/types/supabase';
 
 // ─── Entity registry ──────────────────────────────────────────────────────────
 
@@ -284,7 +291,44 @@ export const entities = {
   // generated column on the row — callers can sort/filter it without
   // re-deriving the probability * impact band in three places.
   Risk:                  createEntityClient('risks'),
-  SOVItem:               createEntityClient('sov_items'),
+  SOVItem:               (() => {
+    const base = createEntityClient('sov_items');
+    const createPayload = (record: Insert<'sov_items'>): Json => {
+      const payload = cleanRecord(record as Record<string, unknown>);
+      delete payload.line_item_number;
+      delete payload.sov_id;
+      return payload as Json;
+    };
+    const create = async (
+      record: Insert<'sov_items'>,
+    ): Promise<RowWithAliases<'sov_items'>> => {
+      const { data, error } = await supabase.rpc('create_sov_item', {
+        p_item: createPayload(record),
+      });
+      if (error) throw new SupabaseOperationError('sov_items', 'create', error);
+      return addAliases<RowWithAliases<'sov_items'>>(
+        data as RowWithAliases<'sov_items'>,
+        'sov_items',
+      );
+    };
+
+    return {
+      ...base,
+      create,
+      bulkCreate: async (
+        records: Insert<'sov_items'>[],
+      ): Promise<Array<RowWithAliases<'sov_items'>>> => {
+        const { data, error } = await supabase.rpc('create_sov_items', {
+          p_items: records.map(createPayload),
+        });
+        if (error) throw new SupabaseOperationError('sov_items', 'bulkCreate', error);
+        return addAliasesToList<RowWithAliases<'sov_items'>>(
+          data as Array<RowWithAliases<'sov_items'>>,
+          'sov_items',
+        );
+      },
+    };
+  })(),
   Vendor:                createEntityClient('vendors'),
   Contact:               createEntityClient('contacts'),
   DailyLog:              (() => {

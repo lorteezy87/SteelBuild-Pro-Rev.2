@@ -7859,6 +7859,14 @@ export type Database = {
             } & "Could not choose the best candidate function between: public.add_updated_at_trigger(tbl => text), public.add_updated_at_trigger(tbl => regclass). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
       create_project: { Args: { project_data: Json }; Returns: Json }
+      create_sov_item: {
+        Args: { p_item: Json }
+        Returns: Database["public"]["Tables"]["sov_items"]["Row"]
+      }
+      create_sov_items: {
+        Args: { p_items: Json[] }
+        Returns: Database["public"]["Tables"]["sov_items"]["Row"][]
+      }
       delete_drawing_set: { Args: { p_set_id: string }; Returns: number }
       soft_delete_project: { Args: { p_project_id: string }; Returns: undefined }
       escalate_rfi_sla: { Args: never; Returns: number }
