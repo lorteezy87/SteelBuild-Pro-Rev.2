@@ -36,6 +36,17 @@ export const SOFT_DELETE_TABLES = new Set<string>([
   'linked_folders', 'document_import_queue',
   // Launch-readiness: archive cost codes instead of hard-deleting financial history.
   'cost_codes',
+  // schedule_tasks gained is_deleted / deleted_at and a BEFORE DELETE guard
+  // (trg_enforce_schedule_task_guards) that raises 42501 on ANY hard delete:
+  // "schedule_tasks rows are never hard-deleted; set is_deleted instead".
+  // `authenticated` also holds no DELETE grant on the table, so the hard-delete
+  // branch below failed at the ACL check before the guard even ran —
+  // "[schedule_tasks.delete] permission denied for table schedule_tasks".
+  // Registering here is the whole fix: delete() becomes the is_deleted write the
+  // guard wants, and list/filter/get start excluding tombstoned tasks so a
+  // deleted task stops feeding the Gantt, the cascade, float and % complete.
+  // Do NOT "fix" this by granting DELETE — the database forbids it on purpose.
+  'schedule_tasks',
 ]);
 
 /**
