@@ -25,8 +25,11 @@ jobs:
     timeout-minutes: 25
     env:
       CONFIRM_PROJECT_REF: kjrwqagyeswwoxpjkcko
-      BACKUP_ROOT: ${{ runner.temp }}/supabase-retirement-backup
     steps:
+      # Job-level env cannot read the runner context; GitHub rejects the whole
+      # file if it tries, failing a run on every push. Set the path here instead.
+      - name: Choose the backup directory
+        run: echo "BACKUP_ROOT=$RUNNER_TEMP/supabase-retirement-backup" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
