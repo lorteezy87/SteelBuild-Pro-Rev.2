@@ -7,7 +7,7 @@
  */
 
 import { type ReactNode, useMemo } from "react";
-import { Receipt, Clock, CheckCircle2, AlertCircle, TrendingUp, DollarSign, CalendarDays, RefreshCw } from "lucide-react";
+import { Receipt, Clock, CheckCircle2, AlertCircle, TrendingUp, DollarSign, CalendarDays, RefreshCw, Plus } from "lucide-react";
 import "@/styles/command.css";
 import {
   PageHero,
@@ -61,6 +61,7 @@ export default function ExpensesControlCenter(props: ExpensesControlCenterProps)
     projectName,
     expenses,
     onStatusFilter,
+    onCreate,
     onOpenExpense,
     onRefresh,
     children,
@@ -205,7 +206,17 @@ export default function ExpensesControlCenter(props: ExpensesControlCenterProps)
         </DecisionPanel>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12 }}>
+        {onCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", border: "1px solid var(--accent)", borderRadius: 7, background: "var(--accent)", color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.06em", cursor: "pointer", fontWeight: 700 }}
+          >
+            <Plus size={12} />
+            Add Expense
+          </button>
+        )}
         <button
           type="button"
           onClick={onRefresh}

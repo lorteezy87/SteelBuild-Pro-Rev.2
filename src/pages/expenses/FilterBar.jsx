@@ -7,7 +7,7 @@
  */
 
 import React from "react";
-import { Upload, Download, X } from "lucide-react";
+import { Upload, Download, X, Plus } from "lucide-react";
 import { COST_CODES_GROUPED } from "@/components/shared/costCodes";
 import { EXPENSE_TYPES, PAYMENT_STATUSES } from "./constants";
 
@@ -31,7 +31,7 @@ export default function FilterBar({
   wpFilter, onWPFilter, workPackages,
   dateRangeFilter, onDateRangeFilter,
   activeKPI, onClearKPI,
-  onImport, onExport,
+  onAdd, onImport, onExport,
 }) {
   return (
     <div className="filter-bar-responsive" style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
@@ -80,6 +80,15 @@ export default function FilterBar({
         <option value="last_30">Last 30 Days</option>
         <option value="this_quarter">This Quarter</option>
       </select>
+      {onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          style={{ ...selectStyle, display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", border: "1px solid var(--accent)", color: "#fff", padding: "6px 14px", fontWeight: 700 }}
+        >
+          <Plus size={12} /> Add Expense
+        </button>
+      )}
       <button
         onClick={onImport}
         style={{ ...selectStyle, display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface-low)", border: "1px solid var(--accent)", color: "var(--accent)", padding: "6px 14px" }}
