@@ -9,6 +9,12 @@ import {
   DesktopSessionValidationError,
 } from "@/lib/desktopSessionHandoff";
 
+// desktopBrowserSessionSchema validates user.id with uuidSchema, so a
+// placeholder like "user-1" fails at the SESSION stage and the test never
+// reaches the crypto or handoff stage it was written to exercise. Every
+// fixture that is meant to get past the session gate needs a real UUID.
+const TEST_USER_ID = "11111111-1111-4111-8111-111111111111";
+
 describe("DesktopConnect", () => {
   it("identifies invalid desktop request parameters before reading the browser session", async () => {
     const dependencies: DesktopConnectDependencies = {
@@ -98,7 +104,7 @@ describe("DesktopConnect", () => {
         access_token: "access-secret",
         refresh_token: "refresh-secret",
         expires_at: 1_800_000_000,
-        user: { id: "user-1", email: "pm@example.com" },
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
       }),
       encryptSession: vi.fn().mockResolvedValue({
         algorithm: "P-256+A256GCM",
@@ -169,7 +175,7 @@ describe("DesktopConnect", () => {
         access_token: "access-secret-value",
         refresh_token: "refresh-secret-value",
         expires_at: 1_800_000_000,
-        user: { id: "user-1", email: "pm@example.com" },
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
       }),
       encryptSession: vi.fn().mockRejectedValue(new Error("private-key-material")),
       createHandoff: vi.fn(),
@@ -198,7 +204,7 @@ describe("DesktopConnect", () => {
         access_token: "access-secret-value",
         refresh_token: "refresh-secret-value",
         expires_at: 1_800_000_000,
-        user: { id: "user-1", email: "pm@example.com" },
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
       }),
       encryptSession: vi.fn().mockRejectedValue(new DesktopSessionCryptoError("import")),
       createHandoff: vi.fn(),
@@ -226,7 +232,7 @@ describe("DesktopConnect", () => {
         access_token: "access-secret-value",
         refresh_token: "refresh-secret-value",
         expires_at: 1_800_000_000,
-        user: { id: "user-1", email: "pm@example.com" },
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
       }),
       encryptSession: vi.fn().mockRejectedValue(new DesktopSessionValidationError("refresh-token")),
       createHandoff: vi.fn(),
@@ -254,7 +260,7 @@ describe("DesktopConnect", () => {
         access_token: "access-secret-value",
         refresh_token: "refresh-secret-value",
         expires_at: 1_800_000_000,
-        user: { id: "user-1", email: "pm@example.com" },
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
       }),
       encryptSession: vi.fn().mockResolvedValue({
         algorithm: "P-256+A256GCM",

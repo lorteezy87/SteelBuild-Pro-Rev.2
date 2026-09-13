@@ -7860,12 +7860,8 @@ export type Database = {
           }
       create_project: { Args: { project_data: Json }; Returns: Json }
       create_sov_item: {
-        Args: { p_item: Json }
+        Args: { p_project_id: string; p_payload: Json }
         Returns: Database["public"]["Tables"]["sov_items"]["Row"]
-      }
-      create_sov_items: {
-        Args: { p_items: Json[] }
-        Returns: Database["public"]["Tables"]["sov_items"]["Row"][]
       }
       delete_drawing_set: { Args: { p_set_id: string }; Returns: number }
       soft_delete_project: { Args: { p_project_id: string }; Returns: undefined }
