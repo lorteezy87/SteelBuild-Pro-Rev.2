@@ -331,16 +331,19 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     mutationFn: async () => {
       const patch = headerPatch(form);
       if (!patch.transmittal_number) throw new Error("Transmittal number is required");
+      const selectedTargets = [...selected].map((revisionId) => ({
+        revisionId,
+        drawingId: drawingIdForRevision(sheetOptions, revisionId),
+      }));
       const transmittal = await entities.DrawingTransmittal.create(
         withProjectId({ ...patch } as Record<string, unknown>, projectId) as never,
       );
       const transmittalId = (transmittal as { id: string }).id;
-      for (const revisionId of selected) {
+      for (const { revisionId, drawingId } of selectedTargets) {
         // drawing_transmittal_items_one_target requires exactly one of
         // drawing_id / gc_drawing_id to be set (added directly to the shared
         // prod schema; drawing_revision_id is no longer part of that check).
         // sheetOptions already resolves drawingId per revisionId.
-        const drawingId = drawingIdForRevision(sheetOptions, revisionId);
         await entities.DrawingTransmittalItem.create(
           withProjectId({
             transmittal_id: transmittalId,

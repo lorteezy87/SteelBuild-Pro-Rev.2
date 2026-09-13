@@ -275,4 +275,24 @@ describe("TransmittalLogPanel", () => {
       drawing_id: "drawing-2",
     }));
   });
+
+  it("rejects an unmapped revision before creating the transmittal header", async () => {
+    can.mockReturnValue(true);
+    register = [registerRow({
+      drawing_id: null as unknown as string,
+      current_revision_id: "revision-unmapped",
+      current_revision: "Z",
+      sheet_number: "S999",
+      sheet_title: "Unmapped sheet",
+    })];
+    renderPanel();
+
+    await userEvent.click(screen.getByRole("button", { name: "Log transmittal" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Transmittal number" }), "T-003");
+    await userEvent.click(screen.getByRole("checkbox", { name: "Attach S999 revision Z" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save transmittal" }));
+
+    await waitFor(() => expect(drawingTransmittalCreate).not.toHaveBeenCalled());
+    expect(drawingTransmittalItemCreate).not.toHaveBeenCalled();
+  });
 });
