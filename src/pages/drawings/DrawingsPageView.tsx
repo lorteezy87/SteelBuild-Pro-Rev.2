@@ -247,7 +247,7 @@ export default function DrawingsPageView({
         ) : (
           <TypedDrawingsGrid
             drawings={data.filtered}
-            drawingSets={data.drawingSetRecords}
+            drawingSets={Object.values(data.visibleSetMap)}
             selected={state.selected}
             onToggleSelect={controller.toggleSelect}
             onEdit={canEditDrawing ? openSheetEditor : null}
