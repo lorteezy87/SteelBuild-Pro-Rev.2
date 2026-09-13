@@ -22,7 +22,7 @@ export default defineConfig({
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'mobile', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
   ],
-  webServer: {
+  webServer: [{
     command: 'npm run dev -- --host 127.0.0.1 --port 4186 --strictPort',
     url: 'http://127.0.0.1:4186/dev/foundation.html',
     reuseExistingServer: false,
@@ -30,5 +30,10 @@ export default defineConfig({
       VITE_SUPABASE_URL: 'http://127.0.0.1:54321',
       VITE_SUPABASE_ANON_KEY: 'foundation-no-network-placeholder',
     },
-  },
+  }, {
+    command: 'npm run dev -- --host 127.0.0.1 --port 4187 --strictPort',
+    url: 'http://127.0.0.1:4187',
+    reuseExistingServer: false,
+    env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' },
+  }],
 });

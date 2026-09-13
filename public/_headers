@@ -27,7 +27,7 @@
 # every page load. Report-Only meant nobody noticed; enforcing it as written
 # would have broken both:
 #
-#   'sha256-EwxUBW9e+49faAQ2NJM1e+x7bzzeB/uRUrVh7VK1/ME='
+#   'sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg='
 #     The anti-FOUC theme bootstrap inlined in index.html. It has to be inline —
 #     it runs before first paint to set data-theme, and an external file would
 #     reintroduce the flash it exists to prevent — so a hash is the only way to
@@ -48,7 +48,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Permissions-Policy: microphone=(), usb=(), serial=(), bluetooth=(), midi=()
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-EwxUBW9e+49faAQ2NJM1e+x7bzzeB/uRUrVh7VK1/ME=' https://js.stripe.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io https://api.stripe.com https://geocoding-api.open-meteo.com https://api.open-meteo.com https://cloudflareinsights.com; worker-src 'self' blob:; frame-src 'self' https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://o4511458803253248.ingest.us.sentry.io/api/4511458819375104/security/?sentry_key=6709c2092ebda9743a803919a79c7b46
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg=' https://js.stripe.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io https://api.stripe.com https://geocoding-api.open-meteo.com https://api.open-meteo.com https://cloudflareinsights.com; worker-src 'self' blob:; frame-src 'self' https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://o4511458803253248.ingest.us.sentry.io/api/4511458819375104/security/?sentry_key=6709c2092ebda9743a803919a79c7b46
 
 # ── Hashed build output ──────────────────────────────────────────────────────
 # Vite fingerprints everything under /assets/, so it is immutable by

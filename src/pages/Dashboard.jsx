@@ -56,7 +56,7 @@ export default function Dashboard() {
   const refetchMs = refetchIntervalFromPref(auto_refresh_secs);
 
   /* ── Portfolio-wide queries (always loaded) ── */
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading, isSuccess: projectsSuccess } = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
@@ -70,10 +70,10 @@ export default function Dashboard() {
   const activeProjectIsLive = !pid || projectsLoading || liveProjectIds.has(pid);
 
   useEffect(() => {
-    if (pid && !projectsLoading && !activeProjectIsLive) {
+    if (pid && projectsSuccess && !activeProjectIsLive) {
       setActiveProject(null);
     }
-  }, [activeProjectIsLive, pid, projectsLoading, setActiveProject]);
+  }, [activeProjectIsLive, pid, projectsSuccess, setActiveProject]);
 
   const scopePortfolioRows = useCallback(
     (rows) => pid ? rows : rows.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),

@@ -6,7 +6,7 @@
  * per G703 line, sees the live G702 summary, and exports the AIA pay app to PDF.
  * All math via the G702 engine (src/lib/payapp) on integer-cents money.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -74,6 +74,10 @@ export default function PayApplications() {
   const [newOpen, setNewOpen] = useState(false);
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
+  useEffect(() => {
+    setSelectedId(null);
+    setNewOpen(false);
+  }, [projectId]);
 
   const {
     data: payApps = [],
@@ -316,13 +320,14 @@ export default function PayApplications() {
             </div>
           </div>
         )}
-        <NewAppModal
-          open={newOpen}
+        {newOpen && <NewAppModal
+          key={projectId}
+          open
           defaultRetainage={contract.retainagePercent}
           busy={createMut.isPending}
           onClose={() => setNewOpen(false)}
           onCreate={(input) => createMut.mutate(input)}
-        />
+        />}
       </>
     );
 }

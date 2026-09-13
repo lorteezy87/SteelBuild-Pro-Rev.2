@@ -52,7 +52,7 @@ const UNLINKED_SUBMITTAL = {
 const HUB = "/DrawingSubmittalHub";
 const RECORD_SUB_1 = `${HUB}?hub_tab=submittals&recordId=sub-1`;
 const RECORD_SUB_2 = `${HUB}?hub_tab=submittals&recordId=sub-2`;
-const SETS_VIEW = `${HUB}?hub_tab=drawings&hub_view=sets`;
+const SETS_VIEW = `${HUB}?hub_tab=drawings&hub_view=sets&set=set-open`;
 const CREATE_SET_OPEN = `${HUB}?hub_tab=submittals&targetSetId=set-open`;
 
 function triageFor(submittals: any[]) {

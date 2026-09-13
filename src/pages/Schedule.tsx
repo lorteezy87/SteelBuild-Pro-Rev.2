@@ -24,6 +24,7 @@ import { useTaskSelection } from "./schedule/useTaskSelection";
 import { useScheduleMutations } from "./schedule/useScheduleMutations";
 import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
 import { buildBrief, scheduleHealthFromBrief } from "@/components/schedule/rivetBriefEngine";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -87,7 +88,12 @@ export default function Schedule() {
   // the whole schedule layer consumes (optional fields + `[key: string]: any`); every
   // consumer here is already null-safe. Normalize once at the boundary so downstream
   // call sites stay clean. Removable once the hook is typed.
-  const { scheduleTasks: scheduleTasksRaw, isLoading: scheduleTasksLoading } = useScheduleTasks(projectId);
+  const {
+    scheduleTasks: scheduleTasksRaw,
+    isPending: scheduleTasksPending,
+    error: scheduleTasksError,
+    refetch: refetchScheduleTasks,
+  } = useScheduleTasks(projectId);
   const scheduleBaselines = useScheduleBaselines(projectId);
   // Mon–Fri unless the project configures otherwise (§2.1). Drives lag and
   // successor starts in both the forward and backward passes — they have to
@@ -97,7 +103,7 @@ export default function Schedule() {
   useAutoOpenEdit(scheduleTasks, (task) => {
     setSelectedTask(task);
     setShowDrawer(true);
-  }, { enabled: !scheduleTasksLoading, param: "recordId" });
+  }, { enabled: !!projectId && !scheduleTasksPending && !scheduleTasksError, param: "recordId" });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -325,6 +331,16 @@ export default function Schedule() {
     bulkSetParent,
     confirmBulkDelete,
   };
+
+  if (!projectId) {
+    return <section role="status" style={{ padding: 32 }}>
+      <h2>Select a project</h2>
+      <p>Choose a project from the project selector to view its schedule.</p>
+    </section>;
+  }
+  if (scheduleTasksPending || scheduleTasksError) {
+    return <WorkflowFetchState label="Schedule" error={scheduleTasksError} onRetry={() => void refetchScheduleTasks()} />;
+  }
 
   return (
     <ScheduleCommandCenter

@@ -41,13 +41,19 @@
     <!-- Apply persisted theme before first paint to avoid FOUC -->
     <script>
       (function () {
+        // Match themeResolution.ts before React or the stylesheets arrive.
+        var theme;
+        try { theme = localStorage.getItem("sbp-theme"); } catch (e) { /* storage unavailable */ }
+        if (theme !== "light" && theme !== "dark") {
+          theme = "dark";
+          try { theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; }
+          catch (e) { /* media query unavailable */ }
+        }
+        var root = document.documentElement;
+        root.setAttribute("data-theme", theme);
+        if (theme === "dark") root.classList.add("steelbuild-dark");
+        else root.classList.remove("steelbuild-dark");
         try {
-          var theme = localStorage.getItem("sbp-theme");
-          if (theme !== "light" && theme !== "dark") theme = "dark";
-          var root = document.documentElement;
-          root.setAttribute("data-theme", theme);
-          if (theme === "dark") root.classList.add("steelbuild-dark");
-          else root.classList.remove("steelbuild-dark");
           var accent = localStorage.getItem("sbp-accent");
           if (accent) root.setAttribute("data-accent", accent);
           var contrast = localStorage.getItem("sbp-contrast");
@@ -63,7 +69,10 @@
 
     <!-- Loading state: visible until React hydrates -->
     <style>
-      body { margin: 0; background: #0B0E11; }
+      /* Match --bg-page while the application stylesheet is still loading. */
+      :root { --sbp-boot-bg: #0B0E11; }
+      :root[data-theme="light"] { --sbp-boot-bg: #F1F5F9; }
+      body { margin: 0; background: var(--bg-page, var(--sbp-boot-bg)); }
       #root:empty {
         display: flex;
         flex-direction: column;
@@ -71,7 +80,7 @@
         align-items: center;
         justify-content: center;
         min-height: 100vh;
-        background: #0B0E11;
+        background: var(--bg-page, var(--sbp-boot-bg));
       }
       #root:empty::before {
         content: '';

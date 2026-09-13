@@ -285,7 +285,7 @@ describe("record and create links (owner decision 3)", () => {
     expect(hubHrefForTriageItem({ _submittalId: "s1", _drawingSetId: null, routeTab: "submittals" }))
       .toBe("/DrawingSubmittalHub?hub_tab=submittals&recordId=s1");
     expect(hubHrefForTriageItem({ _submittalId: null, _drawingSetId: "set1", routeTab: "drawings" }))
-      .toBe("/DrawingSubmittalHub?hub_tab=drawings&hub_view=sets");
+      .toBe("/DrawingSubmittalHub?hub_tab=drawings&hub_view=sets&set=set1");
     expect(hubHrefForTriageItem({ _submittalId: null, _drawingSetId: null, routeTab: "drawings" }))
       .toBe("/DrawingSubmittalHub?hub_tab=drawings");
     expect(hubHrefForTriageItem({ routeTab: "matrix" })).toBe("/DrawingSubmittalHub?hub_tab=matrix");
@@ -302,7 +302,7 @@ describe("record and create links (owner decision 3)", () => {
     expect(hubHrefForBoardItem({ submittalId: "s1", drawingSetId: "set1", routeTab: "submittals" }))
       .toBe("/DrawingSubmittalHub?hub_tab=submittals&recordId=s1");
     expect(hubHrefForBoardItem({ submittalId: null, drawingSetId: "set1", routeTab: "drawings" }))
-      .toBe("/DrawingSubmittalHub?hub_tab=drawings&hub_view=sets");
+      .toBe("/DrawingSubmittalHub?hub_tab=drawings&hub_view=sets&set=set1");
     expect(hubHrefForBoardItem({ submittalId: null, drawingSetId: null, routeTab: "drawings" }))
       .toBe("/DrawingSubmittalHub?hub_tab=drawings");
     expect(hubHrefForBoardItem({ submittalId: null, routeTab: "submittals" }))

@@ -70,10 +70,11 @@ export default function QCFormModal({
       is_deleted: _id, deleted_at: _da,
       ...clean
     } = formData;
+    const quantityPassed = parseFloat(clean.quantity_passed);
     onSave?.({
       ...clean,
       quantity_tested: parseFloat(clean.quantity_tested) || 1,
-      quantity_passed: parseFloat(clean.quantity_passed) || 1,
+      quantity_passed: Number.isNaN(quantityPassed) ? 1 : quantityPassed,
     });
   };
 
