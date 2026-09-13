@@ -7876,6 +7876,25 @@ export type Database = {
         Args: { p_project_id: string; p_payload: Json }
         Returns: Database["public"]["Tables"]["expenses"]["Row"]
       }
+      create_backcharge: {
+        // public.backcharges is not in the generated Tables yet (see
+        // src/lib/backcharge/repository.ts), so the row comes back as Json and
+        // that module's typed signatures enforce the shape.
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Json
+      }
+      create_change_order: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["change_orders"]["Row"]
+      }
+      create_change_request: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["change_requests"]["Row"]
+      }
+      create_delivery: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["deliveries"]["Row"]
+      }
       create_sov_item: {
         Args: { p_project_id: string; p_payload: Json }
         Returns: Database["public"]["Tables"]["sov_items"]["Row"]
