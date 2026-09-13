@@ -26,6 +26,21 @@ import {
   distanceMeters,
   formatMeasureDistance,
 } from "@/lib/ifc/viewerMeasure";
+import {
+  clipHeight,
+  deriveCameraClipRange,
+  deriveMaterialVisibility,
+  deriveMeshVisibility,
+  indexMeshesByGuid,
+  measureMarkerRadius,
+  selectedGuids,
+  shouldUpdateCameraClipRange,
+} from "@/components/viewer3d/ifcViewerScene";
+import {
+  clearDisposableGroup,
+  disposeViewerResources,
+} from "@/components/viewer3d/ifcViewerLifecycle";
+import { useIfcViewerKeyboardShortcuts } from "@/components/viewer3d/useIfcViewerKeyboardShortcuts";
 
 /** The 3D canvas colour. FIXED in both app themes — see VIEWER_HUD below. */
 export const VIEWER_CANVAS_BG = "#0d1117";
@@ -159,14 +174,14 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
 
     const updateClipPlanes = (rad) => {
       const dist = camera.position.distanceTo(controls.target);
-      if (!Number.isFinite(dist) || dist <= 0) return;
-      const r = (Number.isFinite(rad) && rad > 0) ? rad : (apiRef.current?.modelRadius || 10);
-      const near = Math.max(dist * 0.0015, r * 0.00005, 0.01);
-      const far = Math.max(dist + r * 12, r * 40, near * 100, 100);
-      if (near >= far) return;
-      if (Math.abs(camera.near - near) / near > 0.05 || Math.abs(camera.far - far) / far > 0.05) {
-        camera.near = near;
-        camera.far = far;
+      const range = deriveCameraClipRange(
+        dist,
+        Number.isFinite(rad) && rad > 0 ? rad : (apiRef.current?.modelRadius || 10),
+      );
+      if (!range) return;
+      if (shouldUpdateCameraClipRange(camera, range)) {
+        camera.near = range.near;
+        camera.far = range.far;
         camera.updateProjectionMatrix();
       }
     };
@@ -249,14 +264,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
 
           // GUID → meshes index (an assembly part can be several placed
           // geometries) so select/isolate/fit by GUID never walks 10k children.
-          const byGuid = new Map();
-          for (const mesh of model.group.children) {
-            const g = mesh.userData?.guid;
-            if (!g) continue;
-            if (!byGuid.has(g)) byGuid.set(g, []);
-            byGuid.get(g).push(mesh);
-          }
-          api.meshesByGuid = byGuid;
+          api.meshesByGuid = indexMeshesByGuid(model.group.children);
 
           const box = new THREE.Box3().setFromObject(model.group);
           if (box.isEmpty()) {
@@ -341,15 +349,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
       mount.removeEventListener("wheel", onWheelCapture, { capture: true });
       ro.disconnect();
       controls.dispose();
-      apiRef.current?.grid?.geometry?.dispose();
-      if (Array.isArray(apiRef.current?.grid?.material)) {
-        apiRef.current.grid.material.forEach((m) => m.dispose?.());
-      } else {
-        apiRef.current?.grid?.material?.dispose?.();
-      }
-      apiRef.current?.ground?.geometry?.dispose();
-      apiRef.current?.ground?.material?.dispose?.();
-      apiRef.current?.model?.dispose();
+      disposeViewerResources(apiRef.current);
       clearMeasureVisuals();
       renderer.clippingPlanes = [];
       renderer.dispose();
@@ -382,27 +382,14 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
   }, [measureMode]);
 
   function clearMeasureVisuals() {
-    const g = measureRef.current?.group;
-    if (!g) return;
-    while (g.children.length) {
-      const c = g.children[0];
-      g.remove(c);
-      c.geometry?.dispose?.();
-      if (Array.isArray(c.material)) c.material.forEach((m) => m.dispose?.());
-      else c.material?.dispose?.();
-    }
-  }
-
-  function measureMarkerRadius() {
-    const r = apiRef.current?.modelRadius || 1;
-    return Math.min(Math.max(r * 0.004, 0.025), 0.18);
+    clearDisposableGroup(measureRef.current?.group);
   }
 
   function drawMeasure(a, b) {
     clearMeasureVisuals();
     const g = measureRef.current?.group;
     if (!g || !a) return;
-    const rad = measureMarkerRadius();
+    const rad = measureMarkerRadius(apiRef.current?.modelRadius || 1);
     const mkPoint = (p) => {
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(rad, 18, 14),
@@ -457,7 +444,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     selectionRevision.current += 1;
     onPickRef.current?.(null);
     const sel = selectedRef.current;
-    const guids = [...new Set([...sel.values()].map((m) => m.userData?.guid).filter(Boolean))];
+    const guids = selectedGuids(sel.values());
     onSelectRef.current?.(guids);
     return guids;
   }
@@ -513,26 +500,25 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     let ghosted = 0;
     for (const mesh of api.model.group.children) {
       const guid = mesh.userData?.guid;
-      const isHidden = guid ? hidden.has(guid) : false;
-      const isGhost = !isHidden && isolated ? !(guid && isolated.has(guid)) : false;
-      mesh.visible = !isHidden;
-      mesh.userData.ghost = isGhost;
+      const state = deriveMeshVisibility(guid, hidden, isolated);
+      mesh.visible = !state.hidden;
+      mesh.userData.ghost = state.ghosted;
       const mat = mesh.material;
       if (!mat) continue;
       if (mat.userData.baseOpacity == null) {
         mat.userData.baseOpacity = mat.opacity;
         mat.userData.baseTransparent = mat.transparent;
       }
-      if (isGhost) {
-        ghosted += 1;
-        mat.transparent = true;
-        mat.opacity = GHOST_OPACITY;
-        mat.depthWrite = false;
-      } else {
-        mat.transparent = mat.userData.baseTransparent;
-        mat.opacity = mat.userData.baseOpacity;
-        mat.depthWrite = true;
-      }
+      if (state.ghosted) ghosted += 1;
+      Object.assign(
+        mat,
+        deriveMaterialVisibility(
+          mat.userData.baseOpacity,
+          mat.userData.baseTransparent,
+          state.ghosted,
+          GHOST_OPACITY,
+        ),
+      );
     }
     // Drop selection entries that are no longer visible / pickable.
     const sel = selectedRef.current;
@@ -585,9 +571,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
       api.renderer.clippingPlanes = [];
       return;
     }
-    const f = Math.min(1, Math.max(0, Number(fraction)));
-    const { min, max } = api.bounds;
-    const y = min.y + (max.y - min.y) * f;
+    const y = clipHeight(api.bounds, fraction);
     // Keep everything at or below y: plane normal points down, constant = y.
     const plane = api.clipPlane || new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
     plane.set(new THREE.Vector3(0, -1, 0), y);
@@ -625,7 +609,7 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
       applyVisibility();
     },
     setClipHeight: (fraction) => setClipHeightInternal(fraction),
-    getSelectedGuids: () => [...new Set([...selectedRef.current.values()].map((m) => m.userData?.guid).filter(Boolean))],
+    getSelectedGuids: () => selectedGuids(selectedRef.current.values()),
     getVisibility: () => ({ ...visibility }),
     /** Open web-ifc model handle (null until loaded) — lets the save path reuse this parse. */
     getModelHandle: () => apiRef.current?.model?.handle || null,
@@ -633,6 +617,21 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
   // them would recreate the handle every render for no benefit.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [visibility]);
+
+  useIfcViewerKeyboardShortcuts({
+    status,
+    apiRef,
+    selectedRef,
+    measureRef,
+    measureModeRef,
+    onMeasureRef,
+    clearMeasureVisuals,
+    clearMeasureLabel: () => setMeasureLabel(null),
+    clearSelection: clearSelectionInternal,
+    boundsForGuids,
+    fitToBox,
+    applyVisibility,
+  });
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -802,43 +801,6 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     };
     const onPointerLeave = () => { lastHoverGuid = null; setHover(null); };
 
-    const onKeyDown = (ev) => {
-      const api = apiRef.current;
-      if (!api?.model) return;
-      const k = ev.key;
-      if (k === "Escape") {
-        if (measureModeRef.current) {
-          clearMeasureVisuals();
-          measureRef.current.a = null; measureRef.current.b = null;
-          setMeasureLabel(null);
-          onMeasureRef.current?.(null);
-        } else {
-          clearSelectionInternal();
-        }
-        ev.preventDefault();
-        return;
-      }
-      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-      const key = k.toLowerCase();
-      const selGuids = [...new Set([...selectedRef.current.values()].map((m) => m.userData?.guid).filter(Boolean))];
-      if (key === "f") {
-        if (selGuids.length) fitToBox(boundsForGuids(selGuids)); else api.fitView?.();
-      } else if (key === "i" && selGuids.length) {
-        api.isolated = new Set(selGuids);
-        applyVisibility();
-        fitToBox(boundsForGuids(selGuids));
-      } else if (key === "h" && selGuids.length) {
-        for (const g of selGuids) api.hidden.add(g);
-        applyVisibility();
-      } else if (key === "u") {
-        api.isolated = null; api.hidden = new Set();
-        applyVisibility();
-      } else {
-        return;
-      }
-      ev.preventDefault();
-    };
-
     const el = ctx.renderer.domElement;
     el.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("pointermove", onGestureMove, true);
@@ -847,7 +809,6 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
     el.addEventListener("dblclick", onDblClick);
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerleave", onPointerLeave);
-    el.addEventListener("keydown", onKeyDown);
     return () => {
       if (hoverRaf) cancelAnimationFrame(hoverRaf);
       el.removeEventListener("pointerdown", onPointerDown);
@@ -857,7 +818,6 @@ const IfcModelViewer = forwardRef(function IfcModelViewer({
       el.removeEventListener("dblclick", onDblClick);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerleave", onPointerLeave);
-      el.removeEventListener("keydown", onKeyDown);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
