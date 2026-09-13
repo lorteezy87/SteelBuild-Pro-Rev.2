@@ -95,6 +95,15 @@ export function buildTreeOrder(tasks, options = {}) {
       _directChildrenCount: directChildren.length,
       _summaryTaskCount: summaryTaskCount,
       _isRolledUpSummary: true,
+      // The rolled-up values are ALSO stamped under _rolled_* so a save can
+      // tell "the form still holds the derived value I displayed" from "the PM
+      // typed a new date". Without that distinction the sanitizer had to guess,
+      // and it guessed by always restoring _stored_*, which silently discarded
+      // every real edit to a parent row.
+      _rolled_start_date: minStart ? toDateOnly(minStart) : task.start_date || null,
+      _rolled_end_date: maxEnd ? toDateOnly(maxEnd) : task.end_date || null,
+      _rolled_duration: rolledDuration,
+      _rolled_percent_complete: rolledPct,
       wbs_code: displayWbs,
       start_date: minStart ? toDateOnly(minStart) : task.start_date || null,
       end_date: maxEnd ? toDateOnly(maxEnd) : task.end_date || null,

@@ -24,8 +24,93 @@ import {
   normalizeJsonbArray,
 } from './fieldMapping';
 import { createEntityClient } from './entityClient';
-import type { Insert, RowWithAliases, Update } from './supabaseTypes';
+import type { Insert, RowWithAliases, TableName, Update } from './supabaseTypes';
 import type { Json } from '@/types/supabase';
+
+/**
+ * Atomic-creation wrapper for a table whose INSERT is guarded.
+ *
+ * Several tables mint an official record number inside the transaction that
+ * inserts the row, and a BEFORE INSERT trigger rejects any direct write with
+ * "Use create_x() — numbers are minted there". The guard tests a
+ * transaction-local `steelbuild.*_rpc` GUC that only the RPC sets, so a
+ * PostgREST client can never satisfy it: createEntityClient's generic create
+ * fails with 42501 every time. Registering a table's RPC here is what makes
+ * creation work at all.
+ *
+ * `derived` names the columns the RPC mints or looks up itself. Sending them is
+ * at best ignored and at worst a duplicate number, so they never leave here.
+ *
+ * `carried` names columns the RPC's INSERT does not cover but a form does
+ * collect. They are written immediately after, because the guards only gate
+ * INSERT. That is a second round trip rather than one transaction — the row
+ * exists either way, and losing what someone typed is the worse failure. It
+ * deliberately excludes every approval / receipt / void stamp: those are gated
+ * on the UPDATE path too ("Approval / SOV stamps are written only by the RPCs",
+ * "RECEIVE_VIA_RPC"), and carrying them would trade a silent drop for a hard
+ * error on an otherwise good save.
+ */
+interface AtomicCreateConfig {
+  readonly rpc: 'create_change_order' | 'create_change_request' | 'create_delivery';
+  readonly derived: readonly string[];
+  readonly carried: readonly string[];
+}
+
+function atomicCreateClient<T extends TableName>(tableName: T, config: AtomicCreateConfig) {
+  const base = createEntityClient(tableName);
+
+  const create = async (record: Insert<T>): Promise<RowWithAliases<T>> => {
+    const payload = cleanRecord(record as Record<string, unknown>);
+    const projectId = payload.project_id;
+    if (typeof projectId !== 'string' || projectId === '') {
+      throw new Error(`project_id is required to create a ${String(tableName)} record`);
+    }
+    // Passed as its own argument, never inside the payload.
+    delete payload.project_id;
+    for (const column of config.derived) delete payload[column];
+
+    const carried: Record<string, unknown> = {};
+    for (const column of config.carried) {
+      if (column in payload) carried[column] = payload[column];
+    }
+
+    const { data, error } = await supabase.rpc(config.rpc, {
+      p_project_id: projectId,
+      p_payload: payload as Json,
+    });
+    if (error) throw new SupabaseOperationError(tableName as string, 'create', error);
+
+    const created = addAliases<RowWithAliases<T>>(data as RowWithAliases<T>, tableName as string);
+    if (Object.keys(carried).length === 0) return created;
+    return base.update((created as { id: string }).id, carried as Update<T>);
+  };
+
+  return {
+    ...base,
+    create,
+    // One RPC call per row, in order. Each draws the next number from the
+    // sequence, so parallel calls would scramble official numbers against the
+    // order the caller listed them in. Not one transaction: a row that fails
+    // leaves the rows before it committed, so say so rather than letting an
+    // importer report a clean failure over a half-finished batch.
+    bulkCreate: async (records: Insert<T>[]): Promise<Array<RowWithAliases<T>>> => {
+      const created: Array<RowWithAliases<T>> = [];
+      for (const record of records) {
+        try {
+          created.push(await create(record));
+        } catch (cause) {
+          const reason = cause instanceof Error ? cause.message : String(cause);
+          throw new Error(
+            `${created.length} of ${records.length} ${String(tableName)} records were created; ` +
+              `row ${created.length + 1} failed: ${reason}`,
+            { cause },
+          );
+        }
+      }
+      return created;
+    },
+  };
+}
 
 // ─── Entity registry ──────────────────────────────────────────────────────────
 
@@ -90,8 +175,22 @@ export const entities = {
       return { success: true, deletedChildCount: (data as number | null) ?? 0 };
     },
   },
-  ChangeOrder:           createEntityClient('change_orders'),
-  ChangeRequest:         createEntityClient('change_requests'),
+  // CO numbers are contractual identifiers minted by create_change_order();
+  // trg_enforce_change_order_guards rejects a direct insert outright.
+  ChangeOrder:           atomicCreateClient('change_orders', {
+    rpc: 'create_change_order',
+    derived: ['project_name', 'co_number', 'sov_line_number', 'submitted_by'],
+    // Approval / SOV / void stamps are excluded on purpose: the guard writes
+    // them only through the RPCs and rejects them on UPDATE too.
+    carried: ['attachments'],
+  }),
+  ChangeRequest:         atomicCreateClient('change_requests', {
+    rpc: 'create_change_request',
+    // change_order_id is set by create_change_order() when a CO is raised from
+    // this CR — the client must not pre-empt that link.
+    derived: ['project_name', 'cr_number', 'change_order_id'],
+    carried: [],
+  }),
   // ── Drawing-centered execution (MVP Slice 0) ────────────────────
   // Three tables that turn the Drawing Viewer into a coordination hub:
   // every rectangular zone on a sheet revision can link to RFIs, work
@@ -320,7 +419,23 @@ export const entities = {
       },
     };
   })(),
-  Delivery:              createEntityClient('deliveries'),
+  // create_delivery() mints the number AND inserts the nested `items` array
+  // into delivery_items, deriving pieces / weight_tons from it, so the payload
+  // must keep `items` intact.
+  Delivery:              atomicCreateClient('deliveries', {
+    rpc: 'create_delivery',
+    derived: ['project_name', 'delivery_number', 'pieces', 'weight_tons'],
+    // Procurement planning fields the form collects that the RPC's INSERT does
+    // not cover. received_* / status are left out: the guard routes receipt
+    // through receive_delivery() so linked piece lots advance with it.
+    carried: [
+      'actual_date',
+      'is_long_lead',
+      'lead_time_weeks',
+      'order_placed_date',
+      'procurement_category',
+    ],
+  }),
   WorkPackage:           createEntityClient('work_packages'),
   // 062: per-project budget vs actual hours (Estimating Kickoff scope items).
   BudgetHourItem:        createEntityClient('budget_hour_items'),
