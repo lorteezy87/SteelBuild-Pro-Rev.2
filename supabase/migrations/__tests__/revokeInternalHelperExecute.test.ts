@@ -28,21 +28,37 @@ const REVOKED = [
 ] as const;
 
 describe("revoke internal helper EXECUTE from authenticated", () => {
-  it.each(REVOKED)("revokes %s from the grantees that actually hold it", (signature) => {
-    const statement = `revoke execute on function ${signature} from public, anon, authenticated;`;
-    expect(sql).toContain(statement);
+  it.each(REVOKED)("targets %s for revocation", (signature) => {
+    // Listed as a to_regprocedure signature inside the guard's array, not as a
+    // bare statement — see the replay-safety test below.
+    expect(sql).toContain(`'${signature}'`);
   });
 
-  it("names anon and authenticated on every revoke, never public alone", () => {
+  it("names anon and authenticated, never public alone", () => {
     // This is the whole point. Supabase's ALTER DEFAULT PRIVILEGES grants
     // EXECUTE directly to anon/authenticated/service_role, and PUBLIC is a
     // separate grantee — so "revoke ... from public" leaves the function
     // callable by anyone with a session. 14 of this repo's 17 revokes and all
     // 108 of the sibling repo's use that ineffective form.
-    const revokes = sql.match(/revoke execute on function [^;]+;/g) ?? [];
-    expect(revokes).toHaveLength(REVOKED.length);
-    for (const statement of revokes) {
-      expect(statement).toMatch(/from public, anon, authenticated;$/);
+    expect(sql).toContain("revoke execute on function %s from public, anon, authenticated");
+  });
+
+  it("skips a function that is absent rather than aborting the migration", () => {
+    // Replaying all 113 migrations against an empty cluster proved this file was
+    // the only genuine failure: feature_flag_enabled_for is created by no
+    // migration in this repo, so a bare REVOKE aborted the whole file with
+    // "function ... does not exist" on every fresh database.
+    expect(sql).toContain("to_regprocedure(v_sig) is not null");
+    expect(sql).toContain("skipping revoke, function not present here");
+    // No bare revoke may come back: that is what broke replay.
+    expect(sql).not.toMatch(/^revoke execute on function/m);
+  });
+
+  it("keeps every target as an exact identity signature", () => {
+    // to_regprocedure needs the identity form; a bare name or a mismatched
+    // argument list resolves to NULL and would silently skip a real revoke.
+    for (const signature of REVOKED) {
+      expect(signature).toMatch(/^public\.\w+\(.*\)$/);
     }
   });
 

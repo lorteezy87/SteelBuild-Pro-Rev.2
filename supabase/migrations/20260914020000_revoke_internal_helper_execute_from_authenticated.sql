@@ -31,31 +31,60 @@
 -- payload, forge an entry in the folder audit trail, or plant a mutation
 -- receipt under a chosen idempotency key so a later legitimate command
 -- returns the attacker's cached result instead of doing the work.
-revoke execute on function public.note_folder_effective_project_ids(uuid) from public, anon, authenticated;
-revoke execute on function public.note_folder_visible_payload(uuid) from public, anon, authenticated;
-revoke execute on function public.note_folder_receipt_get(text) from public, anon, authenticated;
-revoke execute on function public.note_folder_receipt_put(text, uuid, text, jsonb) from public, anon, authenticated;
-revoke execute on function public.note_folder_write_audit(uuid, uuid, text, boolean, text, jsonb, jsonb, jsonb) from public, anon, authenticated;
-revoke execute on function public.note_folder_reject(uuid, uuid, text, text, text, jsonb) from public, anon, authenticated;
-revoke execute on function public.note_folder_same_org_projects(uuid, uuid[]) from public, anon, authenticated;
-
--- Creates the org's system "General" note folder. Callers: create_note_folder,
--- list_visible_note_folders (both SECURITY DEFINER). Exposed, it inserts a
--- system folder into any org id passed to it.
-revoke execute on function public.ensure_general_notes_folder(uuid) from public, anon, authenticated;
-
--- Seeds the project handoff checklist. Its only caller is the
--- trg_projects_seed_handoff_items AFTER INSERT trigger, which is already
--- revoked from authenticated. Exposed, it bulk-inserts checklist rows into any
--- project id, in any org.
-revoke execute on function public.seed_project_handoff_items(uuid) from public, anon, authenticated;
-
--- Resolves a feature flag for an arbitrary email. Its only caller is
--- erase_my_account (SECURITY DEFINER). The app does not use it: the client
--- reads the feature_flags table through createEntityClient('feature_flags')
--- and resolves per-user in useFeatureFlag.ts. Exposed, it answers "is flag X
--- on for person Y" for any address.
-revoke execute on function public.feature_flag_enabled_for(text, text) from public, anon, authenticated;
+-- Revoked through a guard, not as bare statements, because not every one of
+-- these functions is created by a migration in this repo. feature_flag_enabled_for
+-- exists in production only, so a bare REVOKE aborts the whole migration on a
+-- fresh database with "function ... does not exist" — proven by replaying the
+-- full migration set against an empty cluster, where this file was the only
+-- genuine failure. Skipping an absent function is right rather than merely
+-- convenient: there is no grant to take away, so the intended end state already
+-- holds.
+--
+-- Each entry is the exact identity signature to_regprocedure resolves.
+do $$
+declare
+  v_sig text;
+  v_targets text[] := array[
+    -- note-folder internals. Callers are the note-folder command RPCs
+    -- (create/rename/move/archive/restore/set_links/list_visible), all SECURITY
+    -- DEFINER and postgres-owned. Exposed directly, these let any signed-in user
+    -- reach across orgs: read a folder's effective project list or visible
+    -- payload, forge an entry in the folder audit trail, or plant a mutation
+    -- receipt under a chosen idempotency key so a later legitimate command
+    -- returns the attacker's cached result instead of doing the work.
+    'public.note_folder_effective_project_ids(uuid)',
+    'public.note_folder_visible_payload(uuid)',
+    'public.note_folder_receipt_get(text)',
+    'public.note_folder_receipt_put(text, uuid, text, jsonb)',
+    'public.note_folder_write_audit(uuid, uuid, text, boolean, text, jsonb, jsonb, jsonb)',
+    'public.note_folder_reject(uuid, uuid, text, text, text, jsonb)',
+    'public.note_folder_same_org_projects(uuid, uuid[])',
+    -- Creates the org's system "General" note folder. Callers:
+    -- create_note_folder, list_visible_note_folders (both SECURITY DEFINER).
+    -- Exposed, it inserts a system folder into any org id passed to it.
+    'public.ensure_general_notes_folder(uuid)',
+    -- Seeds the project handoff checklist. Its only caller is the
+    -- trg_projects_seed_handoff_items AFTER INSERT trigger, which is already
+    -- revoked from authenticated. Exposed, it bulk-inserts checklist rows into
+    -- any project id, in any org.
+    'public.seed_project_handoff_items(uuid)',
+    -- Resolves a feature flag for an arbitrary email. Its only caller is
+    -- erase_my_account (SECURITY DEFINER). The app does not use it: the client
+    -- reads the feature_flags table through createEntityClient('feature_flags')
+    -- and resolves per-user in useFeatureFlag.ts. Exposed, it answers "is flag X
+    -- on for person Y" for any address. NOT created by any migration in this
+    -- repo — production only, which is why this guard exists.
+    'public.feature_flag_enabled_for(text, text)'
+  ];
+begin
+  foreach v_sig in array v_targets loop
+    if to_regprocedure(v_sig) is not null then
+      execute format('revoke execute on function %s from public, anon, authenticated', v_sig);
+    else
+      raise notice 'skipping revoke, function not present here: %', v_sig;
+    end if;
+  end loop;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- refresh_cost_code_actual: a role check, because a revoke would break it.
