@@ -5,7 +5,7 @@
 -- and every legitimate caller was traced so nothing below narrows a path the
 -- app actually uses.
 --
--- 1. projects           — any viewer could archive a project, unrecoverably
+-- 1. projects           — any viewer could edit a project's fields (incl. on_hold)
 -- 2. drawing_signoffs   — any viewer could forge or rewrite a fab-release stamp
 -- 3. organization_invitations — an org admin could escalate an invite to owner
 -- 4. build_pay_application_lines        — unauthenticated-by-role, forgeable row arg
@@ -14,27 +14,34 @@
 -- 7. project_row_counts — cross-tenant row-count census
 
 -- ---------------------------------------------------------------------------
--- 1. projects: a viewer could archive any project in the org
+-- 1. projects: a viewer could edit any project in the org
 --
 -- project_update gated on user_has_project_access(id). That function returns
 -- true for ANY org member whenever organizations.member_default_project_role
--- is set, so a viewer-by-default member could UPDATE any project row —
--- including is_deleted.
+-- is set, so a viewer-by-default member could UPDATE any project row in the
+-- org.
 --
--- Archiving is not a soft edit: both project_select and
--- user_has_project_access filter is_deleted = false, so the row then
--- disappeared for every non-privileged path.
+-- Scope of what that reached, verified against the live policy: the
+-- descriptive and scheduling columns — name, phase, health_status, dates,
+-- address, project_manager, superintendent, and on_hold, which stops work on
+-- the job. The contract columns were already covered by
+-- enforce_project_update_guard, org_id by its immutability rule,
+-- approved_change_total and piece_control_mode by their own GUC-gated
+-- triggers.
 --
--- Two layers, matching how this table is already guarded:
---   * the policy decides WHO may update a project at all → pm
---   * enforce_project_update_guard decides WHICH columns need more → admin
---     to archive or restore
+-- NOT reachable, contrary to an earlier reading of this: is_deleted. A direct
+-- client write of it already failed the policy's own WITH CHECK (verified by
+-- re-testing the pre-migration policy), and archival goes through
+-- soft_delete_project(), which is SECURITY DEFINER and checks admin itself.
+-- So this is not an archive fix.
 --
--- Tightening the policy to user_has_project_role_at_least also makes an
--- already-archived project restorable: unlike user_has_project_access, that
--- function does not filter is_deleted, so an admin can clear the flag.
--- (SELECT still hides archived rows; recovering one in the UI needs a
--- deliberate read path, which is deferred.)
+-- The policy now decides WHO may update a project at all → pm.
+--
+-- The is_deleted / deleted_at rule added to enforce_project_update_guard
+-- below is therefore defence in depth, not a hole being closed: it states the
+-- intended authority for archiving in the guard where the other
+-- column-level rules live, and it would hold if a future policy ever admitted
+-- a direct write.
 drop policy if exists project_update on public.projects;
 create policy project_update on public.projects
   for update to authenticated
@@ -55,8 +62,10 @@ begin
     raise exception 'project org_id is immutable' using errcode = '42501';
   end if;
 
-  -- Archiving hides the project from every non-privileged read path, so it
-  -- takes more than the pm floor the policy enforces.
+  -- Defence in depth: a direct client write of is_deleted already fails the
+  -- project_update WITH CHECK, and archival runs through
+  -- soft_delete_project(). This states the intended authority in the same
+  -- place as the other column-level rules.
   if auth.role() = 'authenticated'
      and (new.is_deleted is distinct from old.is_deleted
           or new.deleted_at is distinct from old.deleted_at)

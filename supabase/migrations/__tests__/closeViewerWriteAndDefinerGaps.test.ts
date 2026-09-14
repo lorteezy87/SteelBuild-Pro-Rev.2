@@ -11,18 +11,27 @@ const sql = fs.readFileSync(
 );
 
 describe("close viewer-write and SECURITY DEFINER gaps migration", () => {
-  it("puts a pm floor on project updates and an admin floor on archiving", () => {
+  it("puts a pm floor on project updates", () => {
     // The hole was project_update gating on user_has_project_access, which is
-    // true for any org member once member_default_project_role is set.
+    // true for any org member once member_default_project_role is set. What it
+    // reached was the descriptive and scheduling columns — on_hold included,
+    // which stops work on the job.
     expect(sql).toContain("drop policy if exists project_update on public.projects");
     expect(sql).toContain("public.user_has_project_role_at_least(id, 'pm')");
     expect(sql).not.toContain("using (public.user_has_project_access(id))");
+  });
 
+  it("states the archive authority in the guard as defence in depth", () => {
+    // NOT a hole closure: a direct client write of is_deleted already failed
+    // the policy's WITH CHECK, and archival goes through soft_delete_project(),
+    // which checks admin itself. The rule records the intended authority next
+    // to the other column-level rules.
     expect(sql).toContain("new.is_deleted is distinct from old.is_deleted");
     expect(sql).toContain("new.deleted_at is distinct from old.deleted_at");
     expect(sql).toContain(
       "Archiving or restoring a project requires an admin",
     );
+    expect(sql).toContain("Defence in depth");
   });
 
   it("keeps the project guard's existing org_id and contract-field rules", () => {
