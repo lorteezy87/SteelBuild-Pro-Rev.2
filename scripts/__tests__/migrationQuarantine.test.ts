@@ -1,7 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error -- plain .mjs helper, no type declarations
 import { QUARANTINE_DIR, compareDrift, localInventory, readManifest, validateManifest } from '../supabase-drift-check.mjs';
 
 /**

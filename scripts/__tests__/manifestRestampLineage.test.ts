@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error -- plain .mjs helper, no type declarations
 import { compareDrift, localInventory, readManifest } from '../supabase-drift-check.mjs';
 
 interface ManifestEntry {
