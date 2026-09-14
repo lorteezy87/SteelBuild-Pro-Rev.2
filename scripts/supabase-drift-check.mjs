@@ -187,6 +187,24 @@ function compareAssets(entries, remoteValues, key, label) {
   };
 }
 
+/**
+ * compareAssets builds these keys from a label, so TypeScript infers only
+ * `hasDrift` for the .ts callers. Keep this list in sync with compareAssets.
+ * @typedef {object} DriftReport
+ * @property {string[]} missingMigrations
+ * @property {string[]} unknownMigrations
+ * @property {string[]} environmentExcludedMigrations
+ * @property {string[]} deprecatedMigrations
+ * @property {string[]} unresolvedMigrations
+ * @property {string[]} missingFunctions
+ * @property {string[]} unknownFunctions
+ * @property {string[]} environmentExcludedFunctions
+ * @property {string[]} deprecatedFunctions
+ * @property {string[]} unresolvedFunctions
+ * @property {boolean} hasDrift
+ */
+
+/** @returns {DriftReport} */
 export function compareDrift(manifest, local, remoteMigrations, remoteFunctions) {
   validateManifest(manifest, local);
   const remoteVersions = evidenceSet(remoteMigrations, 'version', /^\d{14}$/);

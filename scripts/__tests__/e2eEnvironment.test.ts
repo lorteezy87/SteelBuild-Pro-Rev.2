@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertDisposableMutationEnvironment,
   resolveE2EEnvironment,
-} from "../../e2e/environment";
+} from "../../e2e/environment.ts";
 
 const staging = {
   E2E_TARGET: "staging",
