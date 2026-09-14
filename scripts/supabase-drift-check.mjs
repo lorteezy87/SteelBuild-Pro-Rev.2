@@ -39,12 +39,34 @@ function localMigrationOverrides(manifest) {
   return manifest.local.migrationOverrides ?? [];
 }
 
+/**
+ * Versions of the `<14-digit>_*.sql` files in one directory, sorted.
+ *
+ * This is the same glob the Supabase CLI and the branching runner apply, which
+ * is why supabase/migrations/ is an executable surface rather than a document
+ * store: anything matching in there runs, in version order, with no reference
+ * to this manifest.
+ */
+function migrationVersionsIn(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter(name => /^\d{14}_.+\.sql$/.test(name))
+    .map(name => name.slice(0, 14))
+    .sort();
+}
+
+export const QUARANTINE_DIR = 'supabase/migrations_quarantine';
+
 export function localInventory(root = ROOT) {
   return {
-    migrations: readdirSync(path.join(root, 'supabase/migrations'))
-      .filter(name => /^\d{14}_.+\.sql$/.test(name))
-      .map(name => name.slice(0, 14))
-      .sort(),
+    migrations: migrationVersionsIn(path.join(root, 'supabase/migrations')),
+    // Deliberately NOT part of `migrations`: a quarantined file is out of every
+    // runner's path, so it can never be applied and must never be reported as a
+    // missing migration. It is still listed so it can be required to carry a
+    // classification — see validateManifest. supabase/migrations_external/
+    // holds recovered already-applied SQL outside the runner for the same
+    // structural reason.
+    quarantined: migrationVersionsIn(path.join(root, QUARANTINE_DIR)),
     functions: readdirSync(path.join(root, 'supabase/functions'), { withFileTypes: true })
       .filter(entry => entry.isDirectory() && !entry.name.startsWith('_'))
       .map(entry => entry.name)
@@ -116,8 +138,18 @@ export function validateManifest(manifest, local) {
     throw new Error('Production ownership manifest local.migrationOverrides must be an array.');
   }
 
+  const quarantined = local.quarantined ?? [];
   assertUnique(local.migrations, 'local migration version');
+  assertUnique(quarantined, 'quarantined migration version');
   assertUnique(local.functions, 'local function slug');
+  const quarantineCollision = quarantined.find(version =>
+    local.migrations.includes(version));
+  if (quarantineCollision) {
+    throw new Error(
+      `Migration is both active and quarantined: ${quarantineCollision}. `
+      + 'A quarantined copy does not disarm the one a runner still executes.',
+    );
+  }
   manifest.migrations.forEach(entry =>
     validateEntry(entry, 'version', /^\d{14}$/, 'manifest migration'));
   manifest.functions.forEach(entry =>
@@ -143,10 +175,45 @@ export function validateManifest(manifest, local) {
     // An override must name a migration that is actually here. Otherwise a
     // renamed or deleted file would leave a stale entry silently suppressing
     // nothing, and the next reader would trust a classification with no source.
-    if (!local.migrations.includes(entry.version)) {
+    if (!local.migrations.includes(entry.version)
+      && !quarantined.includes(entry.version)) {
       throw new Error(`Local migration override has no source file: ${entry.version}`);
     }
   });
+
+  // A quarantined file must say why it is quarantined, and the reason must be a
+  // lifecycle quarantine can actually mean.
+  //
+  // Without the first rule, moving a dangerous migration out of the runner's
+  // path would also move it out of the drift report, and the next reader would
+  // find unexplained SQL with no record of what was wrong with it — trading one
+  // failure mode for a quieter one.
+  //
+  // The second rule rejects the three lifecycles that cannot hold here:
+  // `required` is unsatisfiable by construction, since no runner can reach the
+  // file; `staging-only` and `deprecated` are assertions about the remote
+  // ledger, which quarantining a local file says nothing about.
+  const overriddenVersions = new Set(
+    localMigrationOverrides(manifest).map(entry => entry.version),
+  );
+  const byVersion = new Map(
+    localMigrationOverrides(manifest).map(entry => [entry.version, entry]),
+  );
+  for (const version of quarantined) {
+    if (!overriddenVersions.has(version)) {
+      throw new Error(
+        `Quarantined migration has no local.migrationOverrides entry: ${version}. `
+        + `Every file in ${QUARANTINE_DIR}/ must record why it must never be applied.`,
+      );
+    }
+    const lifecycle = byVersion.get(version).lifecycle;
+    if (lifecycle !== 'intentionally-frozen' && lifecycle !== 'unresolved') {
+      throw new Error(
+        `Quarantined migration ${version} has lifecycle ${lifecycle}; `
+        + 'a quarantined file must be intentionally-frozen or unresolved.',
+      );
+    }
+  }
 
   assertUnique(manifest.migrations.map(entry => entry.version), 'manifest migration version');
   assertUnique(manifest.functions.map(entry => entry.slug), 'manifest function slug');
@@ -194,7 +261,19 @@ function classifiedInventory(manifest, local) {
     owner: manifest.local.owner,
     lifecycle: migOverrides.get(version)?.lifecycle ?? manifest.local.migrationLifecycle,
     evidence: migOverrides.get(version)?.evidence ?? `supabase/migrations/${version}_*.sql`,
-  })).concat(manifest.migrations);
+  })).concat(
+    // Quarantined files stay classified. They can never be missing (nothing can
+    // apply them), but if one ever turns up in the remote ledger the report must
+    // name it rather than call it unknown — and an `unresolved` entry keeps
+    // failing drift. Quarantine removes the execution risk, not the open
+    // question.
+    (local.quarantined ?? []).map(version => ({
+      version,
+      owner: manifest.local.owner,
+      lifecycle: migOverrides.get(version)?.lifecycle ?? manifest.local.migrationLifecycle,
+      evidence: migOverrides.get(version)?.evidence ?? `${QUARANTINE_DIR}/${version}_*.sql`,
+    })),
+  ).concat(manifest.migrations);
   const functions = local.functions.map(slug => ({
     slug,
     owner: manifest.local.owner,

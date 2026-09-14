@@ -139,8 +139,10 @@ describe('the real manifest', () => {
     expect(entry.lifecycle).toBe('intentionally-frozen');
     expect(entry.evidence).toMatch(/MUST NOT BE APPLIED/);
     expect(entry.evidence).toMatch(/enforce_expense_guards/);
-    // and it is still a real file, not deleted
-    expect(local.migrations).toContain('20260913084700');
+    // Still a real file, but quarantined: out of every runner's glob, so it can
+    // never be applied, and therefore never reported missing either.
+    expect(local.quarantined).toContain('20260913084700');
+    expect(local.migrations).not.toContain('20260913084700');
   });
 
   it('gives every override an evidence string', () => {
@@ -156,7 +158,7 @@ describe('the real manifest', () => {
     const overridden = new Set(
       (manifest.local.migrationOverrides ?? []).map((e: { version: string }) => e.version),
     );
-    const unaccounted = local.migrations.filter(
+    const unaccounted = [...local.migrations, ...local.quarantined].filter(
       (v: string) => !overridden.has(v) && !LEDGER.has(v),
     );
     expect(unaccounted).toEqual([]);
