@@ -1,0 +1,391 @@
+{
+ "reviewedAt": "2026-09-14",
+ "projectRef": "kjrwqagyeswwoxpjkcko",
+ "versions": [
+  {
+   "version": "20260727053000",
+   "name": "pm_floor_authority_tables",
+   "classification": "conflict",
+   "superseded_by": [
+    "20260913201853"
+   ],
+   "recorded": true,
+   "evidence": "Email-settings floors are live via 20260913201853; the other three tables take production's model from 20260914120100, so FIELD keeps change-request creation",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD and REPLAY:\n  select c.relname, pol.polname, pol.polcmd, pol.polpermissive, pg_get_expr(pol.polqual,pol.polrelid), pg_get_expr(pol.polwithcheck,pol.polrelid)\n  from pg_policy pol join pg_class c on c.oid=pol.polrelid\n  where c.relnamespace='public'::regnamespace and c.relname in ('drawing_revisions','change_requests','project_closeout','email_integration_settings')\n  order by 1,2;\nPROD result:\n  change_requests: change_requests_insert a perm WC role_at_least(project_id,'field'); change_requests_select r; change_requests_update w perm pm/pm. No *_role_floor.\n  drawing_revisions: _insert a pm; _select; _update pm/pm. No floors.\n  project_closeout: _insert pm; _select; _update pm/pm. No floors.\n  email_integration_settings: 4 permissive 'Users can ...' access policies, plus restrictive _ins/_upd/_del_role_floor with pm predicates.\nREPLAY result: restrictive *_{ins,upd,del}_role_floor pm on all four tables, plus project_* / drawing_revisions_project_access permissive access policies.\n\nPROD: has_table_privilege('authenticated', <table>, 'DELETE') -> change_requests=f, project_closeout=f, drawing_revisions=t, email_integration_settings=t.\n\nPROD ledger:\n  with s as (select version, array_to_string(statements, E'\\n;;\\n') body from supabase_migrations.schema_migrations where version in ('20260909020328','20260909080453','20260909111157'))\n  select version, m[1] from s, regexp_matches(s.body, '((?:drop|create|alter) policy[^;]*(?:change_requests|drawing_revisions|project_closeout)"
+  },
+  {
+   "version": "20260727224500",
+   "name": "bulk_update_piece_attributes",
+   "classification": "superseded",
+   "superseded_by": [
+    "20260727232000"
+   ],
+   "recorded": true,
+   "evidence": "Live; later redefined by 20260727232000, which production matches",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD and REPLAY:\n  select oid::regprocedure, md5(prosrc), length(prosrc), prosecdef, proconfig, proacl from pg_proc\n  where pronamespace='public'::regnamespace and proname in ('bulk_update_piece_attributes_impl','bulk_update_piece_attributes');\n  -> both environments: e49a9b09c2c7bef0f4d4ef24ec52a8fe/4350 and 083f5ab6a9cfbb483fae4c689ce8a879/586, {search_path=public}, ACL {postgres=X,authenticated=X,service_role=X}.\n  File bodies (text between AS $$ and $$;) hash to the same md5s.\n\nPROD and REPLAY:\n  select pg_get_constraintdef(oid) from pg_constraint where conrelid='public.piece_events'::regclass and contype='c';\n  -> identical 20-value list incl. 'drawing_set_linked','drawing_set_unlinked','attributes_updated'.\n\nPROD:\n  select count(*) filter (where event_type <> all(<18-value list from this file>)) -> 356,\n         count(*) filter (where event_type <> all(<20-value list from 20260727232000>)) -> 0,\n         count(*) -> 3917\n  from public.piece_events;\n\nPROD ledger: no statement matches '%bulk_update_piece_attributes%'."
+  },
+  {
+   "version": "20260727232000",
+   "name": "piece_drawing_sets",
+   "classification": "superseded",
+   "superseded_by": [
+    "20260909055216"
+   ],
+   "recorded": true,
+   "evidence": "Its own effects are live; production runs the sibling app's stricter release gate (owner decision: record and document)",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD and REPLAY (identical rows):\n  select 'check', conname||' '||pg_get_constraintdef(oid) from pg_constraint where conrelid='public.piece_events'::regclass and contype='c'\n  union all piece_drawing_sets attributes (format_type, attnotnull, pg_get_expr defaults)\n  union all constraints union all pg_indexes union all non-internal triggers\n  union all relrowsecurity/relacl\n  union all policies (polcmd::text, polpermissive::text)\n  ... for to_regclass('public.piece_drawing_sets').\n\nPROD and REPLAY:\n  select oid::regprocedure, md5(prosrc), length(prosrc), proconfig, proacl from pg_proc\n  where proname in ('link_piece_drawing_set','unlink_piece_drawing_set','evaluate_release_gate');\n  -> link 5e34a3f1..., unlink 150f300f... in both.\n  -> evaluate_release_gate: PROD c4d43eb981ea9bc43d096708e6e1b541/10622; REPLAY and file d146c39a174e65f9c4924df665d8332d/11524.\n\nPROD ledger:\n  with s as (select array_to_string(statements,E'\\n') b from supabase_migrations.schema_migrations where version='20260909055216'),\n  parts as (select regexp_split_to_array(b,'create or replace function public\\.evaluate_release_gate\\(','i') arr from s),\n  defs as (select n, arr[n] t from parts, generate_series(2,array_length(arr,1)) n),\n  q as (select n, substr(t,strpos(t,'$$')+2) rest from defs),\n  bd as (select n, substr(rest,1,strpos(rest,'$$')-1) body from q)\n  select md5(body), length(body), md5(body)=(select md5(prosrc) from pg_proc where oid='public.evaluate_release_gate(uuid)'::regprocedure) from bd;\n  "
+  },
+  {
+   "version": "20260728040000",
+   "name": "advance_piece_stations_bulk",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD and REPLAY:\n  select oid::regprocedure, md5(prosrc), length(prosrc), prosecdef, proconfig, proacl from pg_proc\n  where pronamespace='public'::regnamespace and proname in ('advance_piece_stations_impl','advance_piece_stations');\n  -> both environments: 0e63c515448c902f30c69595e96d797f/3933 ACL {postgres=X,service_role=X}; 90858710d55c35906c8cceb8a529d8d6/713 ACL {postgres=X,authenticated=X,service_role=X}; {search_path=\"\"}.\n  File bodies hash to the same md5s.\n\nPROD ledger: no statement matches '%advance_piece_stations%'.\n\ngrep of supabase/migrations: only this file defines either function."
+  },
+  {
+   "version": "20260728053000",
+   "name": "link_model_elements_chunked",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD and REPLAY:\n  select proname, md5(prosrc), length(prosrc), proconfig, proacl from pg_proc\n  where proname in ('link_model_elements_to_pieces_page','link_model_elements_to_pieces');\n  -> PROD 1d71f4b3.../5720 and 44bc01c5.../5106; REPLAY and file 78b4e294.../5430 and 0abdcb83.../4671.\n  Configs {search_path=public,statement_timeout=60s|180s} and ACLs identical.\n\nPROD and REPLAY:\n  select proname, md5(regexp_replace(prosrc,'\\s','','g')) from pg_proc where proname in (...);\n  -> both 2e76aeb7192617d50ee8a241d9f8bc52 (page) and 52abedd5d0b4c915b83c908d4fd6f9fe (full).\n\nPROD and REPLAY:\n  select proname, md5(string_agg(m[1],'|' order by ord)), count(*)\n  from pg_proc p, regexp_matches(p.prosrc,'(''[^'']*'')','g') with ordinality t(m,ord)\n  where proname in (...) group by 1;\n  -> both 14824e481673ad66748b1877003a69d0/19 and 95c1e499e03b8570d41d1c83d3206267/16.\n\nPROD ledger: '%link_model_elements_to_pieces_page%' matches no statement; '%link_model_elements_to_pieces%' matches only 20260725210000."
+  },
+  {
+   "version": "20260731003000",
+   "name": "piece_mark_3d_sync",
+   "classification": "superseded",
+   "superseded_by": [
+    "20260801120000",
+    "20260904120000",
+    "20260912023827"
+   ],
+   "recorded": true,
+   "evidence": "Live; later redefined by 20260801120000, 20260904120000, 20260912023827, which production matches",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD and REPLAY:\n  select md5(prosrc), length(prosrc), proconfig, proacl from pg_proc where oid='public.pieces_projection_after_change()'::regprocedure;\n  -> both ca8dbd0cd282c812ba2cda2f910a894a/3126, {search_path=public}, {postgres=X/postgres}.\n\nFile bodies:\n  20260731003000 -> d9c99720abff94509833e5d248f290f1/1519\n  20260801120000 -> 1b39a5de276474ae6bb647060a4d3826/2137\n  20260904120000 -> ca8dbd0cd282c812ba2cda2f910a894a/3126\n\nPROD and REPLAY:\n  select pg_get_triggerdef(oid) from pg_trigger where tgrelid='public.pieces'::regclass and tgname='trg_pieces_projection_after_change';\n  -> identical: ... UPDATE OF work_package_id, lifecycle_status, on_hold, piece_mark, normalized_piece_mark, is_deleted, deleted_at ...\n\nPROD and REPLAY:\n  select pubname, schemaname, tablename from pg_publication_tables where tablename='model_elements';\n  -> supabase_realtime public.model_elements.\n\nPROD ledger presence:\n  20260801120000=false, 20260904120000=false, 20260912023827=true (revoke_trigger_fn_execute_and_sheets_grants).\n\nPROD:\n  select count(*) from model_elements me join pieces p on p.id=me.piece_id where me.is_deleted=false and me.piece_mark is distinct from p.piece_mark;\n  -> 0."
+  },
+  {
+   "version": "20260801013000",
+   "name": "fix_archive_wp_progress_reentrancy",
+   "classification": "superseded",
+   "superseded_by": [
+    "20260905130000",
+    "20260909014620"
+   ],
+   "recorded": true,
+   "evidence": "Live; its refresh body was later replaced by 20260905130000, and 20260914120000 adopts production's soft_delete_project",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "Q0 production ledger: SELECT version FROM supabase_migrations.schema_migrations WHERE version IN ('20260801013000','20260801120000','20260802010000','20260805030000','20260805030100','20260805100000') returns 0 rows. The range 20260730-20260807 holds only 20260802090000 and 20260802090500.\nQ1 production: SELECT p.proname, md5(p.prosrc), md5(replace(p.prosrc,E'\\r\\n',E'\\n')), strpos(p.prosrc,'skip_wp_progress_refresh')>0, (SELECT string_agg(s.version,',') FROM supabase_migrations.schema_migrations s WHERE strpos(replace(array_to_string(s.statements,E'\\n'),E'\\r\\n',E'\\n'), replace(p.prosrc,E'\\r\\n',E'\\n'))>0) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('refresh_work_package_progress','work_packages_soft_delete_unassign_pieces','soft_delete_project')\nResults: refresh f37f50a4... skip=t, no stamps; work_packages_soft_delete_unassign_pieces raw ba4e1adb..., LF 9cc100455e94ed9297a20952aef1c4c2, skip=t, no stamps; soft_delete_project 6ac048fb..., skip=t, stamp 20260909014620.\nQ2 replay, same md5(prosrc): refresh f37f50a4, trigger function 9cc10045, soft_delete_project 5dc9d55d. Function bodies extracted between the dollar quotes of the files: 20260801013000 refresh 923bb7e0, trigger function 9cc10045, soft_delete_project 5dc9d55d; 20260905130000 refresh f37f50a4.\nQ3 production and replay: has_function_privilege('anon'|'authenticated'|'service_role', 'public.soft_delete_project(uuid)'::regprocedure, 'EXECUTE') returns f/t/f in bo"
+  },
+  {
+   "version": "20260801120000",
+   "name": "piece_mark_relink_on_change",
+   "classification": "superseded",
+   "superseded_by": [
+    "20260904120000"
+   ],
+   "recorded": true,
+   "evidence": "Live; the projection trigger was later redefined by 20260904120000, which production matches",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "Q1 production: SELECT p.proname, md5(p.prosrc), strpos(p.prosrc,'link_unlinked_model_elements_for_piece')>0 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('link_unlinked_model_elements_for_piece','pieces_projection_after_change'). Results: link helper 7f2be1f83f747afafd5bd34051073cf3; projection ca8dbd0cd282c812ba2cda2f910a894a, calls_helper=t. The replay returns the same md5 values. File bodies: 20260801120000 helper 7f2be1f8, projection 1b39a5de; 20260904120000 projection ca8dbd0c.\nQ2 production ledger: rows whose array_to_string(statements) ILIKE '%link_unlinked%' or '%v_mark_changed%' or '%piece_archive_projection_sync%': none. '%trg_pieces_projection_after_change%' matches only 20260725210000.\nQ3 production and replay: SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgname='trg_pieces_projection_after_change' returns 'AFTER INSERT OR UPDATE OF work_package_id, lifecycle_status, on_hold, piece_mark, normalized_piece_mark, is_deleted, deleted_at ON public.pieces FOR EACH ROW EXECUTE FUNCTION pieces_projection_after_change()' in both.\nQ4 production and replay: has_function_privilege on link_unlinked_model_elements_for_piece(uuid) is anon=f, authenticated=t, service_role=t in both."
+  },
+  {
+   "version": "20260802010000",
+   "name": "pilot_readiness_drawing_sets",
+   "classification": "superseded",
+   "superseded_by": [
+    "20260913201853"
+   ],
+   "recorded": true,
+   "evidence": "Live; later redefined by 20260913201853, which production matches",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "Q1 production: SELECT md5(p.prosrc), length(p.prosrc), p.provolatile, p.prosecdef, p.proconfig, pg_get_function_identity_arguments(p.oid), pg_get_function_result(p.oid), (SELECT string_agg(s.version,',') FROM supabase_migrations.schema_migrations s WHERE strpos(array_to_string(s.statements,E'\\n'), p.prosrc)>0) FROM pg_proc p WHERE p.oid='public.piece_control_pilot_readiness(uuid)'::regprocedure returns faeeed62ac7dc3946b971c19908ed3bd, 12302, s, t, {search_path=\"\"}, 'p_project_id uuid', jsonb, '20260913201853'.\nQ2: md5 of the body between the dollar quotes is faeeed62ac7dc3946b971c19908ed3bd in both 20260802010000 and 20260913201853; slice7 20260718070000 was e481adeb. The replay's md5(prosrc) is faeeed62.\nQ3 production: SELECT md5(array_to_string(statements,E'\\n')) FROM supabase_migrations.schema_migrations WHERE version='20260913201853' returns e30b074dd619aa1f2abec654d6f812fe, matching the runbook."
+  },
+  {
+   "version": "20260805030000",
+   "name": "drop_project_id_null_rls_escape_hatch",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "Q1 production: WITH policy_tables(t) AS (VALUES ('action_items'),('alerts'),('budget_hour_items'),('change_orders'),('change_requests'),('contacts'),('cost_codes'),('daily_logs'),('deliveries'),('documents'),('drawing_activity'),('expenses'),('inspections'),('look_ahead'),('meetings'),('mitigation_actions'),('mitigation_logs'),('number_sequences'),('photos'),('pma_assumptions'),('pma_decisions'),('production_notes'),('project_closeout'),('punchlist_items'),('quality_control_records'),('resources'),('rfis'),('risks'),('safety_incidents'),('schedule_tasks'),('scope_items'),('sov_items'),('warranties'),('work_packages')) SELECT count(*) FILTER (WHERE to_regclass('public.'||t) IS NOT NULL), (SELECT count(*) FROM pg_policy pol WHERE pol.polname='project_member_access' AND pol.polrelid IN (SELECT to_regclass('public.'||t) FROM policy_tables)), (SELECT count(*) FROM pg_policy pol WHERE pol.polrelid IN (SELECT to_regclass('public.'||t) FROM policy_tables) AND (coalesce(pg_get_expr(pol.polqual,pol.polrelid),'') ILIKE '%project_id IS NULL%' OR coalesce(pg_get_expr(pol.polwithcheck,pol.polrelid),'') ILIKE '%project_id IS NULL%')) FROM policy_tables returns 34 existing, 0 project_member_access, 0 escape-hatch policies.\nQ2 production: SELECT polrelid::regclass FROM pg_policy WHERE polname='project_member_access' returns drawing_analyses, drawing_findings, external_file_refs, external_linked_folders.\nQ3 replay: the count of project_member_access on the 34 tables is 0."
+  },
+  {
+   "version": "20260805030100",
+   "name": "revoke_trigger_fn_execute_and_search_path",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "Q1 production: SELECT p.oid::regprocedure, has_function_privilege('anon',p.oid,'EXECUTE'), has_function_privilege('authenticated',p.oid,'EXECUTE'), has_function_privilege('service_role',p.oid,'EXECUTE'), p.proconfig, p.proacl FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN (<the 13 names>). All 13 return f/f/f with proacl {postgres=X/postgres}; seed_default_setup_items proconfig is {search_path=public}. The replay returns identical results.\nQ2 production ledger: regexp_matches over the statements of 20260715235514 for the revoke lines returns 'revoke all on function public.<fn>() from public, anon, authenticated, service_role' for each of the 13. No ledger row contains 'REVOKE EXECUTE ON FUNCTION public.audit_log_trigger()' or 'seed_default_setup_items() SET search_path', so this file's text was never stamped."
+  },
+  {
+   "version": "20260805100000",
+   "name": "daily_logs_materials_received",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "Q1 production: SELECT format_type(a.atttypid,a.atttypmod), a.atttypmod, a.attnotnull, EXISTS(SELECT 1 FROM pg_attrdef d WHERE d.adrelid=a.attrelid AND d.adnum=a.attnum), md5(col_description(a.attrelid,a.attnum)) FROM pg_attribute a WHERE a.attrelid='public.daily_logs'::regclass AND a.attname='materials_received' AND NOT a.attisdropped returns text, -1, false, false, 08f1f969d10da16777eee83187f12f9a. The replay returns the identical row.\nQ2 local: printf '%s' 'Free-text materials received that day (field superintendent daily log).' | md5 gives 08f1f969d10da16777eee83187f12f9a.\nQ3 production ledger: rows whose statements ILIKE '%materials_received%' are 20260909070839 (m13_field, INSERT column list only) and 20260913201853 (precondition guard plus COMMENT)."
+  },
+  {
+   "version": "20260809223000",
+   "name": "piece_intelligence_drawing_impact_pm_floor",
+   "classification": "present",
+   "recorded": true,
+   "evidence": "Live exactly as written: all three PM floors on drawing_impacts",
+   "verification": "checked directly (reviewer agents stalled)",
+   "decisive_queries": "Production and replay policies on drawing_impacts: restrictive ins/upd/del floors with user_has_project_role_at_least(project_id, 'pm'), identical to the file."
+  },
+  {
+   "version": "20260810053816",
+   "name": "piece_intelligence_drawing_impact_assignment_authority",
+   "classification": "present",
+   "recorded": true,
+   "evidence": "Live exactly as written: both function bodies match by MD5; grants and trigger live",
+   "verification": "checked directly (reviewer agents stalled)",
+   "decisive_queries": "md5(prosrc) list_drawing_impact_assignees = 24d8e03491db1d4f13adce9b63406e40 and enforce_drawing_impact_assignee_membership = 909139565ad72833fd252fc8e445a6bd in the file, production and replay; ACLs {postgres, authenticated} and {postgres}; trigger trg_drawing_impacts_assignee_membership BEFORE INSERT OR UPDATE enabled."
+  },
+  {
+   "version": "20260813120000",
+   "name": "note_folders_job_linking",
+   "classification": "superseded",
+   "recorded": true,
+   "evidence": "Production ran this exact file under restamp 20260817072554",
+   "verification": "checked directly (reviewer agents stalled)",
+   "decisive_queries": "Ledger 20260817072554 statements[1]: 41049 bytes, md5 78c37e933c4375375d5739d404a76a55, equal to the file."
+  },
+  {
+   "version": "20260817020000",
+   "name": "repair_bimc_rfi_and_schedule_dates",
+   "classification": "superseded",
+   "recorded": true,
+   "evidence": "Production ran the same two guarded UPDATEs under restamp 20260817083550; their target rows no longer exist, so a re-run would change nothing",
+   "verification": "checked directly (reviewer agents stalled)",
+   "decisive_queries": "Ledger 20260817083550 statements[1] (631 bytes) holds the same two UPDATE statements as the file (918 bytes; only comments differ). Counts of the three target rows in production: 0 (query role bypasses RLS; tables not forced)."
+  },
+  {
+   "version": "20260818233000",
+   "name": "production_notes_date_noted_due",
+   "classification": "present",
+   "recorded": true,
+   "evidence": "Live exactly as written; its backfill has nothing to do",
+   "verification": "checked directly (reviewer agents stalled)",
+   "decisive_queries": "production_notes.date_noted and date_due are nullable date columns with the file's comments; production_notes has 0 rows."
+  },
+  {
+   "version": "20260818240000",
+   "name": "drawing_sets_titleblock_revision_rect",
+   "classification": "present",
+   "recorded": true,
+   "evidence": "Live exactly as written: column, comment and validated shape CHECK",
+   "verification": "checked directly (reviewer agents stalled)",
+   "decisive_queries": "drawing_sets.titleblock_revision_rect jsonb nullable with the file's comment; drawing_sets_titleblock_revision_rect_shape validated and equal to the file's CHECK."
+  },
+  {
+   "version": "20260819001000",
+   "name": "org_member_default_project_access",
+   "classification": "superseded",
+   "superseded_by": [
+    "20260909011728",
+    "20260909014620"
+   ],
+   "recorded": true,
+   "evidence": "Live; later redefined by 20260909011728, 20260909014620, which production matches",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD ledger: select version from supabase_migrations.schema_migrations where version='20260819001000' -> 0 rows. Name regex search on ledger names -> 0 matches.\nPROD: with s as (select version,name,array_to_string(statements,E'\\n') sql from supabase_migrations.schema_migrations) select p.proname, string_agg(s.version,',') filter (where strpos(s.sql,p.prosrc)>0) from pg_proc p join pg_namespace n on n.oid=p.pronamespace cross join s where n.nspname='public' and p.proname in ('user_has_project_access','get_my_project_role','user_has_project_role_at_least') group by 1 -> all three: 20260909014620.\nPROD and REPLAY: select proname, md5(regexp_replace(lower(prosrc),'\\s+','','g')) from pg_proc where pronamespace='public'::regnamespace and proname in (...) -> both: get_my_project_role 72f22609e466793c8fdb500b29bcba70, user_has_project_access e36a8b510d83e0884e7f66a4798ba179, user_has_project_role_at_least 522aba91264e0f981daa968a10aba694.\nPROD and REPLAY: select oid::regprocedure, md5(prosrc), prosecdef, provolatile, proconfig, proacl ... -> raw md5 differs as listed; prosecdef t, provolatile s, {search_path=public}, {postgres=X/postgres,authenticated=X/postgres} on both.\nPROD ledger: substr(statements of 20260909011728, 2850, 900) shows 'member_default_project_role text default 'viewer'' and a DO block adding chk_org_member_default_project_role with the same predicate.\nPROD and REPLAY: select pg_get_constraintdef(oid) from pg_constraint where conname='chk_org_member_default_project_"
+  },
+  {
+   "version": "20260819002000",
+   "name": "operational_alerts_engine",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD ledger: with s as (select version, array_to_string(statements,E'\\n') sql from supabase_migrations.schema_migrations) select version from s where sql ilike '%generate_operational_alerts%' or sql ilike '%generate_project_alerts%' or sql ilike '%generate-operational-alerts%' -> 0 rows. Name regex '(operational_alert|alerts_engine)' -> 0 rows.\nPROD and REPLAY: select oid::regprocedure, md5(prosrc), proconfig, proacl from pg_proc where pronamespace='public'::regnamespace and proname in ('generate_operational_alerts','generate_project_alerts') -> generate_operational_alerts(uuid) 320172885b326bea3b108af87e0e3796 {postgres=X/postgres,service_role=X/postgres}; generate_project_alerts(uuid) 89a33b50677fd1088877517ab41daa92 {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}. Identical on both.\nPROD: select jobid, jobname, schedule, command, database, username, active from cron.job where jobname='generate-operational-alerts' -> 5 | 10 12 * * * | SELECT public.generate_operational_alerts(); | postgres | postgres | true.\nREPLAY: select extname from pg_extension where extname='pg_cron' -> none.\nPROD: select alert_type, count(*), max(created_at)::date from alerts where metadata->>'engine'='operational_alerts' group by 1 -> Delivery_Overdue 1 2026-09-12; Submittal_Overdue 1 2026-09-09."
+  },
+  {
+   "version": "20260819003000",
+   "name": "project_workflow_templates",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD ledger: select version from supabase_migrations.schema_migrations where array_to_string(statements,E'\\n') ilike '%apply_project_template%' -> 0 rows. Name regex '(workflow_template|project_template)' -> 0 rows.\nPROD and REPLAY: select oid::regprocedure, md5(prosrc), proconfig, proacl from pg_proc where proname='apply_project_template' -> d607ef9e348d419cae50d56c9f44343b | {search_path=public} | {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}, identical on both.\nPROD: select conname, pg_get_constraintdef(oid) from pg_constraint where contype='c' and conrelid in ('public.work_packages'::regclass,'public.schedule_tasks'::regclass) -> includes work_packages_phase_check (phase IS NULL or IN Detailing, Procurement, Fabrication, Delivery, Installation, Erection, Closeout), chk_work_packages_status (incl. 'Not Started'), chk_schedule_tasks_status (incl. 'Not Started'), schedule_status_pct_consistency, chk_schedule_tasks_date_range, chk_schedule_tasks_percent.\nREPLAY: select format_type(atttypid,atttypmod) from pg_attribute where attrelid='public.schedule_tasks'::regclass and attname='is_deleted' -> no row (missing). PROD -> boolean."
+  },
+  {
+   "version": "20260825140000",
+   "name": "submittal_approver_notes",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD ledger: select version from supabase_migrations.schema_migrations where array_to_string(statements,E'\\n') ilike '%approver_notes%' -> 0 rows. Name regex 'approver_note' -> 0 rows.\nPROD and REPLAY: select format_type(a.atttypid,a.atttypmod), pg_get_expr(d.adbin,d.adrelid), a.attnotnull, col_description(c.oid,a.attnum) from pg_attribute a join pg_class c on c.oid=a.attrelid left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum where c.oid='public.submittals'::regclass and a.attname='approver_notes' -> jsonb | '[]'::jsonb | true | identical comment on both.\nPROD and REPLAY: select indexdef from pg_indexes where indexname='idx_submittals_approver_notes_present' -> identical definition.\nPROD: select count(*) from submittals where approver_notes is null -> 0."
+  },
+  {
+   "version": "20260904120000",
+   "name": "piece_archive_projection_sync",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD ledger: with s as (select version, array_to_string(statements,E'\\n') sql from supabase_migrations.schema_migrations) select p.proname, string_agg(s.version,',') filter (where strpos(s.sql,p.prosrc)>0), string_agg(s.version,',') filter (where s.sql ilike '%function public.pieces_projection_after_change%') from pg_proc p cross join s where p.proname='pieces_projection_after_change' group by 1 -> exact body: none; CREATE: 20260725210000 only. Name regex '(piece_archive|projection)' -> 0 rows.\nPROD and REPLAY: select md5(prosrc), proconfig, proacl from pg_proc where oid='public.pieces_projection_after_change()'::regprocedure -> ca8dbd0cd282c812ba2cda2f910a894a | {search_path=public} | {postgres=X/postgres} on both.\nPROD and REPLAY: select pg_get_triggerdef(oid), tgenabled from pg_trigger where tgname='trg_pieces_projection_after_change' -> identical 7-column UPDATE OF list, 'O'.\nPROD: select count(*) from model_elements me join pieces p on p.id=me.piece_id where me.is_deleted=false and (coalesce(p.is_deleted,false) or p.deleted_at is not null) -> 0."
+  },
+  {
+   "version": "20260905090000",
+   "name": "sync_production_stages_to_pieces",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD ledger: select version from supabase_migrations.schema_migrations where array_to_string(statements,E'\\n') ilike '%sync_production_stages_to_pieces%' -> 0 rows. Name regex '(production_stage|sync_production)' -> 0 rows.\nPROD and REPLAY: select oid::regprocedure, md5(prosrc), proconfig, proacl from pg_proc where proname in ('sync_production_stages_to_pieces','sync_production_stages_to_pieces_impl') -> _impl fe853ca6d7da14c9c35c47b6b5913501 {search_path=\"\"} {postgres=X/postgres,service_role=X/postgres}; wrapper 51db11920390e518acd414f50c3547ca {search_path=\"\"} {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}. Identical on both.\nPROD and REPLAY: select oid::regprocedure, md5(prosrc), pg_get_function_result(oid), proacl from pg_proc where proname in ('advance_piece_station_impl','ship_piece_lots_impl','record_piece_control_command_failure') -> same signatures, return types and ACLs; bodies differ as listed."
+  },
+  {
+   "version": "20260905130000",
+   "name": "work_package_control_center",
+   "classification": "superseded",
+   "superseded_by": [
+    "20260909055216"
+   ],
+   "recorded": true,
+   "evidence": "Its own effects are live; production runs the sibling app's stricter release implementation (owner decision: record and document)",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD ledger: select version,name from supabase_migrations.schema_migrations where version between '20260905000000' and '20260910000000' -> only 20260906040515, 20260908045525 and the 202609090xxxxx sibling rows; 20260905130000 is absent. Ledger text search for 'work_packages_project_wp_number_live_uidx' -> no rows; 'release_work_package_canonical_impl' -> 20260718070000, 20260724130000, 20260909055216, 20260913201900.\nPROD/REPLAY: select proname, md5(prosrc), length(prosrc), proacl::text, proconfig from pg_proc where pronamespace='public'::regnamespace and proname in ('refresh_work_package_progress','release_work_package_canonical_impl','assign_pieces_to_work_package','unassign_pieces_from_work_package') -> prod impl 298bed7b.../7732 vs replay 812ce09b.../8220; the other three identical in both (f37f50a4..., 243be431..., f3e14eba...).\nPROD: with m9 as (select array_to_string(statements,E'\\n') t from supabase_migrations.schema_migrations where version='20260909055216') select position(p.prosrc in m9.t)>0 from pg_proc p, m9 where p.proname='release_work_package_canonical_impl' -> true. m9 contains 'M7 rule' once and 'skip_wp_progress_refresh'.\nNORMALIZATION (run in both databases): md5(regexp_replace(regexp_replace(regexp_replace(lower(regexp_replace(regexp_replace(prosrc,'-- M7 rule.*?end if;',''),'--[^\\n]*','','g')),'\\mas\\M','','g'),'[[:space:]\"]+','','g'),';$','')) -> prod 690cdc400383abeab2a96b830ea67aa5 = replay 690cdc400383abeab2a96b830ea67aa5.\nPROD: select indexdef from "
+  },
+  {
+   "version": "20260908120000",
+   "name": "schedule_predecessor_orphan_repair",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD: select count(*) from public.schedule_tasks t cross join lateral jsonb_array_elements(t.dependencies::jsonb) e(elem) where t.dependencies is not null and pg_input_is_valid(t.dependencies,'jsonb') and jsonb_typeof(t.dependencies::jsonb)='array' and not exists (select 1 from public.schedule_tasks s where s.id::text = case jsonb_typeof(e.elem) when 'object' then e.elem->>'id' when 'string' then e.elem #>> '{}' end) -> 0. Invalid-JSON dependencies -> 0. Total tasks -> 23.\nPROD/REPLAY: select md5(coalesce(col_description('public.schedule_tasks'::regclass, attnum),'<null>')) from pg_attribute where attrelid='public.schedule_tasks'::regclass and attname='dependencies' -> 5a3040aeabdc0fe21fb04d12a6b1b70e in both.\nPROD ledger: statements ilike '%schedule_tasks.dependencies%' -> no rows; version 20260908120000 absent."
+  },
+  {
+   "version": "20260908130000",
+   "name": "schedule_task_actuals",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD/REPLAY: select conname, pg_get_constraintdef(oid), convalidated from pg_constraint where conname='schedule_tasks_actual_range_chk' -> identical, validated=true in both.\nPROD/REPLAY: select indexdef from pg_indexes where indexname='schedule_tasks_actuals_idx' -> identical.\nPROD/REPLAY: information_schema.columns for schedule_tasks.actual_start_date and actual_finish_date -> date, nullable, in both. Column comment md5s e4ddc327... and f4ad3572..., constraint comment babbe884..., in both.\nPROD: select count(*) from schedule_tasks where actual_finish_date < actual_start_date -> 0; tasks with actuals -> 1.\nPROD ledger: 'schedule_tasks_actual_range_chk' and 'schedule_tasks_actuals_idx' -> no rows. The only 'actual_start_date' hit is 20260909062929, the trigger-body line 'if new.status = 'In Progress' ... new.actual_start_date := current_date', which is not DDL."
+  },
+  {
+   "version": "20260908140000",
+   "name": "schedule_baselines",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD/REPLAY: combined catalog query over pg_indexes, pg_constraint, information_schema.columns, pg_class.relrowsecurity and pg_policy for schedule_baselines and schedule_baseline_tasks -> identical rows. The only difference is relacl: prod has no anon entry.\nPROD: select pg_get_userbyid(defaclrole), defaclobjtype, defaclacl from pg_default_acl where defaclnamespace='public'::regnamespace -> postgres tables {postgres,authenticated,service_role}. REPLAY -> {postgres,anon,authenticated,service_role}.\nPROD: select count(*) from pg_class where relnamespace='public'::regnamespace and relkind='r' and has_table_privilege('anon',oid,'SELECT') -> 1 of 139 (replay 110).\nPROD: count of tasks with metadata ? 'baseline_start' or ? 'baseline_end' -> 0; schedule_baselines -> 0; schedule_baseline_tasks -> 0.\nPROD ledger: 'schedule_baseline_tasks' -> no rows. The only 'schedule_baselines' hit is a comment in 20260909062929."
+  },
+  {
+   "version": "20260908150000",
+   "name": "schedule_change_log_completeness",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD/REPLAY: select md5(prosrc), length(prosrc), prosecdef, proconfig, proacl::text, md5(obj_description(oid,'pg_proc')) from pg_proc where proname='record_planner_action_event' -> e60994cc.../4830/t/{search_path=public, pg_temp}/{postgres=X/postgres}/41dfabac... in both.\nPROD/REPLAY: select pg_get_triggerdef(oid) from pg_trigger where tgname='record_planner_schedule_task_delete' -> identical.\nPROD/REPLAY: select indexdef from pg_indexes where indexname='planner_action_events_entity_idx' -> identical.\nPROD ledger: 'record_planner_schedule_task_delete' and 'planner_action_events_entity_idx' -> no rows. 'record_planner_action_event' -> 20260802090000, plus 20260910031540 where it appears only in the comment 'The legacy record_planner_action_event AFTER trigger keeps writing ...'."
+  },
+  {
+   "version": "20260908160000",
+   "name": "schedule_duration_single_source",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD: select md5(prosrc), length(prosrc), md5(replace(prosrc,E'\\r','')), length(prosrc)-length(replace(prosrc,E'\\r','')) from pg_proc where proname='sync_schedule_task_duration' -> 8c710f9e.../850/9e99beebcb209d5f2e1e805d7a706bce/19. REPLAY: md5(prosrc) -> 9e99beebcb209d5f2e1e805d7a706bce (831).\nPROD/REPLAY: select pg_get_triggerdef(oid) from pg_trigger where tgname='trg_schedule_task_duration_sync' -> identical. Function comment 2f1a20e9... and duration column comment 487f3fae... in both.\nPROD: select count(*) from schedule_tasks where start_date is not null and end_date is not null and end_date>=start_date and duration is distinct from (end_date-start_date)+1 -> 0; end_date<start_date and duration is not null -> 0.\nPROD ledger: 'sync_schedule_task_duration' and 'trg_schedule_task_duration_sync' -> no rows."
+  },
+  {
+   "version": "20260908170000",
+   "name": "project_calendars",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD ledger: select version from supabase_migrations.schema_migrations where version='20260908170000' -> 0 rows. select version,name from supabase_migrations.schema_migrations where array_to_string(statements,E'\\n') ilike '%project_calendars%' -> only 20260909062929 m10_schedule. Its SQL (sibling file lines 131-138) only does 'add primary key (project_id)' if missing, plus 'alter column work_days set default ''{1,2,3,4,5}''' and 'holidays set default ''{}'''. Its statements contain no 'create table public.project_calendars', no 'src/lib/schedule/workingCalendar.ts' and no 'trg_project_calendars_updated_at' (all false).\nPROD+REPLAY catalog: select 'col',a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,pg_get_expr(d.adbin,d.adrelid),col_description(a.attrelid,a.attnum) from pg_attribute a left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum where a.attrelid='public.project_calendars'::regclass and a.attnum>0 and not a.attisdropped; plus pg_constraint (pg_get_constraintdef), pg_trigger (pg_get_triggerdef), pg_policy (polpermissive, polcmd, roles, pg_get_expr qual/with_check), obj_description(table), relrowsecurity, relacl. Result: the two databases differ only in default spelling and the anon ACL entry.\nPROD: select pg_get_userbyid(defaclrole),defaclobjtype,defaclnamespace::regnamespace,defaclacl from pg_default_acl -> postgres r public = {postgres=arwdDxtm,authenticated=arwdDxtm,service_role=arwdDxtm}. REPLAY: same row includes anon=arwdDxtm.\nPROD count"
+  },
+  {
+   "version": "20260909060000",
+   "name": "m3_7_auto_archive_empty_drawing_sets",
+   "classification": "superseded",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Sibling-app version; production ran it under restamp 20260909062016",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD: select md5(prosrc),length(prosrc),prosecdef,proconfig,proacl from pg_proc where oid='public.recount_drawing_set(uuid)'::regprocedure -> 510e63a36ccb6d16d46245bdb9a61140, 890, true, {search_path=public}, {postgres=X/postgres,service_role=X/postgres}.\nPROD: select md5(substring(array_to_string(statements,E'\\n') from '\\$\\$(.*)\\$\\$')) from supabase_migrations.schema_migrations where version='20260909062016' -> 510e63a36ccb6d16d46245bdb9a61140 (same as live). Ledger row: name m3_7_auto_archive_empty_drawing_sets, 1 statement, md5_all 6cedf2d6c185daf6491a36115c451fdf, 1744 bytes. No row for 20260909060000.\nLOCAL (python, scratchpad fnbody.py): body between $$ of the sibling file -> md5 ab8bebb9741d6a189d01b4e416562378, len 1075. Replacing its two '  -- Once the set...' / '  -- doesn't linger...' lines with a blank line -> 510e63a36ccb6d16d46245bdb9a61140, len 890.\nPROD ledger: statements ilike '%recount_drawing_set%' -> 20260909020328 and 20260909062016 only. REPLAY: to_regprocedure('public.recount_drawing_set(uuid)') -> null.\nPROD counts: select count(*) from public.drawing_sets where not is_deleted and sheet_count=0 -> 0; ... where not is_deleted and not exists (live drawing in set) -> 0."
+  },
+  {
+   "version": "20260909060100",
+   "name": "m2_1_scope_project_number_uniqueness_to_org",
+   "classification": "superseded",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Sibling-app version; production ran it under restamp 20260909073500",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD: select indexname,indexdef from pg_indexes where schemaname='public' and tablename='projects' and indexdef ilike '%project_number%' -> only idx_projects_org_project_number (definition above). select to_regclass('public.idx_projects_project_number') -> null.\nPROD ledger: select version,name,array_to_string(statements,E'\\n') from supabase_migrations.schema_migrations where version='20260909073500' -> name m2_1_scope_project_number_uniqueness_to_org, 1 statement, md5 579392b98fb224cbb0a6ae99206cbece, 521 bytes: 'drop index if exists public.idx_projects_project_number; create unique index if not exists idx_projects_org_project_number on public.projects (org_id, project_number) where project_number is not null and coalesce(is_deleted, false) = false;'. No row for 20260909060100.\nPROD count: select count(*) from (select org_id,project_number from public.projects where project_number is not null and coalesce(is_deleted,false)=false group by 1,2 having count(*)>1) d -> 0.\nREPLAY: to_regclass('public.idx_projects_org_project_number') -> null; idx_projects_project_number = CREATE UNIQUE INDEX ... (project_number) WHERE ..."
+  },
+  {
+   "version": "20260909090000",
+   "name": "m19_reset_org_data",
+   "classification": "superseded",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Sibling-app version; production ran the same SQL under alias 20260909090445, and Rev.2 20260912052502 now defines the live function",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD: select md5(prosrc),length(prosrc),prosecdef,proconfig,proacl,obj_description(oid,'pg_proc') from pg_proc where oid='public.reset_org_data(uuid,text)'::regprocedure -> 0fe2ca5f76e49797419753a4241a477e, 4128, true, {search_path=public}, {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}, 'Owner-only. Erases every project ...'. REPLAY: md5 0fe2ca5f76e49797419753a4241a477e, acl {postgres=X/postgres,authenticated=X/postgres}, comment empty.\nPROD: select md5(substring(array_to_string(statements,E'\\n') from '\\$\\$(.*)\\$\\$')) from supabase_migrations.schema_migrations where version='20260909090445' -> 9a3966ed53a6dbf770a3895780e561cd. Ledger row: 1 statement, md5_all 7d4f0fa54bf8c8f8e3eae455ca9381ad, 3466 bytes.\nLOCAL (fnbody.py) body md5s: sibling 20260909090000 = 9a3966ed53a6dbf770a3895780e561cd; migrations_external/20260909090445 = 9a3966ed...; Rev.2 20260912034015 = be9d6a5e...; 20260912042823 = 0b2fdd60...; 20260912052502 = 0fe2ca5f76e49797419753a4241a477e (len 4128).\nPROD ledger: select version,coalesce(array_length(statements,1),0) from supabase_migrations.schema_migrations where version in ('20260912034015','20260912042823','20260912052502') -> all present with 0 statements. No row for 20260909090000.\nPROD: select has_function_privilege('anon'|'authenticated'|'service_role','public.reset_org_data(uuid,text)','EXECUTE') -> false/true/true.\nREPO: git show 57215f57c -- supabase/migrations/20260912052502_reset_org_data_suppress_triggers_in_org_tail.sql ad"
+  },
+  {
+   "version": "20260913084700",
+   "name": "expense_atomic_creation",
+   "classification": "conflict",
+   "recorded": false,
+   "evidence": "Conflict: would replace production's newer, validated expense RPC; claimed by another agent",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD: select oid::regprocedure,prosecdef,proconfig,proacl,md5(prosrc),length(prosrc) from pg_proc where oid='public.create_expense(uuid,jsonb)'::regprocedure -> false, {search_path=public}, {postgres=X,authenticated=X,service_role=X}, a156f9983e2f1f0a4c757fb68a3494ef, 3963. LOCAL: body extracted from SteelBuild-Pro-2026/supabase/migrations/20260909084749_m19_expenses.sql -> md5 a156f9983e2f1f0a4c757fb68a3494ef (same). REPLAY: md5(prosrc)=2677b4afb7af6bc3c575bdbde09cbd9b, len 3394, prosecdef=true, search_path=\"\" = the migration file body.\nPROD: select to_regprocedure('public.enforce_expense_rpc_create()') -> null.\nPROD: select t.tgname from pg_trigger t join pg_proc p on p.oid=t.tgfoid where t.tgrelid='public.expenses'::regclass and not t.tgisinternal and pg_get_functiondef(p.oid) like '%create_expense()%expense numbers%' -> trg_a_enforce_expense_guards.\nPROD: select pg_get_constraintdef(oid) from pg_constraint where conrelid='public.expenses'::regclass and pg_get_constraintdef(oid) ilike '%payment_status%' -> CHECK (payment_status = ANY (ARRAY['Pending','Submitted','Approved','Paid','Rejected','Void'])) NOT VALID.\nPROD ledger: versions whose statements contain create_expense -> only 20260909084749 (m19_expenses), which contains 'EXP-'' || lpad(v_seq::text, 3, ''0'')', 'steelbuild.expense_rpc' and 'A new expense starts Pending or Submitted' (all true). No row for 20260913084700.\nPROD count: select count(*) from public.expenses -> 0."
+  },
+  {
+   "version": "20260913090000",
+   "name": "drawing_transmittal_targets",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Live exactly as written",
+   "verification": "confirmed by independent reviewer",
+   "decisive_queries": "PROD+REPLAY: select a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull from pg_attribute a where a.attrelid='public.drawing_transmittal_items'::regclass and a.attnum>0 and not a.attisdropped; select conname,convalidated,pg_get_constraintdef(oid) from pg_constraint where conrelid='public.drawing_transmittal_items'::regclass; select indexname,indexdef from pg_indexes where schemaname='public' and tablename='drawing_transmittal_items'. PROD one_target = ((drawing_id IS NOT NULL)::integer + (gc_drawing_id IS NOT NULL)::integer) = 1, validated; REPLAY = num_nonnulls(drawing_id, gc_drawing_id) = 1.\nREPLAY: select count(*) filter (where (num_nonnulls(a,b)=1) is distinct from (((a is not null)::integer + (b is not null)::integer) = 1)), count(*) from (values (null::uuid,null::uuid),(gen_random_uuid(),null),(null,gen_random_uuid()),(gen_random_uuid(),gen_random_uuid())) v(a,b) -> 0 | 4.\nPROD counts: select (select count(*) from public.drawing_transmittal_items) total, (select count(*) from public.drawing_transmittal_items i join public.drawing_revisions r on r.id=i.drawing_revision_id where i.drawing_id is null and i.gc_drawing_id is null) pending, (select count(*) from public.drawing_transmittal_items where num_nonnulls(drawing_id,gc_drawing_id)<>1) violations, (select count(*) from public.drawing_transmittal_items where drawing_revision_id is null) null_rev, (select count(*) from public.drawing_transmittal_items i join public.drawing_revisions r on r.id=i.drawing_revision_id"
+  },
+  {
+   "version": "20260913202900",
+   "name": "schedule_tasks_soft_delete_columns",
+   "classification": "present",
+   "superseded_by": [],
+   "recorded": true,
+   "evidence": "Both columns live exactly as defined; its ADD COLUMN IF NOT EXISTS changes nothing in production (20260913203000, which needs them, is already recorded)",
+   "verification": "checked directly",
+   "decisive_queries": "information_schema.columns for public.schedule_tasks in production: is_deleted boolean NOT NULL DEFAULT false; deleted_at timestamptz nullable, no default. Ledger has 20260913203000 but not 20260913202900."
+  }
+ ]
+}
