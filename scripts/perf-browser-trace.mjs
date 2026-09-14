@@ -39,9 +39,12 @@ const perf = await page.evaluate(() => {
     acc[type] = (acc[type] || 0) + transferSize;
     return acc;
   }, {});
+  // Runs in the page (Playwright serialises this callback), so read the
+  // browser-only globals off globalThis: declaring them file-wide would also
+  // hide a stray `document` on the Node side of this script.
   return {
-    title: document.title,
-    url: location.href,
+    title: globalThis.document.title,
+    url: globalThis.location.href,
     domContentLoadedMs: nav ? Math.round(nav.domContentLoadedEventEnd) : null,
     loadEventMs: nav ? Math.round(nav.loadEventEnd) : null,
     transferByType: byType,
