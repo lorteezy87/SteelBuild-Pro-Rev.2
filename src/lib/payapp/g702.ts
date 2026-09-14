@@ -145,12 +145,18 @@ export function applyLineProgress(
   retainagePercent: number,
 ): PayApplicationLine {
   const pct = clampPercent(edit.percentComplete ?? line.percent_complete);
-  const totalWorkEarned = pctOf(line.scheduled_value, pct); // D + E target
+  const stored = edit.materialsStored ?? line.materials_stored;
+  // G703 column G is D+E+F and the percent is G/C, which is what lineFigures
+  // above computes and what compute_pay_application_line stores. Targeting
+  // D+E alone over-bills any line carrying stored materials: entering 100%
+  // on a 1,000 line with 200 stored asked for 1,000 of work on top of the
+  // 200, i.e. 120% of the scheduled value and a negative balance to finish.
+  const totalEarned = pctOf(line.scheduled_value, pct); // D + E + F target
   const next: PayApplicationLine = {
     ...line,
     percent_complete: pct,
-    work_completed_this_period: subMoney(totalWorkEarned, line.work_completed_previous),
-    materials_stored: edit.materialsStored ?? line.materials_stored,
+    work_completed_this_period: subMoney(subMoney(totalEarned, line.work_completed_previous), stored),
+    materials_stored: stored,
   };
   next.retainage = lineRetainage(next, retainagePercent);
   return next;

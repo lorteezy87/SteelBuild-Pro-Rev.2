@@ -26,7 +26,7 @@ describe('recovered shared-production migration lineage', () => {
     const manifest = readManifest();
     const scopedManifest = {
       ...manifest,
-      local: { ...manifest.local, functionOverrides: [] },
+      local: { ...manifest.local, functionOverrides: [], migrationOverrides: [] },
       migrations: manifest.migrations.filter((entry: { version: string }) => originals.some(original => original.version === entry.version)),
       functions: [],
     };

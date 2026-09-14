@@ -82,10 +82,25 @@ describe("applyLineProgress", () => {
     expect(next.work_completed_this_period).toBe(25000); // 55k earned − 30k previous
     expect(next.retainage).toBe(5500); // 10% of 55k completed
   });
-  it("clamps percent to [0,100] and accepts stored materials", () => {
+  it("clamps percent to [0,100] and counts stored materials toward the target", () => {
     const next = applyLineProgress(line({ scheduled_value: 1000 }), { percentComplete: 150, materialsStored: 200 }, 0);
     expect(next.percent_complete).toBe(100);
-    expect(next.work_completed_this_period).toBe(1000);
+    // 100% of a 1,000 line is 1,000 of G (= D+E+F), and 200 of it is already
+    // stored material, so this period earns 800. The old expectation here was
+    // 1,000, which billed 1,200 against a 1,000 line — 120% complete with a
+    // negative balance to finish. lineFigures and the database's
+    // compute_pay_application_line both define % as G/C; this now matches.
+    expect(next.work_completed_this_period).toBe(800);
     expect(next.materials_stored).toBe(200);
+  });
+
+  it("does not over-bill a line that already carries stored materials", () => {
+    const l = line({ scheduled_value: 100000, work_completed_previous: 20000, materials_stored: 5000 });
+    const next = applyLineProgress(l, { percentComplete: 40 }, 10);
+    // Target G = 40,000. Already there: 20,000 previous + 5,000 stored.
+    expect(next.work_completed_this_period).toBe(15000);
+    const f = lineFigures(next);
+    expect(f.totalCompletedStored).toBe(40000);
+    expect(f.displayPercent).toBe(40);
   });
 });
