@@ -124,14 +124,14 @@
     {
       "version": "20260909060000",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "required",
-      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060000_m3_7_auto_archive_empty_drawing_sets.sql"
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Source version of lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060000_m3_7_auto_archive_empty_drawing_sets.sql, which production restamped on apply as 20260909062016 (declared below). This version was never applied and never will be, so it cannot be 'required'."
     },
     {
       "version": "20260909060100",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "required",
-      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060100_m2_1_scope_project_number_uniqueness_to_org.sql"
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Source version of lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060100_m2_1_scope_project_number_uniqueness_to_org.sql, which production restamped on apply as 20260909073500 (declared below). This version was never applied and never will be, so it cannot be 'required'."
     },
     {
       "version": "20260909062016",
@@ -208,8 +208,8 @@
     {
       "version": "20260909090000",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "required",
-      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909090000_m19_reset_org_data.sql"
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Source version of lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909090000_m19_reset_org_data.sql, which production restamped on apply as 20260909090445 (declared below). This version was never applied and never will be, so it cannot be 'required'."
     },
     {
       "version": "20260909090445",
