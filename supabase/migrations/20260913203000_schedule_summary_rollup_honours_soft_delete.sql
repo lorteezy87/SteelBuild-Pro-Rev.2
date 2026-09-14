@@ -26,8 +26,6 @@
 -- unchanged and still applies: recompute never writes is_deleted, so widening
 -- the trigger's column list cannot deepen the existing cascade.
 
-BEGIN;
-
 CREATE OR REPLACE FUNCTION public.recompute_schedule_summary(p_task_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -143,5 +141,3 @@ end;
 $function$;
 
 NOTIFY pgrst, 'reload schema';
-
-COMMIT;

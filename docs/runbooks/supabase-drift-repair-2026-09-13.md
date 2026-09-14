@@ -36,8 +36,13 @@ claim that every advisory or authenticated workflow has been audited.
   RBAC functions: set-only and missing links, nonmember denial, field write
   denial, and PM updates. Eight unexpected-state guards, idempotency, exact
   old-body rollback, and ACL/config preservation passed.
-- Entrypoint SQL tests verify real role denial, unchanged bodies/owners,
-  retained wrapper and service-role privileges, and index creation.
+- `supabase/tests/drift_function_entrypoints.sql` replays the entrypoint
+  repair against six database shapes, including the audited production ACLs.
+  A catalog-wide before/after snapshot may change only the intended ACLs,
+  probe settings and indexes. It also proves real role denial, idempotency,
+  and that the guard rejects 13 kinds of unreviewed drift. Mutation testing
+  killed 62 of 72 migration mutants; the rest are visible only in the file's
+  bytes, so only a byte-level check of the applied migration can catch them.
 - 6,013 Vitest tests across 636 files passed after a clean dependency install.
   Lint, four TypeScript gates and the no-new-JavaScript gate passed.
 
