@@ -58,7 +58,7 @@ describe('production apply-time restamp lineage', () => {
   it('reports no missing migration for a ledger holding only the applied halves', () => {
     const scoped = {
       ...manifest,
-      local: { ...manifest.local, functionOverrides: [] },
+      local: { ...manifest.local, functionOverrides: [], migrationOverrides: [] },
       migrations: (manifest.migrations as ManifestEntry[]).filter((entry) =>
         RESTAMPS.some((r) => r.source === entry.version || r.applied === entry.version),
       ),
@@ -75,7 +75,7 @@ describe('production apply-time restamp lineage', () => {
   it('never reports a source version as missing, even on an empty ledger', () => {
     const scoped = {
       ...manifest,
-      local: { ...manifest.local, functionOverrides: [] },
+      local: { ...manifest.local, functionOverrides: [], migrationOverrides: [] },
       migrations: (manifest.migrations as ManifestEntry[]).filter((entry) =>
         RESTAMPS.some((r) => r.source === entry.version),
       ),

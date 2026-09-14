@@ -22,6 +22,13 @@
         "lifecycle": "staging-only",
         "evidence": "docs/runbooks/staging-e2e-automation.md: hard-locked one-time staging fixture bootstrap"
       }
+    ],
+    "migrationOverrides": [
+      {
+        "version": "20260913084700",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "MUST NOT BE APPLIED. Its create_expense() half is already live in production (verified 2026-09-14 by the 'Not authorized to log expenses for this project' marker in the live body), but it also drops every trigger on public.expenses and installs a create-only guard, enforce_expense_rpc_create, which is absent from production. Production instead carries trg_a_enforce_expense_guards -> enforce_expense_guards, which is strictly stronger: it enforces the same RPC-only insert rule ('Use create_expense() - expense numbers are minted there') plus project_id and expense_number immutability, status and stamp routing through move_expense(), an approved-expense freeze, a field-edit restriction, delete restrictions, and transition validation via expense_transition_allowed. Applying this file would tear all of that out. Superseded, not pending."
+      }
     ]
   },
   "migrations": [

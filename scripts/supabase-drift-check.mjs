@@ -20,6 +20,25 @@ const LIFECYCLES = new Set([
   'unresolved',
 ]);
 
+/**
+ * Per-migration lifecycle overrides for files that live in
+ * supabase/migrations/ but must not be classified by local.migrationLifecycle.
+ *
+ * The manifest's own `migrations` list cannot express this: validateManifest
+ * rejects an entry that duplicates an active local migration, because a
+ * migration must have exactly one classification. So a local file whose
+ * lifecycle differs from the default — one already applied to production under
+ * a restamped version, or one that must never be applied because production
+ * carries a stronger implementation — had no way to be declared, and sat in
+ * missingMigrations permanently with no action that could clear it.
+ *
+ * This mirrors local.functionOverrides, which exists for the same reason on the
+ * function side. Optional, so a manifest without it stays valid.
+ */
+function localMigrationOverrides(manifest) {
+  return manifest.local.migrationOverrides ?? [];
+}
+
 export function localInventory(root = ROOT) {
   return {
     migrations: readdirSync(path.join(root, 'supabase/migrations'))
@@ -91,6 +110,11 @@ export function validateManifest(manifest, local) {
     || !Array.isArray(manifest.functions)) {
     throw new Error('Production ownership manifest asset lists must be arrays.');
   }
+  // Optional so an older manifest (or another reader of schemaVersion 1) stays valid.
+  if (manifest.local.migrationOverrides !== undefined
+    && !Array.isArray(manifest.local.migrationOverrides)) {
+    throw new Error('Production ownership manifest local.migrationOverrides must be an array.');
+  }
 
   assertUnique(local.migrations, 'local migration version');
   assertUnique(local.functions, 'local function slug');
@@ -109,12 +133,30 @@ export function validateManifest(manifest, local) {
       throw new Error(`Local function override has no source directory: ${entry.slug}`);
     }
   });
+  localMigrationOverrides(manifest).forEach(entry => {
+    validateEntry(
+      { ...entry, owner: manifest.local.owner },
+      'version',
+      /^\d{14}$/,
+      'local migration override',
+    );
+    // An override must name a migration that is actually here. Otherwise a
+    // renamed or deleted file would leave a stale entry silently suppressing
+    // nothing, and the next reader would trust a classification with no source.
+    if (!local.migrations.includes(entry.version)) {
+      throw new Error(`Local migration override has no source file: ${entry.version}`);
+    }
+  });
 
   assertUnique(manifest.migrations.map(entry => entry.version), 'manifest migration version');
   assertUnique(manifest.functions.map(entry => entry.slug), 'manifest function slug');
   assertUnique(
     manifest.local.functionOverrides.map(entry => entry.slug),
     'local function override slug',
+  );
+  assertUnique(
+    localMigrationOverrides(manifest).map(entry => entry.version),
+    'local migration override version',
   );
 
   const localMigrationCollision = manifest.migrations.find(entry =>
@@ -144,11 +186,14 @@ function classifiedInventory(manifest, local) {
   const overrides = new Map(
     manifest.local.functionOverrides.map(entry => [entry.slug, entry]),
   );
+  const migOverrides = new Map(
+    localMigrationOverrides(manifest).map(entry => [entry.version, entry]),
+  );
   const migrations = local.migrations.map(version => ({
     version,
     owner: manifest.local.owner,
-    lifecycle: manifest.local.migrationLifecycle,
-    evidence: `supabase/migrations/${version}_*.sql`,
+    lifecycle: migOverrides.get(version)?.lifecycle ?? manifest.local.migrationLifecycle,
+    evidence: migOverrides.get(version)?.evidence ?? `supabase/migrations/${version}_*.sql`,
   })).concat(manifest.migrations);
   const functions = local.functions.map(slug => ({
     slug,
