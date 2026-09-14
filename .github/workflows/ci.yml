@@ -148,6 +148,12 @@ jobs:
         run: npm run typecheck:noimplicitany
 
       - name: Run Vitest tests
+        # Deliberately not UTC. vite.config.js pins every test worker to UTC;
+        # the runner is already UTC, which would hide a broken pin. From UTC+14
+        # src/__tests__/testRunnerTimezone.test.ts fails here if the pin stops
+        # reaching Date/Intl, instead of only on a non-UTC dev box.
+        env:
+          TZ: Pacific/Kiritimati
         run: npm test
 
       - name: Install Chromium for foundation acceptance
