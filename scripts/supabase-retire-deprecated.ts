@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { compareDrift, localInventory, readManifest, validateManifest } from './supabase-drift-check.mjs';
 
 const PROJECT = 'kjrwqagyeswwoxpjkcko';
-const APPROVED = new Map([['bluebeam-proxy', 23], ['schedule-assistant', 32], ['sharepoint-proxy', 26], ['stripe-setup', 10], ['stripe-worker', 10]]);
+const APPROVED = new Map([['bluebeam-proxy', 24], ['schedule-assistant', 33], ['sharepoint-proxy', 27], ['stripe-setup', 11], ['stripe-worker', 11]]);
 const SLUGS = [...APPROVED.keys()];
 type InventoryRow = { slug: string; id: string; version: number; status: string; [key: string]: unknown };
 type Local = { migrations: string[]; functions: string[] };

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { prepareRetirement, applyRetirement, approvedVersion, inspectBackup, readFunctionInventory } from '../supabase-retire-deprecated.ts';
 
 const approved = ['bluebeam-proxy', 'schedule-assistant', 'sharepoint-proxy', 'stripe-setup', 'stripe-worker'];
-const versions = [23, 32, 26, 10, 10];
+const versions = [24, 33, 27, 11, 11];
 const inventory = () => [...approved, 'stripe-webhook', 'stripe-billing', 'sheets-api'].map((slug, i) => ({ slug, id: `id-${slug}`, version: versions[i] ?? 26, status: 'ACTIVE', verify_jwt: true }));
 const local = { migrations: [], functions: ['stripe-billing', 'sheets-api'] };
 const manifest = { schemaVersion: 1, projectRef: 'kjrwqagyeswwoxpjkcko', local: { owner: 'owner/repo', migrationLifecycle: 'required', functionLifecycle: 'required', functionOverrides: [] }, migrations: [], functions: [...approved, 'stripe-webhook'].map(slug => ({ slug, owner: 'owner/repo', lifecycle: 'deprecated', evidence: 'reviewed' })) };
@@ -24,7 +24,7 @@ const upload = { artifactId: '12345', artifactDigest: 'a'.repeat(64) };
 describe('narrow deprecated function retirement', () => {
   it('refuses webhook, active billing, prototype keys, and arbitrary slugs', () => {
     for (const slug of ['stripe-webhook', 'stripe-billing', 'sheets-api', '__proto__', 'constructor', 'anything']) expect(() => approvedVersion(slug)).toThrow();
-    expect(approvedVersion('schedule-assistant')).toBe(32);
+    expect(approvedVersion('schedule-assistant')).toBe(33);
   });
   it('prepares source backups by default without deleting any function', async () => {
     const h = harness(); const receipt = await prepareRetirement(h.options);
@@ -43,7 +43,7 @@ describe('narrow deprecated function retirement', () => {
   it.each(['new-version', 'missing', 'unknown', 'wrong-project', 'not-deprecated', 'empty-inventory'])('fails closed before backup for %s', async mode => {
     const h = harness(); const options = { ...h.options, manifest: structuredClone(manifest) };
     const rows = inventory();
-    if (mode === 'new-version') rows[0].version = 24;
+    if (mode === 'new-version') rows[0].version++;
     if (mode === 'missing') rows.shift();
     if (mode === 'unknown') rows.push({ ...rows[0], slug: 'new-unknown' });
     if (mode === 'wrong-project') options.manifest.projectRef = 'abcdefghijklmnopqrst';
