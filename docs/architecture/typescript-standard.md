@@ -64,4 +64,4 @@ Convert when the file is **actively refactored**, **frequently changed**, **bug-
 ## Related
 
 - Folder ownership: `docs/architecture/folder-ownership.md`
-- CI type gates: `npm run typecheck`, `typecheck:strict`, `typecheck:noimplicitany`
+- CI type gates: `npm run typecheck` (`src/` via `tsconfig.json`, `scripts/` via `tsconfig.scripts.json`), `typecheck:strict`, `typecheck:noimplicitany`
