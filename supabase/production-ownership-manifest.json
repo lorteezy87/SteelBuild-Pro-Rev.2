@@ -193,6 +193,11 @@
         "version": "20260727053000",
         "lifecycle": "intentionally-frozen",
         "evidence": "DELIBERATELY NOT APPLIED - it would contradict a newer decision, and buys no security. It adds RESTRICTIVE pm role-floor policies to four authority tables. Three already enforce pm through their permissive policies (drawing_revisions and project_closeout are pm on INSERT and UPDATE; no table has a DELETE policy, so deletes are already denied), making those nine policies pure defence in depth. The fourth is a live conflict: change_requests INSERT is field, and create_change_request is SECURITY INVOKER with its own field floor and inserts directly, so RLS applies as the caller. Adding a pm restrictive policy would make that RPC fail for field users with a raw RLS violation instead of its own message. Latent today (0 users hold field; every org defaults to viewer) but it would fire the first time a field user is added. The RPC is the later decision, so field users raising a PCO is read as current intent. Whether only PMs may open a change request is a product question for the owner; if the answer is pm, apply this file AND raise create_change_request to pm together so the error stays truthful. Only email_integration_settings received these policies when this migration last ran."
+      },
+      {
+        "version": "20260914122050",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - not yet in the ledger. Re-asserts 20260914010000's revoke of link_unlinked_model_elements_for_piece from PUBLIC, anon and authenticated, then aborts unless has_function_privilege shows anon and authenticated refused and service_role kept. Written because a read-only production check on 2026-09-14 still showed authenticated=X although the ledger records 20260914010000. If production already refuses authenticated, close the PR instead of applying. Once applied and recorded as 20260914122050, move the version into the LEDGER literal in scripts/__tests__/migrationOverrides.test.ts and drop this override."
       }
     ]
   },
