@@ -33,6 +33,7 @@ import {
   type WorkPackageRecord,
   type RfiRecord,
   type ChangeOrderRecord,
+  type ScheduleTaskRecord,
   type AtRiskEntry,
   type ClosingSoonEntry,
   type RecentlyUpdatedEntry,
@@ -99,6 +100,9 @@ export interface ProjectsControlCenterProps {
   workPackages?: WorkPackageRecord[];
   rfis?: RfiRecord[];
   changeOrders?: ChangeOrderRecord[];
+  scheduleTasks?: ScheduleTaskRecord[];
+  todayIso?: string;
+  evidence?: { rfiEvidenceLoaded: boolean; scheduleEvidenceLoaded: boolean };
 
   search: string;
   onSearch: (v: string) => void;
@@ -129,7 +133,9 @@ const HEALTH_VALUES = ["On Track", "Watch", "At Risk"];
 // ── Component ─────────────────────────────────────────────────────
 export default function ProjectsControlCenter(props: ProjectsControlCenterProps) {
   const {
-    projects, workPackages = [], rfis = [], changeOrders = [],
+    projects, workPackages = [], rfis = [], changeOrders = [], scheduleTasks = [],
+    todayIso = new Date().toISOString().slice(0, 10),
+    evidence = { rfiEvidenceLoaded: true, scheduleEvidenceLoaded: true },
     search, onSearch,
     phaseFilter, onPhaseFilter,
     healthFilter, onHealthFilter,
@@ -140,8 +146,16 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
   useCommandSkin();
 
   const s = useMemo(
-    () => buildProjectsSummary(projects, workPackages, rfis, changeOrders),
-    [projects, workPackages, rfis, changeOrders]
+    () => buildProjectsSummary(
+      projects,
+      workPackages,
+      rfis,
+      changeOrders,
+      scheduleTasks,
+      todayIso,
+      evidence,
+    ),
+    [projects, workPackages, rfis, changeOrders, scheduleTasks, todayIso, evidence]
   );
 
   // ── Hero chips ────────────────────────────────────────────────
@@ -225,13 +239,12 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
       header: "% Complete",
       align: "right",
       render: (p) => {
-        // Derive inline — workPackages scoped to this project may not be passed per-row,
-        // so read scope_complete_pct_override as the summary source; WP-based
-        // resolution happens in buildProjectsSummary. For the table, show the override
-        // if present, otherwise "—" (the panel already shows WP-based values).
-        const pct = p.scope_complete_pct_override != null
-          ? `${Math.round(Number(p.scope_complete_pct_override))}%`
-          : "—";
+        // Effective % complete per project (manual override, else work-package
+        // progress) comes from buildProjectsSummary. This column used to read
+        // only scope_complete_pct_override, so it rendered "—" for every
+        // project without a manual override — i.e. all of them.
+        const value = s.pctCompleteByProjectId?.[p.id];
+        const pct = Number.isFinite(value) ? `${Math.round(Number(value))}%` : "—";
         return <span className="cmd-row__num">{pct}</span>;
       },
     },
@@ -248,12 +261,21 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
     {
       key: "health",
       header: "Health",
-      render: (p) => (
-        <Pill tone={healthTone(p.health_status)}>
-          {p.health_status || "—"}
-          {p.on_hold ? " · ON HOLD" : ""}
-        </Pill>
-      ),
+      render: (p) => {
+        const health = s.healthByProjectId[p.id];
+        return (
+          <div>
+            <Pill tone={healthTone(health?.label)}>
+              {health?.label || "Unknown"}{health?.partial ? " · PARTIAL" : ""}
+            </Pill>
+            {health?.reasons[0] && (
+              <div className="cmd-row__meta" title={health.reasons.join("; ")}>
+                {health.reasons[0]}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "target",

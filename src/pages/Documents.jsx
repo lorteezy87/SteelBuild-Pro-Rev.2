@@ -17,6 +17,7 @@ import React, { useState, useMemo, useCallback, useRef, Suspense, lazy } from "r
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { toast } from "sonner";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -91,7 +92,7 @@ export default function Documents() {
   React.useEffect(() => { setCurrentFolderId(null); }, [activeProject?.id]);
 
   /* ── Data ── */
-  const { data: rawDocuments = [], isLoading } = useQuery({
+  const { data: rawDocuments = [], isLoading, isError: docsError, error: docsErrorDetail, refetch: refetchDocs } = useQuery({
     queryKey: ["documents", activeProject?.id],
     queryFn: () =>
       activeProject?.id
@@ -114,17 +115,18 @@ export default function Documents() {
 
   const createFolderMut = useMutation({
     mutationFn: ({ name, parentFolderId }) =>
-      entities.DocumentFolder.create({
-        project_id: activeProject.id,
-        parent_folder_id: parentFolderId,
-        name,
-      }),
+      entities.DocumentFolder.create(
+        withProjectId({
+          parent_folder_id: parentFolderId,
+          name,
+        }, activeProject?.id),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
       toast.success("Folder created");
     },
     onError: (err) => {
-      const msg = err?.message || "Failed to create folder";
+      const msg = toUserErrorMessage(err, "Failed to create folder");
       // Surface the unique-name-per-parent collision in plain English.
       if (/document_folders_unique_name_per_parent/.test(msg)) {
         toast.error("A folder with that name already exists here.");
@@ -141,7 +143,7 @@ export default function Documents() {
       toast.success("Folder renamed");
     },
     onError: (err) => {
-      const msg = err?.message || "Failed to rename folder";
+      const msg = toUserErrorMessage(err, "Failed to rename folder");
       if (/document_folders_unique_name_per_parent/.test(msg)) {
         toast.error("Another folder at this level already uses that name.");
       } else {
@@ -201,7 +203,7 @@ export default function Documents() {
           : "Folder deleted",
       );
     },
-    onError: (err) => toast.error(err?.message || "Failed to delete folder"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to delete folder")),
   });
 
   /**
@@ -227,7 +229,7 @@ export default function Documents() {
         toast.warning(`Moved ${succeeded.length} of ${total} — ${failed.length} failed`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Move failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Move failed")),
   });
 
   /**
@@ -252,7 +254,7 @@ export default function Documents() {
         toast.warning(`Moved ${succeeded.length} of ${total} — ${failed.length} failed`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Folder move failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Folder move failed")),
   });
 
   /**
@@ -271,7 +273,7 @@ export default function Documents() {
         toast.warning(`Deleted ${succeeded.length} of ${total} — ${failed.length} failed`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Bulk delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   /**
@@ -290,11 +292,12 @@ export default function Documents() {
         ? (currentFolderId ?? null)
         : (stack[item.depth - 1] ?? currentFolderId ?? null);
       try {
-        const row = await entities.DocumentFolder.create({
-          project_id: activeProject.id,
-          parent_folder_id: parentId,
-          name: item.name,
-        });
+        const row = await entities.DocumentFolder.create(
+          withProjectId({
+            parent_folder_id: parentId,
+            name: item.name,
+          }, activeProject?.id),
+        );
         stack[item.depth] = row?.id ?? null;
         // Truncate stack so deeper-level entries from a sibling don't
         // leak into the next branch.
@@ -369,7 +372,7 @@ export default function Documents() {
         toast.success(`Updated ${results.succeeded.length} document(s)`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Bulk status update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk status update failed")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -394,7 +397,7 @@ export default function Documents() {
         toast.success(`Deleted ${count} document(s)`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Bulk delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   /* ── Handlers ── */
@@ -419,7 +422,7 @@ export default function Documents() {
       a.click();
       a.remove();
     } catch (err) {
-      toast.error("Download failed: " + (err?.message || "Unknown error"));
+      toast.error(`Download failed: ${toUserErrorMessage(err, "Unknown error")}`);
     }
   };
 
@@ -434,8 +437,8 @@ export default function Documents() {
         return next;
       });
       toast.success("Document deleted");
-    } catch {
-      toast.error("Failed to delete document");
+    } catch (err) {
+      toast.error(toUserErrorMessage(err, "Failed to delete document"));
     }
   };
 
@@ -574,6 +577,20 @@ export default function Documents() {
           <div style={{ padding: 16 }}>
             <LoadingSkeleton variant="table" rows={6} />
           </div>
+        ) : docsError ? (
+          // A failed fetch must not render the "upload your first document"
+          // empty state over a register that may hold real documents.
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 12 }}>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+              Couldn’t load documents
+            </p>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+              {toUserErrorMessage(docsErrorDetail, "Something went wrong. Try again.")}
+            </p>
+            <button type="button" onClick={() => refetchDocs()} style={{ border: "1px solid var(--border-default)", background: "var(--bg-surface)", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>
+              Retry
+            </button>
+          </div>
         ) : allDocuments.length === 0 ? (
           <EmptyState onUploadOpen={() => setUploadOpen(true)} />
         ) : filteredDocs.length === 0 ? (
@@ -600,12 +617,12 @@ export default function Documents() {
                   style={{
                     position: "absolute", top: 8, left: 8, zIndex: 10, width: 18, height: 18,
                     borderRadius: 4,
-                    background: selectedIds.has(doc.id) ? "#10B981" : "rgba(0,0,0,0.5)",
-                    border: selectedIds.has(doc.id) ? "2px solid #10B981" : "2px solid var(--text-muted)",
+                    background: selectedIds.has(doc.id) ? "var(--status-success)" : "color-mix(in srgb, var(--bg-page) 60%, transparent)",
+                    border: selectedIds.has(doc.id) ? "2px solid var(--status-success)" : "2px solid var(--text-muted)",
                     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                   }}
                 >
-                  {selectedIds.has(doc.id) && <span style={{ color: "white", fontSize: 11, lineHeight: 1 }}>{"\u2714"}</span>}
+                  {selectedIds.has(doc.id) && <span style={{ color: "var(--on-accent)", fontSize: 11, lineHeight: 1 }}>{"\u2714"}</span>}
                 </div>
                 <DocumentCard
                   doc={doc}

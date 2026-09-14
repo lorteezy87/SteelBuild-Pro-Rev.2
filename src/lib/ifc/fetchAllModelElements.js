@@ -8,30 +8,68 @@
  * It used to page SERIALLY — fetch page 1, await, fetch page 2, await … — so a
  * 17-page roster meant ~17 back-to-back round-trips, which is what made fab
  * colors visibly "pop in" a few seconds after the model rendered. Now we take one
- * lightweight COUNT, then fetch every page CONCURRENTLY (Promise.all): ~2 round
- * trips instead of ~17. Same rows, same order, much faster first paint.
+ * lightweight COUNT, then fetch pages in bounded concurrent batches: enough
+ * parallelism for first paint, without opening ~28 SELECT * queries at once
+ * (which timed out under statement_timeout on ~27k-row projects —
+ * Sentry JAVASCRIPT-REACT-X / production-model-elements).
  */
 import { supabase } from "@/lib/supabase";
 
 const PAGE = 1000;
+/** Cap concurrent page fetches to avoid statement-timeout storms. */
+const DEFAULT_CONCURRENCY = 4;
 
-export async function fetchAllModelElements(projectId, { client = supabase, page = PAGE } = {}) {
-  if (!projectId) return [];
+async function mapPool(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      results[i] = await mapper(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
-  // One HEAD count so we know how many pages to fan out (no rows transferred).
-  const { count, error: countError } = await client
+/**
+ * How many live model members this project has — ONE HEAD request, zero rows
+ * transferred.
+ *
+ * Callers that only need to know whether a roster EXISTS (and how big it is)
+ * must use this instead of loading the roster. Live rosters run to ~28k rows, so
+ * the full read stays lazy; a UI that infers "no members imported" from an
+ * unloaded roster tells the user something false.
+ *
+ * @returns {Promise<number>} live element count (0 when none)
+ */
+export async function countModelElements(projectId, { client = supabase } = {}) {
+  if (!projectId) return 0;
+  const { count, error } = await client
     .from("model_elements")
     .select("id", { count: "exact", head: true })
     .eq("project_id", projectId)
     .eq("is_deleted", false);
-  if (countError) throw countError;
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function fetchAllModelElements(
+  projectId,
+  { client = supabase, page = PAGE, concurrency = DEFAULT_CONCURRENCY, columns = "*" } = {},
+) {
+  if (!projectId) return [];
+
+  // One HEAD count so we know how many pages to fan out (no rows transferred).
+  const count = await countModelElements(projectId, { client });
   if (!count) return [];
 
   const fetchPage = async (i) => {
     const from = i * page;
     const { data, error } = await client
       .from("model_elements")
-      .select("*")
+      .select(columns)
       .eq("project_id", projectId)
       .eq("is_deleted", false)
       .order("id", { ascending: true }) // stable order so pages don't overlap/skip
@@ -41,6 +79,10 @@ export async function fetchAllModelElements(projectId, { client = supabase, page
   };
 
   const pageCount = Math.ceil(count / page);
-  const pages = await Promise.all(Array.from({ length: pageCount }, (_, i) => fetchPage(i)));
+  const pageIndexes = Array.from({ length: pageCount }, (_, i) => i);
+  const pages = await mapPool(pageIndexes, Math.max(1, concurrency), fetchPage);
   return pages.flat();
 }
+
+/** Slim projection for Production Status piece↔drawing lookup (avoids SELECT *). */
+export const MODEL_ELEMENT_DRAWING_LINK_COLUMNS = "id,piece_mark,drawing_no,drawing_id";

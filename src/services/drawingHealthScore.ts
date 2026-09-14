@@ -19,6 +19,7 @@ import { derivedSetStage, isRRStatus, pickMostRecentSubmittal } from "@/lib/subm
 import { selectChangedSheets } from "@/lib/revisionPackageReport";
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
 import { isRfiOpen } from "@/lib/entityPredicates";
+import { linkedRfiNumbers, normNum } from "@/lib/fabReleaseGate";
 
 export type Grade = "A" | "B" | "C" | "D" | "F";
 export type BandKey = "excellent" | "good" | "at_risk" | "critical";
@@ -46,9 +47,9 @@ export interface DrawingHealthScore {
 }
 
 export interface HealthContext {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   rfis?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   revisions?: any[]; // drawing_revisions for the set's sheets (optional)
   today?: string; // local YYYY-MM-DD; defaults to today
 }
@@ -95,19 +96,16 @@ function severityFor(deduction: number, weight: number): FactorSeverity {
   return "medium";
 }
 
-/** Normalize an RFI number for matching (strip dashes/spaces, lowercase). */
-function normRfi(s: unknown): string {
-  return String(s ?? "").replace(/[-\s]/g, "").toLowerCase();
-}
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function countOpenRfis(sheets: any[], rfis: any[]): number {
   const linked = new Set<string>();
   for (const sheet of sheets || []) {
-    const raw = sheet?.linked_rfi_ids;
-    if (!raw) continue;
-    for (const part of String(raw).split(/[,\s]+/)) {
-      const n = normRfi(part);
+    // linkedRfiNumbers + normNum are the canonical pair (fabReleaseGate). The
+    // local normalizer this replaces split on whitespace and kept the "#", so
+    // "RFI #001" keyed as "rfi#001" and never matched an rfis.rfi_number — the
+    // health score silently counted zero open RFIs on every sheet-linked set.
+    for (const part of linkedRfiNumbers(sheet)) {
+      const n = normNum(part);
       if (n) linked.add(n);
     }
   }
@@ -115,13 +113,13 @@ function countOpenRfis(sheets: any[], rfis: any[]): number {
   let open = 0;
   for (const rfi of rfis || []) {
     if (!rfi || rfi.is_deleted) continue;
-    if (!linked.has(normRfi(rfi.rfi_number))) continue;
+    if (!linked.has(normNum(rfi.rfi_number))) continue;
     if (isRfiOpen(rfi)) open += 1;
   }
   return open;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function setDueDate(pkg: any): string | null {
   if (pkg?.parent?.due_date) return pkg.parent.due_date;
   const dues = (pkg?.sheets || [])
@@ -135,18 +133,21 @@ function setDueDate(pkg: any): string | null {
  * Score a single drawing set's health.
  * @param pkg a set package from buildSetPackages: { setId, name, parent, sheets, submittals }
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function calculateDrawingHealthScore(pkg: any, context: HealthContext = {}): DrawingHealthScore {
   const today = context.today || todayLocalISO();
   const rfis = context.rfis || [];
   const revisions = context.revisions || [];
   const sheets = pkg?.sheets || [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const subs = (pkg?.submittals || []).filter((s: any) => s && !s.is_deleted);
   const recent = pickMostRecentSubmittal(subs);
-  const recentStatus: string | undefined = recent?.status;
+  const recentStatus: string | undefined = recent?.status ?? undefined;
   const stage = derivedSetStage(subs, sheets);
-  const stageIndex = Math.max(0, STAGE_ORDER.indexOf(stage));
+  // Scoring parity: R&R is a first-class derived stage (2026-07-25) but for
+  // the approval deduction it scores like IFA — the approval progress reset
+  // to internal prep. The dedicated R&R churn deduction below still applies.
+  const stageIndex = Math.max(0, STAGE_ORDER.indexOf(stage === "R&R" ? "IFA" : stage));
   const maxIndex = STAGE_ORDER.length - 1; // 6
   const isApprovedOutcome = TERMINAL_APPROVED.has(recentStatus || "");
 

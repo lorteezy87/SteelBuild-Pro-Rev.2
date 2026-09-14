@@ -1,0 +1,281 @@
+// ── Pure helpers extracted from ScheduleGantt.jsx ─────────────────────────
+//
+// Date math, Gantt row-geometry binary searches, column-width persistence,
+// and the task predicates/derivations the Gantt uses for its quick filters
+// and badges (critical / stalled / lookahead / logic-gap / unassigned / …).
+// None of these touch React or the component's closure state — they take every
+// input as an argument, so they're safe to import from the Gantt and to
+// unit-test in isolation. Bodies are byte-identical to the originals; this is a
+// mechanical extraction, not a behavior change.
+import { parseDateUTC, toDateOnly } from "./scheduleDateUtils";
+import { percentCompleteOrNull, isMilestoneTask } from "./scheduleTaskUtils";
+import { parseDeps } from "./scheduleDependencies";
+import { isSummaryTask as isSummaryTaskCanonical } from "@/lib/schedule/summaryTasks";
+import { resolveTaskBaseline } from "@/services/scheduleBaselines";
+import type { BaselineRow } from "@/services/scheduleBaselines";
+
+type ScheduleTaskLike = {
+  id?: string;
+  metadata?: unknown;
+  task_name?: string | null;
+  wbs_code?: string | null;
+  status?: string | null;
+  stage?: string | null;
+  task_type?: string | null;
+  resource_names?: string | null;
+  assigned_to?: string | null;
+  dependencies?: unknown;
+  is_critical?: boolean | null;
+  is_critical_path?: boolean | null;
+  critical_path?: boolean | null;
+  [key: string]: unknown;
+};
+
+type RowGeom = { top: number; height: number };
+
+export function addDaysUTC(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+export function shiftDateOnly(input: unknown, days: number): string | null {
+  const date = parseDateUTC(input);
+  return date ? toDateOnly(addDaysUTC(date, days)) : null;
+}
+
+// Column widths are now user-adjustable via drag handles on each header.
+// TASK NAME is "flex" (takes remaining space) — represented as 0 in the
+// state array and rendered as 1fr in the CSS grid. Every other column is
+// a fixed pixel width the user can drag wider/narrower. Persisted to
+// localStorage so the user's layout sticks across reloads.
+//
+// Header order: WBS · TASK · DUR · START · FINISH · PRED · RESOURCES ·
+//               STATUS · %
+export const DEFAULT_COL_WIDTHS = [50, 0, 40, 68, 68, 48, 80, 72, 36];
+export const MIN_COL_WIDTH = 24;
+// Task-name (flex) column gets at least this much. Bumped from 140 → 240
+// to make names readable out of the box — the user complained names were
+// too cramped. Users can still drag other columns narrower for more name
+// room, or drag the name column's handle to pin a specific width.
+export const MIN_NAME_WIDTH = 240;
+export const COL_WIDTHS_KEY = "sbp-gantt-col-widths-v2";
+
+export function loadColWidths(): number[] {
+  try {
+    const raw = typeof window !== "undefined" && window.localStorage?.getItem(COL_WIDTHS_KEY);
+    if (!raw) return DEFAULT_COL_WIDTHS;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length !== DEFAULT_COL_WIDTHS.length) return DEFAULT_COL_WIDTHS;
+    return parsed.map((w: unknown, i: number) => {
+      if (typeof w !== "number" || !Number.isFinite(w)) return DEFAULT_COL_WIDTHS[i];
+      // Don't trust stored widths smaller than our hard min (could lock users out).
+      return w === 0 ? 0 : Math.max(MIN_COL_WIDTH, Math.min(400, w));
+    });
+  } catch {
+    return DEFAULT_COL_WIDTHS;
+  }
+}
+
+export function findFirstRowAtOrAfter(items: RowGeom[], y: number): number {
+  let lo = 0;
+  let hi = items.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (items[mid].top + items[mid].height < y) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+export function findFirstRowAfter(items: RowGeom[], y: number): number {
+  let lo = 0;
+  let hi = items.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (items[mid].top <= y) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+export function getTaskMetadata(task: ScheduleTaskLike | null | undefined): Record<string, unknown> {
+  if (!task?.metadata) return {};
+  if (typeof task.metadata === "object") return task.metadata as Record<string, unknown>;
+  if (typeof task.metadata === "string") {
+    try {
+      const parsed = JSON.parse(task.metadata);
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+/**
+ * Baseline dates for a task: the `schedule_baselines` table first, the legacy
+ * `metadata.baseline_*` keys second.
+ *
+ * `baselineMap` is optional so every existing call site keeps working while the
+ * map is threaded down from Schedule.tsx. Passing nothing is the metadata-only
+ * behaviour this function has always had — see resolveTaskBaseline for why the
+ * fallback exists at all (migrations here are pushed by hand, so a deploy can
+ * land before the table is populated).
+ */
+export function getTaskBaseline(
+  task: ScheduleTaskLike | null | undefined,
+  baselineMap?: Record<string, BaselineRow> | null,
+): { start: unknown; end: unknown } | null {
+  const resolved = resolveTaskBaseline((task ?? {}) as never, baselineMap);
+  if (!resolved) return null;
+  return { start: resolved.start, end: resolved.finish };
+}
+
+export function hasBaselineDrift(
+  task: ScheduleTaskLike | null | undefined,
+  effStartDate: unknown,
+  effEndDate: unknown,
+  baselineMap?: Record<string, BaselineRow> | null,
+): boolean {
+  const baseline = getTaskBaseline(task, baselineMap);
+  if (!baseline) return false;
+  return baseline.start !== effStartDate || baseline.end !== effEndDate;
+}
+
+/**
+ * Was this task MANUALLY flagged as critical?
+ *
+ * Three flags ORed together, which is all "critical path" meant before §2.2 —
+ * a box someone ticked, possibly months ago, possibly before the dates moved.
+ * §7.3 keeps it as an override because a PM may know something the logic does
+ * not, but it is no longer the answer on its own.
+ */
+export function isManuallyFlaggedCritical(task: ScheduleTaskLike | null | undefined): boolean {
+  const metadata = getTaskMetadata(task);
+  return Boolean(
+    metadata.is_critical ||
+    metadata.critical_path ||
+    task?.is_critical ||
+    task?.is_critical_path ||
+    task?.critical_path
+  );
+}
+
+/**
+ * Is this task on the critical path?
+ *
+ * Prefers the CALCULATED answer (total float <= 0 from the backward pass in
+ * services/scheduleFloat) and falls back to the manual flag only where no float
+ * has been computed for the task — a caller that has not been given a float map,
+ * or a task the calculation could not reach (no dates, or inside a predecessor
+ * cycle). Falling back rather than returning false keeps a hand-marked task
+ * visible instead of silently dropping it off the filter.
+ *
+ * `floats` is optional so every existing call site keeps compiling; passing it
+ * is what upgrades a call from the checkbox to the calculation.
+ */
+export function isCriticalTask(
+  task: ScheduleTaskLike | null | undefined,
+  floats?: Record<string, { isCritical: boolean; totalFloat: number | null }> | null,
+): boolean {
+  const computed = task?.id ? floats?.[String(task.id)] : undefined;
+  if (computed && computed.totalFloat !== null) return computed.isCritical;
+  return isManuallyFlaggedCritical(task);
+}
+
+export function taskSearchHaystack(task: ScheduleTaskLike | null | undefined, phaseLabel = ""): string {
+  return [
+    task?.task_name,
+    task?.wbs_code,
+    task?.status,
+    task?.stage,
+    task?.task_type,
+    task?.resource_names,
+    task?.assigned_to,
+    phaseLabel,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+export function pluralize(value: number, singular: string, plural = `${singular}s`): string {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
+export function isStalledTask(
+  task: ScheduleTaskLike | null | undefined,
+  today: Date,
+  parseStart: (task: ScheduleTaskLike) => Date | null | undefined,
+): boolean {
+  if (!task || task.status === "Complete" || String(task.status || "").toLowerCase().includes("complete")) return false;
+  const start = parseStart(task);
+  // Strictly 0, never unknown. This used to read displayPct, which maps a null
+  // percent to 0 — so a task reopened from Complete (percent deliberately
+  // cleared to "unknown") would be reported as stalled the moment it reopened,
+  // having shown 100% a click earlier (§4.3).
+  return Boolean(start && start < today && percentCompleteOrNull(task) === 0);
+}
+
+export function isOpenScheduleTask(task: ScheduleTaskLike | null | undefined): boolean {
+  const status = String(task?.status || "").toLowerCase();
+  return !["complete", "completed", "closed", "cancelled", "canceled"].some((closed) => status.includes(closed));
+}
+
+// Row-level summary check (flag-based). Delegates to the canonical predicate so
+// the "is this a parent/summary row?" logic lives in exactly one place. The
+// Gantt already enriches rows with _hasChildren/_isRolledUpSummary, so the
+// single-arg (flag-only) form is sufficient here; surfaces that lack that
+// enrichment pass a parentIds set to the canonical helper directly.
+export function isSummaryScheduleTask(task: ScheduleTaskLike | null | undefined): boolean {
+  return isSummaryTaskCanonical(task);
+}
+
+export function isActionableScheduleTask(task: ScheduleTaskLike | null | undefined): boolean {
+  return !isSummaryScheduleTask(task);
+}
+
+export function taskOwner(task: ScheduleTaskLike | null | undefined): string {
+  return String(task?.resource_names || task?.assigned_to || "").trim();
+}
+
+export function isUnassignedTask(task: ScheduleTaskLike | null | undefined): boolean {
+  return Boolean(task && isOpenScheduleTask(task) && isActionableScheduleTask(task) && !taskOwner(task));
+}
+
+export function hasLogicGapTask(
+  task: ScheduleTaskLike | null | undefined,
+  successorCountById: Record<string, number | undefined>,
+): boolean {
+  if (!task || !isOpenScheduleTask(task) || !isActionableScheduleTask(task)) return false;
+  // Milestones are natural network endpoints — exempt from logic-gap checks.
+  if (isMilestoneTask(task)) return false;
+  const predecessorCount = parseDeps(task.dependencies).length;
+  const successorCount = successorCountById[task.id as string] || 0;
+  // A task with either a predecessor OR a successor is part of the schedule
+  // network. Only flag completely unlinked tasks — those are the real logic
+  // gaps. The previous `||` condition flagged start tasks (no predecessor)
+  // and end tasks (no successor) as gaps, which is wrong: "Project Kickoff"
+  // naturally has no predecessors, and final milestones naturally have no
+  // successors. Multiple tasks sharing the same predecessor (e.g. several
+  // tasks starting after kickoff) is valid schedule logic, not a gap.
+  return predecessorCount === 0 && successorCount === 0;
+}
+
+export function isLookaheadTask(
+  task: ScheduleTaskLike | null | undefined,
+  today: Date,
+  getStart: (task: ScheduleTaskLike) => unknown,
+  getEnd: (task: ScheduleTaskLike) => unknown,
+  days = 14,
+): boolean {
+  if (!task || task.status === "Complete" || String(task.status || "").toLowerCase().includes("complete")) return false;
+  const start = parseDateUTC(getStart(task));
+  const end = parseDateUTC(getEnd(task));
+  if (!start && !end) return false;
+
+  const windowEnd = new Date(today);
+  windowEnd.setUTCDate(windowEnd.getUTCDate() + days);
+
+  if (start && end) return start <= windowEnd && end >= today;
+  if (start) return start >= today && start <= windowEnd;
+  return end! >= today && end! <= windowEnd;
+}

@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
@@ -25,10 +26,10 @@ import ExpenseImportModal from "../components/expenses/ExpenseImportModal";
 import { formatCurrencyShort, roundCurrency } from "../components/shared/formatters";
 import { COST_CODES } from "../components/shared/costCodes";
 import { toast } from "sonner";
-import { getNextNumber } from "../components/shared/numberSequencing";
 // Invalidate the FULL expense family (project list + ["expenses-all"] used by
 // Dashboard/Reports + cost rollups), not just the unscoped ["expenses"] prefix.
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 import { safeNum, buildRedFlagAlerts, exportExpensesCSV } from "./expenses/utils";
 import { computeCostCodeTotals } from "@/services/costRollup";
@@ -66,7 +67,7 @@ export default function ExpensesPage() {
   }, [search]);
 
   /* ── Queries ── */
-  const { data: expenses = [], isLoading, refetch } = useQuery({
+  const expensesQuery = useQuery({
     queryKey: ["expenses", activeProject?.id],
     queryFn: async () => {
       if (!activeProject?.id) return [];
@@ -76,24 +77,24 @@ export default function ExpensesPage() {
     enabled: !!activeProject?.id,
   });
 
-  const { data: projects = [] } = useQuery({
+  const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
   });
 
-  const { data: sovItems = [] } = useQuery({
+  const sovQuery = useQuery({
     queryKey: ["sov-items", activeProject?.id],
     queryFn: () => (activeProject?.id ? entities.SOVItem.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
   });
 
-  const { data: workPackages = [] } = useQuery({
+  const workPackagesQuery = useQuery({
     queryKey: ["work-packages", activeProject?.id],
     queryFn: () => (activeProject?.id ? entities.WorkPackage.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
   });
 
-  const { data: costCodes = [] } = useQuery({
+  const costCodesQuery = useQuery({
     queryKey: ["cost-codes", activeProject?.id],
     queryFn: () =>
       activeProject?.id
@@ -103,20 +104,20 @@ export default function ExpensesPage() {
     enabled: !!activeProject?.id,
   });
 
+  const { data: expenses = [], isLoading, isError, error, refetch } = expensesQuery;
+  const projects = projectsQuery.data ?? [];
+  const sovItems = sovQuery.data ?? [];
+  const workPackages = workPackagesQuery.data ?? [];
+  const costCodes = costCodesQuery.data ?? [];
+  const expenseQueries = [expensesQuery, projectsQuery, sovQuery, workPackagesQuery, costCodesQuery];
+  const expenseError = expenseQueries.find((query) => query.isError)?.error ?? null;
+  const expenseLoading = expenseQueries.some((query) => query.isPending);
+
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: async (d) => {
-      if (!activeProject?.id) {
-        throw new Error("Select a project before creating an expense.");
-      }
-      let expenseNumber;
-      try {
-        expenseNumber = await getNextNumber(activeProject.id, "EXPENSE");
-      } catch {
-        throw new Error("Unable to reserve an expense number. Please retry.");
-      }
-      if (!expenseNumber) throw new Error("Unable to reserve an expense number. Please retry.");
-      return entities.Expense.create({ ...d, expense_number: expenseNumber, project_id: d.project_id || activeProject?.id });
+    mutationFn: (d) => {
+      const scoped = withProjectId(d, activeProject?.id);
+      return entities.Expense.create(scoped);
     },
     onSuccess: () => {
       invalidateEntity(qc, "expense", activeProject?.id);
@@ -124,7 +125,7 @@ export default function ExpensesPage() {
       setEditing(null);
       toast.success("Expense created");
     },
-    onError: (err) => toast.error("Failed to create expense: " + (err?.message || "Unknown error")),
+    onError: (err) => toast.error(`Failed to create expense: ${toUserErrorMessage(err, "Unknown error")}`),
   });
 
   const updateMut = useMutation({
@@ -135,7 +136,7 @@ export default function ExpensesPage() {
       setEditing(null);
       toast.success("Expense updated");
     },
-    onError: (err) => toast.error("Failed to update expense: " + (err?.message || "Unknown error")),
+    onError: (err) => toast.error(`Failed to update expense: ${toUserErrorMessage(err, "Unknown error")}`),
   });
 
   const deleteMut = useMutation({
@@ -149,7 +150,7 @@ export default function ExpensesPage() {
       if (deleteTarget?.id === deletedId) setDeleteTarget(null);
       toast.success("Expense deleted");
     },
-    onError: () => toast.error("Failed to delete expense"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to delete expense")),
   });
 
   const bulkUpdateMut = useMutation({
@@ -169,7 +170,7 @@ export default function ExpensesPage() {
     onError: (err) => {
       invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
-      toast.error(err.message);
+      toast.error(toUserErrorMessage(err, "Bulk update failed"));
     },
   });
 
@@ -190,7 +191,7 @@ export default function ExpensesPage() {
     onError: (err) => {
       invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
-      toast.error(err.message);
+      toast.error(toUserErrorMessage(err, "Bulk delete failed"));
     },
   });
 
@@ -432,6 +433,10 @@ export default function ExpensesPage() {
     );
   }
 
+  if (expenseError || expenseLoading) {
+    return <WorkflowFetchState label="Expenses" error={expenseError} onRetry={() => { void Promise.all(expenseQueries.map((query) => query.refetch())); }} />;
+  }
+
   return (
     <div className="exp-page">
       <ListTruncationNotice count={expenses.length} label="expenses" />
@@ -488,6 +493,7 @@ export default function ExpensesPage() {
           dateRangeFilter={dateRangeFilter} onDateRangeFilter={setDateRangeFilter}
           activeKPI={activeKPI}
           onClearKPI={() => { setActiveKPI(null); setStatusFilter("all"); }}
+          onAdd={() => { setEditing(null); setModalOpen(true); }}
           onImport={() => setImportOpen(true)}
           onExport={handleExportCSV}
         />
@@ -495,6 +501,9 @@ export default function ExpensesPage() {
         <ExpenseTable
           filtered={filtered}
           isLoading={isLoading}
+          isError={isError}
+          errorMessage={toUserErrorMessage(error, "Something went wrong. Try again.")}
+          onRetry={() => refetch()}
           selected={selected}
           onToggleSelect={toggleSelect}
           onToggleAll={toggleAll}

@@ -1,40 +1,56 @@
-import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldCheck, Workflow } from "lucide-react";
+import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldAlert, Send, ListChecks, Workflow } from "lucide-react";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
-import { DRAFTING_STATES, effectiveDetailingState, hasGoverningSubmittal, isPackageRR } from "@/lib/detailingPackageState";
+import { DRAFTING_STATES, effectiveDetailingState, hasGoverningSubmittal, isPackageReleasedForFab, isPackageRR } from "@/lib/detailingPackageState";
+import { needsUnlinkedSubmittalHint, openLinkedSubmittalsForSet } from "@/lib/submittalLinkGlue";
 import { computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { workingDaysBetween } from "@/lib/workingDays";
 import { todayLocalISO } from "@/lib/dateMath";
 import { pickMostRecentSubmittal, submittalStatusToStage } from "@/lib/submittalStageMapping";
-import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
+import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
+import type {
+  ApprovalMatrixRow,
+  CurrentRevisionInfo,
+  Drawing,
+  DrawingRevision,
+  DrawingSet,
+  DueInfo,
+  SetPackage,
+  Submittal,
+  TriageItem,
+  TriageModel,
+} from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
 // Use the SAME CSS custom-property names as the rest of the app (Submittals,
 // Drawings, RFIs, etc.).
-export const accent = "var(--accent)";
-export const surface1 = "var(--bg-surface-low)";
-export const surface2 = "var(--bg-surface-high)";
-export const border = "var(--border-default)";
-export const textPrimary = "var(--text-primary)";
-export const textMuted = "var(--text-muted)";
+export const accent = "var(--cmd-gold)";
+export const surface1 = "var(--cmd-surface)";
+export const surface2 = "var(--cmd-row-hover)";
+export const border = "var(--cmd-border)";
+export const textPrimary = "var(--cmd-text)";
+export const textMuted = "var(--cmd-text-muted)";
 export const mono = "var(--font-mono)";
-export const success = "var(--status-success)";
-export const warning = "var(--status-warning)";
-export const error = "var(--status-error)";
-export const info = "var(--status-info)";
-export const review = "var(--status-review)";
+export const success = "var(--cmd-good)";
+export const warning = "var(--cmd-warn)";
+export const error = "var(--cmd-danger)";
+export const info = "var(--cmd-info)";
+export const review = "var(--cmd-review)";
 
 export const TABS = [
   { key: "overview", label: "Control Board", icon: Gauge },
   { key: "process", label: "Process Board", icon: Layers3 },
   { key: "drawings", label: "Drawing Register", icon: FileStack },
   { key: "submittals", label: "Submittal Register", icon: ClipboardList },
+  { key: "transmittals", label: "Transmittals", icon: Send },
   { key: "matrix", label: "Approval Matrix", icon: Workflow },
   { key: "revimpact", label: "Revision Impact", icon: GitCompareArrows },
-  { key: "doccontrol", label: "Doc Control", icon: ShieldCheck },
+  { key: "holds", label: "Holds & Blockers", icon: ShieldAlert },
+  { key: "validation", label: "Validation", icon: ListChecks },
 ];
 
 // ── Status colors for matrix ───────────────────────────────────────────────
+// semantic submittal workflow hues — allowlisted for status identity in matrix chips.
 export const STATUS_COLORS: Record<string, string> = {
   Draft:                 "#64748b",
   Submitted:             "#3b82f6",
@@ -57,8 +73,7 @@ export const STATUS_COLORS: Record<string, string> = {
 // set in the canonical process board.
 //
 // NOT the same as useSubmittals' TERMINAL_APPROVED_STATUSES (which DOES include
-// Approved/AAN) — that set governs auto-LOCKING the linked drawing set from
-// edits, a separate concern from "closed" for due/triage. Don't merge the two.
+// Approved/AAN for document/register rollups). Don't merge the two.
 export const CLOSED_SUBMITTAL_STATUSES = new Set([
   "Released for Fabrication",
   "Void",
@@ -151,13 +166,16 @@ export function workdayDueInfo(input: any, closed = false, today?: string): DueI
     return { label: "No date", days: null, overdue: false, dueSoon: false, tone: textMuted, sort: 99998 };
   }
   if (days < 0) {
-    return { label: `${Math.abs(days)}d late`, days, overdue: true, dueSoon: false, tone: error, sort: days };
+    // "wd" — the same convention submittalRiskAging.ts uses. Sharing the
+    // calendar "d" made "3d left" mean three BUSINESS days with the flag on and
+    // three calendar days with it off, from identical text.
+    return { label: `${Math.abs(days)}wd late`, days, overdue: true, dueSoon: false, tone: error, sort: days };
   }
   if (days === 0) {
     return { label: "Due today", days, overdue: false, dueSoon: true, tone: warning, sort: 0 };
   }
   if (days <= 5) {
-    return { label: `${days}d left`, days, overdue: false, dueSoon: true, tone: warning, sort: days };
+    return { label: `${days}wd left`, days, overdue: false, dueSoon: true, tone: warning, sort: days };
   }
   return { label: fmtDate(input), days, overdue: false, dueSoon: false, tone: textMuted, sort: days };
 }
@@ -189,6 +207,29 @@ export function getSubmittalDueDate(submittal: Submittal | null | undefined): st
 
 export function getDrawingDueDate(drawing: Drawing | null | undefined): string | null {
   return drawing?.due_date || drawing?.required_date || drawing?.target_date || null;
+}
+
+/** One due-date authority for every drawing-package surface. A usable linked
+ * submittal governs; only packages without one fall back to the earliest sheet
+ * date. Closed packages can retain historical dates without appearing late. */
+export function resolveDrawingPackageDue(pkg: SetPackage, useWorkdays = false) {
+  const governingSubmittal = pickMostRecentSubmittal(
+    (pkg.submittals || []).filter((submittal) =>
+      !submittal.is_deleted
+      && submittalStatusToStage(submittal.status, submittal.ball_in_court, submittal.approved_date) !== null,
+    ),
+  );
+  const closed = isClosedPackage(pkg);
+  const submittalDue = getSubmittalDueDate(governingSubmittal);
+  const dueDate = submittalDue || earliestDate((pkg.sheets || []).map(getDrawingDueDate));
+  const dueBySubmittal = Boolean(submittalDue);
+  return {
+    governingSubmittal,
+    closed,
+    dueDate,
+    dueBySubmittal,
+    due: dueInfoFor(dueDate, { closed, useWorkdays: useWorkdays && dueBySubmittal }),
+  };
 }
 
 /** Returns the entity ids to update when an operator edits the due date on a
@@ -231,7 +272,7 @@ export function validateDueDateWrite(
   return null;
 }
 
-const WORKFLOW_STAGE_STATES = new Set(["IFA", "OFA", "BFA", "OFS", "IFC", "Released", "Partially Released", "Released for Erection"]);
+const WORKFLOW_STAGE_STATES = new Set(["IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released", "Partially Released", "Released for Erection"]);
 
 /** Manual detailing state is a pre-submittal recovery action only. */
 export function validateDetailingStateWrite(
@@ -243,6 +284,42 @@ export function validateDetailingStateWrite(
   if (typeof next !== "string" || !DRAFTING_STATES.includes(next)) return "Only pre-submittal detailing states can be set here.";
   if (WORKFLOW_STAGE_STATES.has(item.detailingState || "")) return "The package has reached the formal workflow and cannot move back to drafting here.";
   return null;
+}
+
+// ── Write-capability predicates ──────────────────────────────────────────────
+// The UI must gate a control on whether its write can SUCCEED, not on a looser
+// hand-written condition. Each of these mirrors the matching validator (or the
+// mutation's own dispatch) so the two cannot drift: the Control Board used to
+// render the detailing-state buttons on `_canDraft` alone, the owner and
+// due-date editors unconditionally, and the readiness toggles on a truthy
+// readiness model — all strictly weaker than what the write required, so on
+// reachable package shapes (sheet-less packages, name-keyed sets with no
+// drawing_set_id, sheets carrying a legacy stage) every click was rejected.
+
+/** True when a due-date write on this item can actually reach a row. */
+export function canWriteDueDate(item: Partial<TriageItem> & { closed?: boolean } | null | undefined): boolean {
+  if (!item || item.closed) return false;
+  const targets = dueDateWriteTargets(item as Pick<TriageItem, "_submittalId" | "_sheetIds">);
+  return "submittalId" in targets || targets.sheetIds.length > 0;
+}
+
+/** True when an owner write has a target — mirrors updateOwnerMut's dispatch. */
+export function canWriteOwner(item: Partial<TriageItem> & { _ownerScope?: string } | null | undefined): boolean {
+  if (!item) return false;
+  if (item._submittalId) return true;
+  return item._ownerScope === "First sheet owner" && Boolean(item._firstSheetId);
+}
+
+/** True when a manual detailing-state advance would be accepted. */
+export function canWriteDetailingState(
+  item: { _drawingSetId?: string | null; _submittalId?: string | null; detailingState?: string | null } | null | undefined,
+): boolean {
+  return validateDetailingStateWrite(item, DRAFTING_STATES[0]) === null;
+}
+
+/** Readiness flags live on the drawing_set row, so they need its id. */
+export function canWriteReadinessFlags(item: { _drawingSetId?: string | null } | null | undefined): boolean {
+  return Boolean(item?._drawingSetId);
 }
 
 export function getSetDisplayName({ parent, legacyName, fallback = "Ungrouped drawing set" }: { parent?: DrawingSet | null; legacyName?: string; fallback?: string } = {}): string {
@@ -316,10 +393,20 @@ export function isClosedPackage(pkg: SetPackage | null | undefined): boolean {
   return false;
 }
 
+/**
+ * A sheet needs action when its set-level review verdict is "rejected".
+ * `drawings.stage` is CHECK-constrained to the 7 workflow stages, so it can
+ * never hold Rejected / Revise and Resubmit / Returned — the verdict lives in
+ * `set_approval_status` (lowercase approved|rejected|superseded|pending_review).
+ */
+export function sheetNeedsAction(drawing: Drawing | null | undefined): boolean {
+  return String(drawing?.set_approval_status ?? "").toLowerCase() === "rejected";
+}
+
 export function rollupDrawingStage(sheets: Drawing[]): string {
   if (!sheets.length) return "No sheets";
   if (sheets.every(isClosedDrawing)) return "Released";
-  if (sheets.some((d) => ["Rejected", "Revise and Resubmit", "Returned"].includes(d.stage ?? ""))) return "Needs Action";
+  if (sheets.some(sheetNeedsAction)) return "Needs Action";
   if (sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage ?? ""))) return "In Review";
   return sheets[0]?.stage || "No stage";
 }
@@ -355,6 +442,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
         name: getSetDisplayName({ parent, legacyName }),
         parent,
         sheets: [],
+        supersededSheets: [],
         submittals: [],
       };
       packages.set(key, pkg);
@@ -363,18 +451,24 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
   };
 
   for (const parent of parentsById.values()) {
-    ensurePackage({ setId: parent.id, legacyName: parent.set_name, parent });
+    ensurePackage({ setId: parent.id, legacyName: parent.set_name ?? undefined, parent });
   }
 
   for (const drawing of drawings || []) {
-    if (!drawing || drawing.is_deleted || drawing.is_superseded) continue;
+    if (!drawing || drawing.is_deleted) continue;
     const parent = drawing.drawing_set_id ? parentsById.get(drawing.drawing_set_id) : null;
     const pkg = ensurePackage({
       setId: drawing.drawing_set_id || null,
       legacyName: drawing.drawing_set_name,
       parent,
     });
-    pkg.sheets.push(drawing);
+    // Superseded sheets are kept in a SEPARATE bucket, never in `sheets`:
+    // dropping them entirely made computeDetailingReadiness's revisionImpacted
+    // and fullySuperseded structurally unreachable (it only ever saw live
+    // sheets), so the "Rev impacted" chip could not render and the
+    // `&& !revisionImpacted` term in fabricationReady was a no-op.
+    if (drawing.is_superseded) pkg.supersededSheets.push(drawing);
+    else pkg.sheets.push(drawing);
   }
 
   for (const submittal of submittals || []) {
@@ -383,7 +477,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
     if (ids.length) {
       ids.forEach((setId) => {
         const parent = parentsById.get(setId);
-        if (parent) ensurePackage({ setId, legacyName: parent.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
+        if (parent) ensurePackage({ setId, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent }).submittals.push(submittal);
       });
       continue;
     }
@@ -391,7 +485,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
       const parent = parentsByName.get(submittal.drawing_set_name.trim().toLowerCase()) || null;
       // No unique active parent means this is an actionable unlinked
       // Submittal, not a synthetic package that could imply the wrong owner.
-      if (parent) ensurePackage({ setId: parent.id, legacyName: parent.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
+      if (parent) ensurePackage({ setId: parent.id, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent }).submittals.push(submittal);
     }
   }
 
@@ -425,6 +519,43 @@ export function buildCurrentRevisionMap(
       version: Number(rev.version_number) || 0,
     });
   }
+  return map;
+}
+
+/**
+ * drawing_id → the id of its CURRENT drawing_revisions row. A transmittal item
+ * carries the immutable revision id it sent, so "revised since it was sent"
+ * is an id comparison against this map (the Approval Matrix's Last sent line).
+ *
+ * Only is_current=true rows with an id and a drawing_id count. The DB allows
+ * one current row per drawing (ux_drawing_revisions_one_current), so two can
+ * only come from a stale or merged read: then the highest version_number
+ * wins, then the later created_at, then the larger id — never input order.
+ * A drawing with no current row loaded is simply absent: unknown, not
+ * "unrevised".
+ */
+export function buildCurrentRevisionIdMap(
+  drawingRevisions: DrawingRevision[] | null | undefined,
+): Map<string, string> {
+  const best = new Map<string, { id: string; version: number; createdAt: string }>();
+  for (const rev of drawingRevisions || []) {
+    if (!rev || rev.is_current !== true || !rev.id || !rev.drawing_id) continue;
+    const candidate = {
+      id: String(rev.id),
+      version: Number(rev.version_number) || 0,
+      createdAt: String(rev.created_at || ""),
+    };
+    const drawingId = String(rev.drawing_id);
+    const held = best.get(drawingId);
+    const newer = !held || (
+      candidate.version - held.version ||
+      candidate.createdAt.localeCompare(held.createdAt) ||
+      candidate.id.localeCompare(held.id)
+    ) > 0;
+    if (newer) best.set(drawingId, candidate);
+  }
+  const map = new Map<string, string>();
+  for (const [drawingId, entry] of best) map.set(drawingId, entry.id);
   return map;
 }
 
@@ -496,14 +627,20 @@ export function buildSequenceReadiness(readinessByKey: Map<string, any>) {
 /** Top-line drawing KPIs: total sets/sheets, released, in-review, overdue. */
 export function buildDrawingKpis(drawings: any[], setPackages: SetPackage[]) {
   const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
-  const released = setPackages.filter(isClosedPackage).length;
-  // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
+  // Released-for-FAB, not closed-for-triage. isClosedPackage also fires on a
+  // Void submittal, on the deprecated set_approval_status === "approved" flag,
+  // and on "Partially Released" — so the green "Released / sets to fab" tile was
+  // counting packages the shop never received.
+  const released = setPackages.filter((pkg) =>
+    isPackageReleasedForFab(pkg.parent, pkg.submittals, pkg.sheets)
+  ).length;
+  // "In review" = active workflow stages: IFA / OFA / BFA / R&R / OFS / IFC.
+  // R&R counts as in-review — the package is mid-cycle (detailer rework), the
+  // same bucket it occupied when R&R still derived to IFA.
   const inReview = setPackages.filter((pkg) =>
-    ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets))
+    ["IFA", "OFA", "BFA", "R&R", "OFS", "IFC"].includes(effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets))
   ).length;
-  const overdueDrawings = setPackages.filter((pkg) =>
-    pkg.sheets.some((d) => dueInfo(getDrawingDueDate(d), isClosedDrawing(d)).overdue)
-  ).length;
+  const overdueDrawings = setPackages.filter((pkg) => resolveDrawingPackageDue(pkg).due.overdue).length;
   return {
     totalSets: setPackages.length,
     totalSheets: active.length,
@@ -527,21 +664,22 @@ export function buildTriage(
   setPackages: SetPackage[],
   readinessByKey: Map<string, any>,
   useWorkdays = false,
-) {
+): TriageModel {
     const activeSubmittals = submittals.filter((s) => !s.is_deleted) as any[];
 
-    const setItems = setPackages.map((pkg) => {
-      const governingSubmittal = pickMostRecentSubmittal(
-        pkg.submittals.filter((submittal) =>
-          !submittal.is_deleted && submittalStatusToStage(submittal.status, submittal.ball_in_court, submittal.approved_date) !== null,
-        ),
-      );
+    const setItems: TriageItem[] = setPackages.map((pkg) => {
+      const {
+        governingSubmittal,
+        closed,
+        dueDate,
+        due,
+      } = resolveDrawingPackageDue(pkg, useWorkdays);
       // Coalesced operational state (drafting → submittal → release). Kept
       // alongside `status` (additive) so the existing pipeline/row display is
       // unchanged; surfaced as its own chip + drives the drafting control.
       const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
-      // R&R loops back to the IFA stage for counts; surface it as its own flag so
-      // the board doesn't read an R&R rejection as a fresh IFA (matches register).
+      // R&R is a first-class derived stage (2026-07-25); the flag is kept for
+      // surfaces that badge R&R alongside a non-stage display (e.g. status rows).
       const isRR = isPackageRR(pkg.submittals);
       // CLOSED is satisfied by ANY terminal signal — not only a closed
       // submittal status. Previous logic prioritised `latestSubmittal` and
@@ -549,30 +687,30 @@ export function buildTriage(
       // package that was manually released (e.g. anchor bolts: set locked
       // and/or detailing_state=Released for Erection) whose submittal was
       // never rolled to "Released for Fabrication" lingered on the hit list.
-      const closed = isClosedPackage(pkg);
-      // Prefer the governing submittal's due; only when there is none does the
-      // display fall back to the earliest sheet due. Track WHICH source won so
-      // the countdown is working-day-aware for submittal-governed dues but stays
-      // calendar-day for drawing-set (sheet) dues.
-      const submittalDue = getSubmittalDueDate(governingSubmittal);
-      const dueDate = submittalDue || earliestDate(pkg.sheets.map(getDrawingDueDate));
-      const dueBySubmittal = !!submittalDue;
       // Only surface "needs action" when the package is OPEN (closed items
       // never reach the hit list anyway, but guard against stale per-sheet
       // Rejected/Returned stages on packages that have since been released).
       const needsAction = !closed && (
         (governingSubmittal && ACTION_STATUSES.has(governingSubmittal.status ?? "")) ||
-        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage ?? ""))
+        pkg.sheets.some(sheetNeedsAction)
       );
       const status = governingSubmittal?.status || rollupDrawingStage(pkg.sheets);
       const canDraft = !hasGoverningSubmittal(pkg.submittals);
+      const openLinkedCount = pkg.setId
+        ? openLinkedSubmittalsForSet(pkg.setId, pkg.submittals).length
+        : 0;
+      const needsUnlinkedHint = needsUnlinkedSubmittalHint({
+        hasInFlightWork: !closed && ((pkg.sheets || []).length > 0 || canDraft),
+        openLinkedCount,
+      });
       const firstSheet = pkg.sheets[0] || null;
+      // Submittals carry all three owner fields; `drawings` carries only
+      // `reviewer` — it has no ball_in_court or assigned_to column, so those two
+      // sheet fallbacks were dead expressions that could never resolve.
       const owner =
         governingSubmittal?.ball_in_court ||
         governingSubmittal?.assigned_to ||
         governingSubmittal?.reviewer ||
-        firstSheet?.ball_in_court ||
-        firstSheet?.assigned_to ||
         firstSheet?.reviewer ||
         "Unassigned";
       const submittalLabel = governingSubmittal?.submittal_number ? `Submittal ${governingSubmittal.submittal_number}` : "No linked submittal";
@@ -586,13 +724,14 @@ export function buildTriage(
         dueDate,
         // Working-day only when the flag is on AND a submittal governs the due;
         // a drawing-set (sheet) due always stays calendar-day.
-        due: dueInfoFor(dueDate, { closed, useWorkdays: useWorkdays && dueBySubmittal }),
+        due,
         closed,
         needsAction,
         routeTab: "drawings",
         detailingState,
         isRR,
         _canDraft: canDraft,
+        _needsUnlinkedHint: needsUnlinkedHint,
         _detailingStateRaw: pkg.parent?.detailing_state ?? null,
         _readiness: readinessByKey.get(pkg.key) || null,
         // Entity references for inline editing
@@ -609,7 +748,7 @@ export function buildTriage(
     const linkedSubmittalIds = new Set(
       setPackages.flatMap((pkg) => pkg.submittals.map((submittal) => submittal.id).filter(Boolean))
     );
-    const unlinkedSubmittalItems = activeSubmittals
+    const unlinkedSubmittalItems: TriageItem[] = activeSubmittals
       .filter((submittal) => !linkedSubmittalIds.has(submittal.id))
       .map((submittal) => {
       const closed = isClosedSubmittal(submittal);
@@ -686,6 +825,7 @@ export function getStatusColor(status: string): string {
 
 // Colors for the coalesced OPERATIONAL state vocabulary (drafting + release
 // states; the submittal stages IFA..Released reuse the canonical STAGE_MAP).
+// semantic detailing/release workflow hues — allowlisted for operational-state identity.
 const OPERATIONAL_STATE_COLORS: Record<string, string> = {
   "Not Started":          "#64748b", // slate
   "In Detailing":         "#64748b", // slate
@@ -738,12 +878,31 @@ export function fmtDate(d: any): string {
  * there is no drawing-date fallback to exclude here. Defaults false so the
  * canonical read model retains calendar-day behavior.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], search = "", useWorkdays = false): any[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
+/**
+ * How many review cycles a submittal has actually been through.
+ *
+ * `total_rounds` is the real counter — addSubmittalRound stamps it per
+ * resubmission. `round_number` is a manually-typed form field that nothing in
+ * the app increments (its only writer is behind `bumpRevision`, which has no
+ * production caller), so reading it alone pinned the Approval Matrix's "Round"
+ * column at the hand-entered value — normally 1 — while the same row's expanded
+ * history strip showed R1→R2→R3 and the Submittal Register showed R3.
+ */
+export function submittalRoundCount(submittal: any): number {
+  return Number(submittal?.total_rounds) || Number(submittal?.round_number) || 1;
+}
+
+export function buildApprovalMatrixRows(
+  drawingSets: DrawingSet[],
+  submittals: Submittal[],
+  search = "",
+  useWorkdays = false,
+): ApprovalMatrixRow[] {
+   
   const activeSubmittals = (submittals || []).filter((s: any) => !s.is_deleted);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const setSubmittalMap: Record<string, any[]> = {};
+   
+  const setSubmittalMap: Record<string, Submittal[]> = {};
   for (const sub of activeSubmittals) {
     const setIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
     for (const sid of setIds) {
@@ -755,31 +914,74 @@ export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], s
     .filter((s: any) => !s.is_deleted)
     .map((set: any) => {
       const linked = setSubmittalMap[set.id] || [];
-      const latestSubmittal = linked.slice().sort(
-        (a: any, b: any) => (b.round_number || 1) - (a.round_number || 1),
-      )[0] || null;
+      // Governing submittal: prefer one that maps to a real workflow stage, and
+      // resolve recency with the canonical pickMostRecentSubmittal — the same
+      // rule resolveDrawingPackageDue and the Process Board already use.
+      //
+      // This used to sort on `round_number` alone. Nothing in the app increments
+      // that column (the only writer is a manual form field, and `bumpRevision`
+      // has no production caller), so it sits at 1 for every submittal and the
+      // comparator returned 0 for every pair. The stable sort then left query
+      // order — "-submitted_date", which under Postgres DESC/NULLS-FIRST puts
+      // never-submitted DRAFTS at the head. A set with an overdue Under Review
+      // submittal plus a fresh Draft rendered Status "Draft", BIC "—", Due "No
+      // date", and vanished from the Overdue and Pending pills. A Void submittal
+      // did the same, rendering a green "Closed".
+      const usable = linked.filter((s) =>
+        submittalStatusToStage(s?.status, s?.ball_in_court, s?.approved_date) !== null,
+      );
+      const latestSubmittal = pickMostRecentSubmittal(usable) || pickMostRecentSubmittal(linked) || null;
       const due = dueInfoFor(getSubmittalDueDate(latestSubmittal), {
-        closed: latestSubmittal ? isClosedSubmittal(latestSubmittal) : false,
+        // A RETURNED review is no longer outstanding, whatever the verdict.
+        // isClosedSubmittal is deliberately narrow ({Released for Fabrication,
+        // Void}) and shared with the Process Board, so widening it would regress
+        // those; but `required_date` is never re-stamped after a verdict, so an
+        // Approved / Approved-as-Noted submittal kept counting down against a
+        // deadline it had already met — growing one day later, every day,
+        // forever, with no way to clear it short of Release or Void.
+        closed: latestSubmittal
+          ? isClosedSubmittal(latestSubmittal) || Boolean(latestSubmittal.returned_date)
+          : false,
         useWorkdays,
       });
-      return { ...set, submittals: linked, latestSubmittal, due };
+      return {
+        ...set,
+        submittals: linked,
+        latestSubmittal,
+        due,
+        pendingEorResponse: hasUnansweredApproverNotes(latestSubmittal),
+      };
     })
-    .filter((set: any) => {
+    .filter((set) => {
       if (!search) return true;
       const q = search.toLowerCase();
       return (
         formatDrawingSetNumber(set).toLowerCase().includes(q) ||
         (set.set_name || "").toLowerCase().includes(q) ||
         (set.discipline || "").toLowerCase().includes(q) ||
-        set.submittals.some((s: any) => (s.submittal_number || "").toLowerCase().includes(q))
+        set.submittals.some((s: Submittal) => (s.submittal_number || "").toLowerCase().includes(q))
       );
     })
-    .sort((a: any, b: any) => compareDrawingSetPackages(a, b));
+    .sort((a, b) => compareDrawingSetPackages(a, b));
 }
 
 export interface ApprovalMatrixSummary {
   noSubmittal: number; pending: number; approved: number; rejected: number;
-  overdue: number; dueSoon: number; total: number;
+  overdue: number; dueSoon: number; total: number; pendingEor: number;
+}
+
+export type MatrixStatusBucket = "approved" | "rejected" | "pending" | "void";
+
+/**
+ * The Approval Matrix's status buckets. Shared by summarizeApprovalMatrix and
+ * the matrix's click-through filters, so a pill's count is always the number
+ * of rows its filter shows.
+ */
+export function matrixStatusBucket(status: string | null | undefined): MatrixStatusBucket {
+  if (status === "Approved" || status === "Approved as Noted" || status === "Released for Fabrication") return "approved";
+  if (status === "Rejected" || status === "Revise and Resubmit") return "rejected";
+  if (status === "Void") return "void"; // Void is terminal — never "pending"
+  return "pending";
 }
 
 /**
@@ -787,17 +989,18 @@ export interface ApprovalMatrixSummary {
  * Approved as Noted / Released for Fabrication), rejected (Rejected / Revise and
  * Resubmit), else pending; plus no-submittal and overdue/due-soon tallies.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummary {
-  let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0;
+  let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0, pendingEor = 0;
   for (const row of matrixRows || []) {
     if (!row.latestSubmittal) { noSubmittal++; continue; }
-    const st = row.latestSubmittal.status;
-    if (st === "Approved" || st === "Approved as Noted" || st === "Released for Fabrication") approved++;
-    else if (st === "Rejected" || st === "Revise and Resubmit") rejected++;
-    else pending++;
+    const bucket = matrixStatusBucket(row.latestSubmittal.status);
+    if (bucket === "approved") approved++;
+    else if (bucket === "rejected") rejected++;
+    else if (bucket === "pending") pending++;
     if (row.due.overdue) overdue++;
     if (row.due.dueSoon) dueSoon++;
+    if (row.pendingEorResponse || hasUnansweredApproverNotes(row.latestSubmittal)) pendingEor++;
   }
-  return { noSubmittal, pending, approved, rejected, overdue, dueSoon, total: (matrixRows || []).length };
+  return { noSubmittal, pending, approved, rejected, overdue, dueSoon, pendingEor, total: (matrixRows || []).length };
 }

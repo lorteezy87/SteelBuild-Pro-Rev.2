@@ -19,6 +19,7 @@
  * `dueInfoFor` dispatcher with the same source-gating. No behavior change.
  */
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
@@ -32,7 +33,7 @@ import {
 } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import type { ComponentType } from "react";
-import { STAGE_MAP, STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+import { STAGE_MAP, WORKFLOW_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import { formatShortDate } from "@/utils/dates";
 import { FilterBar, Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
@@ -43,6 +44,7 @@ import {
   summarizeBoard,
 } from "./processBoard.derive";
 import type { BoardFilter, BoardItem, BoardSummary } from "./processBoard.derive";
+import { createSubmittalHref, hubHrefForBoardItem } from "@/pages/drawingSubmittalHub/hubLinks";
 
 type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
@@ -52,7 +54,8 @@ const STAGE_CAPTIONS: Record<string, string> = {
   IFA: "In for approval",
   OFA: "Out for approval",
   BFA: "Back from approval",
-  OFS: "Out for scrub",
+  "R&R": "Revise and resubmit",
+  OFS: "OFS — Out for Scrub",
   IFC: "Issued for construction",
   Released: "Released for fab",
 };
@@ -64,11 +67,18 @@ function getStageColor(stage: string): string {
   return STAGE_MAP[stage]?.color || "var(--text-muted)";
 }
 
-/** Card-level tone: overdue → danger, needs-action → review, due-soon → warn. */
+/** Card-level tone: critical risk / overdue → danger, needs-action → review, due-soon → warn. */
 function cardTone(item: BoardItem): PillTone {
-  if (item.due.overdue) return "danger";
-  if (item.needsAction) return "review";
-  if (item.due.dueSoon) return "warn";
+  if (item.risk?.tier === "critical" || item.due.overdue) return "danger";
+  if (item.risk?.tier === "urgent" || item.needsAction) return "review";
+  if (item.risk?.tier === "attention" || item.due.dueSoon || item.pendingEorResponse) return "warn";
+  return "neutral";
+}
+
+function riskPillTone(tier: string | undefined): PillTone {
+  if (tier === "critical") return "danger";
+  if (tier === "urgent") return "review";
+  if (tier === "attention") return "warn";
   return "neutral";
 }
 
@@ -78,6 +88,13 @@ export interface ProcessBoardPanelProps {
   isLoading?: boolean;
   onOpenTab?: (key: string) => void;
   useWorkdays?: boolean;
+  /**
+   * Rendered inside the Detailing Control Center. A card then opens its
+   * record in the hub (hubHrefForBoardItem), and Create submittal opens create
+   * on the hub's Submittal Register; both push, so Back returns to the board.
+   * Otherwise a card calls onOpenTab and Create submittal goes to /Submittals.
+   */
+  inHub?: boolean;
 }
 
 export default function ProcessBoardPanel({
@@ -86,6 +103,7 @@ export default function ProcessBoardPanel({
   isLoading = false,
   onOpenTab,
   useWorkdays = false,
+  inHub = false,
 }: ProcessBoardPanelProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<BoardFilter>("all");
@@ -99,7 +117,7 @@ export default function ProcessBoardPanel({
     [allItems, filter, search],
   );
   const stageBuckets = useMemo(
-    () => bucketByStage(boardItems, STAGE_ORDER),
+    () => bucketByStage(boardItems, WORKFLOW_STAGE_ORDER),
     [boardItems],
   );
   const summary = useMemo<BoardSummary>(() => summarizeBoard(allItems), [allItems]);
@@ -116,10 +134,12 @@ export default function ProcessBoardPanel({
         filters={
           <>
             <SummaryPill icon={FileStack} label="Packages" value={summary.total} tone="neutral" />
+            <SummaryPill icon={AlertTriangle} label="Critical" value={summary.criticalRisk} tone="danger" />
             <SummaryPill icon={AlertTriangle} label="Overdue" value={summary.overdue} tone="danger" />
             <SummaryPill icon={Clock3} label="Due Soon" value={summary.dueSoon} tone="warn" />
             <SummaryPill icon={ShieldCheck} label="Released" value={summary.released} tone="good" />
             <SummaryPill icon={Link2} label="Unlinked" value={summary.unlinked} tone={summary.unlinked ? "warn" : "neutral"} />
+            <SummaryPill icon={Clock3} label="Incomplete · EOR/AOR" value={summary.pendingEor} tone={summary.pendingEor ? "warn" : "neutral"} />
           </>
         }
       />
@@ -127,8 +147,10 @@ export default function ProcessBoardPanel({
       {/* ── Quick-filter chips ──────────────────────────────────────────── */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label="All" value={summary.total} />
+        <FilterChip active={filter === "critical"} onClick={() => setFilter("critical")} label="Critical" value={summary.criticalRisk} />
         <FilterChip active={filter === "overdue"} onClick={() => setFilter("overdue")} label="Overdue" value={summary.overdue} />
         <FilterChip active={filter === "needs-action"} onClick={() => setFilter("needs-action")} label="Needs Action" value={summary.needsAction} />
+        <FilterChip active={filter === "pending-eor"} onClick={() => setFilter("pending-eor")} label="Incomplete · EOR/AOR" value={summary.pendingEor} />
         <FilterChip active={filter === "unlinked"} onClick={() => setFilter("unlinked")} label="Unlinked" value={summary.unlinked} />
       </div>
 
@@ -143,12 +165,13 @@ export default function ProcessBoardPanel({
         padding: "2px 2px 12px",
         minHeight: 520,
       }}>
-        {STAGE_ORDER.map((stage) => (
+        {WORKFLOW_STAGE_ORDER.map((stage) => (
           <ProcessColumn
             key={stage}
             stage={stage}
             items={stageBuckets[stage] || []}
             onOpenTab={onOpenTab}
+            inHub={inHub}
           />
         ))}
       </div>
@@ -158,7 +181,17 @@ export default function ProcessBoardPanel({
 
 // ── Column ──────────────────────────────────────────────────────────────────
 
-function ProcessColumn({ stage, items, onOpenTab }: { stage: string; items: BoardItem[]; onOpenTab?: (k: string) => void }) {
+function ProcessColumn({
+  stage,
+  items,
+  onOpenTab,
+  inHub,
+}: {
+  stage: string;
+  items: BoardItem[];
+  onOpenTab?: (k: string) => void;
+  inHub: boolean;
+}) {
   const color = getStageColor(stage);
   const caption = STAGE_CAPTIONS[stage] || stage;
   return (
@@ -244,7 +277,7 @@ function ProcessColumn({ stage, items, onOpenTab }: { stage: string; items: Boar
             No packages
           </div>
         ) : (
-          items.map((item) => <ProcessCard key={item.id} item={item} onOpenTab={onOpenTab} />)
+          items.map((item) => <ProcessCard key={item.id} item={item} onOpenTab={onOpenTab} inHub={inHub} />)
         )}
       </div>
     </div>
@@ -253,22 +286,42 @@ function ProcessColumn({ stage, items, onOpenTab }: { stage: string; items: Boar
 
 // ── Card ──────────────────────────────────────────────────────────────────
 
-function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: string) => void }) {
-  const accent = item.due.overdue
+function ProcessCard({
+  item,
+  onOpenTab,
+  inHub,
+}: {
+  item: BoardItem;
+  onOpenTab?: (k: string) => void;
+  inHub: boolean;
+}) {
+  const navigate = useNavigate();
+  const accent = item.risk?.tier === "critical" || item.due.overdue
     ? "var(--cmd-danger)"
-    : item.needsAction
+    : item.risk?.tier === "urgent" || item.needsAction
       ? "var(--cmd-review)"
-      : item.due.dueSoon
+      : item.risk?.tier === "attention" || item.due.dueSoon
         ? "var(--cmd-warn)"
         : getStageColor(item.stage);
   const titleMeta = [
     item.setNumber ? `Set ${item.setNumber}` : null,
     item.submittalNumber ? `Sub ${item.submittalNumber}` : null,
   ].filter(Boolean).join(" | ");
+  // In the hub a card opens its record: the governing submittal, else its
+  // set's Sets & revisions view. A push, so Back returns to the board.
+  const openCard = () => {
+    if (inHub) navigate(hubHrefForBoardItem(item));
+    else onOpenTab?.(item.routeTab || "submittals");
+  };
+  // Create submittal: in the hub, create on its Submittal Register with the
+  // set pre-linked; elsewhere the standalone Submittals page. Either way the
+  // create flow mints the number (the sequence RPC), not this link.
+  const createHref = (setId: string) =>
+    inHub ? createSubmittalHref(setId) : `/Submittals?targetSetId=${encodeURIComponent(setId)}`;
   return (
     <button
       type="button"
-      onClick={() => onOpenTab?.(item.routeTab || "submittals")}
+      onClick={openCard}
       style={{
         width: "100%",
         textAlign: "left",
@@ -330,8 +383,45 @@ function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: str
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 9 }}>
         <Pill tone={statusPillTone(item.stage)}>{item.status}</Pill>
         <DueCardChip item={item} />
+        {item.risk && item.risk.tier !== "normal" && (
+          <span title={item.risk.reason}>
+            <Pill tone={riskPillTone(item.risk.tier)}>
+              {item.risk.tier === "critical"
+                ? "Critical"
+                : item.risk.tier === "urgent"
+                  ? "Urgent"
+                  : "Attention"}
+            </Pill>
+          </span>
+        )}
         {item.needsAction && <Pill tone="review">{item.isRR ? "R&R" : "Action"}</Pill>}
+        {item.pendingEorResponse && (
+          <span title="Incomplete — Pending EOR/AOR Response">
+            <Pill tone="warn">Incomplete · EOR/AOR</Pill>
+          </span>
+        )}
         {!item.linked && <Pill tone="warn">Unlinked</Pill>}
+        {!item.linked && item.kind === "Drawing Set" && item.drawingSetId && (
+          <span
+            role="link"
+            tabIndex={0}
+            onClick={(e) => {
+              // Nested inside the card's button: never also fire the card.
+              e.stopPropagation();
+              navigate(createHref(item.drawingSetId!));
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate(createHref(item.drawingSetId!));
+              }
+            }}
+            title="Create a submittal linked to this drawing set"
+          >
+            <Pill tone="info">Create submittal</Pill>
+          </span>
+        )}
       </div>
 
       <div style={{

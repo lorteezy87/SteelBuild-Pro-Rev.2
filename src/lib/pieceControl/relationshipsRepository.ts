@@ -1,4 +1,9 @@
 import { supabase } from "@/lib/supabase";
+import type { CommentDispositionLike } from "@/lib/commentDispositionGate";
+import {
+  isMissingSchemaObjectError,
+  postgrestErrorMessage,
+} from "@/lib/postgrestErrors";
 import { fetchPieceRegister, type PieceRegisterRow } from "./repository";
 import type {
   DrawingReviewEvidence,
@@ -7,14 +12,35 @@ import type {
   DrawingSignoffEvidence,
   ReadinessDrawing,
   ReadinessPieceDrawing,
+  ReadinessPieceDrawingSet,
   ReadinessWorkPackage,
   SheetResponseEvidence,
   SubmittalEvidence,
 } from "./readiness";
 
+export interface PieceCommentDispositionEvidence extends CommentDispositionLike {
+  id: string;
+  project_id?: string | null;
+  related_piece_ids?: string[] | null;
+  drawing_id?: string | null;
+  submittal_id?: string | null;
+}
+
+export type RelationshipSourceAvailabilityValue = "available" | "unavailable";
+
+export interface RelationshipSourceAvailability {
+  pieceDrawings: RelationshipSourceAvailabilityValue;
+  pieceDrawingSets: RelationshipSourceAvailabilityValue;
+  drawings: RelationshipSourceAvailabilityValue;
+  drawingSets: RelationshipSourceAvailabilityValue;
+  revisions: RelationshipSourceAvailabilityValue;
+  approvals: RelationshipSourceAvailabilityValue;
+}
+
 export interface PieceRelationshipSnapshot {
   pieces: PieceRegisterRow[];
   pieceDrawings: ReadinessPieceDrawing[];
+  pieceDrawingSets: ReadinessPieceDrawingSet[];
   drawings: ReadinessDrawing[];
   workPackages: ReadinessWorkPackage[];
   drawingSets: DrawingSetEvidence[];
@@ -23,9 +49,16 @@ export interface PieceRelationshipSnapshot {
   drawingRevisions: DrawingRevisionEvidence[];
   drawingReviews: DrawingReviewEvidence[];
   drawingSignoffs: DrawingSignoffEvidence[];
+  commentDispositions: PieceCommentDispositionEvidence[];
+  sourceAvailability: RelationshipSourceAvailability;
 }
 
 const db = supabase as any;
+
+function taggedTableError(table: string, error: unknown): Error {
+  const detail = postgrestErrorMessage(error) || "query failed";
+  return new Error(`[${table}] ${detail}`);
+}
 
 async function fetchProjectRows<T>(
   table: string,
@@ -39,83 +72,178 @@ async function fetchProjectRows<T>(
       .from(table)
       .select(select)
       .eq("project_id", projectId)
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
-    if (error) throw error;
+    if (error) throw taggedTableError(table, error);
     rows.push(...((data ?? []) as T[]));
     if (!data || data.length < pageSize) return rows;
   }
 }
 
+/** Active work packages only — soft-deleted rows never appear in assign UI. */
+async function fetchActiveWorkPackages(
+  projectId: string,
+): Promise<ReadinessWorkPackage[]> {
+  const rows: ReadinessWorkPackage[] = [];
+  const pageSize = 1000;
+  // work_packages has name/notes — not description (PGRST/42703 if selected).
+  const select =
+    "id, project_id, wp_number, name, sequence_number, area, scheduled_start_date, is_deleted, deleted_at";
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db
+      .from("work_packages")
+      .select(select)
+      .eq("project_id", projectId)
+      .eq("is_deleted", false)
+      .is("deleted_at", null)
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw taggedTableError("work_packages", error);
+    rows.push(...((data ?? []) as ReadinessWorkPackage[]));
+    if (!data || data.length < pageSize) {
+      // Defense in depth if a row slips past DB filters.
+      return rows.filter((wp) => wp.is_deleted !== true && !wp.deleted_at);
+    }
+  }
+}
+
+/**
+ * Enrichment tables used for readiness scoring / drawing links. Missing
+ * migrations (e.g. submittal_comment_dispositions) must not blank the whole
+ * Lots & links workspace — WP assign still needs pieces + packages.
+ */
+async function fetchOptionalProjectRows<T>(
+  table: string,
+  projectId: string,
+  select = "*",
+): Promise<{ rows: T[]; availability: RelationshipSourceAvailabilityValue }> {
+  try {
+    return {
+      rows: await fetchProjectRows<T>(table, projectId, select),
+      availability: "available",
+    };
+  } catch (error) {
+    // Migration lag (PGRST205) and transient RLS/network noise on enrichment
+    // tables must not blank Lots & links — WP assign still needs pieces + WPs.
+    if (isMissingSchemaObjectError(error)) {
+      console.warn(`[piece-relationships] optional table missing:`, error);
+    } else {
+      console.warn(`[piece-relationships] optional table unavailable:`, error);
+    }
+    return { rows: [], availability: "unavailable" };
+  }
+}
+
+function allSourcesAvailable(
+  sources: Array<{ availability: RelationshipSourceAvailabilityValue }>,
+): RelationshipSourceAvailabilityValue {
+  return sources.every((source) => source.availability === "available")
+    ? "available"
+    : "unavailable";
+}
+
 export async function fetchPieceRelationshipSnapshot(
   projectId: string,
 ): Promise<PieceRelationshipSnapshot> {
+  // Core rows: fail closed — without these the assignment UI cannot run.
+  const [pieces, workPackages] = await Promise.all([
+    fetchPieceRegister(projectId).catch((error) => {
+      throw taggedTableError("pieces", error);
+    }),
+    fetchActiveWorkPackages(projectId),
+  ]);
+
+  // Everything else is best-effort so a single missing/denied table does not
+  // strand WP assignment. Readiness panels degrade gracefully with empty sets.
   const [
-    pieces,
-    pieceDrawings,
-    drawings,
-    workPackages,
-    drawingSets,
-    submittals,
-    sheetResponses,
-    drawingRevisions,
-    drawingReviews,
-    drawingSignoffs,
+    pieceDrawingsSource,
+    pieceDrawingSetsSource,
+    drawingsSource,
+    drawingSetsSource,
+    submittalsSource,
+    sheetResponsesSource,
+    drawingRevisionsSource,
+    drawingReviewsSource,
+    drawingSignoffsSource,
+    commentDispositionsSource,
   ] = await Promise.all([
-    fetchPieceRegister(projectId),
-    fetchProjectRows<ReadinessPieceDrawing>("piece_drawings", projectId),
-    fetchProjectRows<ReadinessDrawing>(
+    fetchOptionalProjectRows<ReadinessPieceDrawing>("piece_drawings", projectId),
+    fetchOptionalProjectRows<ReadinessPieceDrawingSet>(
+      "piece_drawing_sets",
+      projectId,
+      "piece_id, drawing_set_id, project_id",
+    ),
+    fetchOptionalProjectRows<ReadinessDrawing>(
       "drawings",
       projectId,
-      "id, project_id, drawing_set_id, sheet_number, title, set_approval_status, is_deleted, deleted_at, is_superseded",
+      "id, project_id, drawing_set_id, sheet_number, title, stage, set_approval_status, linked_rfi_ids, is_deleted, deleted_at, is_superseded",
     ),
-    fetchProjectRows<ReadinessWorkPackage>(
-      "work_packages",
-      projectId,
-      "id, project_id, wp_number, name, is_deleted, deleted_at",
-    ),
-    fetchProjectRows<DrawingSetEvidence>(
+    fetchOptionalProjectRows<DrawingSetEvidence>(
       "drawing_sets",
       projectId,
-      "id, set_approval_status, is_deleted, deleted_at",
+      "id, set_name, set_approval_status, is_deleted, deleted_at",
     ),
-    fetchProjectRows<SubmittalEvidence>(
+    fetchOptionalProjectRows<SubmittalEvidence>(
       "submittals",
       projectId,
-      "id, status, drawing_set_ids, current_round_id, is_deleted, deleted_at",
+      "id, status, ball_in_court, drawing_set_ids, current_round_id, submitted_date, required_date, returned_date, updated_at, round_number, is_deleted, deleted_at",
     ),
-    fetchProjectRows<SheetResponseEvidence>(
+    fetchOptionalProjectRows<SheetResponseEvidence>(
       "submittal_sheet_responses",
       projectId,
       "drawing_id, submittal_round_id, response_status, is_deleted, deleted_at",
     ),
-    fetchProjectRows<DrawingRevisionEvidence>(
+    fetchOptionalProjectRows<DrawingRevisionEvidence>(
       "drawing_revisions",
       projectId,
-      "id, drawing_id, is_current, archived_at",
+      "id, drawing_id, is_current, archived_at, revision_code, issued_at, received_at",
     ),
-    fetchProjectRows<DrawingReviewEvidence>(
+    fetchOptionalProjectRows<DrawingReviewEvidence>(
       "drawing_reviews",
       projectId,
       "drawing_revision_id, decision",
     ),
-    fetchProjectRows<DrawingSignoffEvidence>(
+    fetchOptionalProjectRows<DrawingSignoffEvidence>(
       "drawing_signoffs",
       projectId,
       "drawing_id, drawing_revision_id, stamp_type, is_voided",
     ),
+    fetchOptionalProjectRows<PieceCommentDispositionEvidence>(
+      "submittal_comment_dispositions",
+      projectId,
+      "id, project_id, status, is_required, is_deleted, comment_text, comment_number, location, related_piece_ids, drawing_id, submittal_id",
+    ),
   ]);
+
+  const approvalSources = [
+    submittalsSource,
+    sheetResponsesSource,
+    drawingReviewsSource,
+    drawingSignoffsSource,
+    commentDispositionsSource,
+  ];
 
   return {
     pieces,
-    pieceDrawings,
-    drawings,
+    pieceDrawings: pieceDrawingsSource.rows,
+    pieceDrawingSets: pieceDrawingSetsSource.rows,
+    drawings: drawingsSource.rows,
     workPackages,
-    drawingSets,
-    submittals,
-    sheetResponses,
-    drawingRevisions,
-    drawingReviews,
-    drawingSignoffs,
+    drawingSets: drawingSetsSource.rows,
+    submittals: submittalsSource.rows,
+    sheetResponses: sheetResponsesSource.rows,
+    drawingRevisions: drawingRevisionsSource.rows,
+    drawingReviews: drawingReviewsSource.rows,
+    drawingSignoffs: drawingSignoffsSource.rows,
+    commentDispositions: commentDispositionsSource.rows,
+    sourceAvailability: {
+      pieceDrawings: pieceDrawingsSource.availability,
+      pieceDrawingSets: pieceDrawingSetsSource.availability,
+      drawings: drawingsSource.availability,
+      drawingSets: drawingSetsSource.availability,
+      revisions: drawingRevisionsSource.availability,
+      approvals: allSourcesAvailable(approvalSources),
+    },
   };
 }
 
@@ -160,3 +288,26 @@ export function unlinkPieceDrawing(projectId: string, pieceId: string, drawingId
   });
 }
 
+export function linkPieceDrawingSet(
+  projectId: string,
+  pieceId: string,
+  drawingSetId: string,
+) {
+  return callRpc("link_piece_drawing_set", {
+    p_project_id: projectId,
+    p_piece_id: pieceId,
+    p_drawing_set_id: drawingSetId,
+  });
+}
+
+export function unlinkPieceDrawingSet(
+  projectId: string,
+  pieceId: string,
+  drawingSetId: string,
+) {
+  return callRpc("unlink_piece_drawing_set", {
+    p_project_id: projectId,
+    p_piece_id: pieceId,
+    p_drawing_set_id: drawingSetId,
+  });
+}

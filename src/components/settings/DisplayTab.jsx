@@ -6,25 +6,15 @@
  * here also flows into ThemeContext so the visual change happens
  * immediately, before the round-trip to Supabase finishes.
  *
- * Wiring status (audit, 2026-04):
- *   1. Theme (dark / light)                              →  WIRED via ThemeContext.setTheme
- *   2. Accent colour preset                              →  WIRED via ThemeContext.setAccent
- *   3. Font size scale                                   →  WIRED via ThemeContext.setFontScale
- *   4. Accessibility (high-contrast, reduced motion)     →  WIRED via ThemeContext.setContrast / setMotion
- *   5. Week starts on (sunday / monday)                  →  WIRED — read by ProjectCalendar via useUserPrefs
- *   6. Date format / time format / units / currency /
- *      number format                                     →  PERSISTED ONLY — formatter retrofit pending
- *      (formatDate / formatCurrency hardcode locales)
- *   7. Default view / table density / tooltips / project
- *      numbers / sidebar collapse / keyboard hints /
- *      auto-open drawers                                 →  PERSISTED ONLY — no consumer in current architecture
- *
- * Unwired prefs are tagged "(not yet active)" in the UI so the user
- * knows what's saved-but-inert versus actually take-effect.
+ * All enabled controls feed a runtime consumer. Cross-device persistence is
+ * owned by Settings.jsx through the canonical user preference contract.
  */
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/components/shared/ThemeContext';
+import { AppearancePreview } from './AppearancePreview';
+import { formatUserCurrency, formatUserDate, formatUserMeasurement } from '@/lib/userPreferences/formatters';
+import { setRuntimeUserPreferences } from '@/lib/userPreferences/runtime';
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -46,7 +36,7 @@ const optionCard = (isSelected) => ({
 
 const Toggle = ({ checked, onChange }) => (
   <div onClick={onChange} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: checked ? 'flex-end' : 'flex-start', width: 44, height: 24, background: checked ? 'var(--status-success)' : 'var(--bg-surface-high)', borderRadius: 12, padding: '2px 4px', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0 }}>
-    <div style={{ width: 20, height: 20, background: '#fff', borderRadius: 10 }} />
+    <div style={{ width: 20, height: 20, background: 'var(--bg-surface)', borderRadius: 10 }} />
   </div>
 );
 
@@ -65,11 +55,11 @@ const FONT_SCALE_PRESETS = [
 ];
 
 export default function DisplayTab({ preferences, onSave, isSaving }) {
-  const { theme, accent, fontScale, contrast, motion,
+  const { themePreference, accent, fontScale, contrast, motion,
           setTheme, setAccent, setFontScale, setContrast, setMotion,
           applyPreferences } = useTheme();
 
-  const [prefs, setPrefs] = useState(() => buildPrefs(preferences, { theme, accent, fontScale, contrast, motion }));
+  const [prefs, setPrefs] = useState(() => buildPrefs(preferences, { theme: themePreference, accent, fontScale, contrast, motion }));
 
   // When preferences load from the server, apply them to ThemeContext
   // (so a user signing in on a new device sees their saved look) and
@@ -77,7 +67,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
   useEffect(() => {
     if (!preferences || Object.keys(preferences).length === 0) return;
     applyPreferences(preferences);
-    setPrefs(buildPrefs(preferences, { theme, accent, fontScale, contrast, motion }));
+    setPrefs(buildPrefs(preferences, { theme: themePreference, accent, fontScale, contrast, motion }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(preferences)]);
 
@@ -85,12 +75,13 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
   // visual option from elsewhere (e.g. the future top-bar quick-switch)
   // is reflected here too.
   useEffect(() => {
-    setPrefs((p) => ({ ...p, theme, accent_color: accent, font_scale: fontScale, contrast_mode: contrast, motion_mode: motion }));
-  }, [theme, accent, fontScale, contrast, motion]);
+    setPrefs((p) => ({ ...p, theme: themePreference, accent_color: accent, font_scale: fontScale, contrast_mode: contrast, motion_mode: motion }));
+  }, [themePreference, accent, fontScale, contrast, motion]);
 
   const handleChange = (key, value) => {
     const updated = { ...prefs, [key]: value };
     setPrefs(updated);
+    setRuntimeUserPreferences(updated);
     // Apply visual changes locally first so the UI is instant; the
     // mutation in Settings.jsx persists them to the user-prefs row.
     if (key === 'theme')           setTheme(value);
@@ -107,11 +98,17 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
         Display
       </h2>
 
+      <AppearancePreview
+        dateLabel={formatUserDate('2026-08-08')}
+        currencyLabel={formatUserCurrency(125400)}
+        measurementLabel={formatUserMeasurement(12500, 'weight')}
+      />
+
       {/* Theme */}
       <div style={{ marginBottom: 28 }}>
         <label style={labelStyle}>Theme</label>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-          {[{ id: 'dark', icon: '🌙', label: 'Dark Mode' }, { id: 'light', icon: '☀️', label: 'Light Mode' }].map(t => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          {[{ id: 'system', icon: '◐', label: 'System' }, { id: 'dark', icon: '🌙', label: 'Dark Mode' }, { id: 'light', icon: '☀️', label: 'Light Mode' }].map(t => (
             <div key={t.id} onClick={() => handleChange('theme', t.id)} style={{ ...optionCard(prefs.theme === t.id), padding: '20px 14px' }}>
               <div style={{ fontSize: 24, marginBottom: 6 }}>{t.icon}</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: prefs.theme === t.id ? 'var(--accent)' : 'var(--text-primary)' }}>{t.label}</div>
@@ -213,7 +210,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
 
       {/* Date Format */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Date Format <NotYetActive /></label>
+        <label style={labelStyle}>Date Format</label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD'].map(format => (
             <div key={format} onClick={() => handleChange('date_format', format)} style={optionCard(prefs.date_format === format)}>
@@ -229,7 +226,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
         <label style={labelStyle}>Locale</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
           <div>
-            <label style={labelStyle}>Time Format <NotYetActive /></label>
+            <label style={labelStyle}>Time Format</label>
             <select value={prefs.time_format} onChange={e => handleChange('time_format', e.target.value)} style={selectStyle}>
               <option value="12h">12-hour (3:45 PM)</option>
               <option value="24h">24-hour (15:45)</option>
@@ -243,7 +240,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
             </select>
           </div>
           <div>
-            <label style={labelStyle}>Units <NotYetActive /></label>
+            <label style={labelStyle}>Units</label>
             <select value={prefs.measurement_units} onChange={e => handleChange('measurement_units', e.target.value)} style={selectStyle}>
               <option value="imperial">Imperial (ft, in, lbs)</option>
               <option value="metric">Metric (m, mm, kg)</option>
@@ -254,20 +251,20 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
 
       {/* Currency & Numbers */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Currency &amp; Numbers <NotYetActive /></label>
+        <label style={labelStyle}>Currency &amp; Numbers</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div>
             <label style={labelStyle}>Currency</label>
             <select value={prefs.currency_format} onChange={e => handleChange('currency_format', e.target.value)} style={selectStyle}>
-              {['USD', 'CAD', 'EUR', 'GBP', 'MXN'].map(c => <option key={c} value={c}>{c}</option>)}
+              {['USD', 'CAD', 'EUR'].map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
             <label style={labelStyle}>Number Format</label>
             <select value={prefs.number_format} onChange={e => handleChange('number_format', e.target.value)} style={selectStyle}>
-              <option value="comma">1,234,567 (US)</option>
-              <option value="period">1.234.567 (EU)</option>
-              <option value="space">1 234 567 (intl)</option>
+              <option value="1,234.56">1,234.56 (US)</option>
+              <option value="1 234,56">1 234,56 (international)</option>
+              <option value="1234.56">1234.56 (plain)</option>
             </select>
           </div>
         </div>
@@ -275,7 +272,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
 
       {/* Table Density */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Table Density <NotYetActive note="The RFIs page has its own per-page density toggle in the filter bar; this global preference doesn't yet feed other tables." /></label>
+        <label style={labelStyle}>Table Density</label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
             { id: 'compact', label: 'Compact', desc: '10px rows' },
@@ -290,29 +287,18 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
         </div>
       </div>
 
-      {/* Default View */}
-      <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Default View <NotYetActive /></label>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          {[{ id: 'table', icon: '📋' }, { id: 'board', icon: '📇' }, { id: 'gantt', icon: '📊' }, { id: 'list', icon: '📝' }].map(v => (
-            <div key={v.id} onClick={() => handleChange('default_view', v.id)} style={optionCard(prefs.default_view === v.id)}>
-              <div style={{ fontSize: 20, marginBottom: 6 }}>{v.icon}</div>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'capitalize', color: prefs.default_view === v.id ? 'var(--accent)' : 'var(--text-primary)' }}>{v.id}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Toggles */}
       <div>
-        <label style={labelStyle}>Additional Options <NotYetActive /></label>
+        <label style={labelStyle}>Sidebar Start Mode</label>
+        <select value={prefs.sidebar_mode} onChange={e => handleChange('sidebar_mode', e.target.value)} style={{ ...selectStyle, marginBottom: 22 }}>
+          <option value="remember">Remember my last choice</option>
+          <option value="expanded">Always expanded</option>
+          <option value="rail">Always compact rail</option>
+        </select>
+        <label style={labelStyle}>Additional Options</label>
         {[
-          { key: 'compact_mode', label: 'Compact Mode', desc: 'Reduce spacing and padding' },
-          { key: 'show_tooltips', label: 'Show Tooltips', desc: 'Display helpful hints on hover' },
           { key: 'show_project_numbers', label: 'Show Project Numbers', desc: 'Display project numbers in lists' },
-          { key: 'sidebar_collapsed', label: 'Start Sidebar Collapsed', desc: 'Collapse navigation on load' },
-          { key: 'show_keyboard_hints', label: 'Show Keyboard Hints', desc: 'Reveal shortcut overlays in dialogs' },
-          { key: 'auto_open_drawers', label: 'Auto-Open Detail Drawers', desc: 'Open the detail panel on row click instead of single-line preview' },
+          { key: 'show_keyboard_hints', label: 'Show Keyboard Hints', desc: 'Show shortcut keys throughout the app' },
         ].map(item => (
           <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--divider)' }}>
             <div>
@@ -329,36 +315,6 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
   );
 }
 
-/**
- * Inline pill that flags a pref the Settings UI saves but no consumer
- * reads yet. Sits inline next to the section label so the user can
- * tell what's wired vs. what's only persisted.
- */
-function NotYetActive({ note }) {
-  return (
-    <span
-      title={note || "Saved to your profile, but no consumer reads this preference yet. We'll wire it up in a future release."}
-      style={{
-        display: 'inline-block',
-        marginLeft: 8,
-        padding: '1px 6px',
-        borderRadius: 3,
-        background: 'var(--bg-surface-high)',
-        color: 'var(--text-muted)',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 8,
-        fontWeight: 700,
-        letterSpacing: '0.10em',
-        textTransform: 'uppercase',
-        verticalAlign: 'middle',
-        border: '1px solid var(--border-default)',
-      }}
-    >
-      Not yet active
-    </span>
-  );
-}
-
 function buildPrefs(p, theme) {
   const safe = p && typeof p === 'object' ? p : {};
   return {
@@ -367,20 +323,16 @@ function buildPrefs(p, theme) {
     font_scale:            safe.font_scale    || theme.fontScale     || 'md',
     contrast_mode:         safe.contrast_mode || theme.contrast      || 'normal',
     motion_mode:           safe.motion_mode   || theme.motion        || 'auto',
-    default_view:          safe.default_view          || 'table',
-    compact_mode:          !!safe.compact_mode,
-    show_tooltips:         safe.show_tooltips !== false,
     date_format:           safe.date_format          || 'MM/DD/YYYY',
     time_format:           safe.time_format          || '12h',
     week_start:            safe.week_start           || 'sunday',
     measurement_units:     safe.measurement_units    || 'imperial',
     currency_format:       safe.currency_format      || 'USD',
-    number_format:         safe.number_format        || 'comma',
+    number_format:         safe.number_format        || '1,234.56',
     default_landing:       safe.default_landing      || 'Dashboard',
     table_density:         safe.table_density        || 'normal',
     show_project_numbers:  safe.show_project_numbers !== false,
-    sidebar_collapsed:     !!safe.sidebar_collapsed,
+    sidebar_mode:          safe.sidebar_mode          || 'remember',
     show_keyboard_hints:   safe.show_keyboard_hints !== false,
-    auto_open_drawers:     safe.auto_open_drawers !== false,
   };
 }

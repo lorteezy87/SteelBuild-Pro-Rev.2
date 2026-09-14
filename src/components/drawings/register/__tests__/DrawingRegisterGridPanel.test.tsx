@@ -1,0 +1,350 @@
+// @vitest-environment jsdom
+//
+// Render test for the register's release affordance. Covers the field-confirmed
+// bug fix: a row with no current revision must show an ENABLED "Set up release
+// tracking" button (not a dead disabled "Release…" select), and clicking it
+// provisions a revision via ensureCurrentRevision and refetches the register. A
+// row that already has a current revision shows the normal Release select.
+
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import "@testing-library/jest-dom";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
+import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
+import type { DrawingRegisterGridPanelProps } from "../DrawingRegisterGridPanel";
+import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
+
+const ensureCurrentRevision = vi.fn().mockResolvedValue({ id: "rev-new", is_current: true });
+const invalidateQueries = vi.fn();
+let canEdit = true;
+
+let registerRows: DrawingRegisterRow[] = [];
+
+vi.mock("@/hooks/useDrawingRegister", () => ({
+  useDrawingRegister: () => ({ data: registerRows, isLoading: false, error: null as Error | null }),
+}));
+vi.mock("@/hooks/usePublishRevision", () => ({
+  usePublishRevision: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock("@/hooks/useDrawingWatch", () => ({
+  useMyDrawingWatches: () => ({ data: new Set() }),
+  useToggleDrawingWatch: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock("@/services/permissions", () => ({
+  usePermissions: () => ({ can: (action: string) => action === "edit" ? canEdit : true }),
+}));
+vi.mock("@/components/shared/useAppSecurity", () => ({
+  useAppSecurity: () => ({ user: { id: "user-1", email: "pm@x.com" } }),
+}));
+vi.mock("@/lib/drawingHub/revisions", () => ({
+  ensureCurrentRevision: (...a: any[]) => ensureCurrentRevision(...a),
+}));
+vi.mock("@/components/drawings/RevisionUploadModal", () => ({
+  default: ({ onComplete }: { onComplete: () => void }) => (
+    <button type="button" onClick={onComplete}>Complete revision upload</button>
+  ),
+}));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
+import { DrawingRegisterGridPanel } from "../DrawingRegisterGridPanel";
+
+function makeRow(over: Partial<DrawingRegisterRow> = {}): DrawingRegisterRow {
+  return {
+    drawing_id: "dwg-1",
+    drawing_set_id: "set-1",
+    project_id: "proj-1",
+    sheet_number: "S101",
+    sheet_title: "First Floor Framing",
+    discipline: "S",
+    drawing_set_name: "Main Steel - IFC",
+    stage: "IFC",
+    current_revision_id: null,
+    current_revision: "A",
+    current_status: null,
+    current_issued_at: null,
+    open_impact_count: 0,
+    pending_review_count: 0,
+    rfi_count: 0,
+    work_package_count: 0,
+    last_activity: null,
+    ...over,
+  };
+}
+
+function renderGrid(props: Partial<DrawingRegisterGridPanelProps> = {}) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qc.invalidateQueries = invalidateQueries as any;
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={qc}>
+        <DrawingRegisterGridPanel projectId="proj-1" {...props} />
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe("DrawingRegisterGridPanel — release affordance", () => {
+  beforeEach(() => {
+    canEdit = true;
+  });
+
+  it("does not present incomplete legacy RFI and WP link counts as totals", () => {
+    registerRows = [makeRow({ rfi_count: 0, work_package_count: 0 })];
+    renderGrid();
+    expect(screen.queryByRole("columnheader", { name: "RFIs" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "WPs" })).not.toBeInTheDocument();
+  });
+
+  it("shows unavailable impact evidence as unknown rather than zero", () => {
+    registerRows = [makeRow({ open_impact_count: null, pending_review_count: null })];
+    renderGrid();
+    expect(screen.getAllByLabelText("Count unavailable")).toHaveLength(2);
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    canEdit = true;
+    ensureCurrentRevision.mockResolvedValue({ id: "rev-new", is_current: true });
+  });
+
+  it("shows an enabled provision button (not a disabled select) for a row with no current revision", () => {
+    registerRows = [makeRow({ current_revision_id: null })];
+    renderGrid();
+    const btn = screen.getByRole("button", { name: /set up release tracking/i });
+    expect(btn).toBeEnabled();
+    // The dead Release… select must NOT be present for this row.
+    expect(screen.queryByRole("option", { name: "Release…" })).not.toBeInTheDocument();
+  });
+
+  it("shows the Release select for a row that already has a current revision", () => {
+    registerRows = [makeRow({ drawing_id: "dwg-2", current_revision_id: "rev-existing" })];
+    renderGrid();
+    expect(screen.getByRole("option", { name: "Release…" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /set up release tracking/i })).not.toBeInTheDocument();
+  });
+
+  it("provisions a revision on click with the mapped drawing, then invalidates the register query", async () => {
+    registerRows = [makeRow({ drawing_id: "dwg-9", project_id: "proj-9", current_revision_id: null, current_revision: "B" })];
+    renderGrid();
+    await userEvent.click(screen.getByRole("button", { name: /set up release tracking/i }));
+    await waitFor(() => expect(ensureCurrentRevision).toHaveBeenCalledTimes(1));
+    expect(ensureCurrentRevision).toHaveBeenCalledWith({
+      drawing: expect.objectContaining({ id: "dwg-9", project_id: "proj-9", revision: "B" }),
+      userId: "user-1",
+    });
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-register", "proj-1"] }),
+    );
+  });
+
+  it("offers a bulk 'set up tracking for all' action counting only untracked rows", () => {
+    registerRows = [
+      makeRow({ drawing_id: "a", current_revision_id: null }),
+      makeRow({ drawing_id: "b", current_revision_id: "rev-b" }),
+      makeRow({ drawing_id: "c", current_revision_id: null }),
+    ];
+    renderGrid();
+    expect(screen.getByRole("button", { name: /set up tracking for all \(2\)/i })).toBeInTheDocument();
+  });
+
+  it("bulk-provisions every untracked row on click, then invalidates the register query once", async () => {
+    registerRows = [
+      makeRow({ drawing_id: "a", current_revision_id: null }),
+      makeRow({ drawing_id: "b", current_revision_id: "rev-b" }), // already tracked — skipped
+      makeRow({ drawing_id: "c", current_revision_id: null }),
+    ];
+    renderGrid();
+    await userEvent.click(screen.getByRole("button", { name: /set up tracking for all \(2\)/i }));
+    // One ensureCurrentRevision per UNTRACKED row (a + c), not the tracked one (b).
+    await waitFor(() => expect(ensureCurrentRevision).toHaveBeenCalledTimes(2));
+    const provisionedIds = ensureCurrentRevision.mock.calls.map((c) => c[0].drawing.id).sort();
+    expect(provisionedIds).toEqual(["a", "c"]);
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-register", "proj-1"] }),
+    );
+  });
+});
+
+describe("DrawingRegisterGridPanel — revision workflow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    canEdit = true;
+    registerRows = [makeRow()];
+  });
+
+  const drawingSet: DrawingSet = { id: "set-1", set_name: "Main Steel - IFC" };
+  const pkg: SetPackage = {
+    key: "id:set-1",
+    setId: "set-1",
+    name: "Main Steel - IFC",
+    parent: drawingSet,
+    sheets: [{ id: "dwg-1" }],
+    supersededSheets: [],
+    submittals: [],
+  };
+
+  it("opens a saved summary from the canonical sheet grid", async () => {
+    const onOpenSummary = vi.fn();
+    const summary = { setId: "set-1", sheetsChanged: 3 };
+    renderGrid({
+      setPackages: [pkg],
+      summariesBySet: new Map([["set-1", { summary, sheets_changed: 3 } as any]]),
+      onOpenSummary,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /revised · 3/i }));
+    expect(onOpenSummary).toHaveBeenCalledWith(summary);
+  });
+
+  it("opens revision upload and forwards the exact package key on completion", async () => {
+    const onRevisionUploaded = vi.fn();
+    renderGrid({
+      activeProject: { id: "proj-1", name: "Project One" },
+      drawingSets: [drawingSet],
+      setPackages: [pkg],
+      onRevisionUploaded,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Upload revision for Main Steel - IFC" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Complete revision upload" }));
+
+    expect(onRevisionUploaded).toHaveBeenCalledWith("id:set-1");
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-register", "proj-1"] });
+  });
+
+  it("keeps saved summaries readable for viewers without exposing revision upload", async () => {
+    canEdit = false;
+    const onOpenSummary = vi.fn();
+    renderGrid({
+      setPackages: [pkg],
+      summariesBySet: new Map([["set-1", { summary: { setId: "set-1" }, sheets_changed: 1 } as any]]),
+      onOpenSummary,
+    });
+
+    expect(screen.queryByRole("button", { name: /upload revision/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /revised · 1/i }));
+    expect(onOpenSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves a visible sheet from its canonical set ID when the hub drawing list is truncated", () => {
+    const truncatedPackage: SetPackage = { ...pkg, sheets: [] };
+    renderGrid({
+      setPackages: [truncatedPackage],
+      summariesBySet: new Map([["set-1", { summary: { setId: "set-1" }, sheets_changed: 2 } as any]]),
+      onOpenSummary: vi.fn(),
+    });
+
+    expect(screen.getByRole("button", { name: /revised · 2/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Upload revision for Main Steel - IFC" })).toBeInTheDocument();
+  });
+
+  it("resolves revision actions for superseded sheets", () => {
+    registerRows = [makeRow({ drawing_set_id: null })];
+    const supersededPackage: SetPackage = { ...pkg, sheets: [], supersededSheets: [{ id: "dwg-1", is_superseded: true }] };
+    renderGrid({
+      setPackages: [supersededPackage],
+      summariesBySet: new Map([["set-1", { summary: { setId: "set-1" }, sheets_changed: 1 } as any]]),
+      onOpenSummary: vi.fn(),
+    });
+
+    expect(screen.getByRole("button", { name: /revised · 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Upload revision for Main Steel - IFC" })).toBeInTheDocument();
+  });
+});
+
+describe("DrawingRegisterGridPanel — large registers", () => {
+  let rectSpy: ReturnType<typeof vi.spyOn>;
+  let originalResizeObserver: typeof window.ResizeObserver;
+
+  beforeEach(() => {
+    originalResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = class {
+      private readonly callback: ResizeObserverCallback;
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+
+      observe(target: Element) {
+        const rect = target.getBoundingClientRect();
+        this.callback([{
+          target,
+          contentRect: rect,
+          borderBoxSize: [{
+            inlineSize: rect.width,
+            blockSize: rect.height,
+          }],
+        } as unknown as ResizeObserverEntry], this);
+      }
+
+      unobserve() {}
+      disconnect() {}
+    };
+    rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function getBoundingClientRect() {
+        const height = this.getAttribute("data-testid") === "drawing-register-virtual-body"
+          ? 600
+          : 54;
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: 1400,
+          bottom: height,
+          width: 1400,
+          height,
+          toJSON: () => ({}),
+        };
+      });
+    vi.clearAllMocks();
+    canEdit = true;
+    registerRows = Array.from({ length: 150 }, (_, index) => {
+      const sequence = String(index + 1).padStart(3, "0");
+      return makeRow({
+        drawing_id: `dwg-${sequence}`,
+        sheet_number: `S${sequence}`,
+        sheet_title: `Framing level ${sequence}`,
+        current_revision_id: `rev-${sequence}`,
+      });
+    });
+
+    afterEach(() => {
+      rectSpy.mockRestore();
+      window.ResizeObserver = originalResizeObserver;
+    });
+  });
+
+  it("virtualizes the row body while preserving accessible headers and visible controls", () => {
+    renderGrid();
+
+    expect(screen.getByRole("table", { name: "Drawing Register" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Sheet" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "S001" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View S001" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "S150" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("row").length).toBeLessThan(registerRows.length);
+  });
+
+  it("keeps filtering and grouped expansion controls functional across virtualization", async () => {
+    const user = userEvent.setup();
+    const view = renderGrid();
+
+    await user.type(screen.getByPlaceholderText("Filter sheet, title, discipline, set…"), "S150");
+    expect(screen.getByRole("link", { name: "S150" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View S150" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "S001" })).not.toBeInTheDocument();
+
+    view.unmount();
+    registerRows = registerRows.map((row) => ({ ...row, drawing_set_name: "Main Steel - IFC" }));
+    renderGrid();
+    await user.click(screen.getByRole("button", { name: "Group by set" }));
+    const groupToggle = screen.getByRole("button", { name: /main steel - ifc.*150 sheets/i });
+    expect(groupToggle).toHaveAttribute("aria-expanded", "true");
+    await user.click(groupToggle);
+    expect(groupToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("link", { name: "S001" })).not.toBeInTheDocument();
+  });
+});

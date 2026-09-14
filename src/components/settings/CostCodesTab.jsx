@@ -139,7 +139,7 @@ export default function CostCodesTab() {
                     position: 'absolute', top: 2,
                     left: code.is_active ? 15 : 2,
                     width: 12, height: 12, borderRadius: '50%',
-                    background: 'white',
+                    background: 'var(--text-primary)',
                     transition: 'left 0.15s',
                   }} />
                 </button>

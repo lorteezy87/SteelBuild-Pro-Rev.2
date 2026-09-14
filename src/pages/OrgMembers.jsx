@@ -16,18 +16,20 @@ import { useOrg } from "@/components/shared/OrgContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { usePlan } from "@/hooks/usePlan";
 import { seatCapacity } from "@/lib/billing/plans";
+import { isNativePlatform } from "@/lib/native/platform";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import {
   listOrgMembers, listInvitations, createInvitation, revokeInvitation,
-  updateMemberRole, removeMember, inviteLink,
+  updateMemberRole, removeMember, inviteLink, updateOrgDefaultProjectRole,
 } from "@/lib/org/repository";
 import { prepareOnboardingInvites, clampOrgRole } from "@/lib/org/onboardingInvites";
 import TeamControlCenter from "./team/TeamControlCenter";
 
 export default function OrgMembers() {
   const { user } = useAuth();
-  const { currentOrg, currentRole } = useOrg();
+  const { currentOrg, currentRole, refetchOrgs } = useOrg();
   const qc = useQueryClient();
   const orgId = currentOrg?.id;
   const canManage = currentRole === "owner" || currentRole === "admin";
@@ -38,12 +40,17 @@ export default function OrgMembers() {
   const [busy, setBusy] = useState(false);
   const [ccSearch, setCcSearch] = useState("");
 
-  const { data: members = [], isLoading: loadingMembers } = useQuery({
+  const membersQuery = useQuery({
     queryKey: ["org-members", orgId], queryFn: () => listOrgMembers(orgId), enabled: !!orgId,
   });
-  const { data: invites = [], isLoading: loadingInvites } = useQuery({
+  const invitesQuery = useQuery({
     queryKey: ["org-invites", orgId], queryFn: () => listInvitations(orgId), enabled: !!orgId,
   });
+
+  const { data: members = [] } = membersQuery;
+  const { data: invites = [] } = invitesQuery;
+  const teamError = membersQuery.error || invitesQuery.error;
+  const teamReady = membersQuery.isSuccess && invitesQuery.isSuccess;
 
   const ownerCount = useMemo(() => members.filter((m) => m.role === "owner").length, [members]);
 
@@ -51,6 +58,9 @@ export default function OrgMembers() {
   // enforces the same limit when an invitation is accepted.
   const { plan } = usePlan();
   const navigate = useNavigate();
+  // Sign-in-only native build: hide the "Upgrade" (→ billing) upsells; plans are
+  // managed on the web. The seat/plan-limit messages themselves still show.
+  const native = isNativePlatform();
   const memberLimit = plan.limits.members;
   const cap = seatCapacity(members.length, invites.length, memberLimit);
   const atMemberLimit = cap.atLimit;
@@ -72,7 +82,7 @@ export default function OrgMembers() {
   useEffect(() => {
     if (seededRef.current) return;
     if (!Array.isArray(prefill) || prefill.length === 0) return;
-    if (!orgId || loadingMembers || loadingInvites) return;
+    if (!orgId || !teamReady) return;
     const { invites: prepared, skipped } = prepareOnboardingInvites(prefill, {
       existingEmails: members.map((m) => m.email),
       pendingEmails: invites.map((i) => i.email),
@@ -85,7 +95,7 @@ export default function OrgMembers() {
       const dropped = skipped.alreadyMember + skipped.alreadyInvited + skipped.invalid + skipped.duplicate;
       if (dropped > 0) toast.info(`Everyone from setup is already on the team or invited (${dropped} skipped)`);
     }
-  }, [prefill, orgId, loadingMembers, loadingInvites, members, invites, isOwner]);
+  }, [prefill, orgId, teamReady, members, invites, isOwner]);
 
   const stagedSkippedNote = useMemo(() => {
     if (!stagedSkipped) return "";
@@ -171,11 +181,37 @@ export default function OrgMembers() {
     try { await removeMember(m.id); toast.success("Member removed"); refresh(); } catch (e) { toast.error(e?.message || "Couldn't remove"); }
   };
 
+  // ── Default project access (workspace-wide) ──
+  const [savingDefaultRole, setSavingDefaultRole] = useState(false);
+  const defaultProjectRole = currentOrg?.member_default_project_role ?? null;
+  const onChangeDefaultProjectRole = async (value) => {
+    if (savingDefaultRole || !orgId) return;
+    const next = value === "none" ? null : value;
+    setSavingDefaultRole(true);
+    try {
+      await updateOrgDefaultProjectRole(orgId, next);
+      await refetchOrgs?.();
+      toast.success(
+        next
+          ? `Members now see all workspace projects as ${next === "pm" ? "PM" : next}`
+          : "Members now only see projects they're explicitly added to",
+      );
+    } catch (e) {
+      toast.error(e?.message || "Couldn't update default project access");
+    } finally {
+      setSavingDefaultRole(false);
+    }
+  };
+
   if (!orgId) {
     return <div className="page-content" style={{ padding: 24 }}><CommandBar eyebrow="Workspace" title="Team" /></div>;
   }
 
-  if (loadingMembers || loadingInvites) {
+  if (teamError) {
+    return <WorkflowFetchState label="Team" error={teamError} onRetry={() => { void Promise.all([membersQuery.refetch(), invitesQuery.refetch()]); }} />;
+  }
+
+  if (!teamReady) {
     return (
       <div className="page-content" style={{ padding: 24 }}>
         <LoadingSkeleton variant="page" />
@@ -222,6 +258,33 @@ export default function OrgMembers() {
         onRemoveStaged={removeStaged}
         onDismissStaged={() => setStaged([])}
       />
+      {canManage && (
+        <div style={{ padding: "0 var(--cmd-page-px, 24px) 16px" }}>
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "16px 20px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16 }}>
+            <div style={{ flex: "1 1 320px", minWidth: 260 }}>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+                Default project access for members
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                The role every member holds on all workspace projects unless they're given a
+                specific role on a project. Owners and admins always see everything.
+              </div>
+            </div>
+            <select
+              aria-label="Default project access for members"
+              value={defaultProjectRole ?? "none"}
+              disabled={savingDefaultRole}
+              onChange={(e) => onChangeDefaultProjectRole(e.target.value)}
+              style={{ minHeight: 36, padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, cursor: savingDefaultRole ? "wait" : "pointer" }}
+            >
+              <option value="viewer">Viewer — read-only on all projects</option>
+              <option value="field">Field — field updates on all projects</option>
+              <option value="pm">PM — full working role on all projects</option>
+              <option value="none">No automatic access (invite per project)</option>
+            </select>
+          </div>
+        </div>
+      )}
       <div style={{ padding: "0 var(--cmd-page-px, 24px) 24px" }}>
         <DangerZone />
       </div>

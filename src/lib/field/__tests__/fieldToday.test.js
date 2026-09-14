@@ -4,6 +4,7 @@ import {
   statusForPercent,
   progressPatch,
   taskUrgency,
+  partitionFieldTasks,
   tasksForToday,
   taskLabel,
   taskCrew,
@@ -90,21 +91,31 @@ describe("tasksForToday", () => {
     expect(ids).not.toContain("far");
   });
 
-  it("includes overdue, due-today, active, unscheduled, and near-upcoming work", () => {
-    const ids = tasksForToday(tasks, TODAY).map((t) => t.id);
-    expect(ids).toEqual(expect.arrayContaining(["overdue", "today", "active", "tbd", "soon"]));
+  it("keeps overdue work out of today's plan and puts it in recovery", () => {
+    const result = partitionFieldTasks(tasks, TODAY);
+    expect(result.today.map((t) => t.id)).toEqual(["today", "active"]);
+    expect(result.recovery.map((t) => t.id)).toEqual(["overdue"]);
+    expect(tasksForToday(tasks, TODAY).map((t) => t.id)).toEqual(["today", "active"]);
   });
 
-  it("sorts most-urgent first (overdue before due-today before active)", () => {
-    const ids = tasksForToday(tasks, TODAY).map((t) => t.id);
-    expect(ids.indexOf("overdue")).toBeLessThan(ids.indexOf("today"));
-    expect(ids.indexOf("today")).toBeLessThan(ids.indexOf("active"));
-    expect(ids.indexOf("active")).toBeLessThan(ids.indexOf("soon"));
+  it("classifies undated work and missing-start future work as planning gaps", () => {
+    const result = partitionFieldTasks([
+      { id: "tbd", percent_complete: 0 },
+      { id: "gap", end_date: ahead(3), percent_complete: 0 },
+    ], TODAY);
+    expect(result.unscheduled.map((t) => t.id)).toEqual(
+      expect.arrayContaining(["gap", "tbd"]),
+    );
+    expect(result.unscheduled).toHaveLength(2);
   });
 
-  it("respects a custom horizon", () => {
-    const ids = tasksForToday(tasks, TODAY, { horizonDays: 2 }).map((t) => t.id);
-    expect(ids).not.toContain("soon"); // starts in 3 days, beyond a 2-day horizon
+  it("keeps all future-start work in upcoming without calling it today", () => {
+    const result = partitionFieldTasks([
+      { id: "soon", start_date: ahead(3), end_date: ahead(6), percent_complete: 0 },
+      { id: "far", start_date: ahead(30), end_date: ahead(40), percent_complete: 0 },
+    ], TODAY);
+    expect(result.upcoming.map((t) => t.id)).toEqual(["soon", "far"]);
+    expect(result.today).toEqual([]);
   });
 
   it("is safe on empty / non-array input", () => {
@@ -112,8 +123,10 @@ describe("tasksForToday", () => {
     expect(tasksForToday(undefined, TODAY)).toEqual([]);
   });
 
-  it("excludes summary/parent tasks — a foreman acts on leaf work only", () => {
+  it("drops complete, deleted, summary, and parent rows from every bucket", () => {
     const withSummaries = [
+      { id: "done", task_name: "Done", percent_complete: 100, end_date: ago(1) },
+      { id: "gone", task_name: "Deleted", end_date: ago(1), is_deleted: true },
       // Flagged summary parent, overdue — must be dropped.
       { id: "sum", task_name: "Erection (phase)", is_summary: true, end_date: ago(2) },
       // Unflagged parent detected by linkage (has a child) — must be dropped.
@@ -122,11 +135,10 @@ describe("tasksForToday", () => {
       { id: "child", task_name: "Set column A-1", parent_task_id: "parent", end_date: ago(2) },
       { id: "solo", task_name: "Weld splice", end_date: ago(1) },
     ];
-    const ids = tasksForToday(withSummaries, TODAY).map((t) => t.id);
-    expect(ids).toContain("child");
-    expect(ids).toContain("solo");
-    expect(ids).not.toContain("sum");
-    expect(ids).not.toContain("parent");
+    const ids = Object.values(partitionFieldTasks(withSummaries, TODAY))
+      .flat()
+      .map((t) => t.id);
+    expect(ids).toEqual(["child", "solo"]);
   });
 });
 

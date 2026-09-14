@@ -21,6 +21,18 @@ import {
   indexTasksById,
   FIELD_ACTIVITY_TYPES,
 } from "@/lib/field/fieldPhase";
+import { isPunchlistOpen } from "@/lib/entityPredicates";
+
+export const FIELD_HUB_PANEL_COPY = Object.freeze({
+  fieldIssues: Object.freeze({
+    title: "Open Field Issues",
+    empty: "No open punchlist items.",
+  }),
+  inspections: Object.freeze({
+    title: "Active Inspections",
+    empty: "No active inspections.",
+  }),
+});
 
 /** Adapter: resolveFieldPhase returns `source`; the row field is `phaseSource`. */
 function phaseFields(
@@ -156,9 +168,9 @@ export interface FieldHubSummary {
   workforceToday: number;
   /** Punchlist items with status not in {"Closed","Complete","Completed"}. */
   openFieldIssues: number;
-  /** Inspections with status "Scheduled" and inspection_date >= today. */
+  /** Inspections still owed: status "Scheduled" (upcoming, undated, or past-due) or "In Progress". */
   inspectionsDue: number;
-  /** Safety incidents with status not "Closed". */
+  /** Safety incidents with status not "Completed" / "Closed". */
   openSafetyObs: number;
   /**
    * SUBSTITUTED: count of today's daily logs with non-empty equipment_used.
@@ -211,19 +223,22 @@ export function buildFieldHubSummary(
   ).length;
 
   // ── KPI: Open Field Issues (punchlist) ──────────────────────────────────
-  const CLOSED_STATUSES = new Set(["Closed", "Complete", "Completed"]);
-  const openPunch = punchlistItems.filter((p) => !CLOSED_STATUSES.has(p.status || ""));
+  const openPunch = punchlistItems.filter(isPunchlistOpen);
   const openFieldIssues = openPunch.length;
 
   // ── KPI: Inspections Due ────────────────────────────────────────────────
-  const inspectionsDue = inspections.filter((i) => {
-    if (i.status !== "Scheduled") return false;
-    if (!i.inspection_date) return true; // scheduled but undated → surface it
-    return i.inspection_date >= today;
-  }).length;
+  // inspections.status ∈ Scheduled / In Progress / Completed / On Hold / Cancelled.
+  // A Scheduled inspection whose date has passed is still owed (it is overdue,
+  // not done), and one In Progress has not been signed off — both count.
+  const ACTIVE_INSPECTION = new Set(["Scheduled", "In Progress"]);
+  const inspectionsDue = inspections.filter((i) => ACTIVE_INSPECTION.has(i.status || "")).length;
 
   // ── KPI: Open Safety Observations ───────────────────────────────────────
-  const openSafetyObs = incidents.filter((i) => i.status !== "Closed").length;
+  // safety_incidents.status ∈ Open / Under Investigation / Action Plan /
+  // In Progress / Completed / Closed — both Completed and Closed are terminal.
+  const CLOSED_INCIDENT = new Set(["Completed", "Closed"]);
+  const isOpenIncident = (i: SafetyIncidentRecord) => !CLOSED_INCIDENT.has(i.status || "");
+  const openSafetyObs = incidents.filter(isOpenIncident).length;
 
   // ── KPI: Total Deficiencies ──────────────────────────────────────────────
   const DONE_INSPECTION = new Set(["Completed", "Cancelled"]);
@@ -251,7 +266,6 @@ export function buildFieldHubSummary(
     }));
 
   // ── Panel: Open Issues (inspection queue) ───────────────────────────────
-  const ACTIVE_INSPECTION = new Set(["Scheduled", "In Progress"]);
   const upcomingInspections = inspections
     .filter((i) => ACTIVE_INSPECTION.has(i.status || ""))
     .slice()
@@ -273,7 +287,7 @@ export function buildFieldHubSummary(
 
   // ── Panel: Site Coordination (open safety + overdue punchlist) ──────────
   const openIncidentRows: SiteCoordRow[] = incidents
-    .filter((i) => i.status !== "Closed")
+    .filter(isOpenIncident)
     .slice(0, 3)
     .map((i) => ({
       id: i.id || "",

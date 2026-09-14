@@ -166,10 +166,23 @@ export function buildFabReleaseSummary(metrics: FabMetrics): FabSummary {
     })
     .slice(0, 6);
 
-  // Recently Released: in-shop packages sorted by released_date descending
-  const recentlyReleased = [...activeShop]
-    .filter((wp) => wp.released_date)
-    .sort((a, b) => String(b.released_date ?? "").localeCompare(String(a.released_date ?? "")))
+  // Recently Released reads the exact same released package set as the KPI.
+  // Missing dates are incomplete metadata, not proof the release did not happen.
+  const releasedPackages = [...activeShop, ...readyToShip].filter(
+    (wp, index, all) => all.findIndex((candidate) => candidate.id === wp.id) === index,
+  );
+  const recentlyReleased = releasedPackages
+    .sort((a, b) => {
+      const aDate = String(a.released_date ?? "");
+      const bDate = String(b.released_date ?? "");
+      if (aDate && bDate && aDate !== bDate) return bDate.localeCompare(aDate);
+      if (aDate !== bDate) return aDate ? -1 : 1;
+      return String(a.wp_number || a.name || a.id).localeCompare(
+        String(b.wp_number || b.name || b.id),
+        undefined,
+        { numeric: true },
+      );
+    })
     .slice(0, 6);
 
   return {

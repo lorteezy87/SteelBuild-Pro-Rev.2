@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
+import { countModelElements, fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 
 /**
  * Chainable Supabase-ish mock. The roster loader now does ONE head/count query
@@ -34,6 +34,58 @@ describe("fetchAllModelElements", () => {
     expect(client.rangeCalls).toEqual([[0, 999], [1000, 1999], [2000, 2999]]);
   });
 
+  it("bounds concurrent page fetches (does not open every page at once)", async () => {
+    const rows = Array.from({ length: 5000 }, (_, i) => ({ id: i }));
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const client = {
+      from() { return client; },
+      select() { return client; },
+      eq() { return client; },
+      order() { return client; },
+      range(from, to) {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            inFlight -= 1;
+            resolve({ data: rows.slice(from, to + 1), error: null });
+          }, 5);
+        });
+      },
+      then(resolve, reject) {
+        return Promise.resolve({ count: rows.length, error: null }).then(resolve, reject);
+      },
+    };
+    const out = await fetchAllModelElements("p", { client, page: 1000, concurrency: 2 });
+    expect(out).toHaveLength(5000);
+    expect(maxInFlight).toBeLessThanOrEqual(2);
+  });
+
+  it("passes optional columns through to page selects", async () => {
+    const selects = [];
+    const rows = [{ id: 1, piece_mark: "A1" }];
+    const client = {
+      from() { return client; },
+      select(cols, opts) {
+        selects.push({ cols, head: !!(opts && opts.head) });
+        return client;
+      },
+      eq() { return client; },
+      order() { return client; },
+      range() { return Promise.resolve({ data: rows, error: null }); },
+      then(resolve, reject) {
+        return Promise.resolve({ count: 1, error: null }).then(resolve, reject);
+      },
+    };
+    await fetchAllModelElements("p", {
+      client,
+      page: 1000,
+      columns: "id,piece_mark,drawing_no,drawing_id",
+    });
+    expect(selects.some((s) => !s.head && s.cols === "id,piece_mark,drawing_no,drawing_id")).toBe(true);
+  });
+
   it("fetches exactly one page on an exact multiple — no wasted empty page", async () => {
     const rows = Array.from({ length: 1000 }, (_, i) => ({ id: i }));
     const client = mockClient(rows);
@@ -65,5 +117,37 @@ describe("fetchAllModelElements", () => {
       then(resolve, reject) { return Promise.resolve({ count: 10, error: null }).then(resolve, reject); },
     };
     await expect(fetchAllModelElements("p", { client: errClient, page: 1000 })).rejects.toThrow("page boom");
+  });
+});
+
+describe("countModelElements", () => {
+  it("returns the live count from a HEAD query without transferring rows", async () => {
+    const rows = Array.from({ length: 27750 }, (_, i) => ({ id: i }));
+    const client = mockClient(rows);
+    const n = await countModelElements("p", { client });
+    expect(n).toBe(27750);
+    // The whole point: a roster this size must cost ZERO row fetches. The
+    // Control Board reads this to know a roster exists; if it ever starts
+    // paging, opening the Detailing page pulls 28 round-trips of steel.
+    expect(client.rangeCalls).toEqual([]);
+    expect(client.headMode).toBe(true);
+  });
+
+  it("returns 0 for no project rather than throwing", async () => {
+    expect(await countModelElements(null)).toBe(0);
+    expect(await countModelElements(undefined)).toBe(0);
+  });
+
+  it("returns 0 (not null) when the project has no members", async () => {
+    const client = mockClient([]);
+    await expect(countModelElements("p", { client })).resolves.toBe(0);
+  });
+
+  it("throws on a count error so callers fail loud instead of showing 0 members", async () => {
+    const errClient = {
+      from() { return errClient; }, select() { return errClient; }, eq() { return errClient; },
+      then(resolve, reject) { return Promise.resolve({ count: null, error: new Error("count boom") }).then(resolve, reject); },
+    };
+    await expect(countModelElements("p", { client: errClient })).rejects.toThrow("count boom");
   });
 });

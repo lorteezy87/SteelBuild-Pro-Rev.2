@@ -94,3 +94,75 @@ describe("buildRevisionImpactRows", () => {
     expect(row.affectedPieces).toBeNull();
   });
 });
+
+// ── Linked-RFI join + fab hold (§4/§5) ───────────────────────────────────────
+// Two independent defects that both rendered a confident, wrong answer:
+// the normalizer split on whitespace and kept "#", so the canonical "RFI #001"
+// never matched; and "Fab Blocked?" read a top-level fab_hold column that does
+// not exist on `rfis` (the flag lives in metadata).
+describe("buildRevisionImpactRows — RFI join and fab hold", () => {
+  const impact = [{ revisionId: "r1", drawingId: "d1", severity: "medium" }];
+  const drawings = [{ id: "d1", sheet_number: "S1", drawing_set_id: "set1", linked_rfi_ids: "RFI #001" }];
+  const drawingSets = [{ id: "set1", set_name: "Main" }];
+
+  it("matches the canonical 'RFI #001' format the sheet editor asks for", () => {
+    const rows = buildRevisionImpactRows(impact, {
+      drawings, drawingSets,
+      rfis: [{ id: "x", rfi_number: "RFI #001", status: "Open" }],
+    });
+    expect(rows[0].rfiCount).toBe(1);
+    expect(rows[0].openRfiCount).toBe(1);
+  });
+
+  it("matches across punctuation variants on both sides of the join", () => {
+    for (const [sheetRef, rfiNum] of [
+      ["RFI #001", "RFI-001"],
+      ["rfi-001", "RFI #001"],
+      ["RFI001", "RFI #001"],
+    ]) {
+      const rows = buildRevisionImpactRows(impact, {
+        drawings: [{ ...drawings[0], linked_rfi_ids: sheetRef }],
+        drawingSets,
+        rfis: [{ id: "x", rfi_number: rfiNum, status: "Open" }],
+      });
+      expect(rows[0].rfiCount, `${sheetRef} vs ${rfiNum}`).toBe(1);
+    }
+  });
+
+  it("splits a multi-RFI CSV on commas only", () => {
+    const rows = buildRevisionImpactRows(impact, {
+      drawings: [{ ...drawings[0], linked_rfi_ids: "RFI #001, RFI #002" }],
+      drawingSets,
+      rfis: [
+        { id: "x", rfi_number: "RFI #001", status: "Open" },
+        { id: "y", rfi_number: "RFI #002", status: "Closed" },
+      ],
+    });
+    expect(rows[0].rfiCount).toBe(2);
+    expect(rows[0].openRfiCount).toBe(1);
+  });
+
+  it("reads the fab-hold flag from metadata, where RFIFormModal writes it", () => {
+    const rows = buildRevisionImpactRows(impact, {
+      drawings, drawingSets,
+      rfis: [{ id: "x", rfi_number: "RFI #001", status: "Open", metadata: { fab_hold: true } }],
+    });
+    expect(rows[0].fabBlocked).toBe(true);
+  });
+
+  it("does not report fab-blocked when the hold flag is absent", () => {
+    const rows = buildRevisionImpactRows(impact, {
+      drawings, drawingSets,
+      rfis: [{ id: "x", rfi_number: "RFI #001", status: "Open", metadata: {} }],
+    });
+    expect(rows[0].fabBlocked).toBe(false);
+  });
+
+  it("only counts a hold from an OPEN rfi", () => {
+    const rows = buildRevisionImpactRows(impact, {
+      drawings, drawingSets,
+      rfis: [{ id: "x", rfi_number: "RFI #001", status: "Closed", metadata: { fab_hold: true } }],
+    });
+    expect(rows[0].fabBlocked).toBe(false);
+  });
+});

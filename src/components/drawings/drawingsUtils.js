@@ -5,17 +5,20 @@
  * overdue detection, CSV export, and filter/stat computation.
  */
 
-import { IN_REVIEW_STAGES, STAGE_ORDER, STAGES } from "./drawingsConfig";
+import { IN_REVIEW_STAGES, STAGE_ORDER, WORKFLOW_STAGES, compareRevisionLabels, revisionSortRank } from "./drawingsConfig";
+import { localToday, toLocalDay } from "@/utils/dates";
 import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 import { compareDrawingSetPackages, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
+import { resolveDrawingPackageDue } from "@/pages/drawingSubmittalHub/format";
 
 /**
  * Decide whether a stage transition is legal.
  *
  * The corrected submittal state machine (migration 077) is linear:
- *   Not Started → IFA → OFA → BFA → OFS → IFC → Released
- * with R&R outcomes that loop any post-prep stage back to IFA.
+ *   Not Started → IFA → OFA → BFA → R&R → OFS → IFC → Released
+ * R&R is a first-class *derived* stage (submittal status); sheet writes
+ * still use the 7-value drawings.stage enum (never store "R&R").
  * We allow:
  *   • Moving forward any number of steps (fast-track from IFA straight
  *     to Released is legitimate for small revisions)
@@ -48,23 +51,35 @@ export function validateStageTransition(from, to) {
 
 /**
  * Classify a direct sheet-stage write before it reaches the entity client.
- * Linked sets belong to the Submittal workflow; only rows without a linked
- * submittal may use the legacy sheet-stage recovery path.
+ *
+ * Open linked submittals own the workflow — block Drawings-page stage writes
+ * and send the user to Submittals. Once every linked submittal is terminal
+ * (open === 0), allow sheet-stage recovery so operators can sync the legacy
+ * `drawings.stage` column after the workflow already moved elsewhere.
  */
 export function classifyDrawingStageMutation(drawing, targetStage, submittalsBySetId = {}) {
   const setId = drawing?.drawing_set_id || null;
-  const linked = !!setId && Number(submittalsBySetId[setId]?.total || 0) > 0;
-  if (linked) {
+  const link = setId ? submittalsBySetId[setId] : null;
+  const openLinked = !!setId && Number(link?.open || 0) > 0;
+  if (openLinked) {
     return {
       kind: "submittal",
       allowed: false,
-      reason: `Set has a linked submittal (${submittalsBySetId[setId]?.latestStatus || "workflow"}).`,
+      setId,
+      latestStatus: link?.latestStatus || null,
+      latestId: link?.latestId || null,
+      open: Number(link?.open || 0),
+      reason: `Set has ${link.open} open linked submittal(s) (${link.latestStatus || "workflow"}).`,
     };
   }
+  const closedLinked = !!setId && Number(link?.total || 0) > 0;
   return {
-    kind: "legacy-recovery",
+    kind: closedLinked ? "closed-set-sync" : "legacy-recovery",
     allowed: true,
-    reason: `Sheet-stage recovery to ${targetStage} for a set without a linked submittal.`,
+    setId,
+    reason: closedLinked
+      ? `Sheet-stage sync to ${targetStage} after linked submittal(s) closed.`
+      : `Sheet-stage recovery to ${targetStage} for a set without a linked submittal.`,
   };
 }
 
@@ -85,7 +100,12 @@ export function isOverdue(drawing) {
   if (drawing.stage === "Released") return false;
   if (drawing.is_superseded) return false;
   if (drawing.set_approval_status === "approved") return false;
-  return new Date(drawing.due_date) < new Date();
+  // Date-only compare against the LOCAL calendar day — `due_date` is a `date`
+  // column (parsed to local noon by the dateOnly shim), so a clock compare
+  // would flip a sheet to "overdue" at noon on its due day.
+  const due = toLocalDay(drawing.due_date);
+  if (!due) return false;
+  return due < toLocalDay(localToday());
 }
 
 /**
@@ -96,7 +116,9 @@ export function isOverdue(drawing) {
  */
 export function daysLate(drawing) {
   if (!isOverdue(drawing) || !drawing.due_date) return 0;
-  return Math.max(1, Math.floor((Date.now() - new Date(drawing.due_date).getTime()) / 86400000));
+  const due = toLocalDay(drawing.due_date);
+  const today = toLocalDay(localToday());
+  return Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
 }
 
 /**
@@ -201,7 +223,7 @@ export function computeStats(drawings, drawingSetRecords = []) {
  * @param {Array} drawingSetRecords  — parent drawing_sets rows
  * @param {Array} submittals         — all project submittals
  */
-export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], submittals = []) {
+export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], submittals = [], useWorkdays = false) {
   // Group sheets by parent set id (FK-first; fall back to set name).
   const sheetsBySetId = new Map();
   const sheetsBySetName = new Map();
@@ -240,12 +262,12 @@ export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], sub
     seenIds.add(ds.id);
     const sheetsHere = sheetsBySetId.get(ds.id) || sheetsBySetName.get(ds.set_name?.trim()) || [];
     const subsHere = submittalsBySetId.get(ds.id) || [];
-    packages.push({ id: ds.id, name: ds.set_name, sheets: sheetsHere, submittals: subsHere });
+    packages.push({ id: ds.id, name: ds.set_name, parent: ds, sheets: sheetsHere, submittals: subsHere });
   }
   // Legacy sheets without a parent FK — group by name.
   for (const [name, sheets] of sheetsBySetName.entries()) {
     if (sheets.some((s) => s.drawing_set_id && seenIds.has(s.drawing_set_id))) continue;
-    packages.push({ id: null, name, sheets, submittals: [] });
+    packages.push({ id: null, name, parent: null, sheets, submittals: [] });
   }
 
   let released = 0;
@@ -256,7 +278,11 @@ export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], sub
     const stage = derivedSetStage(pkg.submittals, pkg.sheets);
     if (stage === "Released") released++;
     else if (isStageInReview(stage)) inReview++;
-    if (pkg.sheets.some((d) => isOverdue(d))) overdue++;
+    const activeDuePackage = {
+      ...pkg,
+      sheets: pkg.sheets.filter((drawing) => !drawing?.is_deleted && !drawing?.is_superseded),
+    };
+    if (resolveDrawingPackageDue(activeDuePackage, useWorkdays).due.overdue) overdue++;
     if (pkg.sheets.some((d) => d.priority_flag)) priority++;
   }
 
@@ -484,11 +510,14 @@ export function groupByDrawingSet(drawings, drawingSetMap = {}) {
     // Priority
     const hasPriority = sheets.some((s) => s.priority_flag);
 
-    // Latest revision (numeric max)
-    const revNums = sheets
-      .map((s) => Number(String(s.revision_number || "0").replace(/[^\d]/g, "")))
-      .filter((n) => !isNaN(n));
-    let maxRev = revNums.length ? Math.max(...revNums) : 0;
+    // Latest revision — natural compare so letter (pre-IFC) and numeric
+    // (post-IFC) labels both roll up correctly. Numeric labels reduce to the
+    // number ("Rev 5" → 5); letter labels keep the letter ("Rev B" → "B").
+    const maxRevLabel = sheets
+      .map((s) => s.revision_number)
+      .reduce((best, cur) => (compareRevisionLabels(cur, best) > 0 ? cur : best), null);
+    const maxRevRank = revisionSortRank(maxRevLabel);
+    let maxRev = maxRevRank.klass === 2 ? maxRevRank.num : (maxRevRank.klass === 1 ? maxRevRank.label : 0);
 
     // Parent-derived fallbacks for set-level-only rows (no child sheets).
     // We pull from the drawing_sets row so the group summary shows something
@@ -580,13 +609,16 @@ export function buildRfiMap(rfis) {
  * Reverse-index submittals by drawing_set_id → { total, open, latestStatus,
  * latestId }. A submittal links a uuid[] of sets, so each fans out. "Open" =
  * not in the terminal-approved set (passed in as `terminalApprovedStatuses`,
- * the single source of truth) nor "Void". Submittals arrive pre-sorted by
- * -submitted_date, so the FIRST encountered status for a set is the latest.
+ * the single source of truth) nor "Void". The input is sorted here (copy) by
+ * submitted_date desc, falling back to created_at, so the FIRST encountered
+ * status for a set is the latest regardless of the caller's ordering.
  */
 export function buildSubmittalsBySetId(submittals, terminalApprovedStatuses) {
   const CLOSED = new Set([...terminalApprovedStatuses, "Void"]);
   const map = {};
-  (submittals || []).forEach((s) => {
+  const sortKey = (s) => String(s?.submitted_date || s?.created_at || "");
+  const ordered = (submittals || []).slice().sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+  ordered.forEach((s) => {
     if (s.is_deleted) return;
     const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
     const open = !CLOSED.has(s.status);
@@ -605,6 +637,20 @@ export function buildSubmittalsBySetId(submittals, terminalApprovedStatuses) {
     });
   });
   return map;
+}
+
+/**
+ * Narrow to one drawing set (`?set=<drawing_set_id>` deep link). Matches the
+ * FK first; legacy rows with no FK match on the set's name. No-op when
+ * `setId` is empty.
+ */
+export function filterDrawingsBySet(drawings, setId, drawingSetMap = {}) {
+  if (!setId) return drawings;
+  const setName = (drawingSetMap?.[setId]?.set_name || "").trim().toLowerCase();
+  return (drawings || []).filter((d) => {
+    if (d.drawing_set_id) return d.drawing_set_id === setId;
+    return !!setName && (d.drawing_set_name || "").trim().toLowerCase() === setName;
+  });
 }
 
 /**
@@ -709,14 +755,18 @@ export function computeStagePipeline({ submittals, drawingSetRecords, drawings, 
     (ds) => ds?.id && !packagesWithSubmittal.has(ds.id) &&
       derivedSetStage([], (drawings || []).filter((d) => d.drawing_set_id === ds.id)) === "Not Started"
   ).length;
-  const counts = STAGES.reduce((acc, s) => {
+  // WORKFLOW_STAGES (not STAGES): the pipeline shows submittal-DERIVED
+  // stages, so the first-class R&R bucket (2026-07-25) gets its own
+  // chevron instead of silently dropping R&R rows. Display only — the
+  // sheet stage filter still operates over the 7-value sheet enum.
+  const counts = WORKFLOW_STAGES.reduce((acc, s) => {
     acc[s.key] = s.key === "Not Started"
       ? notStartedCount
       : (rollup.counts[s.key] || 0);
     return acc;
   }, {});
   // Pipeline stages (use only the forward-flow stages; Released is the terminal)
-  const pipeStages = STAGES.map((s) => ({
+  const pipeStages = WORKFLOW_STAGES.map((s) => ({
     id: s.key,
     label: s.label,
     color: s.color,
@@ -726,13 +776,13 @@ export function computeStagePipeline({ submittals, drawingSetRecords, drawings, 
   // non-empty non-terminal stage (the bottleneck).
   let activeIdx = 0;
   const filteredActive = stageFilter !== "ALL" && !stageFilter.startsWith("_")
-    ? STAGES.findIndex((s) => s.key === stageFilter)
+    ? WORKFLOW_STAGES.findIndex((s) => s.key === stageFilter)
     : -1;
   if (filteredActive >= 0) {
     activeIdx = filteredActive;
   } else {
-    for (let i = STAGES.length - 2; i >= 1; i--) {
-      if (counts[STAGES[i].key] > 0) { activeIdx = i; break; }
+    for (let i = WORKFLOW_STAGES.length - 2; i >= 1; i--) {
+      if (counts[WORKFLOW_STAGES[i].key] > 0) { activeIdx = i; break; }
     }
   }
   return { pipeStages, activeIdx };

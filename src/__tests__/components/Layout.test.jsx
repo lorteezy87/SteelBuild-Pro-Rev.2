@@ -13,10 +13,10 @@
  */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Mock entity clients to no-op reads ──────────────────────────────
 // useLayoutNavData fans out to Alert/RFI/Drawing/Delivery; ProjectProvider
@@ -66,21 +66,32 @@ vi.mock("@/lib/supabase", () => ({
 
 import Layout from "@/Layout";
 import { ProjectProvider } from "@/components/shared/ProjectContext";
+import { ThemeProvider } from "@/components/shared/ThemeContext";
+import { AuthContext } from "@/lib/AuthContext";
 
-function renderLayout() {
+function setViewport(width) {
+  vi.stubGlobal("innerWidth", width);
+  window.dispatchEvent(new Event("resize"));
+}
+
+function renderLayout({ currentPageName = "Dashboard", authUser = null } = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <ProjectProvider>
-          <Layout currentPageName="Dashboard">
-            <div>Test child content</div>
-          </Layout>
-        </ProjectProvider>
-      </MemoryRouter>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <AuthContext.Provider value={{ user: authUser }}>
+        <QueryClientProvider client={qc}>
+          <MemoryRouter>
+            <ProjectProvider>
+              <Layout currentPageName={currentPageName}>
+                <div>Test child content</div>
+              </Layout>
+            </ProjectProvider>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </AuthContext.Provider>
+    </ThemeProvider>
   );
 }
 
@@ -93,6 +104,10 @@ describe("Layout (smoke)", () => {
     } catch {
       /* jsdom localStorage may already be empty */
     }
+    setViewport(1200);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("renders without crashing and shows children", () => {
@@ -103,5 +118,90 @@ describe("Layout (smoke)", () => {
   it("renders the skip-to-main-content accessibility link", () => {
     renderLayout();
     expect(screen.getByText(/skip to main content/i)).toBeInTheDocument();
+  });
+
+  it("renders one user-initial badge with an accessible sign-out name", () => {
+    const { container } = renderLayout({
+      authUser: { full_name: "Nicholas Lortz", email: "nick@example.com" },
+    });
+    const signOut = screen.getByRole("button", { name: /Nicholas Lortz.*sign out/i });
+    expect(signOut.querySelectorAll(".sb-dashboard-topbar__avatar")).toHaveLength(1);
+    expect(container.querySelectorAll(".sb-dashboard-topbar__user span")).toHaveLength(1);
+  });
+
+  it("hydrates saved appearance preferences when the app shell mounts", async () => {
+    renderLayout({
+      authUser: {
+        id: "user-1",
+        theme: "light",
+        accent_color: "teal",
+        font_scale: "lg",
+        contrast_mode: "high",
+        motion_mode: "reduced",
+      },
+    });
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute("data-theme", "light");
+      expect(document.documentElement).toHaveAttribute("data-accent", "teal");
+      expect(document.documentElement).toHaveAttribute("data-contrast", "high");
+      expect(document.documentElement).toHaveAttribute("data-motion", "reduced");
+      expect(document.documentElement.style.getPropertyValue("--font-scale")).toBe("1.12");
+    });
+  });
+
+  it("labels the hamburger when the viewport is phone-width", () => {
+    setViewport(390);
+    const { container } = renderLayout({ currentPageName: "Projects" });
+
+    expect(container.querySelector(".app-shell")).toHaveAttribute("data-viewport", "phone");
+    const hamburger = screen.getByRole("button", { name: /open navigation/i });
+    expect(hamburger).toHaveAttribute("aria-expanded", "false");
+    expect(hamburger).toHaveStyle({ width: "44px", height: "44px" });
+    expect(screen.queryByRole("complementary", { name: /primary navigation/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the tablet shell on a forced rail even in light theme", async () => {
+    window.localStorage.setItem("sbp-theme", "light");
+    act(() => {
+      setViewport(834);
+    });
+    const { container } = renderLayout({ currentPageName: "Projects" });
+
+    expect(container.querySelector(".app-shell")).toHaveAttribute("data-viewport", "tablet");
+    expect(screen.queryByRole("button", { name: /open navigation|close navigation/i })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(container.querySelector(".sb-dashboard-reference-sidebar")).not.toBeNull();
+    });
+    expect(container.querySelector(".sb-dashboard-reference-sidebar")).toHaveClass("is-collapsed");
+    expect(screen.queryByRole("button", { name: /expand sidebar|collapse to icons/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /expand sidebar|collapse sidebar/i })).not.toBeInTheDocument();
+  });
+
+  it("preserves a user-collapsed dashboard sidebar across tablet rail resizing", async () => {
+    const { container } = renderLayout({ currentPageName: "Projects" });
+
+    await waitFor(() => {
+      expect(container.querySelector(".sb-dashboard-reference-sidebar")).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+    expect(container.querySelector(".sb-dashboard-reference-sidebar")).toHaveClass("is-collapsed");
+    expect(screen.getByRole("button", { name: /expand sidebar/i })).toBeInTheDocument();
+
+    setViewport(834);
+    await waitFor(() => {
+      expect(container.querySelector(".app-shell")).toHaveAttribute("data-viewport", "tablet");
+    });
+    expect(screen.queryByRole("button", { name: /expand sidebar|collapse sidebar/i })).not.toBeInTheDocument();
+
+    act(() => {
+      setViewport(1200);
+    });
+    await waitFor(() => {
+      expect(container.querySelector(".app-shell")).toHaveAttribute("data-viewport", "desktop");
+    });
+    expect(container.querySelector(".sb-dashboard-reference-sidebar")).toHaveClass("is-collapsed");
+    expect(screen.getByRole("button", { name: /expand sidebar/i })).toBeInTheDocument();
   });
 });

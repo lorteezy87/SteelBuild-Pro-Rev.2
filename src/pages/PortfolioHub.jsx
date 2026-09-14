@@ -88,10 +88,16 @@ export default function PortfolioHub() {
     staleTime: 60 * 1000,
     enabled: fetchForCC,
   });
+  const { data: expenses = [] } = useQuery({
+    queryKey: ["portfolio-expenses"],
+    queryFn: () => entities.Expense.listAll(),
+    staleTime: 60 * 1000,
+    enabled: fetchForCC,
+  });
 
   const related = useMemo(
-    () => ({ changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks }),
-    [changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks],
+    () => ({ changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks, expenses }),
+    [changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks, expenses],
   );
 
   // Navigate to the project dashboard when a row is clicked
@@ -99,24 +105,8 @@ export default function PortfolioHub() {
     navigate(`${createPageUrl("Dashboard")}?project=${project.id}`);
   };
 
-  if (activeKey === "overview") {
-    if (projectsLoading) {
-      return <LoadingSkeleton variant="page" />;
-    }
-
-    return (
-      <PortfolioControlCenter
-        projects={projects}
-        related={related}
-        search={search}
-        onSearch={setSearch}
-        healthFilter={healthFilter}
-        onHealthFilter={setHealthFilter}
-        onOpenProject={handleOpenProject}
-      />
-    );
-  }
-
+  // The tab strip renders for every tab — it is the only way to reach the
+  // Executive View, so it must not disappear on the default Overview tab.
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div
@@ -169,7 +159,19 @@ export default function PortfolioHub() {
               <ExecutiveView />
             </Suspense>
           </ErrorBoundary>
-        ) : null}
+        ) : projectsLoading ? (
+          <LoadingSkeleton variant="page" />
+        ) : (
+          <PortfolioControlCenter
+            projects={projects}
+            related={related}
+            search={search}
+            onSearch={setSearch}
+            healthFilter={healthFilter}
+            onHealthFilter={setHealthFilter}
+            onOpenProject={handleOpenProject}
+          />
+        )}
       </div>
     </div>
   );

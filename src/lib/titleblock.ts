@@ -8,7 +8,8 @@ import type { Json } from "@/types/supabase";
  * set — steel detailers' titleblocks are uniform across the sheets of a
  * single set by convention.
  *
- * Schema lives in migration 057 with CHECK constraints that enforce the
+ * Schema lives in migration 057 (title + number) and
+ * 20260818240000 (revision) with CHECK constraints that enforce the
  * shape; this type mirrors that shape on the client.
  */
 export type TitleblockRect = {
@@ -53,17 +54,24 @@ export function parseTitleblockRect(value: Json | null | undefined): TitleblockR
 }
 
 /**
- * True when a drawing set has BOTH rectangles defined — the only state
- * the ingest pipeline considers "templated." Either-rect-only is treated
- * as not-yet-set so half-saved templates don't silently degrade to
- * mixed extraction sources.
+ * True when a drawing set has BOTH title + sheet-number rectangles defined —
+ * the minimum state the ingest pipeline considers "templated." Revision is
+ * optional so existing 2-box templates keep working.
  */
 export function hasTitleblockTemplate(set: {
   titleblock_title_rect?: Json | null;
   titleblock_number_rect?: Json | null;
+  titleblock_revision_rect?: Json | null;
 }): boolean {
   return (
     parseTitleblockRect(set.titleblock_title_rect) !== null &&
     parseTitleblockRect(set.titleblock_number_rect) !== null
   );
+}
+
+/** Strip a leading REV / REVISION label from titleblock OCR. */
+export function normalizeTitleblockRevision(raw: string | null | undefined): string {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  return s.replace(/^REV(?:ISION)?\.?\s*/i, "").trim().toUpperCase();
 }

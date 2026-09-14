@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { supabase } from "@/lib/supabase";
@@ -33,7 +33,7 @@ import { mono, normalizeSN, parseZonePayload } from "@/pages/drawingViewer/drawi
 import { parseAnnotationLink } from "@/pages/drawingViewer/annotationLinks";
 import { useAutoScaleOnLoad } from "@/pages/drawingViewer/useAutoScaleOnLoad";
 import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
-import { useDrawingsList } from "@/pages/drawingViewer/useDrawingsList";
+import { useDrawingViewerSelection } from "@/pages/drawingViewer/useDrawingViewerSelection";
 import { usePdfLoader } from "@/pages/drawingViewer/usePdfLoader";
 import { usePdfRenderer } from "@/pages/drawingViewer/usePdfRenderer";
 import { useViewerKeyboardShortcuts } from "@/pages/drawingViewer/useViewerKeyboardShortcuts";
@@ -44,6 +44,10 @@ import CalloutOverlay from "@/pages/drawingViewer/CalloutOverlay";
 import PdfLinkHotspotLayer from "@/pages/drawingViewer/PdfLinkHotspotLayer";
 import { useZoneData } from "@/pages/drawingViewer/useZoneData";
 import { drawingViewerStyles } from "@/pages/drawingViewer/drawingViewerStyles";
+import {
+  deriveOverlayViewModel,
+  deriveZonePanelSheet,
+} from "@/pages/drawingViewer/drawingViewerDerivations";
 import {
   createZone as createZoneSvc,
   updateZone as updateZoneSvc,
@@ -56,21 +60,18 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
+const PDF_PAGE_BACKGROUND = "#fff";
+
 export default function DrawingViewer() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
-
-  const initialId = searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
 
   const [userId, setUserId] = useState(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null)).catch(() => {});
   }, []);
 
-  const [activeId, setActiveId] = useState(initialId || null);
-  const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Closed by default — the bottom thumbnail filmstrip duplicates the left
@@ -109,11 +110,16 @@ export default function DrawingViewer() {
   // Sprint 4 — markup PDF export modal trigger.
   const [exportMarkupOpen, setExportMarkupOpen] = useState(false);
 
-  // ── Load all drawings for this project ──────────────────────────────────────
-  // useDrawingsList encapsulates the project drawings query, the search
-  // filter, and the active-drawing lookup. activeIndex (used below by the
-  // keyboard shortcuts effect) also lives in there.
-  const { drawings, filtered, activeDrawing, activeIndex } = useDrawingsList({ projectId, activeId, search });
+  const {
+    drawings,
+    filtered,
+    activeDrawing,
+    activeIndex,
+    activeId,
+    setActiveId,
+    search,
+    setSearch,
+  } = useDrawingViewerSelection(projectId);
   const markupScale = activeDrawing?.markup_scale || null;
 
   // PDF lifecycle: file_url → signed URL → pdfjs document. Owns currentPage
@@ -261,6 +267,18 @@ export default function DrawingViewer() {
     projectId,
     drawingRevisionId: currentRevision?.id || null,
   });
+  const overlayView = deriveOverlayViewModel({
+    activeDrawing,
+    renderMode,
+    pdfError,
+    markupItems: markup.items,
+    currentPage,
+    zoneMode,
+    zoneCount: zones.length,
+    filteredZoneCount: filteredZones.length,
+    computedZoneCount: zonesWithComputed.length,
+  });
+  const zonePanelSheet = deriveZonePanelSheet(currentRevision, activeDrawing);
 
   // Handler: user clicked "+ Rev" — mint a new revision, carry
   // zones + links over, flip is_current, and force a refetch so
@@ -325,18 +343,14 @@ export default function DrawingViewer() {
     }
   }, [currentRevision, activeDrawing, refetchZones]);
 
-  // When the active drawing changes, jump to its source PDF page so callouts
-  // overlay the correct sheet. Stored as `pdf_page` by DrawingSetUploadModal;
-  // legacy rows without it default to page 1.
-  useEffect(() => {
-    if (!activeDrawing) return;
-    const page = Number(activeDrawing.pdf_page) || 1;
-    setCurrentPage(page);
-  }, [activeDrawing, setCurrentPage]);
+  // Page jumps for the active sheet are owned by usePdfLoader (clamped to
+  // pdfDoc.numPages). Do not setCurrentPage(pdf_page) here unclamped — that
+  // raced after the loader clamp and could request an invalid page, leaving
+  // the viewer on a sticky pdfError for every sheet that shares the PDF.
 
   // Callout → navigation handler. If the targetSheetNumber resolves to a
-  // drawing in the project list, switch to it. The effect above then jumps
-  // to that drawing's pdf_page automatically.
+  // drawing in the project list, switch to it. usePdfLoader then jumps to
+  // that drawing's pdf_page (clamped).
   const onCalloutClick = useCallback((callout) => {
     if (!callout?.targetSheetNumber) return;
     const target = drawings.find(d =>
@@ -466,6 +480,8 @@ export default function DrawingViewer() {
           projectName={activeProject?.name}
           activeDrawing={activeDrawing}
           drawingSet={activeDrawingSet}
+          currentPage={currentPage}
+          totalPages={totalPages}
           onUnlock={async (reason) => {
             try {
               await unlockSetSvc({ setId: activeDrawingSet.id, reason });
@@ -528,7 +544,7 @@ export default function DrawingViewer() {
           {/* Markup toolbar — fixed to the viewer pane, NOT to the scroll
               content. Stays visible no matter how far the user pans the
               sheet. Only shown when we actually have a drawing to mark up. */}
-          {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && (
+          {overlayView.hasCanvas && (
             <>
               <AnnotationToolbar
                 activeTool={activeTool}
@@ -537,7 +553,7 @@ export default function DrawingViewer() {
                 onColorChange={setActiveColor}
                 activeStamp={activeStamp}
                 onStampChange={setActiveStamp}
-                markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
+                markupCount={overlayView.currentPageMarkupCount}
                 onClearPage={() => {
                   markup.items
                     .filter((m) => (m.pdf_page || 1) === currentPage)
@@ -548,7 +564,7 @@ export default function DrawingViewer() {
               />
               {/* Resolution-status filter chip (3a). Only meaningful when
                   there's at least one note on the page. */}
-              {markup.items.some((m) => m.kind === "note" && (m.pdf_page || 1) === currentPage) && (
+              {overlayView.hasCurrentPageNotes && (
                 <button
                   type="button"
                   onClick={() => setHideResolved((v) => !v)}
@@ -580,7 +596,7 @@ export default function DrawingViewer() {
           {/* Zones toggle — floats top-right of the viewer pane. Three-state:
               OFF → VIEW (show saved zones) → DRAW (drag to create). Left
               ghostly in the layout when we don't have a renderable sheet. */}
-          {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && (
+          {overlayView.hasCanvas && (
             <ZonesFloatingToolbar
               zoneMode={zoneMode}
               setZoneMode={setZoneMode}
@@ -605,13 +621,13 @@ export default function DrawingViewer() {
           {/* Zone filter bar — only useful when the overlay is
               actually rendering (VIEW / DRAW). Hidden in OFF mode to
               keep the viewer chrome quiet. */}
-          {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && zoneMode !== "off" && zones.length > 0 && (
+          {overlayView.showZoneFilter && (
             <ZoneFilterBar
               filter={zoneFilter}
               onChange={setZoneFilter}
               statusCounts={zoneStatusCounts}
-              totalVisible={filteredZones.length}
-              totalAll={zonesWithComputed.length}
+              totalVisible={overlayView.visibleZoneCount}
+              totalAll={overlayView.totalZoneCount}
             />
           )}
         <div
@@ -646,13 +662,10 @@ export default function DrawingViewer() {
             });
           }}
           style={{
-            flex: 1,
-            overflow: "auto",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "stretch",
-            // Neutral workspace — works in both light + dark themes.
-            background: "var(--bg-void)",
+            // Layout/background come from .drawing-viewer-canvas-scroll —
+            // do not override with var(--bg-void) (light theme turns it slate
+            // and fights the dark drawing work-surface) or alignItems:stretch
+            // (collapses empty-state visibility inside a zero-height flex fix).
             cursor: spacePan ? "grab" : "default",
           }}
         >
@@ -680,7 +693,7 @@ export default function DrawingViewer() {
                 key={resolvedUrl}
                 src={resolvedUrl}
                 title={activeDrawing.title || activeDrawing.sheet_number}
-                style={{ width: "100%", height: "100%", border: "none", background: "#fff" }}
+                style={{ width: "100%", height: "100%", border: "none", background: PDF_PAGE_BACKGROUND }}
               />
             )
           ) : pdfError ? (
@@ -707,6 +720,10 @@ export default function DrawingViewer() {
                 </button>
               )}
             </div>
+          ) : !resolvedUrl || !pdfDoc ? (
+            <div className="drawing-viewer-paper-wrap">
+              <RenderSkeleton label={!resolvedUrl ? "Resolving drawing file…" : "Loading PDF…"} />
+            </div>
           ) : (
             <div className="drawing-viewer-paper-wrap">
               {rendering && (
@@ -728,7 +745,7 @@ export default function DrawingViewer() {
                   ref={canvasRef}
                   style={{
                     display: "block",
-                    background: "#fff",
+                    background: PDF_PAGE_BACKGROUND,
                   }}
                 />
 
@@ -885,11 +902,7 @@ export default function DrawingViewer() {
 
       <ZonePanel
         zone={panelZoneId ? zones.find((z) => z.id === panelZoneId) : null}
-        sheet={currentRevision
-          ? { sheet_number: currentRevision.sheet_number, sheet_title: currentRevision.sheet_title, revision_code: currentRevision.revision_code }
-          : activeDrawing
-            ? { sheet_number: activeDrawing.sheet_number || activeDrawing.drawing_number, sheet_title: activeDrawing.title }
-            : null}
+        sheet={zonePanelSheet}
         open={!!panelZoneId}
         onClose={() => setPanelZoneId(null)}
         userId={userId}

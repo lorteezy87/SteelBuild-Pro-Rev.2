@@ -1,6 +1,7 @@
 import React from "react";
 import { StatusPill, BicPill, Icon } from "@/components/design-system";
-import { daysOpen, isOverdue, rfiStatusShortLabel } from "./utils";
+import { daysOpen, isOverdue } from "./utils";
+import { rfiAccentColor, rfiStatusView } from "./rfiStatus";
 
 export const RFI_ROW_GRID = "46px 108px minmax(360px, 1.45fr) minmax(156px, 0.58fr) minmax(142px, 0.5fr) minmax(148px, 0.5fr) minmax(148px, 0.5fr) 44px";
 
@@ -41,15 +42,21 @@ function impactSummary(rfi) {
   return { primary, secondary, live: Boolean(cost || schedule || flags.length || rfi.cost_impact || rfi.schedule_impact) };
 }
 
-export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
+// Memoized: the register re-renders on every selection/filter change, and
+// with stable id-taking handlers only the affected rows actually re-render.
+function RfiRow({ rfi, selected, onToggleSelect, onOpen }) {
   const overdue = isOverdue(rfi);
+  const status = rfiStatusView(rfi.status);
+  // Left edge carries urgency for open work and is absent once closed, so the
+  // eye can separate live RFIs from settled ones without reading any text.
+  const accent = rfiAccentColor(rfi, overdue);
   const due = dueSummary(rfi);
   const impact = impactSummary(rfi);
   const reference = [rfi.discipline, rfi.drawing_reference, rfi.spec_section].filter(Boolean).join(" / ");
   const submitted = [rfi.submitted_by, rfi.submitted_date].filter(Boolean).join(" / ");
   const assigned = rfi.assigned_to || rfi.project_name || "";
   const priorityColor =
-    rfi.priority === "Critical" ? "#FF6B35" :
+    rfi.priority === "Critical" ? "var(--status-review)" :
     rfi.priority === "High" ? "var(--status-warning)" :
     rfi.priority === "Medium" ? "var(--status-info)" :
     "var(--text-muted)";
@@ -58,14 +65,21 @@ export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
     <div
       className={[
         "rfi-record-row",
+        status.isClosed ? "is-closed" : "is-open",
         selected ? "is-selected" : "",
         overdue ? "is-overdue" : "",
         rfi.priority === "Critical" ? "is-critical" : "",
       ].filter(Boolean).join(" ")}
-      onClick={onOpen}
+      style={accent ? { "--rfi-accent": accent } : undefined}
+      onClick={() => onOpen(rfi)}
     >
       <div className="rfi-row-check" onClick={(e) => e.stopPropagation()}>
-        <input type="checkbox" checked={!!selected} onChange={onToggle} />
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={() => onToggleSelect(rfi.id)}
+          aria-label={`Select ${rfi.rfi_number || "RFI"}`}
+        />
       </div>
 
       <div className="rfi-row-number-stack">
@@ -90,7 +104,14 @@ export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
       </div>
 
       <div className="rfi-row-status">
-        <StatusPill label={rfiStatusShortLabel(rfi.status)} />
+        {/* Colour is passed explicitly. StatusPill's auto-colour map is keyed
+            on FULL status names, so passing a short label alone silently
+            resolved every status to the same grey. */}
+        <StatusPill
+          label={status.shortLabel}
+          color={status.color}
+          variant={status.isClosed ? "soft" : "solid"}
+        />
         <div className="rfi-row-owner-sub">
           <StatusPill label={rfi.priority || "Medium"} size="xs" color={priorityColor} />
         </div>
@@ -112,3 +133,5 @@ export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
     </div>
   );
 }
+
+export default React.memo(RfiRow);

@@ -10,6 +10,8 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 import { formatCurrency } from "@/components/shared/formatters";
 import { Plus } from "lucide-react";
 import { CHANGE_REQUEST_STATUS, PRIORITY } from "@/lib/enums";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
 export default function ChangeRequests() {
   const projectId = useProjectId();
@@ -20,7 +22,13 @@ export default function ChangeRequests() {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const { data: changeRequests = [] } = useQuery({
+  const {
+    data: changeRequests = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["change-requests", projectId],
     queryFn: () =>
       projectId
@@ -53,14 +61,14 @@ export default function ChangeRequests() {
   };
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.ChangeRequest.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.ChangeRequest.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["change-requests", projectId] });
       setShowForm(false);
       setEditing(null);
       toast.success("Request created");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const updateMut = useMutation({
@@ -71,7 +79,7 @@ export default function ChangeRequests() {
       setEditing(null);
       toast.success("Request updated");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -85,7 +93,7 @@ export default function ChangeRequests() {
       setDeleteTarget(null);
       toast.success("Request deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   const handleSave = (data) => {
@@ -140,7 +148,7 @@ export default function ChangeRequests() {
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: "8px" }}>
           <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Status:</span>
-          {["all", ...statuses.slice(0, 3)].map((status) => (
+          {["all", ...statuses].map((status) => (
             <button key={status} onClick={() => setFilterStatus(status)} style={{ background: filterStatus === status ? "var(--accent)" : "var(--bg-surface-low)", color: filterStatus === status ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               {status === "all" ? "All" : status.slice(0, 6)}
             </button>
@@ -169,7 +177,21 @@ export default function ChangeRequests() {
       )}
 
       {/* Change Requests List */}
-      <ChangeRequestList requests={filtered} onEdit={(cr) => {setEditing(cr); setShowForm(true);}} onDelete={setDeleteTarget} />
+      <RegisterFetchBody
+        isLoading={isLoading}
+        isError={isError}
+        errorMessage={toUserErrorMessage(error, "Failed to load change requests")}
+        onRetry={() => refetch()}
+        totalCount={changeRequests.length}
+        filteredCount={filtered.length}
+        emptyTitle="No change requests yet"
+        emptyBody="Log scope or cost change requests for this project."
+        emptyActionLabel="+ New Request"
+        onEmptyAction={() => { setEditing(null); setShowForm(true); }}
+        onClearFilters={() => { setFilterStatus("all"); setFilterPriority("all"); }}
+      >
+        <ChangeRequestList requests={filtered} onEdit={(cr) => {setEditing(cr); setShowForm(true);}} onDelete={setDeleteTarget} />
+      </RegisterFetchBody>
 
       {/* Delete Dialog */}
       <DeleteDialog

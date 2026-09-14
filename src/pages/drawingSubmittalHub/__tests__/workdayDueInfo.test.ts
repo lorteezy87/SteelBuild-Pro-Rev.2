@@ -38,7 +38,7 @@ describe("workdayDueInfo", () => {
     const info = workdayDueInfo("2026-07-03", false, today);
     expect(info.overdue).toBe(true);
     expect(info.days).toBe(-1);
-    expect(info.label).toBe("1d late");
+    expect(info.label).toBe("1wd late"); // "wd" so it can't be read as calendar days
   });
 
   it("labels 'Due today'", () => {
@@ -51,7 +51,7 @@ describe("workdayDueInfo", () => {
     const info = workdayDueInfo("2026-07-10", false, today);
     expect(info.days).toBe(4);
     expect(info.dueSoon).toBe(true);
-    expect(info.label).toBe("4d left");
+    expect(info.label).toBe("4wd left"); // "wd" so it can't be read as calendar days
   });
 
   it("counts fewer days than the calendar span across a weekend", () => {

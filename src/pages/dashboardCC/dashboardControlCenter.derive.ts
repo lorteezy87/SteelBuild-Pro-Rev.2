@@ -10,11 +10,10 @@
 import {
   openRFICount,
   overdueRFICount,
-  wpProgressPct,
   timelineElapsedPct,
   budgetCommitted,
   committedSpend,
-  costVariance,
+  actualSpend,
   revisedContractValue,
   daysRemaining,
   totalBilled,
@@ -25,6 +24,14 @@ import {
   submittalPipelineRollupFromSubmittals,
   pendingCOTotal,
 } from "../dashboard/projectMetrics";
+import { buildScheduleSummary } from "@/pages/schedule/scheduleCommandCenter.derive";
+import {
+  buildOperationalHealthIndex,
+  capHealthScore,
+  deriveOperationalHealth,
+} from "@/lib/projectHealth";
+import type { OperationalHealthResult } from "@/lib/projectHealth";
+import { isPunchlistOpen, CO_TERMINAL_STATUSES } from "@/lib/entityPredicates";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,6 +75,8 @@ export interface DashboardSummary {
   projectName: string;
   healthScore: number;
   healthLabel: string;
+  operationalHealth: OperationalHealthResult;
+  healthReasons: string[];
   /** 4 KPI strip cells */
   kpis: DashKpi[];
   /** Critical alerts panel rows (pre-filtered to non-zero) */
@@ -81,7 +90,8 @@ export interface DashboardSummary {
   /** Hero chip values */
   openRfis: number;
   overdueRfis: number;
-  schedulePct: number;
+  /** Canonical leaf-task progress, or null when schedule evidence is unavailable. */
+  schedulePct: number | null;
 }
 
 export interface ModuleTile {
@@ -94,12 +104,20 @@ export interface ModuleTile {
   photo: string;
 }
 
-// ── Closed-status sets (mirrors ProjectDashboard.jsx exactly) ─────────────────
+// ── Closed-status sets (DB CHECK vocabularies) ────────────────────────────────
 
-const CLOSED_CO_STATUSES = new Set(["Approved", "Approved as Noted", "Rejected", "Void", "Executed"]);
+/** change_orders.status terminal set: Approved / Rejected / Void (entityPredicates). */
+const CLOSED_CO_STATUSES = CO_TERMINAL_STATUSES;
 const CLOSED_SUBMITTAL_STATUSES = new Set(["Approved", "Approved as Noted", "Released for Fabrication", "Void"]);
 const CLOSED_TASK_STATUSES = new Set(["Complete", "Completed", "Done", "Closed"]);
-const CLOSED_DELIVERY_STATUSES = new Set(["Delivered", "Complete", "Completed", "Received", "Cancelled"]);
+/**
+ * deliveries is a union table (logistics + PROCUREMENT pipeline). Terminal
+ * across both vocabularies: Delivered / Received / Cancelled. Compared
+ * case-insensitively — legacy rows carry mixed casing.
+ */
+const CLOSED_DELIVERY_STATUSES = new Set(["delivered", "received", "cancelled"]);
+const isClosedDeliveryStatus = (status: unknown): boolean =>
+  CLOSED_DELIVERY_STATUSES.has(String(status ?? "").trim().toLowerCase());
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -190,13 +208,15 @@ export function buildDashboardSummary(input: {
   inspections?: Record<string, unknown>[];
   safetyIncidents?: Record<string, unknown>[];
   qualityRecords?: Record<string, unknown>[];
+  todayIso?: string;
+  rfiEvidenceLoaded?: boolean;
+  scheduleEvidenceLoaded?: boolean;
 }): DashboardSummary {
   const {
     project = null,
     rfis = [],
     cos = [],
     codes = [],
-    wps = [],
     deliveries = [],
     actionItems = [],
     expenses = [],
@@ -209,32 +229,74 @@ export function buildDashboardSummary(input: {
     inspections = [],
     safetyIncidents = [],
     qualityRecords = [],
+    todayIso,
+    rfiEvidenceLoaded = true,
+    scheduleEvidenceLoaded = true,
   } = input;
+  const effectiveToday = todayIso ?? new Date().toISOString().slice(0, 10);
 
   // ── Reuse canonical helpers (numbers match page-owned dashboard exactly) ───────
   const openRfis = openRFICount(rfis as Parameters<typeof openRFICount>[0]);
   const overdueRfis = overdueRFICount(rfis as Parameters<typeof overdueRFICount>[0]);
-  const schedulePct = wpProgressPct(wps as Parameters<typeof wpProgressPct>[0]);
+  const scheduleSummary = buildScheduleSummary(scheduleTasks);
+  const schedulePct = scheduleEvidenceLoaded ? scheduleSummary.pctComplete : null;
   const elapsedPct = timelineElapsedPct(project as Parameters<typeof timelineElapsedPct>[0]);
-  const scheduleHealth = clamp(Math.round(100 - Math.max(0, elapsedPct - schedulePct)), 0, 100);
+  const scheduleHealth = schedulePct === null
+    ? null
+    : clamp(Math.round(100 - Math.max(0, elapsedPct - schedulePct)), 0, 100);
 
   const budget = budgetCommitted(codes as Parameters<typeof budgetCommitted>[0]);
   const committed = committedSpend(
     codes as Parameters<typeof committedSpend>[0],
     expenses as Parameters<typeof committedSpend>[1],
   );
-  const costDelta = costVariance(
-    codes as Parameters<typeof costVariance>[0],
-    expenses as Parameters<typeof costVariance>[1],
+  const actual = actualSpend(
+    codes as Parameters<typeof actualSpend>[0],
+    expenses as Parameters<typeof actualSpend>[1],
   );
+  // Cost codes can carry actual_cost without committed_cost. Use the greater
+  // resolved exposure so real spend is never presented as "no costs posted"
+  // or as a misleading +100% budget variance.
+  const costExposure = Math.max(committed, actual);
+  const hasPostedCosts = costExposure > 0;
+  const costDelta = budget - costExposure;
   const costPct = budget > 0 ? (costDelta / budget) * 100 : 0;
-  const budgetHealth = budget > 0 ? clamp(Math.round(100 + Math.min(0, costPct)), 0, 100) : 78;
+  const budgetHealth = budget > 0 && hasPostedCosts
+    ? clamp(Math.round(100 + Math.min(0, costPct)), 0, 100)
+    : null;
 
-  const openPunchlist = punchlistItems.filter((p) => !CLOSED_TASK_STATUSES.has(String((p as Record<string, unknown>).status ?? ""))).length;
+  const openPunchlist = punchlistItems.filter(isPunchlistOpen).length;
   const openInspections = inspections.filter((i) => !CLOSED_TASK_STATUSES.has(String((i as Record<string, unknown>).status ?? ""))).length;
   const qualityHealth = clamp(100 - Math.min(40, openPunchlist + openInspections), 60, 100);
   const safetyHealth = clamp(100 - Math.min(45, safetyIncidents.length * 8), 55, 100);
-  const healthScore = Math.round((budgetHealth + scheduleHealth + qualityHealth + safetyHealth) / 4);
+  // Unknown cost evidence must not silently contribute a perfect score. Only
+  // include the cost dimension once a budget and actual/committed spend exist.
+  const healthComponents = [qualityHealth, safetyHealth];
+  if (scheduleHealth !== null) healthComponents.push(scheduleHealth);
+  if (budgetHealth !== null) healthComponents.push(budgetHealth);
+  const rawHealthScore = Math.round(
+    healthComponents.reduce((sum, value) => sum + value, 0) / healthComponents.length,
+  );
+  const projectId = String(project?.id || "");
+  const operationalHealth = (
+    projectId
+      ? buildOperationalHealthIndex(
+          [project as Record<string, unknown>],
+          rfis,
+          scheduleTasks,
+          effectiveToday,
+          { rfiEvidenceLoaded, scheduleEvidenceLoaded },
+        )[projectId]
+      : undefined
+  ) ?? deriveOperationalHealth({
+    storedStatus: String(project?.health_status || ""),
+    overdueRfis: 0,
+    criticalOverdueRfis: 0,
+    overdueScheduleTasks: 0,
+    rfiEvidenceLoaded,
+    scheduleEvidenceLoaded,
+  });
+  const healthScore = capHealthScore(rawHealthScore, operationalHealth);
 
   const contractValue = revisedContractValue(
     project as Parameters<typeof revisedContractValue>[0],
@@ -259,7 +321,9 @@ export function buildDashboardSummary(input: {
   const pendingCoDollars = pendingCOTotal(cos as Parameters<typeof pendingCOTotal>[0]);
 
   const drawingCount = drawings.filter((d) => !(d as Record<string, unknown>).is_deleted).length;
-  const fieldIssues = openPunchlist + safetyIncidents.length + qualityRecords.length;
+  // Match Field Hub's "Open Field Issues" authority exactly: open punchlist
+  // items. Closed safety observations and passed QC records are not issues.
+  const fieldIssues = openPunchlist;
 
   const submittalPipeline = submittalPipelineRollupFromSubmittals(
     submittals as Parameters<typeof submittalPipelineRollupFromSubmittals>[0],
@@ -274,16 +338,24 @@ export function buildDashboardSummary(input: {
       tone: overdueRfis ? "danger" : "neutral",
     },
     {
-      label: "Schedule Health",
-      value: `${scheduleHealth}%`,
-      sublabel: scheduleHealth >= 85 ? "On Track" : scheduleHealth >= 70 ? "Watch" : "At Risk",
-      tone: scheduleHealth >= 85 ? "good" : scheduleHealth >= 70 ? "warn" : "danger",
+      label: "Schedule Progress",
+      value: schedulePct === null ? "TBD" : `${schedulePct}%`,
+      sublabel: schedulePct === null
+        ? "Schedule unavailable"
+        : scheduleSummary.overdue > 0
+          ? `${scheduleSummary.overdue} overdue`
+          : `${scheduleSummary.activities} activities`,
+      tone: schedulePct !== null && scheduleSummary.overdue > 0 ? "danger" : "neutral",
     },
     {
       label: "Cost Health",
-      value: budget > 0 ? formatSignedPercent(costPct) : "TBD",
-      sublabel: budget > 0 ? (costPct >= 0 ? "Under Budget" : "Over Budget") : "Budget needed",
-      tone: budget > 0 ? (costPct >= 0 ? "good" : "danger") : "neutral",
+      value: budget > 0 && hasPostedCosts ? formatSignedPercent(costPct) : "TBD",
+      sublabel: budget <= 0
+        ? "Budget needed"
+        : hasPostedCosts
+          ? (costPct >= 0 ? "Under Budget" : "Over Budget")
+          : "No costs posted",
+      tone: budget > 0 && hasPostedCosts ? (costPct >= 0 ? "good" : "danger") : "neutral",
     },
     {
       label: "Pending Submittals",
@@ -294,25 +366,24 @@ export function buildDashboardSummary(input: {
   ];
 
   // ── Alerts panel (non-zero count only, at most 5) ─────────────────────────
-  const overdueActions = actionItems.filter((a) => {
-    const r = a as Record<string, unknown>;
-    return isPast(r.due_date as string | null) && !CLOSED_TASK_STATUSES.has(String(r.status ?? ""));
-  }).length;
   const lateDeliveries = deliveries.filter((d) => {
     const r = d as Record<string, unknown>;
     const dateStr = (r.scheduled_date || r.required_date) as string | null;
-    return isPast(dateStr) && !CLOSED_DELIVERY_STATUSES.has(String(r.status ?? ""));
+    return isPast(dateStr) && !isClosedDeliveryStatus(r.status);
   }).length;
+  // drawings has no `status` column. Review disposition lives in
+  // set_approval_status (lowercase: approved / rejected / superseded /
+  // pending_review); `stage` is the detailing lifecycle, not a disposition.
   const staleDrawings = drawings.filter((d) => {
     const r = d as Record<string, unknown>;
-    return !r.is_deleted && ["Rejected", "Revise and Resubmit"].includes(String(r.status ?? r.stage ?? r.set_approval_status ?? ""));
+    return !r.is_deleted && String(r.set_approval_status ?? "").trim().toLowerCase() === "rejected";
   }).length;
 
   const rawAlerts: DashAlertRow[] = [
     { id: "drawings", count: staleDrawings, label: "Drawings Need Attention", priority: "high", priorityLabel: "High Priority" },
     { id: "rfis", count: overdueRfis, label: "RFIs Overdue", priority: "high", priorityLabel: "High Priority" },
     { id: "submittals", count: pendingSubmittals, label: "Submittals Open", priority: pendingSubmittals > 5 ? "medium" : "low", priorityLabel: pendingSubmittals > 5 ? "Medium Priority" : "Low Priority" },
-    { id: "field", count: fieldIssues + overdueActions, label: "Field Issues Require Attention", priority: "medium", priorityLabel: "Medium Priority" },
+    { id: "field", count: fieldIssues, label: "Field Issues Require Attention", priority: "medium", priorityLabel: "Medium Priority" },
     { id: "delivery", count: lateDeliveries + activeCos, label: "Milestones or COs at Risk", priority: lateDeliveries ? "medium" : "low", priorityLabel: lateDeliveries ? "Medium Priority" : "Low Priority" },
   ];
   const alerts = rawAlerts.filter((a) => a.count > 0).slice(0, 5);
@@ -321,7 +392,7 @@ export function buildDashboardSummary(input: {
   const summaryRows: DashSummaryRow[] = [
     { label: "Project Value", value: formatMoney(contractValue) },
     { label: "Target Completion", value: formatDate((project?.target_completion_date || project?.forecast_completion_date) as string | null) },
-    { label: "% Complete", value: `${schedulePct}%` },
+    { label: "% Complete", value: schedulePct === null ? "TBD" : `${schedulePct}%` },
     { label: "Days Remaining", value: remainingDays == null ? "TBD" : String(remainingDays) },
     { label: "Billed / Collected", value: `${formatMoney(billed)} / ${formatMoney(collected)}` },
     { label: "Open Pay + Retainage", value: formatMoney(pendingPay.total + retention) },
@@ -385,19 +456,21 @@ export function buildDashboardSummary(input: {
 
   const modules: ModuleTile[] = [
     { page: "RFIs", title: "RFIs", subtitle: "Questions & Responses", metric: `${openRfis} Open`, target: "rfis", photo: photoFor("RFIs") },
-    { page: "DrawingSubmittalHub", title: "Detailing", subtitle: "Drawings & Models", metric: `${drawingCount} Drawings`, target: "submittals", photo: photoFor("DrawingSubmittalHub") },
-    { page: "ScheduleHub", title: "Schedule", subtitle: "Project Timeline", metric: `${schedulePct}% Complete`, target: "schedule", tone: schedulePct >= 80 ? "good" : undefined, photo: photoFor("ScheduleHub") },
+    { page: "DrawingSubmittalHub", title: "Detailing", subtitle: "Drawings & Models", metric: `${drawingCount} Drawings`, target: "detailing", photo: photoFor("DrawingSubmittalHub") },
+    { page: "ScheduleHub", title: "Schedule", subtitle: "Project Timeline", metric: schedulePct === null ? "Schedule unavailable" : `${schedulePct}% Complete`, target: "schedule", tone: schedulePct !== null && schedulePct >= 80 ? "good" : undefined, photo: photoFor("ScheduleHub") },
     { page: "FieldHub", title: "Field Hub", subtitle: "Daily Field Management", metric: `${fieldIssues} Issues`, target: "field", photo: photoFor("FieldHub") },
-    { page: "CostHub", title: "Budget Control", subtitle: "Costs & Commitments", metric: budget > 0 ? `${formatSignedPercent(costPct)} ${costPct >= 0 ? "Under Budget" : "Over Budget"}` : "Budget TBD", target: "budget-hours", tone: costPct >= 0 ? "good" : undefined, photo: photoFor("CostHub") },
+    { page: "CostHub", title: "Budget Control", subtitle: "Costs & Commitments", metric: budget > 0 && hasPostedCosts ? `${formatSignedPercent(costPct)} ${costPct >= 0 ? "Under Budget" : "Over Budget"}` : budget > 0 ? "Costs not posted" : "Budget TBD", target: "cost-hub", tone: budget > 0 && hasPostedCosts && costPct >= 0 ? "good" : undefined, photo: photoFor("CostHub") },
     { page: "ChangeOrders", title: "Change Orders", subtitle: "Scope & Contract Changes", metric: `${activeCos} Active`, target: "change-orders", photo: photoFor("ChangeOrders") },
-    { page: "Documents", title: "Documents", subtitle: "Project Documents", metric: `${drawingCount + submittals.length} Files`, target: "submittals", photo: photoFor("Documents") },
-    { page: "ReportsHub", title: "Reports", subtitle: "Analytics & Insights", metric: `${recentActivity.length} Updates`, target: "schedule", photo: photoFor("ReportsHub") },
+    { page: "Documents", title: "Documents", subtitle: "Project Documents", metric: `${drawingCount + submittals.length} Files`, target: "documents", photo: photoFor("Documents") },
+    { page: "ReportsHub", title: "Reports", subtitle: "Analytics & Insights", metric: `${recentActivity.length} Updates`, target: "reports", photo: photoFor("ReportsHub") },
   ];
 
   return {
     projectName: String(project?.name || project?.project_name || "Project Dashboard"),
     healthScore,
-    healthLabel: healthScore >= 85 ? "Good" : healthScore >= 70 ? "Watch" : "At Risk",
+    healthLabel: operationalHealth.label,
+    operationalHealth,
+    healthReasons: operationalHealth.reasons,
     kpis,
     alerts,
     summaryRows,

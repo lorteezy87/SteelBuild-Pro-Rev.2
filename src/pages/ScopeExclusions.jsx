@@ -6,9 +6,11 @@ import ScopeItemFormModal from "@/components/scope/ScopeItemFormModal";
 import ScopeItemList from "@/components/scope/ScopeItemList";
 import BulkScopeModal from "@/components/scope/BulkScopeModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toast } from "sonner";
 import { Check, X, Info, Search, Upload } from "lucide-react";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -30,7 +32,13 @@ export default function ScopeExclusions() {
   const [search, setSearch] = useState("");
   const [hideCompleted, setHideCompleted] = useState(false);
 
-  const { data: scopeItems = [] } = useQuery({
+  const {
+    data: scopeItems = [],
+    isLoading: scopeLoading,
+    isError: scopeError,
+    error: scopeErrorDetail,
+    refetch: refetchScope,
+  } = useQuery({
     queryKey: ["scope-items", projectId],
     queryFn: () =>
       projectId
@@ -47,7 +55,7 @@ export default function ScopeExclusions() {
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.ScopeItem.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item updated"); setShowForm(false); setEditing(null); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // Lightweight checkbox toggle — does not open the form modal. Writes the
@@ -61,7 +69,7 @@ export default function ScopeExclusions() {
         ...(is_completed ? { in_progress: false, in_progress_at: null } : {}),
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // Toggle the in-progress flag. If the row is complete, this is a no-op at
@@ -73,13 +81,13 @@ export default function ScopeExclusions() {
         in_progress_at: in_progress ? new Date().toISOString() : null,
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.ScopeItem.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item deleted"); setDeleteTarget(null); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const handleSave = (data) => {
@@ -108,7 +116,7 @@ export default function ScopeExclusions() {
       toast.success(`Updated ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();
     } catch (e) {
-      toast.error("Bulk update failed: " + (e?.message || "Unknown error"));
+      toast.error(`Bulk update failed: ${toUserErrorMessage(e, "Unknown error")}`);
     } finally {
       setBulkActionBusy(false);
     }
@@ -125,7 +133,7 @@ export default function ScopeExclusions() {
       toast.success(`Deleted ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();
     } catch (e) {
-      toast.error("Bulk delete failed: " + (e?.message || "Unknown error"));
+      toast.error(`Bulk delete failed: ${toUserErrorMessage(e, "Unknown error")}`);
     } finally {
       setBulkActionBusy(false);
     }
@@ -163,6 +171,30 @@ export default function ScopeExclusions() {
   const categories = ["Structural", "Misc Metals", "Connections", "Coatings", "Erection", "Engineering", "Other"];
 
   const openCreate = () => { setEditing(null); setShowForm(true); };
+
+  // Contract-scope data must not render "No scope items yet" while the fetch
+  // is in flight (or worse, after it failed) — that's an authoritative-looking
+  // lie on a commercial document register.
+  if (scopeLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+  if (scopeError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 16 }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load scope items
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(scopeErrorDetail, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => refetchScope()}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>

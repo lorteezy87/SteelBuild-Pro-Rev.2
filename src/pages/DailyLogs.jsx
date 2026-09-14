@@ -22,6 +22,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import { localToday } from "@/utils/dates";
 
@@ -65,7 +66,13 @@ export default function DailyLogs() {
 
   const dailyLogQueryKeys = [["daily-logs", projectId]];
 
-  const { data: rawLogs = [], isLoading } = useQuery({
+  const {
+    data: rawLogs = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["daily-logs", projectId],
     queryFn: () =>
       projectId
@@ -144,7 +151,7 @@ export default function DailyLogs() {
   }, [filteredLogs]);
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.DailyLog.create(data),
+    mutationFn: (data) => entities.DailyLog.create(withProjectId(data, projectId)),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, dailyLogQueryKeys, created);
       toast.success("Daily log created");
@@ -335,9 +342,22 @@ export default function DailyLogs() {
         />
       )}
 
-      {/* Logs List */}
+      {/* Logs List — gate loading/error so empty chrome does not flash */}
       {isLoading ? (
         <LoadingSkeleton variant="table" rows={4} />
+      ) : isError ? (
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
+        }}>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+            Couldn’t load daily logs
+          </p>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+            {toUserErrorMessage(error, "Something went wrong. Try again.")}
+          </p>
+          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+        </div>
       ) : (
         <DailyLogsList
           logs={filteredLogs}

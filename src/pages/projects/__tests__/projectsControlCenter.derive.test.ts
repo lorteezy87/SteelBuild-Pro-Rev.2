@@ -84,6 +84,35 @@ describe("effectivePct", () => {
 // ── buildProjectsSummary KPIs ─────────────────────────────────────
 
 describe("buildProjectsSummary – KPIs", () => {
+  it("moves stored On Track projects with five overdue leaf tasks into At Risk", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const summary = buildProjectsSummary(
+      [makeProject({ id: "p1", health_status: "On Track" })],
+      [],
+      [],
+      [],
+      Array.from({ length: 5 }, (_, i) => ({
+        id: `t${i}`,
+        project_id: "p1",
+        end_date: yesterday,
+        percent_complete: 0,
+      })),
+      today,
+      { rfiEvidenceLoaded: true, scheduleEvidenceLoaded: true },
+    );
+    expect(summary.kpis.atRisk).toBe(1);
+    expect(summary.atRiskQueue[0].project.id).toBe("p1");
+    expect(summary.healthByProjectId.p1.label).toBe("At Risk");
+  });
+
+  it("does not count a 100 percent project as active", () => {
+    const summary = buildProjectsSummary([
+      makeProject({ id: "p1", scope_complete_pct_override: 100, health_status: "On Track" }),
+    ]);
+    expect(summary.kpis.activeProjects).toBe(0);
+  });
+
   it("counts total + active + at-risk + on-hold correctly", () => {
     const projects: ProjectRecord[] = [
       makeProject({ id: "p1", health_status: "At Risk" }),
@@ -223,5 +252,63 @@ describe("buildProjectsSummary – edge cases", () => {
     const orphanRfi = makeRfi({ id: "orphan", project_id: "ghost", status: "Open" });
     const { kpis } = buildProjectsSummary(projects, [], [orphanRfi]);
     expect(kpis.openRfis).toBe(0);
+  });
+});
+
+// ── Closing Soon + per-row % complete regressions ─────────────────
+describe("closingSoonQueue", () => {
+  const inDays = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+
+  it("includes a project in the Closeout phase that is days from completion", () => {
+    // Closeout was treated as "complete" and filtered out, so the panel said
+    // "none within 90 days" while a job sat 14 days out.
+    const summary = buildProjectsSummary([
+      makeProject({ id: "capstone", phase: "Closeout", target_completion_date: inDays(14) }),
+    ]);
+    expect(summary.closingSoonQueue.map((e) => e.project.id)).toEqual(["capstone"]);
+    expect(summary.closingSoonQueue[0].daysLeft).toBeLessThanOrEqual(14);
+  });
+
+  it("falls back to forecast_completion_date when no target date is set", () => {
+    const summary = buildProjectsSummary([
+      makeProject({ id: "p9", target_completion_date: null, forecast_completion_date: inDays(30) } as Partial<ProjectRecord>),
+    ]);
+    expect(summary.closingSoonQueue.map((e) => e.project.id)).toEqual(["p9"]);
+  });
+
+  it("still excludes finished, on-hold, and beyond-90-day projects", () => {
+    const summary = buildProjectsSummary([
+      makeProject({ id: "done", status: "Complete", target_completion_date: inDays(10) }),
+      makeProject({ id: "hold", on_hold: true, target_completion_date: inDays(10) }),
+      makeProject({ id: "far", target_completion_date: inDays(120) }),
+      makeProject({ id: "past", target_completion_date: inDays(-5) }),
+    ]);
+    expect(summary.closingSoonQueue).toHaveLength(0);
+  });
+});
+
+describe("pctCompleteByProjectId", () => {
+  it("exposes work-package progress per project so the register column isn't all dashes", () => {
+    const summary = buildProjectsSummary(
+      [makeProject({ id: "p1" }), makeProject({ id: "p2" })],
+      [
+        makeWP({ id: "a", project_id: "p1", status: "Complete" }),
+        makeWP({ id: "b", project_id: "p1", status: "In Progress" }),
+      ],
+    );
+    expect(summary.pctCompleteByProjectId.p1).toBe(50);
+    expect(summary.pctCompleteByProjectId.p2).toBe(0);
+  });
+
+  it("prefers a manual scope override over work-package progress", () => {
+    const summary = buildProjectsSummary(
+      [makeProject({ id: "p1", scope_complete_pct_override: 80 })],
+      [makeWP({ id: "a", project_id: "p1", status: "In Progress" })],
+    );
+    expect(summary.pctCompleteByProjectId.p1).toBe(80);
   });
 });

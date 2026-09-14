@@ -3,9 +3,17 @@ import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import type { DrawingReviewRow } from "@/hooks/useDrawingReviews";
 import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import type { TransmittalRow } from "@/hooks/useTransmittals";
+import type { SetPackage } from "@/pages/drawingSubmittalHub/types";
 import {
   IMPACT_STATUSES,
+  buildRegisterDisplayRows,
+  createDrawingRegisterIndex,
+  filterIndexedRegisterRows,
   filterRegisterRows,
+  firstVisibleDrawingByPackage,
+  listDrawingSetNames,
+  groupRegisterRowsBySet,
+  SET_FILTER_NONE,
   attachableRegisterRows,
   filterReviews,
   groupImpactsByStatus,
@@ -87,6 +95,7 @@ function transmittalRow(over: Partial<TransmittalRow> = {}): TransmittalRow {
     date_received: "2026-07-02",
     notes: null,
     created_at: "2026-07-02T00:00:00Z",
+    items: [],
     item_count: 3,
     ...over,
   };
@@ -118,6 +127,108 @@ describe("filterRegisterRows", () => {
   it("tolerates null text fields without throwing", () => {
     const rows = [regRow({ sheet_number: null, sheet_title: null, discipline: null, drawing_set_name: null, current_status: null })];
     expect(filterRegisterRows(rows, "nomatch", "all")).toHaveLength(0);
+  });
+
+  it("gates by drawing set name when setFilter is set", () => {
+    const rows = [
+      regRow({ drawing_id: "a", drawing_set_name: "Main Steel - IFC" }),
+      regRow({ drawing_id: "b", drawing_set_name: "Misc Metals" }),
+      regRow({ drawing_id: "c", drawing_set_name: null }),
+    ];
+    expect(filterRegisterRows(rows, "", "all", "Misc Metals").map((r) => r.drawing_id)).toEqual(["b"]);
+    expect(filterRegisterRows(rows, "", "all", SET_FILTER_NONE).map((r) => r.drawing_id)).toEqual(["c"]);
+  });
+});
+
+describe("indexed drawing register derivation", () => {
+  it("normalizes searchable fields once per dataset rather than per filter keystroke", () => {
+    let titleReads = 0;
+    const rows = Array.from({ length: 250 }, (_, index) => {
+      const row = regRow({
+        drawing_id: `drawing-${index}`,
+        sheet_number: `S${index}`,
+        drawing_set_name: `Set ${index % 10}`,
+      });
+      Object.defineProperty(row, "sheet_title", {
+        configurable: true,
+        get: () => {
+          titleReads += 1;
+          return `Framing level ${index}`;
+        },
+      });
+      return row;
+    });
+
+    const index = createDrawingRegisterIndex(rows);
+    expect(titleReads).toBe(rows.length);
+
+    expect(filterIndexedRegisterRows(index, "level 24", "all")).toHaveLength(11);
+    expect(filterIndexedRegisterRows(index, "level 1", "all")).toHaveLength(111);
+    expect(titleReads).toBe(rows.length);
+  });
+
+  it("indexes drawing and set package joins once and preserves first-visible actions", () => {
+    const packageA: SetPackage = {
+      key: "id:set-a",
+      setId: "set-a",
+      name: "Set A",
+      parent: { id: "set-a" },
+      sheets: [{ id: "drawing-direct" }],
+      supersededSheets: [],
+      submittals: [],
+    };
+    const rows = [
+      regRow({ drawing_id: "drawing-direct", drawing_set_id: "set-a" }),
+      regRow({
+        drawing_id: "drawing-fallback",
+        drawing_set_id: "set-a",
+        sheet_title: "Fallback sheet",
+      }),
+    ];
+
+    const index = createDrawingRegisterIndex(rows, [packageA]);
+    expect(index.entries.map((entry) => entry.pkg?.key)).toEqual(["id:set-a", "id:set-a"]);
+    expect(firstVisibleDrawingByPackage(index.entries).get("id:set-a")).toBe("drawing-direct");
+    expect(filterIndexedRegisterRows(index, "fallback", "all")[0]?.pkg).toBe(packageA);
+  });
+
+  it("flattens grouped rows while omitting collapsed group children", () => {
+    const index = createDrawingRegisterIndex([
+      regRow({ drawing_id: "a", drawing_set_name: "Set A" }),
+      regRow({ drawing_id: "b", drawing_set_name: "Set A" }),
+      regRow({ drawing_id: "c", drawing_set_name: "Set B" }),
+    ]);
+
+    const expanded = buildRegisterDisplayRows(index.entries, true, new Set());
+    expect(expanded.map((row) => row.kind)).toEqual(["group", "sheet", "sheet", "group", "sheet"]);
+
+    const collapsed = buildRegisterDisplayRows(index.entries, true, new Set(["Set A"]));
+    expect(collapsed.map((row) => row.kind)).toEqual(["group", "group", "sheet"]);
+  });
+});
+
+describe("listDrawingSetNames / groupRegisterRowsBySet", () => {
+  it("lists unique sorted set names", () => {
+    const rows = [
+      regRow({ drawing_set_name: "Zeta" }),
+      regRow({ drawing_set_name: "Alpha" }),
+      regRow({ drawing_set_name: "Alpha" }),
+      regRow({ drawing_set_name: null }),
+    ];
+    expect(listDrawingSetNames(rows)).toEqual(["Alpha", "Zeta"]);
+  });
+
+  it("groups named sets first, unassigned last", () => {
+    const rows = [
+      regRow({ drawing_id: "u", drawing_set_name: null }),
+      regRow({ drawing_id: "b", drawing_set_name: "B Set" }),
+      regRow({ drawing_id: "a", drawing_set_name: "A Set" }),
+      regRow({ drawing_id: "a2", drawing_set_name: "A Set" }),
+    ];
+    const g = groupRegisterRowsBySet(rows);
+    expect(g.map((x) => x.setName)).toEqual(["A Set", "B Set", null]);
+    expect(g[0].rows.map((r) => r.drawing_id)).toEqual(["a", "a2"]);
+    expect(g[2].rows.map((r) => r.drawing_id)).toEqual(["u"]);
   });
 });
 

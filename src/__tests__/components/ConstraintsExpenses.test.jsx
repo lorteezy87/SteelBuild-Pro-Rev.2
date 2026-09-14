@@ -80,13 +80,14 @@ function renderWithProject(ui, route) {
 }
 
 describe("constraints and expenses page shells", () => {
-  it("renders Constraints without crashing", () => {
+  it("renders Constraints without crashing", async () => {
     renderWithProject(<Constraints />, "/Constraints");
-    expect(screen.getByText("Constraint Log")).toBeInTheDocument();
+    // PageHero title mounts after entity queries leave the loading skeleton.
+    expect(await screen.findByText("Constraint Log")).toBeInTheDocument();
   });
 
-  it("renders Expenses without crashing", () => {
+  it("renders Expenses without crashing", async () => {
     renderWithProject(<Expenses />, "/Expenses");
-    expect(screen.getByText("Expenses")).toBeInTheDocument();
+    expect(await screen.findByText("Expenses")).toBeInTheDocument();
   });
 });

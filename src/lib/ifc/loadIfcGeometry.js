@@ -21,14 +21,19 @@ import { getEngine } from "@/lib/ifc/ifcEngine";
  * @param {(guid: string) => string|undefined} [opts.colorForGuid]  hex per GlobalId
  * @param {string} [opts.defaultColor]  hex for unmatched/unstatused members
  * @returns {Promise<{ group: THREE.Group, dispose: () => void, count: number,
- *   pickInfo: (expressID: number) => object, recolor: (fn) => void }>}
+ *   pickInfo: (expressID: number) => object, recolor: (fn) => void,
+ *   handle: { modelID: number, isOpen: () => boolean } }>}
  */
 export async function loadIfcGeometry(buffer, opts = {}) {
   const { api, WebIFC } = await getEngine();
   const defaultColor = opts.defaultColor || "#9aa4b2";
+  // Keep in step with PART_TYPES in extractIfcRoster.js: whatever the roster
+  // imports must also be drawn, or its status colours have nothing to land on.
+  // Proxies are how exports that never mapped their parts arrive.
   const TYPE_NAME = {
     [WebIFC.IFCBEAM]: "beam", [WebIFC.IFCCOLUMN]: "column",
     [WebIFC.IFCPLATE]: "plate", [WebIFC.IFCMEMBER]: "member",
+    [WebIFC.IFCBUILDINGELEMENTPROXY]: "proxy",
   };
 
   const modelID = api.OpenModel(new Uint8Array(buffer), {
@@ -81,10 +86,14 @@ export async function loadIfcGeometry(buffer, opts = {}) {
       const c = pg.color || { x: 0.62, y: 0.66, z: 0.72, w: 1 };
       const ifcHex = `#${new THREE.Color(c.x, c.y, c.z).getHexString()}`;
       const chosen = opts.colorFor?.({ guid, ifcHex, ifcType }) || ifcHex;
-      // Lambert (not PBR Standard): ~2,600 draw calls a frame, so the cheap
-      // per-fragment shading keeps it smooth. No env map needed.
-      const mat = new THREE.MeshLambertMaterial({
+      // Phong (not PBR Standard): still one cheap specular term for a light
+      // steel sheen, without env maps / IBL. Fine at ~10k draw calls.
+      const mat = new THREE.MeshPhongMaterial({
         color: new THREE.Color(chosen),
+        specular: new THREE.Color(0x3a3f48),
+        shininess: 28,
+        emissive: new THREE.Color(0x000000),
+        flatShading: false,
         transparent: c.w < 1,
         opacity: c.w < 1 ? c.w : 1,
       });
@@ -93,7 +102,7 @@ export async function loadIfcGeometry(buffer, opts = {}) {
       mesh.applyMatrix4(m4);
       mesh.userData = { expressID, guid };
       group.add(mesh);
-      materials.push({ mat, guid, ifcHex, ifcType });
+      materials.push({ mat, guid, expressID, ifcHex, ifcType });
 
       geom.delete();
     }
@@ -104,16 +113,18 @@ export async function loadIfcGeometry(buffer, opts = {}) {
   const recolor = (colorFor) => {
     // Returns coverage stats so the host can report how many rendered members
     // actually resolved to a color (diagnostic for roster↔geometry mismatches).
-    let colored = 0;
+    const coloredElements = new Set();
+    const totalElements = new Set();
     let sampleColored = null;
     let sampleUncolored = null;
-    for (const { mat, guid, ifcHex, ifcType } of materials) {
+    for (const { mat, guid, expressID, ifcHex, ifcType } of materials) {
       const c = colorFor?.({ guid, ifcHex, ifcType });
       mat.color.set(c || ifcHex || defaultColor);
-      if (c) { colored += 1; if (!sampleColored) sampleColored = guid; }
+      totalElements.add(expressID);
+      if (c) { coloredElements.add(expressID); if (!sampleColored) sampleColored = guid; }
       else if (!sampleUncolored) sampleUncolored = guid;
     }
-    return { colored, total: materials.length, sampleColored, sampleUncolored };
+    return { colored: coloredElements.size, total: totalElements.size, sampleColored, sampleUncolored };
   };
 
   // On-click detail: read the part's marks/sequence from the "Part Properties"
@@ -139,7 +150,20 @@ export async function loadIfcGeometry(buffer, opts = {}) {
     return out;
   };
 
+  // Open-model handle so the roster extractor can read properties from THIS
+  // parse instead of opening the IFC a second time (halves peak wasm memory on
+  // save). isOpen() goes false once dispose() ran.
+  let closed = false;
+  const handle = {
+    modelID,
+    isOpen: () => {
+      if (closed) return false;
+      try { return typeof api.IsModelOpen === "function" ? api.IsModelOpen(modelID) : true; } catch { return false; }
+    },
+  };
+
   const dispose = () => {
+    closed = true;
     group.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) o.material.dispose();
@@ -147,5 +171,5 @@ export async function loadIfcGeometry(buffer, opts = {}) {
     try { api.CloseModel(modelID); } catch { /* ignore */ }
   };
 
-  return { group, dispose, count: group.children.length, pickInfo, recolor };
+  return { group, dispose, count: new Set(group.children.map(mesh => mesh.userData.expressID)).size, pickInfo, recolor, handle };
 }

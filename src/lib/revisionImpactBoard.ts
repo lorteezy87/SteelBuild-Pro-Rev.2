@@ -13,40 +13,49 @@
  */
 
 import { isRfiOpen } from "@/lib/entityPredicates";
+import { linkedRfiNumbers, normNum } from "@/lib/fabReleaseGate";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normRfi(x: any): string {
-  return String(x ?? "").replace(/[-\s]/g, "").toLowerCase();
+/**
+ * Is fabrication held on this RFI? The flag has NO top-level column — `rfis`
+ * carries it inside `metadata` (written by RFIFormModal, read by RfiDetailModal).
+ * Rows arrive here straight from entities.RFI.filter with no transform, so the
+ * old `r.fab_hold === true` was always comparing against undefined and the
+ * column rendered a confident "No" for every RFI, including the 43 live ones the
+ * detailer had explicitly ticked "hold fabrication".
+ */
+
+function isFabHeld(r: any): boolean {
+  return r?.fab_hold === true || r?.metadata?.fab_hold === true;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function wpSequenceOf(wp: any): string | null {
   const v = wp?.sequence_number ?? wp?.erection_sequence ?? wp?.sequence ?? wp?.area_sequence ?? null;
   return v != null && v !== "" ? String(v) : null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function isOpenRfi(r: any): boolean {
   return isRfiOpen(r);
 }
 
 export interface RevisionImpactSources {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   drawings?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   drawingSets?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   workPackages?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   rfis?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   modelElements?: any[];
 }
 
 export interface RevisionImpactRow {
   // ...spread from the computeRevisionImpact entry (revisionId, drawingId, sheetNumber,
   // revisionCode, issuedAt, drawingSetName, fabricated, delivered, inField, severity)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   [k: string]: any;
   setName: string;
   wpNames: string[];
@@ -60,24 +69,24 @@ export interface RevisionImpactRow {
  * @param revisionImpact computeRevisionImpact() output (one entry per change-revision)
  */
 export function buildRevisionImpactRows(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   revisionImpact: any[] = [],
   sources: RevisionImpactSources = {},
 ): RevisionImpactRow[] {
   const { drawings = [], drawingSets = [], workPackages = [], rfis = [], modelElements = [] } = sources;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const drawingsById = new Map<string, any>();
   for (const d of drawings || []) if (d?.id) drawingsById.set(String(d.id), d);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const setById = new Map<string, any>();
   for (const s of drawingSets || []) if (s?.id) setById.set(String(s.id), s);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const wpById = new Map<string, any>();
   for (const w of workPackages || []) if (w?.id && !w.is_deleted) wpById.set(String(w.id), w);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const rfiByNum = new Map<string, any>();
-  for (const r of rfis || []) if (r && !r.is_deleted) rfiByNum.set(normRfi(r.rfi_number), r);
+  for (const r of rfis || []) if (r && !r.is_deleted) rfiByNum.set(normNum(r.rfi_number), r);
 
   // Piece-count indexes: exact (by set FK) + heuristic (by sequence).
   const elemBySet = new Map<string, number>();
@@ -99,10 +108,14 @@ export function buildRevisionImpactRows(
     const wps = wpIds.map((id) => wpById.get(String(id))).filter(Boolean);
     const wpNames = wps.map((w) => w.wp_number || w.name || w.title).filter(Boolean);
 
-    const nums = [...new Set(String(dwg?.linked_rfi_ids || "").split(/[,\s]+/).map(normRfi).filter(Boolean))];
+    // Split on COMMAS only and normalize with the canonical normNum. Splitting
+    // on whitespace tore the canonical "RFI #001" into ["RFI", "#001"], and the
+    // old normalizer kept the "#", so the key became "rfi#001" and no RFI ever
+    // matched — the column rendered "—" while an RFI was open on the sheet.
+    const nums = [...new Set(linkedRfiNumbers(dwg).map(normNum).filter(Boolean))];
     const linkedRfis = nums.map((n) => rfiByNum.get(n)).filter(Boolean);
     const openRfis = linkedRfis.filter(isOpenRfi);
-    const fabBlocked = openRfis.some((r) => r.fab_hold === true);
+    const fabBlocked = openRfis.some(isFabHeld);
 
     // Affected pieces: exact via drawing_set_id, else heuristic via WP sequence.
     let affectedPieces: number | null = null;

@@ -20,15 +20,31 @@ export const GANTT_PHASE_VAR = {
   Closeout: "var(--sbd-gantt-closeout)",
 };
 
+export const GANTT_BG_VAR = "var(--sbd-gantt-bg)";
+export const GANTT_PANEL_VAR = "var(--sbd-gantt-panel)";
+export const GANTT_PANEL_STRONG_VAR = "var(--sbd-gantt-panel-strong)";
+export const GANTT_HEADER_VAR = "var(--sbd-gantt-header)";
+export const GANTT_LEFT_VAR = "var(--sbd-gantt-left)";
+export const GANTT_ROW_VAR = "var(--sbd-gantt-row)";
+export const GANTT_ROW_ALT_VAR = "var(--sbd-gantt-row-alt)";
+export const GANTT_ROW_HOVER_VAR = "var(--sbd-gantt-row-hover)";
+export const GANTT_GRID_VAR = "var(--sbd-gantt-grid)";
+export const GANTT_GRID_STRONG_VAR = "var(--sbd-gantt-grid-strong)";
+export const GANTT_WEEKEND_VAR = "var(--sbd-gantt-weekend)";
+export const GANTT_TODAY_VAR = "var(--sbd-gantt-today)";
+export const GANTT_TODAY_SOFT_VAR = "var(--sbd-gantt-today-soft)";
+export const GANTT_BASELINE_VAR = GANTT_PHASE_VAR["Pre-Construction"];
+export const GANTT_DEPENDENCY_VAR = GANTT_GRID_STRONG_VAR;
+
 export const GANTT_STATUS_HEX = {
-  complete: "#34D399",
-  inProgress: "#2EA8FF",
-  delayed: "#EF4444",
-  onHold: "#DDB7FF",
-  notStarted: "#64748B",
+  complete: GANTT_PHASE_VAR.Delivery,
+  inProgress: GANTT_PHASE_VAR.Detailing,
+  delayed: "var(--status-error)",
+  onHold: "var(--accent)",
+  notStarted: GANTT_BASELINE_VAR,
 };
 
-export const GANTT_TODAY_HEX = "#FF6B00";
+export const GANTT_TODAY_HEX = GANTT_TODAY_VAR;
 
 export const GANTT_GRADIENT = {
   Detailing: "linear-gradient(90deg, #2EA8FF 0%, #56B0FF 100%)",

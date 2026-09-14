@@ -1,12 +1,16 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { hasResolvableProjectSelection } from "@/lib/projectSelection";
 import { PAGES, PROJECT_SCOPED_PAGES, STATIC_ROUTE_METADATA } from "@/config/routes";
 import PageNotFound from "@/lib/PageNotFound";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 import ProjectScopedRoute from "@/components/shared/ProjectScopedRoute";
 import LayoutRoute from "@/boot/LayoutRoute";
 import PageLoader from "@/boot/PageLoader";
+import { gateFlagForPage, isGatedPage } from "@/config/moduleGating";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
+import ModuleDisabledNotice from "@/components/shared/ModuleDisabledNotice";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectRole } from "@/hooks/useProjectRole";
@@ -18,12 +22,35 @@ import { landingForRole } from "@/lib/landingForRole";
 //   - Landing  at "/Landing"
 const Dashboard = lazyWithRetry(() => import("@/pages/Dashboard"));
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
+const DesktopConnect = lazyWithRetry(() => import("@/pages/DesktopConnect"));
+
+/** Internal handoff pages render fullscreen — no sidebar/topbar chrome. */
+const STANDALONE_LAYOUT_PAGES = new Set(["DesktopConnect"]);
 
 /**
  * Wrap each lazy page in Suspense + per-page error boundary. Keyed by `label`
  * so React tears down and rebuilds the boundary on route changes — that's
  * what lets a previously-errored page recover when the user navigates back.
  */
+/**
+ * Blocks direct-URL access to a deprioritized (gated) module when its
+ * feature flag is off. Non-gated pages render immediately. While flags are
+ * still loading we hold on a loader instead of redirecting, so a deep-link
+ * to an enabled module doesn't bounce home on first paint.
+ *
+ * A blocked page renders an explanatory notice IN PLACE rather than
+ * redirecting home. The old `<Navigate to="/" />` was indistinguishable from a
+ * broken route: the URL silently became the Dashboard with no indication the
+ * module exists but is switched off, and no path to enable it.
+ */
+function ModuleGate({ page, children }) {
+  const { pageEnabled } = useModuleAccess();
+  if (!isGatedPage(page)) return children;
+  const enabled = pageEnabled(page);
+  if (enabled === undefined) return <PageLoader />;
+  return enabled ? children : <ModuleDisabledNotice page={page} flagKey={gateFlagForPage(page)} />;
+}
+
 function LazyRoute({ label, children }) {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -42,7 +69,23 @@ function LegacyProjectDetailRedirect() {
     return <Navigate to="/Projects" replace />;
   }
 
-  return <Navigate to={`/Projects?id=${encodeURIComponent(projectId)}`} replace />;
+  // /Projects opens its detail view from `?recordId=` (useAutoOpenEdit param);
+  // `?id=` would be ignored and the legacy link would land on the bare list.
+  return <Navigate to={`/Projects?recordId=${encodeURIComponent(projectId)}`} replace />;
+}
+
+export function buildStaticRedirectTarget(target, search = "", hash = "") {
+  return `${target}${search}${hash}`;
+}
+
+function StaticRouteRedirect({ route }) {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={buildStaticRedirectTarget(STATIC_ROUTE_METADATA[route].target, location.search, location.hash)}
+      replace
+    />
+  );
 }
 
 export const LANDING_REDIRECT_KEY = "sbp-landing-redirected";
@@ -88,8 +131,17 @@ export function IndexRoute() {
   // Will an active project (and thus a per-project role) resolve this load?
   // A saved localStorage pick or the Settings "Default Project" pref both
   // resolve into an active project after ProjectContext loads.
-  let savedSelection = false;
-  try { savedSelection = !!localStorage.getItem("activeProjectId"); } catch { /* ignore */ }
+  //
+  // The saved pick has to be CHECKED, not just counted. `activeProjectId`
+  // outlives the project it names — ProjectContext clears a stale id only once
+  // a fetch resolves, and it retries an empty list three times with 1.5s + 3s
+  // of backoff first. Testing the bare presence of the key therefore made every
+  // zero-project user (a fresh signup, or anyone whose projects were erased)
+  // wait out that backoff on a spinner: the exact stall the block above says
+  // this logic exists to prevent. hasResolvableProjectSelection cross-checks
+  // the pick against the cached project list, whose absence specifically means
+  // "the last successful load returned no live projects".
+  const savedSelection = hasResolvableProjectSelection();
   const projectPending = savedSelection || !!default_project_id;
 
   // roleReady: the inputs a role decision needs are in. With an active project
@@ -127,9 +179,8 @@ export function IndexRoute() {
  * AppRoutes — the full route table.
  *
  * All registered pages share a single Layout instance (mounted once, kept
- * across navigation). The 404 catch-all is OUTSIDE the layout route so that
- * a typo'd URL gets a clean fullscreen "not found" instead of an empty
- * shell.
+ * across navigation). Unknown URLs stay inside that authenticated shell and
+ * use the existing AuthContext instead of starting a second session check.
  */
 export default function AppRoutes() {
   return (
@@ -137,7 +188,9 @@ export default function AppRoutes() {
       <Route element={<LayoutRoute />}>
         <Route index element={<IndexRoute />} />
 
-        {Object.entries(PAGES).map(([path, Page]) => (
+        {Object.entries(PAGES)
+          .filter(([path]) => !STANDALONE_LAYOUT_PAGES.has(path))
+          .map(([path, Page]) => (
           <Route
             key={path}
             // Reports owns nested routes (`/Reports/<slug>`) for the
@@ -146,13 +199,15 @@ export default function AppRoutes() {
             path={path === "Reports" ? "Reports/*" : path}
             element={
               <LazyRoute label={path}>
-                {PROJECT_SCOPED_PAGES.has(path) ? (
-                  <ProjectScopedRoute>
+                <ModuleGate page={path}>
+                  {PROJECT_SCOPED_PAGES.has(path) ? (
+                    <ProjectScopedRoute>
+                      <Page />
+                    </ProjectScopedRoute>
+                  ) : (
                     <Page />
-                  </ProjectScopedRoute>
-                ) : (
-                  <Page />
-                )}
+                  )}
+                </ModuleGate>
               </LazyRoute>
             }
           />
@@ -168,38 +223,27 @@ export default function AppRoutes() {
         />
 
         <Route path="ProjectDetail" element={<LegacyProjectDetailRedirect />} />
-        <Route
-          path="Financials"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/Financials"].target} replace />}
-        />
-        <Route
-          path="CostDashboard"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/CostDashboard"].target} replace />}
-        />
-        <Route
-          path="ResourceManagement"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/ResourceManagement"].target} replace />}
-        />
-        <Route
-          path="AIInsights"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/AIInsights"].target} replace />}
-        />
-        <Route
-          path="MarginRisk"
-          element={<Navigate to={STATIC_ROUTE_METADATA["/MarginRisk"].target} replace />}
-        />
+        {Object.entries(STATIC_ROUTE_METADATA)
+          .filter(([path, meta]) => path !== "/ProjectDetail" && meta.kind === "redirect")
+          .map(([path]) => (
+            <Route
+              key={path}
+              path={path.slice(1)}
+              element={<StaticRouteRedirect route={path} />}
+            />
+          ))}
 
-        {/* /RFIHub was retired — redirect old links to /RFIs */}
-        <Route path="RFIHub" element={<Navigate to={STATIC_ROUTE_METADATA["/RFIHub"].target} replace />} />
-
-        {/* /GanttChart was retired — redirect old deep-links to /Schedule */}
-        <Route path="GanttChart" element={<Navigate to={STATIC_ROUTE_METADATA["/GanttChart"].target} replace />} />
+        <Route path="*" element={<PageNotFound />} />
       </Route>
 
-      {/* 404 — outside layout */}
-      <Route path="*" element={<PageNotFound />} />
+      <Route
+        path="DesktopConnect"
+        element={
+          <LazyRoute label="DesktopConnect">
+            <DesktopConnect />
+          </LazyRoute>
+        }
+      />
     </Routes>
   );
 }
-
-

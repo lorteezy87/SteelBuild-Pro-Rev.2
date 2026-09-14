@@ -58,6 +58,18 @@ export function daysUntil(dateStr?: string | null): number | null {
   return Math.ceil((due.getTime() - today.getTime()) / 86400000);
 }
 
+export type RfiUrgencyLabel = "Critical" | "Overdue" | "Due Today" | "Due Soon" | "Normal";
+
+/** Time-based urgency. Priority remains a separate, user-assigned business field. */
+export function rfiUrgencyLabel(rfi: RfiRecord): RfiUrgencyLabel {
+  const dueDays = daysUntil(rfi.date_required);
+  if (dueDays !== null && dueDays <= -30) return "Critical";
+  if (dueDays !== null && dueDays < 0) return "Overdue";
+  if (dueDays === 0) return "Due Today";
+  if (dueDays !== null && dueDays <= 3) return "Due Soon";
+  return "Normal";
+}
+
 /** Urgency score used by the canonical RFI work queues. */
 export function riskScore(rfi: RfiRecord): number {
   const age = daysOpen(rfi);
@@ -114,7 +126,7 @@ export function buildRfiSummary(rfis: RfiRecord[]): RfiSummary {
     const diff = daysUntil(r.date_required);
     return diff !== null && diff >= 0 && diff <= 3;
   });
-  const critical = active.filter((r) => r.priority === "Critical");
+  const critical = active.filter((r) => rfiUrgencyLabel(r) === "Critical");
   const incomplete = active.filter((r) => r.status === "Incomplete Response");
   const answeredOrClosed = rfis.filter((r) => r.status === "Answered" || r.status === "Closed").length;
   const costExposure = active.reduce((sum, r) => {

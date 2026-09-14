@@ -1,151 +1,196 @@
-// ── GettingStartedChecklist — onboarding card for the core workflow ──────
-//
-// A dismissible card atop the project Dashboard that walks the user through the
-// killer workflow (drawings → submittals → RFIs → fab release), tracking the
-// project's REAL progress. Presentational over useGettingStarted; the step
-// status logic lives in lib/gettingStarted. Auto-hidden when the project has
-// finished all four steps (a short "complete" banner) or when dismissed.
-import type { CSSProperties } from "react";
-import { useNavigate } from "react-router-dom";
-import { Check, ChevronRight, FileStack, ClipboardCheck, MessageCircleQuestion, PackageCheck, X } from "lucide-react";
-import { createPageUrl } from "@/utils";
-import { useGettingStarted } from "@/hooks/useGettingStarted";
-import type { GettingStartedStepKey } from "@/lib/gettingStarted";
+import React, { useState } from "react";
+import { CheckCircle2, Circle, ArrowRight, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import {
+  computeGettingStartedSteps,
+  type GettingStartedSignals,
+  type GettingStartedStepKey,
+} from "@/lib/gettingStarted";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
-type StepMeta = { title: string; why: string; cta: string; page: string; icon: typeof FileStack };
-
-const STEP_META: Record<GettingStartedStepKey, StepMeta> = {
+const STEP_METADATA: Record<GettingStartedStepKey, {
+  title: string;
+  description: string;
+  cta: string;
+  path: string;
+}> = {
   drawings: {
-    title: "Upload drawings",
-    why: "The documents the job is built from.",
-    cta: "Upload drawings", page: "Drawings", icon: FileStack,
+    title: "Upload Drawings",
+    description: "Get your initial set of sheets into the system.",
+    cta: "Upload Sheets",
+    path: "/Drawings",
   },
   submittals: {
-    title: "Create a submittal",
-    why: "Submittals own the approval workflow — drawings are just the documents.",
-    cta: "Open submittals", page: "Submittals", icon: ClipboardCheck,
+    title: "Create a Submittal",
+    description: "Organize sheets into a package for review.",
+    cta: "Create Submittal",
+    path: "/Submittals",
   },
   rfis: {
     title: "Raise RFIs",
-    why: "Questions to the EOR that can gate fabrication.",
-    cta: "Open RFIs", page: "RFIs", icon: MessageCircleQuestion,
+    description: "Clear up questions before fabrication.",
+    cta: "Raise RFI",
+    path: "/RFIs",
   },
   fab: {
-    title: "Release for fabrication",
-    why: "The gate that checks approval, RFIs, rejected sheets & revision conflicts.",
-    cta: "Go to fab release", page: "FabRelease", icon: PackageCheck,
+    title: "Release for Fab",
+    description: "Move the approved package to the shop.",
+    cta: "Release Steel",
+    path: "/FabRelease",
   },
 };
 
-const ORDER: GettingStartedStepKey[] = ["drawings", "submittals", "rfis", "fab"];
+export default function GettingStartedChecklist({
+  signals,
+  userMetadata,
+}: {
+  signals: GettingStartedSignals;
+  userMetadata?: Record<string, unknown> | null;
+}) {
+  const [isDismissing, setIsDismissing] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const state = computeGettingStartedSteps(signals);
 
-const mono = { fontFamily: "var(--font-mono)" } as const;
-
-export default function GettingStartedChecklist({ projectId }: { projectId?: string }) {
-  const navigate = useNavigate();
-  const { state, dismissed, isLoading, skipRfi, dismiss } = useGettingStarted(projectId);
-
-  if (!projectId || dismissed) return null;
-
-  if (isLoading || !state) {
-    return (
-      <div className="sbd-card" style={{ padding: 14, display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 16, height: 16, borderRadius: 4, background: "var(--bg-surface-high)" }} />
-        <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>Loading getting-started…</div>
-      </div>
-    );
+  if (
+    state.allComplete
+    || dismissed
+    || Boolean(userMetadata?.dismissed_getting_started)
+  ) {
+    return null;
   }
 
-  const doneCount = state.steps.filter((s) => s.status === "done").length;
-
-  if (state.allComplete) {
-    return (
-      <div className="sbd-card" style={{ padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderLeft: "3px solid var(--status-success)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Check size={16} color="var(--status-success)" />
-          <span style={{ fontSize: 13, color: "var(--text-primary)" }}>
-            Core workflow complete — drawings → submittals → RFIs → fab release. Nice work.
-          </span>
-        </div>
-        <button type="button" onClick={dismiss} style={dismissBtn}>Dismiss</button>
-      </div>
-    );
-  }
+  const handleDismiss = async () => {
+    setIsDismissing(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { dismissed_getting_started: true },
+      });
+      if (error) throw error;
+      setDismissed(true);
+      toast.success("Checklist dismissed");
+    } catch (error) {
+      toast.error("Failed to save preference");
+      console.error("Failed to dismiss getting-started checklist:", error);
+    } finally {
+      setIsDismissing(false);
+    }
+  };
 
   return (
-    <div className="sbd-card" style={{ padding: 16, position: "relative" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <div>
-          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--accent)" }}>
-            Getting started
+    <div
+      style={{
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-default)",
+        borderRadius: "var(--radius-card)",
+        padding: "16px 20px",
+        marginBottom: 20,
+        position: "relative",
+        boxShadow: "var(--shadow-card)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            background: "var(--accent)",
+            color: "var(--on-accent)",
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            display: "grid",
+            placeItems: "center",
+            fontSize: 10,
+            fontWeight: 800,
+          }}>
+            !
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginTop: 2 }}>
-            Walk the core workflow ({doneCount}/4)
-          </div>
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.1em",
+            color: "var(--text-primary)",
+          }}>
+            GETTING STARTED
+          </span>
         </div>
-        <button type="button" onClick={dismiss} title="Dismiss" aria-label="Dismiss getting started" style={closeBtn}>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          disabled={isDismissing}
+          aria-label="Dismiss getting-started checklist"
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: "var(--text-muted)",
+            padding: 4,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
           <X size={14} />
         </button>
       </div>
 
-      {/* Steps */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {ORDER.map((key, i) => {
-          const step = state.steps.find((s) => s.key === key)!;
-          const meta = STEP_META[key];
-          const Icon = meta.icon;
-          const isCurrent = step.status === "current";
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+        {state.steps.map((step) => {
+          const meta = STEP_METADATA[step.key];
           const isDone = step.status === "done";
+          const isCurrent = step.status === "current";
+
           return (
             <div
-              key={key}
+              key={step.key}
               style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: isCurrent ? "10px 12px" : "8px 12px",
-                borderRadius: 10,
-                border: `1px solid ${isCurrent ? "var(--accent-border)" : "var(--divider)"}`,
-                background: isCurrent ? "var(--accent-muted)" : "var(--bg-surface-low)",
-                opacity: isDone ? 0.72 : 1,
+                padding: "12px",
+                borderRadius: 6,
+                border: isCurrent ? "1px solid var(--accent)" : "1px solid var(--border-default)",
+                background: isCurrent ? "var(--accent-muted)" : "transparent",
+                transition: "all 0.2s",
               }}
             >
-              {/* Status marker */}
-              <div style={{
-                width: 22, height: 22, borderRadius: 999, flexShrink: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: isDone ? "var(--status-success)" : isCurrent ? "var(--accent)" : "var(--bg-surface-high)",
-                color: isDone || isCurrent ? "#0b0e12" : "var(--text-muted)",
-                ...mono, fontSize: 11, fontWeight: 800,
-              }}>
-                {isDone ? <Check size={13} /> : i + 1}
-              </div>
-
-              <Icon size={16} color={isCurrent ? "var(--accent)" : "var(--text-muted)"} style={{ flexShrink: 0 }} />
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 600, color: "var(--text-primary)", textDecoration: isDone ? "line-through" : "none" }}>
-                  {meta.title}
-                </div>
-                {!isDone && (
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 1 }}>{meta.why}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                {isDone ? (
+                  <CheckCircle2 size={16} color="var(--status-success)" />
+                ) : (
+                  <Circle size={16} color="var(--text-muted)" />
                 )}
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: isDone ? "var(--text-muted)" : "var(--text-primary)",
+                  textDecoration: isDone ? "line-through" : "none",
+                }}>
+                  {meta.title}
+                </span>
               </div>
-
-              {/* Actions */}
+              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.4 }}>
+                {meta.description}
+              </p>
               {!isDone && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  {isCurrent && key === "rfis" && (
-                    <button type="button" onClick={skipRfi} style={skipBtn}>No RFIs needed</button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => navigate(createPageUrl(meta.page))}
-                    className={isCurrent ? "sbd-btn sbd-btn-primary" : "sbd-btn sbd-btn-ghost"}
-                    style={{ padding: "5px 11px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
-                  >
-                    {meta.cta}<ChevronRight size={13} />
-                  </button>
-                </div>
+                <Link
+                  to={meta.path}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                    padding: "6px 0",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    textDecoration: "none",
+                    border: "1px solid var(--accent)",
+                    borderRadius: 4,
+                    textAlign: "center",
+                    background: isCurrent ? "var(--accent)" : "transparent",
+                    color: isCurrent ? "var(--on-accent)" : "var(--accent)",
+                  }}
+                >
+                  {meta.cta} <ArrowRight size={10} />
+                </Link>
               )}
             </div>
           );
@@ -154,17 +199,3 @@ export default function GettingStartedChecklist({ projectId }: { projectId?: str
     </div>
   );
 }
-
-const closeBtn: CSSProperties = {
-  background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer",
-  padding: 4, display: "inline-flex", borderRadius: 6,
-};
-const dismissBtn: CSSProperties = {
-  background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer",
-  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
-  textTransform: "uppercase",
-};
-const skipBtn: CSSProperties = {
-  background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer",
-  fontSize: 11, textDecoration: "underline", whiteSpace: "nowrap",
-};

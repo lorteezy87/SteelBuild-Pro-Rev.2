@@ -1,0 +1,73 @@
+name: Storage backup
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: storage-backup-production
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Back up Supabase Storage offsite
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: storage-backup-production
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install verified rclone binary
+        shell: bash
+        env:
+          # Do not name these RCLONE_* — rclone maps that prefix to CLI flags.
+          # RCLONE_VERSION="1.74.4" makes `rclone version` fail (issue #263).
+          INSTALL_RCLONE_VERSION: "1.74.4"
+          INSTALL_RCLONE_SHA256: fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d
+        run: |
+          set -euo pipefail
+          unset RCLONE_VERSION RCLONE_SHA256
+          curl --fail --silent --show-error --location \
+            --output rclone.zip \
+            "https://downloads.rclone.org/v${INSTALL_RCLONE_VERSION}/rclone-v${INSTALL_RCLONE_VERSION}-linux-amd64.zip"
+          echo "${INSTALL_RCLONE_SHA256}  rclone.zip" | sha256sum --check --strict
+          unzip -q rclone.zip
+          sudo install -m 0755 \
+            "rclone-v${INSTALL_RCLONE_VERSION}-linux-amd64/rclone" \
+            /usr/local/bin/rclone
+          rclone version
+
+      - name: Back up and verify required buckets
+        env:
+          OFFSITE_RCLONE_CONFIG_B64: ${{ secrets.OFFSITE_RCLONE_CONFIG_B64 }}
+          OFFSITE_ROOT: ${{ secrets.OFFSITE_ROOT }}
+          STORAGE_BACKUP_MANIFEST_PATH: ${{ runner.temp }}/storage-backup-manifest.json
+          SUPABASE_EXPECTED_PROJECT_REF: ${{ vars.SUPABASE_EXPECTED_PROJECT_REF }}
+          SUPABASE_S3_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          SUPABASE_S3_ENDPOINT: ${{ secrets.SUPABASE_S3_ENDPOINT }}
+          SUPABASE_S3_REGION: ${{ secrets.SUPABASE_S3_REGION }}
+          SUPABASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+        run: node scripts/storage-backup.mjs
+
+      - name: Retain verified backup manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: storage-backup-manifest-${{ github.run_id }}
+          path: ${{ runner.temp }}/storage-backup-manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove temporary backup data
+        if: always()
+        run: rm -rf /tmp/steelbuild-storage-backup-*

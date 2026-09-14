@@ -21,18 +21,19 @@
  * the outbox in src/lib/field/offlineQueue.js + photoSync.js (tested).
  */
 
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities, integrations } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import { compressImage } from "@/utils/compressImage";
 import { localToday } from "@/utils/dates";
-import { tasksForToday, taskUrgency, clampPercent, progressPatch } from "@/lib/field/fieldToday";
+import { clampPercent, progressPatch } from "@/lib/field/fieldToday";
 import { useOutbox } from "@/lib/field/OutboxContext";
 import {
   makeProgressOp,
@@ -46,14 +47,6 @@ import { putPendingPhoto, reconcilePendingPhotos } from "@/lib/field/blobStore";
 import FieldTodayControlCenter from "./fieldToday/FieldTodayControlCenter";
 
 // ── Urgency presentation (logic-free; buckets come from the helper) ──
-const URGENCY = {
-  overdue: { label: "OVERDUE", color: "var(--status-error)" },
-  "due-today": { label: "DUE TODAY", color: "var(--status-warning)" },
-  active: { label: "ACTIVE", color: "var(--accent)" },
-  unscheduled: { label: "TBD", color: "var(--text-muted)" },
-  upcoming: { label: "UPCOMING", color: "var(--status-info)" },
-};
-
 function fmtShortDate(iso) {
   if (!iso) return "TBD";
   try {
@@ -77,14 +70,14 @@ export default function FieldToday() {
 
   // Control-center supplementary queries (photos + punchlist).
   const todayIsoForQuery = localToday();
-  const { data: allPhotos = [] } = useQuery({
+  const { data: allPhotos = [], isPending: photosPending, fetchStatus: photosFetchStatus, error: photosError, refetch: refetchPhotos } = useQuery({
     queryKey: ["field-hub-photos", projectId],
     queryFn: () =>
       projectId ? entities.Photo.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });
-  const { data: allPunchItems = [] } = useQuery({
+  const { data: allPunchItems = [], isPending: punchlistPending, fetchStatus: punchlistFetchStatus, error: punchlistError, refetch: refetchPunchlist } = useQuery({
     queryKey: ["field-hub-punchlist", projectId],
     queryFn: () =>
       projectId ? entities.PunchlistItem.filter({ project_id: projectId }) : [],
@@ -95,28 +88,7 @@ export default function FieldToday() {
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
 
-  const { scheduleTasks, isLoading } = useScheduleTasks(projectId);
-
-  const todayIso = localToday();
-  const todaysWork = useMemo(
-    () => tasksForToday(scheduleTasks, todayIso),
-    [scheduleTasks, todayIso],
-  );
-
-  // Group the already-sorted list by urgency so a long day (lots of overdue
-  // work) stays scannable — every item still shows; nothing is hidden.
-  const sections = useMemo(() => {
-    const order = ["overdue", "due-today", "active", "unscheduled", "upcoming"];
-    const byBucket = new Map();
-    for (const task of todaysWork) {
-      const bucket = taskUrgency(task, todayIso);
-      if (!byBucket.has(bucket)) byBucket.set(bucket, []);
-      byBucket.get(bucket).push(task);
-    }
-    return order
-      .filter((bucket) => byBucket.has(bucket))
-      .map((bucket) => ({ bucket, tasks: byBucket.get(bucket) }));
-  }, [todaysWork, todayIso]);
+  const { scheduleTasks, isPending: tasksPending, isPaused: tasksPaused, error: tasksError, refetch: refetchTasks } = useScheduleTasks(projectId);
 
   // ── Offline outbox: queued idempotent captures replay (in order) on reconnect.
   // The single app-wide instance lives in OutboxProvider so the queue drains from
@@ -167,8 +139,7 @@ export default function FieldToday() {
   // The client_op_id is minted in onSave and rides BOTH the online create and
   // the offline retry, so a replay can't mint a duplicate (server dedups it).
   const punchMut = useMutation({
-    mutationFn: (data) =>
-      entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.PunchlistItem.create(withProjectId(data, projectId)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["field-hub-punchlist", projectId] });
       queryClient.invalidateQueries({ queryKey: ["punchlist", projectId] });
@@ -210,7 +181,7 @@ export default function FieldToday() {
           category: "Progress",
           title: "Field photo",
           location: "",
-          taken_date: todayIso,
+          taken_date: todayIsoForQuery,
         };
         let file;
         try {
@@ -220,12 +191,12 @@ export default function FieldToday() {
         }
         try {
           const result = await integrations.Core.UploadFile({ file, workflow: "photo" });
-          await entities.Photo.create({
+          await entities.Photo.create(withProjectId({
             ...meta,
             file_url: result.file_url || result.path,
             file_name: file.name,
             client_op_id: clientOpId,
-          });
+          }, projectId));
           added += 1;
         } catch (err) {
           if (isLikelyOfflineError(err)) {
@@ -265,6 +236,18 @@ export default function FieldToday() {
     reconcilePendingPhotos(new Set(loadQueue().map((op) => op.id)));
   }, []);
 
+  if (!projectId) {
+    return <section role="status" style={{ padding: 32 }}>
+      <h2>Select a project</h2>
+      <p>Choose a project from the project selector to view today's field work.</p>
+    </section>;
+  }
+  const fieldError = tasksError || photosError || punchlistError;
+  const taskEvidenceUnavailable = Boolean(tasksError) || tasksPaused;
+  const photoEvidenceUnavailable = Boolean(photosError) || photosPending || photosFetchStatus === "paused";
+  const punchEvidenceUnavailable = Boolean(punchlistError) || punchlistPending || punchlistFetchStatus === "paused";
+  const incompleteEvidence = tasksPending || taskEvidenceUnavailable || photoEvidenceUnavailable || punchEvidenceUnavailable;
+
   // ── Canonical Field Today control center ──────────────────────────────────────────────────
   // All existing offline outbox + photo sync logic above is UNTOUCHED.
   // We pass the real handlers through as props so the Control Center's capture
@@ -285,12 +268,23 @@ export default function FieldToday() {
         <input
           ref={photoInputRef}
           type="file"
+          aria-label="Capture field photo"
           accept="image/*"
           capture="environment"
           multiple
           style={{ display: "none" }}
           onChange={(e) => handlePhotoFiles(e.target.files)}
         />
+        {incompleteEvidence && (
+          <section role={fieldError ? "alert" : "status"} aria-label="Field Today" style={{ padding: 16, marginBottom: 12, background: "var(--bg-surface)", borderRadius: "var(--radius-card)" }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18 }}>{fieldError ? "Some field records are unavailable" : "Waiting for field records"}</h2>
+            <p>Photo and punch capture remain available. Current totals are unavailable for records that have not refreshed.</p>
+            {taskEvidenceUnavailable && scheduleTasks.length > 0 && <p>Showing cached schedule tasks; dates and progress may be stale.</p>}
+            {fieldError && <button type="button" className="sbd-btn sbd-btn-secondary" onClick={() => {
+              void Promise.all([refetchTasks(), refetchPhotos(), refetchPunchlist()]);
+            }}>Retry</button>}
+          </section>
+        )}
         <FieldTodayControlCenter
           projectName={activeProject?.name || "Field"}
           todayIso={todayIsoForQuery}
@@ -298,7 +292,10 @@ export default function FieldToday() {
           photos={todayPhotos}
           punchItems={allPunchItems}
           pendingSync={pendingSync}
-          isLoading={isLoading}
+          isLoading={tasksPending}
+          tasksUnavailable={taskEvidenceUnavailable}
+          photosUnavailable={photoEvidenceUnavailable}
+          punchItemsUnavailable={punchEvidenceUnavailable}
           search={ccSearch}
           onSearch={setCcSearch}
           statusFilter={ccStatusFilter}

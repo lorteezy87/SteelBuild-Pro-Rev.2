@@ -44,7 +44,7 @@ export function useSubmittalComponents(
 
   const {
     data: components = [],
-    isLoading,
+    isPending,
     error,
     refetch,
   } = useQuery<SubmittalComponentRow[]>({
@@ -183,7 +183,7 @@ export function useSubmittalComponents(
   return {
     components,
     bySubmittal,
-    isLoading,
+    isLoading: !!projectId && enabled && isPending,
     error,
     refetch,
     // Mutations

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { formatLocalDate } from "@/utils/dates";
 import { useAuth } from "@/lib/AuthContext";
 import MfaSection from "./MfaSection.jsx";
+import DeleteAccountZone from "./DeleteAccountZone.jsx";
 
 const S = {
   input: { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box' },
@@ -17,7 +18,7 @@ const TIMEZONES = [
   'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu',
 ];
 
-export default function UserSettingsTab({ user, onSave }) {
+export default function UserSettingsTab({ user, workspaceRole }) {
   const [form, setForm] = useState({
     full_name: user?.full_name || '',
     job_title: user?.job_title || '',
@@ -51,7 +52,6 @@ export default function UserSettingsTab({ user, onSave }) {
     setIsSaving(true);
     try {
       await auth.updateMe(form);
-      onSave(form);
       toast.success('Profile updated');
     } catch (err) {
       toast.error('Failed to update profile');
@@ -108,11 +108,11 @@ export default function UserSettingsTab({ user, onSave }) {
           <div>
             <label style={S.label}>Role</label>
             <div style={{ padding: '8px 12px', background: 'var(--accent-muted)', border: '1px solid var(--accent-border)', borderRadius: 8, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {user?.role || 'user'}
+              {workspaceRole || 'member'}
             </div>
           </div>
           <div>
-            <label style={S.label}>Member Since</label>
+            <label style={S.label}>Account Since</label>
             <div style={{ padding: '8px 12px', background: 'var(--bg-surface-low)', borderRadius: 8, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
               {user?.created_date ? formatLocalDate(user.created_date, 'en-US', { month: 'long', year: 'numeric' }) : '—'}
             </div>
@@ -149,9 +149,12 @@ export default function UserSettingsTab({ user, onSave }) {
         <textarea style={{ ...S.input, minHeight: 80, resize: 'vertical' }} value={form.bio} onChange={e => set('bio', e.target.value)} placeholder="Optional — project areas, specialties, notes for teammates..." />
       </div>
 
-      <button onClick={handleSave} disabled={isSaving} style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: isSaving ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: isSaving ? 0.6 : 1 }}>
+      <button onClick={handleSave} disabled={isSaving} style={{ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 8, padding: '9px 20px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: isSaving ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: isSaving ? 0.6 : 1 }}>
         {isSaving ? 'Saving...' : 'Save Profile'}
       </button>
+
+      {/* Self-service account deletion — App Store Guideline 5.1.1(v). */}
+      <DeleteAccountZone />
     </div>
   );
 }

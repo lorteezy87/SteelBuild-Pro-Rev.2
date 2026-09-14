@@ -37,7 +37,8 @@ For the running list of known issues, see [`TECH_DEBT.md`](./TECH_DEBT.md).
                   │  — via Edge Functions  │
                   └────────────────────────┘
 
-         Hosting: Vercel (CI-gated deploy job) → steelbuild-pro.com
+         Hosting: Cloudflare Workers (CI-gated deploy job) → steelbuild-pro.com
+                  migration in progress — see docs/runbooks/cloudflare-migration.md
 ```
 
 There is no separate backend service. The app is a SPA that talks
@@ -187,7 +188,8 @@ The detailing/submittal workflow is the heart of the app. Stages
 └─ Released for Fab             (S&H internal release to fab shop)
 ```
 
-R&R (Revise and Resubmit / Rejected) outcomes loop back to IFA.
+R&R (Revise and Resubmit / Rejected) is a first-class derived workflow stage
+(after BFA); it is never written to `drawings.stage`.
 
 ### Workflow source of truth
 
@@ -206,15 +208,12 @@ Approver-class  (EOR / Architect / AOR)                        → OFA / BFA
 Downstream-class (GC / Owner)                                  → IFC
 ```
 
-### Auto-lock on approval
+### Drawing-set edit locks
 
-When a submittal transitions to a terminal-approved status (`Approved`,
-`Approved as Noted`, `Released for Fabrication`), every linked drawing
-set is auto-locked from edits. This is implemented in
-`useSubmittals.ts` `lockLinkedSetsIfApproved` — the lock primitive
-(`drawingHub/setLock.lockSet`) is unchanged; only the trigger path
-moved from `set_approval_status='approved'` (legacy, document-side) to
-submittal terminal status (workflow-side).
+Drawing sets retain `is_locked` / admin unlock (`drawingHub/setLock`) for
+manual override and DB write barriers, but **submittal approval no longer
+auto-locks** linked sets. Terminal status (`Approved` / `Approved as Noted` /
+`Released for Fabrication`) updates workflow state only.
 
 ---
 
@@ -260,6 +259,10 @@ out by default. Restores are possible by toggling the flag.
 ---
 
 ## Frontend organization
+
+Folder ownership and placement rules are defined in
+[`docs/FOLDER_OWNERSHIP.md`](./docs/FOLDER_OWNERSHIP.md). Use that document when
+adding a module or consolidating duplicate implementations.
 
 ### Routing
 
@@ -347,7 +350,6 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
 
 - `llm-proxy` — the LLM gateway. Holds the only provider API key; all model
   calls route here. Does its own JWT verification (deploy `--no-verify-jwt`).
-- `schedule-assistant` — schedule chat/tooling; routes model turns through `llm-proxy`.
 - `email-ingest` — inbound email → staged project records (Power Automate path).
 - `email-send` — outbound email compose/reply pipeline.
 - `project-export` — RLS-scoped, audited per-project data export (powers the
@@ -359,8 +361,12 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
   (owner/CLI):** `sharepoint-proxy`, `bluebeam-proxy` (removed integrations) and
   the Stripe Sync Engine orphans `stripe-setup` / `stripe-webhook` /
   `stripe-worker` (these are NOT the real webhook — that lives inside
-  `stripe-billing`). As of 2026-07-01 there are **11 functions live** (6 real + 5
-  orphan/deprecated); the `pg_cron` job that pinged `stripe-worker` every 60s was
+  `stripe-billing`). As of 2026-07-24 the application inventory is **5 real**
+  (`llm-proxy`, `email-ingest`, `email-send`, `project-export`, `stripe-billing`)
+  **+ 5 orphan/deprecated** (`sharepoint-proxy`, `bluebeam-proxy`, `stripe-setup`,
+  `stripe-webhook`, `stripe-worker`). A previously shipped schedule chat Edge
+  Function may still exist remotely pending `supabase functions delete`
+  (owner/CLI). The `pg_cron` job that pinged `stripe-worker` every 60s was
   unscheduled 2026-07-01. See `docs/runbooks/owner-checklist.md`.
 
 ### Storage
@@ -419,7 +425,6 @@ work unchanged.
 | `shipping-ticket-import`  | openai    | gpt-4o-mini        | `src/lib/importShippingTicket.js`                 |
 | `rfi-log-import`          | openai    | gpt-4o-mini        | `src/lib/importRfiLog.js`                         |
 | `photo-ocr`               | openai    | gpt-4o-mini        | `src/components/ocr/FileUploadWithOCR.jsx`        |
-| `schedule-assist`         | anthropic | claude-sonnet-4-5  | (NOT WIRED IN PHASE 1 — see TECH_DEBT.md)         |
 
 The Phase 1 routing intentionally **mirrors current production
 defaults**. We did not silently switch any caller to a new provider;
@@ -522,16 +527,34 @@ Concurrency group cancels redundant runs on rapid iteration.
 
 ### Deployment
 
-Production deploys are **CI-gated** (since 2026-06-19). Vercel's own git
-auto-deploy is OFF (`vercel.json` `git.deploymentEnabled.main:false`); the
-`deploy` job in `.github/workflows/ci.yml` is the sole path. Workflow:
+Production deploys are **CI-gated** (since 2026-06-19). The `deploy-cloudflare`
+job in `.github/workflows/ci.yml` is the sole path. Workflow:
 
 1. Develop on a `claude/<slug>` feature branch (or directly on `main`)
 2. Push to `main` → the `ci` job runs (lint + 4 typechecks + Vitest + build)
-3. **Only if `ci` is green** does the `deploy` job publish to Vercel
-   (`vercel pull/build/deploy --prebuilt --prod`). A red run leaves prod on the
-   last good build.
+3. **Only if `ci` is green** does `deploy-cloudflare` publish
+   (`wrangler deploy`). A red run leaves prod on the last good version.
 4. Verify on the live URL
+
+That gate only holds while this job is the sole publisher. Cloudflare's own
+Workers Builds git integration deploys on push with NO gate, so it must stay
+disconnected — the same hole `vercel.json`'s `git.deploymentEnabled` closed
+before. Pull requests get a preview via `preview-cloudflare`
+(`wrangler versions upload`), which uploads a version without promoting it.
+
+Rollback is `wrangler rollback <version-id>`, not a redeploy.
+
+**Cloudflare migration (in progress).** The Vercel account is closed, so the
+`deploy` and `deploy-staging` jobs, `vercel.json`, `.vercelignore` and the Skew
+Protection helper have all been removed — they could only ever fail.
+`deploy-cloudflare` is inert until the `CLOUDFLARE_ENABLED` repo variable is
+`true`, so **until that is set, a push to main deploys nowhere.**
+
+Response headers and SPA routing now live in `public/_headers` (copied into
+`dist/` by Vite) and `wrangler.jsonc`. `_headers` is the only definition of
+those headers, so `scripts/__tests__/deployHeaders.test.ts` asserts them
+directly. Cutover, verification, compliance and rollback steps:
+`docs/runbooks/cloudflare-migration.md`.
 
 Remaining gap: no branch-protection required check (repo plan), so red/unreviewed
 commits can still land on `main` (they just can't deploy). `CLAUDE.md` documents
@@ -543,7 +566,12 @@ Single-region, all-US vendor chain (an accepted risk at this stage):
 
 - **Database + Auth + Storage:** Supabase (Postgres 17) on AWS **us-east-1**,
   single region. Daily backups; PITR is an owner dashboard toggle.
-- **Hosting / CDN:** Vercel (US). **Payments:** Stripe (US). **Monitoring:**
+- **Hosting / CDN:** in transition — the Vercel account is closed and Cloudflare
+  is not yet serving the domain. This line and the customer-facing subprocessor
+  disclosures (Subprocessors/Privacy/Security pages) must be corrected together
+  once Cloudflare serves; note Cloudflare's network is global by default, so the
+  all-US claim below needs restating. See `docs/runbooks/cloudflare-migration.md`.
+  **Payments:** Stripe (US). **Monitoring:**
   Sentry (US). **AI:** US-based model providers via `llm-proxy`.
 - No customer data is stored outside the US; there is no EU-residency option.
 
@@ -691,6 +719,148 @@ public/             Static assets including web-ifc wasm (public/wasm/) + pdf wo
 ---
 
 ## Decision log (recent material decisions)
+
+### 2026-09-07 — Detailing Control Center truthfulness audit (12 fixes)
+
+A full audit of `/DrawingSubmittalHub` found that the dominant defect class on
+the surface was not crashes or bad writes but **confident, wrong display**: the
+page asserting things that were not true. Twelve findings were fixed across
+`0d88e7b7`, `e40711b8`, `3e0320de`, `df1d885e`. Four decisions worth recording,
+because each rejected the obvious fix:
+
+**1. The model roster stays lazy; truth comes from a HEAD count.** A perf commit
+(`639ffd463`) had gated the `model_elements` read to the 3D tab without updating
+four other consumers, so the Control Board announced "No model members yet —
+import a CSV from Tekla or SDS2" on projects with a full roster. The obvious fix
+— ungate the query — was rejected: the largest live roster is 27,750 rows and
+`fetchAllModelElements` pages at PostgREST's 1000-row ceiling, so an unconditional
+fetch would restore ~28 round-trips to every page view. Instead `countModelElements()`
+(one HEAD request, zero rows) answers "does a roster exist", the paged read stays
+on-demand, and the card has four states rather than inferring emptiness from an
+unloaded array. **General rule: never gate a displayed claim on a lazily-loaded
+collection.**
+
+**2. Two `linked_rfi_ids` columns are two different id spaces.**
+`drawings.linked_rfi_ids` is text (a CSV of RFI *numbers*);
+`submittals.linked_rfi_ids` is `uuid[]`; `drawing_sets` has no such column.
+`computeDetailingReadiness` pooled all three and intersected against a set of
+UUIDs, so a sheet-linked open RFI could never block its package — the readiness
+engine showed "Fab ready" while the Drawing Health Score on the same screen
+deducted for that same RFI. `normNum` is now exported from `fabReleaseGate.ts` as
+**the** canonical RFI-number normalizer; two private variants that split on
+whitespace and kept the `#` were deleted rather than a third being written.
+
+**3. `unknown` is a first-class downstream severity.** `computeRevisionImpact`
+treated a missing date as a not-reached date, so on any project that does not
+hand-key the three per-sheet fab/delivery dates every revision rendered as "Not
+downstream" / "caught pre-fab" — an all-clear asserted from absent data, and
+persisted to `drawing_revision_summaries`. Severity is now
+`critical > high > medium > unknown > low`, where `low` means dates *are*
+recorded and none reached. `unknown` counts as neither downstream (which would
+invent rework exposure) nor low (which would invent an all-clear); it is reported
+as `unknownDownstreamCount` and sorts above `low`.
+
+**4. Control enablement derives from the write validator.** Four inline editors
+on the Control Board rendered on conditions strictly weaker than what their
+mutations required, so on reachable package shapes every click failed with a
+toast. `format.ts` now exports `canWriteDueDate` / `canWriteOwner` /
+`canWriteDetailingState` / `canWriteReadinessFlags`, each mirroring its validator
+so the two cannot drift.
+
+Also: `isPackageReleasedForFab` was added rather than widening `isClosedPackage`
+(terminal-for-triage, shared with the triage queue and Register column, and it
+fires on Void submittals); the Approval Matrix now resolves its governing
+submittal with `pickMostRecentSubmittal` over usable statuses instead of the
+never-incremented `round_number`; and `EFFECTIVE_LIST_CAP = min(LIST_ROW_CAP,
+SERVER_MAX_ROWS)` makes the truncation detectors satisfiable — `LIST_ROW_CAP`
+deliberately unchanged so no request asks for fewer rows than before.
+
+Two findings were left open as product/ops decisions: which drawing register
+ships (`DrawingRegisterPanel` discards eight of ten props, making the Revision
+Summary feature unreachable app-wide), and the register's RFIs/WPs columns
+reading `drawing_links` (0 rows) instead of the link model the app actually
+writes — that one needs a view migration. Both are tracked in `TECH_DEBT.md`.
+
+### 2026-07-25 — R&R is a first-class derived workflow stage (drawing approval lifecycle, Slice 1)
+
+R&R (Revise & Resubmit) / Rejected submittal outcomes previously derived to the
+**IFA** stage plus a separate badge (`isRRStatus` / `isPackageRR`), which let a
+failed approval cycle read as a fresh internal-prep package in boards, KPIs and
+rollups. `submittalStatusToStage` now derives those outcomes to a dedicated
+**"R&R"** stage, placed after BFA in the display order
+(`Not Started → IFA → OFA → BFA → R&R → OFS → IFC → Released`,
+`WORKFLOW_STAGE_ORDER` in `drawingsConfig.js`). This is a **display-derivation
+change only**: `submittals.status` + `ball_in_court` remain the workflow source
+of truth (§20), the 7-value `drawings.stage` CHECK is untouched, and "R&R" is
+never written to a sheet row — the 7-stage `STAGE_ORDER` still governs every
+sheet-stage write path. Later slices (approval-cycle history, the
+R&R→OFA transmission-evidence gate, OFS completion checklist, comment
+dispositions, release-gate unification) are specced in
+`docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-rr-stage.md`
+and `docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-ofs-slice4.md`.
+
+### 2026-07-25 — Returned-comment dispositions gate OFS/IFC and R&R/OFA (Slice 5)
+
+Structured `submittal_comment_dispositions` rows track comments returned with
+AAN / R&R. Required unresolved statuses block OFS→IFC and R&R→OFA unless an
+audited override is recorded (`commentDispositionGate`). Sheet-level
+`submittal_sheet_responses` remain the per-sheet disposition SoT.
+`drawing_revisions` gains nullable `revision_source` / `revision_reason`.
+
+### 2026-07-25 — Package fab-release requires IFC/Released (Slice 8)
+
+`isApprovedForFab` / `computeFabReleaseGate` / SQL `evaluate_fab_release_package`
+align with piece-control Slice 6 readiness. Bare `set_approval_status` /
+`ifc_status` / OFS no longer pass package export. New blocker kind
+`not_ifc_ready`. Playwright fab-release E2E (RFI gate) unchanged.
+
+### 2026-07-25 — Dashboard SoT includes R&R; Approval = IFC/Released (Slice 9)
+
+Document Hub stage maps include R&R. `DrawingApprovalStatusCard` prefers
+`submittalPipelineRollupFromSubmittals`. `SteelExecutionStatusCard` Approval
+metric counts IFC/Released only (not OFS).
+
+### 2026-07-25 — Legacy cleanup + dual-source docs (Slice 10)
+
+Removed unreachable `DrawingKanban`. Documented remaining dual-source in
+`docs/architecture/drawing-workflow-dual-source.md`. Scrubbed stale
+“R&R → IFA” product copy. Sheet-stage recovery path kept for sets without
+submittals.
+
+### 2026-07-25 — R&R/OFS/BFA risk aging + Critical ActionItems (Slice 7)
+
+Time-sensitive stages (**R&R**, **OFS**, **BFA**) get Normal / Attention /
+Urgent / Critical tiers from working-day countdown (or days-stuck when no
+due). Surfaced on Process Board (critical filter + pills), Submittal detail,
+and Piece Impact flags. Critical packages draft deduped ActionItems via
+`ensureCriticalAgingActionItems` — Alerts Center Refresh stays reload-only
+(no `generate-alerts` Edge Function). Package fab-release gate unify remains
+Slice 8; dashboard SoT remains Slice 9.
+
+### 2026-07-25 — Piece release requires IFC/Released governing drawings (Slice 6)
+
+Canonical piece / work-package fabrication readiness no longer treats bare
+Approved / AAN (or sheet-response / review-only evidence) as release-ready.
+`piece_control_drawing_is_approved` and client `isDrawingApproved` /
+`isGoverningDrawingReleaseReady` agree: ready = most-recent linked submittal
+derives **IFC** (Approved/AAN + GC/Owner) or **Released for Fabrication**, or
+`drawings.stage` is IFC/Released, or current-revision
+`approved_for_fabrication` signoff. OFS, R&R, BFA, OFA, and IFA fail closed.
+Piece Register surfaces a Piece Impact panel (governing sheet/rev/stage +
+exposure flags) when a single piece is selected. Package-level
+`fabReleaseGate` / `isApprovedForFab` unification remains Slice 8.
+
+### 2026-07-25 — OFS is mandatory scrub before IFC (drawing approval lifecycle, Slice 4)
+
+Approved packages must pass through **OFS — Out for Scrub** before IFC /
+Released for Fabrication. `submittal_approved_to_scrub` defaults ON and
+`nextSubmittalAction` defaults `approvedRoutesToScrub: true` so BFA
+`Approved` follows the same OFS → IFC → Released path as `Approved as Noted`.
+OFS remains a derived stage (Approved/AAN + Detailer-class BIC); scrub is
+**not** a resubmittal — Approved/AAN → Under Review is removed from the
+status graph, OFS→OFA and skip-OFS releases are blocked without an audited
+override, and OFS→IFC requires the scrub checklist (`ofsCompletionGate` +
+`IfcIssueDialog`) stamped into `submittals.metadata.ofs_checklist`.
 
 ### 2026-06-20 — DB migration baseline squash (P0 #2)
 

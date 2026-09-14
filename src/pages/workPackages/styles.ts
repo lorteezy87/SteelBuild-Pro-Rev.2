@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import { phaseColor, STATUS_TONE } from "./format";
 
 export const mono: CSSProperties = { fontFamily: "var(--font-mono)" };
-export const display: CSSProperties = { fontFamily: "'Space Grotesk', var(--font-display)" };
+export const display: CSSProperties = { fontFamily: "var(--font-display)" };
 
 export const pageStyle: CSSProperties = {
   padding: 18,
@@ -10,18 +10,6 @@ export const pageStyle: CSSProperties = {
   flexDirection: "column",
   gap: 14,
   minWidth: 0,
-};
-
-export const heroStyle: CSSProperties = {
-  border: "1px solid color-mix(in srgb, var(--border-default) 84%, white 16%)",
-  borderRadius: 18,
-  background: "linear-gradient(135deg, color-mix(in srgb, var(--bg-surface-high) 94%, #000 6%), color-mix(in srgb, var(--bg-surface) 86%, #000 14%))",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 18px 42px rgba(0,0,0,0.30)",
-  padding: 18,
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) auto",
-  gap: 18,
-  alignItems: "end",
 };
 
 export const eyebrowStyle: CSSProperties = {
@@ -32,97 +20,6 @@ export const eyebrowStyle: CSSProperties = {
   textTransform: "uppercase",
   color: "var(--accent)",
 };
-
-export const heroTitleStyle: CSSProperties = {
-  ...display,
-  fontSize: 34,
-  lineHeight: 1,
-  fontWeight: 900,
-  color: "var(--text-primary)",
-  marginTop: 6,
-};
-
-export const heroMetaStyle: CSSProperties = {
-  display: "flex",
-  gap: 8,
-  flexWrap: "wrap",
-  marginTop: 12,
-  ...mono,
-  fontSize: 9,
-  fontWeight: 800,
-  color: "var(--text-muted)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-};
-
-export const heroActionStyle: CSSProperties = {
-  display: "grid",
-  gap: 10,
-  justifyItems: "end",
-};
-
-export const viewToggleStyle: CSSProperties = {
-  display: "inline-flex",
-  gap: 5,
-  padding: 5,
-  border: "1px solid var(--border-default)",
-  borderRadius: 14,
-  background: "var(--bg-surface-low)",
-};
-
-export const viewButtonStyle = (active): CSSProperties => ({
-  height: 30,
-  padding: "0 10px",
-  border: `1px solid ${active ? "var(--accent)" : "transparent"}`,
-  borderRadius: 10,
-  background: active ? "var(--accent-muted)" : "transparent",
-  color: active ? "var(--accent)" : "var(--text-secondary)",
-  ...mono,
-  fontSize: 9,
-  fontWeight: 900,
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  cursor: "pointer",
-});
-
-export const summaryGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-  gap: 10,
-};
-
-export const metricCardStyle = (tone): CSSProperties => ({
-  minHeight: 114,
-  border: `1px solid color-mix(in srgb, ${tone} 28%, var(--border-default))`,
-  borderRadius: 14,
-  padding: 13,
-  background: `linear-gradient(145deg, color-mix(in srgb, ${tone} 8%, var(--bg-surface-high)), var(--bg-surface-low))`,
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px rgba(0,0,0,0.24)",
-});
-
-export const metricLabelStyle: CSSProperties = {
-  ...mono,
-  fontSize: 8,
-  fontWeight: 900,
-  letterSpacing: "0.13em",
-  textTransform: "uppercase",
-  color: "var(--text-muted)",
-};
-
-export const phaseMetricStyle = (phase, active): CSSProperties => ({
-  textAlign: "left",
-  minHeight: 114,
-  border: `1px solid ${active ? phaseColor(phase) : "var(--border-default)"}`,
-  borderRadius: 14,
-  padding: 13,
-  background: active
-    ? `linear-gradient(145deg, color-mix(in srgb, ${phaseColor(phase)} 14%, var(--bg-surface-high)), var(--bg-surface-low))`
-    : "var(--bg-surface)",
-  cursor: "pointer",
-});
 
 export const controlPanelStyle: CSSProperties = {
   border: "1px solid var(--border-default)",
@@ -607,10 +504,10 @@ export const registerShellStyle: CSSProperties = {
 
 export const registerHeaderStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "26px 86px minmax(220px, 1.4fr) 110px 116px 132px 92px 70px 58px",
+  gridTemplateColumns: "26px 86px minmax(220px, 1.4fr) 110px 116px 104px 132px 92px 70px 58px",
   gap: 10,
   alignItems: "center",
-  minWidth: 900,
+  minWidth: 1000,
   padding: "9px 12px",
   borderBottom: "1px solid var(--divider)",
   background: "var(--bg-surface-low)",
@@ -626,10 +523,10 @@ export const registerRowStyle = (risk): CSSProperties => {
   const tone = risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--divider)";
   return {
     display: "grid",
-    gridTemplateColumns: "26px 86px minmax(220px, 1.4fr) 110px 116px 132px 92px 70px 58px",
+    gridTemplateColumns: "26px 86px minmax(220px, 1.4fr) 110px 116px 104px 132px 92px 70px 58px",
     gap: 10,
     alignItems: "center",
-    minWidth: 900,
+    minWidth: 1000,
     padding: "10px 12px",
     borderBottom: "1px solid var(--divider)",
     borderLeft: `3px solid ${tone}`,

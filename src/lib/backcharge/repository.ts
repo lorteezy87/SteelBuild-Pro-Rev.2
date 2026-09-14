@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { computeTmTicketTotal } from "./cost";
 import type { Backcharge, BackchargeEvent, BackchargeEventType, TmTicket } from "./types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const from = (table: string): any => (supabase.from as unknown as (t: string) => any)(table);
 
 async function logEvent(ev: {
@@ -34,7 +34,7 @@ async function logEvent(ev: {
     });
   } catch (err) {
     // Audit is best-effort — never fail the backcharge write on a log failure.
-    // eslint-disable-next-line no-console
+     
     console.warn("[backcharge] event log failed:", err);
   }
 }
@@ -55,11 +55,57 @@ export async function getBackcharge(id: string): Promise<Backcharge | null> {
   return (data as Backcharge) || null;
 }
 
+/**
+ * Backcharge numbers are contractual identifiers minted by create_backcharge()
+ * inside the inserting transaction, and trg_enforce_backcharge_guards rejects a
+ * direct write with "Use create_backcharge() — numbers are minted there". The
+ * guard tests a transaction-local GUC only the RPC sets, so the plain
+ * .insert() this used to do could never succeed.
+ *
+ * The RPC forces status 'draft' and mints the number; it does not cover
+ * notice_date or attachments, which the form does collect, so those are written
+ * straight after. The guard gates INSERT, not this UPDATE. Status, approval and
+ * collection stamps are deliberately NOT carried — they move only through the
+ * lifecycle RPCs.
+ *
+ * It also writes its own 'created' event via log_backcharge_event(), so the
+ * client-side "created" entry that used to live here is gone; keeping it would
+ * double every backcharge's first audit row.
+ */
+const BC_RPC_DERIVED = ["backcharge_number", "status", "ticket_total"] as const;
+const BC_RPC_CARRIED = ["notice_date", "attachments"] as const;
+
 export async function createBackcharge(input: Partial<Backcharge>): Promise<Backcharge> {
-  const { data, error } = await from("backcharges").insert(input).select().single();
+  const payload: Record<string, unknown> = { ...input };
+  const projectId = payload.project_id;
+  if (typeof projectId !== "string" || projectId === "") {
+    throw new Error("project_id is required to create a backcharge");
+  }
+  delete payload.project_id;
+  for (const column of BC_RPC_DERIVED) delete payload[column];
+
+  const carried: Record<string, unknown> = {};
+  for (const column of BC_RPC_CARRIED) {
+    if (column in payload) carried[column] = payload[column];
+  }
+
+  const { data, error } = await supabase.rpc("create_backcharge", {
+    p_project_id: projectId,
+    p_payload: payload as never,
+  });
   if (error) throw error;
-  const bc = data as Backcharge;
-  await logEvent({ backcharge_id: bc.id, project_id: bc.project_id, event_type: "created", to_status: bc.status, detail: bc.title });
+  let bc = data as unknown as Backcharge;
+
+  if (Object.keys(carried).length > 0) {
+    const { data: patched, error: patchError } = await from("backcharges")
+      .update(carried)
+      .eq("id", bc.id)
+      .select()
+      .single();
+    if (patchError) throw patchError;
+    bc = patched as Backcharge;
+  }
+
   if (bc.notice_date) {
     await logEvent({ backcharge_id: bc.id, project_id: bc.project_id, event_type: "notice_sent", detail: `Notice dated ${bc.notice_date}` });
   }

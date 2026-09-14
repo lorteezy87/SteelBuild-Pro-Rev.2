@@ -1,33 +1,28 @@
 /**
  * moduleRegistry.js - Central navigation and module configuration
- *
- * Single source of truth for:
- *  - Top-bar tab definitions (PRIMARY_TABS)
- *  - Module catalog (ALL_MODULES)
- *  - Modules dropdown groups (NAV_GROUPS)
- *  - Sidebar groups (SIDEBAR_GROUPS)
- *  - Page display labels (PAGE_LABELS)
- *
- * Shared by Layout shell, ModulesDropdown, SidebarNav, MobileDrawer,
- * Breadcrumbs, and BellDropdown.
  */
 
-// ── Tab definitions ──────────────────────────────────────────────────
+import { isNativePlatform } from "@/lib/native/platform";
+
+const NATIVE_HIDDEN_PAGES = new Set(["Billing"]);
+function hideNativePages(groups) {
+  if (!isNativePlatform()) return groups;
+  return groups
+    .map((g) => ({ ...g, items: (g.items || []).filter((it) => !NATIVE_HIDDEN_PAGES.has(it.page)) }))
+    .filter((g) => (g.items || []).length > 0);
+}
+
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
   { label: "PROJECTS",    pages: ["ProjectsHub", "Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
-  // Consolidation (Phase 1): RESOURCES folded into FABRICATION and QUALITY
-  // folded into FIELD — fewer logical groups, and every page stays reachable
-  // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
-  // FieldPlan added here so it's no longer orphaned from the registry.
   { label: "FABRICATION", pages: ["WorkPackages", "PieceRegister", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
-  { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "ProjectCalendar", "LookAheadSchedule"] },
+  { label: "SCHEDULE",    pages: ["ScheduleHub", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldToday", "FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "COST",        pages: ["CostHub", "ChangeOrders", "Backcharges", "SOV", "PayApplications", "ContractManagement"] },
-  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
+  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "JobStatusReport", "Reports", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
 
@@ -45,7 +40,6 @@ export const TAB_DEFAULT_PAGE = {
   CLOSEOUT:    "ProjectCloseout",
 };
 
-// ── Full module catalog (used for grid dropdown + page label lookup) ─
 export const ALL_MODULES = [
   { icon: "\u25C8", name: "Dashboard",               group: "Overview",      page: "Dashboard" },
   { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
@@ -78,7 +72,6 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCCB", name: "Contract Management", group: "Cost",         page: "ContractManagement" },
   { icon: "\uD83D\uDCE6", name: "Deliveries",         group: "Logistics",     page: "Deliveries" },
   { icon: "\u25A5", name: "Schedule",                 group: "Field",         page: "ScheduleHub" },
-  { icon: "\u25A5", name: "Schedule Board",           group: "Field",         page: "Schedule" },
   { icon: "\uD83D\uDCCB", name: "Daily Logs",         group: "Field",         page: "DailyLogs" },
   { icon: "\uD83D\uDCF7", name: "Photos",             group: "Field",         page: "Photos" },
   { icon: "\u25CE", name: "Budget Control",           group: "Cost",          page: "CostHub" },
@@ -90,7 +83,6 @@ export const ALL_MODULES = [
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
   { icon: "\uD83D\uDCCB", name: "Reports",            group: "Reporting",     page: "ReportsHub" },
   { icon: "\uD83D\uDCCB", name: "Job Status Report",  group: "Reporting",     page: "JobStatusReport" },
-
   { icon: "\uD83D\uDCCA", name: "Activity Log",       group: "Reporting",     page: "Activity" },
   { icon: "\uD83D\uDD0D", name: "Inspections",        group: "Quality",       page: "Inspections" },
   { icon: "\u26A0", name: "Safety",                   group: "Quality",       page: "Safety" },
@@ -100,15 +92,15 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDEE1", name: "Warranty",           group: "Closeout",      page: "Warranty" },
   { icon: "\uD83D\uDCDD", name: "Change Requests",    group: "Closeout",      page: "ChangeRequests" },
   { icon: "\uD83C\uDFE2", name: "Vendors",            group: "Setup",         page: "Vendors" },
-  { icon: "\uD83D\uDCD0", name: "Calculator",                group: "Tools", page: "Calculator" }, // 🧮 calculator
+  { icon: "\uD83D\uDCD0", name: "Calculator",                group: "Tools", page: "Calculator" },
   { icon: "📐", name: "Ft/In Calculator",          group: "Tools", page: "FeetInchesCalculator" },
   { icon: "\u2696",       name: "Steel Weight Calculator",   group: "Tools", page: "SteelWeightCalculator" },
   { icon: "\uD83C\uDFD7", name: "Crane Pick Calculator",     group: "Tools", page: "CranePickCalculator" },
   { icon: "\u2194",       name: "Decimal / Fraction Converter", group: "Tools", page: "DecimalFractionConverter" },
+  { icon: "📝", name: "Notes", group: "Tools", page: "Notes" },
 ];
 
-// ── Modules dropdown nav groups (3-column layout) ────────────────────
-export const NAV_GROUPS = [
+export const NAV_GROUPS = hideNativePages([
   {
     label: "OVERVIEW",
     items: [
@@ -137,6 +129,7 @@ export const NAV_GROUPS = [
       { label: "Schedule",     icon: "▥", page: "ScheduleHub" },
       { label: "RFIs",         icon: "⚑", page: "RFIs", badgeKey: "rfi" },
       { label: "Action Items", icon: "☑", page: "ActionItems" },
+      { label: "Email Inbox",  icon: "✉", page: "EmailInbox" },
       { label: "Production Notes", icon: "📝", page: "ProductionNotes" },
     ],
   },
@@ -192,11 +185,11 @@ export const NAV_GROUPS = [
     label: "TOOLS",
     items: [
       { label: "Calculators", icon: "🧮", page: "CalculatorsHub" },
+      { label: "Notes", icon: "📝", page: "Notes" },
     ],
   },
-];
+]);
 
-// Column assignment for the 3-column modules dropdown
 const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DETAILING", "PROJECT MANAGEMENT"];
 const COLUMN_2_GROUPS = ["PRODUCTION", "FIELD", "DOCUMENTS & REPORTS"];
 const COLUMN_3_GROUPS = ["COST", "ADMINISTRATION", "TOOLS"];
@@ -207,8 +200,7 @@ export function getDropdownColumn(groupLabel) {
   return 2;
 }
 
-// ── Sidebar groups (desktop + mobile drawer) ─────────────────────────
-export const SIDEBAR_GROUPS = [
+export const SIDEBAR_GROUPS = hideNativePages([
   {
     label: "OVERVIEW",
     collapsible: false,
@@ -219,7 +211,6 @@ export const SIDEBAR_GROUPS = [
     ],
   },
   {
-    // Projects hub: the project record + Scope / Contacts / Members as tabs.
     label: "PROJECTS",
     collapsible: true,
     items: [
@@ -227,7 +218,6 @@ export const SIDEBAR_GROUPS = [
     ],
   },
   {
-    // The moat. Drawings / Submittals / Doc Control / 3D model are tabs inside.
     label: "DETAILING",
     collapsible: true,
     items: [
@@ -241,6 +231,8 @@ export const SIDEBAR_GROUPS = [
       { label: "Schedule",       icon: "▥", page: "ScheduleHub" },
       { label: "RFIs",           icon: "⚑", page: "RFIs", badgeKey: "rfi" },
       { label: "Action Items",   icon: "☑", page: "ActionItems" },
+      { label: "Email Inbox",    icon: "✉", page: "EmailInbox" },
+      { label: "Production Notes", icon: "📝", page: "ProductionNotes" },
     ],
   },
   {
@@ -267,7 +259,6 @@ export const SIDEBAR_GROUPS = [
     ],
   },
   {
-    // One money home: Budget Control hubs Budget Detail + Cost Dashboard.
     label: "COST",
     collapsible: true,
     items: [
@@ -276,6 +267,7 @@ export const SIDEBAR_GROUPS = [
       { label: "Schedule of Values",   icon: "📊", page: "SOV" },
       { label: "Pay Applications",     icon: "🧾", page: "PayApplications" },
       { label: "Backcharge Defense",   icon: "⚖", page: "Backcharges" },
+      { label: "Contract Management",  icon: "📑", page: "ContractManagement" },
       { label: "Expenses",             icon: "💰", page: "Expenses" },
     ],
   },
@@ -298,20 +290,18 @@ export const SIDEBAR_GROUPS = [
     ],
   },
   {
-    // The five steel calculators, collapsed into one Tools hub (tabs).
     label: "TOOLS",
     collapsible: true,
     items: [
-      { label: "Calculators",                  icon: "🧮", page: "CalculatorsHub" },
+      { label: "Calculators", icon: "🧮", page: "CalculatorsHub" },
+      { label: "Notes",       icon: "📝", page: "Notes" },
     ],
   },
-];
+]);
 
-// ── Page display labels (built from ALL_MODULES + overrides) ─────────
 export const PAGE_LABELS = (() => {
   const labels = {};
   ALL_MODULES.forEach((mod) => { labels[mod.page] = mod.name; });
-  // Add pages not covered by ALL_MODULES
   Object.assign(labels, {
     Dashboard:       "Dashboard",
     CommandCenter:   "Command Center",
@@ -321,20 +311,17 @@ export const PAGE_LABELS = (() => {
     FeatureFlagsAdmin: "Feature Flags",
     Expenses:        "Expenses",
     EmailInbox:      "Email Inbox",
-    // Moved out of the nav into Settings → Setup & Admin, but still routable, so
-    // keep their display labels for breadcrumbs / document title.
     Onboarding:      "Onboarding",
     DataExchange:    "Data Exchange",
     Integrations:    "Integrations",
     Tutorial:        "Tutorial / Help",
-    // Consolidation hubs (leaner-nav 2026-06-13).
     ProjectsHub:     "Projects",
     CalculatorsHub:  "Calculators",
+    Notes:           "Notes",
   });
   return labels;
 })();
 
-// ── Severity colors (used by nav alert badges) ──────────────────────
 export const SEVERITY_COLOR = {
   Critical: "var(--status-error)",
   High:     "var(--status-warning)",
@@ -342,7 +329,6 @@ export const SEVERITY_COLOR = {
   Low:      "var(--text-muted)",
 };
 
-// ── Sidebar collapse persistence ─────────────────────────────────────
 const SIDEBAR_LS_KEY = "sbp-nav-groups";
 
 export function loadSidebarState() {
@@ -359,7 +345,6 @@ export function saveSidebarState(state) {
   } catch { /* ignore */ }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
 export function timeAgo(dateStr) {
   if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -371,7 +356,6 @@ export function timeAgo(dateStr) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ── Dev-time schema validation ───────────────────────────────────────
 if (import.meta.env.DEV) {
   import("./schemas").then(({ validateNavConfig }) => {
     validateNavConfig({
@@ -383,6 +367,3 @@ if (import.meta.env.DEV) {
     });
   });
 }
-
-
-

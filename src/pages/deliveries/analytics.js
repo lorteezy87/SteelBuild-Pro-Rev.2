@@ -1,5 +1,9 @@
 const STATUS_ORDER = ["Scheduled", "Loading", "In Transit", "Partial", "Delayed", "Rejected", "Delivered"];
-const CLOSED_STATUSES = new Set(["delivered", "complete", "completed", "closed", "cancelled", "canceled"]);
+// Terminal statuses across both vocabularies on the deliveries union table
+// (logistics: Delivered; procurement pipeline: Received / Cancelled).
+const CLOSED_STATUSES = new Set(["delivered", "received", "complete", "completed", "closed", "cancelled", "canceled"]);
+/** The procurement pipeline shares the deliveries table; its rows are not logistics loads. */
+const PROCUREMENT_TYPE = "PROCUREMENT";
 const ISSUE_STATUSES = new Set(["partial", "rejected", "delayed"]);
 const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -34,6 +38,10 @@ function normalizeStatus(status) {
 
 function isClosedStatus(status) {
   return CLOSED_STATUSES.has(normalizeStatus(status).toLowerCase());
+}
+
+export function isProcurementRow(delivery) {
+  return String(delivery?.delivery_type || "").toUpperCase() === PROCUREMENT_TYPE;
 }
 
 function isSameDay(a, b) {
@@ -159,7 +167,9 @@ export function getDeliverySignals(delivery, options = {}) {
 export function buildDeliveryMetrics(deliveries = [], workPackages = [], options = {}) {
   const today = todayStart(options.today);
   const workPackagesById = new Map(workPackages.map((wp) => [String(wp.id), wp]));
-  const active = deliveries.filter((delivery) => !delivery?.is_deleted);
+  // Logistics KPIs only: drop soft-deleted rows and the procurement pipeline
+  // (delivery_type = 'PROCUREMENT'), which the Procurement page owns.
+  const active = deliveries.filter((delivery) => !delivery?.is_deleted && !isProcurementRow(delivery));
   const enriched = active.map((delivery) => {
     const workPackage = delivery.work_package_id
       ? workPackagesById.get(String(delivery.work_package_id))

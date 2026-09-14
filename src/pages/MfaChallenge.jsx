@@ -68,12 +68,12 @@ export default function MfaChallenge() {
   );
 }
 
-const wrap = { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "#0B1220" };
-const card = { width: "100%", maxWidth: 400, padding: 32, borderRadius: 18, background: "#111A2B", border: "1px solid #23324B", boxShadow: "0 30px 80px rgba(0,0,0,.45)" };
-const title = { color: "#F1F5F9", margin: "0 0 6px", fontSize: 22, fontWeight: 800, letterSpacing: "-.02em" };
-const body = { color: "#94A3B8", margin: 0, fontSize: 14, lineHeight: 1.5 };
-const label = { display: "block", marginBottom: 6, color: "#CBD5E1", fontSize: 13, fontWeight: 600 };
+const wrap = { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "var(--bg-page)" };
+const card = { width: "100%", maxWidth: 400, padding: 32, borderRadius: 18, background: "var(--bg-surface)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-lg)" };
+const title = { color: "var(--text-primary)", margin: "0 0 6px", fontSize: 22, fontWeight: 800, letterSpacing: "-.02em" };
+const body = { color: "var(--text-muted)", margin: 0, fontSize: 14, lineHeight: 1.5 };
+const label = { display: "block", marginBottom: 6, color: "var(--text-secondary)", fontSize: 13, fontWeight: 600 };
 const input = { width: "100%" };
-const errorBox = { padding: "10px 13px", background: "#3F1D1D", border: "1px solid #7F1D1D", borderRadius: 10, color: "#FCA5A5", fontSize: 13 };
-const primaryBtn = { width: "100%", padding: "11px 16px", borderRadius: 10, border: 0, background: "#F2A706", color: "#111", fontWeight: 800, fontSize: 15 };
-const ghostBtn = { width: "100%", padding: "9px 16px", borderRadius: 10, border: "1px solid #23324B", background: "transparent", color: "#94A3B8", fontWeight: 600, fontSize: 14, cursor: "pointer" };
+const errorBox = { padding: "10px 13px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 10, color: "var(--status-error)", fontSize: 13 };
+const primaryBtn = { width: "100%", padding: "11px 16px", borderRadius: 10, border: 0, background: "var(--accent)", color: "var(--on-accent)", fontWeight: 800, fontSize: 15 };
+const ghostBtn = { width: "100%", padding: "9px 16px", borderRadius: 10, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", fontWeight: 600, fontSize: 14, cursor: "pointer" };

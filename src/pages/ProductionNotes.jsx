@@ -11,181 +11,105 @@
  * selected meeting date. `is_high_priority` powers the yellow highlight
  * (semantically identical: "this needs attention").
  *
+ * Folders are org-scoped. Every bullet belongs to one folder. A folder may
+ * be unlinked (General Notes), linked to one job, or linked to many. Access
+ * is enforced server-side: a linked folder is visible only when the user has
+ * every linked job.
+ *
  * Deferred: print/PDF export, AI-generated bullets, drag-to-reorder.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Trash2, X, Highlighter, CalendarDays } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, X, CalendarDays, FolderTree as FolderTreeIcon } from "lucide-react";
 import { toast } from "sonner";
-import { entities } from "@/api/supabaseClient";
 import { CommandBar, Button } from "@/components/design-system";
-import { logActivity } from "@/services/auditLogger";
-
-// ─── Date helpers ──────────────────────────────────────────────────────────
-const toISODate = (d) => {
-  const dt = d instanceof Date ? d : new Date(d);
-  const yyyy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-/**
- * Default meeting date = the most recent Tuesday on or before today.
- * (User runs the meeting on Tuesdays per the OneNote example "4/21/2026"
- * which was a Tuesday. This is documented in the commit body.)
- */
-const mostRecentTuesday = () => {
-  const today = new Date();
-  const dow = today.getDay(); // 0 = Sun, 2 = Tue
-  const diff = (dow - 2 + 7) % 7;
-  today.setDate(today.getDate() - diff);
-  return toISODate(today);
-};
-
-const formatLongDate = (iso) => {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt
-    .toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
-    .toUpperCase()
-    .replace(",", "");
-};
-
-const shiftDate = (iso, days) => {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + days);
-  return toISODate(dt);
-};
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { useOrg } from "@/components/shared/OrgContext";
+import { usePermissions } from "@/services/permissions";
+import { FolderTree } from "@/components/productionnotes/FolderTree";
+import { FolderLinkDialog } from "@/components/productionnotes/FolderLinkDialog";
+import { ProductionNoteRows } from "@/components/productionnotes/ProductionNoteRows";
+import { canManageFolderLinks, canOrganizeFolders } from "@/lib/noteFolders/domain";
+import {
+  deriveProductionNotesViewModel,
+  formatLongDate,
+  mostRecentTuesday,
+  shiftDate,
+} from "@/pages/productionNotes/productionNotesDerive";
+import { useProductionNotesWorkspace } from "@/pages/productionNotes/useProductionNotesWorkspace";
 
 export default function ProductionNotes() {
-  const qc = useQueryClient();
+  const { currentOrg } = useOrg();
+  const { role } = usePermissions();
+  const orgId = currentOrg?.id ?? null;
+  const canOrganize = canOrganizeFolders(role);
+  const canManageLinks = canManageFolderLinks(role);
 
   const [meetingDate, setMeetingDate] = useState(mostRecentTuesday());
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectPickerQuery, setProjectPickerQuery] = useState("");
-  const [draftBullet, setDraftBullet] = useState({}); // { [projectId]: string }
-  const draftInputRefs = useRef({});
+  const [selectedFolderId, setSelectedFolderId] = useState(null);
+  const [folderNavOpen, setFolderNavOpen] = useState(false);
+  const [linkingFolder, setLinkingFolder] = useState(null);
 
-  // ─── Data ───────────────────────────────────────────────────────────────
-  const { data: projects = [] } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => entities.Project.list(),
-    staleTime: 5 * 60 * 1000,
+  const {
+    projectsQuery,
+    foldersQuery,
+    notesQuery,
+    selectedFolder,
+    activeFolderId,
+    createNote: createMut,
+    updateNote: updateMut,
+    deleteNote: deleteMut,
+    createFolder: createFolderMut,
+    renameFolder: renameFolderMut,
+    archiveFolder: archiveFolderMut,
+    linkFolder: linkFolderMut,
+  } = useProductionNotesWorkspace({
+    orgId,
+    meetingDate,
+    selectedFolderId,
+    onSelectedFolderArchived: setSelectedFolderId,
+    onLinksUpdated: () => setLinkingFolder(null),
   });
+  const folderWorkspace = foldersQuery.data;
+  const folders = folderWorkspace?.folders ?? [];
+  const folderWorkspaceReady = Boolean(folderWorkspace && !foldersQuery.isError);
+  const projects = projectsQuery.data ?? [];
+  const notes = notesQuery.data ?? [];
+  const {
+    isLoading: notesLoading,
+    isError: notesError,
+    error: notesErrorValue,
+    refetch: refetchNotes,
+  } = notesQuery;
 
-  // All notes for the selected meeting date.
-  const { data: notes = [], isLoading: notesLoading } = useQuery({
-    queryKey: ["production-notes", meetingDate],
-    queryFn: () => entities.ProductionNote.filter({ note_date: meetingDate }, "created_at"),
-    staleTime: 30 * 1000,
-  });
+  useEffect(() => {
+    if (!selectedFolderId && folderWorkspace?.general_notes_id) {
+      setSelectedFolderId(folderWorkspace.general_notes_id);
+    }
+  }, [selectedFolderId, folderWorkspace?.general_notes_id]);
 
-  // ─── Mutations ──────────────────────────────────────────────────────────
-  const createMut = useMutation({
-    mutationFn: (data) => entities.ProductionNote.create(data),
-    onMutate: async (data) => {
-      await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
-      const previous = qc.getQueryData(["production-notes", meetingDate]);
-      const optimistic = { ...data, id: `tmp-${Date.now()}-${Math.random()}`, _optimistic: true };
-      qc.setQueryData(["production-notes", meetingDate], (old = []) => [...old, optimistic]);
-      return { previous, optimisticId: optimistic.id };
-    },
-    onError: (err, _data, ctx) => {
-      if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error(err.message || "Failed to add bullet");
-    },
-    onSuccess: (record, vars) => {
-      qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] });
-      logActivity("production_note", "created", record, {
-        projectId: vars.project_id,
-        projectName: vars.project_name,
-        description: `Added bullet to ${vars.project_name} (${meetingDate})`,
-      });
-    },
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }) => entities.ProductionNote.update(id, data),
-    onMutate: async ({ id, data }) => {
-      await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
-      const previous = qc.getQueryData(["production-notes", meetingDate]);
-      qc.setQueryData(["production-notes", meetingDate], (old = []) =>
-        old.map((n) => (n.id === id ? { ...n, ...data } : n))
-      );
-      return { previous };
-    },
-    onError: (err, _data, ctx) => {
-      if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error(err.message || "Update failed");
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id) => entities.ProductionNote.delete(id),
-    onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
-      const previous = qc.getQueryData(["production-notes", meetingDate]);
-      qc.setQueryData(["production-notes", meetingDate], (old = []) => old.filter((n) => n.id !== id));
-      return { previous };
-    },
-    onError: (err, _id, ctx) => {
-      if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error("Delete failed");
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
-  });
-
-  // ─── Derived: group notes by project ────────────────────────────────────
-  const projectsById = useMemo(() => {
-    const m = new Map();
-    projects.forEach((p) => m.set(p.id, p));
-    return m;
-  }, [projects]);
-
-  // Each project's bullets, in insertion order. Skip optimistic-only projects.
-  const projectRows = useMemo(() => {
-    const grouped = new Map();
-    notes.forEach((n) => {
-      if (!n.project_id) return;
-      if (!grouped.has(n.project_id)) grouped.set(n.project_id, []);
-      grouped.get(n.project_id).push(n);
-    });
-    // Sort by project name for stable ordering.
-    return Array.from(grouped.entries())
-      .map(([projectId, bullets]) => ({
-        projectId,
-        project: projectsById.get(projectId),
-        bullets,
-      }))
-      .filter((r) => r.project) // hide rows whose project was deleted
-      .sort((a, b) => (a.project?.name || "").localeCompare(b.project?.name || ""));
-  }, [notes, projectsById]);
-
-  const projectsWithRows = useMemo(() => new Set(projectRows.map((r) => r.projectId)), [projectRows]);
-
-  const availableProjects = useMemo(() => {
-    const q = projectPickerQuery.trim().toLowerCase();
-    return projects
-      .filter((p) => !projectsWithRows.has(p.id))
-      .filter((p) =>
-        !q ||
-        (p.name || "").toLowerCase().includes(q) ||
-        (p.project_number || "").toLowerCase().includes(q)
-      )
-      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  }, [projects, projectsWithRows, projectPickerQuery]);
+  const { projectsById, projectRows, availableProjects, totalBullets, highlightedCount } =
+    useMemo(
+      () => deriveProductionNotesViewModel(projects, notes, projectPickerQuery),
+      [notes, projectPickerQuery, projects],
+    );
 
   // ─── Actions ────────────────────────────────────────────────────────────
   const addProjectRow = (project) => {
+    if (!activeFolderId) {
+      toast.error("Select a folder first");
+      return;
+    }
     // Seed a single empty bullet so the row appears and is ready to type into.
     createMut.mutate({
       project_id: project.id,
       project_name: project.name,
       note_date: meetingDate,
+      date_noted: meetingDate,
+      folder_id: activeFolderId,
       content: "",
       category: "General",
       is_high_priority: false,
@@ -202,11 +126,13 @@ export default function ProductionNotes() {
 
   const addBullet = (projectId, content = "") => {
     const project = projectsById.get(projectId);
-    if (!project) return;
+    if (!project || !activeFolderId) return;
     createMut.mutate({
       project_id: projectId,
       project_name: project.name,
       note_date: meetingDate,
+      date_noted: meetingDate,
+      folder_id: activeFolderId,
       content,
       category: "General",
       is_high_priority: false,
@@ -219,6 +145,10 @@ export default function ProductionNotes() {
     updateMut.mutate({ id: note.id, data: { content: newText } });
   };
 
+  const updateBulletDates = (note, patch) => {
+    updateMut.mutate({ id: note.id, data: patch });
+  };
+
   const toggleHighlight = (note) => {
     updateMut.mutate({ id: note.id, data: { is_high_priority: !note.is_high_priority } });
   };
@@ -226,10 +156,6 @@ export default function ProductionNotes() {
   const deleteBullet = (note) => {
     deleteMut.mutate(note.id);
   };
-
-  // ─── Render ─────────────────────────────────────────────────────────────
-  const totalBullets = notes.length;
-  const highlightedCount = notes.filter((n) => n.is_high_priority).length;
 
   return (
     <div className="sb-dashboard-reference-page" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-page)" }}>
@@ -259,11 +185,21 @@ export default function ProductionNotes() {
           count={totalBullets}
           unit=" · BULLETS"
           subtitle={
-            highlightedCount > 0
-              ? `${projectRows.length} project${projectRows.length === 1 ? "" : "s"} · ${highlightedCount} highlighted`
-              : `${projectRows.length} project${projectRows.length === 1 ? "" : "s"}`
+            [
+              foldersQuery.isError ? "Folder data unavailable" : selectedFolder?.name || "Folders",
+              highlightedCount > 0
+                ? `${projectRows.length} project${projectRows.length === 1 ? "" : "s"} · ${highlightedCount} highlighted`
+                : `${projectRows.length} project${projectRows.length === 1 ? "" : "s"}`,
+            ].join(" · ")
           }
         >
+          <button
+            onClick={() => setFolderNavOpen((open) => !open)}
+            title="Folders"
+            style={navBtn()}
+          >
+            <FolderTreeIcon size={14} />
+          </button>
           <button
             onClick={() => setMeetingDate(shiftDate(meetingDate, -7))}
             title="Previous week"
@@ -301,13 +237,55 @@ export default function ProductionNotes() {
           >
             <CalendarDays size={14} />
           </button>
-          <Button variant="primary" icon="plus" onClick={() => setProjectPickerOpen(true)}>
+          <Button
+            variant="primary"
+            icon="plus"
+            disabled={!folderWorkspaceReady}
+            onClick={() => setProjectPickerOpen(true)}
+          >
             Add Project
           </Button>
         </CommandBar>
       </div>
 
       {/* Body */}
+      <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
+        <div
+          className="notes-folder-pane"
+          style={{
+            display: folderNavOpen ? "flex" : undefined,
+          }}
+        >
+          <FolderTree
+            folders={folders}
+            selectedId={activeFolderId}
+            onSelect={(id) => {
+              setSelectedFolderId(id);
+              setFolderNavOpen(false);
+            }}
+            onCreate={(parentFolderId, name) => createFolderMut.mutate({ parentFolderId, name })}
+            onRename={(folder, name) => renameFolderMut.mutate({ folder, name })}
+            onArchive={(folder) => archiveFolderMut.mutate(folder)}
+            onLinkJobs={setLinkingFolder}
+            projects={projects}
+            canOrganize={folderWorkspaceReady && canOrganize}
+            canManageLinks={folderWorkspaceReady && canManageLinks}
+          />
+        </div>
+        <style>{`
+          .notes-folder-pane { display: none; }
+          @media (min-width: 840px) {
+            .notes-folder-pane { display: flex; }
+          }
+          @media (max-width: 839px) {
+            .notes-folder-pane[style*="flex"] {
+              position: absolute;
+              inset: 0 auto 0 0;
+              z-index: 30;
+              box-shadow: 12px 0 32px rgba(0,0,0,0.35);
+            }
+          }
+        `}</style>
       <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px 96px" }}>
         <div
           style={{
@@ -357,7 +335,54 @@ export default function ProductionNotes() {
           </div>
 
           {/* Rows */}
-          {projectRows.length === 0 && !notesLoading && (
+          {foldersQuery.isLoading ? (
+            <div style={{ padding: "24px" }}>
+              <LoadingSkeleton variant="table" rows={5} />
+            </div>
+          ) : foldersQuery.isError ? (
+            <div
+              role="alert"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px 24px",
+                gap: 16,
+              }}
+            >
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+                Couldn’t load note folders
+              </p>
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 360 }}>
+                {toUserErrorMessage(foldersQuery.error, "Folder data is unavailable. Notes cannot be safely edited until it loads.")}
+              </p>
+              <Button variant="outline" onClick={() => foldersQuery.refetch()}>Retry folders</Button>
+            </div>
+          ) : notesLoading && projectRows.length === 0 ? (
+            <div style={{ padding: "24px" }}>
+              <LoadingSkeleton variant="table" rows={5} />
+            </div>
+          ) : notesError && projectRows.length === 0 ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px 24px",
+                gap: 16,
+              }}
+            >
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+                Couldn’t load production notes
+              </p>
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+                {toUserErrorMessage(notesErrorValue, "Something went wrong. Try again.")}
+              </p>
+              <Button variant="outline" onClick={() => refetchNotes()}>Retry</Button>
+            </div>
+          ) : projectRows.length === 0 ? (
             <div
               style={{
                 padding: "60px 24px",
@@ -370,39 +395,41 @@ export default function ProductionNotes() {
             >
               No notes for this meeting.
               <br />
-              <Button variant="primary" icon="plus" onClick={() => setProjectPickerOpen(true)} style={{ marginTop: 12 }}>
+              <Button
+                variant="primary"
+                icon="plus"
+                disabled={!folderWorkspaceReady}
+                onClick={() => setProjectPickerOpen(true)}
+                style={{ marginTop: 12 }}
+              >
                 Add a project to get started
               </Button>
             </div>
-          )}
-
-          {notesLoading && projectRows.length === 0 && (
-            <div
-              style={{
-                padding: "60px 24px",
-                textAlign: "center",
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                letterSpacing: "0.1em",
-              }}
-            >
-              LOADING…
-            </div>
-          )}
-
-          {projectRows.map((row) => (
-            <ProjectRow
-              key={row.projectId}
-              row={row}
+          ) : (
+            <ProductionNoteRows
+              rows={projectRows}
               onUpdateBulletText={updateBulletText}
+              onUpdateBulletDates={updateBulletDates}
               onToggleHighlight={toggleHighlight}
               onDeleteBullet={deleteBullet}
               onAddBullet={addBullet}
             />
-          ))}
+          )}
         </div>
       </div>
+      </div>
+
+      {linkingFolder && (
+        <FolderLinkDialog
+          folder={linkingFolder}
+          projects={projects}
+          pending={linkFolderMut.isPending}
+          onClose={() => setLinkingFolder(null)}
+          onSave={(projectIds, makeIndependent) =>
+            linkFolderMut.mutate({ folder: linkingFolder, projectIds, makeIndependent })
+          }
+        />
+      )}
 
       {/* Project picker modal */}
       {projectPickerOpen && (
@@ -559,121 +586,6 @@ export default function ProductionNotes() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ─── H4 fix: BulletRow + ProjectRow extracted to module scope ────────────────
-// Previously defined INSIDE ProductionNotes, causing re-creation on every
-// render which destroyed input focus and defeated optimistic updates.
-
-function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, onToggleHighlight, onDeleteBullet }) {
-  const [text, setText] = useState(note.content || "");
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    setText(note.content || "");
-  }, [note.id, note.content]);
-
-  const commit = () => {
-    const trimmed = text.replace(/\s+$/, "");
-    if (trimmed !== (note.content || "")) {
-      onUpdateBulletText(note, trimmed);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      commit();
-      if (isLast) {
-        if (text.trim()) onCreateNext();
-      } else {
-        const all = document.querySelectorAll(`[data-bullet-project="${projectId}"] [data-bullet-input]`);
-        const idx = Array.from(all).indexOf(e.currentTarget);
-        if (idx >= 0 && all[idx + 1]) all[idx + 1].focus();
-      }
-    } else if (e.key === "Backspace" && text === "" && !note._optimistic) {
-      e.preventDefault();
-      const all = document.querySelectorAll(`[data-bullet-project="${projectId}"] [data-bullet-input]`);
-      const idx = Array.from(all).indexOf(e.currentTarget);
-      onDeleteBullet(note);
-      setTimeout(() => {
-        const updated = document.querySelectorAll(`[data-bullet-project="${projectId}"] [data-bullet-input]`);
-        if (updated[idx - 1]) updated[idx - 1].focus();
-      }, 50);
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h") {
-      e.preventDefault();
-      onToggleHighlight(note);
-    }
-  };
-
-  const highlighted = !!note.is_high_priority;
-
-  return (
-    <div
-      style={{
-        display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 6px",
-        borderRadius: 4,
-        background: highlighted ? "color-mix(in srgb, var(--status-warning) 18%, transparent)" : "transparent",
-        borderLeft: highlighted ? "3px solid var(--status-warning)" : "3px solid transparent",
-        transition: "background 0.15s",
-      }}
-      className="bullet-row"
-    >
-      <span style={{ color: highlighted ? "var(--status-warning)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 14, lineHeight: 1.5, paddingTop: 1, userSelect: "none" }}>•</span>
-      <textarea
-        ref={inputRef}
-        data-bullet-input
-        value={text}
-        rows={1}
-        onChange={(e) => { setText(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
-        onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; }}
-        onBlur={commit}
-        onKeyDown={handleKeyDown}
-        placeholder={isLast ? "Type a bullet — Enter for next, Ctrl+H to highlight" : ""}
-        style={{ flex: 1, background: "transparent", border: "none", outline: "none", resize: "none", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.55, padding: "1px 0", fontWeight: highlighted ? 600 : 400 }}
-      />
-      <div className="bullet-actions" style={{ display: "flex", gap: 4, opacity: 0.65, transition: "opacity 0.15s" }}>
-        <button title="Highlight (Ctrl+H)" onClick={() => onToggleHighlight(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: highlighted ? "color-mix(in srgb, var(--status-warning) 25%, transparent)" : "transparent", color: highlighted ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Highlighter size={12} />
-        </button>
-        <button title="Delete bullet" onClick={() => onDeleteBullet(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: "transparent", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--status-error)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
-          <Trash2 size={12} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ProjectRow({ row, onUpdateBulletText, onToggleHighlight, onDeleteBullet, onAddBullet }) {
-  const { project, bullets, projectId } = row;
-  const renderable = bullets.length > 0 ? bullets : [];
-
-  return (
-    <div data-bullet-project={projectId} style={{ display: "grid", gridTemplateColumns: "260px 1fr", borderTop: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
-      <div style={{ padding: "14px 18px", borderRight: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column", gap: 4, minHeight: 60 }}>
-        {project.project_number && (<span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em" }}>{project.project_number}</span>)}
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3, wordBreak: "break-word" }}>{project.name}</span>
-        {project.gc_name && (<span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.05em" }}>{project.gc_name}</span>)}
-      </div>
-      <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 2 }}>
-        {renderable.map((note, idx) => (
-          <BulletRow
-            key={note.id}
-            note={note}
-            projectId={projectId}
-            isLast={idx === renderable.length - 1}
-            onCreateNext={() => onAddBullet(projectId, "")}
-            onUpdateBulletText={onUpdateBulletText}
-            onToggleHighlight={onToggleHighlight}
-            onDeleteBullet={onDeleteBullet}
-          />
-        ))}
-        <button onClick={() => onAddBullet(projectId, "")} style={{ alignSelf: "flex-start", marginTop: 4, padding: "3px 8px", borderRadius: 4, border: "1px dashed var(--divider)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--divider)"; }}>
-          <Plus size={11} /> Add bullet
-        </button>
-      </div>
     </div>
   );
 }

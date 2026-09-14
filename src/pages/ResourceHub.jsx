@@ -22,6 +22,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ResourcesControlCenter from "@/pages/resources/ResourcesControlCenter";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const CrewSchedule = lazyWithRetry(() => import("@/pages/ResourceScheduling"));
 const ResourceFormModal = lazyWithRetry(() => import("@/components/resources/ResourceFormModal"));
@@ -64,7 +65,7 @@ export default function ResourceHub() {
       toast.success("Resource updated");
       closeForm();
     },
-    onError: (e) => toast.error("Failed to update resource: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed to update resource: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const deleteMut = useMutation({
@@ -74,7 +75,7 @@ export default function ResourceHub() {
       toast.success("Resource deleted");
       setDeleteTarget(null);
     },
-    onError: (e) => toast.error("Failed to delete resource: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed to delete resource: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // The modal only calls onSave in edit mode; it owns the create mutation itself.

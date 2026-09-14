@@ -13,5 +13,8 @@ describe("feature flag catalog", () => {
     const invalid = FEATURE_FLAG_KEYS.filter((key) => !allowed.test(key));
     expect(invalid).toEqual([]);
   });
-});
 
+  it("does not expose Cost as an optional module after it became core", () => {
+    expect(FEATURE_FLAG_KEYS).not.toContain("module_cost");
+  });
+});

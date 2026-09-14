@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CLOSED_SUBMITTAL_STATUSES,
+  buildCurrentRevisionIdMap,
   buildCurrentRevisionMap,
   buildDrawingKpis,
   buildSetPackages,
@@ -22,6 +23,12 @@ import {
   toLocalDay,
   buildApprovalMatrixRows,
   summarizeApprovalMatrix,
+  sheetNeedsAction,
+  canWriteDetailingState,
+  canWriteDueDate,
+  canWriteOwner,
+  canWriteReadinessFlags,
+  submittalRoundCount,
 } from "../format";
 
 // These guard the Arizona (MST, UTC-7, no DST) date-display bug: a date-only
@@ -302,8 +309,16 @@ describe("rollupDrawingStage", () => {
     expect(rollupDrawingStage([{ stage: "Released" }, { stage: "Released" }] as any)).toBe("Released");
   });
 
-  it("surfaces 'Needs Action' when any sheet is rejected / R&R / returned", () => {
-    expect(rollupDrawingStage([{ stage: "IFA" }, { stage: "Rejected" }] as any)).toBe("Needs Action");
+  it("surfaces 'Needs Action' when any sheet's set-level verdict is rejected (stage can never be 'Rejected')", () => {
+    expect(rollupDrawingStage([{ stage: "IFA" }, { stage: "BFA", set_approval_status: "rejected" }] as any)).toBe("Needs Action");
+    expect(rollupDrawingStage([{ stage: "IFA" }, { stage: "BFA", set_approval_status: "REJECTED" }] as any)).toBe("Needs Action");
+  });
+
+  it("sheetNeedsAction keys off set_approval_status only", () => {
+    expect(sheetNeedsAction({ set_approval_status: "rejected" } as any)).toBe(true);
+    expect(sheetNeedsAction({ set_approval_status: "pending_review" } as any)).toBe(false);
+    expect(sheetNeedsAction({ stage: "Rejected" } as any)).toBe(false);
+    expect(sheetNeedsAction(null)).toBe(false);
   });
 
   it("rolls up to 'In Review' when a sheet is mid-approval (IFA…IFC)", () => {
@@ -398,7 +413,9 @@ describe("buildSetPackages (the set↔submittal join behind every matrix row)", 
 
   it("ignores a Void submittal for governing owner and due-date dispatch", () => {
     const pkgs = buildSetPackages(
-      [{ id: "d1", drawing_set_id: "s1", assigned_to: "Sheet owner" }] as any,
+      // `reviewer` is the ONLY owner column on drawings — no assigned_to, no
+      // ball_in_court. Fixtures must not teach a shape production can't produce.
+      [{ id: "d1", drawing_set_id: "s1", reviewer: "Sheet owner" }] as any,
       [{ id: "s1", set_name: "Main Steel" }] as any,
       [
         { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 9, ball_in_court: "Void owner" },
@@ -455,11 +472,11 @@ describe("buildApprovalMatrixRows", () => {
     const rows = buildApprovalMatrixRows(sets, subs);
     expect(rows).toHaveLength(2); // s3 deleted → excluded
     const s1 = rows.find((r) => r.id === "s1");
-    expect(s1.submittals).toHaveLength(2);
-    expect(s1.latestSubmittal.id).toBe("b"); // round 2 wins
+    expect(s1?.submittals).toHaveLength(2);
+    expect(s1?.latestSubmittal?.id).toBe("b"); // round 2 wins
     const s2 = rows.find((r) => r.id === "s2");
-    expect(s2.submittals).toHaveLength(0); // its only submittal is deleted
-    expect(s2.latestSubmittal).toBeNull();
+    expect(s2?.submittals).toHaveLength(0); // its only submittal is deleted
+    expect(s2?.latestSubmittal).toBeNull();
   });
 
   it("filters by search across set name, discipline, and submittal number", () => {
@@ -470,6 +487,21 @@ describe("buildApprovalMatrixRows", () => {
 
   it("handles empty input", () => {
     expect(buildApprovalMatrixRows([], [])).toEqual([]);
+  });
+
+  it("flags unanswered Approver Notes on the latest submittal", () => {
+    const rows = buildApprovalMatrixRows(
+      [{ id: "s1", set_name: "Main Steel", is_deleted: false }],
+      [{
+        id: "a",
+        drawing_set_ids: ["s1"],
+        round_number: 1,
+        status: "Submitted",
+        submittal_number: "001",
+        approver_notes: [{ id: "n1", note: "Confirm CJP at B-4?", response: "" }],
+      }],
+    );
+    expect(rows[0].pendingEorResponse).toBe(true);
   });
 });
 
@@ -492,7 +524,30 @@ describe("summarizeApprovalMatrix", () => {
     expect(s.noSubmittal).toBe(1);
     expect(s.overdue).toBe(1);
     expect(s.dueSoon).toBe(1);
+    expect(s.pendingEor).toBe(0);
     expect(s.total).toBe(5);
+  });
+  it("does NOT count a Void submittal as pending", () => {
+    const s = summarizeApprovalMatrix([row("Void"), row("Submitted")]);
+    expect(s.pending).toBe(1);
+    expect(s.approved).toBe(0);
+    expect(s.rejected).toBe(0);
+    expect(s.total).toBe(2);
+  });
+  it("counts unanswered Approver Notes as pending EOR/AOR", () => {
+    const s = summarizeApprovalMatrix([
+      {
+        latestSubmittal: { status: "Submitted", approver_notes: [{ id: "1", note: "Confirm camber?", response: "" }] },
+        due: { overdue: false, dueSoon: false },
+        pendingEorResponse: true,
+      },
+      {
+        latestSubmittal: { status: "Submitted", approver_notes: [{ id: "2", note: "Confirm camber?", response: "3/4 OK" }] },
+        due: { overdue: false, dueSoon: false },
+        pendingEorResponse: false,
+      },
+    ]);
+    expect(s.pendingEor).toBe(1);
   });
   it("handles empty input", () => {
     expect(summarizeApprovalMatrix([])).toMatchObject({ total: 0, approved: 0 });
@@ -581,6 +636,55 @@ describe("buildCurrentRevisionMap (authoritative current-revision lookup)", () =
       { revision_code: "2", version_number: 2, is_current: true },
     ]);
     expect(map.size).toBe(0);
+  });
+});
+
+// The Approval Matrix's Last sent line compares each transmittal item's
+// revision id with this map, so here the id (not the code) must be right.
+describe("buildCurrentRevisionIdMap (drawing_id → current revision id)", () => {
+  it("keeps only is_current=true rows", () => {
+    const map = buildCurrentRevisionIdMap([
+      { id: "r1", drawing_id: "d1", version_number: 1, is_current: false },
+      { id: "r2", drawing_id: "d1", version_number: 2, is_current: true },
+      { id: "r3", drawing_id: "d2", version_number: 1, is_current: true },
+      { id: "r4", drawing_id: "d3", version_number: 1 },
+    ]);
+    expect([...map.entries()]).toEqual([["d1", "r2"], ["d2", "r3"]]);
+  });
+
+  // Against the DB's one-current-row index, only a stale or merged read can
+  // do this. Both orders are checked, so "last row wins" can't pass.
+  it.each([
+    ["listed second", [0, 1]],
+    ["listed first", [1, 0]],
+  ])("picks the higher version when two rows are current (the higher one %s)", (_label, order) => {
+    const rows = [
+      { id: "older", drawing_id: "d1", version_number: 2, is_current: true, created_at: "2026-08-05T00:00:00Z" },
+      { id: "newer", drawing_id: "d1", version_number: 3, is_current: true, created_at: "2026-08-01T00:00:00Z" },
+    ];
+    expect(buildCurrentRevisionIdMap(order.map((i) => rows[i])).get("d1")).toBe("newer");
+  });
+
+  it("breaks a version tie on the later created_at, then the larger id, never on row order", () => {
+    const pick = (rows: Array<Record<string, unknown>>) => buildCurrentRevisionIdMap(rows).get("d1");
+    const early = { id: "b", drawing_id: "d1", version_number: 2, is_current: true, created_at: "2026-08-01T00:00:00Z" };
+    const late = { id: "a", drawing_id: "d1", version_number: 2, is_current: true, created_at: "2026-08-02T00:00:00Z" };
+    expect(pick([early, late])).toBe("a");
+    expect(pick([late, early])).toBe("a");
+    const x = { ...early, id: "x" };
+    const y = { ...early, id: "y" };
+    expect(pick([x, y])).toBe("y");
+    expect(pick([y, x])).toBe("y");
+  });
+
+  it("skips rows missing an id or a drawing_id, and tolerates null/undefined", () => {
+    expect(buildCurrentRevisionIdMap(null).size).toBe(0);
+    expect(buildCurrentRevisionIdMap(undefined).size).toBe(0);
+    expect(buildCurrentRevisionIdMap([
+      { drawing_id: "d1", version_number: 9, is_current: true },
+      { id: "r1", version_number: 9, is_current: true },
+      { id: "r2", drawing_id: "d2", version_number: 1, is_current: true },
+    ])).toEqual(new Map([["d2", "r2"]]));
   });
 });
 
@@ -696,7 +800,9 @@ describe("buildTriage — working-day due display (submittal_workday_dues)", () 
     const t = buildTriage([], [submittalGovernedPkg()], new Map(), true);
     const item = t.setItems.find((i) => i.id === "set-pkg-s");
     expect(item?.due.days).toBe(5); // Mon→Mon = 5 working days (weekend dropped)
-    expect(item?.due.label).toBe("5d left");
+    // "wd", not "d" — the same text under the calendar-day path means 5 CALENDAR
+    // days, so the suffix is what distinguishes them on screen.
+    expect(item?.due.label).toBe("5wd left");
     expect(item?.due.dueSoon).toBe(true);
   });
 
@@ -747,5 +853,156 @@ describe("buildApprovalMatrixRows — working-day due display", () => {
     const def = buildApprovalMatrixRows(sets, subs).find((r) => r.id === "s1");
     expect(on?.due.days).toBe(7);
     expect(def?.due).toEqual(on?.due); // default arg === explicit false
+  });
+});
+
+// ── Approval Matrix: round count + governing submittal ───────────────────────
+describe("submittalRoundCount", () => {
+  it("prefers total_rounds — the counter addSubmittalRound actually stamps", () => {
+    expect(submittalRoundCount({ total_rounds: 3, round_number: 1 })).toBe(3);
+  });
+
+  it("falls back to round_number when total_rounds is absent", () => {
+    expect(submittalRoundCount({ round_number: 2 })).toBe(2);
+  });
+
+  it("defaults to 1 for a submittal with neither", () => {
+    expect(submittalRoundCount({})).toBe(1);
+    expect(submittalRoundCount(null)).toBe(1);
+  });
+});
+
+describe("buildApprovalMatrixRows — governing submittal", () => {
+  const sets = [{ id: "s1", set_name: "Main Steel" }] as any;
+
+  it("does not let a never-submitted Draft govern over a live submittal", () => {
+    // round_number is pinned at 1 on both (nothing increments it), so the old
+    // comparator returned 0 and query order decided — and "-submitted_date"
+    // DESC/NULLS-FIRST puts the undated Draft first.
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "draft", drawing_set_ids: ["s1"], status: "Draft", round_number: 1, submitted_date: null },
+      { id: "live", drawing_set_ids: ["s1"], status: "Under Review", round_number: 1, ball_in_court: "EOR", submitted_date: "2026-01-05", required_date: "2026-01-20" },
+    ] as any);
+    expect(rows[0]?.latestSubmittal?.id).toBe("live");
+    expect(rows[0]?.latestSubmittal?.ball_in_court).toBe("EOR");
+  });
+
+  it("does not let a Void submittal govern and render a green Closed", () => {
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 9 },
+      { id: "live", drawing_set_ids: ["s1"], status: "Submitted", round_number: 1, submitted_date: "2026-01-05", required_date: "2000-01-01" },
+    ] as any);
+    expect(rows[0]?.latestSubmittal?.id).toBe("live");
+    expect(rows[0]?.due.overdue).toBe(true);
+  });
+
+  it("still governs by the most recent submittal among usable ones", () => {
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "older", drawing_set_ids: ["s1"], status: "Submitted", submitted_date: "2026-01-01" },
+      { id: "newer", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-03-01" },
+    ] as any);
+    expect(rows[0]?.latestSubmittal?.id).toBe("newer");
+  });
+
+  it("falls back to an unusable submittal rather than showing none linked", () => {
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 1 },
+    ] as any);
+    expect(rows[0].latestSubmittal?.id).toBe("void");
+  });
+});
+
+describe("buildApprovalMatrixRows — a returned review stops counting down", () => {
+  const sets = [{ id: "s1", set_name: "Main Steel" }] as any;
+
+  it("does not mark an Approved-as-Noted submittal late once it was returned", () => {
+    // required_date is never re-stamped after a verdict, so without this the row
+    // grew one day later every day, forever, with no way to clear it.
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "a", drawing_set_ids: ["s1"], status: "Approved as Noted", submitted_date: "2026-01-01", required_date: "2000-01-01", returned_date: "2000-01-05" },
+    ] as any);
+    expect(rows[0].due.overdue).toBe(false);
+    expect(rows[0].due.label).toBe("Closed");
+  });
+
+  it("still marks an outstanding (not yet returned) submittal late", () => {
+    const rows = buildApprovalMatrixRows(sets, [
+      { id: "b", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-01-01", required_date: "2000-01-01", returned_date: null },
+    ] as any);
+    expect(rows[0].due.overdue).toBe(true);
+  });
+});
+
+// ── Write-capability predicates (§10) ────────────────────────────────────────
+describe("canWrite* predicates mirror the write validators", () => {
+  it("canWriteDueDate is false for a package with no submittal and no sheets", () => {
+    expect(canWriteDueDate({ _submittalId: null, _sheetIds: [] } as any)).toBe(false);
+    expect(canWriteDueDate({ _submittalId: "sub1", _sheetIds: [] } as any)).toBe(true);
+    expect(canWriteDueDate({ _submittalId: null, _sheetIds: ["d1"] } as any)).toBe(true);
+  });
+
+  it("canWriteDueDate is false for closed work", () => {
+    expect(canWriteDueDate({ _submittalId: "sub1", _sheetIds: [], closed: true } as any)).toBe(false);
+  });
+
+  it("canWriteOwner mirrors the mutation's own dispatch, including _ownerScope", () => {
+    expect(canWriteOwner({ _submittalId: "sub1" } as any)).toBe(true);
+    expect(canWriteOwner({ _ownerScope: "First sheet owner", _firstSheetId: "d1" } as any)).toBe(true);
+    // The mutation throws for this shape, so the control must not be enabled.
+    expect(canWriteOwner({ _ownerScope: "No owner target", _firstSheetId: null } as any)).toBe(false);
+    expect(canWriteOwner({ _ownerScope: "First sheet owner", _firstSheetId: null } as any)).toBe(false);
+  });
+
+  it("canWriteDetailingState requires a drawing set and a pre-workflow state", () => {
+    expect(canWriteDetailingState({ _drawingSetId: "s1", detailingState: "In Detailing" })).toBe(true);
+    // No set row to write to — the old gate (_canDraft) allowed this.
+    expect(canWriteDetailingState({ _drawingSetId: null, detailingState: "In Detailing" })).toBe(false);
+    // Already in the formal workflow — the write rejects it.
+    expect(canWriteDetailingState({ _drawingSetId: "s1", detailingState: "OFS" })).toBe(false);
+    // A submittal governs the state.
+    expect(canWriteDetailingState({ _drawingSetId: "s1", _submittalId: "sub1", detailingState: "In Detailing" })).toBe(false);
+  });
+
+  it("canWriteReadinessFlags requires the drawing_set row the flags live on", () => {
+    expect(canWriteReadinessFlags({ _drawingSetId: "s1" })).toBe(true);
+    expect(canWriteReadinessFlags({ _drawingSetId: null })).toBe(false);
+  });
+});
+
+// ── Counters must match what their label and their list say (§15–§18) ────────
+describe("triage counters vs. the queues beneath them", () => {
+  // Two overdue items of DIFFERENT kinds: one drawing set, one unlinked submittal.
+  const pastDue = "2000-01-01";
+  const pkgs = () => buildSetPackages(
+    [{ id: "d1", drawing_set_id: "s1", due_date: pastDue }] as any,
+    [{ id: "s1", set_name: "Main Steel" }] as any,
+    [] as any,
+  );
+  const unlinkedOverdue = [
+    { id: "u1", submittal_number: "SUB-9", status: "Submitted", required_date: pastDue, drawing_set_ids: [] },
+  ] as any;
+
+  it("partitions overdue into two disjoint counts that sum to the queue length", () => {
+    const t = buildTriage(unlinkedOverdue, pkgs(), new Map());
+    expect(t.overdueDrawingSets).toBe(1);
+    expect(t.overdueUnlinkedSubmittals).toBe(1);
+    // The hero chip and the Overdue tile must use the SUM — using only the
+    // drawing-set half flew a green "No overdue sets" past a late submittal.
+    expect(t.overdueDrawingSets + t.overdueUnlinkedSubmittals).toBe(t.overdue.length);
+  });
+
+  it("exposes unscoped dueSoon / noDate totals for the unscoped tiles", () => {
+    // "Due This Week" and "Missing Dates" label nothing, and the queues under
+    // them list both kinds, so they must not read the set-scoped counts.
+    const t = buildTriage(unlinkedOverdue, pkgs(), new Map());
+    expect(t.dueSoon.length).toBeGreaterThanOrEqual(t.dueSoonDrawingSets);
+    expect(t.noDate.length).toBeGreaterThanOrEqual(t.noDateDrawingSets);
+  });
+
+  it("counts an unlinked overdue submittal even with no overdue drawing sets", () => {
+    const t = buildTriage(unlinkedOverdue, [], new Map());
+    expect(t.overdueDrawingSets).toBe(0);
+    expect(t.overdueUnlinkedSubmittals).toBe(1);
+    expect(t.overdue.length).toBe(1); // the all-clear must not fire here
   });
 });

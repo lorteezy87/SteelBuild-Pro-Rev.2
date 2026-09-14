@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase";
 
 export interface DrawingRegisterRow {
   drawing_id: string;
+  drawing_set_id?: string | null;
   project_id: string | null;
   sheet_number: string | null;
   sheet_title: string | null;
@@ -26,7 +27,14 @@ export interface DrawingRegisterRow {
   rfi_count: number | null;
   work_package_count: number | null;
   last_activity: string | null;
+  // Always present from the live view (migration 20260908045525); optional
+  // here only so existing fixtures that spread a partial row keep compiling.
+  active_hold_id?: string | null;
+  active_hold_reason?: string | null;
+  active_hold_placed_at?: string | null;
 }
+
+const DRAWING_SET_LOOKUP_BATCH_SIZE = 100;
 
 export function useDrawingRegister(projectId: string | null) {
   return useQuery({
@@ -40,7 +48,31 @@ export function useDrawingRegister(projectId: string | null) {
         .eq("project_id", projectId as string)
         .order("sheet_number", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as DrawingRegisterRow[];
+      const registerRows = (data ?? []) as Omit<DrawingRegisterRow, "drawing_set_id">[];
+      const setIdByDrawingId = new Map<string, string | null>();
+      const drawingIdBatches: string[][] = [];
+      for (let start = 0; start < registerRows.length; start += DRAWING_SET_LOOKUP_BATCH_SIZE) {
+        drawingIdBatches.push(registerRows
+          .slice(start, start + DRAWING_SET_LOOKUP_BATCH_SIZE)
+          .map((row) => row.drawing_id));
+      }
+      const drawingBatches = await Promise.all(drawingIdBatches.map((drawingIds) =>
+        supabase
+          .from("drawings")
+          .select("id, drawing_set_id")
+          .eq("project_id", projectId as string)
+          .in("id", drawingIds)
+      ));
+      for (const { data: drawings, error: drawingError } of drawingBatches) {
+        if (drawingError) throw drawingError;
+        for (const drawing of drawings ?? []) {
+          setIdByDrawingId.set(drawing.id, drawing.drawing_set_id);
+        }
+      }
+      return registerRows.map((row) => ({
+        ...row,
+        drawing_set_id: setIdByDrawingId.get(row.drawing_id) ?? null,
+      }));
     },
   });
 }

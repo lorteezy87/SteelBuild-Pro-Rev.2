@@ -13,7 +13,9 @@ export function normalizeDocument(d) {
   return {
     ...d,
     projectId:      d.projectId      ?? d.project_id,
-    displayName:    d.displayName    ?? d.display_name ?? d.fileName ?? d.file_name ?? d.title,
+    // Prefer human-entered names over the raw upload filename, which is often
+    // a storage hash/UUID — that's why some cards showed a hash as the title.
+    displayName:    d.displayName    ?? d.display_name ?? d.title ?? d.fileName ?? d.file_name,
     documentNumber: d.documentNumber ?? d.document_number,
     fileName:       d.fileName       ?? d.file_name,
     fileUrl:        d.fileUrl        ?? d.file_url,
@@ -24,12 +26,39 @@ export function normalizeDocument(d) {
     drawingNumber:  d.drawingNumber  ?? d.drawing_number,
     uploadedBy:     d.uploadedBy     ?? d.uploaded_by,
     uploadedDate:   d.uploadedDate   ?? d.uploaded_date ?? d.created_at,
-    tags: Array.isArray(d.tags)
-      ? d.tags
-      : d.tags
-        ? String(d.tags).split(",").map((t) => t.trim()).filter(Boolean)
-        : [],
+    tags: parseTagList(d.tags),
   };
+}
+
+/**
+ * `documents.tags` is jsonb but writers have stored it as a JSON *string*, so a
+ * row can hold a real array, `'["a","b"]'`, `'[]'`, or a plain comma list.
+ *
+ * The old path only checked Array.isArray then comma-split whatever was left,
+ * so the JSON text `"[]"` became the single tag `["[]"]` — rendered literally
+ * on every card. Same string-vs-array duality as email recipients
+ * (formatRecipientList).
+ */
+export function parseTagList(value) {
+  if (Array.isArray(value)) return value.map((t) => String(t).trim()).filter(Boolean);
+  if (value == null) return [];
+  const raw = String(value).trim();
+  if (!raw) return [];
+  // JSON-encoded array or scalar
+  if (raw.startsWith("[") || raw.startsWith('"')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map((t) => String(t).trim()).filter(Boolean);
+      const single = String(parsed).trim();
+      return single ? [single] : [];
+    } catch {
+      // Malformed JSON — fall through to comma handling rather than showing
+      // the raw brackets as a tag.
+      const stripped = raw.replace(/^\[|\]$/g, "").replace(/"/g, "");
+      return stripped.split(",").map((t) => t.trim()).filter(Boolean);
+    }
+  }
+  return raw.split(",").map((t) => t.trim()).filter(Boolean);
 }
 
 export function exportDocsCsv(docs, projectName) {
@@ -66,28 +95,28 @@ export function exportDocsCsv(docs, projectName) {
 
 /** File-type badge color map used in the list view. */
 export const LIST_FILETYPE_STYLES = {
-  pdf:  { bg: "rgba(239,68,68,0.18)",   color: "#F87171" },
-  dwg:  { bg: "rgba(56,189,248,0.18)",  color: "#38BDF8" },
-  ifc:  { bg: "rgba(8,145,178,0.18)", color: "#0891B2" },
-  gltf: { bg: "rgba(8,145,178,0.18)", color: "#0891B2" },
-  xlsx: { bg: "rgba(52,211,153,0.18)",  color: "#34D399" },
-  docx: { bg: "rgba(96,165,250,0.18)",  color: "#60A5FA" },
-  img:  { bg: "rgba(45,212,191,0.18)",  color: "#2DD4BF" },
-  zip:  { bg: "rgba(251,191,36,0.18)",  color: "#FBBF24" },
+  pdf:  { bg: "var(--danger-muted)", color: "var(--status-error)" },
+  dwg:  { bg: "var(--info-muted)", color: "var(--status-info)" },
+  ifc:  { bg: "var(--accent-muted)", color: "var(--accent)" },
+  gltf: { bg: "var(--accent-muted)", color: "var(--accent)" },
+  xlsx: { bg: "var(--success-muted)", color: "var(--status-success)" },
+  docx: { bg: "var(--info-muted)", color: "var(--status-info)" },
+  img:  { bg: "var(--accent-muted)", color: "var(--accent)" },
+  zip:  { bg: "var(--warning-muted)", color: "var(--status-warning)" },
 };
 
 /** Status color map used by the list-view status badge. */
 export const LIST_STATUS_STYLES = {
-  "Approved":                { bg: "rgba(52,211,153,0.18)",  color: "#34D399" },
-  "Approved with Comments":  { bg: "rgba(52,211,153,0.12)",  color: "#34D399" },
-  "Under Review":            { bg: "rgba(251,191,36,0.18)",  color: "#FBBF24" },
-  "Revise & Resubmit":       { bg: "rgba(251,146,60,0.18)",  color: "#FB923C" },
-  "Rejected":                { bg: "rgba(248,113,113,0.18)", color: "#F87171" },
-  "Draft":                   { bg: "rgba(160,175,210,0.12)", color: "#A0AED2" },
-  "Issued":                  { bg: "rgba(96,165,250,0.18)",  color: "#60A5FA" },
-  "Superseded":              { bg: "rgba(100,116,139,0.12)", color: "#94A3B8" },
-  "Archived":                { bg: "rgba(100,116,139,0.08)", color: "#64748B" },
-  "Void":                    { bg: "rgba(248,113,113,0.10)", color: "#F87171" },
+  "Approved":                { bg: "var(--success-muted)", color: "var(--status-success)" },
+  "Approved with Comments":  { bg: "color-mix(in srgb, var(--status-success) 10%, transparent)", color: "var(--status-success)" },
+  "Under Review":            { bg: "var(--warning-muted)", color: "var(--status-warning)" },
+  "Revise & Resubmit":       { bg: "var(--warning-muted)", color: "var(--status-warning)" },
+  "Rejected":                { bg: "var(--danger-muted)", color: "var(--status-error)" },
+  "Draft":                   { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
+  "Issued":                  { bg: "var(--info-muted)", color: "var(--status-info)" },
+  "Superseded":              { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
+  "Archived":                { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
+  "Void":                    { bg: "color-mix(in srgb, var(--status-error) 10%, transparent)", color: "var(--status-error)" },
 };
 
-export const FILETYPE_FALLBACK = { bg: "rgba(160,175,210,0.12)", color: "#A0AED2" };
+export const FILETYPE_FALLBACK = { bg: "var(--bg-surface-high)", color: "var(--text-muted)" };

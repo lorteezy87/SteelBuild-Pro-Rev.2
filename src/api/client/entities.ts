@@ -9,13 +9,108 @@
 
 import { supabase } from '@/lib/supabase';
 import {
+  createProjectRecordSchema,
+  softDeleteProjectArgsSchema,
+} from '@/lib/securitySchemas';
+import {
   parseDependencies as parseScheduleDependencies,
   serializeDependencies as serializeScheduleDependencies,
 } from '@/services/scheduleCascade';
 import { SupabaseOperationError } from './errors';
-import { addAliases, normalizeIdArray, normalizeJsonbArray } from './fieldMapping';
+import {
+  addAliases,
+  cleanRecord,
+  normalizeIdArray,
+  normalizeJsonbArray,
+} from './fieldMapping';
 import { createEntityClient } from './entityClient';
-import type { Insert, RowWithAliases, Update } from './supabaseTypes';
+import type { Insert, RowWithAliases, TableName, Update } from './supabaseTypes';
+import type { Json } from '@/types/supabase';
+
+/**
+ * Atomic-creation wrapper for a table whose INSERT is guarded.
+ *
+ * Several tables mint an official record number inside the transaction that
+ * inserts the row, and a BEFORE INSERT trigger rejects any direct write with
+ * "Use create_x() — numbers are minted there". The guard tests a
+ * transaction-local `steelbuild.*_rpc` GUC that only the RPC sets, so a
+ * PostgREST client can never satisfy it: createEntityClient's generic create
+ * fails with 42501 every time. Registering a table's RPC here is what makes
+ * creation work at all.
+ *
+ * `derived` names the columns the RPC mints or looks up itself. Sending them is
+ * at best ignored and at worst a duplicate number, so they never leave here.
+ *
+ * `carried` names columns the RPC's INSERT does not cover but a form does
+ * collect. They are written immediately after, because the guards only gate
+ * INSERT. That is a second round trip rather than one transaction — the row
+ * exists either way, and losing what someone typed is the worse failure. It
+ * deliberately excludes every approval / receipt / void stamp: those are gated
+ * on the UPDATE path too ("Approval / SOV stamps are written only by the RPCs",
+ * "RECEIVE_VIA_RPC"), and carrying them would trade a silent drop for a hard
+ * error on an otherwise good save.
+ */
+interface AtomicCreateConfig {
+  readonly rpc: 'create_change_order' | 'create_change_request' | 'create_delivery';
+  readonly derived: readonly string[];
+  readonly carried: readonly string[];
+}
+
+function atomicCreateClient<T extends TableName>(tableName: T, config: AtomicCreateConfig) {
+  const base = createEntityClient(tableName);
+
+  const create = async (record: Insert<T>): Promise<RowWithAliases<T>> => {
+    const payload = cleanRecord(record as Record<string, unknown>);
+    const projectId = payload.project_id;
+    if (typeof projectId !== 'string' || projectId === '') {
+      throw new Error(`project_id is required to create a ${String(tableName)} record`);
+    }
+    // Passed as its own argument, never inside the payload.
+    delete payload.project_id;
+    for (const column of config.derived) delete payload[column];
+
+    const carried: Record<string, unknown> = {};
+    for (const column of config.carried) {
+      if (column in payload) carried[column] = payload[column];
+    }
+
+    const { data, error } = await supabase.rpc(config.rpc, {
+      p_project_id: projectId,
+      p_payload: payload as Json,
+    });
+    if (error) throw new SupabaseOperationError(tableName as string, 'create', error);
+
+    const created = addAliases<RowWithAliases<T>>(data as RowWithAliases<T>, tableName as string);
+    if (Object.keys(carried).length === 0) return created;
+    return base.update((created as { id: string }).id, carried as Update<T>);
+  };
+
+  return {
+    ...base,
+    create,
+    // One RPC call per row, in order. Each draws the next number from the
+    // sequence, so parallel calls would scramble official numbers against the
+    // order the caller listed them in. Not one transaction: a row that fails
+    // leaves the rows before it committed, so say so rather than letting an
+    // importer report a clean failure over a half-finished batch.
+    bulkCreate: async (records: Insert<T>[]): Promise<Array<RowWithAliases<T>>> => {
+      const created: Array<RowWithAliases<T>> = [];
+      for (const record of records) {
+        try {
+          created.push(await create(record));
+        } catch (cause) {
+          const reason = cause instanceof Error ? cause.message : String(cause);
+          throw new Error(
+            `${created.length} of ${records.length} ${String(tableName)} records were created; ` +
+              `row ${created.length + 1} failed: ${reason}`,
+            { cause },
+          );
+        }
+      }
+      return created;
+    },
+  };
+}
 
 // ─── Entity registry ──────────────────────────────────────────────────────────
 
@@ -26,11 +121,16 @@ export const entities = {
   Project: {
     ...createEntityClient('projects'),
     create: async (record: Insert<'projects'>): Promise<RowWithAliases<'projects'>> => {
-      const clean = Object.fromEntries(
+      const cleanInput = Object.fromEntries(
         Object.entries(record as Record<string, unknown>).filter(([, v]) => v !== undefined)
       );
+      const parsed = createProjectRecordSchema.safeParse(cleanInput);
+      if (!parsed.success) {
+        const detail = parsed.error.issues.map((i) => i.message).join('; ');
+        throw new Error(`Invalid project payload: ${detail}`);
+      }
       const { data, error } = await supabase.rpc('create_project', {
-        project_data: clean as never,
+        project_data: parsed.data as never,
       });
       if (error) throw new SupabaseOperationError('projects', 'create', error);
       return addAliases<RowWithAliases<'projects'>>(data as RowWithAliases<'projects'>, 'projects');
@@ -39,6 +139,10 @@ export const entities = {
       // Atomic, admin-gated archive: the RPC soft-deletes every project-scoped
       // child + the project root in one transaction, so the project can never be
       // left half-archived (#13). Replaces the old best-effort multi-step delete.
+      // Validate for its own sake — the parsed output infers p_project_id as
+      // optional under this tsconfig, so pass the already-typed `id` to the RPC
+      // rather than the parse result.
+      softDeleteProjectArgsSchema.parse({ p_project_id: id });
       const { error } = await supabase.rpc('soft_delete_project', { p_project_id: id });
       if (error) throw new SupabaseOperationError('projects', 'delete', error);
       return { success: true };
@@ -48,6 +152,7 @@ export const entities = {
       // stranding every child record live (the half-archive bug #13). Route
       // each project through the atomic soft_delete_project RPC instead.
       for (const id of ids) {
+        softDeleteProjectArgsSchema.parse({ p_project_id: id });
         const { error } = await supabase.rpc('soft_delete_project', { p_project_id: id });
         if (error) throw new SupabaseOperationError('projects', 'bulkDelete', error);
       }
@@ -70,8 +175,22 @@ export const entities = {
       return { success: true, deletedChildCount: (data as number | null) ?? 0 };
     },
   },
-  ChangeOrder:           createEntityClient('change_orders'),
-  ChangeRequest:         createEntityClient('change_requests'),
+  // CO numbers are contractual identifiers minted by create_change_order();
+  // trg_enforce_change_order_guards rejects a direct insert outright.
+  ChangeOrder:           atomicCreateClient('change_orders', {
+    rpc: 'create_change_order',
+    derived: ['project_name', 'co_number', 'sov_line_number', 'submitted_by'],
+    // Approval / SOV / void stamps are excluded on purpose: the guard writes
+    // them only through the RPCs and rejects them on UPDATE too.
+    carried: ['attachments'],
+  }),
+  ChangeRequest:         atomicCreateClient('change_requests', {
+    rpc: 'create_change_request',
+    // change_order_id is set by create_change_order() when a CO is raised from
+    // this CR — the client must not pre-empt that link.
+    derived: ['project_name', 'cr_number', 'change_order_id'],
+    carried: [],
+  }),
   // ── Drawing-centered execution (MVP Slice 0) ────────────────────
   // Three tables that turn the Drawing Viewer into a coordination hub:
   // every rectangular zone on a sheet revision can link to RFIs, work
@@ -95,6 +214,9 @@ export const entities = {
   // approved-as-noted, revise-and-resubmit, etc.). Voided rows stay in the
   // table; UI filters them with is_voided=false in listSignoffs.
   DrawingSignoff:        createEntityClient('drawing_signoffs'),
+  // Sheet-level Holds & Blockers (SteelBuild Sheets parity): reason required,
+  // full placed/released audit trail. See migration 20260908045525.
+  DrawingHold:           createEntityClient('drawing_holds'),
   ScheduleTask:          (() => {
     // Schedule audit fix (bug class 3): keep status and percent_complete in
     // lock-step on every create/update so no future code path can land a row
@@ -112,7 +234,11 @@ export const entities = {
       const hasStatus = Object.prototype.hasOwnProperty.call(out, 'status');
       const hasPct    = Object.prototype.hasOwnProperty.call(out, 'percent_complete');
 
-      for (const field of ['start_date', 'end_date']) {
+      // DateOrTbdInput emits '' when a date is cleared, and Postgres rejects ''
+      // for a `date` column. The actuals columns go through the same input, so
+      // they need the same coercion — without it, clearing a wrongly-stamped
+      // actual finish fails with a raw type error.
+      for (const field of ['start_date', 'end_date', 'actual_start_date', 'actual_finish_date']) {
         if (Object.prototype.hasOwnProperty.call(out, field) && out[field] === '') {
           out[field] = null;
         }
@@ -231,16 +357,85 @@ export const entities = {
     };
   })(),
   TaskDependency:        createEntityClient('task_dependencies'),
+  // Baselines are append-only by RLS — there is no UPDATE policy on either
+  // table, so an .update() here fails at the database rather than silently
+  // rewriting history. Correcting a baseline means retracting and re-setting.
+  ScheduleBaseline:      createEntityClient('schedule_baselines'),
+  // Append-only change log written by the record_planner_action_event
+  // trigger. Read-only from the client by design: the table has a SELECT
+  // policy and no INSERT policy, so the trail cannot be forged or suppressed.
+  PlannerActionEvent:    createEntityClient('planner_action_events'),
+  // Optional per-project working calendar. No row = Mon–Fri, no holidays
+  // (src/lib/schedule/workingCalendar.ts DEFAULT_CALENDAR), so a project
+  // without one still gets weekend-aware scheduling.
+  ProjectCalendar:       createEntityClient('project_calendars'),
+  ScheduleBaselineTask:  createEntityClient('schedule_baseline_tasks'),
   Submittal:             createEntityClient('submittals'),
   SubmittalRound:        createEntityClient('submittal_rounds'),
   // Phase 4 submittal-logic: per-drawing-type (Shop/Erection/Part) received +
   // released tracking, gated by the `submittal_drawing_types` flag at the UI.
   SubmittalComponent:    createEntityClient('submittal_components'),
   SubmittalSheetResponse: createEntityClient('submittal_sheet_responses'),
+  SubmittalCommentDisposition: createEntityClient('submittal_comment_dispositions'),
   SubmittalActivity:     createEntityClient('submittal_activity'),
   Comment:               createEntityClient('comments'),
-  Expense:               createEntityClient('expenses'),
-  Delivery:              createEntityClient('deliveries'),
+  // Expense numbers are official project records. create_expense() allocates
+  // the number and inserts the row in one transaction; direct table inserts
+  // are rejected by the database guard.
+  Expense:               (() => {
+    const base = createEntityClient('expenses');
+    const create = async (
+      record: Insert<'expenses'>,
+    ): Promise<RowWithAliases<'expenses'>> => {
+      const payload = cleanRecord(record as Record<string, unknown>);
+      const projectId = payload.project_id;
+      if (typeof projectId !== 'string' || projectId === '') {
+        throw new Error('project_id is required to create an expense');
+      }
+      delete payload.project_id;
+      delete payload.project_name;
+      delete payload.expense_number;
+
+      const { data, error } = await supabase.rpc('create_expense', {
+        p_project_id: projectId,
+        p_payload: payload as Json,
+      });
+      if (error) throw new SupabaseOperationError('expenses', 'create', error);
+      return addAliases<RowWithAliases<'expenses'>>(
+        data as RowWithAliases<'expenses'>,
+        'expenses',
+      );
+    };
+
+    return {
+      ...base,
+      create,
+      bulkCreate: async (
+        records: Insert<'expenses'>[],
+      ): Promise<Array<RowWithAliases<'expenses'>>> => {
+        const created: Array<RowWithAliases<'expenses'>> = [];
+        for (const record of records) created.push(await create(record));
+        return created;
+      },
+    };
+  })(),
+  // create_delivery() mints the number AND inserts the nested `items` array
+  // into delivery_items, deriving pieces / weight_tons from it, so the payload
+  // must keep `items` intact.
+  Delivery:              atomicCreateClient('deliveries', {
+    rpc: 'create_delivery',
+    derived: ['project_name', 'delivery_number', 'pieces', 'weight_tons'],
+    // Procurement planning fields the form collects that the RPC's INSERT does
+    // not cover. received_* / status are left out: the guard routes receipt
+    // through receive_delivery() so linked piece lots advance with it.
+    carried: [
+      'actual_date',
+      'is_long_lead',
+      'lead_time_weeks',
+      'order_placed_date',
+      'procurement_category',
+    ],
+  }),
   WorkPackage:           createEntityClient('work_packages'),
   // 062: per-project budget vs actual hours (Estimating Kickoff scope items).
   BudgetHourItem:        createEntityClient('budget_hour_items'),
@@ -249,7 +444,106 @@ export const entities = {
   // generated column on the row — callers can sort/filter it without
   // re-deriving the probability * impact band in three places.
   Risk:                  createEntityClient('risks'),
-  SOVItem:               createEntityClient('sov_items'),
+  // SOV line numbers are official project records, so the database mints them
+  // inside the same transaction that inserts the row: create_sov_item() takes
+  // the number from get_next_sequence_number(), and a BEFORE INSERT guard on
+  // sov_items rejects any direct table insert with
+  // "Use create_sov_item() - SOV line numbers are minted there".
+  // createEntityClient's generic create writes the table directly, so it can
+  // never be used here.
+  //
+  // The RPC takes the project id as its OWN argument, separate from the row
+  // payload. It derives project_name, line_item_number and sort_order itself,
+  // and rejects a cost code or work package belonging to another project.
+  SOVItem:               (() => {
+    const base = createEntityClient('sov_items');
+    // Real sov_items columns that create_sov_item() does not write. The
+    // pay-application fields SOVFormModal collects are all in here, so
+    // without a follow-up write a PM's Application #, period dates and
+    // submitted / paid dates disappear the moment they hit Save.
+    const RPC_IGNORED_COLUMNS = [
+      'application_number',
+      'period_from',
+      'period_to',
+      'submitted_date',
+      'payment_received_date',
+      'change_order_id',
+    ] as const;
+    const splitRecord = (
+      record: Insert<'sov_items'>,
+    ): { projectId: string; payload: Json; carried: Record<string, unknown> } => {
+      const payload = cleanRecord(record as Record<string, unknown>);
+      const projectId = payload.project_id;
+      if (typeof projectId !== 'string' || projectId === '') {
+        throw new Error('project_id is required to create a SOV item');
+      }
+      // Passed as its own argument, not inside the payload.
+      delete payload.project_id;
+      // Minted server-side. A client-supplied number is at best ignored and at
+      // worst a duplicate, so it never leaves here.
+      delete payload.line_item_number;
+      delete payload.sov_id;
+      const carried: Record<string, unknown> = {};
+      for (const column of RPC_IGNORED_COLUMNS) {
+        if (column in payload) carried[column] = payload[column];
+      }
+      return { projectId, payload: payload as Json, carried };
+    };
+    const create = async (
+      record: Insert<'sov_items'>,
+    ): Promise<RowWithAliases<'sov_items'>> => {
+      const { projectId, payload, carried } = splitRecord(record);
+      const { data, error } = await supabase.rpc('create_sov_item', {
+        p_project_id: projectId,
+        p_payload: payload,
+      });
+      if (error) throw new SupabaseOperationError('sov_items', 'create', error);
+      const created = addAliases<RowWithAliases<'sov_items'>>(
+        data as RowWithAliases<'sov_items'>,
+        'sov_items',
+      );
+      if (Object.keys(carried).length === 0) return created;
+      // The guard only blocks INSERT, so the columns the RPC skipped are
+      // written straight after. Two round trips rather than one transaction —
+      // the row exists either way, and losing what the PM typed is the worse
+      // failure. Fold these into create_sov_item() to make it atomic.
+      return base.update(
+        (created as { id: string }).id,
+        carried as Update<'sov_items'>,
+      );
+    };
+
+    return {
+      ...base,
+      create,
+      // One RPC call per row, in order. There is no bulk overload, and each
+      // call draws the next number from the sequence, so issuing them in
+      // parallel would scramble line numbers against the order the caller
+      // listed them in.
+      //
+      // That means this is NOT one transaction: a row that fails leaves the
+      // rows before it committed. Say so in the error rather than letting the
+      // caller report a clean failure over a half-finished import.
+      bulkCreate: async (
+        records: Insert<'sov_items'>[],
+      ): Promise<Array<RowWithAliases<'sov_items'>>> => {
+        const created: Array<RowWithAliases<'sov_items'>> = [];
+        for (const record of records) {
+          try {
+            created.push(await create(record));
+          } catch (cause) {
+            const reason = cause instanceof Error ? cause.message : String(cause);
+            throw new Error(
+              `${created.length} of ${records.length} SOV line items were created; ` +
+                `row ${created.length + 1} failed: ${reason}`,
+              { cause },
+            );
+          }
+        }
+        return created;
+      },
+    };
+  })(),
   Vendor:                createEntityClient('vendors'),
   Contact:               createEntityClient('contacts'),
   DailyLog:              (() => {
@@ -366,9 +660,6 @@ export const entities = {
   DefaultCostCode:       createEntityClient('default_cost_codes'),
   ProjectCloseout:       createEntityClient('project_closeout'),
   ProjectHandoffItem:    createEntityClient('project_handoff_items'),
-  PmaDecision:           createEntityClient('pma_decisions'),
-  PmaAssumption:         createEntityClient('pma_assumptions'),
-  PmaAuditLog:           createEntityClient('pma_audit_logs'),
   User:                  createEntityClient('user_profiles'),
   // RBAC Phase C: per-project membership rows. Roles enforced by DB CHECK
   // (owner/admin/pm/field/viewer). Writes are gated by RLS — only project

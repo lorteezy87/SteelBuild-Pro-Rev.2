@@ -15,6 +15,8 @@
  * is skipped rather than crashing the whole parse.
  */
 
+import { readFileText } from "@/lib/textDecoding";
+
 // ── CSV parser ──────────────────────────────────────────────────────
 //
 // Small handwritten parser that handles the 4 real-world gotchas:
@@ -25,6 +27,9 @@
 //
 // Returns an array of row arrays. Pulling in papaparse for 30 lines of
 // parsing would be overkill.
+//
+// Perf: field text is accumulated in a char array then joined once per
+// field (avoids quadratic string reallocation on large production CSVs).
 function firstNonEmptyLine(value) {
   return String(value || "").split(/\r?\n/).find((line) => line.trim()) || "";
 }
@@ -62,41 +67,48 @@ export function parseCsv(raw) {
   const delimiter = chooseDelimiter(src);
   const rows = [];
   let row = [];
-  let field = "";
+  let fieldChars = [];
   let inQuotes = false;
   let i = 0;
   const n = src.length;
+
+  const flushField = () => {
+    row.push(fieldChars.join(""));
+    fieldChars = [];
+  };
+
   while (i < n) {
     const c = src[i];
     if (inQuotes) {
       if (c === '"') {
-        if (src[i + 1] === '"') { field += '"'; i += 2; continue; }
+        if (src[i + 1] === '"') { fieldChars.push('"'); i += 2; continue; }
         inQuotes = false; i++; continue;
       }
-      field += c; i++; continue;
+      fieldChars.push(c); i++; continue;
     }
     if (c === '"') { inQuotes = true; i++; continue; }
-    if (c === delimiter) { row.push(field); field = ""; i++; continue; }
+    if (c === delimiter) { flushField(); i++; continue; }
     if (c === "\r") {
-      // Handle \r, \r\n
-      row.push(field); field = "";
-      rows.push(row); row = [];
+      flushField();
+      if (row.some((v) => v && String(v).trim() !== "")) rows.push(row);
+      row = [];
       if (src[i + 1] === "\n") i += 2; else i++;
       continue;
     }
     if (c === "\n") {
-      row.push(field); field = "";
-      rows.push(row); row = [];
+      flushField();
+      if (row.some((v) => v && String(v).trim() !== "")) rows.push(row);
+      row = [];
       i++; continue;
     }
-    field += c; i++;
+    fieldChars.push(c); i++;
   }
   // Trailing field / row — but only push a row if there's something in
   // it. Otherwise a CSV that ends with a newline would add a phantom
   // empty row.
-  if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    if (row.some((v) => v && v.trim() !== "")) rows.push(row);
+  if (fieldChars.length > 0 || row.length > 0) {
+    flushField();
+    if (row.some((v) => v && String(v).trim() !== "")) rows.push(row);
   }
   return rows;
 }
@@ -315,6 +327,12 @@ export function parseRfiCsv(csvText, { fileName = "" } = {}) {
  * Load a user-supplied File and return parseRfiCsv's result. Size-guard
  * mirrors importRfiLog — CSVs won't actually be 32 MB, but a consistent
  * ceiling is friendlier than surprising the user.
+ *
+ * Decodes by byte-order mark / UTF-16 sniff and strips U+0000: file.text()
+ * is UTF-8 only, so a UTF-16 ("Unicode text") export came through full of
+ * U+0000 and Postgres rejected the rfis insert (22P05). Rejects with a
+ * TextDecodingError for UTF-32 and binary files (.xlsx, .xls, PDF); the
+ * import modal shows its re-save message.
  */
 export async function readRfiCsvFile(file) {
   if (!file) throw new Error("No file provided.");
@@ -325,6 +343,6 @@ export async function readRfiCsvFile(file) {
     file.type === "text/plain";
   if (!looksCsv) throw new Error("File must be a CSV (or plain text).");
   if (file.size > 8 * 1024 * 1024) throw new Error("CSV exceeds 8 MB.");
-  const text = await file.text();
+  const { text } = await readFileText(file);
   return parseRfiCsv(text, { fileName: file.name });
 }

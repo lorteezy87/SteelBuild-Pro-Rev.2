@@ -1,3 +1,7 @@
+/**
+ * @deprecated Prefer `ProcessBoardPanel` (canonical Detailing Process Board).
+ * Kept for back-compat tests; hub routes use ProcessBoardPanel (Slice 10).
+ */
 import React, { useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -12,7 +16,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { STAGE_MAP, STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+import { STAGE_MAP, WORKFLOW_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import {
   derivedSetStage,
   isRRStatus,
@@ -25,7 +29,7 @@ import { formatShortDate } from "@/utils/dates";
 // below is retained for DRAWING-set (sheet) dues, which stay calendar-day; only
 // SUBMITTAL-governed dues switch to working days when `useWorkdays` is on. Shares
 // the SAME tested engine as the Control Board / Approval Matrix so all three agree.
-import { dueInfoFor } from "@/pages/drawingSubmittalHub/format";
+import { dueInfoFor, sheetNeedsAction } from "@/pages/drawingSubmittalHub/format";
 
 const surfaceLow = "var(--bg-surface-low)";
 const surfaceHigh = "var(--bg-surface-high)";
@@ -47,7 +51,7 @@ const STAGE_CAPTIONS = {
   IFA: "In for approval",
   OFA: "Out for approval",
   BFA: "Back from approval",
-  OFS: "Out for scrub",
+  OFS: "OFS — Out for Scrub",
   IFC: "Issued for construction",
   Released: "Released for fab",
 };
@@ -167,7 +171,7 @@ function buildBoardItems(setPackages, submittals, useWorkdays = false) {
       linked: !!latestSubmittal,
       needsAction:
         ACTION_STATUSES.has(latestSubmittal?.status) ||
-        (pkg.sheets || []).some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage)),
+        (pkg.sheets || []).some((drawing) => sheetNeedsAction(drawing)),
       isRR: isRRStatus(latestSubmittal?.status),
       sheetCount: (pkg.sheets || []).length,
       submittalCount: (pkg.submittals || []).length,
@@ -257,9 +261,9 @@ export default function SubmittalVisualBoard({
   );
 
   const stageBuckets = useMemo(() => {
-    const buckets = Object.fromEntries(STAGE_ORDER.map((stage) => [stage, []]));
+    const buckets = Object.fromEntries(WORKFLOW_STAGE_ORDER.map((stage) => [stage, []]));
     for (const item of boardItems) {
-      const key = STAGE_ORDER.includes(item.stage) ? item.stage : "Not Started";
+      const key = WORKFLOW_STAGE_ORDER.includes(item.stage) ? item.stage : "Not Started";
       buckets[key].push(item);
     }
     return buckets;
@@ -341,7 +345,7 @@ export default function SubmittalVisualBoard({
         padding: "2px 2px 12px",
         minHeight: 520,
       }}>
-        {STAGE_ORDER.map((stage) => (
+        {WORKFLOW_STAGE_ORDER.map((stage) => (
           <ProcessColumn
             key={stage}
             stage={stage}
@@ -473,7 +477,7 @@ function ProcessCard({ item, onOpenTab }) {
           : surfaceLow,
         color: textPrimary,
         cursor: "pointer",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.10)",
+        boxShadow: "var(--shadow-card)",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>

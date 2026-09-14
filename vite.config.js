@@ -29,11 +29,12 @@ function copyWebIfcWasm() {
   }
 }
 
-// Sentry source-map upload runs ONLY when SENTRY_AUTH_TOKEN is present (set as a
-// Vercel build env var for production). Local + CI builds have no token, so the
-// plugin is skipped entirely and the build is unaffected. org/project come from
-// the SENTRY_ORG / SENTRY_PROJECT env vars (set alongside the token). The token
-// is NEVER hardcoded — it is read from the environment at build time only.
+// Sentry source-map upload runs ONLY when SENTRY_AUTH_TOKEN is present (set as
+// a repo secret and passed to the deploy job in .github/workflows/ci.yml).
+// Local builds have no token, so the plugin is skipped entirely and the build
+// is unaffected. org/project come from the SENTRY_ORG / SENTRY_PROJECT env vars
+// (set alongside the token). The token is NEVER hardcoded — it is read from the
+// environment at build time only.
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const enableSentrySourceMaps = Boolean(sentryAuthToken)
 
@@ -132,6 +133,12 @@ export default defineConfig({
         })]
       : []),
   ],
+  // NOTE: there is no asset-URL pinning here any more. Vercel Skew Protection
+  // used to rewrite emitted asset URLs to carry a deployment id, so a tab open
+  // across a deploy could still fetch its matching lazy chunks. Cloudflare has
+  // no equivalent, and the Vercel account is gone, so the mechanism went with
+  // it. src/lib/lazyRetry.ts is what covers this now: it catches the
+  // stale-chunk import failure and does one reload onto the fresh index.html.
   build: {
     // Emit hidden source maps (no sourceMappingURL comment, so they're not
     // referenced by the served bundle) only when we're going to upload them to
@@ -171,6 +178,17 @@ export default defineConfig({
     env: {
       VITE_SUPABASE_URL: 'https://ci-placeholder.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'ci-placeholder-anon-key',
+      // Pin the runner's timezone. Schedule dates are date-only strings parsed
+      // at UTC midnight, and several suites assert week/day bucket membership;
+      // under a non-zero UTC offset those buckets shift and the assertions turn
+      // machine-dependent (green in CI and on this container, both UTC, red on
+      // an Arizona dev box). CI and the container are already UTC, so this
+      // changes no current result — it stops the suite from silently depending
+      // on where it runs.
+      // NOTE for the working-day/local-date work (audit §2.5): tests that must
+      // prove local-vs-UTC behaviour have to set TZ per-file rather than rely
+      // on this default, which deliberately hides that difference.
+      TZ: 'UTC',
     },
     setupFiles: ['./vitest.setup.js', './src/setupTests.ts'],
     // Use the worker_threads pool. Threads are terminated forcibly at teardown,

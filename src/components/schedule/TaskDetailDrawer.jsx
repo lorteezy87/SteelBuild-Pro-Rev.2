@@ -1,20 +1,15 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useTaskLinkOptions } from '@/hooks/useTaskLinkOptions';
 import { calculateTaskDuration, computeAutoScheduledDates } from './scheduleUtils';
+import { SCHEDULE_STATUSES, SCHEDULE_TASK_TYPES, SCHEDULE_PRIORITIES } from '@/lib/schedule/taskStatus';
 import { PHASES } from '../../utils/phases';
 import {
-  DETAILING_STAGE_GATES,
-  DETAILING_STAGE_META,
   getStageDates,
   applyStageDatesToTask,
   usesStageDates,
-  getActiveStage,
-  getEffectiveDueDate,
 } from '../../lib/stageDates';
 import {
-  addDaysIso,
-  parseDependencies,
   serializeDependencies,
   LINK_TYPES,
 } from '../../services/scheduleCascade';
@@ -23,249 +18,24 @@ import { logActivity } from '@/services/auditLogger';
 import DateOrTbdInput from './DateOrTbdInput';
 import { validReparentTargets } from '@/lib/schedule/hierarchy';
 import { isSummaryTask, buildParentIdSet } from '@/lib/schedule/summaryTasks';
-
-// Coerce JSONB values that may come back from Postgres as strings or null.
-// Mirrors the helper in DailyLogForm — the entity wrapper also normalises,
-// but defending in the editor lets us tolerate stale cached rows that were
-// fetched before the wrapper coercion landed.
-function asIdArray(v) {
-  if (Array.isArray(v)) return v.filter((id) => typeof id === 'string' && id.length > 0);
-  if (typeof v === 'string') {
-    try {
-      const parsed = JSON.parse(v);
-      return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string' && id.length > 0) : [];
-    } catch { return []; }
-  }
-  return [];
-}
-
-// Compare two id-arrays for equality (order-insensitive). Used to detect
-// whether the related-* fields actually changed on save so we only emit a
-// single audit-log entry when something is different.
-function sameIdSet(a, b) {
-  const aa = Array.isArray(a) ? a : [];
-  const bb = Array.isArray(b) ? b : [];
-  if (aa.length !== bb.length) return false;
-  const sa = new Set(aa);
-  for (const id of bb) if (!sa.has(id)) return false;
-  return true;
-}
-
-/**
- * Parse the upgraded `dependencies` TEXT column. Each element is now a
- * link object — `{ id, type: 'FS'|'SS'|'FF'|'SF', lag_days: int }`. The
- * shared parseDependencies utility also handles the legacy id-string
- * shape so a row that hasn't been migrated yet still loads cleanly,
- * defaulting to FS + 1 day.
- */
-function parseDeps(raw) {
-  return parseDependencies(raw);
-}
-
-const drawerSurface = 'var(--bg-surface-secondary)';
-const drawerPanel = 'var(--bg-surface-low)';
-const drawerPanelStrong = 'var(--bg-surface-high)';
-const drawerBorder = 'var(--border-default)';
-const drawerMutedBorder = 'var(--divider)';
-const drawerText = 'var(--text-primary)';
-const drawerMutedText = 'var(--text-muted)';
-
-const drawerControlStyle = {
-  width: '100%',
-  background: drawerPanelStrong,
-  border: `1px solid ${drawerBorder}`,
-  borderRadius: 8,
-  padding: '8px 10px',
-  fontFamily: 'var(--font-body)',
-  fontSize: 12,
-  color: drawerText,
-  boxSizing: 'border-box',
-  colorScheme: 'dark',
-  outline: 'none',
-};
-
-/**
- * Searchable task picker — replaces the plain <select> for adding
- * predecessors / successors. Filters tasks by name or WBS code as
- * the user types. Keyboard-navigable (↑ ↓ Enter Escape).
- */
-function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search tasks...' }) {
-  const [query, setQuery] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
-  const [highlightIdx, setHighlightIdx] = useState(0);
-  const wrapperRef = useRef(null);
-  const inputRef = useRef(null);
-  const listRef = useRef(null);
-
-  const filtered = useMemo(() => {
-    if (!query.trim()) return tasks.slice(0, 50); // show first 50 when empty
-    const q = query.toLowerCase();
-    return tasks.filter(t => {
-      const name = (t.task_name || '').toLowerCase();
-      const wbs = (t.wbs_code || '').toLowerCase();
-      const phase = (t.phase || '').toLowerCase();
-      return name.includes(q) || wbs.includes(q) || phase.includes(q);
-    }).slice(0, 50);
-  }, [tasks, query]);
-
-  // Reset highlight when results change
-  useEffect(() => { setHighlightIdx(0); }, [filtered.length, query]);
-
-  // Scroll highlighted item into view
-  useEffect(() => {
-    if (!listRef.current) return;
-    const el = listRef.current.children[highlightIdx];
-    if (el) el.scrollIntoView({ block: 'nearest' });
-  }, [highlightIdx]);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setIsOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [isOpen]);
-
-  const handleSelect = useCallback((t) => {
-    onSelect(t.id);
-    setQuery('');
-    setIsOpen(false);
-    setHighlightIdx(0);
-  }, [onSelect]);
-
-  const handleKeyDown = (e) => {
-    if (!isOpen && (e.key === 'ArrowDown' || e.key === 'Enter')) {
-      setIsOpen(true);
-      e.preventDefault();
-      return;
-    }
-    if (!isOpen) return;
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setHighlightIdx(i => Math.min(i + 1, filtered.length - 1));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setHighlightIdx(i => Math.max(i - 1, 0));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (filtered[highlightIdx]) handleSelect(filtered[highlightIdx]);
-        break;
-      case 'Escape':
-        e.preventDefault();
-        setIsOpen(false);
-        break;
-    }
-  };
-
-  if (tasks.length === 0) return null;
-
-  return (
-    <div ref={wrapperRef} style={{ position: 'relative', marginTop: 8 }}>
-      <div style={{ position: 'relative' }}>
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setIsOpen(true); }}
-          onFocus={() => setIsOpen(true)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          style={{
-            ...drawerControlStyle,
-            paddingLeft: 30,
-            fontSize: 11,
-          }}
-        />
-        <svg
-          width="13" height="13" viewBox="0 0 24 24" fill="none"
-          stroke={drawerMutedText} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-        >
-          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-      </div>
-
-      {isOpen && (
-        <div
-          ref={listRef}
-          style={{
-            position: 'absolute', left: 0, right: 0, top: '100%',
-            marginTop: 4,
-            // Opaque elevated surface — NOT --bg-surface-low, which the
-            // SteelBuild-Dark theme defines as a ~2%-white tint (great for a
-            // nested background, but a popover over it let the content behind
-            // bleed through). --bg-elevated is the floating-surface token;
-            // backdrop-blur kills any residual show-through from its 0.85 alpha.
-            background: 'var(--bg-elevated)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: `1px solid ${drawerBorder}`,
-            borderRadius: 8,
-            maxHeight: 220,
-            overflowY: 'auto',
-            zIndex: 100,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
-          }}
-        >
-          {filtered.length === 0 ? (
-            <div style={{
-              padding: '12px 14px', textAlign: 'center',
-              fontFamily: 'var(--font-mono)', fontSize: 9,
-              color: drawerMutedText, letterSpacing: '0.06em',
-            }}>
-              No matching tasks
-            </div>
-          ) : (
-            filtered.map((t, idx) => (
-              <div
-                key={t.id}
-                onClick={() => handleSelect(t)}
-                onMouseEnter={() => setHighlightIdx(idx)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '7px 12px',
-                  cursor: 'pointer',
-                  background: idx === highlightIdx ? 'rgba(255,255,255,0.06)' : 'transparent',
-                  borderBottom: idx < filtered.length - 1 ? `1px solid ${drawerMutedBorder}` : 'none',
-                  transition: 'background 0.08s',
-                }}
-              >
-                <span style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 600,
-                  color: 'var(--accent)', flexShrink: 0,
-                  minWidth: 48, textAlign: 'right',
-                }}>
-                  {t.wbs_code || '—'}
-                </span>
-                <span style={{
-                  fontFamily: 'var(--font-body)', fontSize: 11,
-                  color: idx === highlightIdx ? drawerText : drawerMutedText,
-                  flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {t.task_name}
-                </span>
-                {t.phase && (
-                  <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 7, fontWeight: 600,
-                    color: drawerMutedText, letterSpacing: '0.06em',
-                    textTransform: 'uppercase', flexShrink: 0,
-                  }}>
-                    {t.phase}
-                  </span>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import { computeFinishVariance, describeVariance } from '@/lib/schedule/actuals';
+import { finishFromDuration } from '@/lib/schedule/duration';
+import TaskHistoryTab from './TaskHistoryTab';
+import { asIdArray, sameIdSet, parseDeps } from './taskDetailDerive';
+import {
+  SearchableTaskPicker,
+  FormField,
+  ScheduleFlag,
+  StageGateDates,
+  drawerControlStyle,
+  drawerText,
+  drawerMutedText,
+  drawerBorder,
+  drawerMutedBorder,
+  drawerPanel,
+  drawerPanelStrong,
+  drawerSurface,
+} from './taskDetailPrimitives';
 
 export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onReparent, allTasks = [], onDelete, effectiveDates = {} }) {
   const [formData, setFormData] = useState(task || {});
@@ -338,15 +108,20 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
   // When the user edits duration, keep start_date fixed and shift end_date.
   const handleDurationChange = (newDays) => {
     const days = parseInt(newDays, 10);
-    if (!Number.isFinite(days) || days < 1) return;
+    if (!Number.isFinite(days)) return; // mid-typing, or the field was cleared
     if (!formData.start_date) {
       toast.error('Set a start date first', { position: 'top-right', duration: 2000 });
       return;
     }
-    // UTC-safe: new Date(str+'T00:00:00') (local) + toISOString() (UTC) shifts
-    // end_date by a day under a non-zero UTC offset. addDaysIso does the
-    // arithmetic in UTC — timezone-independent. (days is already guarded ≥1.)
-    const endStr = addDaysIso(formData.start_date, days);
+    // 0 lands the task on a single date instead of being ignored (§4.3). A
+    // milestone is a point in time, which P6 and MS Project call 0 days and the
+    // inclusive convention calls 1 — same date either way. Silently discarding
+    // the keystroke made the field look broken to anyone entering a milestone.
+    const inclusiveDays = days <= 0 ? 1 : days;
+    // finishFromDuration is start + (days - 1): day 1 IS the start date, under
+    // the inclusive convention (§2.4). It does the arithmetic in UTC, so a
+    // non-zero local offset cannot shift the finish by a day.
+    const endStr = finishFromDuration(formData.start_date, inclusiveDays);
     if (!endStr) return; // unparseable start_date — leave dates untouched
     setFormData({ ...formData, end_date: endStr });
   };
@@ -481,7 +256,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(1,4,10,0.72)',
+          background: 'color-mix(in srgb, var(--sbd-gantt-bg) 72%, transparent)',
           backdropFilter: 'blur(3px)',
           zIndex: 1200,
         }}
@@ -497,7 +272,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
           width: 'min(620px, calc(100vw - 24px))',
           background: drawerSurface,
           borderLeft: `1px solid ${drawerBorder}`,
-          boxShadow: '-28px 0 70px rgba(0,0,0,0.66), inset 1px 0 0 rgba(255,255,255,0.04)',
+          boxShadow: 'var(--shadow-lg)',
           color: drawerText,
           zIndex: 1201,
           display: 'flex',
@@ -542,7 +317,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
               type="button"
               aria-label="Close"
               onClick={onClose}
-              style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${drawerMutedBorder}`, borderRadius: 8, cursor: 'pointer', color: drawerMutedText, fontSize: 18, width: 34, height: 34 }}
+              style={{ background: drawerPanelStrong, border: `1px solid ${drawerMutedBorder}`, borderRadius: 8, cursor: 'pointer', color: drawerMutedText, fontSize: 18, width: 34, height: 34 }}
             >
               ✕
             </button>
@@ -562,7 +337,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 fontSize: 9,
                 letterSpacing: '0.10em',
                 color: activeTab === tab.toLowerCase() ? 'var(--accent)' : drawerMutedText,
-                background: activeTab === tab.toLowerCase() ? 'rgba(86,176,255,0.12)' : 'transparent',
+                background: activeTab === tab.toLowerCase() ? 'var(--accent-muted)' : 'transparent',
                 border: 'none',
                 borderBottom: activeTab === tab.toLowerCase() ? '2px solid var(--accent)' : '1px solid transparent',
                 cursor: 'pointer',
@@ -586,14 +361,14 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 {/* Left column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <FormField label="Task Name" value={formData.task_name} onChange={(v) => setFormData({ ...formData, task_name: v })} />
-                  <FormField label="Task Type" type="select" value={formData.task_type} onChange={(v) => setFormData({ ...formData, task_type: v })} options={['Fabrication', 'Delivery', 'Install', 'Submittal', 'RFI', 'Milestone', 'Task']} />
+                  <FormField label="Task Type" type="select" value={formData.task_type} onChange={(v) => setFormData({ ...formData, task_type: v })} options={SCHEDULE_TASK_TYPES} />
                   <FormField label="Phase" type="select" value={formData.phase} onChange={(v) => setFormData({ ...formData, phase: v })} options={PHASES} />
-                  <FormField label="Status" type="select" value={formData.status} onChange={(v) => setFormData({ ...formData, status: v })} options={['Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold']} />
+                  <FormField label="Status" type="select" value={formData.status} onChange={(v) => setFormData({ ...formData, status: v })} options={SCHEDULE_STATUSES} />
                 </div>
 
                 {/* Right column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={['Critical', 'High', 'Normal', 'Low']} />
+                  <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={SCHEDULE_PRIORITIES} />
                   <FormField label="Assigned To / Resources" value={formData.resource_names || formData.assigned_to || ''} onChange={(v) => setFormData({ ...formData, resource_names: v, assigned_to: v })} />
                   <FormField label="% Complete" type="slider" value={formData.percent_complete || 0} onChange={(v) => setFormData({ ...formData, percent_complete: v })} />
                   <FormField label="WBS Code" value={formData.wbs_code || ''} onChange={(v) => setFormData({ ...formData, wbs_code: v })} />
@@ -612,8 +387,8 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 };
                 return (
                   <div style={{
-                    background: 'rgba(59,130,246,0.10)',
-                    border: '1px solid rgba(59,130,246,0.30)',
+                    background: 'var(--accent-muted)',
+                    border: '1px solid var(--accent-border)',
                     borderRadius: 8,
                     padding: '8px 12px',
                     marginBottom: 8,
@@ -621,7 +396,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                     flexDirection: 'column',
                     gap: 2,
                   }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'rgba(147,197,253,0.95)', letterSpacing: '0.04em' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.04em' }}>
                       SHIFTED BY PREDECESSORS
                     </span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: drawerText }}>
@@ -682,17 +457,17 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                       <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Duration (days)</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         value={duration}
                         onChange={(e) => handleDurationChange(e.target.value)}
                         readOnly={isSummary}
                         disabled={isSummary}
                         placeholder="—"
-                        title={isSummary ? 'Derived from children — not editable' : 'Edit duration to auto-shift the end date'}
+                        title={isSummary ? 'Derived from children — not editable' : 'Inclusive days: Mon → Fri is 5, a same-day task is 1. Enter 0 for a milestone.'}
                         style={{
                           ...drawerControlStyle,
                           width: '100%',
-                          ...(isSummary ? { opacity: 0.55, cursor: 'not-allowed', background: 'rgba(255,255,255,0.035)', color: drawerMutedText } : {}),
+                          ...(isSummary ? { opacity: 0.55, cursor: 'not-allowed', background: drawerPanelStrong, color: drawerMutedText } : {}),
                         }}
                       />
                     </div>
@@ -702,13 +477,65 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                       fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.04em',
                       color: drawerMutedText, lineHeight: 1.4,
                       padding: '6px 8px',
-                      background: 'rgba(255,255,255,0.025)',
+                      background: drawerPanel,
                       border: `1px dashed ${drawerMutedBorder}`,
                       borderRadius: 2,
                     }}>
                       Summary task — dates roll up from child tasks (earliest start, latest finish) and can't be edited directly.
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Actuals — what actually happened, kept strictly apart from the
+                  plan above (§1.4). These are never derived from start_date /
+                  end_date: a plan is a promise, an actual is a fact, and
+                  copying one into the other manufactures evidence of an on-time
+                  finish nobody recorded. Blank means "not recorded", which is
+                  why the variance line says so in words rather than showing a
+                  bare dash that reads like "on time". */}
+              {!isSummary && (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 8,
+                  padding: '10px 12px',
+                  background: drawerPanel,
+                  border: `1px solid ${drawerMutedBorder}`,
+                  borderRadius: 8,
+                }}>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em',
+                    textTransform: 'uppercase', color: drawerMutedText,
+                  }}>
+                    Actuals
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                    gap: 12,
+                  }}>
+                    <div>
+                      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Actual Start</label>
+                      <DateOrTbdInput
+                        value={formData.actual_start_date}
+                        onChange={(v) => setFormData({ ...formData, actual_start_date: v })}
+                        inputStyle={{ width: '100%', ...drawerControlStyle }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Actual Finish</label>
+                      <DateOrTbdInput
+                        value={formData.actual_finish_date}
+                        onChange={(v) => setFormData({ ...formData, actual_finish_date: v })}
+                        inputStyle={{ width: '100%', ...drawerControlStyle }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: 11, lineHeight: 1.4,
+                    color: drawerMutedText,
+                  }}>
+                    {describeVariance(computeFinishVariance(formData))}
+                  </div>
                 </div>
               )}
 
@@ -932,9 +759,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
           )}
 
           {activeTab === 'history' && (
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, textAlign: 'center', padding: '40px 0' }}>
-              No history yet
-            </div>
+            <TaskHistoryTab taskId={task?.id} projectId={task?.project_id} />
           )}
         </div>
 
@@ -944,7 +769,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
             onClick={onClose}
             style={{
               flex: 1,
-              background: 'rgba(255,255,255,0.025)',
+              background: drawerPanel,
               border: `1px solid ${drawerBorder}`,
               borderRadius: 8,
               padding: '10px 12px',
@@ -960,14 +785,14 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
             onClick={handleSave}
             style={{
               flex: 1,
-              background: 'linear-gradient(135deg, rgba(86,176,255,0.98) 0%, rgba(35,134,230,0.98) 100%)',
-              border: '1px solid rgba(86,176,255,0.4)',
+              background: 'var(--accent)',
+              border: '1px solid var(--accent-border)',
               borderRadius: 8,
               padding: '10px 12px',
               fontFamily: 'var(--font-body)',
               fontSize: 12,
               fontWeight: 600,
-              color: '#04111f',
+              color: 'var(--on-accent)',
               cursor: 'pointer',
             }}
           >
@@ -976,303 +801,5 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
         </div>
       </div>
     </>
-  );
-}
-
-function FormField({ label, type = 'text', value, onChange, readOnly = false, options = [] }) {
-  return (
-    <div>
-      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 5 }}>
-        {label}
-      </label>
-      {type === 'select' ? (
-        <select
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          style={{
-            ...drawerControlStyle,
-          }}
-        >
-          <option value="">—</option>
-          {options.map(opt => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
-      ) : type === 'date' ? (
-        <input
-          type="date"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          style={{
-            ...drawerControlStyle,
-          }}
-        />
-      ) : type === 'slider' ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={value || 0}
-            onChange={(e) => onChange(parseInt(e.target.value))}
-            style={{ flex: 1 }}
-          />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: drawerMutedText, minWidth: 32, textAlign: 'right' }}>{value || 0}%</span>
-        </div>
-      ) : (
-        <input
-          type={type}
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          readOnly={readOnly}
-          style={{
-            ...drawerControlStyle,
-            background: readOnly ? 'rgba(255,255,255,0.035)' : drawerControlStyle.background,
-            color: readOnly ? drawerMutedText : drawerText,
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Schedule flag toggle (Milestone / Critical Path) ─────────────────
-function ScheduleFlag({ label, checked, onChange, hint }) {
-  return (
-    <label
-      title={hint}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        cursor: 'pointer',
-        userSelect: 'none',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        color: checked ? 'var(--accent)' : drawerMutedText,
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={!!checked}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ accentColor: 'var(--accent)' }}
-      />
-      {label}
-    </label>
-  );
-}
-
-// ── Detailing stage-gate date panel ───────────────────────────────────
-//
-// Two date pickers per gate (Start + End), one row each for OFA → BFA →
-// IFC → Released, plus a read-only derived Bar-Start/Finish line so the
-// user can see the Gantt bar anchors that will land on save. Each gate
-// row shows its caption ("Back from Approval") so new PMs don't have to
-// memorise the acronyms. The currently-active gate (the one the
-// schedule "follows" for due-date tracking) gets a left rail in its
-// gate colour. A "Clear" affordance per row wipes that single gate
-// without disturbing the others.
-function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
-  const setGateField = (gate, field, iso) => {
-    const next = { ...stageDates };
-    const prev = next[gate] || { start: null, end: null };
-    next[gate] = { ...prev, [field]: iso || null };
-    // If both halves of a gate are now empty, leave the empty object —
-    // the apply helper drops it on save so we don't write `{}`.
-    onChange(next);
-  };
-  const clearGate = (gate) => {
-    const next = { ...stageDates };
-    next[gate] = { start: null, end: null };
-    onChange(next);
-  };
-
-  // Derived preview: earliest filled start → latest filled end.
-  // Mirrors deriveStartEndFromStages on save so the user doesn't have
-  // to save-and-look to understand the effect.
-  const allDates = [];
-  for (const g of DETAILING_STAGE_GATES) {
-    const v = stageDates?.[g];
-    if (v?.start) allDates.push(v.start);
-    if (v?.end)   allDates.push(v.end);
-  }
-  const sortedAll = allDates.sort();
-  const previewStart = sortedAll[0] || null;
-  const previewEnd   = sortedAll[sortedAll.length - 1] || null;
-
-  // Which gate is the schedule currently tracking? Highlight it in the
-  // panel so the user can see at a glance which window drives the
-  // "due when" date.
-  const activeGate = getActiveStage(stageDates);
-  const dueDate    = getEffectiveDueDate(stageDates);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{
-        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-        gap: 8,
-      }}>
-        <div style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: drawerMutedText,
-        }}>
-          Detailing Stage Dates
-        </div>
-        {activeGate && (
-          <div
-            title="The gate the schedule is currently tracking — its end date is the live due date."
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: '0.10em',
-              color: DETAILING_STAGE_META[activeGate]?.color || 'var(--accent)',
-            }}
-          >
-            ACTIVE · {activeGate}
-            {dueDate ? ` · DUE ${dueDate}` : ''}
-          </div>
-        )}
-      </div>
-
-      {DETAILING_STAGE_GATES.map((gate) => {
-        const meta  = DETAILING_STAGE_META[gate];
-        const v     = stageDates?.[gate] || { start: null, end: null };
-        const start = v.start || '';
-        const end   = v.end || '';
-        const filled = !!(start || end);
-        const isActive = gate === activeGate;
-        return (
-          <div
-            key={gate}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '112px minmax(0, 1fr) minmax(0, 1fr) 28px',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 12px',
-              background: filled
-                ? `linear-gradient(90deg, color-mix(in srgb, ${meta.color} 16%, ${drawerPanelStrong}) 0%, ${drawerPanelStrong} 70%)`
-                : drawerPanel,
-              border: `1px solid ${filled ? `color-mix(in srgb, ${meta.color} 48%, ${drawerMutedBorder})` : drawerMutedBorder}`,
-              borderLeft: `3px solid ${isActive ? meta.color : (filled ? meta.color : drawerBorder)}`,
-              borderRadius: 8,
-              boxShadow: isActive
-                ? `0 0 0 1px color-mix(in srgb, ${meta.color} 34%, transparent), 0 14px 28px rgba(0,0,0,0.25)`
-                : 'none',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                fontWeight: 800,
-                color: meta.color,
-                letterSpacing: '0.08em',
-              }}>
-                {meta.label}
-              </span>
-              <span style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: 9,
-                color: drawerMutedText,
-                lineHeight: 1.2,
-              }}>
-                {meta.caption}
-              </span>
-            </div>
-            <DateInput
-              ariaLabel={`${gate} start date`}
-              placeholder="start"
-              value={start}
-              onChange={(iso) => setGateField(gate, 'start', iso)}
-            />
-            <DateInput
-              ariaLabel={`${gate} end date`}
-              placeholder="end"
-              value={end}
-              onChange={(iso) => setGateField(gate, 'end', iso)}
-            />
-            <button
-              type="button"
-              onClick={() => clearGate(gate)}
-              disabled={!filled}
-              aria-label={`Clear ${gate}`}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: filled ? drawerMutedText : 'rgba(135,154,180,0.3)',
-                cursor: filled ? 'pointer' : 'not-allowed',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                padding: '2px 6px',
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        );
-      })}
-
-      {/* Derived bar anchors — helps the user understand how the Gantt
-          bar will be placed without saving first. Prefers the live
-          preview (which reflects unsaved edits) over the persisted
-          derivedStart / derivedEnd props, so the hint stays in sync
-          with what they just typed. */}
-      <div
-        style={{
-          marginTop: 2,
-          padding: '6px 8px',
-          background: 'rgba(255,255,255,0.025)',
-          border: `1px dashed ${drawerMutedBorder}`,
-          borderRadius: 8,
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: drawerMutedText,
-          letterSpacing: '0.04em',
-        }}
-      >
-        <span>Bar start {previewStart || derivedStart || '—'}</span>
-        <span>Bar end {previewEnd || derivedEnd || '—'}</span>
-      </div>
-    </div>
-  );
-}
-
-// Inline date input used by the per-gate rows. The dates panel now
-// sits full-width below the 2-col grid in the drawer, so each input
-// has plenty of room — no need to compress font size or padding the
-// way the cramped half-column layout once required.
-function DateInput({ value, onChange, ariaLabel, placeholder }) {
-  return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-      <span style={{
-        fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
-        letterSpacing: '0.10em', textTransform: 'uppercase',
-        color: drawerMutedText,
-      }}>
-        {placeholder}
-      </span>
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={ariaLabel}
-        style={{
-          ...drawerControlStyle,
-          minWidth: 0,
-        }}
-      />
-    </label>
   );
 }

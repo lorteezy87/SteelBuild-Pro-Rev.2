@@ -2,8 +2,9 @@ import React, { useState, useMemo, useRef } from 'react';
 import { Download, Upload, FileText, X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { entities } from "@/api/supabaseClient";
 import { COST_CODES } from '../shared/costCodes';
-import { getNextNumber } from '../shared/numberSequencing';
 import { toast } from 'sonner';
+import { withProjectId } from '@/lib/mutations/standardMutation';
+import { readFileText } from '@/lib/textDecoding';
 
 const EXPENSE_TYPES = ['Labor', 'Materials', 'Equipment', 'Subcontractor', 'Misc.', 'Overhead'];
 const PAYMENT_STATUSES = ['Unpaid', 'Paid', 'Pending Approval', 'Disputed', 'Voided'];
@@ -213,6 +214,15 @@ function parseRowsToExpenses(rows, workPackages) {
   return { headers: rawHeaders, records };
 }
 
+/**
+ * Text of an uploaded expense CSV. Decodes UTF-16 exports by byte-order mark
+ * or sniff and drops U+0000, which Postgres rejects (22P05). Throws
+ * TextDecodingError for UTF-32 and for binary files such as .xlsx.
+ */
+export async function readExpenseImportFile(file) {
+  return (await readFileText(file)).text;
+}
+
 export default function ExpenseImportModal({ open, onClose, activeProject, workPackages = [], onImported }) {
   const fileInputRef = useRef(null);
   const [csvText, setCsvText] = useState('');
@@ -235,9 +245,15 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
 
   const handleFile = async (file) => {
     if (!file) return;
-    setFileName(file.name);
-    const text = await file.text();
-    setCsvText(text);
+    try {
+      const text = await readExpenseImportFile(file);
+      setFileName(file.name);
+      setCsvText(text);
+    } catch (e) {
+      toast.error(e?.message || 'Could not read import file');
+      // Clear the picker so the re-saved file can be chosen again.
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const reset = () => {
@@ -266,25 +282,8 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
     for (let i = 0; i < valid.length; i++) {
       const rec = valid[i];
       try {
-        let expenseNumber;
-        try {
-          expenseNumber = await getNextNumber(activeProject.id, "EXPENSE");
-        } catch (err) {
-          failed += 1;
-          console.error("Unable to reserve expense number for import row:", rec, err);
-          setProgress({ done: i + 1, total: valid.length, failed });
-          continue;
-        }
-        if (!expenseNumber) {
-          failed += 1;
-          setProgress({ done: i + 1, total: valid.length, failed });
-          continue;
-        }
-
-        const payload = {
-          project_id: activeProject.id,
+        const payload = withProjectId({
           project_name: activeProject.name || '',
-          expense_number: expenseNumber,
           expense_date: rec.expense_date,
           description: rec.description,
           expense_type: rec.expense_type,
@@ -303,7 +302,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
           work_package_name: rec.work_package_name || '',
           submitted_by: rec.submitted_by || '',
           notes: rec.notes || '',
-        };
+        }, activeProject.id);
 
         await entities.Expense.create(payload);
         succeeded += 1;
@@ -435,7 +434,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
                   padding: '8px 14px', borderRadius: 6,
                   background: 'var(--accent)',
                   border: 'none',
-                  color: '#07090E',
+                  color: 'var(--on-accent)',
                   fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase',
                   cursor: 'pointer',
@@ -609,7 +608,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
               disabled={importing || validCount === 0 || !activeProject?.id}
               style={{
                 background: 'var(--accent)', border: 'none',
-                color: '#07090E', padding: '8px 18px', borderRadius: 6,
+                color: 'var(--on-accent)', padding: '8px 18px', borderRadius: 6,
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
                 letterSpacing: '0.08em', textTransform: 'uppercase',
                 cursor: importing || validCount === 0 ? 'not-allowed' : 'pointer',

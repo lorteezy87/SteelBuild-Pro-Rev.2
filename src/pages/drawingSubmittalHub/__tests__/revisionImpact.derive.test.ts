@@ -12,10 +12,22 @@ describe("downstreamFor", () => {
     expect(downstreamFor("medium")).toEqual({ label: "Fabricated", tone: "review" });
     expect(downstreamFor("low")).toEqual({ label: "Not downstream", tone: "neutral" });
   });
-  it("falls back to 'low' for unknown / missing severity", () => {
-    expect(downstreamFor(undefined)).toEqual(downstreamFor("low"));
-    expect(downstreamFor(null)).toEqual(downstreamFor("low"));
-    expect(downstreamFor("bogus")).toEqual(downstreamFor("low"));
+
+  it("labels the unknown severity as unknown, never as an all-clear", () => {
+    const meta = downstreamFor("unknown");
+    expect(meta.label).toBe("Unknown");
+    expect(meta.tone).toBe("warn");
+    expect(meta.title).toMatch(/can't be determined/i);
+  });
+
+  // An unrecognized severity must never render "Not downstream" — that is a
+  // positive claim about steel, and defaulting to it is how a missing-data row
+  // came to read as "caught pre-fab".
+  it("falls back to 'unknown' for a missing / unrecognized severity", () => {
+    expect(downstreamFor(undefined)).toEqual(downstreamFor("unknown"));
+    expect(downstreamFor(null)).toEqual(downstreamFor("unknown"));
+    expect(downstreamFor("bogus")).toEqual(downstreamFor("unknown"));
+    expect(downstreamFor(undefined).label).not.toBe("Not downstream");
   });
 });
 

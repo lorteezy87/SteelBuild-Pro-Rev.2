@@ -2,7 +2,7 @@
  * routes.test.js — smoke tests for the route metadata source-of-truth.
  *
  * These don't render React; they just verify the data shape so that an
- * accidental rename in pages.config.js or routes.js trips CI before it
+ * accidental rename in src/config/routes.js trips CI before it
  * reaches production.
  */
 
@@ -29,6 +29,28 @@ describe("routes — page registry", () => {
     expect(ALL_ROUTE_PATHS).toContain("/Landing");
     expect(ALL_ROUTE_PATHS).toContain("/RFIHub");
     expect(ALL_ROUTE_PATHS).toContain("/ProjectDetail");
+  });
+
+  it("keeps /Schedule as a compatibility redirect to the canonical ScheduleHub", () => {
+    expect(STATIC_ROUTE_METADATA["/Schedule"]).toMatchObject({
+      lifecycle: "legacy",
+      kind: "redirect",
+      target: "/ScheduleHub",
+    });
+    expect(PAGE_LABELS).not.toHaveProperty("Schedule");
+  });
+
+  it("keeps legacy Team and Budget Control links on their canonical pages", () => {
+    expect(STATIC_ROUTE_METADATA["/Team"]).toMatchObject({
+      lifecycle: "legacy",
+      kind: "redirect",
+      target: "/OrgMembers",
+    });
+    expect(STATIC_ROUTE_METADATA["/BudgetControl"]).toMatchObject({
+      lifecycle: "legacy",
+      kind: "redirect",
+      target: "/CostHub",
+    });
   });
 
   it("has no duplicate route paths", () => {
@@ -87,7 +109,7 @@ describe("routeLabel", () => {
 describe("PROJECT_SCOPED_PAGES", () => {
   it("contains pages that genuinely depend on an active project", () => {
     expect(PROJECT_SCOPED_PAGES.has("Drawings")).toBe(true);
-    expect(PROJECT_SCOPED_PAGES.has("Schedule")).toBe(true);
+    expect(PROJECT_SCOPED_PAGES.has("ScheduleHub")).toBe(true);
     expect(PROJECT_SCOPED_PAGES.has("RFIs")).toBe(true);
   });
 

@@ -9,6 +9,7 @@ Refs:
 - Production: `https://steelbuild-pro.com`
 - Vercel project: `steelbuildpro-og`
 - GitHub repo: `lorteezy87/SteelBuild-Pro-Rev.2`
+- Tier 1 code-vs-owner split: [`tier1-enterprise-status.md`](./tier1-enterprise-status.md)
 
 > How to use: work top-to-bottom within each group. Check the box only when the step is done **and verified** by the stated evidence. Do not mark "done" on a dashboard toggle without re-opening the setting to confirm it stuck.
 
@@ -69,6 +70,13 @@ Refs:
   - Why: daily backups alone give up to ~24h of data loss; PITR narrows RPO to minutes. An untested backup is not a backup.
   - Verify: rehearsal completes; login + project-list + drawing-register + a signed-URL file open all succeed on the restored copy.
 
+- [~] **Enable and rehearse offsite Storage backup** — [H25]
+  - **Code ready (2026-07-22):** `.github/workflows/storage-backup.yml` and `scripts/storage-backup.mjs` cover `app-files` and `email-attachments` with timestamped snapshots, a current mirror, exact path/size checks, aggregate count/byte checks, and a retained manifest.
+  - Owner steps: provision a company-owned offsite destination, enable provider-side versioning/soft-delete and lifecycle retention, configure the `storage-backup-production` deployment branches/tags policy to **selected branches** with `main` only before adding environment secrets, then manually run the workflow. A feature-branch `workflow_dispatch` must be rejected/skipped and must not receive production credentials.
+  - Rehearse a restore of both buckets into staging and record the manifest timestamp, measured RTO/RPO, and post-restore checks in `backup-dr.md`.
+  - Full setup and acceptance criteria: `storage-backup-setup.md`.
+  - Verify: the workflow has a green run and manifest for both buckets with `source.projectRef` matching production, failure notifications reach an owner, and the staging restore passes a real signed-file open.
+
 - [ ] **Harden Auth settings** — [M42]
   - Supabase dashboard → `Authentication → Providers/Policies/Settings`:
     - Minimum password length **>= 10** with complexity requirement enabled.
@@ -118,9 +126,21 @@ Refs:
 
 ## 3. Edge Functions — Delete Orphan / Deprecated Functions
 
-**Requires Supabase CLI (not available to automation).** Confirmed **ACTIVE** as of 2026-07-01: five functions that are either orphaned Stripe Sync Engine leftovers or deprecated integrations no longer invoked by the client.
+**Requires Supabase CLI + `SUPABASE_ACCESS_TOKEN`.** Confirmed historically ACTIVE:
+five functions that are either orphaned Stripe Sync Engine leftovers or deprecated
+integrations no longer invoked by the client.
 
 - [ ] **Delete the 5 confirmed-active orphan/deprecated functions** — [H5 / L12]
+
+  Preferred (dry-run first, then apply):
+
+  ```bash
+  export SUPABASE_ACCESS_TOKEN=…   # dashboard → Account → Access Tokens
+  npm run supabase:delete-deprecated-fns          # dry-run
+  DRY_RUN=0 npm run supabase:delete-deprecated-fns
+  ```
+
+  Equivalent manual CLI:
 
   ```powershell
   npx supabase functions delete sharepoint-proxy --project-ref kjrwqagyeswwoxpjkcko
@@ -136,6 +156,8 @@ Refs:
     - The `stripe-sync-worker` pg_cron job that pinged `stripe-worker` every ~60s **is already unscheduled** — deleting `stripe-worker` removes the dangling 404 target.
   - Why: dead attack surface + noise in edge logs; every deployed function is something to secure and reason about.
   - Verify (by runtime outcome): after deletion, `npx supabase functions list --project-ref kjrwqagyeswwoxpjkcko` no longer lists them; edge logs no longer show `stripe-worker` 404s; billing checkout/portal + webhook still work (do a test-mode checkout).
+  - Mandatory CI: keep repo secret `SUPABASE_ACCESS_TOKEN` and variable `SUPABASE_PROJECT_REF` configured; the `supabase-drift` job fails closed when either is absent and fails while these remain deployed.
+  - Shared-project ownership and lifecycle are reviewed in [`supabase-production-ownership.md`](./supabase-production-ownership.md); inventory green does not prove SQL or deployed-source equivalence.
 
 ---
 
@@ -143,10 +165,15 @@ Refs:
 
 - [ ] **Register AZ TPT, then enable Stripe Tax** — [H14]
   - Register for **Arizona Transaction Privilege Tax** (TPT) with the AZ Dept. of Revenue. SaaS is treated under the **rental class**; AZ TPT is the seller's tax — charge AZ customers from dollar one, on a separate invoice line.
-  - Only **after** TPT registration is live: enable **Stripe Tax**. The code already has an `automatic_tax` scaffold behind a `billing_config` flag — **turn that flag on only after Stripe Tax is active**, and split revenue vs. TPT so the tax portion books to a **"TPT Payable" liability**, not revenue.
+  - Only **after** TPT registration is live: enable **Stripe Tax** in the Stripe dashboard and mark subscription prices as taxable. Checkout already sends `automatic_tax: { enabled: true }` (+ billing address / tax-id collection) — **redeploy `stripe-billing` after merge**, then verify Tax resolves.
+  - Split revenue vs. TPT so the tax portion books to a **"TPT Payable" liability**, not revenue.
   - Why: collecting tax without registration, or booking tax as revenue, are both compliance problems.
   - Verify: a test-mode AZ checkout shows a separate tax line; the webhook records the tax portion to the liability path.
 
+- [~] **Signup clickwrap** — [H12] **Code shipped (2026-07-27):** Landing signup
+  requires an affirmative Terms/Privacy checkbox; `signUpWithPassword` refuses to
+  mint `terms_accepted_at` metadata unless `termsAccepted: true`. Counsel review
+  of the linked legal pages (DRAFT markers) remains owner work below.
 - [ ] **Counsel review of Terms / Privacy / Security; remove DRAFT markers** — [H12 / H13]
   - Have legal counsel review the Terms of Service, Privacy Policy, and Security statement. Remove all **"DRAFT"** markers only after sign-off.
   - Why: DRAFT legal pages undermine enterprise buyer trust and may be unenforceable.

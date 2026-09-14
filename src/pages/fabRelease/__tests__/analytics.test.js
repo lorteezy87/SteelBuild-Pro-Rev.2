@@ -42,6 +42,26 @@ describe("fab release analytics", () => {
     expect(signals.flags.map((flag) => flag.key)).toContain("drawings_not_released");
   });
 
+  it("treats stage/ifc_status IFC or Released (any case) as released, but NOT a bare approved set or a phantom status column", () => {
+    const wp = {
+      id: "wp-1",
+      phase: "Fabrication",
+      status: "Not Started",
+      percent_complete: 0,
+      linked_drawing_ids: "d1",
+      vif_confirmed: true,
+      load_list_complete: true,
+      crew: "Shop A",
+    };
+    const flagsFor = (drawing) =>
+      getFabReleaseSignals(wp, { drawingsById: new Map([["d1", { id: "d1", ...drawing }]]), today: "2026-05-13" })
+        .flags.map((flag) => flag.key);
+    expect(flagsFor({ stage: "ifc" })).not.toContain("drawings_not_released");
+    expect(flagsFor({ stage: "OFS", ifc_status: "IFC" })).not.toContain("drawings_not_released");
+    expect(flagsFor({ stage: "OFS", set_approval_status: "approved" })).toContain("drawings_not_released");
+    expect(flagsFor({ stage: "OFS", status: "Released" })).toContain("drawings_not_released");
+  });
+
   it("rolls up stage, release, drawing, and labor metrics", () => {
     const metrics = buildFabReleaseMetrics(
       [

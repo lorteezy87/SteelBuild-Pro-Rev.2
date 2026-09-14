@@ -6,6 +6,12 @@ export interface ScheduleTask {
   task_type?: string;
   start_date?: string | null;
   end_date?: string | null;
+  /** When work actually started. NULL = not recorded — never inferred from
+   *  start_date, which is the plan (§1.4). */
+  actual_start_date?: string | null;
+  /** When work actually finished. NULL = not recorded — never inferred from
+   *  end_date (§1.4). */
+  actual_finish_date?: string | null;
   duration?: number | string | null;
   status?: string;
   percent_complete?: number;
@@ -52,4 +58,8 @@ export interface ParsedMppTask {
   durationDays: number | null;
   resources: string[];
   notes: string;
+  /** CSV import: explicit phase when the file has a Phase column. */
+  phaseHint?: string | null;
+  /** CSV import: DB-legal status already reconciled with percent_complete. */
+  statusHint?: string | null;
 }

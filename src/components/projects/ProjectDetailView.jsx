@@ -23,11 +23,11 @@ const TABS = [
 ];
 
 const PHASE_CONFIG = {
-  Detailing:   { color: '#0D9488' },
+  Detailing:   { color: 'var(--accent)' },
   Fabrication: { color: 'var(--accent)' },
-  Delivery:    { color: '#06B6D4' },
-  Erection:    { color: '#22C55E' },
-  Closeout:    { color: '#9CA3AF' },
+  Delivery:    { color: 'var(--status-info)' },
+  Erection:    { color: 'var(--status-success)' },
+  Closeout:    { color: 'var(--text-muted)' },
 };
 
 const HEALTH_CONFIG = {

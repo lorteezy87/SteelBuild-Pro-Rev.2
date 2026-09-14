@@ -12,7 +12,7 @@
  *   4. FilterBar — search + type chips + "Log Field Activity" primary action
  *   5. DataTable — flat activity feed (all sources merged)
  */
-import { useMemo } from "react";
+import { useMemo, type KeyboardEvent } from "react";
 import { HardHat, Users, AlertTriangle, ClipboardCheck, ShieldAlert, Wrench, Flame } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -28,7 +28,7 @@ import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import { FIELD_PHASES } from "@/lib/field/fieldPhase";
 import PhaseBadge from "@/components/field/PhaseBadge";
-import { buildFieldHubSummary } from "./fieldHubControlCenter.derive";
+import { buildFieldHubSummary, FIELD_HUB_PANEL_COPY } from "./fieldHubControlCenter.derive";
 import type {
   DailyLogRecord,
   InspectionRecord,
@@ -43,6 +43,13 @@ import type {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function activateDecisionRow(event: KeyboardEvent<HTMLDivElement>) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    event.currentTarget.click();
+  }
+}
 
 const TYPE_CHIPS = ["All", "Daily Log", "Inspection", "Safety", "Punchlist"];
 const PHASE_CHIPS = ["All", ...FIELD_PHASES];
@@ -315,18 +322,21 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
       <div className="cmd-panels">
         {/* Panel 1 — Today in the Field */}
         <DecisionPanel
-          title="Today in the Field"
+          title={FIELD_HUB_PANEL_COPY.fieldIssues.title}
           onViewAll={() => {
             onTypeFilterChange("Punchlist");
             scrollToTable();
           }}
         >
           {s.todayQueue.length === 0 ? (
-            <div className="cmd-row__meta">No open field issues.</div>
+            <div className="cmd-row__meta">{FIELD_HUB_PANEL_COPY.fieldIssues.empty}</div>
           ) : (
             s.todayQueue.map((item: SiteCoordRow) => (
               <div
                 className="cmd-row is-clickable"
+                role="button"
+                tabIndex={0}
+                onKeyDown={activateDecisionRow}
                 key={item.id}
                 onClick={() => onOpenPunchlist?.(item.id)}
               >
@@ -355,14 +365,14 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
 
         {/* Panel 2 — Open Issues (upcoming inspections) */}
         <DecisionPanel
-          title="Open Issues"
+          title={FIELD_HUB_PANEL_COPY.inspections.title}
           onViewAll={() => {
             onTypeFilterChange("Inspection");
             scrollToTable();
           }}
         >
           {s.inspectionQueue.length === 0 ? (
-            <div className="cmd-row__meta">No upcoming inspections.</div>
+            <div className="cmd-row__meta">{FIELD_HUB_PANEL_COPY.inspections.empty}</div>
           ) : (
             s.inspectionQueue.map((insp: InspectionQueueRow) => {
               const overdue = insp.daysUntilDue !== null && insp.daysUntilDue < 0;
@@ -370,6 +380,9 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
               return (
                 <div
                   className="cmd-row is-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={activateDecisionRow}
                   key={insp.id}
                   onClick={() => onOpenInspection?.(insp.id)}
                 >
@@ -409,6 +422,9 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
             s.coordinationQueue.map((item: SiteCoordRow) => (
               <div
                 className="cmd-row is-clickable"
+                role="button"
+                tabIndex={0}
+                onKeyDown={activateDecisionRow}
                 key={item.id}
                 onClick={() => {
                   if (item.type === "safety") onOpenIncident?.(item.id);

@@ -1,0 +1,46 @@
+/* Canonical register only: desktop split, narrow-screen list/detail navigation. */
+.submittal-register__controls {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 14px;
+  min-width: 0;
+}
+.submittal-register__list {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.submittal-register__detail {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 480px;
+  min-width: 0;
+  min-height: 0;
+}
+.submittal-register [hidden] { display: none; }
+.submittal-detail { width: 100%; flex: 1; min-width: 0; }
+.submittal-detail__back { display: none; }
+.submittal-register[data-compact="true"] .submittal-register__detail { flex: 1; }
+.submittal-register[data-compact="true"] .submittal-detail__back {
+  display: block;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 10px 16px;
+  text-align: left;
+  font: 600 12px var(--font-body);
+  color: var(--cmd-text);
+  background: var(--cmd-surface);
+  border: 0;
+  border-bottom: 1px solid var(--cmd-border);
+  cursor: pointer;
+}
+.submittal-register[data-compact="true"] .cmd-filterbar { flex-wrap: wrap; }
+.submittal-register[data-compact="true"] .cmd-search { flex: 1 0 100%; min-width: 0; }
+.submittal-register[data-compact="true"] .cmd-filterbar__filters { flex: 1 0 100%; min-width: 0; }
+.submittal-register[data-compact="true"] .cmd-filterbar__filters select { max-width: 100%; min-width: 0; }
+.submittal-register[data-compact="true"] .cmd-kpi { padding: 10px; min-width: 0; }
+.submittal-register[data-compact="true"] .cmd-kpi__icon { display: none; }
+.submittal-register[data-compact="true"] .cmd-kpi__value { font-size: 22px; }
+.submittal-register[data-compact="true"] .cmd-kpi__label { font-size: 11px; }

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { normalizeThrownQueryError } from "@/lib/postgrestErrors";
 import type { ImportPayload, PieceImportSourceType } from "./reconciliation";
 
 export interface PieceRegisterRow {
@@ -14,9 +15,14 @@ export interface PieceRegisterRow {
   weight_each_lbs: number | null;
   weight_total_lbs: number | null;
   work_package_id: string | null;
+  /** Lot / WP sequence from import (used by auto-assign). */
+  sequence_number?: string | null;
+  /** Erection area from import (used by auto-assign). */
+  erection_area?: string | null;
   lifecycle_status: string;
   current_station?: string | null;
   on_hold: boolean;
+  on_hold_reason?: string | null;
   is_container?: boolean;
   is_deleted?: boolean;
   source_system: string | null;
@@ -44,6 +50,8 @@ export interface PieceImportStagedRow {
   id: string;
   source_row_number: number;
   normalized_payload: Record<string, unknown>;
+  /** Raw staged row (keeps wp_number / sheet_number hints for post-apply). */
+  original_payload?: Record<string, unknown> | null;
   decision: string;
   warnings: string[];
   resolution: string | null;
@@ -51,6 +59,13 @@ export interface PieceImportStagedRow {
 }
 
 const db = supabase as any;
+
+function isActivePieceRow(row: {
+  is_deleted?: boolean | null;
+  deleted_at?: string | null;
+}): boolean {
+  return !row.is_deleted && !row.deleted_at;
+}
 
 async function fetchAllProjectRows<T>(table: string, projectId: string): Promise<T[]> {
   const rows: T[] = [];
@@ -60,8 +75,11 @@ async function fetchAllProjectRows<T>(table: string, projectId: string): Promise
       .from(table)
       .select("*")
       .eq("project_id", projectId)
+      // Offset paging needs a stable sort or Postgres may repeat/skip rows
+      // across page boundaries.
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
-    if (error) throw error;
+    if (error) throw normalizeThrownQueryError(error);
     rows.push(...((data ?? []) as T[]));
     if (!data || data.length < pageSize) return rows;
   }
@@ -69,7 +87,8 @@ async function fetchAllProjectRows<T>(table: string, projectId: string): Promise
 
 export async function fetchPieceRegister(projectId: string): Promise<PieceRegisterRow[]> {
   const rows = await fetchAllProjectRows<PieceRegisterRow>("pieces", projectId);
-  return rows.filter((row) => !row.deleted_at);
+  // pieces uses both is_deleted and deleted_at in different write paths — require both clear.
+  return rows.filter(isActivePieceRow);
 }
 
 export async function fetchPieceImportBatches(projectId: string): Promise<PieceImportBatch[]> {
@@ -79,7 +98,7 @@ export async function fetchPieceImportBatches(projectId: string): Promise<PieceI
     .eq("project_id", projectId)
     .order("created_at", { ascending: false })
     .limit(50);
-  if (error) throw error;
+  if (error) throw normalizeThrownQueryError(error);
   return (data ?? []) as PieceImportBatch[];
 }
 
@@ -89,11 +108,11 @@ export async function fetchPieceImportRows(
 ): Promise<PieceImportStagedRow[]> {
   const { data, error } = await db
     .from("piece_import_rows")
-    .select("id, source_row_number, normalized_payload, decision, warnings, resolution, matched_piece_id")
+    .select("id, source_row_number, normalized_payload, original_payload, decision, warnings, resolution, matched_piece_id")
     .eq("project_id", projectId)
     .eq("batch_id", batchId)
     .order("source_row_number");
-  if (error) throw error;
+  if (error) throw normalizeThrownQueryError(error);
   return (data ?? []) as PieceImportStagedRow[];
 }
 
@@ -109,19 +128,19 @@ export async function stagePieceImportBatch(
     p_source_name: sourceName,
     p_rows: rows,
   });
-  if (error) throw error;
+  if (error) throw normalizeThrownQueryError(error);
   return data as Record<string, unknown>;
 }
 
 export async function approvePieceImportBatch(batchId: string): Promise<Record<string, unknown>> {
   const { data, error } = await db.rpc("approve_piece_import_batch", { p_batch_id: batchId });
-  if (error) throw error;
+  if (error) throw normalizeThrownQueryError(error);
   return data as Record<string, unknown>;
 }
 
 export async function applyPieceImportBatch(batchId: string): Promise<Record<string, unknown>> {
   const { data, error } = await db.rpc("apply_piece_import_batch", { p_batch_id: batchId });
-  if (error) throw error;
+  if (error) throw normalizeThrownQueryError(error);
   return data as Record<string, unknown>;
 }
 
@@ -137,6 +156,6 @@ export async function archivePieceLots(
     p_confirmation: confirmation,
     p_reason: reason,
   });
-  if (error) throw error;
+  if (error) throw normalizeThrownQueryError(error);
   return data as Record<string, unknown>;
 }

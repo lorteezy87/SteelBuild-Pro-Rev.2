@@ -39,7 +39,7 @@ const COLUMNS: { label: string; align?: "right"; title?: string }[] = [
   { label: "Linked Work Package" },
   { label: "RFIs (open/all)", align: "right" },
   { label: "Fab Blocked?" },
-  { label: "Pieces ≈", align: "right", title: "Pieces tied to this set — exact when the roster links pieces to the set, otherwise estimated via the linked work-package sequence. '—' when neither resolves." },
+  { label: "Pieces ≈", align: "right", title: "Pieces tied to this set — exact when the roster links pieces to the set, otherwise estimated via the linked work-package sequence. '—' when the model roster isn't loaded, or neither link resolves." },
   { label: "" },
 ];
 
@@ -48,7 +48,7 @@ const COLUMNS: { label: string; align?: "right"; title?: string }[] = [
  * Shared by BOTH the <table> and the virtualized grid so the columns can never
  * drift apart in the canonical revision-impact panel.
  */
-function rowCells(r: any, onCompareRevision?: (drawingId: string) => void) {
+function rowCells(r: any, onCompareRevision?: (drawingId: string) => void, rosterLoaded = false) {
   const dm = downstreamFor(r.severity);
   return [
     // Changed Sheet (sheet number + set-name subline)
@@ -58,22 +58,35 @@ function rowCells(r: any, onCompareRevision?: (drawingId: string) => void) {
     </span>,
     // Rev
     <span key="rev" style={{ color: "var(--cmd-text-muted)" }}>{r.revisionCode}</span>,
-    // Downstream
-    <Pill key="down" tone={dm.tone}>{dm.label}</Pill>,
+    // Downstream — the "Unknown" state carries why, so it can't read as an all-clear.
+    <span key="down" title={dm.title}><Pill tone={dm.tone}>{dm.label}</Pill></span>,
     // Linked Work Package
     <span key="wp" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, color: r.wpNames?.length ? "var(--cmd-text)" : "var(--cmd-text-muted)" }}>
       {r.wpNames?.length ? r.wpNames.join(", ") : "—"}
     </span>,
     // RFIs (open/all)
     r.rfiCount ? (
-      <span key="rfi" style={{ fontSize: 11, color: r.openRfiCount ? "var(--cmd-warn)" : "var(--cmd-text-muted)" }}>
+      <span key="rfi" style={{ fontSize: 11, color: r.openRfiCount ? "var(--cmd-warn-text)" : "var(--cmd-text-muted)" }}>
         {r.openRfiCount}<span style={{ color: "var(--cmd-text-muted)" }}> / {r.rfiCount}</span>
       </span>
     ) : <span key="rfi" style={{ color: "var(--cmd-text-muted)" }}>—</span>,
     // Fab Blocked?
     <Pill key="fab" tone={r.fabBlocked ? "danger" : "neutral"}>{r.fabBlocked ? "Yes" : "No"}</Pill>,
-    // Pieces ≈
-    <span key="pcs" style={{ color: r.affectedPieces != null ? "var(--cmd-text)" : "var(--cmd-text-muted)" }}>{r.affectedPieces != null ? r.affectedPieces : "—"}</span>,
+    // Pieces ≈ — a "—" here has two very different causes, and saying which is
+    // the difference between "nothing is affected" and "we didn't look".
+    <span
+      key="pcs"
+      style={{ color: r.affectedPieces != null ? "var(--cmd-text)" : "var(--cmd-text-muted)" }}
+      title={
+        r.affectedPieces != null
+          ? undefined
+          : rosterLoaded
+            ? "No piece resolves to this set — neither the roster's set link nor a linked work-package sequence matches."
+            : "Model roster not loaded, so pieces were not counted. Load it from the Control Board's 3D model mapping card."
+      }
+    >
+      {r.affectedPieces != null ? r.affectedPieces : "—"}
+    </span>,
     // Compare action
     (onCompareRevision && r.drawingId) ? (
       <button
@@ -104,7 +117,7 @@ function rowKey(r: any): string {
 
 // ── Virtualized branch (>100 rows) ──────────────────────────────────────────
 
-function VirtualBoard({ rows, onCompareRevision }: { rows: any[]; onCompareRevision?: (drawingId: string) => void }) {
+function VirtualBoard({ rows, onCompareRevision, rosterLoaded = false }: { rows: any[]; onCompareRevision?: (drawingId: string) => void; rosterLoaded?: boolean }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -126,7 +139,7 @@ function VirtualBoard({ rows, onCompareRevision }: { rows: any[]; onCompareRevis
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const r = rows[virtualRow.index];
-            const cells = rowCells(r, onCompareRevision);
+            const cells = rowCells(r, onCompareRevision, rosterLoaded);
             return (
               <div
                 key={rowKey(r)}
@@ -156,7 +169,7 @@ function VirtualBoard({ rows, onCompareRevision }: { rows: any[]; onCompareRevis
 
 // ── Board ─────────────────────────────────────────────────────────────────
 
-export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLoading }: { rows?: any[]; onCompareRevision?: (drawingId: string) => void; isLoading?: boolean }) {
+export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLoading, rosterLoaded = false }: { rows?: any[]; onCompareRevision?: (drawingId: string) => void; isLoading?: boolean; rosterLoaded?: boolean }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => filterRevisionImpactRows(rows, search), [rows, search]);
   const virtualize = shouldVirtualizeRevisionImpact(filtered.length);
@@ -178,7 +191,7 @@ export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLo
       />
 
       {virtualize ? (
-        <VirtualBoard rows={filtered} onCompareRevision={onCompareRevision} />
+        <VirtualBoard rows={filtered} onCompareRevision={onCompareRevision} rosterLoaded={rosterLoaded} />
       ) : (
         <div className="cmd-table-wrap">
           <table className="cmd-table">
@@ -199,7 +212,7 @@ export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLo
                   </td>
                 </tr>
               ) : filtered.map((r) => {
-                const cells = rowCells(r, onCompareRevision);
+                const cells = rowCells(r, onCompareRevision, rosterLoaded);
                 return (
                   <tr key={rowKey(r)} style={{ borderLeft: severityRail(r.severity) }}>
                     {cells.map((cell, i) => (
@@ -214,7 +227,7 @@ export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLo
       )}
 
       <div style={{ fontSize: 9, color: "var(--cmd-text-muted)", lineHeight: 1.5 }}>
-        Downstream severity: <span style={{ color: "var(--cmd-danger)" }}>in field</span> &gt; <span style={{ color: "var(--cmd-warn)" }}>delivered</span> &gt; <span style={{ color: "var(--cmd-review)" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
+        Downstream severity: <span style={{ color: "var(--cmd-danger-text)" }}>in field</span> &gt; <span style={{ color: "var(--cmd-warn-text)" }}>delivered</span> &gt; <span style={{ color: "var(--cmd-review-text)" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
       </div>
     </section>
   );

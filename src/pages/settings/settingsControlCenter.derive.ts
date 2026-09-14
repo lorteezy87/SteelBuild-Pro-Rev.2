@@ -20,7 +20,13 @@ export interface SettingsPrefs {
   theme?: string | null;         // "dark" | "light" | "system" or undefined
   accent_color?: string | null;
   pinned_modules?: string[] | null;
+  workspace_preset?: string | null;
+  table_density?: string | null;
+  favorite_project_ids?: string[] | null;
+  default_project_id?: string | null;
 }
+
+export type SettingsSyncState = "idle" | "saving" | "saved" | "error";
 
 export interface SettingsSummary {
   /** Display-ready global role label. */
@@ -37,10 +43,17 @@ export interface SettingsSummary {
    * Current theme label; null if not stored (→ KPI omitted in the UI).
    */
   themeLabel: string | null;
+  presetLabel: string | null;
+  densityLabel: string | null;
+  favoriteProjectCount: number | null;
+  defaultProjectLabel: string | null;
+  syncLabel: string | null;
 }
 
 const ROLE_LABEL: Record<string, string> = {
+  owner: "Owner",
   admin: "Admin",
+  member: "Member",
   user: "Member",
 };
 
@@ -55,6 +68,11 @@ export function formatThemeLabel(theme?: string | null): string | null {
   return map[theme.toLowerCase()] ?? theme;
 }
 
+function formatKnownLabel(value: string | null | undefined, labels: Record<string, string>): string | null {
+  if (!value) return null;
+  return labels[value.toLowerCase()] ?? value;
+}
+
 /**
  * Derive the Settings KPI summary from the user record, prefs, and the
  * number of visible tab sections this user can see.
@@ -63,13 +81,15 @@ export function buildSettingsSummary(
   user: SettingsUser | null | undefined,
   prefs: SettingsPrefs | null | undefined,
   visibleSectionCount: number,
+  syncState: SettingsSyncState = "idle",
 ): SettingsSummary {
   const role = user?.role ?? "user";
-  const isAdmin = role === "admin";
+  const isAdmin = role === "owner" || role === "admin";
 
   const pinnedModules = prefs?.pinned_modules;
   const pinnedModuleCount =
     Array.isArray(pinnedModules) ? pinnedModules.length : null;
+  const favoriteProjects = prefs?.favorite_project_ids;
 
   return {
     roleLabel: ROLE_LABEL[role] ?? "Member",
@@ -77,5 +97,20 @@ export function buildSettingsSummary(
     visibleSectionCount,
     pinnedModuleCount,
     themeLabel: formatThemeLabel(prefs?.theme),
+    presetLabel: formatKnownLabel(prefs?.workspace_preset, {
+      project_manager: "Project Manager",
+      field: "Field",
+      fabrication: "Fabrication",
+      executive: "Executive",
+      custom: "Custom",
+    }),
+    densityLabel: formatKnownLabel(prefs?.table_density, {
+      compact: "Compact",
+      normal: "Normal",
+      comfortable: "Comfortable",
+    }),
+    favoriteProjectCount: Array.isArray(favoriteProjects) ? favoriteProjects.length : null,
+    defaultProjectLabel: prefs?.default_project_id ? "Selected" : prefs?.default_project_id === null ? "None" : null,
+    syncLabel: ({ saving: "Saving…", saved: "Saved", error: "Needs attention" } as const)[syncState as "saving" | "saved" | "error"] ?? null,
   };
 }

@@ -2,26 +2,26 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const hardeningSql = readFileSync(
-  fileURLToPath(
-    new URL("../20260721030200_harden_trigger_and_split_write_policies.sql", import.meta.url),
-  ),
-  "utf8",
-).toLowerCase();
+function readSql(relativePath) {
+  return readFileSync(
+    fileURLToPath(new URL(relativePath, import.meta.url)),
+    "utf8",
+  )
+    .replace(/\r\n/g, "\n")
+    .toLowerCase();
+}
 
-const cutoverSql = readFileSync(
-  fileURLToPath(
-    new URL("../20260721031606_close_app_files_legacy_path_final.sql", import.meta.url),
-  ),
-  "utf8",
-).toLowerCase();
+const hardeningSql = readSql(
+  "../20260721030200_harden_trigger_and_split_write_policies.sql",
+);
 
-const rewriteSql = readFileSync(
-  fileURLToPath(
-    new URL("../20260721031557_rewrite_app_files_legacy_references.sql", import.meta.url),
-  ),
-  "utf8",
-).toLowerCase();
+const cutoverSql = readSql(
+  "../20260721031606_close_app_files_legacy_path_final.sql",
+);
+
+const rewriteSql = readSql(
+  "../20260721031557_rewrite_app_files_legacy_references.sql",
+);
 
 const policyTables = [
   "delivery_items",
@@ -183,9 +183,40 @@ describe("problem-tracker database security hardening", () => {
     expect(cutoverSql).toMatch(/alter\s+policy\s+auth_read\s+on\s+storage\.objects/);
     expect(cutoverSql).toMatch(/alter\s+policy\s+auth_upload\s+on\s+storage\.objects/);
 
-    const alteredPolicies = cutoverSql.slice(cutoverSql.indexOf("alter policy auth_read"));
+    // Scope to the two ALTER POLICY statements themselves, the same way the
+    // next test does. Slicing to end-of-file also swallowed the maintenance-job
+    // block below them, which counts retained legacy objects with
+    // `name like 'uploads/%'` — a telemetry read, not a grant — so the
+    // assertion failed on a migration whose policies are in fact clean.
+    const policyStatement = (policy) =>
+      cutoverSql.match(
+        new RegExp(`alter\\s+policy\\s+${policy}\\s+on\\s+storage\\.objects[\\s\\S]*?\\);\\s*`, "i"),
+      )?.[0] ?? "";
+    const alteredPolicies = policyStatement("auth_read") + policyStatement("auth_upload");
+    // Both statements must actually be captured, or every negative assertion
+    // below would pass against an empty string.
+    expect(policyStatement("auth_read")).not.toBe("");
+    expect(policyStatement("auth_upload")).not.toBe("");
     expect(alteredPolicies).not.toContain("founding_org_id");
     expect(alteredPolicies).not.toContain("= 'uploads'");
+    expect(alteredPolicies).not.toContain("like 'uploads/%'");
+  });
+
+  it("keeps auth_read/auth_upload scoped to org UUID folders only", () => {
+    const authRead = cutoverSql.match(
+      /alter\s+policy\s+auth_read\s+on\s+storage\.objects[\s\S]*?\);\s*/i,
+    )?.[0];
+    const authUpload = cutoverSql.match(
+      /alter\s+policy\s+auth_upload\s+on\s+storage\.objects[\s\S]*?\);\s*/i,
+    )?.[0];
+
+    expect(authRead).toContain("~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'");
+    expect(authRead).toContain("public.user_is_org_member(((storage.foldername(name))[1])::uuid)");
+    expect(authRead).not.toContain("uploads/");
+
+    expect(authUpload).toContain("~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'");
+    expect(authUpload).toContain("public.user_is_org_member(((storage.foldername(name))[1])::uuid)");
+    expect(authUpload).not.toContain("uploads/");
   });
 
   it("atomically completes and disables the legacy-copy maintenance job", () => {

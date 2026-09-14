@@ -40,7 +40,7 @@ export const FAB_STAGES = [
     id: "finish_treatment",
     label: "Paint / Galv",
     short: "FIN",
-    color: "#B45309",
+    color: "var(--status-warning)",
     description: "Paint, galvanizing, or final finish treatment.",
   },
   {
@@ -57,14 +57,11 @@ export const BOARD_LANES = ["Blocked", "Ready For Release", "Released", "In Shop
 
 const STAGE_ORDER = FAB_STAGES.map((stage) => stage.id);
 const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
+/** Slice 8 — only IFC / Released count as fab-ready (not OFS / bare Approved). */
 const RELEASED_DRAWING_STATES = new Set([
   "released",
   "ifc",
   "issued for construction",
-  "ofs",
-  "approved",
-  "approved as noted",
-  "approved_as_noted",
 ]);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -121,12 +118,10 @@ function drawingSetKey(drawing) {
 
 function drawingIsReleasedForFab(drawing) {
   if (!drawing || drawing.is_deleted || drawing.is_superseded) return false;
-  const candidates = [
-    drawing.stage,
-    drawing.status,
-    drawing.set_approval_status,
-    drawing.ifc_status,
-  ];
+  // `drawings` has no status column and a bare set_approval_status=approved
+  // is NOT fab-ready (matches src/lib/pieceControl/drawingReleaseReady.ts) —
+  // only stage / ifc_status ∈ {IFC, Released} count.
+  const candidates = [drawing.stage, drawing.ifc_status];
   return candidates.some((value) => RELEASED_DRAWING_STATES.has(normalize(value)));
 }
 

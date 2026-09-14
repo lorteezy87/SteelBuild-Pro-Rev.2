@@ -5,15 +5,23 @@ const normalizeNumeric = (value: unknown): number | null => {
   return value;
 };
 
+/**
+ * Prefer each × quantity when both total and each are present and disagree.
+ * Prevents a stale weight_total_lbs from silently inflating tonnage after qty edits.
+ */
 const pieceWeightFallback = (value: PieceWeightInputs): number | null => {
-  const totalLbs = normalizeNumeric(value.weight_total_lbs);
-  if (totalLbs !== null) return totalLbs;
-
   const eachLbs = normalizeNumeric(value.weight_each_lbs);
   const quantity = normalizeNumeric(value.quantity);
-  if (eachLbs === null || quantity === null) return null;
+  const fromEach =
+    eachLbs !== null && quantity !== null ? eachLbs * quantity : null;
+  const totalLbs = normalizeNumeric(value.weight_total_lbs);
 
-  return eachLbs * quantity;
+  if (fromEach !== null && totalLbs !== null) {
+    const tolerance = Math.max(0.01, totalLbs * 0.01);
+    if (Math.abs(fromEach - totalLbs) > tolerance) return fromEach;
+  }
+  if (totalLbs !== null) return totalLbs;
+  return fromEach;
 };
 
 export function pieceTotalWeightLbs(piece: PieceWeightInputs): number | null {
@@ -34,4 +42,3 @@ export function sumPieceTons(pieces: Array<PieceWeightInputs> | null | undefined
     return total + (tons ?? 0);
   }, 0);
 }
-

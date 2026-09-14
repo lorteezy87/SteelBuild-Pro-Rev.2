@@ -27,12 +27,10 @@
 
 import { useMemo, useState } from "react";
 import { useResolvedFileUrl } from "@/hooks/useResolvedFileUrl";
-import PhaseBadge from "@/components/field/PhaseBadge";
 import {
   CalendarCheck,
   Camera,
   ClipboardCheck,
-  ClipboardList,
   WifiOff,
   AlertTriangle,
   CheckCircle2,
@@ -44,21 +42,24 @@ import {
   KpiStrip,
   DecisionPanel,
   Pill,
-  FilterBar,
-  DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef, KpiTone } from "@/components/command";
+import type { KpiCellDef, KpiTone } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
 import {
   buildFieldTodaySummary,
+  filterFieldTaskRows,
   URGENCY_DISPLAY,
-  FieldTaskRow,
   ScheduleTaskRecord,
   PhotoRecord,
   PunchlistItemRecord,
 } from "./fieldTodayControlCenter.derive";
-import { PROGRESS_STEPS, clampPercent } from "@/lib/field/fieldToday";
+import {
+  FieldTodayCaptureActions,
+  FieldTodayTaskFilters,
+  useFieldTodayNavigation,
+} from "./FieldTodayInteractions";
+import FieldTodayTaskTable from "./FieldTodayTaskTable";
 
 // ── Photo thumbnail ─────────────────────────────────────────────────────────────
 // Stored photo file_url values are storage PATHS (not fetchable URLs), so an
@@ -109,6 +110,10 @@ export interface FieldTodayControlCenterProps {
   /** From useFieldOutbox */
   pendingSync: number;
   isLoading: boolean;
+  /** A failed/paused refresh may still provide cached task rows for offline progress. */
+  tasksUnavailable?: boolean;
+  photosUnavailable?: boolean;
+  punchItemsUnavailable?: boolean;
   search: string;
   onSearch: (v: string) => void;
   statusFilter: string;
@@ -142,82 +147,6 @@ function urgencyTone(bucket: string): import("@/components/command").PillTone {
   }
 }
 
-/** Map task completion status to Pill tone. */
-function statusTone(status: string): import("@/components/command").PillTone {
-  switch (status) {
-    case "Complete":    return "good";
-    case "In Progress": return "info";
-    default:            return "neutral";
-  }
-}
-
-/** Scroll the DataTable into view when a panel "View all" is clicked. */
-function scrollToTable() {
-  document.querySelector(".field-today-cc .cmd-table-wrap")?.scrollIntoView({
-    behavior: "smooth",
-    block: "start",
-  });
-}
-
-// ── Status filter chips ───────────────────────────────────────────────────────
-
-const STATUS_CHIPS = [
-  { label: "All",          value: "all" },
-  { label: "Overdue",      value: "overdue" },
-  { label: "Due Today",    value: "due-today" },
-  { label: "Active",       value: "active" },
-  { label: "Unscheduled",  value: "unscheduled" },
-];
-
-// ── Inline progress buttons (thumb-friendly, inline style only) ───────────────
-
-interface ProgressButtonsProps {
-  task: ScheduleTaskRecord;
-  saving: boolean;
-  onSetProgress: (pct: number) => void;
-}
-
-function ProgressButtons({ task, saving, onSetProgress }: ProgressButtonsProps) {
-  const pct = clampPercent(task.percent_complete);
-  const bucket = task.__urgencyBucket as string | undefined;
-  const accentColor = URGENCY_DISPLAY[(bucket as keyof typeof URGENCY_DISPLAY) ?? "active"]?.color ?? "var(--accent)";
-
-  return (
-    <div style={{ display: "flex", gap: 4, flexWrap: "nowrap" }}>
-      {PROGRESS_STEPS.map((step) => {
-        const active = pct === step;
-        return (
-          <button
-            key={step}
-            type="button"
-            disabled={saving}
-            onClick={(e) => { e.stopPropagation(); onSetProgress(step); }}
-            aria-pressed={active}
-            style={{
-              minHeight: 40,
-              minWidth: 40,
-              borderRadius: 6,
-              border: `1px solid ${active ? accentColor : "var(--cmd-border)"}`,
-              background: active
-                ? `color-mix(in srgb, ${accentColor} 18%, var(--cmd-surface))`
-                : "var(--cmd-surface)",
-              color: active ? accentColor : "var(--cmd-text-muted)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 800,
-              cursor: saving ? "wait" : "pointer",
-              padding: "0 6px",
-              flexShrink: 0,
-            }}
-          >
-            {step === 100 ? "Done" : `${step}`}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function FieldTodayControlCenter(props: FieldTodayControlCenterProps) {
@@ -226,7 +155,9 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
     pendingSync, isLoading, search, onSearch, statusFilter, onStatusFilter,
     onSetProgress, onAddPunch, onAddPhoto, onDailyLog, onFlushOutbox,
     savingTaskId, uploadingPhoto,
+    tasksUnavailable = false, photosUnavailable = false, punchItemsUnavailable = false,
   } = props;
+  const taskEvidenceMissing = isLoading || tasksUnavailable;
 
   useCommandSkin();
 
@@ -235,30 +166,17 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
     [tasks, photos, punchItems, todayIso, pendingSync],
   );
 
-  // Apply search + status filter to table rows
-  const filtered = useMemo(() => {
-    let rows = s.tableRows;
-    if (statusFilter && statusFilter !== "all") {
-      rows = rows.filter((r) => r.urgencyBucket === statusFilter);
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      rows = rows.filter(
-        (r) =>
-          r.activity.toLowerCase().includes(q) ||
-          r.type.toLowerCase().includes(q) ||
-          r.location.toLowerCase().includes(q) ||
-          r.reportedBy.toLowerCase().includes(q),
-      );
-    }
-    return rows;
-  }, [s.tableRows, statusFilter, search]);
+  const filtered = useMemo(
+    () => filterFieldTaskRows(s.tableRows, search, statusFilter),
+    [s.tableRows, search, statusFilter],
+  );
+  const navigation = useFieldTodayNavigation({ todayIso, onStatusFilter });
 
   // ── Hero summary chips ──
   const chips = [
-    { label: `${s.kpis.todaysTasks} Tasks` },
-    { label: `${s.kpis.overdueTasks} Overdue`, tone: s.kpis.overdueTasks ? "danger" as const : "neutral" as const },
-    { label: `${s.kpis.photosToday} Photos Today` },
+    { label: taskEvidenceMissing ? "Tasks unavailable" : `${s.kpis.todaysTasks} Tasks` },
+    { label: taskEvidenceMissing ? "Recovery unavailable" : `${s.kpis.recoveryTasks} Recovery`, tone: !taskEvidenceMissing && s.kpis.recoveryTasks ? "danger" as const : "neutral" as const },
+    { label: photosUnavailable ? "Photos unavailable" : `${s.kpis.photosToday} Photos Today` },
   ];
 
   // ── KPI strip ──
@@ -271,152 +189,38 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
   const kpiCells: KpiCellDef[] = [
     {
       label: "Today's Tasks",
-      value: s.kpis.todaysTasks,
-      sublabel: "scheduled",
+      value: taskEvidenceMissing ? "—" : s.kpis.todaysTasks,
+      sublabel: taskEvidenceMissing ? "current total unavailable" : "due or active today",
       tone: "neutral" as KpiTone,
       Icon: CalendarCheck,
     },
     {
-      label: "Overdue",
-      value: s.kpis.overdueTasks,
-      sublabel: "tasks",
-      tone: (s.kpis.overdueTasks > 0 ? "danger" : "neutral") as KpiTone,
+      label: "Recovery",
+      value: taskEvidenceMissing ? "—" : s.kpis.recoveryTasks,
+      sublabel: taskEvidenceMissing ? "current total unavailable" : "overdue tasks",
+      tone: (!taskEvidenceMissing && s.kpis.recoveryTasks > 0 ? "danger" : "neutral") as KpiTone,
       Icon: AlertTriangle,
     },
     {
-      label: "Completed",
-      value: s.kpis.completedToday,
-      sublabel: "today",
-      tone: (s.kpis.completedToday > 0 ? "good" : "neutral") as KpiTone,
+      label: "Completed Today",
+      value: "—",
+      sublabel: "completion time unavailable",
+      tone: "neutral" as KpiTone,
       Icon: CheckCircle2,
     },
     {
       label: "Open Punch Items",
-      value: s.kpis.openPunchItems,
-      sublabel: "items",
-      tone: (s.kpis.openPunchItems > 0 ? "warn" : "neutral") as KpiTone,
+      value: punchItemsUnavailable ? "—" : s.kpis.openPunchItems,
+      sublabel: punchItemsUnavailable ? "current total unavailable" : "items",
+      tone: (!punchItemsUnavailable && s.kpis.openPunchItems > 0 ? "warn" : "neutral") as KpiTone,
       Icon: ClipboardCheck,
     },
     {
       label: "Photos Today",
-      value: s.kpis.photosToday,
-      sublabel: "captured",
+      value: photosUnavailable ? "—" : s.kpis.photosToday,
+      sublabel: photosUnavailable ? "current total unavailable" : "captured",
       tone: "neutral" as KpiTone,
       Icon: Camera,
-    },
-  ];
-
-  // ── DataTable columns ──
-  const columns: Column<FieldTaskRow>[] = [
-    {
-      key: "time",
-      header: "Due Date",
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{r.time}</span>
-      ),
-    },
-    {
-      key: "activity",
-      header: "Activity",
-      render: (r) => (
-        <span style={{ fontWeight: 600 }}>{r.activity}</span>
-      ),
-    },
-    {
-      key: "phase",
-      header: "Phase",
-      render: (r) => <PhaseBadge phase={r.phase} source={r.phaseSource} />,
-    },
-    {
-      key: "location",
-      header: "Location",
-      render: (r) => r.location || <span style={{ color: "var(--cmd-text-muted)" }}>—</span>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (r) => <Pill tone={statusTone(r.status)}>{r.status}</Pill>,
-    },
-    {
-      key: "urgency",
-      header: "Urgency",
-      render: (r) => (
-        <Pill tone={urgencyTone(r.urgencyBucket)}>
-          {URGENCY_DISPLAY[r.urgencyBucket]?.label ?? r.urgencyBucket}
-        </Pill>
-      ),
-    },
-    {
-      key: "progress",
-      header: "Progress",
-      render: (r) => (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 180 }}>
-          {/* Mini progress bar */}
-          <div
-            style={{
-              flex: 1,
-              height: 6,
-              borderRadius: 999,
-              background: "var(--cmd-border)",
-              overflow: "hidden",
-              minWidth: 40,
-            }}
-          >
-            <div
-              style={{
-                width: `${r.pct}%`,
-                height: "100%",
-                background: URGENCY_DISPLAY[r.urgencyBucket]?.color ?? "var(--accent)",
-                transition: "width 120ms ease",
-              }}
-            />
-          </div>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              fontWeight: 800,
-              minWidth: 30,
-              textAlign: "right",
-              color: "var(--cmd-text)",
-            }}
-          >
-            {r.pct}%
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: "quickset",
-      header: "Quick Set",
-      render: (r) => {
-        // Annotate the raw task with its urgency bucket so ProgressButtons can read it
-        const annotated = { ...r._task, __urgencyBucket: r.urgencyBucket };
-        return (
-          <ProgressButtons
-            task={annotated}
-            saving={savingTaskId === r.id}
-            onSetProgress={(pct) => onSetProgress(r._task, pct)}
-          />
-        );
-      },
-    },
-    {
-      key: "nextAction",
-      header: "Next Action",
-      render: (r) => (
-        <span style={{ color: "var(--cmd-text-muted)", fontSize: 12 }}>{r.nextAction}</span>
-      ),
-    },
-    {
-      key: "reportedBy",
-      header: "Crew",
-      render: (r) =>
-        r.reportedBy ? (
-          r.reportedBy
-        ) : (
-          <span style={{ color: "var(--cmd-text-muted)" }}>—</span>
-        ),
     },
   ];
 
@@ -477,91 +281,33 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
 
       <KpiStrip cells={kpiCells} />
 
-      {/* Quick-capture actions row — sits between KPI strip and panels */}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          margin: "0 0 16px",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          className="cmd-chip-btn is-action"
-          onClick={onAddPunch}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            minHeight: 40,
-            padding: "8px 14px",
-            fontWeight: 700,
-            borderColor: "var(--status-warning)",
-            color: "var(--status-warning)",
-          }}
-        >
-          <ClipboardCheck size={14} />
-          Add Punch
-        </button>
-        <button
-          type="button"
-          className="cmd-chip-btn is-action"
-          onClick={onAddPhoto}
-          disabled={uploadingPhoto}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            minHeight: 40,
-            padding: "8px 14px",
-            fontWeight: 700,
-            opacity: uploadingPhoto ? 0.6 : 1,
-          }}
-        >
-          <Camera size={14} />
-          {uploadingPhoto ? "Uploading…" : "Photo"}
-        </button>
-        <button
-          type="button"
-          className="cmd-chip-btn is-action"
-          onClick={onDailyLog}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            minHeight: 40,
-            padding: "8px 14px",
-            fontWeight: 700,
-          }}
-        >
-          <ClipboardList size={14} />
-          Daily Log
-        </button>
-      </div>
+      <FieldTodayCaptureActions
+        onAddPunch={onAddPunch}
+        onAddPhoto={onAddPhoto}
+        onDailyLog={onDailyLog}
+        uploadingPhoto={uploadingPhoto}
+      />
 
       <div className="cmd-panels">
         {/* Panel 1: Today's Plan */}
-        <DecisionPanel title="Today's Plan" onViewAll={() => { onStatusFilter("all"); scrollToTable(); }}>
+        <DecisionPanel title="Today's Plan" onViewAll={navigation.showAllTasks}>
           {isLoading ? (
             <div className="cmd-row__meta">Loading tasks…</div>
-          ) : s.planQueue.length === 0 ? (
-            <div className="cmd-row__meta">No open tasks for today.</div>
+          ) : s.planRows.length === 0 ? (
+            <div className="cmd-row__meta">{tasksUnavailable ? "Task records unavailable." : "No open tasks for today."}</div>
           ) : (
-            s.planQueue.map((task) => {
-              const taskId = String(task.id || "");
-              const row = s.tableRows.find((r) => r.id === taskId);
-              const bucket = row?.urgencyBucket ?? "active";
+            s.planRows.map((row) => {
+              const bucket = row.urgencyBucket;
               const display = URGENCY_DISPLAY[bucket];
-              const pct = clampPercent(task.percent_complete);
+              const pct = row.pct;
               return (
-                <div className="cmd-row" key={taskId}>
+                <div className="cmd-row" key={row.id}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="cmd-row__num" style={{ fontSize: 13 }}>
-                      {row?.activity ?? String(task.task_name || task.name || "(task)")}
+                      {row.activity}
                     </div>
                     <div className="cmd-row__meta">
-                      {row?.location || "No location"} · {row?.time ?? "TBD"}
+                      {row.location || "Location not provided"} · {row.time}
                     </div>
                     {/* Mini progress bar */}
                     <div
@@ -575,10 +321,12 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
                     >
                       <div
                         style={{
-                          width: `${pct}%`,
+                          width: "100%",
                           height: "100%",
                           background: display.color,
-                          transition: "width 120ms ease",
+                          transform: `scaleX(${pct / 100})`,
+                          transformOrigin: "left",
+                          transition: "transform 120ms ease",
                         }}
                       />
                     </div>
@@ -610,16 +358,43 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           )}
         </DecisionPanel>
 
-        {/* Panel 2: Crew Status — task completion ring + open punch items */}
+        {/* Panel 2: Recovery Backlog — explicitly separate from today's plan */}
+        <DecisionPanel title="Recovery Backlog">
+          {isLoading ? (
+            <div className="cmd-row__meta">Loading recovery work…</div>
+          ) : s.recoveryRows.length === 0 ? (
+            <div className="cmd-row__meta">{tasksUnavailable ? "Recovery records unavailable." : "No overdue schedule tasks."}</div>
+          ) : (
+            <div style={{ maxHeight: 360, overflowY: "auto", overscrollBehavior: "contain" }}>
+              {s.recoveryRows.map((row) => (
+                <div className="cmd-row" key={row.id}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="cmd-row__num" style={{ fontSize: 13 }}>
+                      {row.activity}
+                    </div>
+                    <div className="cmd-row__meta">
+                      {row.location} · {row.dueDate}
+                    </div>
+                  </div>
+                  <Pill tone="danger">OVERDUE</Pill>
+                </div>
+              ))}
+            </div>
+          )}
+          {!taskEvidenceMissing && (s.planningGapCount > 0 || s.upcomingCount > 0) && (
+            <div className="cmd-row__meta" style={{ marginTop: 8 }}>
+              {s.planningGapCount} planning gap{s.planningGapCount === 1 ? "" : "s"} · {s.upcomingCount} starting within 7 days
+            </div>
+          )}
+        </DecisionPanel>
+
+        {/* Panel 3: Crew Status — today's average progress + open punch items */}
         <DecisionPanel
           title="Crew Status"
-          onViewAll={() => {
-            // Navigate user toward open punch items
-            scrollToTable();
-          }}
+          onViewAll={navigation.showTaskTable}
         >
-          {/* Completion ring (inline SVG, real value: taskCompletionPct) */}
-          <div
+          {/* Progress ring (inline SVG, real value: today's average progress) */}
+          {taskEvidenceMissing ? <div className="cmd-row__meta">Plan progress unavailable.</div> : <div
             style={{
               display: "flex",
               alignItems: "center",
@@ -629,7 +404,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
               marginBottom: 8,
             }}
           >
-            <CompletionRing pct={s.taskCompletionPct} />
+            <CompletionRing pct={s.todayProgressPct} />
             <div>
               <div
                 style={{
@@ -640,16 +415,16 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
                   lineHeight: 1,
                 }}
               >
-                {s.taskCompletionPct}%
+                {s.todayProgressPct}%
               </div>
               <div className="cmd-row__meta" style={{ marginTop: 2 }}>
-                Task completion today
+                Plan progress
               </div>
               <div className="cmd-row__meta" style={{ marginTop: 2 }}>
-                {s.kpis.completedToday} of {s.kpis.todaysTasks} done
+                Average across {s.kpis.todaysTasks} task{s.kpis.todaysTasks === 1 ? "" : "s"}
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* Open punch items */}
           <div
@@ -665,14 +440,14 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           >
             Open Punch Items
           </div>
-          {s.openPunchRows.length === 0 ? (
+          {punchItemsUnavailable ? <div className="cmd-row__meta">Punch records unavailable.</div> : s.openPunchRows.length === 0 ? (
             <div className="cmd-row__meta">No open punch items.</div>
           ) : (
             s.openPunchRows.map((p) => (
               <div className="cmd-row" key={p.id}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div className="cmd-row__num" style={{ fontSize: 12 }}>{p.title}</div>
-                  <div className="cmd-row__meta">{p.location || "No location"}</div>
+                  <div className="cmd-row__meta">{p.location || "Location not provided"}</div>
                 </div>
                 {p.priority && (
                   <Pill
@@ -692,15 +467,12 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           )}
         </DecisionPanel>
 
-        {/* Panel 3: Daily Photos */}
+        {/* Panel 4: Daily Photos */}
         <DecisionPanel
           title="Daily Photos"
-          onViewAll={() => {
-            // Real action: the Photos page is at /Photos
-            window.location.assign(`/Photos?date=${todayIso}`);
-          }}
+          onViewAll={navigation.showDailyPhotos}
         >
-          {s.photoThumbnails.length === 0 ? (
+          {photosUnavailable ? <div className="cmd-row__meta">Photo records unavailable.</div> : s.photoThumbnails.length === 0 ? (
             <div
               style={{
                 display: "flex",
@@ -777,35 +549,21 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
         </DecisionPanel>
       </div>
 
-      {/* FilterBar + DataTable */}
-      <FilterBar
+      <FieldTodayTaskFilters
         search={search}
         onSearch={onSearch}
-        searchPlaceholder="Search tasks by name, location, or crew…"
-        primaryLabel="Log Activity"
-        onPrimary={onDailyLog}
-        filters={
-          <>
-            {STATUS_CHIPS.map((chip) => (
-              <button
-                key={chip.value}
-                type="button"
-                className={`cmd-chip-btn${statusFilter === chip.value ? " is-active" : ""}`}
-                onClick={() => onStatusFilter(chip.value)}
-              >
-                {chip.label}
-              </button>
-            ))}
-          </>
-        }
+        statusFilter={statusFilter}
+        onStatusFilter={onStatusFilter}
+        onDailyLog={onDailyLog}
       />
 
-      <DataTable
-        columns={columns}
-        rows={filtered}
-        onRowClick={undefined}
-        emptyMessage="No tasks match your filters."
-      />
+      <div ref={navigation.tableRef}>
+        {taskEvidenceMissing && s.tableRows.length === 0 ? <div className="cmd-row__meta">Task records unavailable.</div> : <FieldTodayTaskTable
+          rows={filtered}
+          savingTaskId={savingTaskId}
+          onSetProgress={onSetProgress}
+        />}
+      </div>
     </div>
   );
 }

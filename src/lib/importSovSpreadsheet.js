@@ -186,6 +186,35 @@ const num = (v, fallback = 0) => {
 };
 
 /**
+ * Tolerant numeric parse for spreadsheet cells: strips $ signs, thousands
+ * commas, surrounding whitespace, and a trailing % ("$25,000.50", "50%").
+ * Returns the fallback when nothing parseable remains.
+ */
+const numLoose = (v, fallback = 0) => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : fallback;
+  const cleaned = String(v ?? "").trim().replace(/^\$/, "").replace(/,/g, "").replace(/%$/, "");
+  if (cleaned === "") return fallback;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+/**
+ * Canonical SOV statuses (must match the SOVFormModal enum). Every billed
+ * rollup exact-matches "Certified"/"Paid", so an off-case status imported
+ * verbatim would silently vanish from billed-to-date, cash collected, and
+ * revenue reports. Normalize case-insensitively; unknown values fall back
+ * to Draft so nothing is counted as billed without review.
+ */
+const SOV_STATUSES = ["Draft", "Submitted", "Certified", "Paid"];
+
+export function normalizeSovStatus(raw) {
+  const cleaned = String(raw ?? "").trim().toLowerCase();
+  if (!cleaned) return { status: "Draft", recognized: true };
+  const match = SOV_STATUSES.find((s) => s.toLowerCase() === cleaned);
+  return match ? { status: match, recognized: true } : { status: "Draft", recognized: false };
+}
+
+/**
  * Map canonical rows to stage-able SOV records for the pre-import review.
  * Each entry: `{ record, valid, reason, autoMapped }`. `record` holds only DB
  * fields; the review modal commits `staged.filter(s => s.valid).map(s => s.record)`.
@@ -197,8 +226,19 @@ export function buildSovStaged(rows, { project, existingCount = 0, costCodes = [
   const baseApp = num(rows?.[0]?.application_number, 1) || 1;
   return (rows || []).map((row, idx) => {
     const description = (row.description || "").trim();
-    const scheduledValue = num(row.scheduled_value, 0);
+    const scheduledValue = numLoose(row.scheduled_value, 0);
     const lineNum = num(row.line_item_number, 0) || existingCount + idx + 1;
+    const { status, recognized: statusRecognized } = normalizeSovStatus(row.status);
+
+    // Percent cells: fail closed on garbage instead of silently importing 0%
+    // (a zeroed percent passes review as "Ready" and understates billed-to-date).
+    const prevPctRaw = row.previous_percent_complete;
+    const currPctRaw = row.current_percent_complete;
+    const prevPct = numLoose(prevPctRaw, NaN);
+    const currPct = numLoose(currPctRaw, NaN);
+    const badPercent =
+      (String(prevPctRaw ?? "").trim() !== "" && !Number.isFinite(prevPct)) ||
+      (String(currPctRaw ?? "").trim() !== "" && !Number.isFinite(currPct));
 
     // Cost code: explicit column first, else auto-map from description.
     let cost_code = (row.cost_code || "").trim() || null;
@@ -229,19 +269,23 @@ export function buildSovStaged(rows, { project, existingCount = 0, costCodes = [
       application_number: num(row.application_number, baseApp) || baseApp,
       period_from: row.period_from || null,
       period_to: row.period_to || null,
-      previous_percent_complete: num(row.previous_percent_complete, 0),
-      current_percent_complete: num(row.current_percent_complete, 0),
+      previous_percent_complete: Number.isFinite(prevPct) ? prevPct : 0,
+      current_percent_complete: Number.isFinite(currPct) ? currPct : 0,
       retainage_percent:
-        row.retainage_percent === "" || row.retainage_percent == null ? 10 : num(row.retainage_percent, 10),
-      status: row.status || "Draft",
+        row.retainage_percent === "" || row.retainage_percent == null ? 10 : numLoose(row.retainage_percent, 10),
+      status,
     };
 
-    const valid = Boolean(description) && scheduledValue > 0;
+    const valid = Boolean(description) && scheduledValue > 0 && !badPercent && statusRecognized;
     const reason = !description
       ? "Missing description"
       : !(scheduledValue > 0)
         ? "Scheduled value must be > 0"
-        : null;
+        : badPercent
+          ? "Percent complete is not a number"
+          : !statusRecognized
+            ? `Unknown status "${String(row.status).trim()}" (use Draft/Submitted/Certified/Paid)`
+            : null;
 
     return { record, valid, reason, autoMapped };
   });

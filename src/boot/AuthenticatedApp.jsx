@@ -5,6 +5,7 @@ import AppLoader from "@/boot/AppLoader";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
+const DesktopConnectSignIn = lazyWithRetry(() => import("@/pages/DesktopConnectSignIn"));
 const UpdatePassword = lazyWithRetry(() => import("@/pages/UpdatePassword"));
 const MfaChallenge = lazyWithRetry(() => import("@/pages/MfaChallenge"));
 const AppRoutes = lazyWithRetry(() => import("@/boot/AppRoutes"));
@@ -12,6 +13,11 @@ const OrgOnboarding = lazyWithRetry(() => import("@/pages/OrgOnboarding"));
 const ProjectProvider = lazyWithRetry(() =>
   import("@/components/shared/ProjectContext").then((mod) => ({ default: mod.ProjectProvider }))
 );
+
+export function isDesktopConnectPath() {
+  if (typeof window === "undefined") return false;
+  return /\/DesktopConnect\/?$/i.test(window.location.pathname);
+}
 
 /**
  * AuthenticatedApp — auth gate + org gate + routing.
@@ -50,9 +56,18 @@ function OrgGate() {
 
 export default function AuthenticatedApp() {
   const {
-    isLoadingAuth, isLoadingPublicSettings, authError,
+    isAuthenticated,
+    isLoadingAuth, isLoadingPublicSettings, authError, isLoggingIn,
     loginWithPassword, signUpWithPassword, sendPasswordReset, isPasswordRecovery, mfaRequired,
+    mfaStatusDegraded, mfaStatusMessage, retryMfaStatus,
+    logout,
   } = useAuth();
+
+  const onDesktopConnect = isDesktopConnectPath();
+  const loginError =
+    authError?.type === "auth_required" && authError.message !== "Authentication required"
+      ? authError.message
+      : null;
 
   // Password recovery takes precedence over every other state: a user who
   // followed the emailed reset link is technically "authenticated" with a
@@ -63,6 +78,27 @@ export default function AuthenticatedApp() {
       <Suspense fallback={<AppLoader />}>
         <UpdatePassword />
       </Suspense>
+    );
+  }
+
+  if (mfaStatusDegraded) {
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, background: "var(--bg-page)" }}>
+        <div style={{ width: "100%", maxWidth: 420, border: "1px solid var(--border-default)", borderRadius: 16, background: "var(--bg-surface)", padding: 24 }}>
+          <h1 style={{ margin: "0 0 8px", fontSize: 22, color: "var(--text-primary)" }}>Verify your sign-in</h1>
+          <p style={{ margin: "0 0 16px", color: "var(--text-muted)", lineHeight: 1.5 }}>
+            {mfaStatusMessage || "We could not verify your MFA status. Retry to continue."}
+          </p>
+          <div style={{ display: "grid", gap: 10 }}>
+            <button className="sbd-btn sbd-btn-primary" onClick={() => { void retryMfaStatus(); }}>
+              Retry MFA check
+            </button>
+            <button className="sbd-btn sbd-btn-ghost" onClick={() => { void logout(); }}>
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -80,16 +116,40 @@ export default function AuthenticatedApp() {
     return <AppLoader />;
   }
 
-  if (authError?.type === "auth_required") {
+  if (!isAuthenticated) {
+    // Desktop Connect opens the system browser, which often has no session even
+    // when the user is signed in elsewhere. Show a focused gate instead of the
+    // marketing Landing page so the handoff query string stays obvious.
+    if (onDesktopConnect) {
+      return (
+        <Suspense fallback={<AppLoader />}>
+          <DesktopConnectSignIn
+            onLogin={loginWithPassword}
+            isSubmitting={isLoggingIn}
+            loginError={loginError}
+          />
+        </Suspense>
+      );
+    }
     return (
       <Suspense fallback={<AppLoader />}>
         <Landing
           onLogin={loginWithPassword}
           onSignUp={signUpWithPassword}
           onForgotPassword={sendPasswordReset}
-          isSubmitting={isLoadingAuth}
-          loginError={authError?.message !== "Authentication required" ? authError?.message : null}
+          isSubmitting={isLoggingIn}
+          loginError={loginError}
         />
+      </Suspense>
+    );
+  }
+
+  // Desktop handoff only needs a browser session — skip org/project bootstrap
+  // so a successful sign-in lands on /DesktopConnect immediately.
+  if (onDesktopConnect) {
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <AppRoutes />
       </Suspense>
     );
   }

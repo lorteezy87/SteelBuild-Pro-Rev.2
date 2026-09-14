@@ -145,6 +145,7 @@ describe("calcRfiHealth", () => {
       { status: "In Review", date_required: future }, // active, not overdue
       { status: "Answered", date_required: past }, // not active
       { status: "Closed", date_required: past }, // not active
+      { status: "Void", date_required: past }, // not active — Void is terminal too
     ]);
     expect(r.openCount).toBe(2);
     expect(r.overdueCount).toBe(1);

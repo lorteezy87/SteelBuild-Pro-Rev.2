@@ -80,6 +80,39 @@ input::placeholder, textarea::placeholder {
   color: var(--text-muted) !important;
 }
 
+/* Landing / marketing page inputs must stay dark-on-white regardless of app theme.
+   Global input !important rules above otherwise make typed credentials unreadable
+   on the executive-light login modal. */
+.lp-page input.lp-input,
+.lp-page textarea.lp-input {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #101827 !important;
+  -webkit-text-fill-color: #101827 !important;
+  caret-color: #101827 !important;
+  box-shadow: none !important;
+}
+.lp-page input.lp-input:focus,
+.lp-page textarea.lp-input:focus {
+  border-color: #F5A800 !important;
+  box-shadow: 0 0 0 4px rgba(245, 168, 0, 0.16) !important;
+}
+.lp-page input.lp-input::placeholder,
+.lp-page textarea.lp-input::placeholder {
+  color: #8491A6 !important;
+  -webkit-text-fill-color: #8491A6 !important;
+  opacity: 1 !important;
+}
+.lp-page input.lp-input:-webkit-autofill,
+.lp-page input.lp-input:-webkit-autofill:hover,
+.lp-page input.lp-input:-webkit-autofill:focus,
+.lp-page textarea.lp-input:-webkit-autofill {
+  -webkit-text-fill-color: #101827 !important;
+  caret-color: #101827 !important;
+  box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+  transition: background-color 99999s ease-in-out 0s;
+}
+
 /* ── Light theme element overrides ──
  *
  * HD pass (Apr 2026):
@@ -107,11 +140,43 @@ select option:disabled {
   color: #7b8798 !important;
 }
 
+/* Floating menus / Radix popouts — never use frosted rgba fills. */
+.sbp-opaque-popout {
+  background-color: var(--bg-elevated, var(--sbd-bg-panel-hi, #21262D)) !important;
+  color: var(--text-primary, #f3f7ff);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+[data-theme="light"] .sbp-opaque-popout {
+  background-color: var(--bg-elevated, #ffffff) !important;
+  color: var(--text-primary, #16203a);
+}
+
+
+/* Dark native selects: opaque panel solids (not frosted rgba). */
+html.steelbuild-dark select,
+html.steelbuild-dark select option,
+html.steelbuild-dark select optgroup,
 .steelbuild-dark select,
 .steelbuild-dark select option,
-.steelbuild-dark select optgroup {
-  background-color: #07111f !important;
-  color: #f3f7ff !important;
+.steelbuild-dark select optgroup,
+[data-theme="dark"] select,
+[data-theme="dark"] select option,
+[data-theme="dark"] select optgroup {
+  background: var(--cmd-menu, var(--sbd-bg-panel-hi, #21262D)) !important;
+  color: var(--cmd-text, #f3f7ff) !important;
+}
+html.steelbuild-dark select option:checked,
+html.steelbuild-dark select option:hover,
+html.steelbuild-dark select option:focus,
+.steelbuild-dark select option:checked,
+.steelbuild-dark select option:hover,
+.steelbuild-dark select option:focus,
+[data-theme="dark"] select option:checked,
+[data-theme="dark"] select option:hover,
+[data-theme="dark"] select option:focus {
+  background: var(--cmd-menu-hover, var(--sbd-bg-panel-hover, #2D333B)) !important;
+  color: #ffffff !important;
 }
 
 /* LIGHT surfaces (light theme + the canonical light presentation): option panels must
@@ -120,21 +185,70 @@ select option:disabled {
    into the closed control when it's hovered — on a light page that paints the
    select black-on-black (unreadable, doesn't revert). These higher-specificity
    rules keep options light wherever the surface is light. */
+/* Light surfaces only — do NOT force white options under SteelBuild Dark.
+   Dark command skins are handled below (incl. nested data-skin descendants). */
 [data-theme="light"] select option,
 [data-theme="light"] select optgroup,
-[data-skin="command"] select option,
-[data-skin="command"] select optgroup {
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select option,
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select optgroup,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select option,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select optgroup {
   background: #ffffff !important;
   color: #16203a !important;
 }
 [data-theme="light"] select option:checked,
-[data-skin="command"] select option:checked {
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select option:checked,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select option:checked {
   background: #e8edf3 !important;
   color: #16203a !important;
 }
 [data-theme="light"] select option:disabled,
-[data-skin="command"] select option:disabled {
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select option:disabled,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select option:disabled {
   color: #94a3b8 !important;
+}
+
+/* Dark command skins — cover nested data-skin="command" (Piece Register, etc.)
+   as well as the html-level skin from useCommandSkin(). Without the descendant
+   forms, the light `[data-skin="command"] select option { background:#fff }`
+   rule wins inside nested skins under SteelBuild Dark. */
+html.steelbuild-dark[data-skin="command"] select,
+html.steelbuild-dark[data-skin="command"] select option,
+html.steelbuild-dark[data-skin="command"] select optgroup,
+html.steelbuild-dark [data-skin="command"] select,
+html.steelbuild-dark [data-skin="command"] select option,
+html.steelbuild-dark [data-skin="command"] select optgroup,
+.steelbuild-dark[data-skin="command"] select,
+.steelbuild-dark[data-skin="command"] select option,
+.steelbuild-dark[data-skin="command"] select optgroup,
+.steelbuild-dark [data-skin="command"] select,
+.steelbuild-dark [data-skin="command"] select option,
+.steelbuild-dark [data-skin="command"] select optgroup,
+[data-theme="dark"][data-skin="command"] select,
+[data-theme="dark"][data-skin="command"] select option,
+[data-theme="dark"][data-skin="command"] select optgroup,
+[data-theme="dark"] [data-skin="command"] select,
+[data-theme="dark"] [data-skin="command"] select option,
+[data-theme="dark"] [data-skin="command"] select optgroup {
+  background: var(--cmd-menu, var(--sbd-bg-panel-hi, #21262D)) !important;
+  color: var(--cmd-text, #f3f7ff) !important;
+}
+html.steelbuild-dark[data-skin="command"] select option:checked,
+html.steelbuild-dark [data-skin="command"] select option:checked,
+.steelbuild-dark[data-skin="command"] select option:checked,
+.steelbuild-dark [data-skin="command"] select option:checked,
+[data-theme="dark"][data-skin="command"] select option:checked,
+[data-theme="dark"] [data-skin="command"] select option:checked {
+  background: var(--cmd-menu-hover, var(--sbd-bg-panel-hover, #2D333B)) !important;
+  color: var(--cmd-text, #f3f7ff) !important;
+}
+html.steelbuild-dark[data-skin="command"] select option:disabled,
+html.steelbuild-dark [data-skin="command"] select option:disabled,
+.steelbuild-dark[data-skin="command"] select option:disabled,
+.steelbuild-dark [data-skin="command"] select option:disabled,
+[data-theme="dark"][data-skin="command"] select option:disabled,
+[data-theme="dark"] [data-skin="command"] select option:disabled {
+  color: var(--cmd-text-muted, rgba(255,255,255,0.45)) !important;
 }
 
 [data-theme="light"] body,
@@ -216,3 +330,45 @@ a:focus-visible,
 [role="dialog"] span:not([style*="color"]) {
   color: var(--text-primary);
 }
+
+/* ── Safe-area insets (notch / home indicator) ──
+   The variables are always available so any component can opt into them. The
+   padding rules below activate ONLY in the installed PWA (display-mode:
+   standalone) or the native Capacitor shell (html.capacitor-native) — a normal
+   browser tab is never affected, because env(safe-area-inset-*) resolves to 0
+   without viewport-fit=cover on a notched device, and both selectors are false
+   in-tab. */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+}
+
+/* The installed iOS PWA uses a translucent status bar (see the
+   apple-mobile-web-app-status-bar-style meta in index.html), so the app must
+   clear the top inset itself. */
+@media (display-mode: standalone) {
+  #root {
+    padding-top: var(--safe-area-inset-top);
+    padding-bottom: var(--safe-area-inset-bottom);
+  }
+}
+
+/* The native shell insets the webview below the status bar automatically
+   (StatusBar.overlaysWebView = false), so only the home-indicator area at the
+   bottom needs padding. Higher specificity than the standalone rule above, so
+   it wins inside the native app. */
+html.capacitor-native #root {
+  padding-top: 0;
+  padding-bottom: var(--safe-area-inset-bottom);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+button { cursor: pointer; }
+

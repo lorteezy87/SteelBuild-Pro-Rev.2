@@ -6,11 +6,9 @@
  * per G703 line, sees the live G702 summary, and exports the AIA pay app to PDF.
  * All math via the G702 engine (src/lib/payapp) on integer-cents money.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
-import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { localToday } from "@/utils/dates";
 import { formatMoney, sumMoney } from "@/lib/money";
@@ -18,15 +16,23 @@ import { logActivity } from "@/services/auditLogger";
 import {
   createPayApplication,
   listLines,
+  getPayAppContract,
+  listSovItems,
+  listPayAppChangeOrders,
   listPayApplications,
   softDeletePayApplication,
   updateLine,
   updatePayApplication,
 } from "@/lib/payapp/repository";
+import PayAppReconciliationPanel from "./payApplications/PayAppReconciliationPanel";
+import { reconcilePayApplication } from "@/lib/payapp/reconciliation";
 import { computeG702, lineFigures } from "@/lib/payapp/g702";
 import { PAY_APP_STATUSES, PAY_APP_STATUS_LABELS } from "@/lib/payapp/types";
 import { buildPayAppPdf, suggestPayAppFilename } from "@/lib/payapp/payAppPdf";
 import PayApplicationsControlCenter from "./payApplications/PayApplicationsControlCenter";
+import { assertProjectId, toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { Button } from "@/components/design-system";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: 16 };
@@ -68,37 +74,49 @@ export default function PayApplications() {
   const [newOpen, setNewOpen] = useState(false);
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
+  useEffect(() => {
+    setSelectedId(null);
+    setNewOpen(false);
+  }, [projectId]);
 
-  const { data: payApps = [] } = useQuery({ queryKey: ["pay_applications", projectId], queryFn: () => listPayApplications(projectId), enabled: !!projectId });
-  const { data: sovItems = [] } = useQuery({
-    queryKey: ["sov_items_payapp", projectId],
-    queryFn: async () => {
-      const { data } = await supabase.from("sov_items").select("id, line_item_number, description, scheduled_value").eq("project_id", projectId).eq("is_deleted", false);
-      return data || [];
-    },
-    enabled: !!projectId,
-  });
-  // Key must be the cacheRegistry `change_order` primary (hyphenated). It was
-  // ["change_orders", projectId], which no invalidation ever matched — so
-  // approving a CO left this pay app billing against a stale contract sum.
-  const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders", projectId], queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
+  const {
+    data: payApps = [],
+    isLoading,
+    isFetching: appsFetching,
+    isError,
+    error,
+    refetch,
+  } = useQuery({ queryKey: ["pay_applications", projectId], queryFn: () => listPayApplications(projectId), enabled: !!projectId });
+  const sovQuery = useQuery({ queryKey: ["sov-items", projectId, "payapp-evidence"], queryFn: () => listSovItems(projectId), enabled: !!projectId });
+  const sovItems = sovQuery.data || [];
+  // Preserve the change-orders invalidation prefix, with a separate cache shape.
+  const changesQuery = useQuery({ queryKey: ["change-orders", projectId, "payapp-evidence"], queryFn: () => listPayAppChangeOrders(projectId), enabled: !!projectId });
+  const changeOrders = changesQuery.data || [];
+  const contractQuery = useQuery({ queryKey: ["projects", projectId, "payapp-contract"], queryFn: () => getPayAppContract(projectId), enabled: !!projectId });
+  const sourcesReady = contractQuery.isSuccess && !contractQuery.isFetching && sovQuery.isSuccess && changesQuery.isSuccess && !sovQuery.isFetching && !changesQuery.isFetching;
 
   const contract = useMemo(() => ({
-    originalContractSum: num(activeProject?.original_contract_value),
-    netChangeOrders: sumMoney((changeOrders || []).filter((co) => String(co.status).toLowerCase() === "approved").map((co) => co.co_amount)),
-    retainagePercent: num(activeProject?.retainage_percent),
-  }), [activeProject, changeOrders]);
+    originalContractSum: num(contractQuery.data?.original_contract_value),
+    netChangeOrders: changeOrders.some(co => String(co.status).trim().toLowerCase() === "approved" && (co.co_amount == null || !Number.isFinite(Number(co.co_amount)))) ? NaN
+      : sumMoney(changeOrders.filter(co => String(co.status).trim().toLowerCase() === "approved").map(co => co.co_amount)),
+    retainagePercent: num(contractQuery.data?.retainage_percent),
+  }), [contractQuery.data, changeOrders]);
 
   const selectedApp = payApps.find((a) => a.id === selectedId) || null;
   // Only a DRAFT pay app is editable — once submitted/approved/paid the G703
   // figures are a billing record (locked in the UI here + by the DB trigger, C2).
   const isDraft = selectedApp?.status === "draft";
-  const { data: lines = [] } = useQuery({ queryKey: ["payapp_lines", selectedId], queryFn: () => listLines(selectedId), enabled: !!selectedId });
-  const g702 = useMemo(() => (selectedApp ? computeG702({
+  const linesQuery = useQuery({ queryKey: ["payapp_lines", selectedId], queryFn: () => listLines(selectedId), enabled: !!selectedApp });
+  const lines = linesQuery.data || [];
+  const linesReady = !!selectedApp && !appsFetching && linesQuery.isSuccess && !linesQuery.isFetching;
+  const reconciliation = useMemo(() => selectedApp && linesReady ? reconcilePayApplication(selectedApp, lines, sourcesReady ? {
+    sovItems, originalContractSum: contractQuery.data?.original_contract_value, netChangeOrders: contract.netChangeOrders,
+  } : null) : null, [selectedApp, linesReady, lines, sourcesReady, sovItems, contractQuery.data, contract.netChangeOrders]);
+  const g702 = useMemo(() => (selectedApp && linesReady ? computeG702({
     contract: { originalContractSum: num(selectedApp.original_contract_sum), netChangeOrders: num(selectedApp.net_change_orders), retainagePercent: num(selectedApp.retainage_percent) },
     lines,
     lessPreviousCertificates: num(selectedApp.less_previous_certificates),
-  }) : null), [selectedApp, lines]);
+  }) : null), [selectedApp, lines, linesReady]);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pay_applications", projectId] });
@@ -106,9 +124,18 @@ export default function PayApplications() {
   };
 
   const createMut = useMutation({
-    mutationFn: (input) => createPayApplication({ projectId, ...input }, { sovItems, contract }),
+    mutationFn: (input) => {
+      assertProjectId(projectId);
+      if (!sourcesReady || !Number.isFinite(contract.netChangeOrders) || contractQuery.data?.original_contract_value == null) throw new Error("Wait for current SOV and change orders before creating an application.");
+      // generate_pay_application() reads the SOV and the contract server-side,
+      // so the client no longer hands them in.
+      return createPayApplication({ projectId, ...input });
+    },
     onSuccess: (app) => { logActivity("pay_application", "created", app, { projectId }); refresh(); setNewOpen(false); setSelectedId(app.id); toast.success(`Pay Application #${app.application_number} created`); },
-    onError: (e) => toast.error(e?.message?.includes("row-level security") ? "Only PM+ can create pay applications." : `Create failed: ${e?.message}`),
+    onError: (e) => {
+      const msg = toUserErrorMessage(e);
+      toast.error(msg.includes("row-level security") ? "Only PM+ can create pay applications." : `Create failed: ${msg}`);
+    },
   });
   const lineMut = useMutation({
     mutationFn: ({ line, edit }) => updateLine(line, edit, num(selectedApp?.retainage_percent)),
@@ -120,19 +147,58 @@ export default function PayApplications() {
       logActivity("pay_application", "updated", { id: selectedApp?.id, project_id: projectId, application_number: selectedApp?.application_number }, { projectId, description: desc });
       refresh();
     },
-    onError: (e) => toast.error(`Update failed: ${e?.message}`),
+    onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
   });
-  const statusMut = useMutation({ mutationFn: ({ id, status }) => updatePayApplication(id, { status }), onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); }, onError: (e) => toast.error(`Update failed: ${e?.message}`) });
-  const delMut = useMutation({ mutationFn: (id) => softDeletePayApplication(id), onSuccess: (_r, id) => { logActivity("pay_application", "deleted", { id, project_id: projectId }, { projectId }); refresh(); setSelectedId(null); toast.success("Deleted"); }, onError: (e) => toast.error(`Delete failed: ${e?.message}`) });
+  const statusMut = useMutation({
+    mutationFn: ({ id, status }) => updatePayApplication(id, { status }),
+    onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); },
+    onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
+  });
+  const delMut = useMutation({
+    mutationFn: (id) => softDeletePayApplication(id),
+    onSuccess: (_r, id) => { logActivity("pay_application", "deleted", { id, project_id: projectId }, { projectId }); refresh(); setSelectedId(null); toast.success("Deleted"); },
+    onError: (e) => toast.error(`Delete failed: ${toUserErrorMessage(e)}`),
+  });
 
   const exportPdf = () => {
     try {
+      if (!linesReady || lineMut.isPending) throw new Error("Wait for complete certificate lines before exporting.");
       buildPayAppPdf({ app: selectedApp, lines, project: activeProject }).save(`${suggestPayAppFilename(selectedApp, activeProject)}.pdf`);
       toast.success("Pay application PDF exported");
-    } catch (e) { toast.error(`Export failed: ${e?.message}`); }
+    } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };
 
   if (!projectId) return <div style={{ ...mono, padding: 24, color: "var(--text-muted)" }}>Select a project to manage pay applications.</div>;
+
+  // Gate fetch states at the page shell — PayApplicationsControlCenter has no loading props.
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load pay applications
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(error, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
 
   // G702 summary rows used by the canonical control-center editor.
   const summary = g702 && [
@@ -172,12 +238,17 @@ export default function PayApplications() {
           statusFilter={ccStatusFilter}
           onStatusFilter={setCcStatusFilter}
           onOpen={(app) => setSelectedId(app.id)}
-          onExport={selectedId ? exportPdf : null}
-          onCreate={sovItems.length > 0 ? () => setNewOpen(true) : null}
-          canCreate={sovItems.length > 0}
+          onExport={linesReady && !lineMut.isPending ? exportPdf : null}
+          onCreate={sourcesReady && sovItems.length > 0 ? () => setNewOpen(true) : null}
+          canCreate={sourcesReady && sovItems.length > 0}
         />
+        {(sovQuery.isError || changesQuery.isError || contractQuery.isError) && <p role="alert">Could not load current SOV, contract, or change orders. <button onClick={() => { sovQuery.refetch(); changesQuery.refetch(); contractQuery.refetch(); }}>Retry contract data</button></p>}
         {selectedApp && (
           <div style={{ padding: "0 20px 20px", maxWidth: 1240, margin: "0 auto" }}>
+            <PayAppReconciliationPanel result={lineMut.isPending ? null : reconciliation} linesError={linesQuery.isError}
+              liveState={sovQuery.isError || changesQuery.isError || contractQuery.isError ? "error" : sourcesReady ? "ready" : "loading"}
+              historical={!isDraft} busy={appsFetching || linesQuery.isFetching || sovQuery.isFetching || changesQuery.isFetching || contractQuery.isFetching || lineMut.isPending}
+              onRefresh={() => { refresh(); sovQuery.refetch(); changesQuery.refetch(); contractQuery.refetch(); }} />
             <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
               <div style={card}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -198,7 +269,7 @@ export default function PayApplications() {
                   <select style={{ ...input, width: "auto" }} value={selectedApp.status} onChange={(e) => statusMut.mutate({ id: selectedApp.id, status: e.target.value })}>
                     {PAY_APP_STATUSES.map((s) => <option key={s} value={s}>{PAY_APP_STATUS_LABELS[s]}</option>)}
                   </select>
-                  <button style={btnP} onClick={exportPdf}>Export PDF</button>
+                  <button style={btnP} disabled={!linesReady || lineMut.isPending} onClick={exportPdf}>Export PDF</button>
                   <button style={{ ...btn, color: "var(--status-error)", borderColor: "var(--status-error)", opacity: isDraft ? 1 : 0.4, cursor: isDraft ? "pointer" : "not-allowed" }} disabled={!isDraft} title={isDraft ? "" : "Only a draft pay application can be deleted — set status to void instead."} onClick={() => { if (confirm("Delete this pay application?")) delMut.mutate(selectedApp.id); }}>Delete</button>
                 </div>
               </div>
@@ -230,11 +301,11 @@ export default function PayApplications() {
                           <td style={{ padding: 4, color: "var(--text-muted)" }}>{formatMoney(l.work_completed_previous)}</td>
                           <td style={{ padding: 4, color: "var(--text-primary)" }}>{formatMoney(l.work_completed_this_period)}</td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft}
+                            <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft || !linesReady || lineMut.isPending}
                               onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.percent_complete)) lineMut.mutate({ line: l, edit: { percentComplete: v } }); }} />
                           </td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft}
+                            <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft || !linesReady || lineMut.isPending}
                               onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.materials_stored)) lineMut.mutate({ line: l, edit: { materialsStored: v } }); }} />
                           </td>
                           <td style={{ padding: 4, color: "var(--text-primary)", fontWeight: 700 }}>{formatMoney(f.totalCompletedStored)}</td>
@@ -243,20 +314,22 @@ export default function PayApplications() {
                         </tr>
                       );
                     })}
-                    {lines.length === 0 && <tr><td colSpan={10} style={{ padding: 10, color: "var(--text-muted)", textAlign: "center" }}>No lines.</td></tr>}
+                    {!linesReady && <tr><td colSpan={10} role="status">{linesQuery.isError ? "Certificate lines unavailable. Use Refresh checks to retry." : "Loading certificate lines…"}</td></tr>}
+                    {linesReady && lines.length === 0 && <tr><td colSpan={10} style={{ padding: 10, color: "var(--text-muted)", textAlign: "center" }}>No lines.</td></tr>}
                   </tbody>
                 </table>
               </div>
             </div>
           </div>
         )}
-        <NewAppModal
-          open={newOpen}
+        {newOpen && <NewAppModal
+          key={projectId}
+          open
           defaultRetainage={contract.retainagePercent}
           busy={createMut.isPending}
           onClose={() => setNewOpen(false)}
           onCreate={(input) => createMut.mutate(input)}
-        />
+        />}
       </>
     );
 }

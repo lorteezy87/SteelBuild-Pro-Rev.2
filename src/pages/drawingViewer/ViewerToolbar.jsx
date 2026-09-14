@@ -14,8 +14,9 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { STAGES, mono } from "@/pages/drawingViewer/drawingViewerUtils";
+import { mono } from "@/pages/drawingViewer/drawingViewerUtils";
 import { formatScaleFraction } from "@/components/drawings/viewer/scaleParse";
+import { deriveToolbarViewModel } from "@/pages/drawingViewer/drawingViewerDerivations";
 
 export default function ViewerToolbar({
   sidebarOpen,
@@ -41,9 +42,7 @@ export default function ViewerToolbar({
   setContextOpen,
   setShortcutsOpen,
 }) {
-  const stage = STAGES[activeDrawing?.stage];
-  const hasPdf = !!activeDrawing?.file_url;
-  const canPage = totalPages > 1;
+  const { stage, hasPdf, canPage } = deriveToolbarViewModel(activeDrawing, totalPages);
 
   return (
     <div className="drawing-viewer-toolbar">

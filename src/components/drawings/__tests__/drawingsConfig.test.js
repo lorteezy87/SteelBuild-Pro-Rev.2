@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stageUpdatePatch, SORTABLE_FIELDS } from "../drawingsConfig";
+import { stageUpdatePatch, SORTABLE_FIELDS, compareRevisionLabels } from "../drawingsConfig";
 
 // stageUpdatePatch is the shared patch-builder for the two DIRECT (legacy)
 // sheet-stage mutations on the Drawings page (the bulk stage edit and the
@@ -49,6 +49,21 @@ describe("SORTABLE_FIELDS comparators", () => {
     const cmp = SORTABLE_FIELDS.revision_number.cmp;
     expect(cmp({ revision_number: "2" }, { revision_number: "10" })).toBeLessThan(0);
     expect(cmp({ revision_number: 3 }, { revision_number: 3 })).toBe(0);
+  });
+
+  it("sorts letter revisions naturally and BEFORE numeric (pre-IFC letters, post-IFC numbers)", () => {
+    const cmp = SORTABLE_FIELDS.revision_number.cmp;
+    expect(cmp({ revision_number: "A" }, { revision_number: "B" })).toBeLessThan(0);
+    expect(cmp({ revision_number: "Rev B" }, { revision_number: "C" })).toBeLessThan(0);
+    expect(cmp({ revision_number: "C" }, { revision_number: "1" })).toBeLessThan(0);
+    expect(cmp({ revision_number: "Rev 5" }, { revision_number: "IFC Rev 2" })).toBeGreaterThan(0);
+    expect(cmp({ revision_number: "" }, { revision_number: "A" })).toBeLessThan(0);
+    expect(cmp({ revision_number: null }, { revision_number: null })).toBe(0);
+  });
+
+  it("compareRevisionLabels orders a mixed list letters-first then numeric", () => {
+    const sorted = ["10", "B", "2", "Rev A", "C", "IFC Rev 1"].sort(compareRevisionLabels);
+    expect(sorted).toEqual(["Rev A", "B", "C", "IFC Rev 1", "2", "10"]);
   });
 
   it("treats a missing due_date as far-future (9999) so undated sheets sort last ascending", () => {

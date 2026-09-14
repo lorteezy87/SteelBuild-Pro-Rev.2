@@ -3,6 +3,8 @@ import { useLocation } from "react-router-dom";
 import AppProviders from "@/boot/AppProviders";
 import AuthenticatedApp from "@/boot/AuthenticatedApp";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import PageLoader from "@/boot/PageLoader";
+import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 
 /**
  * App — boot entrypoint.
@@ -40,8 +42,10 @@ function Root() {
   const PublicPage = PUBLIC_PAGES[key];
   if (PublicPage) {
     return (
-      <Suspense fallback={null}>
-        <PublicPage />
+      <Suspense fallback={<PageLoader />}>
+        <PageErrorBoundary key={key} label={key.slice(1)}>
+          <PublicPage />
+        </PageErrorBoundary>
       </Suspense>
     );
   }

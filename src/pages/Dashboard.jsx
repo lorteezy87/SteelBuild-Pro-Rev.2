@@ -2,15 +2,17 @@ import React, { Suspense, useCallback, useEffect, useMemo, useState } from "reac
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
+import { useAuth } from "@/lib/AuthContext";
 import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import GettingStartedChecklist from "@/components/dashboard/GettingStartedChecklist";
 // Canonical control-center loading uses the same query set for all project views.
 const DashboardControlCenter = lazyWithRetry(() => import("./dashboardCC/DashboardControlCenter"));
 const PortfolioControlCenter = lazyWithRetry(() => import("./portfolio/PortfolioControlCenter"));
-const CanonicalPieceDashboard = lazyWithRetry(() => import("@/components/dashboard/CanonicalPieceDashboard"));
 
 function FirstProjectWelcome({ onStart }) {
   return (
@@ -36,6 +38,7 @@ function FirstProjectWelcome({ onStart }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { activeProject, setActiveProject } = useProjectContext();
+  const { user } = useAuth();
   const pid = activeProject?.id;
   const [portfolioSearch, setPortfolioSearch] = useState("");
   const [portfolioHealthFilter, setPortfolioHealthFilter] = useState("All");
@@ -53,7 +56,7 @@ export default function Dashboard() {
   const refetchMs = refetchIntervalFromPref(auto_refresh_secs);
 
   /* ── Portfolio-wide queries (always loaded) ── */
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading, isSuccess: projectsSuccess } = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
@@ -61,23 +64,23 @@ export default function Dashboard() {
   // Portfolio rollups must exclude on-hold projects (and their child entity
   // contributions); on-hold projects are visible only on the /Projects page.
   // `liveProjectIds` is the active (non-on-hold) id set used by every
-  // portfolio aggregation downstream (scopePortfolioRows + PortfolioView).
+  // portfolio aggregation downstream (scopePortfolioRows + PortfolioControlCenter).
   const portfolioProjects = useMemo(() => projects.filter((p) => !p.on_hold), [projects]);
   const liveProjectIds = useMemo(() => new Set(portfolioProjects.map((p) => p.id).filter(Boolean)), [portfolioProjects]);
   const activeProjectIsLive = !pid || projectsLoading || liveProjectIds.has(pid);
 
   useEffect(() => {
-    if (pid && !projectsLoading && !activeProjectIsLive) {
+    if (pid && projectsSuccess && !activeProjectIsLive) {
       setActiveProject(null);
     }
-  }, [activeProjectIsLive, pid, projectsLoading, setActiveProject]);
+  }, [activeProjectIsLive, pid, projectsSuccess, setActiveProject]);
 
   const scopePortfolioRows = useCallback(
     (rows) => pid ? rows : rows.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
     [pid, liveProjectIds],
   );
 
-  const { data: allRFIs = [], isLoading: rfisLoading } = useQuery({
+  const { data: allRFIs = [], isLoading: rfisLoading, isSuccess: rfisSuccess } = useQuery({
     queryKey: ["rfis-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.RFI),
     refetchInterval: refetchMs,
@@ -106,16 +109,18 @@ export default function Dashboard() {
     refetchInterval: refetchMs,
     enabled: true,
   });
+  // Loaded in both modes: the project CC uses expenses for spend, and the
+  // portfolio CC's resolveProjectSpend falls back to expenses so its totals
+  // match PortfolioHub (which always passes expenses).
   const { data: allExpenses = [] } = useQuery({
     queryKey: ["expenses-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.Expense),
-    enabled: !!pid,
   });
   // Portfolio timeline column needs schedule_tasks for every non-singleton
   // project portfolio view. Tiny payload —
   // one row per task, a few date columns — so global fetch is cheaper than
   // per-project drilldown round-trips.
-  const { data: allScheduleTasks = [] } = useQuery({
+  const { data: allScheduleTasks = [], isSuccess: scheduleTasksSuccess } = useQuery({
     queryKey: ["schedule-tasks-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.ScheduleTask, "-start_date"),
     staleTime: 60 * 1000,
@@ -134,6 +139,22 @@ export default function Dashboard() {
     staleTime: 30 * 1000,
     enabled: !!pid,
   });
+  const {
+    data: hasRecordedFabRelease = false,
+    isSuccess: fabReleaseEvidenceLoaded,
+  } = useQuery({
+    queryKey: ["fab-release-evidence", pid],
+    queryFn: async () => {
+      if (!pid) return false;
+      const { count, error } = await supabase
+        .from("fab_release_log")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", pid);
+      if (error) throw error;
+      return (count ?? 0) > 0;
+    },
+    enabled: !!pid,
+  });
   // Cash-flow figures (total billed / collected / pending payment /
   // retention) on the Financial Controls section come from SOV items.
   const { data: allSovItems = [] } = useQuery({
@@ -146,14 +167,6 @@ export default function Dashboard() {
   // activity surface that's actually populated — the generic
   // `activities` table is empty everywhere). Pull the latest 50
   // events globally and project-scope them in the section.
-  // Budget-hour rows live per-project; fetch only when a project is active
-  // so portfolio mode doesn't pay for a query that has no consumer.
-  const { data: budgetHourItems = [] } = useQuery({
-    queryKey: ["budget-hour-items", pid],
-    queryFn: () => (pid ? entities.BudgetHourItem.filter({ project_id: pid }, "sort_order") : []),
-    enabled: !!pid,
-    staleTime: 30 * 1000,
-  });
   const { data: allDrawingActivity = [] } = useQuery({
     queryKey: ["drawing-activity-recent", projectScope],
     queryFn: () =>
@@ -167,21 +180,10 @@ export default function Dashboard() {
     enabled: !!pid,
   });
   // ── Field activity rollup (added with the Field overhaul) ──
-  // Each field surface (Daily Logs / Photos / Punchlist / Inspections /
-  // Safety / QC) feeds the project dashboard plus its corresponding module.
+  // The field surfaces the control center actually reads (Punchlist /
+  // Inspections / Safety / QC) feed the project dashboard. Daily logs and
+  // photos are not consumed by DashboardControlCenter, so they are not fetched.
   // Pull per-project only to avoid portfolio-mode overhead.
-  const { data: allDailyLogs = [] } = useQuery({
-    queryKey: ["daily-logs-dashboard", projectScope],
-    queryFn: () => listForDashboard(entities.DailyLog, "-date"),
-    staleTime: 60 * 1000,
-    enabled: !!pid,
-  });
-  const { data: allPhotos = [] } = useQuery({
-    queryKey: ["photos-dashboard", projectScope],
-    queryFn: () => listForDashboard(entities.Photo, "-taken_date"),
-    staleTime: 60 * 1000,
-    enabled: !!pid,
-  });
   const { data: allPunchlist = [] } = useQuery({
     queryKey: ["punchlist-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.PunchlistItem),
@@ -229,8 +231,6 @@ export default function Dashboard() {
     () => (pid ? allDrawingActivity.filter((a) => a.project_id === pid) : []),
     [allDrawingActivity, pid],
   );
-  const dailyLogs        = useMemo(() => (pid ? allDailyLogs.filter((r) => r.project_id === pid)        : []), [allDailyLogs, pid]);
-  const photosForProject = useMemo(() => (pid ? allPhotos.filter((r) => r.project_id === pid)           : []), [allPhotos, pid]);
   const punchlistItems   = useMemo(() => (pid ? allPunchlist.filter((r) => r.project_id === pid)        : []), [allPunchlist, pid]);
   const inspections      = useMemo(() => (pid ? allInspections.filter((r) => r.project_id === pid)      : []), [allInspections, pid]);
   const safetyIncidents  = useMemo(() => (pid ? allSafetyIncidents.filter((r) => r.project_id === pid)  : []), [allSafetyIncidents, pid]);
@@ -247,10 +247,13 @@ export default function Dashboard() {
       deliveries: scopePortfolioRows(allDeliveries),
       actionItems: scopePortfolioRows(allActionItems),
       scheduleTasks: scopePortfolioRows(allScheduleTasks),
+      expenses: scopePortfolioRows(allExpenses),
+      rfiEvidenceLoaded: rfisSuccess,
+      scheduleEvidenceLoaded: scheduleTasksSuccess,
     }),
     [
-      allCOs, allWPs, allCodes, allRFIs, allDeliveries,
-      allActionItems, allScheduleTasks, scopePortfolioRows,
+      allCOs, allWPs, allCodes, allRFIs, allDeliveries, allExpenses,
+      allActionItems, allScheduleTasks, scopePortfolioRows, rfisSuccess, scheduleTasksSuccess,
     ],
   );
 
@@ -270,15 +273,42 @@ export default function Dashboard() {
 
   // ── Canonical single-project Dashboard Control Center ─────────────────────
   if (pid) {
+    const hasReleasedSubmittal = submittals.some(
+      (submittal) => submittal.status === "Released for Fabrication",
+    );
+    const signals = {
+      hasDrawings: drawings.length > 0,
+      hasSubmittal: submittals.length > 0,
+      hasRfi: rfis.length > 0,
+      rfiSkipped: false,
+      hasFabRelease: hasRecordedFabRelease || hasReleasedSubmittal,
+    };
+
     const onNavigateDash = (target, opts = {}) => {
       const paths = {
-        rfis: "/RFIs", submittals: "/Submittals", "work-packages": "/WorkPackages",
-        deliveries: "/Deliveries", "change-orders": "/ChangeOrders",
-        "field-reports": "/DailyLogs", schedule: "/Schedule",
-        "fab-release": "/FabRelease", "budget-hours": "/BudgetHours",
-        procurement: "/Procurement", field: "/Field", "daily-logs": "/DailyLogs",
-        photos: "/Photos", punchlist: "/Punchlist", inspections: "/Inspections",
-        safety: "/Safety", "quality-control": "/QualityControl",
+        rfis: "/RFIs",
+        submittals: "/Submittals",
+        detailing: "/DrawingSubmittalHub",
+        "work-packages": "/WorkPackages",
+        deliveries: "/Deliveries",
+        "change-orders": "/ChangeOrders",
+        "field-reports": "/DailyLogs",
+        schedule: "/ScheduleHub",
+        "fab-release": "/FabRelease",
+        "budget-hours": "/BudgetHours",
+        "cost-hub": "/CostHub",
+        documents: "/Documents",
+        reports: "/ReportsHub",
+        procurement: "/Procurement",
+        field: "/FieldHub",
+        "daily-logs": "/DailyLogs",
+        photos: "/Photos",
+        punchlist: "/Punchlist",
+        inspections: "/Inspections",
+        safety: "/Safety",
+        "quality-control": "/QualityControl",
+        "piece-register": "/PieceRegister",
+        contracts: "/ContractManagement",
       };
       const path = paths[target];
       if (!path) return;
@@ -286,32 +316,43 @@ export default function Dashboard() {
       if (opts.create) params.push("new=1");
       if (opts.stage) params.push(`stage=${encodeURIComponent(opts.stage)}`);
       if (opts.status) params.push(`status=${encodeURIComponent(opts.status)}`);
+      if (opts.id) params.push(`id=${encodeURIComponent(String(opts.id))}`);
       navigate(params.length ? `${path}?${params.join("&")}` : path);
     };
     return (
       <ErrorBoundary label="Dashboard Control Center">
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <CanonicalPieceDashboard project={activeProject} />
-          <DashboardControlCenter
-            project={activeProject}
-            rfis={rfis}
-            cos={cos}
-            codes={codes}
-            wps={wps}
-            deliveries={deliveries}
-            actionItems={actionItems}
-            expenses={expenses}
-            submittals={submittals}
-            drawings={drawings}
-            sovItems={sovItems}
-            scheduleTasks={scheduleTasks}
-            drawingActivity={drawingActivity}
-            punchlistItems={punchlistItems}
-            inspections={inspections}
-            safetyIncidents={safetyIncidents}
-            qualityRecords={qualityRecords}
-            onNavigate={onNavigateDash}
-          />
+          <>
+            {(fabReleaseEvidenceLoaded || hasReleasedSubmittal) && (
+              <GettingStartedChecklist
+                signals={signals}
+                userMetadata={user}
+              />
+            )}
+            <DashboardControlCenter
+              project={activeProject}
+              rfis={rfis}
+              cos={cos}
+              codes={codes}
+              wps={wps}
+              deliveries={deliveries}
+              actionItems={actionItems}
+              expenses={expenses}
+              submittals={submittals}
+              drawings={drawings}
+              sovItems={sovItems}
+              scheduleTasks={scheduleTasks}
+              drawingActivity={drawingActivity}
+              punchlistItems={punchlistItems}
+              inspections={inspections}
+              safetyIncidents={safetyIncidents}
+              qualityRecords={qualityRecords}
+              todayIso={new Date().toISOString().slice(0, 10)}
+              rfiEvidenceLoaded={rfisSuccess}
+              scheduleEvidenceLoaded={scheduleTasksSuccess}
+              onNavigate={onNavigateDash}
+            />
+          </>
         </Suspense>
       </ErrorBoundary>
     );

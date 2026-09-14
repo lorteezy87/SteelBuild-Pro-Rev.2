@@ -1,11 +1,13 @@
 // Sentry must initialise before any other app code — keep this import FIRST.
 import './instrument'
 
+import { Capacitor } from '@capacitor/core'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from '@/App.jsx'
+import AppBootstrap from '@/boot/AppBootstrap'
 import { installDateOnlyShim } from '@/lib/dateOnly'
 import { logError } from '@/lib/telemetry'
+import { isPreviewDeployHost } from '@/lib/deployHost'
 import '@/globals.css'
 
 installDateOnlyShim()
@@ -21,10 +23,8 @@ function installWebManifest() {
   if (typeof document === 'undefined' || typeof window === 'undefined') return
   const { hostname } = window.location
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1'
-  const isProductionAlias = hostname === 'steelbuild-pro.vercel.app'
-  const isProtectedVercelDeployment = hostname.endsWith('.vercel.app') && !isProductionAlias
 
-  if (!isLocal && isProtectedVercelDeployment) return
+  if (!isLocal && isPreviewDeployHost(hostname)) return
   if (document.querySelector('link[rel="manifest"]')) return
 
   const link = document.createElement('link')
@@ -37,8 +37,10 @@ installWebManifest()
 
 // Register the offline app-shell service worker (public/sw.js). Best-effort:
 // registration failure must never break app boot. Gated to real deploys —
-// NOT localhost/dev (a SW + Vite HMR fight each other) and NOT protected Vercel
-// previews (caching an auth-walled shell is useless). Mirrors installWebManifest.
+// NOT localhost/dev (a SW + Vite HMR fight each other) and NOT preview
+// deployments on either host (caching an auth-walled shell is useless, and on
+// Cloudflare the cached shell outlives the torn-down preview version). Mirrors
+// installWebManifest; both share isPreviewDeployHost.
 function registerServiceWorker() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return
   if (!('serviceWorker' in navigator)) return
@@ -47,9 +49,7 @@ function registerServiceWorker() {
 
   const { hostname } = window.location
   if (hostname === 'localhost' || hostname === '127.0.0.1') return
-  const isProductionAlias = hostname === 'steelbuild-pro.vercel.app'
-  const isProtectedVercelDeployment = hostname.endsWith('.vercel.app') && !isProductionAlias
-  if (isProtectedVercelDeployment) return
+  if (isPreviewDeployHost(hostname)) return
 
   window.addEventListener('load', () => {
     // updateViaCache:'none' — always revalidate the SW script itself so a new
@@ -75,5 +75,14 @@ if (typeof window !== 'undefined') {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <App />
+  <AppBootstrap />
 )
+
+// Native (Capacitor iOS) bootstrap. No-op on web: the module and its native
+// plugin dependencies are only fetched when running inside the native shell, so
+// the browser bundle and the test runner are entirely unaffected.
+if (Capacitor.isNativePlatform()) {
+  import('@/lib/native/capacitor')
+    .then((m) => m.initNativePlatform())
+    .catch((err) => logError(err, { source: 'native-bootstrap' }))
+}

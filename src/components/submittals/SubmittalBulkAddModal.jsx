@@ -282,7 +282,7 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit, busy =
       aria-modal="true"
       aria-label="Bulk add submittals"
       style={{
-        position: "fixed", inset: 0, background: "rgba(2,6,23,0.55)", backdropFilter: "blur(4px)",
+        position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 55%, transparent)", backdropFilter: "blur(4px)",
         zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
       }}
       onClick={reset}
@@ -509,7 +509,7 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit, busy =
             style={{
               padding: "8px 14px",
               background: parsed.rows.length === 0 ? "var(--bg-surface)" : "var(--accent)",
-              color: parsed.rows.length === 0 ? "var(--text-muted)" : "#fff",
+              color: parsed.rows.length === 0 ? "var(--text-muted)" : "var(--on-accent)",
               border: parsed.rows.length === 0 ? "1px solid var(--border-default)" : "none",
               borderRadius: 4, cursor: parsed.rows.length === 0 ? "not-allowed" : "pointer",
               fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",

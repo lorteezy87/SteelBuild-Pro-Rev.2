@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Building2 } from "lucide-react";
+import { Building2, Star } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../shared/ProjectContext";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 
 export default function ProjectPillDropdown({ compact = false, align = "right", variant = "default" }) {
   // `activeProjects` excludes on-hold; the switcher never lists paused projects.
@@ -14,8 +16,11 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
   // project from the pill silently has no effect because the URL still
   // pins the page to the previous one. We clear them on every selection.
   const [searchParams, setSearchParams] = useSearchParams();
+  const { favorite_project_ids, show_project_numbers } = useUserPrefs();
+  const { savePatch } = useSaveUserPrefs();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [activeOptionIndex, setActiveOptionIndex] = useState(0);
   const ref = useRef(null);
   const searchRef = useRef(null);
 
@@ -63,6 +68,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
   // Focus search input when dropdown opens
   useEffect(() => {
     if (open && searchRef.current) {
+      setActiveOptionIndex(0);
       setTimeout(() => searchRef.current?.focus(), 50);
     }
     if (!open) setSearch("");
@@ -94,12 +100,12 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
     loading
       ? "Loading..."
       : activeProject
-        ? `${activeProject.name.slice(0, 20)} · ${activeProject.project_number || "—"}`
+        ? `${activeProject.name.slice(0, 20)}${show_project_numbers ? ` · ${activeProject.project_number || "—"}` : ""}`
         : projects.length === 0
           ? "NO PROJECTS"
           : "SELECT PROJECT";
   const displayLabel = activeProject && !loading
-    ? `${activeProject.project_number || "----"} \u00B7 ${(activeProject.name || "Project").toUpperCase()}`
+    ? `${show_project_numbers ? `${activeProject.project_number || "----"} \u00B7 ` : ""}${(activeProject.name || "Project").toUpperCase()}`
     : label;
 
   // Filter projects by search
@@ -113,9 +119,30 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
   });
 
   const sortAlpha = (arr) => [...arr].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const favorites = sortAlpha(filtered.filter((p) => favorite_project_ids.includes(p.id)));
   const grouped = {
-    active: sortAlpha(filtered.filter((p) => p.phase !== "Closeout")),
-    closeout: sortAlpha(filtered.filter((p) => p.phase === "Closeout")),
+    active: sortAlpha(filtered.filter((p) => p.phase !== "Closeout" && !favorite_project_ids.includes(p.id))),
+    closeout: sortAlpha(filtered.filter((p) => p.phase === "Closeout" && !favorite_project_ids.includes(p.id))),
+  };
+  const orderedProjects = [...favorites, ...grouped.active, ...grouped.closeout];
+  const handleSearchKeyDown = (event) => {
+    if (!orderedProjects.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveOptionIndex((index) => (index + 1) % orderedProjects.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveOptionIndex((index) => (index - 1 + orderedProjects.length) % orderedProjects.length);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      handleSelect(orderedProjects[Math.min(activeOptionIndex, orderedProjects.length - 1)]);
+    }
+  };
+  const toggleFavorite = (projectId) => {
+    const next = favorite_project_ids.includes(projectId)
+      ? favorite_project_ids.filter((id) => id !== projectId)
+      : [...favorite_project_ids, projectId];
+    savePatch({ favorite_project_ids: next });
   };
 
   return (
@@ -128,15 +155,20 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
       style={{ position: "relative", minWidth: 0 }}
     >
       {/* Pill trigger */}
-      <div
+      <button
+        type="button"
         className="project-pill-trigger"
         onClick={() => setOpen((o) => !o)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls="project-picker-panel"
+        aria-label={`Project picker: ${activeProject?.name || "no project selected"}`}
         style={{
           display: "flex",
           alignItems: "center",
           gap: isDashboardVariant ? 10 : 5,
-          background: isDashboardVariant ? "#ffffff" : "var(--accent-muted)",
-          border: isDashboardVariant ? "1px solid #dbe2ec" : "1px solid var(--accent-border)",
+          background: isDashboardVariant ? "var(--bg-surface)" : "var(--accent-muted)",
+          border: isDashboardVariant ? "1px solid var(--border-default)" : "1px solid var(--accent-border)",
           borderRadius: isDashboardVariant ? 8 : 20,
           minHeight: isDashboardVariant ? 46 : compact ? 34 : 28,
           padding: isDashboardVariant ? "0 12px" : compact ? "6px 10px" : "5px 13px",
@@ -146,7 +178,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
           // switcher. The health dot (left) still carries the status color.
           fontSize: isDashboardVariant ? 13 : 11,
           fontWeight: isDashboardVariant ? 700 : 600,
-          color: isDashboardVariant ? "#162033" : "var(--text-primary)",
+          color: "var(--text-primary)",
           letterSpacing: isDashboardVariant ? "0" : "0.04em",
           cursor: "pointer",
           whiteSpace: "nowrap",
@@ -156,7 +188,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
           maxWidth: isDashboardVariant ? 230 : compact ? "min(44vw, 190px)" : 280,
           overflow: "hidden",
           textOverflow: "ellipsis",
-          boxShadow: isDashboardVariant ? "0 1px 2px rgba(15, 23, 42, 0.03)" : undefined,
+          boxShadow: isDashboardVariant ? "var(--shadow-card)" : undefined,
         }}
         title={displayLabel}
       >
@@ -167,10 +199,10 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
               width: 26,
               height: 26,
               borderRadius: 6,
-              border: "1px solid #cfd8e5",
+              border: "1px solid var(--border-default)",
               display: "grid",
               placeItems: "center",
-              color: "#5b6678",
+              color: "var(--text-muted)",
               flexShrink: 0,
             }}
           >
@@ -206,8 +238,8 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {activeProject?.name || "Select project"}
               </span>
-              <span style={{ fontSize: 10, fontWeight: 500, color: "#6f7c91" }}>
-                Project ID: {activeProject?.project_number || "Not selected"}
+              <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-muted)" }}>
+                {show_project_numbers ? `Project ID: ${activeProject?.project_number || "Not selected"}` : "Personal workspace"}
               </span>
             </span>
           ) : displayLabel}
@@ -223,12 +255,15 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
         >
           ▾
         </span>
-      </div>
+      </button>
 
-      {/* Dropdown panel */}
+      {/* Dropdown panel — solid opaque (no sbd-card glass) so page content never bleeds through */}
       {open && (
         <div
-          className="project-pill-dropdown-panel sbd-card"
+          id="project-picker-panel"
+          role="dialog"
+          aria-label="Choose project"
+          className="project-pill-dropdown-panel sbp-opaque-popout"
           style={{
             position: compact ? "fixed" : "absolute",
             top: compact ? 58 : "calc(100% + 6px)",
@@ -240,15 +275,18 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
             width: compact ? "auto" : 400,
             maxHeight: compact ? "min(70dvh, 420px)" : 300,
             overflowY: "auto",
-            // Theme-aware opaque surface — a hardcoded dark gradient here left
-            // dark var(--text-primary) text unreadable on a dark panel in light mode.
-            background: "var(--bg-surface-secondary)",
+            // Solid elevated surface — sbd-card glass left content readable
+            // underneath the list. Prefer elevated, then page, then hard fallback.
+            background: "var(--sbd-bg-panel-hi, var(--bg-elevated, #21262D))",
             border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border-default))",
             borderRadius: 14,
-            boxShadow:
-              "0 24px 70px rgba(0,0,0,0.72), inset 0 1px 0 rgba(255,255,255,0.07)",
+            boxShadow: "var(--shadow-lg, 0 16px 40px rgba(0,0,0,0.55))",
             zIndex: 3000,
             padding: 8,
+            // Kill any inherited backdrop blur / translucency
+            backdropFilter: "none",
+            WebkitBackdropFilter: "none",
+            isolation: "isolate",
           }}
         >
           {/* Search filter */}
@@ -258,7 +296,13 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
               type="text"
               placeholder="Search projects..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setActiveOptionIndex(0); }}
+              onKeyDown={handleSearchKeyDown}
+              role="combobox"
+              aria-label="Search projects"
+              aria-controls="project-picker-options"
+              aria-expanded={open}
+              aria-activedescendant={orderedProjects[activeOptionIndex]?.id ? `project-option-${orderedProjects[activeOptionIndex].id}` : undefined}
               style={{
                 width: "100%",
                 padding: "7px 10px",
@@ -295,6 +339,21 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
             </div>
           )}
 
+          <div id="project-picker-options" role="listbox" aria-label="Projects">
+          {favorites.length > 0 && (
+            <div>
+              <div style={{ padding: "6px 8px 4px", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.16em", color: "var(--accent)", textTransform: "uppercase" }}>
+                <span>Favorites ({favorites.length})</span>
+                <button type="button" onClick={() => savePatch({ favorite_project_ids: [] })} style={{ border: 0, background: "transparent", color: "var(--text-muted)", font: "inherit", cursor: "pointer", padding: 3 }}>
+                  Clear favorites
+                </button>
+              </div>
+              {favorites.map((p) => (
+                <ProjectOption key={p.id} project={p} isActive={activeProject?.id === p.id} isHighlighted={orderedProjects[activeOptionIndex]?.id === p.id} onHighlight={() => setActiveOptionIndex(orderedProjects.findIndex((item) => item.id === p.id))} openRFIs={rfiCountByProject[p.id] || 0} onClick={() => handleSelect(p)} isFavorite onToggleFavorite={() => toggleFavorite(p.id)} showProjectNumbers={show_project_numbers} />
+              ))}
+            </div>
+          )}
+
           {/* Active projects */}
           {grouped.active.length > 0 && (
             <div>
@@ -315,8 +374,13 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
                   key={p.id}
                   project={p}
                   isActive={activeProject?.id === p.id}
+                  isHighlighted={orderedProjects[activeOptionIndex]?.id === p.id}
+                  onHighlight={() => setActiveOptionIndex(orderedProjects.findIndex((item) => item.id === p.id))}
                   openRFIs={rfiCountByProject[p.id] || 0}
                   onClick={() => handleSelect(p)}
+                  isFavorite={false}
+                  onToggleFavorite={() => toggleFavorite(p.id)}
+                  showProjectNumbers={show_project_numbers}
                 />
               ))}
             </div>
@@ -342,12 +406,18 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
                   key={p.id}
                   project={p}
                   isActive={activeProject?.id === p.id}
+                  isHighlighted={orderedProjects[activeOptionIndex]?.id === p.id}
+                  onHighlight={() => setActiveOptionIndex(orderedProjects.findIndex((item) => item.id === p.id))}
                   openRFIs={rfiCountByProject[p.id] || 0}
                   onClick={() => handleSelect(p)}
+                  isFavorite={false}
+                  onToggleFavorite={() => toggleFavorite(p.id)}
+                  showProjectNumbers={show_project_numbers}
                 />
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
     </div>
@@ -355,7 +425,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
 }
 
 /* ── Individual project row ── */
-function ProjectOption({ project, isActive, openRFIs, onClick }) {
+function ProjectOption({ project, isActive, isHighlighted, onHighlight, openRFIs, onClick, isFavorite, onToggleFavorite, showProjectNumbers }) {
   const [hovered, setHovered] = useState(false);
 
   const healthColor =
@@ -390,8 +460,18 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
 
   return (
     <div
+      id={`project-option-${project.id}`}
+      role="option"
+      aria-selected={isActive}
+      tabIndex={0}
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      onMouseEnter={() => { setHovered(true); onHighlight(); }}
       onMouseLeave={() => setHovered(false)}
       style={{
         padding: "8px 10px",
@@ -399,10 +479,10 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
         alignItems: "center",
         gap: 8,
         cursor: "pointer",
-        background: isActive
+        background: isActive || isHighlighted
           ? "var(--accent-muted)"
           : hovered
-            ? "rgba(86,176,255,0.12)"
+            ? "color-mix(in srgb, var(--status-info) 16%, transparent)"
             : "transparent",
         borderLeft: isActive
           ? "3px solid var(--accent)"
@@ -489,7 +569,7 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
               letterSpacing: "0.06em",
             }}
           >
-            {project.project_number || "—"} · {project.phase || "—"}
+            {showProjectNumbers ? `${project.project_number || "—"} · ` : ""}{project.phase || "—"}
           </span>
           {quickStat && (
             <span
@@ -506,6 +586,15 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
           )}
         </div>
       </div>
+
+      <button
+        type="button"
+        aria-label={`${isFavorite ? "Remove" : "Favorite"} ${project.name || "project"}`}
+        onClick={(event) => { event.stopPropagation(); onToggleFavorite(); }}
+        style={{ border: 0, background: "transparent", color: isFavorite ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", padding: 3, display: "grid", placeItems: "center" }}
+      >
+        <Star size={14} fill={isFavorite ? "currentColor" : "none"} />
+      </button>
 
       {/* Active checkmark */}
       {isActive && (

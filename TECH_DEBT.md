@@ -65,12 +65,67 @@ checklist and are not counted as resolved by documentation alone.
 
 ## Active items
 
+> **2026-08-05:** Enterprise Tier 1 **code** gaps closed via PR #236 — see
+> [`docs/runbooks/tier1-enterprise-status.md`](docs/runbooks/tier1-enterprise-status.md).
+> Remaining blockers are owner-only (PITR, secrets, Stripe Tax dashboard, counsel,
+> branch protection). PR hygiene playbook:
+> [`.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md`](.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md).
+
+
 _Updated 2026-07-14. RLS is enabled everywhere and the **org boundary is wired
 into the access layer** (no cross-tenant reads), billing + plan enforcement are
 live, and data export works. A 2026-07-01 enterprise-readiness audit
 (`origin/main@642ce154`) is driving a remediation pass — see the entries below
 and `docs/runbooks/`. These are go-to-market, typing, and platform-maturity
 follow-ups._
+
+### Detailing Control Center — audit remainder (2026-09-07)
+
+From the `/DrawingSubmittalHub` truthfulness audit. Twelve findings were fixed in
+`0d88e7b7`, `e40711b8`, `3e0320de`, `df1d885e` (see the ARCHITECTURE.md decision
+log). These are what is left.
+
+- **Decide which drawing register ships.** `DrawingRegisterPanel` declares ten
+  props and forwards two — its own comment says *"Props retained for hub
+  call-site compatibility"*. Because `onRevisionUploaded` / `onOpenSummary` are
+  the only producers of `summaryCard`, the entire Revision Summary feature is
+  unreachable **app-wide**: `RevisionSummaryCard`, the AI deep-dive modal, and
+  `openRfiFromSummary → createRfiAndLink` can never render.
+  `drawing_revision_summaries` holds 2 rows and has stopped accumulating.
+  `drawingRegisterTable.tsx` (494 lines) and `drawingRegister.derive.ts` (+155
+  lines of passing tests) are imported only by their own test files, and a
+  `revision-summaries` query is fetched on every project load with zero
+  consumers. **Either** delete the dead register, the eight dead props,
+  `handleRevisionUploaded`, `currentRevByDrawingId` and that query, **or** add a
+  revision-upload affordance to `DrawingRegisterGridPanel` and forward the two
+  callbacks. This is a product call, not a bug fix.
+
+- **Register "RFIs" / "WPs" columns read a link model nothing writes.**
+  `drawing_register_view` counts via `drawing_links` subqueries, but the app
+  links RFIs through `drawings.linked_rfi_ids` (CSV of numbers) and work packages
+  through `work_packages.linked_drawing_ids`. Live: `drawing_links` has **0
+  rows** while **74 work packages** carry `linked_drawing_ids`, so every one of
+  those sheets renders a muted "0". Needs a **production view migration** to
+  union the two models — the schema already does the same
+  `unnest(string_to_array(...))` join in two other places — or the columns should
+  be dropped rather than render a zero that means "not tracked here".
+
+- **Lower-severity remainder (§15–§29 of the audit).** Verified but unfixed:
+  tab badge counts sets while the tab lists sheets; the hero chip reads "No
+  overdue sets" while overdue *unlinked submittals* exist; two tiles both labelled
+  "Needs Action" with different denominators; KPI strip renders definitive zeros
+  while still loading; "Detailing %" can never reach 100 (denominator includes two
+  post-fab erection states); R&R ranks above BFA in `DETAILING_STATE_ORDER` so a
+  rejected package clears the "Not approved" milestone; `revisionImpacted` /
+  `fullySuperseded` are structurally dead (`buildSetPackages` strips superseded
+  sheets before readiness sees them); working-day due chips use the calendar "d"
+  suffix; the register table is unvirtualized with an O(sets×rows) scan per
+  keystroke; the four inline write controls have no `can()` gate (RLS still
+  blocks, but viewers get enabled controls); matrix rows expand on mouse only;
+  vivid `--cmd-*` fill hues used as 9px text fail contrast on the light skin;
+  Radix Dialog is imported in two files (CLAUDE.md forbids it — the shared
+  `ui/dialog` primitive has 17 importers, so this is a repo-wide decision); and
+  "Run AI deep-dive →" renders unconditionally while its handler is flag-gated.
 
 ### Monetization / go-to-market
 
@@ -82,9 +137,9 @@ follow-ups._
   a test-mode checkout) are in [`docs/stripe-go-live.md`](docs/stripe-go-live.md).
   ✅ **Update (verified 2026-06-17):** the orphan **Supabase Stripe Sync Engine**
   functions (`stripe-setup`/`stripe-worker`/`stripe-webhook`/`stripe-diagnostics`)
-  are **gone** — only 8 edge functions are deployed now (`llm-proxy`,
-  `schedule-assistant`, `email-ingest`, `email-send`, `stripe-billing`,
-  `project-export`, `sharepoint-proxy`, `bluebeam-proxy`). The 29-table `stripe`
+  are **gone** — only the active edge functions remain (`llm-proxy`,
+  `email-ingest`, `email-send`, `stripe-billing`,
+  `project-export`, plus deprecated `sharepoint-proxy`/`bluebeam-proxy`). The 29-table `stripe`
   schema decision remains. ✅ **`org.plan` anchor path confirmed (code-verified
   2026-06-17):** there is no separate `stripe-webhook` function — the webhook is a
   `/webhook` route INSIDE the deployed `stripe-billing` function (CLAUDE.md §16 is
@@ -94,47 +149,37 @@ follow-ups._
   + `customer.subscription.updated/deleted`. Still unverified: the **live
   Stripe-dashboard endpoint wiring + an end-to-end test** (0 `billing_events`; 1
   internal `enterprise` org) — same gap as the "Stripe go-live" item above.
-- **Storage backfill (app-files cross-project read residual)** — verified
-  2026-06-17: **775** legacy flat `app-files/uploads/<ts>-<rand>` objects predate
-  org-prefixing. The set is **frozen** — the uploader cut over cleanly (last flat
-  upload Jun 16 08:06; org-prefixed `<org_id>/uploads/...` uploads start 08:29, 32
-  so far), so the problem isn't growing. **Exposure:** the `app-files` SELECT
-  policy `auth_read` reads flat paths via the branch
-  `foldername[1] = 'uploads' AND user_is_org_member(founding_org_id())` — i.e. any
-  member of the **founding org** can read every legacy flat file regardless of
-  project membership. Org isolation already closed the cross-**org** hole, so this
-  is now **intra-founding-org cross-project** read of legacy files only (low
-  severity while S&H Steel is the sole org; matters before adding outside members
-  to the founding org). **Why deferred:** the remediation is a risk-bearing live
-  migration and can't be done from SQL/MCP (a `name` rename moves the row but not
-  the S3 bytes → broken links; needs the Storage API). **Remediation (needs a
-  service-role script, run by an owner):** (1) for each of the 775 objects,
-  Storage `copy`/`move` `uploads/<f>` → `<founding_org_id>/uploads/<f>`;
-  (2) backfill every DB `file_url` reference (audit all text columns holding
-  `uploads/...`, e.g. `drawings`, `uploaded_files`, `model_registry`,
-  attachment tables, then UPDATE the prefix); (3) verify every ref resolves;
-  (4) only then drop the `'uploads'` branch from the `auth_read` policy so the
-  flat paths become unreadable and the gap closes. Do copy-then-verify-then-cut
-  (reversible until step 4).
-- **Org → project access model** — `user_has_project_access` now gates by org
-  membership while `user_projects` still drives project *role*. Decide whether
-  org members auto-see all org projects or stay per-project before onboarding
-  teams (today a new member sees a project only once added to `user_projects`).
-- **Deprecated edge functions** — `sharepoint-proxy` / `bluebeam-proxy` are still
-  deployed but unused by the client; `supabase functions delete` them.
-- **Stale generated types** — `src/types/supabase.ts` lacks the org/billing
-  tables (and `vendors.org_id`, `*.client_op_id`). Untyped JS access works;
-  regenerate via the Supabase MCP on the next pass.
+- **Storage backfill (app-files cross-project read residual)** — ✅ **DONE in
+  production (2026-07-20):** all 775 legacy `uploads/…` objects were copied under
+  the founding-org prefix, DB references rewritten, and the legacy storage RLS
+  branch closed. Originals are retained as rollback material; deleting them is a
+  separate owner decision (see `docs/app-files-tenant-isolation-plan.md`).
+- **Org → project access model — ✅ RESOLVED 2026-08-19** (migration
+  `20260819001000_org_member_default_project_access`): org members implicitly
+  hold a workspace-configurable default role (`viewer` by default) on every
+  org project when they have no explicit `user_projects` row, so a new
+  teammate's first session shows the org's projects instead of an empty app.
+  An explicit `user_projects` row always wins (grant more or restrict below
+  the default); org admins can switch the default (Viewer/Field/PM) or turn
+  it off (invite-only) from Team → "Default project access for members".
+- **Deprecated edge functions** — `sharepoint-proxy` / `bluebeam-proxy` /
+  orphan Stripe Sync functions may still be deployed remotely. Owner-run helper:
+  `npm run supabase:delete-deprecated-fns` (dry-run by default; `DRY_RUN=0` to
+  apply). CI opt-in drift job flags them when `SUPABASE_DRIFT_ENABLED=true`.
+- **Stale generated types** — org/billing tables were patched into
+  `src/types/supabase.ts` (2026-07-27). Full regen via `npm run types:db` still
+  needed for remaining gaps (`vendors.org_id`, `*.client_op_id`, etc.).
 
 ### Platform maturity (longer-running)
 
-- **TypeScript conversion** — ~77% of `src` is still JS/JSX (≈275 TS/TSX vs ≈945
-  JS/JSX, verified 2026-07-01). `src/services/` is fully typed; convert
-  incrementally, shared-infra-first. Base `strict:false`, but **strictNullChecks
-  + noImplicitAny are CI-enforced ratchets** (shipped 2026-06-22). Burn-down
-  metric: ~96 `as any` boundary casts (the JS→TS tax — type the shared infra
-  first to shed them). Net-new JS is still being authored — a CI check blocking
-  new `.js/.jsx` under `src` is queued.
+- **TypeScript conversion (in progress)** — `src/services/` is fully typed and
+  the deterministic Production Control scoring boundary is now
+  `src/utils/pccEngine.ts`, with explicit source-record, normalized-item,
+  scoring, rollup, forecast-window, owner-load, briefing, and release-action
+  result types. Continue incrementally, shared-infra-first; do not mass-rename
+  UI modules whose shapes are still implicit. Base `strict:false`, while
+  **strictNullChecks + noImplicitAny are CI-enforced ratchets**, and
+  `check:no-new-js` blocks new `.js/.jsx` files under `src`.
 - **Large-component decomposition (in progress)** — the biggest components are
   being thinned by extracting their pure logic into named, unit-tested modules
   (behavior-preserving, validated against the full suite at each slice). Done so
@@ -156,6 +201,7 @@ follow-ups._
   organization, and fixture project are provisioned against staging.
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project
   performance** (virtualization, server-side filtering, narrow invalidation).
+  Phase 0 tablet kit is landed; Phases 1-4 domain migrations remain pending.
 - **Dependency vulnerabilities — CLEARED (`npm audit` = 0 advisories, verified
   2026-06-17).** The 2 remaining `esbuild`-via-`vite` highs were patched within the
   vite-6 line (`esbuild@0.25.12`), so **`vite@8` is no longer required** to clear
@@ -262,6 +308,7 @@ Remaining:
 
 ## Recently-resolved (last 30 days, kept here for context)
 
+- 2026-09-13 **Bulk-edit approval gate enforcement:** added stage transition and submittal-link checks to `handleBulkEdit` in `pages/drawings/useDrawingsPageController.ts` to prevent bypassing the fabrication-release gate during bulk updates.
 - 2026-06-20 **Security batch (audit #5/#6/#7/#11/#12 + #21/#14):** edge-function
   hardening — quota fail-closed + `LLM_KILL_SWITCH`, email-classify per-project cap,
   inbound-attachment count/size/extension guards + filename sanitize, CORS opt-in
@@ -462,12 +509,9 @@ Remaining:
   drawings/submittals rollup was removed after confirming no live
   callers remained.
 
-- `schedule-assistant` LLM gateway bypass resolved: the edge function
-  now keeps JWT verification, RLS-scoped schedule tool execution, and
-  `ai_audit_log` writes locally, but routes every model turn through
-  `llm-proxy` with `useCase: "schedule-assist"`. Token usage, latency,
-  cost, and failures are now visible through `llm_telemetry`, and
-  provider/model changes live in `supabase/functions/llm-proxy/router.ts`.
+- Retired schedule chat assistant removed from the application and
+  repository runtime. Historical `pma_*` / `ai_audit_log`
+  schema objects remain in migrations and generated types only.
 
 - Supabase generated types / typecheck drift resolved: `npm run typecheck`
   and `npm run typecheck:js` are passing, and CI treats both checks as

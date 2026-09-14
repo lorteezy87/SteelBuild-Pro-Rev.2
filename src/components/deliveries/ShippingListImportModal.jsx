@@ -21,6 +21,11 @@ import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { parseShippingList, classifyLoads } from "@/lib/importShippingList";
 import { listPieceProduction, commitProductionRows } from "@/lib/production/repository";
+import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
+import { resolveCanonicalShipTargets } from "@/lib/pieceControl/shippingCanonicalBridge";
+import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
+import { fetchAllProjectRowsPaged } from "@/lib/pieceControl/pagedSelect";
+import { summarizeShippingListCommit } from "@/lib/deliveries/summarizeShippingListCommit";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -166,22 +171,44 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
         });
       }
       // Mark every shipped piece "Shipped" on Production Status (terminal stage).
+      // When Piece Control is pilot/live, also advance matching canonical lots.
       let shipped = 0;
+      let canonicalShipped = 0;
+      let canonicalSkipped = 0;
+      let productionShipFailed = false;
+      let canonicalShipFailed = false;
       if (markShipped) {
         try {
           shipped = await markPiecesShipped(kept, existingProduction, projectId);
         } catch (e) {
+          productionShipFailed = true;
           console.error("[ShippingListImportModal] mark-shipped failed:", e);
+        }
+        try {
+          const bridge = await markCanonicalPiecesShipped(kept, projectId);
+          canonicalShipped = bridge.shipped;
+          canonicalSkipped = bridge.skipped;
+        } catch (e) {
+          canonicalShipFailed = true;
+          console.error("[ShippingListImportModal] canonical ship bridge failed:", e);
         }
       }
 
-      setLastResult({ created, items, failed, shipped });
-      toast.success(
-        `${created} load${created === 1 ? "" : "s"} imported (${items} pieces)`
-        + (shipped ? `, ${shipped} marked shipped` : "")
-        + (failed ? `, ${failed} failed` : ""),
-      );
-      onImported?.({ created, items, failed, shipped });
+      const result = {
+        created,
+        items,
+        failed,
+        shipped,
+        canonicalShipped,
+        canonicalSkipped,
+        productionShipFailed,
+        canonicalShipFailed,
+      };
+      setLastResult(result);
+      const { level, message } = summarizeShippingListCommit(result);
+      if (level === "warning") toast.warning(message);
+      else toast.success(message);
+      onImported?.(result);
       setStep("done");
       setTimeout(() => { reset(); onClose(); }, 1800);
     } catch (e) {
@@ -330,8 +357,15 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
             <div style={{ textAlign: "center", padding: "40px 0" }}>
               <CheckCircle2 size={32} style={{ color: "var(--status-success)" }} />
               <div style={{ marginTop: 10, color: "var(--text-primary)", fontWeight: 700 }}>
-                {lastResult.created} load{lastResult.created === 1 ? "" : "s"} imported · {lastResult.items} pieces{lastResult.shipped ? ` · ${lastResult.shipped} marked shipped` : ""}{lastResult.failed ? ` · ${lastResult.failed} failed` : ""}
+                {lastResult.created} load{lastResult.created === 1 ? "" : "s"} imported · {lastResult.items} pieces{lastResult.shipped ? ` · ${lastResult.shipped} marked shipped` : ""}{lastResult.canonicalShipped ? ` · ${lastResult.canonicalShipped} canonical shipped` : ""}{lastResult.canonicalSkipped ? ` · ${lastResult.canonicalSkipped} canonical skipped` : ""}{lastResult.failed ? ` · ${lastResult.failed} failed` : ""}
               </div>
+              {(lastResult.productionShipFailed || lastResult.canonicalShipFailed) && (
+                <div style={{ marginTop: 8, color: "var(--status-warning)", fontSize: 12 }}>
+                  Piece sync incomplete
+                  {lastResult.productionShipFailed ? " — production status update failed" : ""}
+                  {lastResult.canonicalShipFailed ? " — canonical lot bridge failed" : ""}.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -385,6 +419,50 @@ async function markPiecesShipped(keptLoads, existingProduction, projectId) {
   });
   const { created, updated } = await commitProductionRows(projectId, rows);
   return created + updated;
+}
+
+/**
+ * When Piece Control is pilot/live, advance fabricated canonical leaf lots that
+ * exactly match shipping-list marks. Shadow/off leave legacy piece_production
+ * authoritative. Ambiguous or non-fabricated marks are skipped with reasons.
+ */
+async function markCanonicalPiecesShipped(keptLoads, projectId) {
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .select("piece_control_mode")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (projectError) throw projectError;
+  const mode = project?.piece_control_mode || "off";
+  if (mode !== "pilot" && mode !== "live") {
+    return { shipped: 0, skipped: 0 };
+  }
+
+  // Paged — an unpaged select capped at 1000 lots and reported the rest as
+  // "No canonical leaf lot matched this mark".
+  const pieces = await fetchAllProjectRowsPaged(supabase, "pieces", projectId, {
+    select: "id, piece_mark, lifecycle_status, on_hold, is_container, is_deleted, deleted_at, parent_piece_id",
+    build: (query) => query.eq("is_deleted", false).is("deleted_at", null),
+  });
+
+  const actionable = selectActionableLeafPieces(pieces || []);
+  const { shipIds, skipped } = resolveCanonicalShipTargets(keptLoads, actionable);
+  if (shipIds.length === 0) {
+    return { shipped: 0, skipped: skipped.length };
+  }
+
+  const shipDate = keptLoads
+    .map((load) => load.ship_date)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || null;
+
+  await transitionPieceLots("ship", projectId, shipIds, {
+    shipment_number: "shipping-list-import",
+    ship_date: shipDate || "",
+    notes: "Advanced from shipping-list import after delivery loads were confirmed",
+  });
+  return { shipped: shipIds.length, skipped: skipped.length };
 }
 
 const th = { textAlign: "left", padding: "8px 10px", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", borderBottom: "1px solid var(--divider)" };

@@ -7,6 +7,7 @@
  */
 
 import { computeRevisedContractValue } from "@/services/costRollup";
+import { isRfiOpen } from "@/lib/entityPredicates";
 
 /**
  * Work-package progress for a single project.
@@ -107,8 +108,11 @@ export function calcEVM(workPackages = [], budgetAtCompletion) {
  * @returns {{ openCount, overdueCount }}
  */
 export function calcRfiHealth(rfis = []) {
+  // Local midnight so RFIs due today don't flip to overdue at noon
+  // (the date-only shim parses "YYYY-MM-DD" as local noon).
   const now      = new Date();
-  const active   = rfis.filter(r => !["Answered", "Closed"].includes(r.status));
+  now.setHours(0, 0, 0, 0);
+  const active   = rfis.filter(isRfiOpen); // excludes Answered / Closed / Void
   const openCount    = active.length;
   const overdueCount = active.filter(r => r.date_required && new Date(r.date_required) < now).length;
   return { openCount, overdueCount };

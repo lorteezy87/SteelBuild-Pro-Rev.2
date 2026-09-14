@@ -17,7 +17,7 @@ export default function SkipToMainContentLink() {
         position: "absolute",
         top: 4, left: 4,
         background: "var(--accent)",
-        color: "#fff",
+        color: "var(--on-accent)",
         padding: "6px 12px",
         borderRadius: 6,
         fontFamily: "var(--font-mono)",

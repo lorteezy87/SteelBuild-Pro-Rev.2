@@ -17,6 +17,7 @@ function renderCC(props: Record<string, unknown> = {}) {
       onBulkAdd={() => {}}
       onWbsBuilder={() => {}}
       onImportMpp={() => {}}
+      onImportCsv={() => {}}
       importing={false}
       onExportIcs={() => {}}
       onExportPdf={() => {}}
@@ -59,15 +60,18 @@ describe("ScheduleCommandCenter — Bulk Add + WBS Builder discoverability", () 
 
   it("promotes import and export actions into the canonical shell", () => {
     const onImportMpp = vi.fn();
+    const onImportCsv = vi.fn();
     const onExportIcs = vi.fn();
     const onExportPdf = vi.fn();
-    renderCC({ onImportMpp, onExportIcs, onExportPdf });
+    renderCC({ onImportMpp, onImportCsv, onExportIcs, onExportPdf });
 
     fireEvent.click(screen.getByRole("button", { name: /import ms project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /import csv/i }));
     fireEvent.click(screen.getByRole("button", { name: /export ics/i }));
     fireEvent.click(screen.getByRole("button", { name: /export pdf/i }));
 
     expect(onImportMpp).toHaveBeenCalledTimes(1);
+    expect(onImportCsv).toHaveBeenCalledTimes(1);
     expect(onExportIcs).toHaveBeenCalledTimes(1);
     expect(onExportPdf).toHaveBeenCalledTimes(1);
   });

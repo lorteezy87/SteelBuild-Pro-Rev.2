@@ -1,11 +1,12 @@
 import React from 'react';
 
-export default function DateOrTbdInput({ value, onChange, inputStyle = {}, compact = false, onKeyDown, disabled = false, "data-row": dataRow, "data-col": dataCol }) {
+export default function DateOrTbdInput({ id, value, onChange, inputStyle = {}, compact = false, onKeyDown, disabled = false, "data-row": dataRow, "data-col": dataCol }) {
   const hasValue = !!value;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 5 : 6, width: '100%' }}>
       <input
+        id={id}
         type="date"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
@@ -29,8 +30,8 @@ export default function DateOrTbdInput({ value, onChange, inputStyle = {}, compa
         disabled={disabled}
         title={disabled ? 'Derived from children — not editable' : hasValue ? 'Clear date (mark as TBD)' : 'Date is TBD'}
         style={{
-          background: hasValue ? (inputStyle.background || 'var(--bg-input)') : 'rgba(200,155,32,0.16)',
-          border: hasValue ? '1px solid var(--border-default)' : '1px solid rgba(200,155,32,0.4)',
+          background: hasValue ? (inputStyle.background || 'var(--bg-input)') : 'var(--accent-muted)',
+          border: hasValue ? '1px solid var(--border-default)' : '1px solid var(--accent-border)',
           borderRadius: 2,
           padding: compact ? '2px 6px' : '3px 7px',
           fontFamily: 'var(--font-mono)',

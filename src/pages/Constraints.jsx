@@ -10,14 +10,20 @@
  * src/pages/constraints/.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 
 import { useProjectId } from "@/hooks/useProjectId";
+import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
+import { Button } from "@/components/design-system";
 import { isOverdue } from "./constraints/utils";
 import KpiStrip from "./constraints/KpiStrip";
 import PriorityBar from "./constraints/PriorityBar";
@@ -32,7 +38,14 @@ import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/Seque
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus, Search } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
+import { ACTION_ITEM_CLOSED_STATUSES } from "@/lib/entityPredicates";
+
+// Constraints are action_items rows (chk_action_items_status: Open / In Progress /
+// Complete / Cancelled / Resolved / Closed). "Open" must exclude every terminal
+// status, not just Resolved/Closed.
+const isClosedConstraint = (c) => ACTION_ITEM_CLOSED_STATUSES.has(c?.status ?? "");
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
+import { buildConstraintPrefillFromRfi } from "./constraints/rfiConstraintHandoff";
 
 const EMPTY_ENGINE_SOURCES = {
   rfis: [],
@@ -47,10 +60,12 @@ export default function Constraints() {
   const qc = useQueryClient();
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [view, setView] = useState("list");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [prefill, setPrefill] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("open");
@@ -59,8 +74,22 @@ export default function Constraints() {
   const [seqFilter, setSeqFilter] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
+  useResetOnProjectChange(projectId, () => {
+    setShowForm(false);
+    setEditing(null);
+    setPrefill(null);
+    setDeleteTarget(null);
+    setExpandedId(null);
+  });
+
   // -- Data ----------------------------------------------------------------------
-  const { data: items = [] } = useQuery({
+  const {
+    data: items = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["constraints", projectId],
     queryFn: () =>
       projectId
@@ -68,6 +97,29 @@ export default function Constraints() {
         : entities.ActionItem.filter({ category: "CONSTRAINT" }),
     enabled: true,
   });
+
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["rfis", projectId],
+    queryFn: () =>
+      projectId ? entities.RFI.filter({ project_id: projectId }, "-created_at") : [],
+    enabled: !!projectId,
+    staleTime: 60 * 1000,
+  });
+
+  // RFI → constraint handoff: ?fromRfi=<id> opens create form prefilled from the RFI.
+  useEffect(() => {
+    const fromRfi = searchParams.get("fromRfi");
+    if (!fromRfi || !rfis.length) return;
+    const rfi = rfis.find((r) => r.id === fromRfi);
+    if (rfi) {
+      setPrefill(buildConstraintPrefillFromRfi(rfi, projectId));
+      setEditing(null);
+      setShowForm(true);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("fromRfi");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, rfis, projectId, setSearchParams]);
 
   const { data: wps = [] } = useQuery({
     queryKey: ["work-packages", projectId],
@@ -108,14 +160,15 @@ export default function Constraints() {
 
   // -- Mutations ----------------------------------------------------------------------
   const createMut = useMutation({
-    mutationFn: (data) => entities.ActionItem.create(data),
+    mutationFn: (data) => entities.ActionItem.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["constraints"] });
       toast.success("Constraint logged");
       setShowForm(false);
       setEditing(null);
+      setPrefill(null);
     },
-    onError: (err) => toast.error(err?.message || "Create failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const updateMut = useMutation({
@@ -125,8 +178,9 @@ export default function Constraints() {
       toast.success("Constraint updated");
       setShowForm(false);
       setEditing(null);
+      setPrefill(null);
     },
-    onError: (err) => toast.error(err?.message || "Update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -136,7 +190,7 @@ export default function Constraints() {
       setDeleteTarget(null);
       toast.success("Constraint deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   // -- Derived data ----------------------------------------------------------------------
@@ -159,7 +213,7 @@ export default function Constraints() {
   );
 
   const kpis = useMemo(() => {
-    const open = allConstraints.filter((c) => !RESOLVED_STATUSES.includes(c.status));
+    const open = allConstraints.filter((c) => !isClosedConstraint(c));
     const resolved = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.RESOLVED);
     const closed = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.CLOSED);
     const overdue = open.filter(isOverdue);
@@ -194,7 +248,7 @@ export default function Constraints() {
     return allConstraints
       .filter((c) => {
         if (filterType !== "all" && c.constraint_type !== filterType) return false;
-        if (filterStatus === "open" && RESOLVED_STATUSES.includes(c.status)) return false;
+        if (filterStatus === "open" && isClosedConstraint(c)) return false;
         if (filterStatus !== "all" && filterStatus !== "open" && c.status !== filterStatus) return false;
         if (filterPriority !== "all" && c.priority !== filterPriority) return false;
         if (!matchesSequenceFilter(c, seqFilter)) return false;
@@ -230,7 +284,7 @@ export default function Constraints() {
   // -- Handlers ----------------------------------------------------------------------
 
   const handleSave = (data) => {
-    if (editing) {
+    if (editing?.id) {
       updateMut.mutate({ id: editing.id, data });
     } else {
       createMut.mutate({
@@ -239,6 +293,12 @@ export default function Constraints() {
         project_id: projectId || data.project_id || "",
       });
     }
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditing(null);
+    setPrefill(null);
   };
 
   // -- No-project early return ----------------------------------------------------------------------
@@ -262,6 +322,35 @@ export default function Constraints() {
         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>
           Constraint tracking is project-scoped. Choose a project from the top nav.
         </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load constraints
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(error, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
       </div>
     );
   }
@@ -313,7 +402,7 @@ export default function Constraints() {
           </div>
           <OpsActionButton
             variant="primary"
-            onClick={() => { setEditing(null); setShowForm(true); }}
+            onClick={() => { setEditing(null); setPrefill(null); setShowForm(true); }}
             icon={<Plus size={13} />}
           >
             Log Constraint
@@ -358,6 +447,8 @@ export default function Constraints() {
 
       <SequenceFilter items={allConstraints} value={seqFilter} onChange={setSeqFilter} />
 
+      <ListTruncationNotice count={items.length} label="constraints" />
+
       {filtered.length === 0 ? (
         <EmptyState hasOpen={filterStatus === "open"} />
       ) : view === "list" ? (
@@ -384,8 +475,9 @@ export default function Constraints() {
         <ConstraintFormModal
           projectId={projectId}
           constraint={editing}
+          prefill={prefill}
           wps={wps}
-          onClose={() => { setShowForm(false); setEditing(null); }}
+          onClose={closeForm}
           onSave={handleSave}
         />
       )}

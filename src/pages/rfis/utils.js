@@ -3,8 +3,9 @@
  * repair, CSV export. No React, no state, no network.
  */
 
-import { parseUTCDate } from "@/components/shared/formatters";
 import { RFI_NUMBER_PATTERN, DENSITY_LS_KEY, DENSITY_PRESETS, INSIGHTS_LS_KEY } from "./constants";
+import { isRfiClosed } from "@/lib/entityPredicates";
+import { localToday } from "@/utils/dates";
 
 export const extractRfiSequence = (value) => {
   if (!value) return null;
@@ -91,20 +92,41 @@ export const buildRfiNumberRepairs = (records) => {
   return { repairs, skippedWithoutProject };
 };
 
+/**
+ * Age in days. A closed RFI stops ageing at `date_answered`; an open one ages
+ * against today.
+ *
+ * The terminal check goes through the canonical predicate rather than a local
+ * ["Answered","Closed"] list, which omitted **Void** — so a voided RFI kept
+ * accruing "days open" forever and drifted to the top of age-sorted views.
+ * Void rarely carries a `date_answered`, so it falls back to today's date and
+ * is clamped at 0 rather than showing a negative age.
+ */
 export const daysOpen = (r) => {
   if (!r.submitted_date) return 0;
   const start = new Date(r.submitted_date + "T00:00:00");
   const end =
-    r.date_answered && ["Answered", "Closed"].includes(r.status)
+    r.date_answered && isClosed(r)
       ? new Date(r.date_answered + "T00:00:00")
       : new Date();
   return Math.max(0, Math.floor((end - start) / 86400000));
 };
 
-export const isClosed = (r) => ["Answered", "Closed"].includes(r.status);
+/** Terminal RFI statuses: Answered / Closed / Void (canonical entityPredicates). */
+export const isClosed = (r) => isRfiClosed(r);
 
-export const isOverdue = (r) =>
-  !isClosed(r) && r.date_required && parseUTCDate(r.date_required) < new Date();
+/**
+ * Overdue = still open and `date_required` is strictly before local today.
+ * Date-only comparison: `date_required` is a DATE column, and the date-only
+ * shim parses "YYYY-MM-DD" as local NOON — comparing that against `new Date()`
+ * made an RFI due today flip to overdue at 12:00. A day-string compare has no
+ * time-of-day to flip on, and matches rfiControlCenter.derive's daysUntil.
+ */
+export const isOverdue = (r) => {
+  if (!r || isClosed(r) || !r.date_required) return false;
+  const due = String(r.date_required).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(due) && due < localToday();
+};
 
 /**
  * Map a raw RFI status to the short label shown in the row pipeline /
@@ -189,6 +211,14 @@ export function loadInsightsCollapsed() {
 }
 
 /** Count RFIs by status / overdue / critical for the filter tiles. */
+/**
+ * Count RFIs by status / overdue / critical for the filter tiles.
+ *
+ * `void` and the lifecycle rollups (`liveOpen` / `liveClosed`) are included so
+ * the per-status counts actually reconcile against `all`. Previously Void was
+ * counted in `all` but had no bucket and no filter, so a voided RFI inflated
+ * the total while being unreachable from any chip.
+ */
 export function buildRfiCounts(rfis) {
   const overdue = rfis.filter((r) => isOverdue(r));
   return {
@@ -198,6 +228,10 @@ export function buildRfiCounts(rfis) {
     incomplete: rfis.filter((r) => r.status === "Incomplete Response").length,
     answered:   rfis.filter((r) => r.status === "Answered").length,
     closed:     rfis.filter((r) => r.status === "Closed").length,
+    void:       rfis.filter((r) => r.status === "Void").length,
+    // Lifecycle rollups — what the register's open/closed grouping counts.
+    liveOpen:   rfis.filter((r) => !isClosed(r)).length,
+    liveClosed: rfis.filter((r) => isClosed(r)).length,
     overdue:    overdue.length,
     critical:   rfis.filter((r) => r.priority === "Critical").length,
   };
@@ -218,6 +252,11 @@ export function filterAndSortRfis(rfis, { filter, disciplineFilter, seqFilter, s
       if (filter === "incomplete") return r.status === "Incomplete Response";
       if (filter === "answered")   return r.status === "Answered";
       if (filter === "closed")     return r.status === "Closed";
+      if (filter === "void")       return r.status === "Void";
+      // Lifecycle filters — the "show me what is still live" question the
+      // per-status chips could not express.
+      if (filter === "live")       return !isClosed(r);
+      if (filter === "settled")    return isClosed(r);
       if (filter === "overdue")    return isOverdue(r);
       if (filter === "critical")   return r.priority === "Critical";
       return true;

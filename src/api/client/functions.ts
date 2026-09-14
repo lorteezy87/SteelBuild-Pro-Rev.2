@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { numberSequenceArgsSchema } from '@/lib/securitySchemas';
 import { SupabaseOperationError } from './errors';
 import type { FunctionInvokeResult } from './supabaseTypes';
 
@@ -26,8 +27,12 @@ export const functions = {
       // The DB function uses INSERT...ON CONFLICT with RETURNING for atomicity.
       case 'secureNumberSequence':
       case 'numberSequence': {
-        const { project_id, record_type } = params as { project_id?: string; record_type?: string };
-        if (!project_id || !record_type) return { data: { number: 1 } };
+        const parsed = numberSequenceArgsSchema.safeParse(params);
+        if (!parsed.success) {
+          const detail = parsed.error.issues.map((i) => i.message).join('; ');
+          throw new Error(`Invalid numberSequence payload: ${detail}`);
+        }
+        const { project_id, record_type } = parsed.data;
         // Atomic, server-side ONLY. The RPC does INSERT...ON CONFLICT DO UPDATE
         // ...RETURNING under a row lock, so concurrent callers serialize and get
         // DISTINCT official numbers (and it re-checks project access). NEVER fall
@@ -49,35 +54,37 @@ export const functions = {
         throw new SupabaseOperationError('number_sequences', 'get_next_sequence_number', lastError);
       }
 
-      // LLM proxy
+      // LLM proxy — prefer integrations.Core.InvokeLLM (src/api/client/llm.ts).
+      // This legacy dispatcher path must still fail closed: never return a
+      // success-shaped payload with error: null when the proxy is unavailable.
       case 'invokeLLM':
       case 'anthropicProxy': {
         try {
           const { data, error } = await supabase.functions.invoke('llm-proxy', { body: params });
           if (error) throw error;
           return { data };
-        } catch {
-          return { data: { text: 'AI features require the "llm-proxy" Supabase Edge Function.', error: null } };
+        } catch (err: unknown) {
+          const detail =
+            (err as { message?: string } | undefined)?.message ||
+            'AI features require the "llm-proxy" Supabase Edge Function.';
+          return { data: { text: null, error: detail } };
         }
       }
 
-      // Alert generation
+      // Alert generation — fail closed. There is no generate-alerts Edge Function
+      // in this repo; returning an empty "success" made Alerts Center look like a
+      // scan completed. Module workflows (RFIs, Deliveries) create alerts directly.
       case 'generateAlerts':
-        try {
-          const { data } = await supabase.functions.invoke('generate-alerts', { body: params });
-          return { data: data || { alerts: [] } };
-        } catch {
-          return { data: { alerts: [] } };
-        }
+        throw new Error(
+          'Cross-module alert scan is unavailable: the generate-alerts Edge Function is not deployed. Alerts are created from module workflows (RFIs, Deliveries).',
+        );
 
-      // Agent memory
+      // Agent memory — retired with the chat assistant. Do not invoke a
+      // remote function or return a null "success" that hides the retirement.
       case 'agentMemory':
-        try {
-          const { data } = await supabase.functions.invoke('agent-memory', { body: params });
-          return { data };
-        } catch {
-          return { data: null };
-        }
+        throw new Error(
+          'Agent memory is unavailable: the retired memory Edge Function is not deployed.',
+        );
 
       default:
         throw new Error(`Unsupported backend function: ${name}`);

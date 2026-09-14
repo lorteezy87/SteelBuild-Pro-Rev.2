@@ -39,6 +39,7 @@ import {
 
 const OLD_TINT = "#FF4D4D";   // removed content
 const NEW_TINT = "#2F81F7";   // added content
+const PDF_PAGE_BACKGROUND = "#fff";
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3];
 
 const mono = "var(--font-mono)";
@@ -93,7 +94,7 @@ function RevisionAiPanel({
             display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px", borderRadius: 8,
             background: "color-mix(in srgb, #F85149 14%, transparent)", border: "1px solid color-mix(in srgb, #F85149 40%, transparent)",
           }}>
-            <AlertTriangle size={14} style={{ color: "#F85149", flexShrink: 0, marginTop: 1 }} />
+            <AlertTriangle size={14} style={{ color: "var(--status-error)", flexShrink: 0, marginTop: 1 }} />
             <span style={{ fontFamily: "var(--font-body)", fontSize: 11.5, color: "var(--text-primary)", lineHeight: 1.5 }}>
               This sheet is already <strong>{downstream}</strong> — any real change here may mean rework or a backcharge.
             </span>
@@ -458,16 +459,29 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      {/* Height/max-height live in CSS (not inline) so the dvh upgrade can be
+          @supports-gated with a vh fallback. The dialog is centred by Radix
+          with translateY(-50%): if the box is ever TALLER than the viewport,
+          half the overflow goes ABOVE the top edge where it can't be scrolled
+          to — that's how the header and revision selectors became unreachable
+          on short windows. max-height + overflow:hidden makes that impossible. */}
+      <style>{`
+        .rev-compare-dialog { height: 92vh; max-height: 92vh; }
+        @supports (height: 92dvh) {
+          .rev-compare-dialog { height: 92dvh; max-height: 92dvh; }
+        }
+      `}</style>
       <DialogContent
-        className="detailing-cc"
+        className="detailing-cc rev-compare-dialog"
         style={{
           maxWidth: "min(96vw, 1500px)",
           width: "96vw",
-          height: "92vh",
           display: "flex",
           flexDirection: "column",
           gap: 10,
           padding: 16,
+          overflow: "hidden",
+          minHeight: 0,
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
         }}
@@ -498,7 +512,10 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
             version will be archived here automatically for overlay compare.
           </div>
         ) : (
-          <>
+          // Scrollable body: the header above stays pinned, and if a short
+          // window can't fit the control rows plus a usable canvas, the whole
+          // body scrolls instead of pushing content out of reach.
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
             {/* ── Controls ──────────────────────────────────────────── */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
               <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 800, color: OLD_TINT, letterSpacing: "0.08em" }}>OLD</span>
@@ -620,10 +637,11 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
             )}
 
             {/* ── Canvas + AI rail ─────────────────────────────────── */}
-            <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 10 }}>
+            {/* minHeight floor keeps the sheet usable when the body scrolls. */}
+            <div style={{ flex: 1, minHeight: 260, display: "flex", gap: 10 }}>
             <div style={{
               flex: 1, minWidth: 0, overflow: "auto", borderRadius: 10,
-              border: "1px solid var(--border-default)", background: "#3A3F46",
+              border: "1px solid var(--border-default)", background: "var(--bg-surface-highest)",
               position: "relative",
             }}>
               {(rendering || isLoading) && (
@@ -651,7 +669,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                       <div style={{ fontFamily: mono, fontSize: 9, fontWeight: 800, color: tintColor, letterSpacing: "0.08em", marginBottom: 4 }}>
                         {label || "—"}
                       </div>
-                      <canvas ref={ref} style={{ width: `${100 * zoom}%`, height: "auto", display: "block", background: "#fff", borderRadius: 4 }} />
+                      <canvas ref={ref} style={{ width: `${100 * zoom}%`, height: "auto", display: "block", background: PDF_PAGE_BACKGROUND, borderRadius: 4 }} />
                     </div>
                   ))}
                 </div>
@@ -662,7 +680,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                     style={{
                       width: `${RASTER_TARGET_WIDTH * zoom}px`,
                       maxWidth: zoom === 1 ? "100%" : undefined,
-                      height: "auto", display: "block", background: "#fff", borderRadius: 4,
+                      height: "auto", display: "block", background: PDF_PAGE_BACKGROUND, borderRadius: 4,
                     }}
                   />
                 </div>
@@ -687,7 +705,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
               />
             )}
             </div>
-          </>
+          </div>
         )}
 
         {rfiDraft && (

@@ -45,6 +45,7 @@ import {
   costStatusTone,
 } from "./costControlCenter.derive";
 import CostChartRow from "./CostChartRow";
+import { persistCostCode } from "./costCodeSave";
 
 // CostCodeFormModal is untyped JS; its default-`[]` props infer as never[]. Cast so it accepts our data.
 const CostCodeForm = CostCodeFormModal as unknown as React.ComponentType<Record<string, unknown>>;
@@ -126,16 +127,17 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   const coPending = changeOrders.filter((co) =>
     ["Submitted", "Under Review"].includes(co.status ?? ""),
   ).length;
-  const coApproved = changeOrders.filter((co) => co.status === "Approved").length;
+  const coApproved = changeOrders.filter((co) => String(co.status ?? "").trim() === "Approved").length;
   const coStale = coAging.filter((co) => co.isStale).length;
   const topStaleCOs = coAging.filter((co) => co.isStale).slice(0, 5);
 
-  // Budget from cost-code budgets; EAC from the expense-rolled actuals
-  // (costCodeRows) + forecast-to-complete, consistent with the Actual/Committed KPIs.
-  const totalBudget = useMemo(
-    () => costCodes.reduce((s, c) => s + Number(c.budget_amount || 0), 0),
-    [costCodes],
-  );
+  // Budget KPI = revised budget (original + CO signed extras), matching the
+  // per-row "Budget" column and its Variance below — the strip previously
+  // summed raw budget_amount while labeled "revised", so the KPI Variance
+  // disagreed with the table on any project with approved COs.
+  const totalBudget = summary.revisedBudget;
+  // EAC from the expense-rolled actuals (costCodeRows) + forecast-to-complete,
+  // consistent with the Actual/Committed KPIs.
   const totalEAC = useMemo(
     () => costCodeRows.reduce((s, c) => s + Number(c.actual_cost || 0) + Number(c.forecast_to_complete || 0), 0),
     [costCodeRows],
@@ -226,6 +228,27 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
       key: "status",
       header: "Status",
       render: (r) => <Pill tone={costStatusTone(r)}>{r.is_over ? "Over Budget" : r.used_pct > 85 ? "Watch" : "On Track"}</Pill>,
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (r) => can("delete", "cost_code") ? (
+        <button
+          type="button"
+          className="cmd-btn cmd-btn--secondary"
+          style={{ fontSize: 10, padding: "4px 8px" }}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (!window.confirm(`Archive cost code ${r.cost_code_number}? Historical expenses remain; the code is hidden from active budgets.`)) {
+              return;
+            }
+            costCodeCrud.delete.mutate(r.id);
+          }}
+        >
+          Archive
+        </button>
+      ) : null,
     },
   ];
 
@@ -429,12 +452,14 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
         costCode={editingCode ? (costCodes.find((c) => c.id === editingCode.id) ?? editingCode) : null}
         projects={project ? [project] : []}
         existingCodes={costCodes}
-        onSave={(data: Record<string, unknown>) => {
-          if (editingCode) {
-            costCodeCrud.update.mutate({ id: editingCode.id as string, ...data });
-          } else {
-            costCodeCrud.create.mutate({ ...data, project_id: projectId });
-          }
+        onSave={async (data: Record<string, unknown>) => {
+          await persistCostCode({
+            editingId: editingCode?.id as string | null,
+            data,
+            projectId,
+            createMutation: costCodeCrud.create,
+            updateMutation: costCodeCrud.update,
+          });
           setModalOpen(false);
           setEditingCode(null);
         }}

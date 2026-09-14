@@ -19,18 +19,140 @@ describe("computeDetailingReadiness", () => {
     expect(r.erectionReady).toBe(false); // not yet released for erection
   });
 
-  it("an open linked RFI blocks fabrication readiness", () => {
-    const pkg = { linked_rfi_ids: ["rfi-1"] };
-    const open = new Set(["rfi-1"]);
-    const r = computeDetailingReadiness({ pkg, submittals: [SUB_RELEASED], sheets: [], openRfiIds: open });
+  // ── Linked RFIs: TWO id spaces ────────────────────────────────────────────
+  // submittals.linked_rfi_ids is uuid[]; drawings.linked_rfi_ids is a CSV of RFI
+  // NUMBERS. These used to be pooled and intersected against uuids only, so a
+  // sheet-linked open RFI never blocked. Fixtures below use the shapes the DB
+  // actually stores — the old ones used `pkg.linked_rfi_ids`, a column that does
+  // not exist on drawing_sets, which is why the broken path stayed green.
+
+  it("an open RFI linked from a SUBMITTAL (uuid) blocks fabrication readiness", () => {
+    const submittals = [{ ...SUB_RELEASED, linked_rfi_ids: ["rfi-1"] }];
+    const r = computeDetailingReadiness({
+      pkg: {}, submittals, sheets: [], openRfiIds: new Set(["rfi-1"]),
+    });
     expect(r.rfiBlocked).toBe(true);
     expect(r.fabricationReady).toBe(false);
   });
 
-  it("a linked RFI that is NOT open does not block", () => {
-    const pkg = { linked_rfi_ids: ["rfi-1"] };
-    const r = computeDetailingReadiness({ pkg, submittals: [SUB_RELEASED], sheets: [], openRfiIds: new Set(["rfi-99"]) });
+  it("a submittal-linked RFI that is NOT open does not block", () => {
+    const submittals = [{ ...SUB_RELEASED, linked_rfi_ids: ["rfi-1"] }];
+    const r = computeDetailingReadiness({
+      pkg: {}, submittals, sheets: [], openRfiIds: new Set(["rfi-99"]),
+    });
     expect(r.rfiBlocked).toBe(false);
+    expect(r.fabricationReady).toBe(true);
+  });
+
+  it("an open RFI linked from a SHEET (canonical 'RFI #014' text) blocks fabrication readiness", () => {
+    // The exact shape SheetFormModal's "RFI #001, RFI #002" placeholder produces.
+    const r = computeDetailingReadiness({
+      pkg: {},
+      submittals: [SUB_RELEASED],
+      sheets: [{ linked_rfi_ids: "RFI #014" }],
+      openRfiIds: new Set(["some-uuid"]),
+      openRfiNumbers: new Set(["RFI014"]),
+    });
+    expect(r.rfiBlocked).toBe(true);
+    expect(r.fabricationReady).toBe(false);
+  });
+
+  it("matches sheet-linked RFI numbers across punctuation and spacing variants", () => {
+    const openRfiNumbers = new Set(["RFI014"]);
+    for (const raw of ["RFI #014", "rfi-014", "RFI014", " RFI # 014 "]) {
+      const r = computeDetailingReadiness({
+        pkg: {}, submittals: [SUB_RELEASED], sheets: [{ linked_rfi_ids: raw }], openRfiNumbers,
+      });
+      expect(r.rfiBlocked, `variant: ${raw}`).toBe(true);
+    }
+  });
+
+  it("splits a multi-RFI sheet CSV on commas only (a number may contain a space)", () => {
+    const r = computeDetailingReadiness({
+      pkg: {},
+      submittals: [SUB_RELEASED],
+      sheets: [{ linked_rfi_ids: "RFI #001, RFI #002" }],
+      openRfiNumbers: new Set(["RFI002"]),
+    });
+    expect(r.rfiBlocked).toBe(true);
+  });
+
+  it("a sheet-linked RFI that is NOT open does not block", () => {
+    const r = computeDetailingReadiness({
+      pkg: {},
+      submittals: [SUB_RELEASED],
+      sheets: [{ linked_rfi_ids: "RFI #014" }],
+      openRfiNumbers: new Set(["RFI099"]),
+    });
+    expect(r.rfiBlocked).toBe(false);
+    expect(r.fabricationReady).toBe(true);
+  });
+
+  it("never matches a sheet's RFI NUMBER against the open-UUID set", () => {
+    // Guards the regression directly: pooling the id spaces made this pass.
+    const r = computeDetailingReadiness({
+      pkg: {},
+      submittals: [SUB_RELEASED],
+      sheets: [{ linked_rfi_ids: "RFI #014" }],
+      openRfiIds: new Set(["RFI #014", "RFI014"]),
+    });
+    expect(r.rfiBlocked).toBe(false);
+  });
+
+  it("ignores drawing_sets.linked_rfi_ids — no such column exists", () => {
+    const r = computeDetailingReadiness({
+      pkg: { linked_rfi_ids: ["rfi-1"] },
+      submittals: [SUB_RELEASED],
+      sheets: [],
+      openRfiIds: new Set(["rfi-1"]),
+    });
+    expect(r.rfiBlocked).toBe(false);
+  });
+
+  it("falls back to 'has any linked RFI' when no open set is supplied", () => {
+    expect(computeDetailingReadiness({
+      pkg: {}, submittals: [SUB_RELEASED], sheets: [{ linked_rfi_ids: "RFI #014" }],
+    }).rfiBlocked).toBe(true);
+    expect(computeDetailingReadiness({
+      pkg: {}, submittals: [{ ...SUB_RELEASED, linked_rfi_ids: ["rfi-1"] }], sheets: [],
+    }).rfiBlocked).toBe(true);
+    expect(computeDetailingReadiness({
+      pkg: {}, submittals: [SUB_RELEASED], sheets: [{}],
+    }).rfiBlocked).toBe(false);
+  });
+
+  // ── Superseded sheets arrive in their own bucket (§22) ──────────────────
+  // buildSetPackages keeps superseded sheets OUT of `sheets`, so counts, dues
+  // and the due-date write targets are unaffected — which made both of these
+  // signals permanently false when they were derived from `sheets` alone.
+  it("flags revisionImpacted from the supersededSheets bucket", () => {
+    const r = computeDetailingReadiness({
+      pkg: {}, submittals: [SUB_RELEASED],
+      sheets: [{ id: "live" }],
+      supersededSheets: [{ id: "old", is_superseded: true }],
+    });
+    expect(r.revisionImpacted).toBe(true);
+    expect(r.fullySuperseded).toBe(false);
+    // The `&& !revisionImpacted` term in fabricationReady was a no-op before.
+    expect(r.fabricationReady).toBe(false);
+  });
+
+  it("reports fullySuperseded when every sheet is in the superseded bucket", () => {
+    const r = computeDetailingReadiness({
+      pkg: {}, submittals: [SUB_RELEASED],
+      sheets: [],
+      supersededSheets: [{ id: "old", is_superseded: true }],
+    });
+    expect(r.fullySuperseded).toBe(true);
+    expect(r.revisionImpacted).toBe(false); // dead, not "impacted"
+  });
+
+  it("reports neither when nothing is superseded", () => {
+    const r = computeDetailingReadiness({
+      pkg: {}, submittals: [SUB_RELEASED], sheets: [{ id: "live" }], supersededSheets: [],
+    });
+    expect(r.revisionImpacted).toBe(false);
+    expect(r.fullySuperseded).toBe(false);
     expect(r.fabricationReady).toBe(true);
   });
 
@@ -94,15 +216,31 @@ describe("computeSequenceReadiness", () => {
     const rows = computeSequenceReadiness(entries);
     expect(rows.map((r) => r.sequence)).toEqual(["1", "2", "Unsequenced"]);
 
+    // "Detailing %" is normalized against "Released" (index 10 — the point at
+    // which DETAILING is done), NOT the full 13-state order. Dividing by the
+    // order length meant a fully released package showed 83% and only the
+    // post-fab ERECTION states could reach 100.
     const s1 = rows[0];
     expect(s1.packageCount).toBe(2);
-    expect(s1.detailingPct).toBe(50);   // (100% + 0%) / 2
+    // "Released for Erection" is past detailing-complete → clamped to 100%,
+    // averaged with "Not Started" at 0%.
+    expect(s1.detailingPct).toBe(50);
     expect(s1.fabReadyCount).toBe(1);
     expect(s1.erectionReadyCount).toBe(1);
     expect(s1.atRiskCount).toBe(1);
 
-    expect(rows[1].detailingPct).toBe(82);   // "Released" = index 9 of 11
-    expect(rows[2].detailingPct).toBe(36);   // "IFA" = index 4 of 11
+    expect(rows[1].detailingPct).toBe(100); // "Released" IS detailing-complete
+    expect(rows[2].detailingPct).toBe(40);  // "IFA" = index 4 of 10
+  });
+
+  it("never reports a released package as partially detailed", () => {
+    // The reported symptom: "Seq 3 — Detailing 83%" sitting next to "Fab 4/4".
+    for (const state of ["Released", "Partially Released", "Released for Erection"]) {
+      const [row] = computeSequenceReadiness([
+        { sequenceNumber: "9", effectiveState: state, fabricationReady: true },
+      ]);
+      expect(row.detailingPct, state).toBe(100);
+    }
   });
 
   it("returns [] for no entries", () => {

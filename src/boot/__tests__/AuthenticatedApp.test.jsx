@@ -20,6 +20,7 @@ vi.mock("@/components/shared/OrgContext", () => ({
 }));
 vi.mock("@/boot/AppLoader", () => ({ default: () => <div>LOADER</div> }));
 vi.mock("@/pages/Landing", () => ({ default: () => <div>LANDING</div> }));
+vi.mock("@/pages/DesktopConnectSignIn", () => ({ default: () => <div>DESKTOP_CONNECT_SIGNIN</div> }));
 vi.mock("@/pages/UpdatePassword", () => ({ default: () => <div>UPDATE_PW</div> }));
 vi.mock("@/pages/MfaChallenge", () => ({ default: () => <div>MFA_CHALLENGE</div> }));
 vi.mock("@/boot/AppRoutes", () => ({ default: () => <div>APP_ROUTES</div> }));
@@ -28,12 +29,24 @@ vi.mock("@/components/shared/ProjectContext", () => ({ ProjectProvider: ({ child
 
 import AuthenticatedApp from "@/boot/AuthenticatedApp";
 
-const authed = { isLoadingAuth: false, isLoadingPublicSettings: false, authError: null, loginWithPassword: vi.fn() };
+const authed = {
+  isAuthenticated: true,
+  isLoadingAuth: false,
+  isLoggingIn: false,
+  isLoadingPublicSettings: false,
+  authError: null,
+  loginWithPassword: vi.fn(),
+  retryMfaStatus: vi.fn(),
+  logout: vi.fn(),
+  mfaStatusDegraded: false,
+  mfaStatusMessage: null,
+};
 
 describe("AuthenticatedApp — auth + org gate precedence", () => {
   beforeEach(() => {
     authState = { ...authed };
     orgState = { isLoadingOrgs: false, hasOrg: true };
+    window.history.pushState({}, "", "/");
   });
 
   it("shows the loader while auth is resolving", () => {
@@ -43,9 +56,47 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
   });
 
   it("shows the Landing page when there is no session", async () => {
-    authState = { ...authed, authError: { type: "auth_required", message: "Authentication required" } };
+    authState = {
+      ...authed,
+      isAuthenticated: false,
+      authError: { type: "auth_required", message: "Authentication required" },
+    };
     render(<AuthenticatedApp />);
     expect(await screen.findByText("LANDING")).toBeInTheDocument();
+  });
+
+  it("shows a focused desktop connect sign-in on /DesktopConnect when there is no session", async () => {
+    window.history.pushState({}, "", "/DesktopConnect?state=abc");
+    authState = {
+      ...authed,
+      isAuthenticated: false,
+      authError: { type: "auth_required", message: "Authentication required" },
+    };
+    render(<AuthenticatedApp />);
+    expect(await screen.findByText("DESKTOP_CONNECT_SIGNIN")).toBeInTheDocument();
+    expect(screen.queryByText("LANDING")).not.toBeInTheDocument();
+  });
+
+  it("keeps the desktop connect sign-in mounted while credentials are submitting", async () => {
+    window.history.pushState({}, "", "/DesktopConnect?state=abc");
+    authState = {
+      ...authed,
+      isAuthenticated: false,
+      isLoggingIn: true,
+      authError: { type: "auth_required", message: "Authentication required" },
+    };
+    render(<AuthenticatedApp />);
+    expect(await screen.findByText("DESKTOP_CONNECT_SIGNIN")).toBeInTheDocument();
+    expect(screen.queryByText("LOADER")).not.toBeInTheDocument();
+  });
+
+  it("routes authenticated /DesktopConnect users directly to app routes", async () => {
+    window.history.pushState({}, "", "/DesktopConnect?state=abc");
+    authState = { ...authed, isAuthenticated: true, authError: null };
+    render(<AuthenticatedApp />);
+    expect(await screen.findByText("APP_ROUTES")).toBeInTheDocument();
+    expect(screen.queryByText("LOADER")).not.toBeInTheDocument();
+    expect(screen.queryByText("ONBOARDING")).not.toBeInTheDocument();
   });
 
   it("shows the loader while the org is resolving", () => {
@@ -81,6 +132,14 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     orgState = { isLoadingOrgs: false, hasOrg: true };
     render(<AuthenticatedApp />);
     expect(await screen.findByText("MFA_CHALLENGE")).toBeInTheDocument();
+    expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
+  });
+
+  it("blocks app entry when MFA status check is degraded", async () => {
+    authState = { ...authed, mfaStatusDegraded: true, mfaStatusMessage: "retry mfa" };
+    render(<AuthenticatedApp />);
+    expect(await screen.findByText("Verify your sign-in")).toBeInTheDocument();
+    expect(screen.getByText("retry mfa")).toBeInTheDocument();
     expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
   });
 

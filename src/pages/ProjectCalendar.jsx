@@ -17,7 +17,7 @@
  *     lives in localStorage so the user's preferred view sticks.
  *   - Event clicks navigate to the entity's existing list page
  *     (deliberate — we don't rebuild detail drawers; reuse what exists).
- *     For schedule tasks specifically, the existing /Schedule page
+ *     For schedule tasks specifically, the canonical /ScheduleHub page
  *     handles deep-link to a row; other entities share a similar
  *     pattern.
  */
@@ -25,6 +25,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Printer, Download } from "lucide-react";
 
 import { entities } from "@/api/supabaseClient";
@@ -49,6 +50,10 @@ import {
   buildCalendarEvents,
   EVENT_TYPE_GROUPS,
 } from "@/lib/calendarEvents";
+import { applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
+import { buildParentIdSet, isSummaryTask } from "@/lib/schedule/summaryTasks";
+import { computeCycleTaskIdsKey } from "@/components/schedule/scheduleGanttDerive";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import {
   downloadIcs,
   scheduleTaskToEvent,
@@ -192,9 +197,56 @@ export default function ProjectCalendar() {
     staleTime: 60 * 1000,
   });
 
+  // ── Effective dates ───────────────────────────────────────────────
+  // The Calendar is a sibling tab of the Gantt in the same ScheduleHub shell.
+  // It rendered STORED dates while the Gantt rendered cascaded ones, so the same
+  // task sat in a different week two clicks apart (audit §1.2).
+  //
+  // A useMemo, deliberately not a react-query `select`: five observers share the
+  // ["schedule-tasks", projectId] key (useScheduleTasks, Submittals, FieldHub,
+  // CommandCenter, this page) plus FieldToday's optimistic setQueryData writer,
+  // and a memo here cannot perturb what any of them read. It also fails loudly
+  // rather than silently returning nothing.
+  //
+  // Summary rows are SUPPRESSED. Their dates roll up from their children, so a
+  // parent duplicated its children's span as a separate pill — and on a flat
+  // surface with no tree, no indentation and no collapse, MonthView caps at 3
+  // pills per day, so a 60-day phase bar ate a slot in 60 consecutive cells and
+  // pushed the real work behind "+N more". The parentIds branch of isSummaryTask
+  // is what matters here: this page never runs the Gantt's tree builder, so
+  // _hasChildren / _isRolledUpSummary are never set on these rows.
+  const scheduleEffectiveDates = useMemo(
+    () => computeEffectiveDates(scheduleTasks),
+    [scheduleTasks],
+  );
+
+  const calendarScheduleTasks = useMemo(() => {
+    const parentIds = buildParentIdSet(scheduleTasks);
+    return applyEffectiveDates(scheduleTasks, scheduleEffectiveDates)
+      .filter((t) => !isSummaryTask(t, parentIds));
+  }, [scheduleTasks, scheduleEffectiveDates]);
+
+  // Cycle members fall back to their stored dates, so their pills silently stop
+  // being "where the cascade puts it" like every other pill now claims. The
+  // Gantt says this out loud; say it here too. scheduleCascade dedupes its own
+  // console.warn in a module-scoped set, so having visited the Gantt earlier in
+  // the session would otherwise mean no signal anywhere.
+  const cycleTaskIdsKey = useMemo(
+    () => computeCycleTaskIdsKey(scheduleEffectiveDates, calendarScheduleTasks),
+    [scheduleEffectiveDates, calendarScheduleTasks],
+  );
+  useEffect(() => {
+    if (!cycleTaskIdsKey) return;
+    const count = cycleTaskIdsKey.split("|").filter(Boolean).length;
+    toast.warning(
+      `${count} task${count === 1 ? "" : "s"} in a predecessor cycle — showing stored dates`,
+      { description: "Open the task on the Schedule tab and break the loop on its Dependencies tab." },
+    );
+  }, [cycleTaskIdsKey]);
+
   // ── Build the events list (filtered) ──────────────────────────────
   const allEvents = useMemo(() => buildCalendarEvents({
-    scheduleTasks,
+    scheduleTasks: calendarScheduleTasks,
     deliveries,
     rfis,
     submittals,
@@ -204,7 +256,7 @@ export default function ProjectCalendar() {
     dailyLogs,
     project: activeProject,
   }), [
-    scheduleTasks, deliveries, rfis, submittals, changeOrders,
+    calendarScheduleTasks, deliveries, rfis, submittals, changeOrders,
     actionItems, inspections, dailyLogs, activeProject,
   ]);
 
@@ -287,7 +339,17 @@ export default function ProjectCalendar() {
       return d && d >= visibleRange.start && d <= addDays(visibleRange.end, 0);
     };
     const icsEvents = [];
-    scheduleTasks.forEach((t) => {
+    // The SAME rows the grid renders. An .ics that disagreed with the calendar
+    // it was exported from would be a new divergence.
+    //
+    // KNOWN GAP, deferred with the rest of the stored-date surfaces (audit
+    // §1.2): FieldPlan's export still emits STORED dates and mints the same
+    // stable `task-<id>` UID, so importing a field plan after this calendar
+    // overwrites these entries with un-cascaded dates. FieldPlan cannot simply
+    // reuse this memo — its query is date-windowed, so most predecessors are
+    // absent and a cascade over it would under-shift. It needs its own
+    // full-project fetch, alongside fixing what it displays.
+    calendarScheduleTasks.forEach((t) => {
       const e = scheduleTaskToEvent(t, projectNumber);
       if (e && (inRange(e.start) || inRange(e.end))) icsEvents.push(e);
     });
@@ -361,6 +423,14 @@ export default function ProjectCalendar() {
           gap: 14,
         }}
       >
+        {/* The cascade is only as complete as the rows it ran over. This page's
+            read is capped and unpaged, and the shared cache key is primed by
+            queryFns with three different sorts — CommandCenter sorts DESCENDING,
+            so a truncated set drops the EARLIEST rows, i.e. exactly the
+            predecessors, and every successor silently falls back to its stored
+            date. "Absence is not evidence", applied to a truncated cascade. */}
+        <ListTruncationNotice count={scheduleTasks.length} label="schedule tasks" />
+
         <div className="calendar-no-print">
           <CommandBar
             eyebrow={`SteelBuild Pro · ${activeProject?.project_number || "Project"} · Calendar`}

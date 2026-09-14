@@ -14,11 +14,11 @@ import React from "react";
  */
 
 const RESPONSE_COLORS = {
-  "No Exception":        { color: "#10B981", bg: "rgba(16,185,129,0.15)" },
-  "Approved as Noted":   { color: "#84CC16", bg: "rgba(132,204,22,0.15)" },
-  "Revise and Resubmit": { color: "#F97316", bg: "rgba(249,115,22,0.15)" },
-  "Rejected":            { color: "#DC2626", bg: "rgba(220,38,38,0.15)" },
-  "See Comments":        { color: "#2563EB", bg: "rgba(37,99,235,0.15)" },
+  "No Exception":        { color: "var(--status-success)", bg: "var(--success-muted)" },
+  "Approved as Noted":   { color: "var(--status-success-bright)", bg: "color-mix(in srgb, var(--status-success-bright) 15%, transparent)" },
+  "Revise and Resubmit": { color: "var(--status-review)", bg: "var(--status-review-muted)" },
+  "Rejected":            { color: "var(--status-error)", bg: "var(--danger-muted)" },
+  "See Comments":        { color: "var(--status-info)", bg: "var(--info-muted)" },
 };
 const RESPONSE_ABBR = {
   "No Exception": "NE",

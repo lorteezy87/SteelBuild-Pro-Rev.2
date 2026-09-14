@@ -1,8 +1,45 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import {
   compareRfisByNumber, extractRfiSequence,
   loadDensity, loadInsightsCollapsed, buildRfiCounts, filterAndSortRfis, buildProjectNameMap,
+  isClosed, isOverdue,
 } from "../utils";
+
+function localIso(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+describe("isClosed / isOverdue", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("treats Answered, Closed and Void as closed (chk_rfis_status terminal set)", () => {
+    expect(isClosed({ status: "Answered" })).toBe(true);
+    expect(isClosed({ status: "Closed" })).toBe(true);
+    expect(isClosed({ status: "Void" })).toBe(true);
+    expect(isClosed({ status: "Open" })).toBe(false);
+    expect(isClosed({ status: "Under Review" })).toBe(false);
+    expect(isClosed({ status: "Incomplete Response" })).toBe(false);
+  });
+
+  it("is overdue only when date_required is strictly before local today", () => {
+    const now = new Date();
+    const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+    const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+    expect(isOverdue({ status: "Open", date_required: localIso(yesterday) })).toBe(true);
+    expect(isOverdue({ status: "Open", date_required: localIso(now) })).toBe(false);
+    expect(isOverdue({ status: "Open", date_required: localIso(tomorrow) })).toBe(false);
+    expect(isOverdue({ status: "Open", date_required: null })).toBe(false);
+    expect(isOverdue({ status: "Void", date_required: localIso(yesterday) })).toBe(false);
+  });
+
+  it("does not flip an RFI due today to overdue in the afternoon (date-only shim parses as local noon)", () => {
+    vi.useFakeTimers();
+    const afternoon = new Date();
+    afternoon.setHours(16, 30, 0, 0);
+    vi.setSystemTime(afternoon);
+    expect(isOverdue({ status: "Open", date_required: localIso(afternoon) })).toBe(false);
+  });
+});
 
 describe("RFI numeric ordering", () => {
   it("extracts numbers from app-created, imported, and vendor RFI formats", () => {
@@ -82,7 +119,24 @@ describe("buildRfiCounts", () => {
     const c = buildRfiCounts(rfis);
     expect(c).toEqual({
       all: 6, open: 2, review: 1, incomplete: 1, answered: 1, closed: 1, critical: 1, overdue: 1,
+      // Void gained a bucket, and liveOpen/liveClosed roll the per-status
+      // counts up to the open-vs-closed split the register groups on.
+      void: 0, liveOpen: 4, liveClosed: 2,
     });
+  });
+
+  it("keeps the per-status buckets reconciling against the total", () => {
+    const rfis = [
+      { status: "Open" },
+      { status: "Under Review" },
+      { status: "Incomplete Response" },
+      { status: "Answered" },
+      { status: "Closed" },
+      { status: "Void" },
+    ];
+    const c = buildRfiCounts(rfis);
+    expect(c.open + c.review + c.incomplete + c.answered + c.closed + c.void).toBe(c.all);
+    expect(c.liveOpen + c.liveClosed).toBe(c.all);
   });
 });
 

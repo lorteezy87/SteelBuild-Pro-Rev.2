@@ -2,6 +2,9 @@ import { supabase } from "@/lib/supabase";
 import type { PieceRegisterRow } from "./repository";
 import type { LogisticsAction } from "./lifecycle";
 import { unwrapPieceControlRpc } from "./rpcResult";
+import { fetchAllProjectRowsPaged } from "./pagedSelect";
+
+const LOGISTICS_EVENT_PIECE_BATCH_SIZE = 100;
 
 export interface PieceLogisticsEvent {
   id: string;
@@ -23,40 +26,47 @@ export interface LogisticsSnapshot {
   events: PieceLogisticsEvent[];
 }
 
+/**
+ * @param workPackageId
+ *   - `undefined` / omit: all lots in the project
+ *   - `null`: unassigned lots only
+ *   - uuid: lots for that work package
+ */
 export async function fetchLogisticsSnapshot(
   projectId: string,
-  workPackageId?: string,
+  workPackageId?: string | null,
 ): Promise<LogisticsSnapshot> {
   const db = supabase as any;
-  let piecesQuery = db
-    .from("pieces")
-    .select("*")
-    .eq("project_id", projectId)
-    .eq("is_deleted", false)
-    .is("deleted_at", null)
-    .order("normalized_piece_mark")
-    .order("lot_code");
-  if (workPackageId) piecesQuery = piecesQuery.eq("work_package_id", workPackageId);
-
-  const piecesResult = await piecesQuery;
-  if (piecesResult.error) throw piecesResult.error;
-
-  const pieces = (piecesResult.data ?? []) as PieceRegisterRow[];
+  // Paged — the ship/deliver/erect lists silently stopped at 1000 lots.
+  const pieces = await fetchAllProjectRowsPaged<PieceRegisterRow>(db, "pieces", projectId, {
+    orderBy: ["normalized_piece_mark", "lot_code"],
+    build: (query) => {
+      let scoped = query.eq("is_deleted", false).is("deleted_at", null);
+      if (workPackageId === null) scoped = scoped.is("work_package_id", null);
+      else if (workPackageId) scoped = scoped.eq("work_package_id", workPackageId);
+      return scoped;
+    },
+  });
   const pieceIds = pieces.map((piece) => piece.id);
   if (pieceIds.length === 0) return { pieces, events: [] };
 
-  const eventsResult = await db
-    .from("piece_events")
-    .select("*")
-    .eq("project_id", projectId)
-    .in("piece_id", pieceIds)
-    .in("event_type", ["shipped", "delivered", "erected"])
-    .order("created_at", { ascending: false });
-  if (eventsResult.error) throw eventsResult.error;
+  const events: PieceLogisticsEvent[] = [];
+  for (let start = 0; start < pieceIds.length; start += LOGISTICS_EVENT_PIECE_BATCH_SIZE) {
+    const eventsResult = await db
+      .from("piece_events")
+      .select("*")
+      .eq("project_id", projectId)
+      .in("piece_id", pieceIds.slice(start, start + LOGISTICS_EVENT_PIECE_BATCH_SIZE))
+      .in("event_type", ["shipped", "delivered", "erected"])
+      .order("created_at", { ascending: false });
+    if (eventsResult.error) throw eventsResult.error;
+    events.push(...((eventsResult.data ?? []) as PieceLogisticsEvent[]));
+  }
+  events.sort((left, right) => right.created_at.localeCompare(left.created_at));
 
   return {
     pieces,
-    events: (eventsResult.data ?? []) as PieceLogisticsEvent[],
+    events,
   };
 }
 

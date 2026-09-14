@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { entities, functions } from "@/api/supabaseClient";
+import { useMemo, useState } from "react";
+import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -7,6 +8,9 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { batchProcess } from "@/utils/batchProcess";
 import { toast } from "sonner";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { filterAlertsForUser } from "@/lib/userPreferences/alerts";
 
 // Loose Alert shape — the entity client is still untyped (Phase 3). Once the entity
 // boundary is typed, this will be replaced with the generated Database row type.
@@ -24,18 +28,32 @@ export function useAlerts() {
   const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [generating, setGenerating] = useState(false);
+  const userPreferences = useUserPrefs();
 
-  const { data: alerts = [], isLoading, refetch } = useQuery<Alert[]>({
+  const {
+    data: alerts = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<Alert[]>({
     queryKey: ["alerts", projectId],
     queryFn: () =>
       projectId
         ? entities.Alert.filter({ project_id: projectId }, "-created_at")
         : entities.Alert.list("-created_at"),
-    refetchInterval: 60000,
+    // Realtime invalidation below keeps this fresh; the interval is only a
+    // fallback for a dropped channel (was 60s — a full tenant-wide list per
+    // minute while Alerts Center was open).
+    refetchInterval: 5 * 60 * 1000,
     staleTime: 30000,
   });
 
   useRealtimeInvalidation("alerts", projectId, [["alerts", projectId]]);
+  const visibleAlerts = useMemo(
+    () => filterAlertsForUser(alerts, userPreferences),
+    [alerts, userPreferences],
+  );
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
@@ -51,16 +69,12 @@ export function useAlerts() {
   const markRead = (alert: Alert) => {
     updateMut.mutate(
       { id: alert.id, data: { is_read: true } },
-      { onError: (err) => {
-        if (!String(err?.message).includes("column")) {
-          toast.error(`Failed to mark alert as read`);
-        }
-      }}
+      { onError: () => toast.error(`Failed to mark alert as read`) }
     );
   };
 
   const markAllRead = async () => {
-    const unread = alerts.filter((a) => !a.is_read);
+    const unread = visibleAlerts.filter((a) => !a.is_read);
     if (unread.length === 0) return;
     try {
       const { succeeded, failed } = await batchProcess(unread, (a: Alert) =>
@@ -72,42 +86,67 @@ export function useAlerts() {
       } else {
         toast.success(`${succeeded.length} alerts marked as read`);
       }
-    } catch {
-      // is_read column may not exist yet — silently degrade
-      console.warn("[useAlerts] markAllRead failed — is_read column may not exist");
+    } catch (err) {
+      toast.error(`Failed to mark alerts as read: ${toUserErrorMessage(err, "Unknown error")}`);
     }
   };
 
   const dismiss = (alert: Alert) => {
+    // is_dismissed is what AlertsCenter filters and unreadCount check —
+    // writing only dismissed_at left the alert visibly un-dismissed.
     updateMut.mutate(
-      { id: alert.id, data: { dismissed_at: new Date().toISOString() } },
-      { onError: (err) => {
-        if (!String(err?.message).includes("column")) {
-          toast.error(`Failed to dismiss alert`);
-        }
-      }}
+      { id: alert.id, data: { is_dismissed: true, dismissed_at: new Date().toISOString() } },
+      { onError: () => toast.error(`Failed to dismiss alert`) }
     );
   };
 
   const generateAlerts = async () => {
     setGenerating(true);
     try {
-      await functions.invoke("generateAlerts", {});
-      await refetch();
-      toast.success("Alerts refreshed");
+      if (projectId) {
+        // Server-side rule engine (migration 20260819002000): overdue
+        // deliveries, overdue submittals, stalled submittals — scoped to this
+        // project and access-gated by the RPC itself. The same engine runs
+        // daily via pg_cron, so this is a manual "scan now".
+        // Untyped rpc call — generate_project_alerts ships in migration
+        // 20260819002000 and isn't in the generated DB types yet (same
+        // pattern as src/lib/org/repository.ts callRpc).
+        const rpc = supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+        const { data, error } = await rpc("generate_project_alerts", {
+          p_project_id: projectId,
+        });
+        if (error) throw error;
+        await refetch();
+        const created = Number(data) || 0;
+        toast.message(
+          created > 0
+            ? `Scan complete — ${created} new alert${created === 1 ? "" : "s"}`
+            : "Scan complete — no new alerts",
+        );
+      } else {
+        // Portfolio view: the daily server scan covers all projects; here we
+        // just reload the feed.
+        await refetch();
+        toast.message("Alerts refreshed. Select a project to run an on-demand scan.");
+      }
     } catch (err: unknown) {
-      const msg = (err as { message?: string } | undefined)?.message || "Unknown error";
-      toast.error("Failed to generate alerts: " + msg);
+      toast.error(`Failed to refresh alerts: ${toUserErrorMessage(err, "Unknown error")}`);
     } finally {
       setGenerating(false);
     }
   };
 
-  const unreadCount = alerts.filter((a) => !a.is_read && !a.is_dismissed).length;
+  // dismissed_at covers legacy rows dismissed before is_dismissed was written
+  const unreadCount = visibleAlerts.filter((a) => !a.is_read && !a.is_dismissed && !a.dismissed_at).length;
 
   return {
-    alerts,
+    alerts: visibleAlerts,
     isLoading,
+    isError,
+    error,
     refetch,
     generating,
     unreadCount,

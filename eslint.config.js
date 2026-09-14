@@ -53,6 +53,13 @@ const sharedPlugins = {
   "jsx-a11y": pluginJsxA11y,
 };
 
+// Rules for every TypeScript block. The src/ and scripts/ blocks share this one
+// object so tooling code can never be linted more leniently than app code.
+const tsRules = {
+  ...pluginReact.configs.flat.recommended.rules,
+  ...sharedRules,
+};
+
 export default [
   {
     ignores: [
@@ -141,9 +148,32 @@ export default [
       ...sharedPlugins,
       "@typescript-eslint": tseslint.plugin,
     },
-    rules: {
-      ...pluginReact.configs.flat.recommended.rules,
-      ...sharedRules,
+    rules: tsRules,
+  },
+  // ── TypeScript under scripts/ ───────────────────────────────────────────────
+  // Node tooling and its tests. With no block matching them, `eslint .` skipped
+  // every scripts/**/*.ts as "File ignored because no matching configuration
+  // was supplied" and still exited 0. Same parser and rules as the src/ TS
+  // block above; Node globals instead of browser ones.
+  {
+    files: ["scripts/**/*.{ts,mts,cts}"],
+    languageOptions: {
+      parser: tseslint.parser,
+      globals: globals.node,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: "module",
+      },
     },
+    settings: {
+      react: {
+        version: "detect",
+      },
+    },
+    plugins: {
+      ...sharedPlugins,
+      "@typescript-eslint": tseslint.plugin,
+    },
+    rules: tsRules,
   },
 ];

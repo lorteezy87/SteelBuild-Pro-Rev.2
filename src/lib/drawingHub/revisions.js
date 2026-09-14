@@ -85,6 +85,27 @@ export async function ensureCurrentRevision({ drawing, userId }) {
 // created against the new revision.
 // ────────────────────────────────────────────────────────────────────
 
+/**
+ * Pair each source zone with its clone via the clone's `parent_zone_id`
+ * breadcrumb (unique per carry-forward). Throws when a source zone has no
+ * clone — links must never be attached to the wrong zone.
+ */
+export function mapClonedZonesBySource(sourceZones, newZones) {
+  const byParent = new Map();
+  for (const nz of newZones || []) {
+    if (nz?.parent_zone_id) byParent.set(nz.parent_zone_id, nz);
+  }
+  const idMap = new Map();
+  for (const src of sourceZones || []) {
+    const clone = byParent.get(src.id);
+    if (!clone) {
+      throw new Error(`carryZonesForward: cloned zone for source ${src.id} not found in insert result`);
+    }
+    idMap.set(src.id, clone);
+  }
+  return idMap;
+}
+
 export async function carryZonesForward({
   fromRevisionId,
   toRevisionId,
@@ -145,11 +166,10 @@ export async function carryZonesForward({
     .select();
   if (insErr) throw insErr;
 
-  // Map source zone id → new zone (by id) so we can clone links.
-  const idMap = new Map();
-  for (let i = 0; i < sourceZones.length; i++) {
-    idMap.set(sourceZones[i].id, newZones[i]);
-  }
+  // Map source zone id → new zone so we can clone links. Every clone carries
+  // parent_zone_id = its source zone id, so match on that rather than on
+  // array position (PostgREST does not guarantee returned-row order).
+  const idMap = mapClonedZonesBySource(sourceZones, newZones);
 
   let linksCloned = 0;
   if (includeLinks) {
@@ -215,6 +235,10 @@ export async function createNewRevisionAndCarryZones({
   pdfPage = undefined,
   issuedAt = null,
   notes = null,
+  /** Slice 5 — where the revision originated (GC comments, RFI, ASI, …). */
+  revisionSource = null,
+  /** Slice 5 — free-text why this revision was issued. */
+  revisionReason = null,
 }) {
   if (!drawing?.id || !drawing?.project_id) {
     throw new Error("createNewRevisionAndCarryZones: drawing required");
@@ -268,6 +292,8 @@ export async function createNewRevisionAndCarryZones({
       pdf_page:               pdfPage !== undefined ? pdfPage : (drawing.pdf_page ?? null),
       issued_at:              issuedAt || null,
       revision_notes:         notes || null,
+      revision_source:        revisionSource || null,
+      revision_reason:        revisionReason || null,
       created_by:             userId || null,
     })
     .select()

@@ -1,0 +1,84 @@
+# Cloudflare Workers static-assets response headers.
+#
+# THIS FILE IS THE ONLY PLACE the deployed app's response headers are defined.
+# These rules were ported from vercel.json, which has been deleted along with
+# the rest of the dead Vercel setup — there is no second copy to cross-check
+# against, so a header deleted here is simply gone from production with no
+# other signal. scripts/__tests__/deployHeaders.test.ts asserts the ones that
+# matter and records why each is here.
+#
+# Workers serves static assets with a default of
+#   Cache-Control: public, max-age=0, must-revalidate
+# so WITHOUT this file every hashed /assets/ bundle revalidates on every load
+# and the app ships with no security headers at all. Syntax:
+# https://developers.cloudflare.com/workers/static-assets/headers/
+#
+# Netlify reads the same `_headers` format. While the Netlify site is still
+# connected it picks this file up too, which is harmless (identical rules) but
+# worth knowing if you are debugging headers on a Netlify preview.
+
+# ── Security headers (every response) ────────────────────────────────────────
+# CSP stays Report-Only: it reports violations to Sentry without enforcing.
+# Promoting it to an enforcing Content-Security-Policy is a separate, reviewed
+# change — a missed source breaks Stripe, Supabase realtime or the 3D viewer at
+# runtime with no build-time signal.
+#
+# Two script-src entries exist because production was violating the policy on
+# every page load. Report-Only meant nobody noticed; enforcing it as written
+# would have broken both:
+#
+#   'sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg='
+#     The anti-FOUC theme bootstrap inlined in index.html. It has to be inline —
+#     it runs before first paint to set data-theme, and an external file would
+#     reintroduce the flash it exists to prevent — so a hash is the only way to
+#     allow it without 'unsafe-inline'. scripts/__tests__/deployHeaders.test.ts
+#     RECOMPUTES this hash from index.html on every run: edit that script and
+#     the test fails with the new hash to paste in. Do not hand-edit it.
+#
+#   https://static.cloudflareinsights.com  (+ https://cloudflareinsights.com in
+#     connect-src) — Cloudflare Web Analytics. Cloudflare injects this beacon
+#     itself when the feature is on for the zone; nothing in this repo requests
+#     it. The connect-src half is anticipatory: the script was blocked before it
+#     could POST, so that violation was never observed, only implied. If the
+#     analytics are not wanted, the cleaner fix is turning the feature off in
+#     the Cloudflare dashboard and reverting both entries.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: microphone=(), usb=(), serial=(), bluetooth=(), midi=()
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg=' https://js.stripe.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io https://api.stripe.com https://geocoding-api.open-meteo.com https://api.open-meteo.com https://cloudflareinsights.com; worker-src 'self' blob:; frame-src 'self' https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://o4511458803253248.ingest.us.sentry.io/api/4511458819375104/security/?sentry_key=6709c2092ebda9743a803919a79c7b46
+
+# ── Hashed build output ──────────────────────────────────────────────────────
+# Vite fingerprints everything under /assets/, so it is immutable by
+# construction. public/sw.js depends on this: its hashed-asset branch is
+# cache-first precisely because these URLs can never change content.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── web-ifc WebAssembly: deliberately NO rule here ───────────────────────────
+# The old vercel.json pinned Content-Type: application/wasm on /wasm/. Do NOT
+# add that rule back — on Cloudflare it makes things worse, verified against
+# `wrangler dev`:
+#
+#   • Wrangler already derives application/wasm from the .wasm extension when
+#     it uploads the asset, so a REAL /wasm/web-ifc.wasm is correctly typed
+#     with no rule at all.
+#   • A path-pattern rule also applies to the SPA fallback. With "/wasm/*  ->
+#     Content-Type: application/wasm", a request for a /wasm/ path that does
+#     NOT exist returned 200 with index.html in the body labelled
+#     application/wasm — WebAssembly.instantiateStreaming then fails on a
+#     confusing compile error instead of a clean 404.
+#
+# The IFC viewer renders zero geometry with no error on a wrong MIME type, so
+# the failure this rule would cause is exactly the one it looks like it
+# prevents. Leave it out.
+
+# ── Preview URLs must never be indexed ───────────────────────────────────────
+# Cloudflare *.workers.dev preview URLs are PUBLIC by default (the Vercel
+# previews these replaced were auth-walled by the platform). The app still
+# gates data behind Supabase auth, but the shell should not be crawlable.
+# Cloudflare Access is the real fix — see the runbook. This is the backstop.
+https://:version.:subdomain.workers.dev/*
+  X-Robots-Tag: noindex

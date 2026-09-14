@@ -14,7 +14,7 @@
  */
 import { useMemo } from "react";
 import type { ReactNode } from "react";
-import { Settings, ShieldCheck, LayoutDashboard, Palette } from "lucide-react";
+import { Settings, Gauge, LayoutDashboard, Palette, Star, FolderCheck, RefreshCw } from "lucide-react";
 import "@/styles/command.css";
 import { PageHero, KpiStrip, useCommandSkin } from "@/components/command";
 import type { KpiCellDef } from "@/components/command";
@@ -22,7 +22,7 @@ import { photoFor } from "@/config/launcherConfig";
 import {
   buildSettingsSummary,
 } from "./settingsControlCenter.derive";
-import type { SettingsUser, SettingsPrefs } from "./settingsControlCenter.derive";
+import type { SettingsUser, SettingsPrefs, SettingsSyncState } from "./settingsControlCenter.derive";
 
 export interface SettingsControlCenterProps {
   /** The authenticated user (from AuthContext). */
@@ -31,6 +31,8 @@ export interface SettingsControlCenterProps {
   prefs: SettingsPrefs | null | undefined;
   /** Number of visible settings tab sections for this user. */
   visibleSectionCount: number;
+  /** Current status of the centralized preference save pipeline. */
+  syncState?: SettingsSyncState;
   /** The full existing settings body — tabs sidebar + content card — rendered verbatim. */
   children: ReactNode;
 }
@@ -39,13 +41,14 @@ export default function SettingsControlCenter({
   user,
   prefs,
   visibleSectionCount,
+  syncState = "idle",
   children,
 }: SettingsControlCenterProps) {
   useCommandSkin();
 
   const s = useMemo(
-    () => buildSettingsSummary(user, prefs, visibleSectionCount),
-    [user, prefs, visibleSectionCount],
+    () => buildSettingsSummary(user, prefs, visibleSectionCount, syncState),
+    [user, prefs, visibleSectionCount, syncState],
   );
 
   // Hero chips: identity context
@@ -54,35 +57,19 @@ export default function SettingsControlCenter({
     ...(s.isAdmin ? [{ label: "Workspace Admin", tone: "good" as const }] : []),
   ];
 
-  // KPI cells: only real facts, only when a source exists
+  // Personalization summary: every value is derived from a persisted preference.
   const kpiCells: KpiCellDef[] = [
-    {
-      label: "Access Level",
-      value: s.roleLabel,
-      sublabel: s.isAdmin ? "full workspace access" : "project-scoped access",
-      tone: s.isAdmin ? "info" : "neutral",
-      Icon: ShieldCheck,
-    },
-    {
-      label: "Settings Sections",
-      value: s.visibleSectionCount,
-      sublabel: "visible to your role",
-      tone: "neutral",
-      Icon: LayoutDashboard,
-    },
-    // Pinned modules: only show when the pref has been explicitly set
-    ...(s.pinnedModuleCount !== null
+    ...(s.presetLabel !== null
       ? [
           {
-            label: "Pinned Modules",
-            value: s.pinnedModuleCount,
-            sublabel: "on your dashboard",
-            tone: "neutral" as const,
+            label: "Workspace Preset",
+            value: s.presetLabel,
+            sublabel: "personal workflow",
+            tone: "info" as const,
             Icon: LayoutDashboard,
           },
         ]
       : []),
-    // Theme: only show when a value is stored
     ...(s.themeLabel !== null
       ? [
           {
@@ -94,6 +81,30 @@ export default function SettingsControlCenter({
           },
         ]
       : []),
+    ...(s.densityLabel !== null
+      ? [{ label: "Table Density", value: s.densityLabel, sublabel: "workspace-wide", tone: "neutral" as const, Icon: Gauge }]
+      : []),
+    ...(s.pinnedModuleCount !== null || s.favoriteProjectCount !== null
+      ? [{
+            label: "Favorite Projects",
+            value: `${s.favoriteProjectCount ?? 0} selected`,
+          sublabel: `${s.pinnedModuleCount ?? 0} pinned modules`,
+          tone: "neutral" as const,
+          Icon: Star,
+        }]
+      : []),
+    ...(s.defaultProjectLabel !== null
+      ? [{ label: "Default Project", value: s.defaultProjectLabel, sublabel: "for project tools", tone: "neutral" as const, Icon: FolderCheck }]
+      : []),
+    ...(s.syncLabel !== null
+      ? [{
+          label: "Preference Sync",
+          value: s.syncLabel,
+          sublabel: s.syncLabel === "Needs attention" ? "last save failed" : "saved to your account",
+          tone: s.syncLabel === "Needs attention" ? "danger" as const : "good" as const,
+          Icon: RefreshCw,
+        }]
+      : []),
   ];
 
   const displayName = user?.full_name || user?.email || "Signed in";
@@ -103,7 +114,7 @@ export default function SettingsControlCenter({
       <PageHero
         Icon={Settings}
         title="Settings"
-        subtitle="Configure system preferences, project settings, notifications, and access."
+        subtitle="Personalize how SteelBuild Pro looks, behaves, and prioritizes your work."
         chips={chips}
         photoSrc={photoFor("Settings") ?? undefined}
         stats={[

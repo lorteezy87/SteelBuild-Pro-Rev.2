@@ -26,7 +26,11 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { computeRevisedContractValue, preferManualActual } from "@/services/costRollup";
 import { COST_CODES } from "@/components/shared/costCodes";
+import { formatCurrencyWhole as formatCurrency } from "@/components/shared/formatters";
+import { sovScheduledTotal } from "@/pages/dashboard/projectMetrics";
 import { calcEVM } from "@/utils/projectKpis";
+import { logActivity } from "@/services/auditLogger";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 export type CostCode = RowWithAliases<'cost_codes'>;
 export type Expense = RowWithAliases<'expenses'>;
@@ -49,10 +53,9 @@ export function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function formatCurrency(value: unknown): string {
-  const n = safeNumber(value);
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
+// Preserve the hook's public named export while keeping formatting logic in
+// the canonical shared module.
+export { formatCurrency };
 
 export function formatSigned(value: unknown): string {
   if (value == null) return "—";
@@ -152,8 +155,11 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   );
 
   // ── Derived: approved COs ───────────────────────────────────────────
+  // Trimmed comparison matches computeRevisedContractValue — real data has
+  // carried whitespace-padded statuses, and summary.contractValue already
+  // trims, so exact-matching here would let the two KPIs disagree.
   const approvedCOs = useMemo(
-    () => changeOrders.filter((co) => co.status === "Approved"),
+    () => changeOrders.filter((co) => String(co.status ?? "").trim() === "Approved"),
     [changeOrders]
   );
 
@@ -222,7 +228,10 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   // ── Derived: project-level summary ──────────────────────────────────
   const summary = useMemo<FinancialSummary>(() => {
     const contractValue = computeRevisedContractValue(project, changeOrders);
-    const sovTotal = sovItems.reduce((s, item) => s + safeNumber(item.scheduled_value), 0);
+    // sov_items holds one row per (line item × application × status), so a
+    // raw-row sum overcounts the SOV total ~2-3× on multi-application
+    // projects and falsely trips the "SOV ≠ contract" review flag.
+    const sovTotal = sovScheduledTotal(sovItems);
     const revisedBudget = costCodeRows.reduce((s, r) => s + r.revised_budget, 0);
     const actual = costCodeRows.reduce((s, r) => s + r.actual_cost, 0);
     const committed = costCodeRows.reduce((s, r) => s + r.committed_cost, 0);
@@ -297,7 +306,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
 
   // ── KPI 1: Change Order Impact ─────────────────────────────────────
   const changeOrderImpact = useMemo(() => {
-    const approved = changeOrders.filter((co) => co.status === "Approved");
+    const approved = changeOrders.filter((co) => String(co.status ?? "").trim() === "Approved");
     const pending  = changeOrders.filter((co) => ["Submitted", "Under Review"].includes(co.status as string));
     const rejected = changeOrders.filter((co) => ["Rejected", "Void"].includes(co.status as string));
 
@@ -573,11 +582,15 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       if (existing) throw new Error(`Cost code ${data.cost_code_number} already exists in this project.`);
       return await entities.CostCode.create(data as Insert<'cost_codes'>);
     },
-    onSuccess: async () => {
+    onSuccess: async (created) => {
       await invalidateEntities(qc, ["cost_code"], projectId);
+      logActivity("create", "cost_code", created, {
+        projectId: created?.project_id || projectId,
+        projectName: created?.project_name,
+      });
       toast.success("Cost code created");
     },
-    onError: (err) => toast.error(`Failed to create cost code: ${err.message}`),
+    onError: (err) => toast.error(`Failed to create cost code: ${toUserErrorMessage(err)}`),
   });
 
   type CostCodeUpdate = { id: string } & Record<string, unknown>;
@@ -586,11 +599,15 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       if (!id) throw new Error("Update requires an id.");
       return await entities.CostCode.update(id, data as Update<'cost_codes'>);
     },
-    onSuccess: async () => {
+    onSuccess: async (updated) => {
       await invalidateEntities(qc, ["cost_code"], projectId);
+      logActivity("update", "cost_code", updated, {
+        projectId: updated?.project_id || projectId,
+        projectName: updated?.project_name,
+      });
       toast.success("Cost code updated");
     },
-    onError: (err) => toast.error(`Failed to update cost code: ${err.message}`),
+    onError: (err) => toast.error(`Failed to update cost code: ${toUserErrorMessage(err)}`),
   });
 
   const costCodeDeleteMut = useMutation<string, Error, string>({
@@ -599,11 +616,15 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       await entities.CostCode.delete(id);
       return id;
     },
-    onSuccess: async () => {
+    onSuccess: async (id) => {
       await invalidateEntities(qc, ["cost_code"], projectId);
-      toast.success("Cost code deleted");
+      logActivity("delete", "cost_code", { id, cost_code_number: id }, {
+        projectId,
+        description: "Archived cost code",
+      });
+      toast.success("Cost code archived");
     },
-    onError: (err) => toast.error(`Failed to delete cost code: ${err.message}`),
+    onError: (err) => toast.error(`Failed to archive cost code: ${toUserErrorMessage(err)}`),
   });
 
   return {

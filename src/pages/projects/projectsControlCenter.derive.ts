@@ -9,6 +9,9 @@ import {
   calcDaysToDeadline,
   calcRfiHealth,
 } from "@/utils/projectKpis";
+import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import type { OperationalHealthResult } from "@/lib/projectHealth";
+import { localToday } from "@/utils/dates";
 
 // ──────────────────────────────────────────────────────────────────
 // Types (mirror what Projects.jsx actually reads from the DB row)
@@ -59,6 +62,12 @@ export interface ChangeOrderRecord {
   [key: string]: unknown;
 }
 
+export interface ScheduleTaskRecord {
+  id?: string;
+  project_id?: string | null;
+  [key: string]: unknown;
+}
+
 // ──────────────────────────────────────────────────────────────────
 // KPI summary (portfolio-level, active projects only — no on-hold)
 // ──────────────────────────────────────────────────────────────────
@@ -100,6 +109,13 @@ export interface RecentlyUpdatedEntry {
 
 export interface ProjectsSummary {
   kpis: ProjectsKpiSummary;
+  healthByProjectId: Record<string, OperationalHealthResult>;
+  /**
+   * Effective % complete per project id (override, else WP progress). The
+   * register column previously had no per-row source and rendered "—" for
+   * every project without a manual override.
+   */
+  pctCompleteByProjectId: Record<string, number>;
   atRiskQueue: AtRiskEntry[];
   closingSoonQueue: ClosingSoonEntry[];
   recentlyUpdatedQueue: RecentlyUpdatedEntry[];
@@ -127,26 +143,68 @@ export function buildProjectsSummary(
   projects: ProjectRecord[],
   workPackages: WorkPackageRecord[] = [],
   rfis: RfiRecord[] = [],
-  changeOrders: ChangeOrderRecord[] = []
+  changeOrders: ChangeOrderRecord[] = [],
+  scheduleTasks: ScheduleTaskRecord[] = [],
+  todayIso: string = localToday(),
+  evidence: { rfiEvidenceLoaded: boolean; scheduleEvidenceLoaded: boolean } = {
+    rfiEvidenceLoaded: true,
+    scheduleEvidenceLoaded: true,
+  },
 ): ProjectsSummary {
   // Filter child entities to those within the visible project set
   const projectIds = new Set(projects.map((p) => p.id));
   const visibleWPs = workPackages.filter((w) => w.project_id && projectIds.has(w.project_id));
   const visibleRfis = rfis.filter((r) => r.project_id && projectIds.has(r.project_id));
   const visibleCOs = changeOrders.filter((c) => c.project_id && projectIds.has(c.project_id));
+  const visibleTasks = scheduleTasks.filter(
+    (task) => task.project_id && projectIds.has(task.project_id),
+  );
+  const healthByProjectId = buildOperationalHealthIndex(
+    projects,
+    visibleRfis,
+    visibleTasks,
+    todayIso,
+    evidence,
+  );
 
-  // KPI rollup excludes on-hold projects (same rule as classic page)
-  const activeProjects = projects.filter((p) => !p.on_hold);
+  const nonHoldProjects = projects.filter((p) => !p.on_hold);
+  const isComplete = (project: ProjectRecord) => {
+    const projectWPs = visibleWPs.filter((wp) => wp.project_id === project.id);
+    const lifecycle = String(project.status || project.phase || "").toLowerCase();
+    return (
+      lifecycle === "complete" ||
+      lifecycle === "completed" ||
+      lifecycle === "closeout" ||
+      effectivePct(project, projectWPs) >= 100
+    );
+  };
+  /**
+   * Genuinely finished — closed lifecycle or 100% scope. Unlike `isComplete`
+   * this does NOT treat the Closeout phase as finished, so a job still being
+   * closed out stays visible to the Closing Soon panel.
+   */
+  const isFinished = (project: ProjectRecord) => {
+    const projectWPs = visibleWPs.filter((wp) => wp.project_id === project.id);
+    const lifecycle = String(project.status || project.phase || "").toLowerCase();
+    return (
+      lifecycle === "complete" ||
+      lifecycle === "completed" ||
+      effectivePct(project, projectWPs) >= 100
+    );
+  };
+  const activeProjects = nonHoldProjects.filter((project) => !isComplete(project));
   const activeIds = new Set(activeProjects.map((p) => p.id));
   const kpiRfis = visibleRfis.filter((r) => r.project_id && activeIds.has(r.project_id));
   const kpiCOs  = visibleCOs.filter((c) => c.project_id && activeIds.has(c.project_id));
 
-  const atRiskProjects = activeProjects.filter((p) => p.health_status === "At Risk");
-  const onHoldCount    = projects.length - activeProjects.length;
-  const totalVal       = activeProjects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
+  const atRiskProjects = activeProjects.filter(
+    (project) => healthByProjectId[project.id]?.label === "At Risk",
+  );
+  const onHoldCount    = projects.filter((project) => project.on_hold).length;
+  const totalVal       = nonHoldProjects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
 
   // Average % complete over active, non-closeout projects
-  const progressable = activeProjects.filter((p) => p.phase !== "Closeout");
+  const progressable = activeProjects;
   const avgPctComplete = progressable.length
     ? Math.round(
         progressable.reduce((sum, p) => {
@@ -166,7 +224,7 @@ export function buildProjectsSummary(
 
   const kpis: ProjectsKpiSummary = {
     totalProjects: projects.length,
-    activeProjects: activeProjects.filter((p) => p.phase !== "Closeout").length,
+    activeProjects: activeProjects.length,
     atRisk: atRiskProjects.length,
     onHold: onHoldCount,
     totalContractValue: totalVal,
@@ -196,14 +254,24 @@ export function buildProjectsSummary(
       return { project: p, openRfis: openCount, overdueRfis: overdueCount, daysLeft, isOverdue };
     });
 
-  // ── Panel 2: Closing Soon (active, not closeout, target date present) ──
+  // ── Panel 2: Closing Soon (≤90 days out) ─────────────────────────────────
+  // Scoped to non-hold, not-yet-complete projects — NOT `activeProjects`,
+  // which excludes the Closeout phase. A job in closeout with a target date two
+  // weeks away is precisely what "Closing Soon" is for; excluding it made the
+  // panel report "none within 90 days" while a project was 14 days out.
+  // Falls back to forecast_completion_date when no target date is set.
   const now = Date.now();
-  const closingSoonQueue: ClosingSoonEntry[] = activeProjects
-    .filter((p) => p.phase !== "Closeout" && p.target_completion_date)
-    .map((p) => {
-      const daysLeft = Math.ceil(
-        (new Date(p.target_completion_date!).getTime() - now) / 86400000
-      );
+  const closingSoonQueue: ClosingSoonEntry[] = nonHoldProjects
+    .filter((p) => !isFinished(p))
+    .map((p) => ({
+      p,
+      // forecast_completion_date isn't a declared field on ProjectRecord, so it
+      // arrives through the index signature as unknown — normalise to a string.
+      dateStr: String(p.target_completion_date || p.forecast_completion_date || ""),
+    }))
+    .filter((e) => e.dateStr !== "")
+    .map(({ p, dateStr }) => {
+      const daysLeft = Math.ceil((new Date(dateStr).getTime() - now) / 86400000);
       const pWPs = visibleWPs.filter((w) => w.project_id === p.id);
       return { project: p, daysLeft, pctComplete: effectivePct(p, pWPs) };
     })
@@ -226,5 +294,20 @@ export function buildProjectsSummary(
       return { project: p, pctComplete: effectivePct(p, pWPs), updatedAt: p.updated_at ?? null };
     });
 
-  return { kpis, atRiskQueue, closingSoonQueue, recentlyUpdatedQueue };
+  const pctCompleteByProjectId: Record<string, number> = {};
+  for (const p of projects) {
+    pctCompleteByProjectId[p.id] = effectivePct(
+      p,
+      visibleWPs.filter((w) => w.project_id === p.id),
+    );
+  }
+
+  return {
+    kpis,
+    healthByProjectId,
+    pctCompleteByProjectId,
+    atRiskQueue,
+    closingSoonQueue,
+    recentlyUpdatedQueue,
+  };
 }

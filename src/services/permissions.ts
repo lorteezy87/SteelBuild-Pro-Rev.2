@@ -67,6 +67,8 @@ const ENTITY_OVERRIDES: Record<string, AppRole> = {
   "rfi:edit":             "field",
   "drawing:create":       "pm",
   "drawing:delete":       "pm",
+  // drawing_holds RLS floor: user_has_project_role_at_least(project_id, 'field').
+  "drawing:hold":         "field",
   "change_order:approve": "pm",
   "change_order:void":    "admin",
   // budget_hour_items RLS: INSERT/UPDATE/DELETE = user_has_project_role_at_least(project_id,'pm').
@@ -75,6 +77,23 @@ const ENTITY_OVERRIDES: Record<string, AppRole> = {
   "budget_hour_item:create": "pm",
   "budget_hour_item:edit":   "pm",
   "budget_hour_item:delete": "pm",
+  "production_note:create":  "field",
+  "production_note:edit":    "field",
+  "production_note:delete":  "field",
+  "note_folder:create":      "field",
+  "note_folder:edit":        "field",
+  "note_folder:delete":      "pm",
+  "note_folder_link:edit":   "pm",
+  // Detailing Control Center inline edits (owner / due date / detailing state /
+  // readiness flags) write drawing_sets, drawings and submittals. All three RLS
+  // UPDATE policies are user_has_project_role_at_least(project_id,'field'), so
+  // the entity-agnostic "edit" floor of pm is STRICTER than the database and
+  // would wrongly hide these from field users. Mirror the DB instead.
+  // (submittals additionally requires pm to set 'Released for Fabrication' —
+  // that transition is not one of these inline controls.)
+  "drawing_set:edit":        "field",
+  "drawing:edit":            "field",
+  "submittal:edit":          "field",
 };
 
 // ─── Pure permission check ──────────────────────────────────────────────

@@ -22,7 +22,7 @@ function makeProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
     name: "Test Project",
     project_number: "24001",
     phase: "Fabrication",
-    status: "Active",
+    on_hold: false,
     original_contract_value: 1_000_000,
     target_completion_date: null,
     ...overrides,
@@ -77,14 +77,44 @@ describe("buildPortfolioSummary – KPIs", () => {
     expect(kpis.totalContractValue).toBe(600_000);
   });
 
-  it("counts Active projects as active", () => {
+  it("counts projects as active unless on hold or in Closeout (projects has no status column)", () => {
     const projects = [
-      makeProject({ id: "p1", status: "Active" }),
-      makeProject({ id: "p2", status: "Complete" }),
-      makeProject({ id: "p3", status: null }), // no status → counted as active
+      makeProject({ id: "p1", on_hold: false }),
+      makeProject({ id: "p2", on_hold: true }),
+      makeProject({ id: "p3", on_hold: undefined }), // flag absent → active
+      makeProject({ id: "p4", phase: "Closeout" }),
+      makeProject({ id: "p5", status: "Complete" }), // stray non-column is ignored
     ];
     const { kpis } = buildPortfolioSummary(projects, emptyRelated);
-    expect(kpis.activeProjects).toBe(2); // p1 + p3
+    expect(kpis.activeProjects).toBe(3); // p1 + p3 + p5
+  });
+
+  it("flags an on-hold project via the on_hold column, not a status string", () => {
+    const [held] = buildPortfolioSummary([makeProject({ id: "held", on_hold: true })], emptyRelated).allRows;
+    const [live] = buildPortfolioSummary([makeProject({ id: "live", status: "On Hold" })], emptyRelated).allRows;
+    expect(held.reasons.some((r) => /hold/i.test(r))).toBe(true);
+    expect(live.reasons.some((r) => /hold/i.test(r))).toBe(false);
+  });
+
+  it("does not count a 100 percent project as active or in active averages", () => {
+    const projects = [
+      makeProject({ id: "done" }),
+      makeProject({ id: "live" }),
+    ];
+    const related: PortfolioRelated = {
+      ...emptyRelated,
+      workPackages: [
+        { project_id: "done", status: "Complete" },
+        { project_id: "live", status: "Complete" },
+        { project_id: "live", status: "Complete" },
+        { project_id: "live", status: "In Progress" },
+        { project_id: "live", status: "Not Started" },
+        { project_id: "live", status: "Not Started" },
+      ],
+    };
+    const { kpis } = buildPortfolioSummary(projects, related);
+    expect(kpis.activeProjects).toBe(1);
+    expect(kpis.avgPctComplete).toBe(40);
   });
 
   it("computes avgPctComplete from work-package counts", () => {
@@ -160,9 +190,10 @@ describe("buildPortfolioSummary – health scoring", () => {
       rfis: [{ project_id: "p1", status: "Open", date_required: "2020-01-01", priority: "Low" }],
     };
     const { allRows } = buildPortfolioSummary(projects, related);
-    // baseline 92 − 9 for the single overdue RFI = 83 (still On Track, ≥ 76).
+    // Raw scoring remains 83, but canonical operational health prevents On Track.
     expect(allRows[0].score).toBe(83);
     expect(allRows[0].overdueRfis).toBe(1);
+    expect(allRows[0].health).toBe("Watch");
   });
 
   it("applies overdue action deductions", () => {

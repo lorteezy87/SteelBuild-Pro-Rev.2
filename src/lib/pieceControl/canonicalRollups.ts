@@ -1,22 +1,20 @@
 import { pieceTons } from "./tonnage";
+import {
+  PIECE_LIFECYCLE_STATUSES,
+  type PieceLifecycleStatus,
+} from "./types";
 import type {
   StationCompletion,
   StationConfiguration,
 } from "./stationProgress";
 
-export const CANONICAL_LIFECYCLES = [
-  "not_started",
-  "in_fabrication",
-  "fabricated",
-  "shipped",
-  "delivered",
-  "erected",
-] as const;
+export const CANONICAL_LIFECYCLES = PIECE_LIFECYCLE_STATUSES;
 
-export type CanonicalLifecycle = (typeof CANONICAL_LIFECYCLES)[number];
+export type CanonicalLifecycle = PieceLifecycleStatus;
 export type DerivedWorkPackageStatus =
   | "No Canonical Scope"
   | "Ready for Release"
+  | "Released"
   | "In Fabrication"
   | "Fabrication Complete"
   | "Shipping"
@@ -39,6 +37,14 @@ export interface CanonicalRollupPiece {
   is_deleted: boolean;
   deleted_at: string | null;
 }
+
+export type LeafSelectablePiece = {
+  id: string;
+  parent_piece_id: string | null;
+  is_container?: boolean;
+  is_deleted?: boolean;
+  deleted_at: string | null;
+};
 
 export interface CanonicalWorkPackage {
   id: string;
@@ -70,7 +76,7 @@ export interface CanonicalWorkPackageRollup extends CanonicalPieceRollup {
   plannedShipDate: string | null;
 }
 
-export function selectActionableLeafPieces<T extends CanonicalRollupPiece>(
+export function selectActionableLeafPieces<T extends LeafSelectablePiece>(
   pieces: T[] | null | undefined,
 ): T[] {
   const active = (pieces ?? []).filter(
@@ -150,6 +156,14 @@ export function deriveWorkPackageStatus(
     )
   ) {
     return "In Fabrication";
+  }
+  if (
+    statuses.some((status) => status === "released") &&
+    statuses.every(
+      (status) => status === "not_started" || status === "released",
+    )
+  ) {
+    return "Released";
   }
   return "Ready for Release";
 }
@@ -245,4 +259,3 @@ export function rollupCanonicalWorkPackages(
       };
     });
 }
-

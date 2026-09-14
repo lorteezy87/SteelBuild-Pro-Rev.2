@@ -1,0 +1,111 @@
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message.trim();
+  if (typeof error === "string") return error.trim();
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    return typeof message === "string" ? message.trim() : "";
+  }
+  return "";
+}
+
+export function presentPieceControlError(
+  error: unknown,
+  fallback: string,
+): string {
+  const message = errorMessage(error);
+  if (!message) return fallback;
+  if (/^PGRST\d+$/i.test(message)) return fallback;
+
+  if (/CANONICAL_RELEASE_NO_SCOPE/i.test(message)) {
+    return "Fabrication release requires active pieces assigned to this work package.";
+  }
+  if (/CANONICAL_RELEASE_ALREADY_EXISTS/i.test(message)) {
+    return "This work package is already released for fabrication.";
+  }
+  if (/CANONICAL_RELEASE_BLOCKED/i.test(message)) {
+    return "Fabrication release checks are incomplete. Add an exception reason to continue.";
+  }
+  if (/Pilot transition blocked/i.test(message)) {
+    return "Pilot workflow is blocked. Review the readiness checks and try again.";
+  }
+  if (/Live transition blocked/i.test(message)) {
+    return "Live workflow is blocked. Review the readiness checks and try again.";
+  }
+  if (/Unsafe Piece Control transition|Invalid Piece Control mode/i.test(message)) {
+    return "This Piece Register workflow change is not allowed.";
+  }
+  if (/canonical logistics transition/i.test(message)) {
+    return "The selected pieces are not ready for this logistics step.";
+  }
+  if (/active canonical release before production can advance/i.test(message)) {
+    return "Release this work package for fabrication before recording production.";
+  }
+  if (/Piece control is disabled/i.test(message)) {
+    return "Set up the Piece Register before using this action.";
+  }
+  if (/Piece import batch not found/i.test(message)) {
+    return "This import batch is no longer available. Refresh and try again.";
+  }
+  if (/Piece import batch must be approved before apply/i.test(message)) {
+    return "Approve this import batch before applying it.";
+  }
+  // Postgres 22P05: U+0000 in a json/jsonb/text value (Sentry JAVASCRIPT-REACT-2C).
+  if (/unsupported Unicode escape sequence|22P05/i.test(message)) {
+    return "This data contains a null character the database can't store. If it came from a file, re-save it as CSV UTF-8 and import it again.";
+  }
+  // archive_piece_lots guards (Sentry JAVASCRIPT-REACT-2D). The register
+  // pre-excludes what it can see; these cover server-only checks and races.
+  if (/Held or production-started pieces cannot be archived/i.test(message)) {
+    return "Held or production-started pieces can't be archived. Clear the hold or deselect those pieces, then try again.";
+  }
+  if (/Split piece lots cannot be archived/i.test(message)) {
+    return "Split piece lots can't be archived. Deselect the split lots, then try again.";
+  }
+  if (/Pieces with production history cannot be archived/i.test(message)) {
+    return "Pieces with recorded production history can't be archived. Deselect them, then try again.";
+  }
+  if (/canonically released work package cannot be archived/i.test(message)) {
+    return "Pieces in a work package released for fabrication can't be archived. Deselect them, then try again.";
+  }
+  if (/must be active and belong to the same project/i.test(message)) {
+    return "Some selected pieces are no longer active in this project. Refresh the register and try again.";
+  }
+  if (/Not authorized|permission denied|42501/i.test(message)) {
+    return "You do not have permission to complete this Piece Register action.";
+  }
+
+  // Schema / migration lag — keep the table/function tag so operators can act.
+  if (
+    /does not exist|schema cache|Could not find the table|Could not find the function|column .* does not exist/i.test(
+      message,
+    )
+  ) {
+    if (/link_model_elements_to_pieces/i.test(message)) {
+      return "3D mark linking is unavailable until Piece Control migrations are applied (link_model_elements_to_pieces).";
+    }
+    const tableMatch = message.match(/\[([a-z0-9_]+)\]/i);
+    const table = tableMatch?.[1];
+    if (table === "pieces" || table === "work_packages") {
+      return table === "pieces"
+        ? "Piece data is unavailable. Confirm Piece Control migrations are applied for this project."
+        : "Work packages could not be loaded. Confirm you still have access to this project.";
+    }
+    return table
+      ? `Piece relationships partially blocked (${table} unavailable). Refresh after migrations, or continue if pieces still list.`
+      : "Piece relationships could not be loaded because a required database object is missing. Apply pending Piece Control migrations.";
+  }
+
+  // Tagged repository errors: prefer a short operator-facing form.
+  const tagged = message.match(/^\[([a-z0-9_]+)\]\s*(.*)$/i);
+  if (tagged) {
+    const [, table, detail] = tagged;
+    if (/JWT|session|not authenticated|login/i.test(detail)) {
+      return "Your session expired. Sign in again and reopen Piece Register.";
+    }
+    if (table === "pieces" || table === "work_packages") {
+      return `${fallback} (${table}: ${detail.slice(0, 120)})`;
+    }
+  }
+
+  return fallback;
+}

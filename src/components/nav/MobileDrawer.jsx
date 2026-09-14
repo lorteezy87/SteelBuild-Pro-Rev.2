@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { BrandLogo } from "./BrandLogo";
 
 export default function MobileDrawer({ open, onClose, onNavigate, currentPageName }) {
-  const ref = useRef(null);
+  const ref = useFocusTrap(open);
   const [mobileCollapsed, setMobileCollapsed] = useState(loadSidebarState);
+  const { isPageVisible } = useModuleAccess();
 
   const toggleGroup = (label) => {
     setMobileCollapsed((prev) => {
@@ -34,7 +37,7 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
       {open && <div style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.82)",
+        background: "color-mix(in srgb, var(--sbd-bg-base) 82%, transparent)",
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
         zIndex: 900,
@@ -46,12 +49,14 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
         aria-modal="true"
         aria-label="Mobile navigation"
         aria-hidden={!open}
+        {...(!open ? { inert: "" } : {})}
         style={{
         position: "fixed", top: 0, left: 0, bottom: 0,
         width: "min(360px, 92vw)",
         zIndex: 950,
         transform: open ? "translateX(0)" : "translateX(-100%)",
-        transition: "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+        visibility: open ? "visible" : "hidden",
+        transition: `transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s ${open ? "0s" : "0.25s"}`,
         overflowY: "auto",
         background: "var(--bg-sidebar)",
         display: "flex", flexDirection: "column",
@@ -90,13 +95,20 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
           </button>
         </div>
         <div style={{ padding: "4px 0 16px" }}>
-          {SIDEBAR_GROUPS.map((group, groupIdx) => {
+          {SIDEBAR_GROUPS
+            .map((group) => ({ ...group, items: group.items.filter((it) => isPageVisible(it.page)) }))
+            .filter((group) => group.items.length > 0)
+            .map((group, groupIdx) => {
             const isCollapsed = group.collapsible && mobileCollapsed[group.label];
+            const GroupHeading = group.collapsible ? "button" : "div";
             return (
               <div key={group.label} style={{ marginTop: groupIdx === 0 ? 0 : 8 }}>
-                <div
+                <GroupHeading
+                  type={group.collapsible ? "button" : undefined}
+                  aria-expanded={group.collapsible ? !isCollapsed : undefined}
                   onClick={group.collapsible ? () => toggleGroup(group.label) : undefined}
                   style={{
+                    width: "100%", border: "none", background: "transparent", textAlign: "left",
                     padding: "8px 16px 4px",
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                     cursor: group.collapsible ? "pointer" : "default", userSelect: "none",
@@ -113,8 +125,8 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
                       {isCollapsed ? "\u25B8" : "\u25BE"}
                     </span>
                   )}
-                </div>
-                <div style={{ display: isCollapsed ? "none" : "block" }}>
+                </GroupHeading>
+                <div aria-hidden={Boolean(isCollapsed)} style={{ display: isCollapsed ? "none" : "block" }}>
                   {group.items.map((item) => {
                     const isActive = item.page === currentPageName;
                     return (

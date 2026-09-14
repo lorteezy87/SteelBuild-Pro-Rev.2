@@ -83,26 +83,28 @@ describe("bulkCreateWithFallback", () => {
 
   it("returns the bulk-created rows on the happy path (no per-row creates)", async () => {
     const entity = makeEntity();
-    const rows = await bulkCreateWithFallback(entity, [{ key: "a" }, { key: "b" }]);
+    const { created, skipped } = await bulkCreateWithFallback(entity, [{ key: "a" }, { key: "b" }]);
     expect(entity.bulkCreate).toHaveBeenCalledTimes(1);
     expect(entity.create).not.toHaveBeenCalled();
-    expect(rows).toHaveLength(2);
+    expect(created).toHaveLength(2);
+    expect(skipped).toBe(0);
   });
 
   it("falls back to per-row creates and SKIPS duplicates without throwing or aborting the batch", async () => {
     const entity = makeEntity({ bulkFails: true, failOn: ["dup1", "dup2"] });
-    const rows = await bulkCreateWithFallback(entity, [
+    const { created, skipped } = await bulkCreateWithFallback(entity, [
       { key: "ok1" }, { key: "dup1" }, { key: "ok2" }, { key: "dup2" },
     ]);
     // Every row attempted (no abort on the first duplicate), valid rows kept,
     // duplicates skipped — and crucially, no unhandled rejection.
     expect(entity.create).toHaveBeenCalledTimes(4);
-    expect(rows.map((r) => r.key)).toEqual(["ok1", "ok2"]);
+    expect(created.map((r) => r.key)).toEqual(["ok1", "ok2"]);
+    expect(skipped).toBe(2);
   });
 
-  it("returns [] for an empty list without touching the entity", async () => {
+  it("returns empty created/skipped for an empty list without touching the entity", async () => {
     const entity = makeEntity();
-    expect(await bulkCreateWithFallback(entity, [])).toEqual([]);
+    expect(await bulkCreateWithFallback(entity, [])).toEqual({ created: [], skipped: 0 });
     expect(entity.bulkCreate).not.toHaveBeenCalled();
   });
 });

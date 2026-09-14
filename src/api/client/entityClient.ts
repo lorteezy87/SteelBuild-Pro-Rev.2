@@ -18,6 +18,7 @@ import {
   projectScopedSelect,
 } from './softDelete';
 import type { EntityClient, RowWithAliases, TableName } from './supabaseTypes';
+import { emitProjectUpdated } from '@/services/projectUpdateEvents';
 
 // ─── Entity factory ───────────────────────────────────────────────────────────
 
@@ -46,15 +47,40 @@ const chunkIds = (ids: string[]): string[][] => {
 export const LIST_ROW_CAP = 2000;
 const DEFAULT_LIST_LIMIT = LIST_ROW_CAP;
 
+/**
+ * PostgREST's own `db-max-rows` ceiling (supabase/config.toml). A request may
+ * ASK for more — LIST_ROW_CAP is 2000 — but the server never returns more than
+ * this, which is why fetchAllModelElements has to page with .range().
+ */
+export const SERVER_MAX_ROWS = 1000;
+
+/**
+ * The row count at which a default read is actually truncated: whichever
+ * ceiling bites first. Both truncation detectors compare against THIS, not
+ * against the requested limit — a 2000-row request that PostgREST cut to 1000
+ * satisfied `1000 < 2000` and so tripped neither the console/Sentry warning nor
+ * the user-facing notice. Truncation was undetectable at all 13 call sites.
+ */
+export const EFFECTIVE_LIST_CAP = Math.min(LIST_ROW_CAP, SERVER_MAX_ROWS);
+
 // Warn when a read comes back at the cap (likely truncated) so the silent-
 // 1000-row failure mode surfaces. In DEV this logs to the console; in PROD it
 // reports a Sentry warning message (H10) so silent truncation is observable in
 // production, not just during development. The UI also surfaces this via
 // ListTruncationNotice (M18) — this is the telemetry half.
 const warnIfTruncated = (tableName: string, op: string, count: number, cap: number) => {
-  if (count < cap) return;
+  // Compare against the ceiling that actually bit — the caller's limit OR the
+  // server's max_rows, whichever is lower. Comparing only against `cap` made
+  // this dead code for every default read.
+  if (count < Math.min(cap, SERVER_MAX_ROWS)) return;
+  // Explicit caller limits (latest-1, recent-50 activity feed, quiet exists
+  // probes) are intentional truncations — only the default LIST_ROW_CAP is the
+  // silent-truncation failure mode H10 cares about. Without this gate, every
+  // SubmittalRound.filter(..., 1) and DrawingActivity.filter(..., 50) that
+  // fills its window floods Sentry (JAVASCRIPT-REACT-E / -D).
+  if (cap < DEFAULT_LIST_LIMIT) return;
   if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       `[supabaseClient] ${tableName}.${op}() returned ${count} rows at the ${cap}-row cap — results may be TRUNCATED. Add server-side filtering or pagination.`,
     );
@@ -119,7 +145,7 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
       if (!data || data.length < PAGE) return all;
     }
     // Hit the safety ceiling — surface in PROD too (unlike list()'s dev-only warn).
-    // eslint-disable-next-line no-console
+     
     console.warn(`[supabaseClient] ${tableName}.listAll() stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
     return all;
   },
@@ -211,7 +237,11 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
       .select()
       .single();
     if (error) throw new SupabaseOperationError(tableName as string, 'update', error);
-    return addAliases<RowWithAliases<T>>(data, tableName as string);
+    const updated = addAliases<RowWithAliases<T>>(data, tableName as string);
+    if ((tableName as string) === 'projects') {
+      emitProjectUpdated(updated as unknown as Record<string, unknown> & { id?: string });
+    }
+    return updated;
   },
 
   /**

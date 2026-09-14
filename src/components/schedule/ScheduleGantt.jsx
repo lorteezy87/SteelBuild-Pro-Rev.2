@@ -1,8 +1,23 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { risksForTaskWindow } from "@/lib/weatherRisk";
-import { computeEffectiveDates } from "@/services/scheduleCascade";
-import { GANTT_PHASE_HEX, GANTT_STATUS_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
+import {
+  GANTT_BASELINE_VAR,
+  GANTT_BG_VAR,
+  GANTT_DEPENDENCY_VAR,
+  GANTT_GRID_STRONG_VAR,
+  GANTT_GRID_VAR,
+  GANTT_HEADER_VAR,
+  GANTT_LEFT_VAR,
+  GANTT_PANEL_STRONG_VAR,
+  GANTT_PANEL_VAR,
+  GANTT_PHASE_VAR,
+  GANTT_ROW_HOVER_VAR,
+  GANTT_STATUS_HEX,
+  GANTT_TODAY_SOFT_VAR,
+  GANTT_TODAY_VAR,
+  GANTT_WEEKEND_VAR,
+} from "@/lib/ganttTheme";
 import {
   parseDateUTC,
   toDateOnly,
@@ -10,67 +25,76 @@ import {
   calcDuration,
 } from "./scheduleDateUtils";
 import { buildTreeOrder } from "./scheduleTree";
-import { parseDeps, formatPredecessorLabels } from "./scheduleDependencies";
+import { parseDeps } from "./scheduleDependencies";
 import {
   PHASES,
   normalizePhase,
-  displayPct,
+  percentCompleteOrNull,
   isMilestoneTask,
   sanitizeTaskName,
   statusColor,
 } from "./scheduleTaskUtils";
 import {
-  StatusChip,
-  SummaryBar,
-  StageGateMilestones,
-  TaskBar,
-  BaselineGhostBar,
-  SubmittalBar,
-  DeliveryBar,
-} from "./scheduleGanttBars";
-import {
-  addDaysUTC, shiftDateOnly,
-  findFirstRowAtOrAfter, findFirstRowAfter,
-  getTaskMetadata, getTaskBaseline, hasBaselineDrift, isCriticalTask,
-  taskSearchHaystack, pluralize, isStalledTask, isSummaryScheduleTask,
-  isActionableScheduleTask, taskOwner, isUnassignedTask, hasLogicGapTask, isLookaheadTask,
+  addDaysUTC,
+  getTaskBaseline, hasBaselineDrift, isCriticalTask,
+  pluralize, taskOwner, isUnassignedTask, hasLogicGapTask,
 } from "./scheduleGanttHelpers";
+import { buildBaselineRows, createBaseline } from "@/services/scheduleBaselines";
+import { todayLocalISO, todayUtcMidnightFromLocal } from "@/lib/dateMath";
+import { formatFloat, describeFloat } from "@/services/scheduleFloat";
+import {
+  WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
+  buildWeatherRiskByTask,
+  computeScheduleStats,
+} from "./scheduleGanttStats";
 import { GanttStatsBar, GanttQuickFilters, GanttMetricCards, GanttLegend } from "./ScheduleGanttToolbar";
 import { useColumnResize } from "./useColumnResize";
 import { useGanttLayout } from "./useGanttLayout";
 import { useTaskBarDrag } from "./useTaskBarDrag";
 import { useTaskRowDnD } from "./useTaskRowDnD";
+import { useGanttInlineEdit } from "./useGanttInlineEdit";
+import {
+  computeCycleTaskIdsKey,
+  selectShiftedSyncTasks,
+  computeSuccessorCountById,
+  computeVisibleTaskIds,
+  buildTaskPositions,
+  buildDepArrows,
+  buildRowLayout,
+  sliceVirtualRows,
+  computeVirtualPadding,
+  filterVisibleDepArrows,
+  GANTT_ROW_H,
+  GANTT_SUM_H,
+} from "./scheduleGanttDerive";
+import { GanttLeftPanelRows, GanttTimelineRows } from "./GanttTaskRows";
 
-const DELIVERY_STATUS_DOT = {
-  "Scheduled":  GANTT_PHASE_HEX.Procurement,
-  "In Transit": GANTT_STATUS_HEX.inProgress,
-  "Delivered":  GANTT_STATUS_HEX.complete,
-  "Partial":    GANTT_STATUS_HEX.delayed,
-  "Rejected":   GANTT_STATUS_HEX.delayed,
-  "Delayed":    GANTT_STATUS_HEX.delayed,
-};
-
-const ROW_H   = 40;
-const SUM_H   = 36;
 const HEAD_H  = 40;
+const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
-// Valid drawing-stage values for a scheduled detailing task — matches the
-// drawings.stage CHECK constraint after migration 077 (corrected 7-stage
-// flow) minus "Not Started" (stage on a scheduled task only becomes
-// meaningful once work is in motion). IFC and Released are now distinct
-// stages so we expose both directly with no display alias.
-const DETAILING_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
-const STAGE_DISPLAY = {};  // no aliases — display each stage by its key
+// Stable identity for the `effectiveDates` fallback. An inline `{}` default
+// would be a fresh object every render and would invalidate every memo below
+// that lists `effectiveDates` as a dependency.
+const NO_EFFECTIVE_DATES = Object.freeze({});
+const NO_BASELINE_MAP = Object.freeze({});
+const NO_FLOAT_MAP = Object.freeze({});
 
-export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null }) {
+export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, effectiveDates = NO_EFFECTIVE_DATES, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null, projectId = null, baselineMap = NO_BASELINE_MAP, onBaselineChange, floatMap = NO_FLOAT_MAP }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
   const [showDeliveries, setShowDeliveries] = useState(true);
   const [collapsedDeliveries, setCollapsedDeliveries] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState({});
-  const [saving, setSaving] = useState(false);
+  const {
+    editingId,
+    editDraft,
+    setEditDraft,
+    saving,
+    setSaving,
+    startInlineEdit,
+    commitEdit,
+    cancelEdit,
+  } = useGanttInlineEdit({ onSave });
   const [tooltip, setTooltip] = useState(null);
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const [collapsedTasks, setCollapsedTasks] = useState({});
@@ -101,48 +125,14 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const rightBody = useRef(null);
   const containerRef = useRef(null);
 
-  // Normalize "today" to UTC midnight so all date math (overdue checks, today
-  // line, scroll-to-today) compares apples to apples with task dates that are
-  // stored as YYYY-MM-DD and parsed at T00:00:00Z. Without this, a 4pm local
-  // load drifts every comparison by hours and can flip overdue/upcoming.
-  const today = useMemo(() => {
-    const d = new Date();
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  }, []);
-
-  const startInlineEdit = (task, e) => {
-    e.stopPropagation();
-    setEditingId(task.id);
-    setEditDraft({
-      task_name: task.task_name || "",
-      start_date: task.start_date || "",
-      end_date: task.end_date || "",
-      status: task.status || "Not Started",
-      // Seed the editor with the same value the UI shows — Complete tasks
-      // round to 100 even if percent_complete is stale, otherwise the user
-      // sees a confusing "100% Complete" row that snaps back to 0 on edit.
-      percent_complete: displayPct(task),
-    });
-  };
-
-  const commitEdit = async (taskId) => {
-    if (!onSave || saving) return;
-    setSaving(true);
-    try {
-      await onSave({ id: taskId, ...editDraft });
-      setEditingId(null);
-      setEditDraft({});
-    } catch (err) {
-      console.error("Gantt save failed:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditDraft({});
-  };
+  // "Today" as the user's LOCAL calendar date, anchored at UTC midnight so all
+  // date math (overdue checks, today line, scroll-to-today) compares apples to
+  // apples with task dates stored as YYYY-MM-DD and parsed at T00:00:00Z.
+  //
+  // This used to read getUTCDate() — the UTC calendar date — which in Arizona
+  // (UTC-7) is already tomorrow from 5 PM local onward, so the today line
+  // jumped a day early and overdue flipped with it (audit §2.5).
+  const today = useMemo(() => todayUtcMidnightFromLocal(), []);
 
   // Sync vertical scroll between left and right body
   const syncScroll = (from) => {
@@ -203,7 +193,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       if (map[ph.key]) ordered.push({ phase: ph, tasks: buildTreeOrder(map[ph.key], { rootPrefix: ph.id }) });
     });
     if (map["Uncategorized"]) {
-      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: buildTreeOrder(map["Uncategorized"], { rootPrefix: 99 }) });
+      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: GANTT_BASELINE_VAR }, tasks: buildTreeOrder(map["Uncategorized"], { rootPrefix: 99 }) });
     }
     return ordered;
   }, [rawTasks, phaseFilter]);
@@ -233,32 +223,45 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     getScrollEl: () => leftRef.current,
   });
 
-  // ── Effective dates: cascade through dependencies so a late predecessor
-  // automatically shifts its successors forward in the gantt view. The
-  // underlying task.start_date / task.end_date in the DB are NEVER mutated;
-  // this only affects how the bars are positioned visually.
+  // ── Effective dates ─────────────────────────────────────────────────
+  // `effectiveDates` arrives as a PROP, computed once in Schedule.tsx over the
+  // WHOLE project. It is deliberately not recomputed here.
   //
-  // Delegates to the shared `computeEffectiveDates` utility (see
-  // `src/services/scheduleCascade.js`) so every schedule consumer — the
-  // Gantt, Task List, 6-Week Lookahead, ICS export — agrees on where each
-  // task sits on the calendar once predecessor links are followed. The
-  // utility supports FS / SS / FF / SF + lag; for the legacy "id only"
-  // dep shape it defaults to FS + 1 day to preserve the regression-test
-  // bar set by the previous inline cascade.
-  const effectiveDates = useMemo(() => computeEffectiveDates(allTasks), [allTasks]);
+  // This component previously ran `computeEffectiveDates(allTasks)` — but
+  // `allTasks` is phase-FILTERED, and scheduleCascade skips any link whose
+  // predecessor is absent from the array it was handed. So filtering the Gantt
+  // to one phase dropped every cross-phase predecessor and silently reverted
+  // its successors to un-cascaded stored dates, with no indicator. Two thirds
+  // of real predecessor links cross a phase boundary (Detailing -> Approval ->
+  // Fab -> Delivery -> Erection is the normal shape of a steel job), so the
+  // filter was changing the dates on screen rather than just narrowing them.
+  // See docs/audits/SCHEDULE_MODULE_AUDIT_2026-09-08.md §1.1.
+  //
+  // The filter now narrows DISPLAY only. Stored dates are still never mutated.
+  if (import.meta.env.DEV && rawTasks.length > 0 && Object.keys(effectiveDates).length === 0) {
+    // Failing open here would render the entire project un-cascaded — exactly
+    // the silence this wiring exists to remove — so make it loud in dev.
+    console.error(
+      "[ScheduleGantt] `effectiveDates` prop is empty while tasks are present. " +
+      "Every bar will render at its stored date and cascaded rows will be wrong. " +
+      "Check that ScheduleBody is passing effectiveDatesMap.",
+    );
+  }
 
   // ── Cycle observability ─────────────────────────────────────────────
-  // The cascade flags every task in a predecessor cycle with `cycle:
-  // true`. We surface a single toast when cycles are present so a user
-  // looking at the Gantt knows their schedule has a circular dependency
-  // they need to break — without it, the cycle members silently fall
-  // back to their stored dates and the user just sees "the cascade
-  // didn't shift this row" with no explanation. We dedupe by the set of
-  // cycle-affected task IDs so the toast doesn't fire on every render.
-  const cycleTaskIdsKey = useMemo(() => {
-    const ids = Object.keys(effectiveDates).filter((id) => effectiveDates[id]?.cycle);
-    return ids.sort().join("|");
-  }, [effectiveDates]);
+  // The cascade flags every task in a predecessor cycle with `cycle: true`.
+  // One toast per distinct cycle set tells the user their schedule has a loop;
+  // without it the members silently fall back to stored dates and the row just
+  // looks like "the cascade didn't shift this".
+  //
+  // Scoped to the RENDERED rows: the map now covers the whole project, and
+  // naming loops on rows the user cannot see (and cannot reach under a filter)
+  // would be noise. A partly-visible cycle still warns — the member on screen
+  // is the one sitting on stored dates.
+  const cycleTaskIdsKey = useMemo(
+    () => computeCycleTaskIdsKey(effectiveDates, allTasks),
+    [effectiveDates, allTasks],
+  );
   useEffect(() => {
     if (!cycleTaskIdsKey) return;
     const count = cycleTaskIdsKey.split("|").filter(Boolean).length;
@@ -277,28 +280,34 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     px, spanPx, todayPx, showToday, isCurrentWeek,
   } = useGanttLayout({ zoom, today, allTasks, deliveries, effStart, effEnd });
 
+  // Two populations, deliberately distinct (audit §1.5):
+  //   allTasks     — phase-filtered + tree-rolled. What is ON SCREEN. Correct
+  //                  for anything DESCRIBING the current view.
+  //   projectTasks — every task on the project, un-rolled. Correct for the
+  //                  project-wide WRITE actions (baseline, date sync), which
+  //                  must not silently do less than their dialog claims, and
+  //                  for the drag's landing prediction, which has to see every
+  //                  predecessor — not just the ones in the current phase.
+  // Declared HERE, above its first consumer, so it is never in the temporal
+  // dead zone for a hook argument below.
+  const projectTasks = rawTasks;
+
   // Bar drag-to-reschedule (move / resize-start / resize-end) — useTaskBarDrag.
-  const { taskDrag, startTaskBarDrag } = useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppressTaskClickRef, setTooltip });
+  const { taskDrag, startTaskBarDrag } = useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppressTaskClickRef, setTooltip, projectTasks });
 
   // ── Weather-risk overlay ───────────────────────────────────────────
   // Only attach risks to field-sensitive phases (Installation, Delivery).
   // Indoor work doesn't get flagged — a rainy day in Phoenix isn't a
   // problem for Detailing. Memoised keyed by (weatherRisk, allTasks)
   // so the lookup per row is O(1).
-  const WEATHER_SENSITIVE_PHASES = useMemo(() => new Set(["Installation", "Delivery", "Erection", "Erection/Installation"]), []);
-  const weatherRiskByTask = useMemo(() => {
-    const out = {};
-    if (!weatherRisk?.risks?.length || !allTasks?.length) return out;
-    for (const t of allTasks) {
-      if (!WEATHER_SENSITIVE_PHASES.has(t.phase)) continue;
-      const hits = risksForTaskWindow(weatherRisk.risks, effStart(t), effEnd(t));
-      if (hits.length > 0) out[t.id] = hits;
-    }
-    return out;
+  const WEATHER_SENSITIVE_PHASES = WEATHER_SENSITIVE_PHASES_SET;
+  const weatherRiskByTask = useMemo(
+    () => buildWeatherRiskByTask(weatherRisk, allTasks, effStart, effEnd, risksForTaskWindow, WEATHER_SENSITIVE_PHASES),
     // effStart/effEnd depend on effectiveDates; adding it to deps keeps
     // the memo honest if dependencies shift a task into bad weather.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weatherRisk, allTasks, effectiveDates, WEATHER_SENSITIVE_PHASES]);
+    [weatherRisk, allTasks, effectiveDates, WEATHER_SENSITIVE_PHASES],
+  );
 
   // Overdue uses the *effective* finish so a task whose predecessor slipped
   // is judged against where the bar actually sits in the gantt — not the
@@ -361,50 +370,19 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
 
   // Stats: one pass over the visible schedule model. This keeps filter/search
   // changes responsive on large imported schedules.
-  const scheduleStats = useMemo(() => {
-    const stats = {
-      totalTasks: allTasks.length,
-      completeTasks: 0,
-      overdueTasks: 0,
-      inProgressTasks: 0,
-      unscheduledTasks: 0,
-      lookaheadTasks: 0,
-      stalledTasks: 0,
-      criticalTasks: 0,
-      milestoneTasks: 0,
-      shiftedTasks: 0,
-      totalShiftDays: 0,
-      unassignedTasks: 0,
-      weatherRiskTasks: 0,
-      dependencyLinks: 0,
-      progressTotal: 0,
-      progressCount: 0,
-    };
-    for (const task of allTasks) {
-      const actionable = isActionableScheduleTask(task);
-      if (task.status === "Complete") stats.completeTasks += 1;
-      if (task.status === "In Progress") stats.inProgressTasks += 1;
-      if (actionable && isOverdue(task)) stats.overdueTasks += 1;
-      if (actionable && (!effStart(task) || !effEnd(task))) stats.unscheduledTasks += 1;
-      if (actionable && isLookaheadTask(task, today, effStart, effEnd)) stats.lookaheadTasks += 1;
-      if (actionable && isStalledTask(task, today, (item) => parseDateUTC(effStart(item)))) stats.stalledTasks += 1;
-      if (actionable && isCriticalTask(task)) stats.criticalTasks += 1;
-      if (actionable && isMilestoneTask(task)) stats.milestoneTasks += 1;
-      if (actionable && effectiveDates[task.id]?.shifted) stats.shiftedTasks += 1;
-      if (actionable) stats.totalShiftDays += Number(effectiveDates[task.id]?.shiftedBy) || 0;
-      if (actionable && isUnassignedTask(task)) stats.unassignedTasks += 1;
-      if (actionable && weatherRiskByTask[task.id]) stats.weatherRiskTasks += 1;
-      if (actionable) stats.dependencyLinks += parseDeps(task.dependencies).length;
-      if (actionable) {
-        stats.progressTotal += displayPct(task);
-        stats.progressCount += 1;
-      }
-    }
-    return {
-      ...stats,
-      avgProgress: stats.progressCount > 0 ? Math.round(stats.progressTotal / stats.progressCount) : 0,
-    };
-  }, [allTasks, effectiveDates, today, weatherRiskByTask]);
+  const scheduleStats = useMemo(
+    () =>
+      computeScheduleStats(allTasks, {
+        today,
+        effectiveDates,
+        weatherRiskByTask,
+        effStart,
+        effEnd,
+        isOverdue,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allTasks, effectiveDates, today, weatherRiskByTask],
+  );
 
   const {
     totalTasks,
@@ -425,40 +403,70 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   } = scheduleStats;
 
   // ── Baseline stats & handler ─────────────────────────────────────────
+  // Stays VIEW-scoped on purpose: it only gates the baseline toggle and the
+  // legend, both of which describe what is currently rendered. A project that
+  // has baselines elsewhere but none in this phase has nothing to overlay here.
   const baselineTaskCount = useMemo(
-    () => allTasks.filter((t) => getTaskBaseline(t) !== null).length,
-    [allTasks]
+    () => allTasks.filter((t) => getTaskBaseline(t, baselineMap) !== null).length,
+    [allTasks, baselineMap]
   );
 
   const handleSetBaseline = async () => {
-    if (!onSave) return;
-    const tasksWithDates = allTasks.filter((t) => effStart(t) || effEnd(t));
-    if (tasksWithDates.length === 0) {
+    if (saving) return;
+    if (!projectId) {
+      toast.error("Select a project before taking a baseline.");
+      return;
+    }
+    // Rows are built from STORED dates, so count on the same basis the snapshot
+    // will use — counting dated-by-effective would promise rows that
+    // buildBaselineRows then skips.
+    const rows = buildBaselineRows(projectTasks);
+    if (rows.length === 0) {
       toast.info("No tasks with dates to baseline.");
       return;
     }
-    const confirmed = window.confirm(
-      `Set baseline for ${tasksWithDates.length} task${tasksWithDates.length === 1 ? "" : "s"}?\n\n` +
-      "This will snapshot the current effective dates as the planned schedule. " +
-      "Existing baseline data will be overwritten."
+
+    const name = window.prompt(
+      `Name this baseline — ${rows.length} dated task${rows.length === 1 ? "" : "s"}.\n\n` +
+      "This covers the whole project, not just the phase you are viewing. " +
+      "It snapshots the dates as entered, not the cascaded dates the bars show.\n\n" +
+      "Baselines are never overwritten — this is added alongside any already taken.\n" +
+      "Examples: \"Baseline 0 — contract\", \"Rev 2 — CO 14 time extension\".",
+      `Baseline ${todayLocalISO()}`,
     );
-    if (!confirmed) return;
+    if (name === null) return; // cancelled
+    if (!name.trim()) {
+      toast.error("A baseline needs a name.");
+      return;
+    }
+
+    const reason = window.prompt(
+      "Why is this baseline being taken? (optional, but this is the field that " +
+      "answers \"who changed the contract schedule and on what authority\")",
+      "",
+    );
+    if (reason === null) return; // cancelled at the second step
+
     setSaving(true);
     try {
-      const updates = tasksWithDates.map((task) => {
-        const metadata = getTaskMetadata(task);
-        const newMetadata = {
-          ...metadata,
-          baseline_start: effStart(task) || null,
-          baseline_end: effEnd(task) || null,
-          baseline_set_at: new Date().toISOString(),
-        };
-        return onSave({ id: task.id, metadata: newMetadata });
+      const { baseline, rowsWritten, rowsFailed } = await createBaseline({
+        projectId,
+        name,
+        reason,
+        // The WHOLE project, never the phase-filtered rows — §1.5 shipped a
+        // version that baselined one phase while the dialog counted the job.
+        tasks: projectTasks,
       });
-      for (let i = 0; i < updates.length; i += 10) {
-        await Promise.all(updates.slice(i, i + 10));
+
+      if (rowsFailed > 0) {
+        // A baseline missing rows is worse than no baseline if nobody knows.
+        toast.warning(
+          `Baseline "${baseline.name}" saved with ${rowsWritten} of ${rowsWritten + rowsFailed} tasks — ${rowsFailed} failed. Retract and retake it rather than relying on a partial snapshot.`,
+        );
+      } else {
+        toast.success(`Baseline "${baseline.name}" set for ${rowsWritten} tasks`);
       }
-      toast.success(`Baseline set for ${tasksWithDates.length} tasks`);
+      onBaselineChange?.();
     } catch (err) {
       toast.error("Failed to set baseline: " + (err?.message || "unknown error"));
     } finally {
@@ -474,13 +482,12 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   // actually shifted are touched; cycle members (whose effective dates fall
   // back to stored) and tasks without a computed start/end are skipped, so we
   // never invent a date on a TBD task.
+  // Pure + unit-tested: see scheduleGanttDerive.selectShiftedSyncTasks. Takes
+  // the WHOLE project (not the filtered rows) and skips summary rows, whose
+  // dates the DB rollup trigger owns.
   const shiftedSyncTasks = useMemo(
-    () =>
-      allTasks.filter((t) => {
-        const eff = effectiveDates[t.id];
-        return eff?.shifted && !eff.cycle && effStart(t) && effEnd(t);
-      }),
-    [allTasks, effectiveDates]
+    () => selectShiftedSyncTasks(projectTasks, effectiveDates),
+    [projectTasks, effectiveDates]
   );
 
   const handleSyncScheduledDates = async () => {
@@ -491,10 +498,13 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       return;
     }
     const confirmed = window.confirm(
-      `Update scheduled dates for ${n} task${n === 1 ? "" : "s"}?\n\n` +
+      `Update scheduled dates for ${n} task${n === 1 ? "" : "s"} across this project?\n\n` +
       "Dependency logic has pushed these tasks past their saved dates, so the Gantt " +
       "shows later dates than what's stored. This writes the computed start/end back " +
-      "to each task so the saved schedule matches the Gantt. Baselines are not changed."
+      "to each task so the saved schedule matches the Gantt.\n\n" +
+      "This covers the whole project, not just the phase you are viewing. " +
+      "Summary rows are skipped — their dates roll up from their children. " +
+      "Baselines are not changed."
     );
     if (!confirmed) return;
     setSaving(true);
@@ -517,76 +527,39 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     }
   };
 
-  const successorCountById = useMemo(() => {
-    const out = {};
-    allTasks.forEach((task) => {
-      parseDeps(task.dependencies).forEach((predId) => {
-        out[predId] = (out[predId] || 0) + 1;
-      });
-    });
-    return out;
-  }, [allTasks]);
+  const successorCountById = useMemo(() => computeSuccessorCountById(allTasks), [allTasks]);
   const logicGapTasks = allTasks.filter(t => hasLogicGapTask(t, successorCountById)).length;
 
   const normalizedSearch = searchText.trim().toLowerCase();
   const hasActiveRowFilter = normalizedSearch.length > 0 || quickFilter !== "all";
 
-  const visibleTaskIds = useMemo(() => {
-    if (!hasActiveRowFilter) return null;
-
-    const allById = new Map(allTasks.map((task) => [task.id, task]));
-    const phaseById = new Map();
-    grouped.forEach(({ phase, tasks }) => {
-      tasks.forEach((task) => phaseById.set(task.id, phase));
-    });
-
-    const directMatches = new Set();
-    allTasks.forEach((task) => {
-      const phase = phaseById.get(task.id);
-      const matchesText = !normalizedSearch || taskSearchHaystack(task, phase?.label || phase?.key || "").includes(normalizedSearch);
-      const matchesQuick = (() => {
-        if (quickFilter !== "all" && isSummaryScheduleTask(task)) return false;
-        if (quickFilter === "all") return true;
-        if (quickFilter === "lookahead") return isLookaheadTask(task, today, effStart, effEnd);
-        if (quickFilter === "critical") return isCriticalTask(task);
-        if (quickFilter === "delayed") return String(task.status || "").toLowerCase().includes("delay");
-        if (quickFilter === "stalled") return isStalledTask(task, today, (item) => parseDateUTC(effStart(item)));
-        if (quickFilter === "overdue") return isOverdue(task);
-        if (quickFilter === "tbd") return !effStart(task) || !effEnd(task);
-        if (quickFilter === "logic") return hasLogicGapTask(task, successorCountById);
-        if (quickFilter === "unassigned") return isUnassignedTask(task);
-        if (quickFilter === "shifted") return Boolean(effectiveDates[task.id]?.shifted);
-        if (quickFilter === "deps") return parseDeps(task.dependencies).length > 0 || successorCountById[task.id] > 0;
-        if (quickFilter === "unlinked") return parseDeps(task.dependencies).length === 0 && !successorCountById[task.id] && !task.parent_task_id && !task._hasChildren;
-        if (quickFilter === "milestones") return isMilestoneTask(task);
-        if (quickFilter === "weather") return Boolean(weatherRiskByTask[task.id]);
-        return true;
-      })();
-      if (matchesText && matchesQuick) directMatches.add(task.id);
-    });
-
-    const withAncestors = new Set(directMatches);
-    directMatches.forEach((taskId) => {
-      let parentId = allById.get(taskId)?.parent_task_id;
-      const guard = new Set();
-      while (parentId && !guard.has(parentId)) {
-        guard.add(parentId);
-        withAncestors.add(parentId);
-        parentId = allById.get(parentId)?.parent_task_id;
-      }
-    });
-
-    return withAncestors;
-  }, [
-    allTasks,
-    grouped,
-    normalizedSearch,
-    quickFilter,
-    hasActiveRowFilter,
-    effectiveDates,
-    successorCountById,
-    weatherRiskByTask,
-  ]);
+  const visibleTaskIds = useMemo(
+    () => computeVisibleTaskIds({
+      allTasks,
+      grouped,
+      normalizedSearch,
+      quickFilter,
+      hasActiveRowFilter,
+      effectiveDates,
+      successorCountById,
+      weatherRiskByTask,
+      today,
+      isOverdue,
+      effStart,
+      effEnd,
+      floatMap,
+    }),
+    [
+      allTasks,
+      grouped,
+      normalizedSearch,
+      quickFilter,
+      hasActiveRowFilter,
+      effectiveDates,
+      successorCountById,
+      weatherRiskByTask,
+    ],
+  );
 
   const visibleGrouped = useMemo(() => {
     if (!visibleTaskIds) return grouped;
@@ -653,12 +626,17 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         insertDeliveryRows();
       }
 
-      // Phase % uses displayPct so Complete tasks always count as 100% even
-      // when their percent_complete field is stale.
+      // Complete tasks always count as 100% even when their percent_complete
+      // column is stale; tasks whose progress is UNKNOWN are left out of the
+      // mean rather than averaged in as 0 (§4.3). Falls back to 0 only as a bar
+      // width when nothing in the phase has a known percent.
       const phaseProgressTasks = tasks.filter((task) => !task._hasChildren);
       const progressBasis = phaseProgressTasks.length ? phaseProgressTasks : tasks;
-      const avgPct = progressBasis.length > 0
-        ? progressBasis.reduce((sum, t) => sum + displayPct(t), 0) / progressBasis.length
+      const knownPcts = progressBasis
+        .map((t) => percentCompleteOrNull(t))
+        .filter((pct) => pct !== null);
+      const avgPct = knownPcts.length > 0
+        ? knownPcts.reduce((sum, pct) => sum + pct, 0) / knownPcts.length
         : 0;
 
       // Phase summary bar spans from the earliest *effective* start to the
@@ -682,79 +660,31 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     }
 
     return list;
-  }, [visibleGrouped, collapsed, collapsedTasks, showDeliveries, deliveries, collapsedDeliveries]);
+    // `effectiveDates` is a real dependency: the phase-band start/end above are
+    // derived through effStart/effEnd. It used to be recomputed from `allTasks`
+    // (already a dep via visibleGrouped) so it never needed listing; now that it
+    // arrives as a prop it can change on its own.
+  }, [visibleGrouped, collapsed, collapsedTasks, showDeliveries, deliveries, collapsedDeliveries, effectiveDates]);
 
-  // Build task ID → row index + Y position map for dependency arrows
-  const taskPositions = useMemo(() => {
-    const posMap = {};
-    let y = 0;
-    rows.forEach((row) => {
-      if (row.type === "summary" || row.type === "delivery-summary") {
-        y += SUM_H;
-      } else if (row.type === "task") {
-        posMap[row.task.id] = { y: y + ROW_H / 2 }; // center of the row
-        y += ROW_H;
-      } else {
-        y += ROW_H; // delivery rows
-      }
-    });
-    return posMap;
-  }, [rows]);
+  const taskPositions = useMemo(() => buildTaskPositions(rows, GANTT_ROW_H, GANTT_SUM_H), [rows]);
 
-  // Build dependency arrows
-  const depArrows = useMemo(() => {
-    const arrows = [];
-    rows.forEach((row) => {
-      if (row.type !== "task") return;
-      const task = row.task;
-      const deps = parseDeps(task.dependencies);
-      if (!deps.length) return;
-      const toPos = taskPositions[task.id];
-      const taskEffStart = effStart(task);
-      if (!toPos || !taskEffStart) return;
-      const toX = px(taskEffStart);
-      deps.forEach((predId) => {
-        const predPos = taskPositions[predId];
-        if (!predPos) return; // predecessor not visible (collapsed or filtered)
-        const predTask = taskById.get(predId);
-        const predEnd = predTask ? effEnd(predTask) : null;
-        if (!predTask || !predEnd) return;
-        const fromX = px(predEnd);
-        arrows.push({
-          key: `${predId}-${task.id}`,
-          fromX, fromY: predPos.y,
-          toX, toY: toPos.y,
-        });
-      });
-    });
-    return arrows;
-  }, [rows, taskPositions, taskById]);
+  const depArrows = useMemo(
+    () => buildDepArrows({ rows, taskPositions, taskById, effStart, effEnd, px }),
+    // effStart/effEnd read `effectiveDates`; as a prop it can change without
+    // `rows` changing, which would leave the arrows pointing at stale endpoints.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, taskPositions, taskById, effectiveDates],
+  );
 
-  const rowLayout = useMemo(() => {
-    let top = 0;
-    const items = rows.map((row, index) => {
-      const height = (row.type === "summary" || row.type === "delivery-summary") ? SUM_H : ROW_H;
-      const item = { row, index, top, height };
-      top += height;
-      return item;
-    });
-    return { items, totalHeight: top };
-  }, [rows]);
+  const rowLayout = useMemo(() => buildRowLayout(rows, GANTT_ROW_H, GANTT_SUM_H), [rows]);
 
   const totalHeight = rowLayout.totalHeight;
-  const virtualRows = useMemo(() => {
-    const overscan = 320;
-    const start = Math.max(0, bodyViewport.scrollTop - overscan);
-    const end = bodyViewport.scrollTop + bodyViewport.height + overscan;
-    const startIndex = findFirstRowAtOrAfter(rowLayout.items, start);
-    const endIndex = findFirstRowAfter(rowLayout.items, end);
-    return rowLayout.items.slice(startIndex, endIndex);
-  }, [rowLayout, bodyViewport]);
+  const virtualRows = useMemo(
+    () => sliceVirtualRows(rowLayout, bodyViewport.scrollTop, bodyViewport.height),
+    [rowLayout, bodyViewport],
+  );
 
-  const virtualTopPadding = virtualRows[0]?.top || 0;
-  const virtualBottomPadding = virtualRows.length
-    ? Math.max(0, totalHeight - (virtualRows[virtualRows.length - 1].top + virtualRows[virtualRows.length - 1].height))
-    : 0;
+  const { virtualTopPadding, virtualBottomPadding } = computeVirtualPadding(virtualRows, totalHeight);
 
   useEffect(() => {
     if (!focusedTaskId) return;
@@ -773,20 +703,16 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     });
   }, [focusedTaskId, rowLayout, externalFocus?.requestedAt]);
 
-  const visibleDepArrows = useMemo(() => {
-    const overscan = 320;
-    const start = Math.max(0, bodyViewport.scrollTop - overscan);
-    const end = bodyViewport.scrollTop + bodyViewport.height + overscan;
-    return depArrows.filter(({ fromY, toY }) => (
-      (fromY >= start && fromY <= end) || (toY >= start && toY <= end)
-    ));
-  }, [depArrows, bodyViewport]);
+  const visibleDepArrows = useMemo(
+    () => filterVisibleDepArrows(depArrows, bodyViewport.scrollTop, bodyViewport.height),
+    [depArrows, bodyViewport],
+  );
 
   return (
-    <div ref={containerRef} data-gantt-export-root style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--sbd-gantt-bg)", overflow: "hidden" }}>
+    <div ref={containerRef} data-gantt-export-root style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: GANTT_BG_VAR, overflow: "hidden" }}>
 
       {/* ── Toolbar ─────────────────────────────────────────────────── */}
-      <div data-gantt-export-exclude style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: "6px 16px", borderBottom: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-panel)" }}>
+      <div data-gantt-export-exclude style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: "6px 16px", borderBottom: `1px solid ${GANTT_GRID_STRONG_VAR}`, background: GANTT_PANEL_VAR }}>
         {/* Stats */}
         <GanttStatsBar
           totalTasks={totalTasks} completeTasks={completeTasks} inProgressTasks={inProgressTasks}
@@ -847,8 +773,8 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 maxWidth: 220,
                 padding: "4px 8px",
                 borderRadius: 999,
-                border: `1px solid ${GANTT_STATUS_HEX.inProgress}88`,
-                background: `${GANTT_STATUS_HEX.inProgress}18`,
+                border: `1px solid ${tint(GANTT_STATUS_HEX.inProgress, 53)}`,
+                background: tint(GANTT_STATUS_HEX.inProgress, 9),
                 color: GANTT_STATUS_HEX.inProgress,
                 fontFamily: "var(--font-mono)",
                 fontSize: 8,
@@ -872,7 +798,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             style={{
               padding: "4px 10px", borderRadius: 4,
               border: showSubmittals ? `1px solid ${GANTT_STATUS_HEX.inProgress}` : "1px solid var(--divider)",
-              background: showSubmittals ? `${GANTT_STATUS_HEX.inProgress}1A` : "transparent",
+              background: showSubmittals ? tint(GANTT_STATUS_HEX.inProgress, 10) : "transparent",
               color: showSubmittals ? GANTT_STATUS_HEX.inProgress : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
@@ -886,9 +812,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             onClick={() => setShowDeliveries(v => !v)}
             style={{
               padding: "4px 10px", borderRadius: 4,
-              border: showDeliveries ? `1px solid ${GANTT_PHASE_HEX.Delivery}` : "1px solid var(--divider)",
-              background: showDeliveries ? `${GANTT_PHASE_HEX.Delivery}1A` : "transparent",
-              color: showDeliveries ? GANTT_PHASE_HEX.Delivery : "var(--text-muted)",
+              border: showDeliveries ? `1px solid ${GANTT_PHASE_VAR.Delivery}` : "1px solid var(--divider)",
+              background: showDeliveries ? `color-mix(in srgb, ${GANTT_PHASE_VAR.Delivery} 12%, transparent)` : "transparent",
+              color: showDeliveries ? GANTT_PHASE_VAR.Delivery : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
             }}
@@ -901,9 +827,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             onClick={() => setShowBaseline(v => !v)}
             style={{
               padding: "4px 10px", borderRadius: 4,
-              border: showBaseline ? "1px solid rgba(100,116,139,0.7)" : "1px solid var(--divider)",
-              background: showBaseline ? "rgba(100,116,139,0.14)" : "transparent",
-              color: showBaseline ? "#94A3B8" : "var(--text-muted)",
+              border: showBaseline ? `1px solid color-mix(in srgb, ${GANTT_BASELINE_VAR} 70%, transparent)` : "1px solid var(--divider)",
+              background: showBaseline ? `color-mix(in srgb, ${GANTT_BASELINE_VAR} 14%, transparent)` : "transparent",
+              color: showBaseline ? GANTT_BASELINE_VAR : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
             }}
@@ -914,14 +840,19 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         {onSave && (
           <button
             onClick={handleSetBaseline}
-            title="Snapshot current schedule dates as the baseline for variance tracking"
+            /* Without this, a double-click fires the whole project-wide write
+               set twice concurrently. The sync button beside it already
+               guarded; this one did not. */
+            disabled={saving}
+            title="Snapshot every dated task on this project as the baseline for variance tracking"
             style={{
               padding: "4px 10px", borderRadius: 4,
               border: "1px solid var(--divider)",
               background: "transparent",
               color: "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-              cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
+              cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.5 : 1,
+              letterSpacing: "0.06em", textTransform: "uppercase",
             }}
           >
             Set Baseline
@@ -997,7 +928,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             padding: "5px 10px",
             borderRadius: 8,
             border: "1px solid var(--divider)",
-            background: showLegend ? "rgba(86,176,255,0.12)" : "rgba(255,255,255,0.03)",
+            background: showLegend ? GANTT_ROW_HOVER_VAR : GANTT_PANEL_STRONG_VAR,
             color: showLegend ? "var(--accent)" : "var(--text-muted)",
             fontFamily: "var(--font-mono)",
             fontSize: 8,
@@ -1021,7 +952,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             handle resizes THAT column; TASK NAME (flex) auto-rebalances.
             Double-click the handle to reset that single column to its
             default width; double-click the "% " header to reset ALL. */}
-        <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: "var(--sbd-gantt-header)", borderRight: "1px solid var(--sbd-gantt-grid-strong)", display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4 }}>
+        <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: GANTT_HEADER_VAR, borderRight: `1px solid ${GANTT_GRID_STRONG_VAR}`, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4 }}>
           {["WBS", "TASK NAME", "DUR", "START", "FINISH", "PRED", "RESOURCES", "STATUS", "STAGE", "%"].map((h, i) => (
             <div key={i} style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", overflow: "visible" }}
                  onDoubleClick={i === 9 ? resetColWidths : undefined}
@@ -1060,7 +991,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             reads the month as a wide segment); bottom half shows
             week-of-year + start-of-week date. Current week is
             highlighted with the accent color across both tiers. */}
-        <div ref={rightHead} style={{ flex: 1, overflowX: "hidden", overflowY: "hidden", background: "var(--sbd-gantt-header)" }}>
+        <div ref={rightHead} style={{ flex: 1, overflowX: "hidden", overflowY: "hidden", background: GANTT_HEADER_VAR }}>
           <div style={{ display: "flex", width: totalW, height: HEAD_H, position: "relative" }}>
             {dateRange.weeks.map((week, i) => {
               const cur = isCurrentWeek(week);
@@ -1069,9 +1000,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               // and render a slightly stronger left-edge divider.
               const isMonthStart = week.getDate() <= 7;
               const headerBg = cur
-                ? "var(--sbd-gantt-today-soft)"
+                ? GANTT_TODAY_SOFT_VAR
                 : banded
-                  ? "rgba(255,255,255,0.018)"
+                  ? GANTT_WEEKEND_VAR
                   : "transparent";
               const monthLabel = isMonthStart
                 ? week.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).toUpperCase()
@@ -1079,8 +1010,8 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               return (
                 <div key={i} style={{
                   minWidth: WEEK_PX,
-                  borderRight: "1px solid rgba(255,255,255,0.04)",
-                  borderLeft: isMonthStart ? "1px solid rgba(255,255,255,0.10)" : "none",
+                  borderRight: `1px solid ${GANTT_GRID_VAR}`,
+                  borderLeft: isMonthStart ? `1px solid ${GANTT_GRID_STRONG_VAR}` : "none",
                   display: "flex",
                   flexDirection: "column",
                   background: headerBg,
@@ -1092,7 +1023,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                     display: "flex",
                     alignItems: "center",
                     paddingLeft: 8,
-                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    borderBottom: `1px solid ${GANTT_GRID_VAR}`,
                   }}>
                     {monthLabel && (
                       <span style={{
@@ -1146,409 +1077,56 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
         {/* Left panel */}
-        <div ref={leftRef} onScroll={() => syncScroll("left")} style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, overflowY: "auto", overflowX: "hidden", borderRight: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-left)" }}>
+        <div ref={leftRef} onScroll={() => syncScroll("left")} style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, overflowY: "auto", overflowX: "hidden", borderRight: `1px solid ${GANTT_GRID_STRONG_VAR}`, background: GANTT_LEFT_VAR }}>
           {rows.length === 0 && (
             <div style={{ padding: 18, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>
               No tasks match the current Gantt filters.
             </div>
           )}
           {virtualTopPadding > 0 && <div aria-hidden="true" style={{ height: virtualTopPadding, flexShrink: 0 }} />}
-          {virtualRows.map(({ row, index: i }) => {
-            if (row.type === "summary") {
-              const { phase, tasks, pctComplete } = row;
-              const isOpen = !collapsed[phase.key];
-              // Summary/parent rows must never be counted as overdue — their
-              // window merely spans their children, so a late child already
-              // shows up on its own row. Counting the parent too would
-              // double-count and inflate the phase's overdue badge.
-              const phaseOverdue = tasks.filter((t) => !isSummaryScheduleTask(t) && isOverdue(t)).length;
-              const phaseCritical = tasks.filter(isCriticalTask).length;
-              const phaseTbd = tasks.filter(t => !effStart(t) || !effEnd(t)).length;
-              const phaseMeta = [
-                `${pluralize(tasks.length, "task")}`,
-                phaseCritical ? `${phaseCritical} critical` : null,
-                phaseOverdue ? `${phaseOverdue} overdue` : null,
-                phaseTbd ? `${phaseTbd} TBD` : null,
-              ].filter(Boolean).join(" / ");
-              return (
-                <div
-                  key={`sum-${phase.key}`}
-                  onClick={() => togglePhase(phase.key)}
-                  // Whole row is the click target (chevron + label + count
-                  // + percent), with a subtle background-shift on hover so
-                  // it's obviously interactive — the audit flagged the
-                  // previous render as ambiguous about the hit area.
-                  onMouseEnter={(e) => { e.currentTarget.style.background = `${phase.color}1f`; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = `${phase.color}12`; }}
-                  title={`${isOpen ? "Collapse" : "Expand"} ${phase.label}`}
-                  role="button"
-                  aria-expanded={isOpen}
-                  style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: `1px solid var(--divider)`, background: `${phase.color}12`, cursor: "pointer", userSelect: "none", transition: "background 0.12s" }}
-                >
-                  <span style={{ color: phase.color, fontSize: 10, transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", display: "inline-block", lineHeight: 1 }}>▾</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phase.color, letterSpacing: "0.10em", background: `${phase.color}20`, border: `1px solid ${phase.color}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>{phase.id}.0</span>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: phase.color, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.label.toUpperCase()}</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: phaseOverdue ? GANTT_STATUS_HEX.delayed : phaseCritical ? GANTT_PHASE_HEX.Procurement : "var(--text-muted)", flexShrink: 0 }}>{phaseMeta}</span>
-                  </div>
-                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: phase.color }}>{Math.round(pctComplete)}%</span>
-                </div>
-              );
-            }
-            // ── Delivery summary row ──
-            if (row.type === "delivery-summary") {
-              const isOpen = !collapsedDeliveries;
-              const dColor = GANTT_PHASE_HEX.Delivery;
-              return (
-                <div key="delivery-summary" onClick={() => setCollapsedDeliveries(v => !v)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: "1px solid var(--divider)", background: `${dColor}12`, cursor: "pointer", userSelect: "none" }}>
-                  <span style={{ color: dColor, fontSize: 10, transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", display: "inline-block", lineHeight: 1 }}>▾</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: dColor, letterSpacing: "0.10em", background: `${dColor}20`, border: `1px solid ${dColor}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>🚛</span>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: dColor, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>DELIVERIES</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{row.deliveryCount} items</span>
-                  </div>
-                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: dColor }}>{row.pctComplete}%</span>
-                </div>
-              );
-            }
-            // ── Delivery item row ──
-            if (row.type === "delivery") {
-              const d = row.delivery;
-              const dotColor = DELIVERY_STATUS_DOT[d.status] || GANTT_PHASE_HEX.Delivery;
-              const isLate = d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered";
-              const label = d.description || d.vendor || "Delivery";
-              return (
-                <div key={`del-${d.id}`} style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: "transparent", borderLeft: isLate ? `3px solid ${GANTT_STATUS_HEX.delayed}` : "3px solid transparent" }}
-                  onMouseEnter={() => setHoveredRowId(`del-${d.id}`)}
-                  onMouseLeave={() => setHoveredRowId(null)}
-                >
-                  {/* WBS placeholder */}
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>—</span>
-                  {/* Name + vendor */}
-                  <span style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
-                    <span style={{ fontSize: 10, flexShrink: 0 }}>🚛</span>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 500, color: isLate ? GANTT_STATUS_HEX.delayed : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-                  </span>
-                  {/* Tonnage instead of duration */}
-                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>{d.weight_tons ? `${d.weight_tons}T` : "—"}</span>
-                  {/* Scheduled date */}
-                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isLate ? GANTT_STATUS_HEX.delayed : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(d.scheduled_date)}</span>
-                  {/* Required/actual date */}
-                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(d.required_date || d.actual_date)}</span>
-                  {/* Pieces */}
-                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center" }}>{d.pieces ? `${d.pieces}pc` : "—"}</span>
-                  {/* Vendor */}
-                  <span title={d.vendor || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.vendor || "—"}</span>
-                  {/* Status */}
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: dotColor, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{d.status || "—"}</span>
-                  {/* Stage — deliveries don't have a detailing stage */}
-                  <span />
-                  {/* No % for deliveries */}
-                  <span />
-                </div>
-              );
-            }
-            // Task row
-            const { task, phase } = row;
-            const deps = parseDeps(task.dependencies);
-            // Orphaned dependencies (predecessor task deleted) are skipped so
-            // the cell never renders the literal "undefined…".
-            const depLabels = formatPredecessorLabels(deps, (dId) => taskById.get(dId));
-            const predecessorCount = deps.length;
-            const successorCount = successorCountById[task.id] || 0;
-            const logicGap = hasLogicGapTask(task, successorCountById);
-            const unassigned = isUnassignedTask(task);
-            const overdue = isOverdue(task);
-            // Show *effective* start/finish in the left columns so the date
-            // text matches the bar position. If a task slipped because of a
-            // dependency cascade we mark it with "*" so users know it's
-            // shifted vs the stored value — clicking the row reveals the raw
-            // dates in the detail panel.
-            const dispStart = effStart(task);
-            const dispEnd   = effEnd(task);
-            const isShifted = !!effectiveDates[task.id]?.shifted;
-            const isEditing = editingId === task.id;
-            // Summary/parent rows have trigger-derived start/end (see the
-            // schedule_summary_rollup migration), so the inline date editor must
-            // show them read-only — any typed value is overwritten on the next
-            // child change. Matches TaskDetailDrawer. The Gantt already enriches
-            // rows with _hasChildren/_isRolledUpSummary, so the flag-based
-            // predicate is sufficient here.
-            const isSummaryRow = isSummaryScheduleTask(task);
-            const leftHovered = hoveredRowId === task.id;
-            const parentRowBg = task._hasChildren ? `${GANTT_STATUS_HEX.inProgress}0A` : "transparent";
-            const critical = isCriticalTask(task);
-            const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
-            return (
-              <div key={`task-${task.id}`}
-                draggable={!isEditing}
-                onDragStart={(e) => {
-                  // Don't start a row drag when the gesture begins on an
-                  // interactive control (inline-edit input, expand caret,
-                  // status menu) — let those keep their native behaviour.
-                  const t = e.target;
-                  const tag = t && t.tagName;
-                  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || tag === "BUTTON" || (t && t.isContentEditable)) {
-                    e.preventDefault();
-                    return;
-                  }
-                  onDragStart(e, task);
-                }}
-                onDragOver={(e) => onDragOverRow(e, task)}
-                onDrop={(e) => onDropRow(e, task)}
-                onDragEnd={onDragEnd}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: isFocused ? `${GANTT_STATUS_HEX.inProgress}24` : leftHovered ? `${GANTT_STATUS_HEX.inProgress}12` : critical ? `${GANTT_PHASE_HEX.Procurement}0C` : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: isFocused ? `3px solid ${GANTT_STATUS_HEX.inProgress}` : overdue ? `3px solid ${GANTT_STATUS_HEX.delayed}` : critical ? `3px solid ${GANTT_PHASE_HEX.Procurement}` : "3px solid transparent", boxShadow: dropTarget?.id === task.id && dropTarget.zone === "nest" ? "inset 0 0 0 2px var(--accent)" : isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none", opacity: dragId === task.id ? 0.4 : 1, borderTop: dropTarget?.id === task.id && dropTarget.zone === "before" ? "2px solid var(--accent)" : undefined, borderBottomColor: dropTarget?.id === task.id && dropTarget.zone === "after" ? "var(--accent)" : undefined, borderBottomWidth: dropTarget?.id === task.id && dropTarget.zone === "after" ? 2 : undefined }}
-                onClick={() => onTaskClick && onTaskClick(task)}
-                onMouseEnter={() => setHoveredRowId(task.id)}
-                onMouseLeave={() => setHoveredRowId(null)}
-              >
-                {/* WBS */}
-                <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || "—"}</span>
-                {/* Task name — with hierarchy indentation and expand/collapse */}
-                {isEditing ? (
-                  <input
-                    autoFocus
-                    value={editDraft.task_name}
-                    onChange={e => setEditDraft(d => ({ ...d, task_name: e.target.value }))}
-                    onClick={e => e.stopPropagation()}
-                    onKeyDown={e => { if (e.key === "Enter") commitEdit(task.id); if (e.key === "Escape") cancelEdit(); }}
-                    style={{ fontFamily: "var(--font-body)", fontSize: 11, background: "var(--bg-input)", border: "1px solid var(--accent)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 6px", width: "100%" }}
-                  />
-                ) : (
-                  <span
-                    title={sanitizeTaskName(task)}
-                    onDoubleClick={e => onSave && startInlineEdit(task, e)}
-                    style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: (task._depth || 0) * 16, overflow: "hidden" }}
-                  >
-                    {/* Hierarchy is edited by dragging this row onto
-                        another (nest) or into the gap between rows
-                        (reorder) — see useTaskRowDnD. The old inline
-                        ▲▼◂▸ move/indent buttons + Tab/Alt-arrow keys
-                        were removed in favour of drag-and-drop. */}
-                    {task._hasChildren && (
-                      <button onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 9, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>
-                        {collapsedTasks[task.id] ? "▶" : "▾"}
-                      </button>
-                    )}
-                    {!task._hasChildren && task._depth > 0 && <span style={{ width: 14, flexShrink: 0 }} />}
-                    {isMilestoneTask(task) && <span style={{ marginRight: 4, color: "var(--accent)" }}>◆</span>}
-                    {/* Weather-risk chip — only on Installation/Delivery
-                        rows whose window overlaps rough forecast days.
-                        Tooltip lists specific dates + drivers so the
-                        super can plan around them. */}
-                    {weatherRiskByTask[task.id] && (() => {
-                      const hits = weatherRiskByTask[task.id];
-                      const worst = hits.reduce((m, h) => (h.severity > m ? h.severity : m), 0);
-                      const color = worst >= 3 ? GANTT_STATUS_HEX.delayed : GANTT_PHASE_HEX.Procurement;
-                      const label = hits.length === 1 ? hits[0].date.slice(5) : `${hits.length} days`;
-                      const tipLines = hits.slice(0, 5).map((h) => `${h.date}: ${h.summary}`);
-                      if (hits.length > 5) tipLines.push(`…${hits.length - 5} more`);
-                      return (
-                        <span
-                          title={`Weather risk:\n${tipLines.join("\n")}\n(${weatherRisk?.source || "Open-Meteo"})`}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 3,
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 8,
-                            fontWeight: 800,
-                            letterSpacing: "0.08em",
-                            color,
-                            border: `1px solid ${color}`,
-                            borderRadius: 2,
-                            padding: "0 4px",
-                            marginRight: 5,
-                            flexShrink: 0,
-                            lineHeight: 1.4,
-                          }}
-                        >
-                          ⚠ {label}
-                        </span>
-                      );
-                    })()}
-                    {logicGap && (
-                      <span
-                        title={`${predecessorCount === 0 ? "Missing predecessor" : ""}${predecessorCount === 0 && successorCount === 0 ? " / " : ""}${successorCount === 0 ? "Missing successor" : ""}`}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 7,
-                          fontWeight: 900,
-                          letterSpacing: "0.08em",
-                          color: "var(--status-warning)",
-                          border: "1px solid color-mix(in srgb, var(--status-warning) 50%, transparent)",
-                          background: "rgba(245,158,11,0.10)",
-                          borderRadius: 2,
-                          padding: "1px 4px",
-                          marginRight: 5,
-                          flexShrink: 0,
-                          lineHeight: 1.35,
-                        }}
-                      >
-                        LOGIC
-                      </span>
-                    )}
-                    {unassigned && (
-                      <span
-                        title="No assigned resource or owner"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 7,
-                          fontWeight: 900,
-                          letterSpacing: "0.08em",
-                          color: "var(--status-error)",
-                          border: "1px solid color-mix(in srgb, var(--status-error) 50%, transparent)",
-                          background: "rgba(239,68,68,0.10)",
-                          borderRadius: 2,
-                          padding: "1px 4px",
-                          marginRight: 5,
-                          flexShrink: 0,
-                          lineHeight: 1.35,
-                        }}
-                      >
-                        NO OWNER
-                      </span>
-                    )}
-                    <span style={{
-                      fontFamily: "var(--font-body)",
-                      // Slight WBS-level type ramp: parent tasks read as
-                      // headers, leaf rows stay at the base weight. Depth
-                      // also drops the size by 0.5px per level (max 2)
-                      // so a glance can tell parent from grandchild.
-                      fontSize: task._hasChildren ? 11.5 : Math.max(10, 11 - Math.min(task._depth || 0, 2) * 0.5),
-                      fontWeight: task._hasChildren ? 800 : 500,
-                      letterSpacing: task._hasChildren ? "0.01em" : 0,
-                      textTransform: task._hasChildren ? "uppercase" : "none",
-                      color: overdue
-                        ? GANTT_STATUS_HEX.delayed
-                        : task._hasChildren
-                          ? "var(--text-primary)"
-                          : (task._depth || 0) > 0
-                            ? "var(--text-secondary)"
-                            : "var(--text-primary)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}>
-                      {sanitizeTaskName(task)}
-                    </span>
-                  </span>
-                )}
-                {/* Duration — always derive from start/end so a stale stored
-                    `duration` from an old MS Project import (or a manual edit
-                    that touched dates without touching the duration column)
-                    can't display "1d" on a 140-day task. The schedule_tasks
-                    table still has a `duration` column, but it is no longer
-                    a source of truth for display. */}
-                <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>
-                  {calcDuration(task.start_date, task.end_date)}
-                </span>
-                {/* Start */}
-                {isEditing ? (
-                  <input type="date" value={editDraft.start_date} disabled={isSummaryRow} title={isSummaryRow ? "Derived from children — not editable" : undefined} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%", ...(isSummaryRow ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} />
-                ) : (
-                  <span
-                    className="sbd-num"
-                    title={isShifted ? `Stored: ${fmtDate(task.start_date)}\nShifted by predecessors` : undefined}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: !dispStart ? "var(--status-warning)" : isShifted ? "var(--accent)" : "var(--text-secondary)", fontWeight: !dispStart ? 700 : 400, textAlign: "center", whiteSpace: "nowrap" }}
-                  >
-                    {fmtDate(dispStart)}{isShifted ? "*" : ""}
-                  </span>
-                )}
-                {/* Finish */}
-                {isEditing ? (
-                  <input type="date" value={editDraft.end_date} disabled={isSummaryRow} title={isSummaryRow ? "Derived from children — not editable" : undefined} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%", ...(isSummaryRow ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} />
-                ) : (
-                  <span
-                    className="sbd-num"
-                    title={isShifted ? `Stored: ${fmtDate(task.end_date)}\nShifted by predecessors` : undefined}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: !dispEnd ? GANTT_PHASE_HEX.Procurement : overdue ? GANTT_STATUS_HEX.delayed : isShifted ? GANTT_STATUS_HEX.inProgress : "var(--text-secondary)", fontWeight: !dispEnd ? 700 : 400, textAlign: "center", whiteSpace: "nowrap" }}
-                  >
-                    {fmtDate(dispEnd)}{isShifted ? "*" : ""}
-                  </span>
-                )}
-                {/* Predecessors */}
-                <span title={depLabels || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{depLabels || "—"}</span>
-                {/* Resources */}
-                <span title={task.resource_names || task.assigned_to || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: task.resource_names || task.assigned_to ? "var(--text-secondary)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.resource_names || task.assigned_to || "—"}</span>
-                {/* Status — chip rendering, tinted background + dot for
-                    quick visual scan. Overdue rows promote to the
-                    Delayed palette so an "Overdue" row visually
-                    matches its red border-left strip. */}
-                {isEditing ? (
-                  <select value={editDraft.status} onChange={e => setEditDraft(d => ({ ...d, status: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px" }}>
-                    {["Not Started","In Progress","Complete","Delayed","On Hold"].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                ) : (
-                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", overflow: "hidden" }}>
-                    <StatusChip status={task.status} overdue={overdue} />
-                  </div>
-                )}
-                {/* Stage — only rendered with a picker on Detailing-phase
-                    rows. `phase` here is the PHASES config object from the
-                    row (not a string), so we check phase.key. For other
-                    phases we emit an em-dash so the grid layout stays
-                    aligned. Stage persists in
-                    schedule_tasks.metadata.detailing_stage; onSave is the
-                    parent Schedule page's ScheduleTask.update callback.
-                    stopPropagation on mousedown + click so the row's
-                    onTaskClick doesn't fire while the select is open. */}
-                {phase?.key === "Detailing" ? (
-                  <select
-                    value={task.metadata?.detailing_stage || ""}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      const newStage = e.target.value || null;
-                      if (onSave) {
-                        onSave({
-                          id: task.id,
-                          metadata: { ...(task.metadata || {}), detailing_stage: newStage },
-                        });
-                      }
-                    }}
-                    style={{
-                      fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-                      background: "var(--bg-input)",
-                      border: `1px solid ${task.metadata?.detailing_stage ? "var(--accent-border)" : "var(--divider)"}`,
-                      borderRadius: 3,
-                      color: task.metadata?.detailing_stage ? "var(--accent)" : "var(--text-muted)",
-                      padding: "2px 2px",
-                      width: "100%",
-                      letterSpacing: "0.04em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <option value="">—</option>
-                    {DETAILING_STAGES.map((s) => (
-                      <option key={s} value={s}>{STAGE_DISPLAY[s] || s}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center" }}>—</span>
-                )}
-                {/* % or save/cancel */}
-                {isEditing ? (
-                  <div style={{ display: "flex", gap: 3, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => commitEdit(task.id)} disabled={saving} style={{ background: "var(--accent)", border: "none", borderRadius: 3, color: "#000", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, padding: "2px 6px", cursor: "pointer" }}>{saving ? "…" : "✓"}</button>
-                    <button onClick={cancelEdit} style={{ background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", cursor: "pointer" }}>✕</button>
-                  </div>
-                ) : (
-                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{displayPct(task)}%</span>
-                )}
-              </div>
-            );
-          })}
+          <GanttLeftPanelRows
+            virtualRows={virtualRows}
+            collapsed={collapsed}
+            togglePhase={togglePhase}
+            collapsedDeliveries={collapsedDeliveries}
+            setCollapsedDeliveries={setCollapsedDeliveries}
+            GRID={GRID}
+            today={today}
+            setHoveredRowId={setHoveredRowId}
+            taskById={taskById}
+            successorCountById={successorCountById}
+            effectiveDates={effectiveDates}
+            editingId={editingId}
+            editDraft={editDraft}
+            setEditDraft={setEditDraft}
+            hoveredRowId={hoveredRowId}
+            focusedTaskId={focusedTaskId}
+            dropTarget={dropTarget}
+            dragId={dragId}
+            onDragStart={onDragStart}
+            onDragOverRow={onDragOverRow}
+            onDropRow={onDropRow}
+            onDragEnd={onDragEnd}
+            onTaskClick={onTaskClick}
+            commitEdit={commitEdit}
+            cancelEdit={cancelEdit}
+            onSave={onSave}
+            startInlineEdit={startInlineEdit}
+            toggleTask={toggleTask}
+            collapsedTasks={collapsedTasks}
+            weatherRiskByTask={weatherRiskByTask}
+            weatherRisk={weatherRisk}
+            saving={saving}
+            effStart={effStart}
+            effEnd={effEnd}
+            isOverdue={isOverdue}
+            floatMap={floatMap}
+          />
           {virtualBottomPadding > 0 && <div aria-hidden="true" style={{ height: virtualBottomPadding, flexShrink: 0 }} />}
         </div>
 
         {/* Right gantt panel */}
-        <div ref={rightBody} onScroll={() => { syncScroll("right"); syncHScroll(); }} style={{ flex: 1, overflowX: "auto", overflowY: "auto", background: "var(--sbd-gantt-bg)", position: "relative" }}>
+        <div ref={rightBody} onScroll={() => { syncScroll("right"); syncHScroll(); }} style={{ flex: 1, overflowX: "auto", overflowY: "auto", background: GANTT_BG_VAR, position: "relative" }}>
           <div style={{ width: totalW, height: totalHeight, position: "relative" }}>
 
             {/* Alternating week bands — softer than before to match the
@@ -1562,7 +1140,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   bottom: 0,
                   left: i * WEEK_PX,
                   width: WEEK_PX,
-                  background: "rgba(255,255,255,0.018)",
+                  background: GANTT_WEEKEND_VAR,
                   pointerEvents: "none",
                   zIndex: 0,
                 }} />
@@ -1580,7 +1158,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 <div style={{
                   position: "absolute", top: 0, bottom: 0,
                   left: todayPx - 12, width: 24,
-                  background: "linear-gradient(90deg, transparent 0%, var(--sbd-gantt-today-soft) 50%, transparent 100%)",
+                  background: `linear-gradient(90deg, transparent 0%, ${GANTT_TODAY_SOFT_VAR} 50%, transparent 100%)`,
                   pointerEvents: "none",
                   zIndex: 6,
                 }} />
@@ -1589,19 +1167,19 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 <div style={{
                   position: "absolute", top: 0, bottom: 0,
                   left: todayPx - 1, width: 2,
-                  background: GANTT_TODAY_HEX,
+                  background: GANTT_TODAY_VAR,
                   zIndex: 12,
-                  boxShadow: "0 0 4px rgba(255,107,0,0.65), 0 0 12px rgba(255,107,0,0.35)",
+                  boxShadow: `0 0 4px color-mix(in srgb, ${GANTT_TODAY_VAR} 65%, transparent), 0 0 12px color-mix(in srgb, ${GANTT_TODAY_VAR} 35%, transparent)`,
                 }}>
                   <div style={{
                     position: "absolute", top: 0, left: -22,
-                    background: GANTT_TODAY_HEX,
+                    background: GANTT_TODAY_VAR,
                     borderRadius: "2px 2px 2px 0",
                     padding: "2px 6px",
                     fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800,
-                    color: "#fff", letterSpacing: "0.10em",
+                    color: "var(--on-accent)", letterSpacing: "0.10em",
                     whiteSpace: "nowrap",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
+                    boxShadow: `0 2px 6px color-mix(in srgb, ${GANTT_BG_VAR} 70%, transparent)`,
                   }}>TODAY</div>
                 </div>
               </>
@@ -1616,7 +1194,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               return (
                 <div key={i} style={{
                   position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: 1,
-                  background: isMonthStart ? "var(--sbd-gantt-grid-strong)" : "var(--sbd-gantt-grid)",
+                  background: isMonthStart ? GANTT_GRID_STRONG_VAR : GANTT_GRID_VAR,
                   zIndex: 1,
                   pointerEvents: "none",
                 }} />
@@ -1632,7 +1210,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               <svg style={{ position: "absolute", top: 0, left: 0, width: totalW, height: totalHeight, pointerEvents: "none", zIndex: 5 }}>
                 <defs>
                   <marker id="depArrowHead" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
-                    <polygon points="0 0, 10 3.5, 0 7" fill="#7DA3C7" />
+                    <polygon points="0 0, 10 3.5, 0 7" fill={GANTT_DEPENDENCY_VAR} />
                   </marker>
                 </defs>
                 {visibleDepArrows.map(({ key, fromX, fromY, toX, toY }) => {
@@ -1640,7 +1218,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   const gap = 8;
                   const midX = fromX + gap;
                   const sameRow = Math.abs(fromY - toY) < 4;
-                  const stroke = "#7DA3C7";
+                  const stroke = GANTT_DEPENDENCY_VAR;
                   const strokeOpacity = 0.65;
                   if (sameRow) {
                     return (
@@ -1657,255 +1235,30 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             )}
 
             {/* Rows */}
-            {(() => {
-              let top = 0;
-              let taskIdx = 0;
-              return virtualRows.map(({ row, top: rowTop, index: i }) => {
-                if (row.type === "summary") {
-                  top += SUM_H;
-                  // Use effective dates for the summary span as well
-                  const phaseEffStarts = row.tasks.map(t => effStart(t)).filter(Boolean).sort();
-                  const phaseEffEnds   = row.tasks.map(t => effEnd(t)).filter(Boolean).sort();
-                  const sumStart = phaseEffStarts[0] || row.start;
-                  const sumEnd   = phaseEffEnds[phaseEffEnds.length - 1] || row.end;
-                  const startPx = px(sumStart);
-                  const w = spanPx(sumStart, sumEnd);
-                  return (
-                    <div key={`gs-${row.phase.key}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: SUM_H, background: `${row.phase.color}08`, borderBottom: `1px solid var(--divider)` }}>
-                      <SummaryBar phase={row.phase} leftPx={startPx} widthPx={w} pctComplete={row.pctComplete} />
-                    </div>
-                  );
-                }
-                // ── Delivery summary bar ──
-                if (row.type === "delivery-summary") {
-                  top += SUM_H;
-                  const startPx2 = px(row.start);
-                  const w2 = spanPx(row.start, row.end);
-                  const dColor = GANTT_PHASE_HEX.Delivery;
-                  const pct2 = row.pctComplete || 0;
-                  return (
-                    <div key="gs-deliveries" style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: SUM_H, background: `${dColor}08`, borderBottom: "1px solid var(--divider)" }}>
-                      {/* Summary bar spanning all deliveries */}
-                      <div style={{
-                        position: "absolute", left: startPx2, width: Math.max(w2, 6), height: 14, top: "50%", transform: "translateY(-50%)",
-                        background: `${dColor}40`, borderRadius: 2, overflow: "hidden",
-                      }}>
-                        <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(pct2, 100)}%`, background: dColor, borderRadius: 2, transition: "width 0.3s" }} />
-                        <div style={{ position: "absolute", left: 0, top: 0, width: 4, height: "100%", background: dColor, borderRadius: "2px 0 0 2px" }} />
-                        <div style={{ position: "absolute", right: 0, top: 0, width: 4, height: "100%", background: dColor, borderRadius: "0 2px 2px 0" }} />
-                        {w2 > 40 && (
-                          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 9, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)" }}>{pct2}%</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-                // ── Delivery item bar ──
-                if (row.type === "delivery") {
-                  const zebra2 = taskIdx++ % 2 === 1;
-                  top += ROW_H;
-                  const d = row.delivery;
-                  const hovered = hoveredRowId === `del-${d.id}`;
-                  const isLate = d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered";
-                  const baseBg2 = isLate ? "rgba(239,68,68,0.04)" : zebra2 ? "var(--hover-bg)" : "transparent";
-                  const startIso = (d.scheduled_date || "").split("T")[0];
-                  const endIso = (d.required_date || d.actual_date || d.scheduled_date || "").split("T")[0];
-                  if (!startIso) {
-                    return <div key={`gd-${d.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? "rgba(245,158,11,0.07)" : baseBg2 }} />;
-                  }
-                  return (
-                    <div key={`gd-${d.id}`}
-                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? "rgba(245,158,11,0.07)" : baseBg2, transition: "background 0.08s" }}
-                      onMouseEnter={() => setHoveredRowId(`del-${d.id}`)}
-                      onMouseLeave={() => setHoveredRowId(null)}
-                    >
-                      <DeliveryBar delivery={d} leftPx={px(startIso)} widthPx={spanPx(startIso, endIso)} />
-                    </div>
-                  );
-                }
-                const zebra = taskIdx++ % 2 === 1;
-                top += ROW_H;
-                const { task } = row;
-                const overdue = isOverdue(task);
-                const critical = isCriticalTask(task);
-                const hovered = hoveredRowId === task.id;
-                const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
-                const parentBg = task._hasChildren ? `${GANTT_STATUS_HEX.inProgress}0A` : "transparent";
-                const baseBg = overdue ? "rgba(239,68,68,0.04)" : critical ? "rgba(245,158,11,0.04)" : zebra ? "var(--hover-bg)" : parentBg;
-                const hoverBg = `${GANTT_STATUS_HEX.inProgress}12`;
-                const focusedBg = `${GANTT_STATUS_HEX.inProgress}20`;
-                const handleTaskRowClick = () => {
-                  if (suppressTaskClickRef.current) {
-                    suppressTaskClickRef.current = false;
-                    return;
-                  }
-                  onTaskClick?.(task);
-                };
-                if (!task.start_date || !task.end_date) {
-                  const tbdLeft = px(today.toISOString().slice(0, 10));
-                  return (
-                    <div key={`gr-${task.id}`}
-                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: "pointer", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
-                      onClick={handleTaskRowClick}
-                      onMouseEnter={() => setHoveredRowId(task.id)}
-                      onMouseLeave={() => setHoveredRowId(null)}
-                    >
-                      <div
-                        title="Date TBD — task is tracked but not yet scheduled"
-                        style={{
-                          position: "absolute",
-                          left: Math.max(tbdLeft - 20, 4),
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          padding: "2px 8px",
-                          border: "1px dashed var(--status-warning)",
-                          borderRadius: 4,
-                          background: "rgba(245,158,11,0.08)",
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 9,
-                          fontWeight: 700,
-                          color: "var(--status-warning)",
-                          letterSpacing: "0.06em",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        TBD
-                      </div>
-                    </div>
-                  );
-                }
-                const taskEffS = effStart(task);
-                const taskEffE = effEnd(task);
-                const isDraggingTask = taskDrag?.taskId === task.id;
-                const dragDays = isDraggingTask ? taskDrag.daysDelta : 0;
-                const dragMode = isDraggingTask ? (taskDrag.mode || "move") : "move";
-                const startDelta = dragMode === "resize-end" ? 0 : dragDays;
-                const endDelta = dragMode === "resize-start" ? 0 : dragDays;
-                const displayStart = startDelta ? shiftDateOnly(taskEffS, startDelta) : taskEffS;
-                const displayEnd = endDelta ? shiftDateOnly(taskEffE, endDelta) : taskEffE;
-                const barLeft = px(displayStart);
-                const barWidth = spanPx(displayStart, displayEnd);
-                const canDragTaskBar = Boolean(onSave && !saving && isActionableScheduleTask(task));
-                const isMilestone = isMilestoneTask(task);
-                const dragTargetLeft = isMilestone ? barLeft - 12 : barLeft;
-                const dragTargetWidth = isMilestone ? 24 : Math.max(barWidth, 18);
-                return (
-                  <div key={`gr-${task.id}`}
-                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: canDragTaskBar ? (isDraggingTask ? "grabbing" : "grab") : "pointer", transition: "background 0.08s", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
-                    onClick={handleTaskRowClick}
-                    onMouseEnter={e => { setHoveredRowId(task.id); if (!taskDrag) setTooltip({ task, x: e.clientX, y: e.clientY }); }}
-                    onMouseMove={e => { if (!taskDrag) setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null); }}
-                    onMouseLeave={() => { setHoveredRowId(null); setTooltip(null); }}
-                  >
-                    {/* Baseline ghost bar — rendered behind the current bar */}
-                    {showBaseline && !task._hasChildren && (() => {
-                      const baseline = getTaskBaseline(task);
-                      if (!baseline) return null;
-                      const taskStart = displayStart;
-                      const taskEnd = displayEnd;
-                      if (baseline.start === taskStart && baseline.end === taskEnd) return null;
-                      const ghostLeft = px(baseline.start);
-                      const ghostWidth = spanPx(baseline.start, baseline.end);
-                      const direction = baseline.start && taskStart && baseline.start < taskStart ? "right"
-                        : baseline.start && taskStart && baseline.start > taskStart ? "left" : null;
-                      return <BaselineGhostBar leftPx={ghostLeft} widthPx={ghostWidth} direction={direction} />;
-                    })()}
-                    {task._hasChildren ? (
-                      <SummaryBar phase={row.phase} leftPx={barLeft} widthPx={barWidth} pctComplete={task.percent_complete || 0} />
-                    ) : (
-                      <>
-                        <TaskBar task={task} leftPx={barLeft} widthPx={barWidth} />
-                        {canDragTaskBar && (
-                          <div
-                            title="Drag to move this task's start and finish dates"
-                            role="button"
-                            aria-label={`Drag ${sanitizeTaskName(task)} to move start and finish dates`}
-                            onPointerDown={(event) => startTaskBarDrag(event, task, taskEffS, taskEffE)}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleTaskRowClick();
-                            }}
-                            style={{
-                              position: "absolute",
-                              left: dragTargetLeft,
-                              width: dragTargetWidth,
-                              height: 26,
-                              top: "50%",
-                              transform: "translateY(-50%)",
-                              cursor: isDraggingTask ? "grabbing" : "grab",
-                              zIndex: 9,
-                              touchAction: "none",
-                              borderRadius: 6,
-                              background: isDraggingTask ? "rgba(255,255,255,0.08)" : "transparent",
-                              boxShadow: isDraggingTask ? "0 0 0 1px rgba(255,255,255,0.22) inset" : "none",
-                            }}
-                          />
-                        )}
-                        {/* Edge resize handles — drag an edge to change the
-                            task's duration (left = start, right = finish). Sit
-                            above the move zone (zIndex 10) so an edge grab
-                            resizes while the bar body still moves. Hidden on
-                            milestones and bars too narrow to grab safely. */}
-                        {canDragTaskBar && !isMilestone && barWidth >= 24 && (
-                          <>
-                            <div
-                              title="Drag to change this task's start date (duration)"
-                              role="button"
-                              aria-label={`Resize start of ${sanitizeTaskName(task)}`}
-                              onPointerDown={(event) => startTaskBarDrag(event, task, taskEffS, taskEffE, "resize-start")}
-                              onClick={(event) => event.stopPropagation()}
-                              style={{
-                                position: "absolute", left: barLeft - 1, width: 9, height: 24,
-                                top: "50%", transform: "translateY(-50%)",
-                                cursor: "ew-resize", zIndex: 10, touchAction: "none",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}
-                            >
-                              <div style={{ width: 2, height: 14, borderRadius: 2, background: "var(--accent)", opacity: (hovered || isDraggingTask) ? 0.85 : 0, transition: "opacity 0.1s" }} />
-                            </div>
-                            <div
-                              title="Drag to change this task's finish date (duration)"
-                              role="button"
-                              aria-label={`Resize finish of ${sanitizeTaskName(task)}`}
-                              onPointerDown={(event) => startTaskBarDrag(event, task, taskEffS, taskEffE, "resize-end")}
-                              onClick={(event) => event.stopPropagation()}
-                              style={{
-                                position: "absolute", left: barLeft + barWidth - 8, width: 9, height: 24,
-                                top: "50%", transform: "translateY(-50%)",
-                                cursor: "ew-resize", zIndex: 10, touchAction: "none",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}
-                            >
-                              <div style={{ width: 2, height: 14, borderRadius: 2, background: "var(--accent)", opacity: (hovered || isDraggingTask) ? 0.85 : 0, transition: "opacity 0.1s" }} />
-                            </div>
-                          </>
-                        )}
-                      </>
-                    )}
-                    {/* Detailing stage-gate milestones — color-coded
-                        diamonds (IFA / OFA / BFA / OFS / IFC / Released) overlayed
-                        on the task bar at each filled date. Purely
-                        decorative; bar placement comes from the
-                        derived start/end. Component short-circuits
-                        for non-Detailing rows. */}
-                    <StageGateMilestones task={task} px={px} />
-
-                    {/* Submittal review bars linked to this WP */}
-                    {showSubmittals && submittals
-                      .filter(s => s.is_submittal && s.linked_wp_id === task.id && s.due_date)
-                      .map(s => {
-                        const uploadIso = (s.uploaded_date || s.revision_date || task.start_date || "").split("T")[0];
-                        const dueIso = s.due_date;
-                        if (!uploadIso || !dueIso) return null;
-                        return (
-                          <SubmittalBar key={s.id} submittal={s} leftPx={px(uploadIso)} widthPx={spanPx(uploadIso, dueIso)} />
-                        );
-                      })
-                    }
-                  </div>
-                );
-              });
-            })()}
+            <GanttTimelineRows
+              virtualRows={virtualRows}
+              effStart={effStart}
+              effEnd={effEnd}
+              px={px}
+              spanPx={spanPx}
+              today={today}
+              hoveredRowId={hoveredRowId}
+              setHoveredRowId={setHoveredRowId}
+              focusedTaskId={focusedTaskId}
+              suppressTaskClickRef={suppressTaskClickRef}
+              onTaskClick={onTaskClick}
+              taskDrag={taskDrag}
+              onSave={onSave}
+              saving={saving}
+              startTaskBarDrag={startTaskBarDrag}
+              showBaseline={showBaseline}
+              baselineMap={baselineMap}
+              floatMap={floatMap}
+              showSubmittals={showSubmittals}
+              submittals={submittals}
+              setTooltip={setTooltip}
+              isOverdue={isOverdue}
+            />
           </div>
         </div>
       </div>
@@ -1926,7 +1279,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             padding: "8px 10px",
             pointerEvents: "none",
             borderRadius: 7,
-            boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
+            boxShadow: "var(--shadow-lg)",
             minWidth: 220,
           }}
         >
@@ -1956,7 +1309,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           padding: "10px 14px",
           pointerEvents: "none",
           minWidth: 260,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.3)",
+          boxShadow: "var(--shadow-lg)",
           borderRadius: 8,
         }}>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6, letterSpacing: "0.01em" }}>
@@ -1968,7 +1321,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             </div>
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
-            {isCriticalTask(tooltip.task) && (
+            {isCriticalTask(tooltip.task, floatMap) && (
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", border: "1px solid var(--status-warning)", borderRadius: 999, padding: "2px 6px" }}>
                 Critical
               </span>
@@ -1979,22 +1332,22 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               </span>
             )}
             {effectiveDates[tooltip.task.id]?.shifted && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 999, padding: "2px 6px" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 999, padding: "2px 6px" }}>
                 Shifted {effectiveDates[tooltip.task.id]?.shiftedBy || 0}d
               </span>
             )}
             {hasLogicGapTask(tooltip.task, successorCountById) && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 999, padding: "2px 6px" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 999, padding: "2px 6px" }}>
                 Logic gap
               </span>
             )}
             {isUnassignedTask(tooltip.task) && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-error)", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 999, padding: "2px 6px" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 999, padding: "2px 6px" }}>
                 No owner
               </span>
             )}
-            {hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task)) && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94A3B8", background: "rgba(100,116,139,0.14)", border: "1px solid rgba(100,116,139,0.40)", borderRadius: 999, padding: "2px 6px" }}>
+            {hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task), baselineMap) && (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: GANTT_BASELINE_VAR, background: `color-mix(in srgb, ${GANTT_BASELINE_VAR} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${GANTT_BASELINE_VAR} 40%, transparent)`, borderRadius: 999, padding: "2px 6px" }}>
                 Baseline drift
               </span>
             )}
@@ -2009,12 +1362,22 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             {fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}
           </div>
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 2 }}>
-            Effective {fmtDate(effStart(tooltip.task))} to {fmtDate(effEnd(tooltip.task))} / {calcDuration(effStart(tooltip.task), effEnd(tooltip.task)) || 0}d
+            Effective {fmtDate(effStart(tooltip.task))} to {fmtDate(effEnd(tooltip.task))} / {calcDuration(effStart(tooltip.task), effEnd(tooltip.task))}
+          </div>
+          {/* Calculated float, not the checkbox (§2.2). describeFloat spells out
+              WHY a cell is blank — "no dates" and "in a predecessor cycle" are
+              different from "zero float", and only one of them means critical. */}
+          <div
+            className="sbd-num"
+            title={describeFloat(floatMap[tooltip.task?.id])}
+            style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 2 }}
+          >
+            Float {formatFloat(floatMap[tooltip.task?.id])}
           </div>
           {(() => {
-            const bl = getTaskBaseline(tooltip.task);
+            const bl = getTaskBaseline(tooltip.task, baselineMap);
             if (!bl) return null;
-            const drifted = hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task));
+            const drifted = hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task), baselineMap);
             return (
               <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: drifted ? "var(--status-warning)" : "var(--text-muted)", marginBottom: 2 }}>
                 Baseline {fmtDate(bl.start)} to {fmtDate(bl.end)}{drifted ? " (drifted)" : ""}
@@ -2022,9 +1385,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             );
           })()}
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isOverdue(tooltip.task) ? GANTT_STATUS_HEX.delayed : "var(--text-secondary)" }}>
-            {displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
+            {percentCompleteOrNull(tooltip.task) === null
+              ? "Progress not recorded"
+              : `${percentCompleteOrNull(tooltip.task)}% complete`}{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${GANTT_GRID_VAR}` }}>
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Pred</div>
               <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-primary)", fontWeight: 800 }}>
@@ -2049,11 +1414,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             </div>
           </div>
           {weatherRiskByTask[tooltip.task.id] && (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${GANTT_GRID_VAR}` }}>
               Weather risk: {pluralize(weatherRiskByTask[tooltip.task.id].length, "day")}
             </div>
           )}
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: taskOwner(tooltip.task) ? "var(--text-muted)" : "var(--status-error)", marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: taskOwner(tooltip.task) ? "var(--text-muted)" : "var(--status-error)", marginTop: 6, paddingTop: 6, borderTop: `1px solid ${GANTT_GRID_VAR}` }}>
             Owner: {taskOwner(tooltip.task) || "Unassigned"}
           </div>
           {onSave && (

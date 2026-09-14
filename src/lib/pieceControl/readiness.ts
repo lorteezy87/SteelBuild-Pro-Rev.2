@@ -1,8 +1,17 @@
+import { isGoverningDrawingReleaseReady } from "./drawingReleaseReady";
+import {
+  expandLinkedDrawingIdsForPieces,
+  pieceHasDrawingLink,
+} from "./pieceDrawingLinks";
+
 export interface ReadinessWorkPackage {
   id: string;
   project_id: string;
   wp_number?: string | null;
   name?: string | null;
+  sequence_number?: string | null;
+  area?: string | null;
+  scheduled_start_date?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
 }
@@ -25,13 +34,22 @@ export interface ReadinessPieceDrawing {
   project_id: string;
 }
 
+export interface ReadinessPieceDrawingSet {
+  piece_id: string;
+  drawing_set_id: string;
+  project_id: string;
+}
+
 export interface ReadinessDrawing {
   id: string;
   project_id: string;
   drawing_set_id?: string | null;
   sheet_number?: string | null;
   title?: string | null;
+  /** Legacy sheet-stage enum (7 values). Prefer submittal-derived stage. */
+  stage?: string | null;
   set_approval_status?: string | null;
+  linked_rfi_ids?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
   is_superseded?: boolean | null;
@@ -39,6 +57,7 @@ export interface ReadinessDrawing {
 
 export interface DrawingSetEvidence {
   id: string;
+  set_name?: string | null;
   set_approval_status?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
@@ -47,8 +66,14 @@ export interface DrawingSetEvidence {
 export interface SubmittalEvidence {
   id: string;
   status: string;
+  ball_in_court?: string | null;
   drawing_set_ids?: string[] | null;
   current_round_id?: string | null;
+  submitted_date?: string | null;
+  required_date?: string | null;
+  returned_date?: string | null;
+  updated_at?: string | null;
+  round_number?: number | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
 }
@@ -66,6 +91,9 @@ export interface DrawingRevisionEvidence {
   drawing_id: string;
   is_current: boolean;
   archived_at?: string | null;
+  revision_code?: string | null;
+  issued_at?: string | null;
+  received_at?: string | null;
 }
 
 export interface DrawingReviewEvidence {
@@ -103,81 +131,15 @@ export interface WorkPackageReadiness {
   isReady: boolean;
 }
 
-function normalizedStatus(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
-
-const APPROVED_DIRECT = new Set(["approved", "approved_as_noted"]);
-const APPROVED_REVIEW = new Set(["approved", "approved_with_notes"]);
-const APPROVED_SIGNOFF = new Set(["approved_for_fabrication", "approved_as_noted"]);
-const APPROVED_SUBMITTAL = new Set(["approved", "approved_as_noted"]);
-const APPROVED_RESPONSE = new Set(["no_exception", "approved_as_noted"]);
-
+/**
+ * Piece-control "approved for fab" predicate (Slice 6).
+ * Delegates to IFC/Released readiness — bare Approved/AAN (OFS/BFA) is not enough.
+ */
 export function isDrawingApproved(
   drawing: ReadinessDrawing,
   evidence: ReadinessEvidence = {},
 ): boolean {
-  if (APPROVED_DIRECT.has(normalizedStatus(drawing.set_approval_status))) return true;
-
-  const drawingSet = (evidence.drawingSets ?? []).find(
-    (set) => set.id === drawing.drawing_set_id && !set.is_deleted && !set.deleted_at,
-  );
-  if (drawingSet && APPROVED_DIRECT.has(normalizedStatus(drawingSet.set_approval_status))) {
-    return true;
-  }
-
-  const currentRevisionIds = new Set(
-    (evidence.drawingRevisions ?? [])
-      .filter((revision) =>
-        revision.drawing_id === drawing.id &&
-        revision.is_current &&
-        !revision.archived_at
-      )
-      .map((revision) => revision.id),
-  );
-
-  const activeSignoffs = (evidence.drawingSignoffs ?? []).filter((signoff) =>
-    signoff.drawing_id === drawing.id &&
-    !signoff.is_voided &&
-    (currentRevisionIds.size === 0 ||
-      !signoff.drawing_revision_id ||
-      currentRevisionIds.has(signoff.drawing_revision_id))
-  );
-  if (activeSignoffs.some((signoff) => APPROVED_SIGNOFF.has(normalizedStatus(signoff.stamp_type)))) {
-    return true;
-  }
-
-  if (currentRevisionIds.size > 0) {
-    const reviews = (evidence.drawingReviews ?? []).filter((review) =>
-      currentRevisionIds.has(review.drawing_revision_id) &&
-      normalizedStatus(review.decision) !== "not_required"
-    );
-    if (
-      reviews.length > 0 &&
-      reviews.every((review) => APPROVED_REVIEW.has(normalizedStatus(review.decision)))
-    ) return true;
-  }
-
-  const linkedSubmittals = (evidence.submittals ?? []).filter((submittal) =>
-    !submittal.is_deleted &&
-    !submittal.deleted_at &&
-    Boolean(drawing.drawing_set_id) &&
-    (submittal.drawing_set_ids ?? []).includes(drawing.drawing_set_id!)
-  );
-  if (linkedSubmittals.some((submittal) => APPROVED_SUBMITTAL.has(normalizedStatus(submittal.status)))) {
-    return true;
-  }
-
-  const currentRoundIds = new Set(
-    linkedSubmittals.map((submittal) => submittal.current_round_id).filter(Boolean),
-  );
-  return (evidence.sheetResponses ?? []).some((response) =>
-    response.drawing_id === drawing.id &&
-    currentRoundIds.has(response.submittal_round_id) &&
-    !response.is_deleted &&
-    !response.deleted_at &&
-    APPROVED_RESPONSE.has(normalizedStatus(response.response_status))
-  );
+  return isGoverningDrawingReleaseReady(drawing, evidence).ready;
 }
 
 export function evaluateWorkPackageReadiness(
@@ -186,6 +148,7 @@ export function evaluateWorkPackageReadiness(
   pieceDrawings: ReadinessPieceDrawing[],
   drawings: ReadinessDrawing[],
   evidence: ReadinessEvidence = {},
+  pieceDrawingSets: ReadinessPieceDrawingSet[] = [],
 ): WorkPackageReadiness[] {
   const activePieces = pieces.filter((piece) => !piece.deleted_at);
   const containerIds = new Set(
@@ -206,8 +169,12 @@ export function evaluateWorkPackageReadiness(
         !containerIds.has(piece.id)
       );
       const scopeIds = new Set(scope.map((piece) => piece.id));
-      const relations = pieceDrawings.filter((relation) => scopeIds.has(relation.piece_id));
-      const linkedDrawingIds = new Set(relations.map((relation) => relation.drawing_id));
+      const linkedDrawingIds = expandLinkedDrawingIdsForPieces(
+        scopeIds,
+        pieceDrawingSets,
+        pieceDrawings,
+        drawings,
+      );
       const linkedDrawings = [...linkedDrawingIds]
         .map((drawingId) => activeDrawings.get(drawingId))
         .filter((drawing): drawing is ReadinessDrawing => Boolean(drawing));
@@ -219,6 +186,9 @@ export function evaluateWorkPackageReadiness(
         .length;
       const unapprovedDrawingCount = linkedDrawings.length - approvedDrawingCount;
       const heldPieceCount = scope.filter((piece) => piece.on_hold).length;
+      const unmappedPieceCount = scope.filter(
+        (piece) => !pieceHasDrawingLink(piece.id, pieceDrawingSets, pieceDrawings),
+      ).length;
       const blockers: string[] = [];
 
       if (scope.length === 0) {
@@ -226,11 +196,18 @@ export function evaluateWorkPackageReadiness(
       } else if (linkedDrawingIds.size === 0) {
         blockers.push("No shop drawings linked.");
       }
+      if (unmappedPieceCount > 0) {
+        blockers.push(
+          `${unmappedPieceCount} scoped ${unmappedPieceCount === 1 ? "piece has" : "pieces have"} no linked drawing set.`,
+        );
+      }
       if (missingDrawingCount > 0) {
         blockers.push(`${missingDrawingCount} linked drawing ${missingDrawingCount === 1 ? "record is" : "records are"} missing or inactive.`);
       }
       if (unapprovedDrawingCount > 0) {
-        blockers.push(`${unapprovedDrawingCount} linked shop ${unapprovedDrawingCount === 1 ? "drawing is" : "drawings are"} not approved.`);
+        blockers.push(
+          `${unapprovedDrawingCount} linked shop ${unapprovedDrawingCount === 1 ? "drawing is" : "drawings are"} not IFC / Released for fabrication.`,
+        );
       }
       if (heldPieceCount > 0) {
         blockers.push(`${heldPieceCount} scoped ${heldPieceCount === 1 ? "piece is" : "pieces are"} on hold.`);

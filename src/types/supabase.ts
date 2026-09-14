@@ -269,6 +269,68 @@ export type Database = {
           },
         ]
       }
+      billing_config: {
+        Row: {
+          livemode: boolean | null
+          scope: string
+          stripe_price_business: string | null
+          stripe_price_pro: string | null
+          stripe_webhook_endpoint_id: string | null
+          stripe_webhook_secret: string | null
+          updated_at: string
+        }
+        Insert: {
+          livemode?: boolean | null
+          scope?: string
+          stripe_price_business?: string | null
+          stripe_price_pro?: string | null
+          stripe_webhook_endpoint_id?: string | null
+          stripe_webhook_secret?: string | null
+          updated_at?: string
+        }
+        Update: {
+          livemode?: boolean | null
+          scope?: string
+          stripe_price_business?: string | null
+          stripe_price_pro?: string | null
+          stripe_webhook_endpoint_id?: string | null
+          stripe_webhook_secret?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      billing_events: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string | null
+          stripe_event_id: string
+          type: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id?: string | null
+          stripe_event_id: string
+          type?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string | null
+          stripe_event_id?: string
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_hour_items: {
         Row: {
           category: string
@@ -1613,12 +1675,88 @@ export type Database = {
           },
         ]
       }
+      drawing_holds: {
+        Row: {
+          created_at: string
+          drawing_id: string
+          id: string
+          is_active: boolean
+          placed_at: string
+          placed_by_id: string | null
+          placed_by_name: string | null
+          prior_release_status: string | null
+          project_id: string
+          reason: string
+          release_notes: string | null
+          released_at: string | null
+          released_by_id: string | null
+          released_by_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          drawing_id: string
+          id?: string
+          is_active?: boolean
+          placed_at?: string
+          placed_by_id?: string | null
+          placed_by_name?: string | null
+          prior_release_status?: string | null
+          project_id: string
+          reason: string
+          release_notes?: string | null
+          released_at?: string | null
+          released_by_id?: string | null
+          released_by_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          drawing_id?: string
+          id?: string
+          is_active?: boolean
+          placed_at?: string
+          placed_by_id?: string | null
+          placed_by_name?: string | null
+          prior_release_status?: string | null
+          project_id?: string
+          reason?: string
+          release_notes?: string | null
+          released_at?: string | null
+          released_by_id?: string | null
+          released_by_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drawing_holds_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "drawing_holds_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawing_holds_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drawing_impacts: {
         Row: {
           assigned_to: string | null
           created_at: string
           created_by: string | null
-          drawing_revision_id: string
+          drawing_revision_id: string | null
           due_date: string | null
           id: string
           impact_type: string
@@ -1634,7 +1772,7 @@ export type Database = {
           assigned_to?: string | null
           created_at?: string
           created_by?: string | null
-          drawing_revision_id: string
+          drawing_revision_id?: string | null
           due_date?: string | null
           id?: string
           impact_type: string
@@ -2109,6 +2247,8 @@ export type Database = {
           revision_code: string
           revision_name: string | null
           revision_notes: string | null
+          revision_reason: string | null
+          revision_source: string | null
           sheet_number: string
           sheet_title: string
           supersedes_revision_id: string | null
@@ -2135,6 +2275,8 @@ export type Database = {
           revision_code: string
           revision_name?: string | null
           revision_notes?: string | null
+          revision_reason?: string | null
+          revision_source?: string | null
           sheet_number: string
           sheet_title: string
           supersedes_revision_id?: string | null
@@ -2161,6 +2303,8 @@ export type Database = {
           revision_code?: string
           revision_name?: string | null
           revision_notes?: string | null
+          revision_reason?: string | null
+          revision_source?: string | null
           sheet_number?: string
           sheet_title?: string
           supersedes_revision_id?: string | null
@@ -2519,26 +2663,39 @@ export type Database = {
       drawing_transmittal_items: {
         Row: {
           created_at: string
+          drawing_id: string | null
           drawing_revision_id: string
+          gc_drawing_id: string | null
           id: string
           project_id: string
           transmittal_id: string
         }
         Insert: {
           created_at?: string
+          drawing_id?: string | null
           drawing_revision_id: string
+          gc_drawing_id?: string | null
           id?: string
           project_id: string
           transmittal_id: string
         }
         Update: {
           created_at?: string
+          drawing_id?: string | null
           drawing_revision_id?: string
+          gc_drawing_id?: string | null
           id?: string
           project_id?: string
           transmittal_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "drawing_transmittal_items_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "drawing_transmittal_items_drawing_revision_id_fkey"
             columns: ["drawing_revision_id"]
@@ -4886,6 +5043,127 @@ export type Database = {
         }
         Relationships: []
       }
+      organization_invitations: {
+        Row: {
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string | null
+          org_id: string
+          role: string
+          status: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          org_id: string
+          role?: string
+          status?: string
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          org_id?: string
+          role?: string
+          status?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_invitations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_members: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          current_period_end: string | null
+          id: string
+          metadata: Json
+          name: string
+          plan: string
+          slug: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          current_period_end?: string | null
+          id?: string
+          metadata?: Json
+          name: string
+          plan?: string
+          slug?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          current_period_end?: string | null
+          id?: string
+          metadata?: Json
+          name?: string
+          plan?: string
+          slug?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       photos: {
         Row: {
           category: string | null
@@ -5153,6 +5431,7 @@ export type Database = {
           content: string | null
           created_at: string | null
           date: string | null
+          folder_id: string
           id: string
           is_high_priority: boolean | null
           is_resolved: boolean | null
@@ -5173,6 +5452,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           date?: string | null
+          folder_id: string
           id?: string
           is_high_priority?: boolean | null
           is_resolved?: boolean | null
@@ -5193,6 +5473,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           date?: string | null
+          folder_id?: string
           id?: string
           is_high_priority?: boolean | null
           is_resolved?: boolean | null
@@ -5208,6 +5489,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "production_notes_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "note_folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "production_notes_project_id_fkey"
             columns: ["project_id"]
@@ -6057,8 +6345,190 @@ export type Database = {
           },
         ]
       }
+      project_calendars: {
+        Row: {
+          created_at: string
+          holidays: string[]
+          project_id: string
+          shift_label: string | null
+          updated_at: string
+          work_days: number[]
+        }
+        Insert: {
+          created_at?: string
+          holidays?: string[]
+          project_id: string
+          shift_label?: string | null
+          updated_at?: string
+          work_days?: number[]
+        }
+        Update: {
+          created_at?: string
+          holidays?: string[]
+          project_id?: string
+          shift_label?: string | null
+          updated_at?: string
+          work_days?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_calendars_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planner_action_events: {
+        Row: {
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          entity_id: string | null
+          entity_type: string
+          event_type: string
+          id: string
+          occurred_at: string
+          project_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          entity_id?: string | null
+          entity_type: string
+          event_type: string
+          id?: string
+          occurred_at?: string
+          project_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          entity_id?: string | null
+          entity_type?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planner_action_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_baseline_tasks: {
+        Row: {
+          baseline_duration: number | null
+          baseline_finish: string | null
+          baseline_id: string
+          baseline_start: string | null
+          id: string
+          is_summary: boolean
+          phase: string | null
+          project_id: string
+          task_id: string
+          task_name: string | null
+          wbs_code: string | null
+        }
+        Insert: {
+          baseline_duration?: number | null
+          baseline_finish?: string | null
+          baseline_id: string
+          baseline_start?: string | null
+          id?: string
+          is_summary?: boolean
+          phase?: string | null
+          project_id: string
+          task_id: string
+          task_name?: string | null
+          wbs_code?: string | null
+        }
+        Update: {
+          baseline_duration?: number | null
+          baseline_finish?: string | null
+          baseline_id?: string
+          baseline_start?: string | null
+          id?: string
+          is_summary?: boolean
+          phase?: string | null
+          project_id?: string
+          task_id?: string
+          task_name?: string | null
+          wbs_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_baseline_tasks_baseline_id_fkey"
+            columns: ["baseline_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_baselines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_baseline_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_baselines: {
+        Row: {
+          id: string
+          is_original: boolean
+          name: string
+          project_id: string
+          reason: string | null
+          set_at: string
+          set_by: string | null
+          set_by_name: string | null
+          task_count: number
+        }
+        Insert: {
+          id?: string
+          is_original?: boolean
+          name: string
+          project_id: string
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          set_by_name?: string | null
+          task_count?: number
+        }
+        Update: {
+          id?: string
+          is_original?: boolean
+          name?: string
+          project_id?: string
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          set_by_name?: string | null
+          task_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_baselines_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schedule_tasks: {
         Row: {
+          actual_finish_date: string | null
+          actual_start_date: string | null
           assigned_to: string | null
           blockers: Json | null
           created_at: string | null
@@ -6094,6 +6564,8 @@ export type Database = {
           wbs_code: string | null
         }
         Insert: {
+          actual_finish_date?: string | null
+          actual_start_date?: string | null
           assigned_to?: string | null
           blockers?: Json | null
           created_at?: string | null
@@ -6129,6 +6601,8 @@ export type Database = {
           wbs_code?: string | null
         }
         Update: {
+          actual_finish_date?: string | null
+          actual_start_date?: string | null
           assigned_to?: string | null
           blockers?: Json | null
           created_at?: string | null
@@ -6396,6 +6870,126 @@ export type Database = {
           },
         ]
       }
+      submittal_comment_dispositions: {
+        Row: {
+          comment_number: string | null
+          comment_text: string | null
+          completed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          drawing_id: string | null
+          id: string
+          incorporated_revision: string | null
+          is_deleted: boolean
+          is_required: boolean
+          location: string | null
+          metadata: Json
+          project_id: string
+          related_piece_ids: string[]
+          related_rfi_id: string | null
+          required_action: string | null
+          resolution: string | null
+          responsible_user_id: string | null
+          source: string | null
+          status: string
+          submittal_id: string
+          submittal_round_id: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          comment_number?: string | null
+          comment_text?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          drawing_id?: string | null
+          id?: string
+          incorporated_revision?: string | null
+          is_deleted?: boolean
+          is_required?: boolean
+          location?: string | null
+          metadata?: Json
+          project_id: string
+          related_piece_ids?: string[]
+          related_rfi_id?: string | null
+          required_action?: string | null
+          resolution?: string | null
+          responsible_user_id?: string | null
+          source?: string | null
+          status?: string
+          submittal_id: string
+          submittal_round_id: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          comment_number?: string | null
+          comment_text?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          drawing_id?: string | null
+          id?: string
+          incorporated_revision?: string | null
+          is_deleted?: boolean
+          is_required?: boolean
+          location?: string | null
+          metadata?: Json
+          project_id?: string
+          related_piece_ids?: string[]
+          related_rfi_id?: string | null
+          required_action?: string | null
+          resolution?: string | null
+          responsible_user_id?: string | null
+          source?: string | null
+          status?: string
+          submittal_id?: string
+          submittal_round_id?: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submittal_comment_dispositions_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_comment_dispositions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_comment_dispositions_related_rfi_id_fkey"
+            columns: ["related_rfi_id"]
+            isOneToOne: false
+            referencedRelation: "rfis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_comment_dispositions_submittal_id_fkey"
+            columns: ["submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_comment_dispositions_submittal_round_id_fkey"
+            columns: ["submittal_round_id"]
+            isOneToOne: false
+            referencedRelation: "submittal_rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       submittal_components: {
         Row: {
           created_at: string
@@ -6623,6 +7217,7 @@ export type Database = {
           approval_chain: Json | null
           approval_chain_step: number | null
           approved_date: string | null
+          approver_notes: Json
           ball_in_court: string | null
           created_at: string | null
           current_round_id: string | null
@@ -6665,6 +7260,7 @@ export type Database = {
           approval_chain?: Json | null
           approval_chain_step?: number | null
           approved_date?: string | null
+          approver_notes?: Json
           ball_in_court?: string | null
           created_at?: string | null
           current_round_id?: string | null
@@ -6707,6 +7303,7 @@ export type Database = {
           approval_chain?: Json | null
           approval_chain_step?: number | null
           approved_date?: string | null
+          approver_notes?: Json
           ball_in_court?: string | null
           created_at?: string | null
           current_round_id?: string | null
@@ -7275,6 +7872,51 @@ export type Database = {
             } & "Could not choose the best candidate function between: public.add_updated_at_trigger(tbl => text), public.add_updated_at_trigger(tbl => regclass). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
       create_project: { Args: { project_data: Json }; Returns: Json }
+      create_expense: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["expenses"]["Row"]
+      }
+      generate_pay_application: {
+        // public.pay_applications is not in the generated Tables (see
+        // src/lib/payapp/repository.ts), so the row comes back as Json and that
+        // module's typed signatures enforce the shape.
+        Args: { p_project_id: string; p_period_from: string | null; p_period_to: string | null; p_notes?: string | null }
+        Returns: Json
+      }
+      move_pay_application: {
+        Args: {
+          p_id: string
+          p_status: string
+          p_notes?: string | null
+          p_actor?: string | null
+          p_date?: string | null
+        }
+        Returns: Json
+      }
+      refresh_pay_application_totals: { Args: { p_id: string }; Returns: undefined }
+      create_backcharge: {
+        // public.backcharges is not in the generated Tables yet (see
+        // src/lib/backcharge/repository.ts), so the row comes back as Json and
+        // that module's typed signatures enforce the shape.
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Json
+      }
+      create_change_order: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["change_orders"]["Row"]
+      }
+      create_change_request: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["change_requests"]["Row"]
+      }
+      create_delivery: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["deliveries"]["Row"]
+      }
+      create_sov_item: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["sov_items"]["Row"]
+      }
       delete_drawing_set: { Args: { p_set_id: string }; Returns: number }
       soft_delete_project: { Args: { p_project_id: string }; Returns: undefined }
       escalate_rfi_sla: { Args: never; Returns: number }

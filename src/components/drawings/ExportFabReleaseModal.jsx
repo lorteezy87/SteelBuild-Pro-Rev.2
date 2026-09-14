@@ -33,6 +33,75 @@ import {
   downloadTextFile,
 } from "@/lib/exports/fabRelease";
 
+/**
+ * Group key for a sheet: the FK set id, else the id of the drawing_sets row
+ * whose name matches (so legacy name-only sheets join their FK siblings),
+ * else the raw legacy name.
+ */
+export function resolveDrawingSetKey(drawing, drawingSets = []) {
+  if (!drawing) return null;
+  if (drawing.drawing_set_id) return drawing.drawing_set_id;
+  const name = String(drawing.drawing_set_name || "").trim().toLowerCase();
+  if (!name) return null;
+  const match = (drawingSets || []).find(
+    (set) => set && !set.is_deleted && String(set.set_name || "").trim().toLowerCase() === name,
+  );
+  return match?.id || drawing.drawing_set_name || null;
+}
+
+/** Slice 8 — submittal + signoff evidence for IFC/Released readiness. */
+function useFabApprovalEvidence(open, projectId, drawings) {
+  const [evidence, setEvidence] = useState({
+    submittals: [],
+    drawingSignoffs: [],
+    drawingRevisions: [],
+  });
+
+  useEffect(() => {
+    if (!open || !projectId) {
+      setEvidence({ submittals: [], drawingSignoffs: [], drawingRevisions: [] });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const drawingIds = (drawings || []).map((d) => d?.id).filter(Boolean);
+        const [subs, signoffs, revisions] = await Promise.all([
+          supabase
+            .from("submittals")
+            .select("id, status, ball_in_court, drawing_set_ids, submitted_date, updated_at, round_number, is_deleted, deleted_at")
+            .eq("project_id", projectId)
+            .eq("is_deleted", false),
+          drawingIds.length
+            ? supabase
+                .from("drawing_signoffs")
+                .select("drawing_id, drawing_revision_id, stamp_type, is_voided")
+                .in("drawing_id", drawingIds)
+                .eq("is_voided", false)
+            : Promise.resolve({ data: [], error: null }),
+          drawingIds.length
+            ? supabase
+                .from("drawing_revisions")
+                .select("id, drawing_id, is_current, archived_at")
+                .in("drawing_id", drawingIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]);
+        if (cancelled) return;
+        setEvidence({
+          submittals: subs.data || [],
+          drawingSignoffs: signoffs.data || [],
+          drawingRevisions: revisions.data || [],
+        });
+      } catch (err) {
+        console.warn("[ExportFabReleaseModal] approval evidence fetch failed:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, projectId, drawings]);
+
+  return evidence;
+}
+
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 
 const labelStyle = {
@@ -50,14 +119,14 @@ const KIND_CONFIG = {
   fab_release: {
     title: "Export Fab Release Package",
     eyebrow: "FABRICATION RELEASE",
-    description: "Approved drawings (Released / approved sets) bundled with a manifest CSV and a README listing the contents, ready to hand to the fabricator.",
-    filterLabel: "Approved for fabrication",
+    description: "IFC / Released drawings (submittal-derived) bundled with a manifest CSV and a README listing the contents, ready to hand to the fabricator.",
+    filterLabel: "IFC / Released for fabrication",
   },
   turnover: {
     title: "Export Turnover Package",
     eyebrow: "TURNOVER",
-    description: "Approved-for-construction or approved-for-fabrication drawings with manifest and README, ready for owner turnover.",
-    filterLabel: "Approved (construction / fab)",
+    description: "IFC / Released drawings with manifest and README, ready for owner turnover.",
+    filterLabel: "IFC / Released",
   },
   claims: {
     title: "Export Claims Package",
@@ -72,6 +141,8 @@ const GATE_REASON_ICON = {
   open_rfis: "❓",
   rejected_sheets: "⊘",
   revision_conflict: "⟳",
+  unresolved_revision: "◎",
+  not_ifc_ready: "⊘",
   missing_signoffs: "✍",
 };
 
@@ -81,18 +152,19 @@ export default function ExportFabReleaseModal({
   kind = "fab_release",
   project,
   drawings = [],
+  drawingSets = [],
 }) {
   const cfg = KIND_CONFIG[kind] || KIND_CONFIG.fab_release;
   const [busy, setBusy] = useState(false);
+  const approvalEvidence = useFabApprovalEvidence(open, project?.id, drawings);
 
-  // For fab_release / turnover the filter is identical (both predicates
-  // resolve to the same conditions today). For claims we include
-  // everything not soft-deleted.
+  // For fab_release / turnover the filter is identical (IFC/Released).
+  // For claims we include everything not soft-deleted.
   const filteredDrawings = useMemo(() => {
     const list = drawings || [];
     if (kind === "claims") return list.filter(isClaimable);
-    return list.filter(isApprovedForFab);
-  }, [drawings, kind]);
+    return list.filter((d) => isApprovedForFab(d, approvalEvidence));
+  }, [drawings, kind, approvalEvidence]);
 
   const groups = useMemo(() => groupBySet(filteredDrawings), [filteredDrawings]);
 
@@ -103,11 +175,18 @@ export default function ExportFabReleaseModal({
   const requireSignoffs = !!project?.metadata?.require_fab_signoffs;
   const packageDrawings = useMemo(() => {
     if (kind === "claims") return filteredDrawings;
-    const setKey = (d) => d?.drawing_set_id || d?.drawing_set_name || null;
+    const setKey = (d) => resolveDrawingSetKey(d, drawingSets);
     const releasedSets = new Set(filteredDrawings.map(setKey).filter(Boolean));
     if (releasedSets.size === 0) return filteredDrawings;
     return (drawings || []).filter((d) => d && !d.is_deleted && releasedSets.has(setKey(d)));
-  }, [drawings, filteredDrawings, kind]);
+  }, [drawings, drawingSets, filteredDrawings, kind]);
+  // Identity of the package membership — the override resets only when the
+  // modal opens or the set of sheets in the package actually changes, not on
+  // every approval-evidence refresh (which re-creates the array).
+  const packageKey = useMemo(
+    () => packageDrawings.map((d) => d?.id).filter(Boolean).sort().join(","),
+    [packageDrawings],
+  );
 
   // ── Fab Release gate ─────────────────────────────────────────────────
   // Don't let a package ship to the shop while an open RFI references one of
@@ -125,6 +204,10 @@ export default function ExportFabReleaseModal({
     if (!open) return;
     setOverride(false);
     setOverrideReason("");
+  }, [open, packageKey]);
+
+  useEffect(() => {
+    if (!open) return;
     setLinkedRfis([]);
     setGateSignoffs([]);
     if (!gated || !project?.id) return;
@@ -166,9 +249,16 @@ export default function ExportFabReleaseModal({
 
   const gate = useMemo(
     () => (gated
-      ? computeFabReleaseGate({ drawings: packageDrawings, rfis: linkedRfis, signoffs: gateSignoffs, requireSignoffs })
+      ? computeFabReleaseGate({
+          drawings: packageDrawings,
+          rfis: linkedRfis,
+          signoffs: gateSignoffs,
+          requireSignoffs,
+          submittals: approvalEvidence.submittals,
+          drawingRevisions: approvalEvidence.drawingRevisions,
+        })
       : { blocked: false, reasons: [], blockingRfis: [], affectedSheets: [], blockingCount: 0 }),
-    [gated, packageDrawings, linkedRfis, gateSignoffs, requireSignoffs],
+    [gated, packageDrawings, linkedRfis, gateSignoffs, requireSignoffs, approvalEvidence],
   );
   // Override now requires a written reason (the server records it and refuses an
   // empty-reason override). The button stays locked until the reason is filled.
@@ -209,12 +299,23 @@ export default function ExportFabReleaseModal({
             packageKind: kind,
             packageName: stem,
             drawingIds: filteredDrawings.map((d) => d.id).filter(Boolean),
+            packageDrawingIds: packageDrawings.map((d) => d.id).filter(Boolean),
             overrideReason: override ? overrideReason : null,
           });
         } catch (err) {
           if (err instanceof FabReleaseBlockedError) {
-            const nums = err.blockingRfiNumbers.length ? ` (${err.blockingRfiNumbers.join(", ")})` : "";
-            toast.error(`Release blocked: open RFI${err.blockingRfiNumbers.length === 1 ? "" : "s"}${nums} reference this package. Resolve them or check the PM override and give a reason.`);
+            const detail = err.blockers?.length
+              ? err.blockers.map((b) => {
+                  const sheets = (b.sheet_numbers || []).filter(Boolean);
+                  const rfis = (b.rfi_numbers || []).filter(Boolean);
+                  if (rfis.length) return `${b.title} (${rfis.join(", ")})`;
+                  if (sheets.length) return `${b.title}: ${sheets.join(", ")}`;
+                  return b.title;
+                }).join(" · ")
+              : (err.blockingRfiNumbers.length
+                ? `open RFI${err.blockingRfiNumbers.length === 1 ? "" : "s"} (${err.blockingRfiNumbers.join(", ")})`
+                : err.message);
+            toast.error(`Release blocked: ${detail}. Resolve each blocker or check the PM override and give a reason.`);
           } else {
             toast.error(`Could not record the release: ${err?.message || "Unknown error"}`);
           }
@@ -377,6 +478,11 @@ export default function ExportFabReleaseModal({
                     <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3 }}>
                       {GATE_REASON_ICON[reason.kind] || "•"} {reason.title}
                     </div>
+                    {reason.action && (
+                      <div style={{ ...mono, fontSize: 10.5, color: "var(--status-warning)", paddingLeft: 16, marginBottom: 3 }}>
+                        Next: {reason.action}
+                      </div>
+                    )}
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 16 }}>
                       {items.slice(0, 4).map((item, i) => (
                         <div key={item.id || i} style={{ ...mono, fontSize: 10.5, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -420,7 +526,7 @@ export default function ExportFabReleaseModal({
           borderRadius: 2, padding: "10px 12px", marginBottom: 18,
           fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5,
         }}>
-          <strong style={{ color: "#60A5FA" }}>Note:</strong> Zip packaging isn't enabled in this build.
+          <strong style={{ color: "var(--status-info)" }}>Note:</strong> Zip packaging isn't enabled in this build.
           You'll receive separate <code>manifest.csv</code>, <code>README.md</code>, and <code>URLS.txt</code> files.
           Use the URLs file to download each drawing PDF directly.
         </div>

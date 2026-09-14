@@ -1,22 +1,25 @@
 /**
  * DrawingRegisterGridPanel — the on-skin Doc Control "Register" view (Slice 2c).
  *
- * Presentation-only re-skin of DrawingRegisterGrid onto the canonical presentation kit. Every
- * query, mutation, permission gate, provisioning path, watch toggle, and the
- * `["drawing-register", projectId]` cache-key invalidation are UNCHANGED — this
- * panel reuses the exact same hooks + handlers as the legacy grid; only the chrome
- * (card / filter row / table / status chip) is swapped to `cmd-*` primitives.
- *
- * The panel renders inside the DetailingCommandShell light island
- * ([data-skin="command"] on <html>). The reused native form controls (the status
- * <select>, the search <input>, and the per-row Release <select>) carry `sbd-*`
- * classes whose light styling comes from the shipped `.detailing-cc` token cascade,
- * so the panel root is `.detailing-cc` — matching Slice 2b.
+ * Sheet-level register (Doc Control clean table):
+ *  - free-text + status + drawing-set filters
+ *  - flat sheet rows by default; optional group-by-set
+ *  - click sheet # / View to open DrawingViewer
  */
-import { useMemo, useState } from "react";
+import {
+  Suspense,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
-import { Star, Loader2 } from "lucide-react";
+import { Star, Loader2, ChevronDown, ChevronRight, Eye, ExternalLink, FileUp } from "lucide-react";
 import { useDrawingRegister, type DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { usePublishRevision, type ReleaseStatus } from "@/hooks/usePublishRevision";
 import { useMyDrawingWatches, useToggleDrawingWatch } from "@/hooks/useDrawingWatch";
@@ -24,11 +27,46 @@ import { usePermissions } from "@/services/permissions";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { ensureCurrentRevision } from "@/lib/drawingHub/revisions";
 import { batchProcess } from "@/utils/batchProcess";
+import { createPageUrl } from "@/utils";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
+import { lazyWithRetry } from "@/lib/lazyRetry";
+import type { SavedRevisionSummary } from "@/lib/revisionSummaryRepo";
+import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
 import { registerRowToDrawing, rowsNeedingProvisioning } from "./registerProvision";
-import { filterRegisterRows } from "./docControl.derive";
+import {
+  buildRegisterDisplayRows,
+  createDrawingRegisterIndex,
+  filterIndexedRegisterRows,
+  firstVisibleDrawingByPackage as deriveFirstVisibleDrawingByPackage,
+  SET_FILTER_NONE,
+  type IndexedRegisterRow,
+  type RegisterDisplayRow,
+} from "./docControl.derive";
+
+interface RevisionUploadModalProps {
+  open: boolean;
+  onClose: () => void;
+  onComplete: () => void;
+  activeProject: { id?: string | null; name?: string | null } | null | undefined;
+  preSelectedSet: DrawingSet;
+  drawingSets: unknown[];
+}
+
+const RevisionUploadModal = lazyWithRetry(
+  () => import("@/components/drawings/RevisionUploadModal"),
+) as unknown as ComponentType<RevisionUploadModalProps>;
+
+export interface DrawingRegisterGridPanelProps {
+  projectId: string | null;
+  activeProject?: { id?: string | null; name?: string | null } | null;
+  drawingSets?: unknown[];
+  setPackages?: SetPackage[];
+  summariesBySet?: Map<string, SavedRevisionSummary>;
+  onRevisionUploaded?: (pkgKey: string) => void | Promise<void>;
+  onOpenSummary?: (summary: SavedRevisionSummary["summary"]) => void;
+}
 
 const STATUS_FILTERS = [
   "all", "received", "pending_review", "reviewed", "released_for_estimate",
@@ -41,9 +79,22 @@ const RELEASE_OPTIONS: { value: ReleaseStatus; label: string }[] = [
   { value: "released_for_field", label: "Field" },
 ];
 
-/** Map a release status to a kit Pill tone. Mirrors the legacy STATUS_TONE hues:
- *  field-released → good, shop/on-hold/pending → warn, void → danger, reviewed/
- *  estimate → info, else neutral. */
+const EMPTY_REGISTER_ROWS: DrawingRegisterRow[] = [];
+const EMPTY_DRAWING_SETS: unknown[] = [];
+const EMPTY_SET_PACKAGES: SetPackage[] = [];
+const EMPTY_SUMMARIES = new Map<string, SavedRevisionSummary>();
+
+export const DRAWING_REGISTER_VIRTUALIZE_THRESHOLD = 100;
+
+const REGISTER_GRID_COLUMNS =
+  "28px minmax(76px,.75fr) minmax(220px,2fr) minmax(64px,.65fr) minmax(180px,1.5fr) minmax(56px,.55fr) minmax(118px,1fr) 72px 72px minmax(108px,1fr) 56px";
+
+function registerGridColumns(canRelease: boolean) {
+  return canRelease
+    ? `${REGISTER_GRID_COLUMNS} minmax(150px,1.2fr)`
+    : REGISTER_GRID_COLUMNS;
+}
+
 function statusTone(status: string | null): PillTone {
   if (!status) return "neutral";
   if (status === "released_for_field") return "good";
@@ -59,18 +110,63 @@ function StatusCell({ status }: { status: string | null }) {
 }
 
 function Count({ n, danger, info }: { n: number | null; danger?: boolean; info?: boolean }) {
-  const v = n ?? 0;
+  if (n == null) return <span aria-label="Count unavailable" title="Count unavailable">—</span>;
+  const v = n;
   const color = v === 0
     ? "var(--cmd-text-muted)"
     : danger ? "var(--cmd-warn)" : info ? "var(--cmd-info)" : "var(--cmd-text)";
   return <span style={{ fontVariantNumeric: "tabular-nums", fontSize: 12, color }}>{v}</span>;
 }
 
-export function DrawingRegisterGridPanel({ projectId }: { projectId: string | null }) {
-  const { data = [], isLoading, error } = useDrawingRegister(projectId);
+function RegisterCell({
+  virtual,
+  children,
+  style,
+}: {
+  virtual: boolean;
+  children?: ReactNode;
+  style?: CSSProperties;
+}) {
+  if (!virtual) return <td style={style}>{children}</td>;
+  return (
+    <div
+      role="cell"
+      style={{
+        padding: "11px 14px",
+        minWidth: 0,
+        display: "flex",
+        alignItems: "center",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function viewerHref(drawingId: string) {
+  return `${createPageUrl("DrawingViewer")}?recordId=${encodeURIComponent(drawingId)}`;
+}
+
+export function DrawingRegisterGridPanel({
+  projectId,
+  activeProject,
+  drawingSets = EMPTY_DRAWING_SETS,
+  setPackages = EMPTY_SET_PACKAGES,
+  summariesBySet = EMPTY_SUMMARIES,
+  onRevisionUploaded,
+  onOpenSummary,
+}: DrawingRegisterGridPanelProps) {
+  const { data = EMPTY_REGISTER_ROWS, isLoading, error } = useDrawingRegister(projectId);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [setFilter, setSetFilter] = useState("all");
+  /** Collapsed set keys when group-by-set is on. */
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  /** Flat clean table by default (Doc Control look). Group headers optional. */
+  const [groupBySet, setGroupBySet] = useState(false);
   const { can } = usePermissions();
+  const canEdit = can("edit", "drawing");
   const canRelease = can("approve", "drawing");
   const publish = usePublishRevision();
   const { data: watches } = useMyDrawingWatches(projectId);
@@ -80,6 +176,7 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
 
   const [provisioning, setProvisioning] = useState<Set<string>>(new Set());
   const [bulkProvisioning, setBulkProvisioning] = useState(false);
+  const [revisionPackage, setRevisionPackage] = useState<SetPackage | null>(null);
 
   const invalidateRegister = () =>
     queryClient.invalidateQueries({ queryKey: ["drawing-register", projectId] });
@@ -134,8 +231,172 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
     }
   };
 
-  const rows = useMemo(() => filterRegisterRows(data, query, statusFilter), [data, query, statusFilter]);
-  const untrackedRows = useMemo(() => rowsNeedingProvisioning(rows), [rows]);
+  const registerIndex = useMemo(
+    () => createDrawingRegisterIndex(data, setPackages),
+    [data, setPackages],
+  );
+  const rows = useMemo(
+    () => filterIndexedRegisterRows(registerIndex, query, statusFilter, setFilter),
+    [registerIndex, query, statusFilter, setFilter],
+  );
+  const displayRows = useMemo(
+    () => buildRegisterDisplayRows(rows, groupBySet, collapsed),
+    [rows, groupBySet, collapsed],
+  );
+  const untrackedRows = useMemo(
+    () => rowsNeedingProvisioning(rows.map((entry) => entry.row)),
+    [rows],
+  );
+  const firstVisibleDrawingByPackage = useMemo(() => {
+    return deriveFirstVisibleDrawingByPackage(rows);
+  }, [rows]);
+
+  const toggleGroup = (key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const colCount = canRelease ? 12 : 11;
+
+  const renderSheetCells = (entry: IndexedRegisterRow, virtual: boolean) => {
+    const r = entry.row;
+    const watched = !!watches?.has(r.drawing_id);
+    const href = viewerHref(r.drawing_id);
+    const pkg = entry.pkg;
+    const showRevisionActions = !!pkg && firstVisibleDrawingByPackage.get(pkg.key) === r.drawing_id;
+    const savedSummary = pkg?.setId ? summariesBySet.get(String(pkg.setId)) : undefined;
+    return (
+      <>
+        <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}>
+          <button
+            type="button"
+            title={watched ? "Unwatch this sheet" : "Watch this sheet"}
+            aria-pressed={watched}
+            disabled={toggleWatch.isPending}
+            onClick={() => toggleWatch.mutate(
+              { drawingId: r.drawing_id, watched },
+              { onError: (e) => toast.error("Couldn't update watch: " + ((e as Error)?.message || "unknown")) }
+            )}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 0, color: watched ? "var(--cmd-gold)" : "var(--cmd-text-muted)" }}
+          >
+            <Star size={14} fill={watched ? "var(--cmd-gold)" : "none"} />
+          </button>
+        </RegisterCell>
+        <RegisterCell virtual={virtual} style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+          <Link
+            to={href}
+            style={{ color: "var(--cmd-accent, var(--accent))", textDecoration: "none" }}
+            title="Open in drawing viewer"
+          >
+            {r.sheet_number || "—"}
+          </Link>
+        </RegisterCell>
+        <RegisterCell virtual={virtual} style={{ color: "var(--cmd-text)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sheet_title || "—"}</RegisterCell>
+        <RegisterCell virtual={virtual} style={{ color: "var(--cmd-text-muted)" }}>{r.discipline || "—"}</RegisterCell>
+        <RegisterCell
+          virtual={virtual}
+          style={{
+            color: "var(--cmd-text-muted)",
+            maxWidth: 220,
+            ...(virtual ? { display: "block" } : {}),
+          }}
+        >
+          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {r.drawing_set_name || "—"}
+          </div>
+          {showRevisionActions && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+              {savedSummary && onOpenSummary && (
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  title={`View the latest revision summary for ${pkg.name}`}
+                  onClick={() => onOpenSummary(savedSummary.summary)}
+                  style={{ padding: "2px 6px", fontSize: 9 }}
+                >
+                  Revised · {savedSummary.sheets_changed}
+                </button>
+              )}
+              {canEdit && pkg.parent && (
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  disabled={!!pkg.parent.is_locked}
+                  title={pkg.parent.is_locked
+                    ? `Locked — ${pkg.parent.locked_reason || "an admin must unlock before a new revision"}`
+                    : `Upload a new revision for ${pkg.name}`}
+                  aria-label={`Upload revision for ${pkg.name}`}
+                  onClick={() => setRevisionPackage(pkg)}
+                  style={{ padding: "2px 6px", fontSize: 9 }}
+                >
+                  <FileUp size={11} />
+                  New revision
+                </button>
+              )}
+            </div>
+          )}
+        </RegisterCell>
+        <RegisterCell virtual={virtual} style={{ fontVariantNumeric: "tabular-nums", color: "var(--cmd-text)", whiteSpace: "nowrap" }}>{r.current_revision || "—"}</RegisterCell>
+        <RegisterCell virtual={virtual}><StatusCell status={r.current_status} /></RegisterCell>
+        <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}><Count n={r.open_impact_count} danger /></RegisterCell>
+        <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}><Count n={r.pending_review_count} info /></RegisterCell>
+        <RegisterCell virtual={virtual} style={{ color: "var(--cmd-text-muted)", whiteSpace: "nowrap" }}>{r.last_activity ? fmtDate(r.last_activity) : "—"}</RegisterCell>
+        <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}>
+          <Link
+            to={href}
+            className="cmd-btn cmd-btn--ghost"
+            title={`View ${r.sheet_number || "sheet"}`}
+            aria-label={`View ${r.sheet_number || "sheet"}`}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              padding: "4px 8px", textDecoration: "none", fontSize: 11, gap: 4,
+            }}
+          >
+            <Eye size={14} />
+          </Link>
+        </RegisterCell>
+        {canRelease && (
+          <RegisterCell virtual={virtual}>
+            {r.current_revision_id ? (
+              <select
+                className="sbd-select"
+                value=""
+                disabled={publish.isPending}
+                onChange={(e) => {
+                  const v = e.target.value as ReleaseStatus;
+                  if (v) release(r, v);
+                  e.target.value = "";
+                }}
+                title="Release current revision"
+                style={{ fontSize: 11 }}
+              >
+                <option value="">Release…</option>
+                {RELEASE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ) : (
+              <button
+                type="button"
+                className="cmd-btn cmd-btn--ghost"
+                disabled={provisioning.has(r.drawing_id)}
+                onClick={() => provisionRevision(r)}
+                title="This sheet has no tracked revision yet. Set up release tracking to create its current revision so it can be released."
+                style={{ fontSize: 11, whiteSpace: "nowrap" }}
+              >
+                {provisioning.has(r.drawing_id) && <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />}
+                {provisioning.has(r.drawing_id) ? "Setting up…" : "Set up release tracking"}
+              </button>
+            )}
+          </RegisterCell>
+        )}
+      </>
+    );
+  };
 
   if (!projectId) {
     return <div style={{ padding: 24, color: "var(--cmd-text-muted)", fontSize: 13 }}>Select a project to view its drawing register.</div>;
@@ -157,8 +418,33 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
         <div>
           <h3 style={{ margin: 0, color: "var(--cmd-text)", fontSize: 16, fontWeight: 700 }}>Drawing Register</h3>
           <p style={{ margin: "4px 0 0", color: "var(--cmd-text-muted)", fontSize: 12 }}>
-            Current revision + release status + downstream counts per sheet. Filter to “Released for field” for the crew’s current-sheet view.
+            Current revision, release status, impacts, and reviews per sheet. Click a sheet to open the viewer.
           </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            aria-pressed={groupBySet}
+            onClick={() => setGroupBySet((v) => !v)}
+            title="Optional: group sheet rows under drawing set headers"
+            style={{
+              fontSize: 12,
+              border: groupBySet ? "1px solid var(--cmd-accent, var(--accent))" : undefined,
+              color: groupBySet ? "var(--cmd-accent, var(--accent))" : undefined,
+            }}
+          >
+            {groupBySet ? "Grouped by set" : "Group by set"}
+          </button>
+          <Link
+            to={createPageUrl("Drawings")}
+            className="cmd-btn cmd-btn--ghost"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", fontSize: 12 }}
+            title="Open the full Drawings editor for set upload, rename, bulk edit"
+          >
+            <ExternalLink size={13} />
+            Full editor
+          </Link>
         </div>
       </div>
 
@@ -171,12 +457,30 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="cmd-filterbar__filters">
+        <div className="cmd-filterbar__filters" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select
+            className="sbd-select"
+            value={setFilter}
+            onChange={(e) => setSetFilter(e.target.value)}
+            title="Filter by drawing set"
+            aria-label="Filter by drawing set"
+          >
+            <option value="all">All sets ({data.length})</option>
+            {registerIndex.setNames.map((name) => (
+              <option key={name} value={name}>{name} ({registerIndex.setCounts.get(name) || 0})</option>
+            ))}
+            {registerIndex.unassignedCount > 0 && (
+              <option value={SET_FILTER_NONE}>
+                Unassigned ({registerIndex.unassignedCount})
+              </option>
+            )}
+          </select>
           <select
             className="sbd-select"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             title="Filter by release status"
+            aria-label="Filter by release status"
           >
             {STATUS_FILTERS.map((s) => (
               <option key={s} value={s}>{s === "all" ? "All statuses" : s.replace(/_/g, " ")}</option>
@@ -206,6 +510,14 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
           </div>
         </div>
       ) : (
+        rows.length > DRAWING_REGISTER_VIRTUALIZE_THRESHOLD ? (
+          <VirtualRegisterRows
+            rows={displayRows}
+            canRelease={canRelease}
+            onToggleGroup={toggleGroup}
+            renderSheetCells={renderSheetCells}
+          />
+        ) : (
         <div className="cmd-table-wrap">
           <table className="cmd-table">
             <thead>
@@ -219,85 +531,248 @@ export function DrawingRegisterGridPanel({ projectId }: { projectId: string | nu
                 <th>Status</th>
                 <th style={{ textAlign: "center" }}>Impacts</th>
                 <th style={{ textAlign: "center" }}>Reviews</th>
-                <th style={{ textAlign: "center" }}>RFIs</th>
-                <th style={{ textAlign: "center" }}>WPs</th>
                 <th>Last activity</th>
+                <th style={{ width: 56 }}>View</th>
                 {canRelease && <th>Release</th>}
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
-                const watched = !!watches?.has(r.drawing_id);
-                return (
-                  <tr key={r.drawing_id}>
-                    <td style={{ textAlign: "center" }}>
-                      <button
-                        type="button"
-                        title={watched ? "Unwatch this sheet" : "Watch this sheet"}
-                        aria-pressed={watched}
-                        disabled={toggleWatch.isPending}
-                        onClick={() => toggleWatch.mutate(
-                          { drawingId: r.drawing_id, watched },
-                          { onError: (e) => toast.error("Couldn't update watch: " + ((e as Error)?.message || "unknown")) }
-                        )}
-                        style={{ background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 0, color: watched ? "var(--cmd-gold)" : "var(--cmd-text-muted)" }}
-                      >
-                        <Star size={14} fill={watched ? "var(--cmd-gold)" : "none"} />
-                      </button>
-                    </td>
-                    <td style={{ fontWeight: 700, color: "var(--cmd-text)", whiteSpace: "nowrap" }}>{r.sheet_number || "—"}</td>
-                    <td style={{ color: "var(--cmd-text)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sheet_title || "—"}</td>
-                    <td style={{ color: "var(--cmd-text-muted)" }}>{r.discipline || "—"}</td>
-                    <td style={{ color: "var(--cmd-text-muted)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.drawing_set_name || "—"}</td>
-                    <td style={{ fontVariantNumeric: "tabular-nums", color: "var(--cmd-text)", whiteSpace: "nowrap" }}>{r.current_revision || "—"}</td>
-                    <td><StatusCell status={r.current_status} /></td>
-                    <td style={{ textAlign: "center" }}><Count n={r.open_impact_count} danger /></td>
-                    <td style={{ textAlign: "center" }}><Count n={r.pending_review_count} info /></td>
-                    <td style={{ textAlign: "center" }}><Count n={r.rfi_count} /></td>
-                    <td style={{ textAlign: "center" }}><Count n={r.work_package_count} /></td>
-                    <td style={{ color: "var(--cmd-text-muted)", whiteSpace: "nowrap" }}>{r.last_activity ? fmtDate(r.last_activity) : "—"}</td>
-                    {canRelease && (
-                      <td>
-                        {r.current_revision_id ? (
-                          <select
-                            className="sbd-select"
-                            value=""
-                            disabled={publish.isPending}
-                            onChange={(e) => {
-                              const v = e.target.value as ReleaseStatus;
-                              if (v) release(r, v);
-                              e.target.value = "";
-                            }}
-                            title="Release current revision"
-                            style={{ fontSize: 11 }}
-                          >
-                            <option value="">Release…</option>
-                            {RELEASE_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <button
-                            type="button"
-                            className="cmd-btn cmd-btn--ghost"
-                            disabled={provisioning.has(r.drawing_id)}
-                            onClick={() => provisionRevision(r)}
-                            title="This sheet has no tracked revision yet. Set up release tracking to create its current revision so it can be released."
-                            style={{ fontSize: 11, whiteSpace: "nowrap" }}
-                          >
-                            {provisioning.has(r.drawing_id) && <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />}
-                            {provisioning.has(r.drawing_id) ? "Setting up…" : "Set up release tracking"}
-                          </button>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
+              {displayRows.map((displayRow) => displayRow.kind === "group" ? (
+                <GroupBlock
+                  key={`group:${displayRow.key}`}
+                  label={displayRow.label}
+                  count={displayRow.count}
+                  collapsed={displayRow.collapsed}
+                  onToggle={() => toggleGroup(displayRow.key)}
+                  colCount={colCount}
+                />
+              ) : (
+                <tr key={displayRow.entry.row.drawing_id}>
+                  {renderSheetCells(displayRow.entry, false)}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+        )
+      )}
+      {canEdit && revisionPackage?.parent && (
+        <Suspense fallback={<p role="status" style={{ color: "var(--cmd-text-muted)", fontSize: 12 }}>Loading revision upload…</p>}>
+          <RevisionUploadModal
+            open
+            onClose={() => setRevisionPackage(null)}
+            onComplete={() => {
+              const pkgKey = revisionPackage.key;
+              setRevisionPackage(null);
+              void invalidateRegister();
+              void onRevisionUploaded?.(pkgKey);
+            }}
+            activeProject={activeProject}
+            preSelectedSet={revisionPackage.parent}
+            drawingSets={drawingSets}
+          />
+        </Suspense>
       )}
     </section>
+  );
+}
+
+function VirtualRegisterRows({
+  rows,
+  canRelease,
+  onToggleGroup,
+  renderSheetCells,
+}: {
+  rows: RegisterDisplayRow[];
+  canRelease: boolean;
+  onToggleGroup: (key: string) => void;
+  renderSheetCells: (entry: IndexedRegisterRow, virtual: boolean) => ReactNode;
+}) {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: (index) => rows[index]?.kind === "group" ? 37 : 54,
+    overscan: 10,
+    getItemKey: (index) => {
+      const displayRow = rows[index];
+      return displayRow.kind === "group"
+        ? `group:${displayRow.key}`
+        : `sheet:${displayRow.entry.row.drawing_id}`;
+    },
+    initialRect: { width: 1400, height: 600 },
+  });
+  const columns = [
+    { label: "Watch", align: "center" },
+    { label: "Sheet" },
+    { label: "Title" },
+    { label: "Disc." },
+    { label: "Set" },
+    { label: "Rev" },
+    { label: "Status" },
+    { label: "Impacts", align: "center" },
+    { label: "Reviews", align: "center" },
+    { label: "Last activity" },
+    { label: "View", align: "center" },
+    ...(canRelease ? [{ label: "Release" }] : []),
+  ];
+  const gridTemplateColumns = registerGridColumns(canRelease);
+
+  return (
+    <div
+      className="cmd-table-wrap"
+      role="table"
+      aria-label="Drawing Register"
+      aria-rowcount={rows.length + 1}
+      style={{ overflowX: "auto", overflowY: "hidden" }}
+    >
+      <div role="rowgroup" style={{ minWidth: 1400 }}>
+        <div
+          role="row"
+          aria-rowindex={1}
+          style={{
+            display: "grid",
+            gridTemplateColumns,
+            borderBottom: "1px solid var(--cmd-border)",
+          }}
+        >
+          {columns.map((column, index) => (
+            <div
+              key={column.label}
+              role="columnheader"
+              aria-colindex={index + 1}
+              aria-label={column.label === "Watch" ? "Watch" : undefined}
+              style={{
+                padding: "10px 14px",
+                color: "var(--cmd-text-muted)",
+                fontSize: 10,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                whiteSpace: "nowrap",
+                textAlign: column.align === "center" ? "center" : "left",
+              }}
+            >
+              {column.label === "Watch" ? null : column.label}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div
+        ref={parentRef}
+        role="rowgroup"
+        data-testid="drawing-register-virtual-body"
+        style={{ maxHeight: 600, overflowY: "auto", minWidth: 1400 }}
+      >
+        <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const displayRow = rows[virtualRow.index];
+            const sharedStyle: CSSProperties = {
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${virtualRow.start}px)`,
+              display: "grid",
+              gridTemplateColumns,
+              borderBottom: "1px solid var(--cmd-border)",
+            };
+            if (displayRow.kind === "group") {
+              return (
+                <div
+                  key={`group:${displayRow.key}`}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  role="row"
+                  aria-rowindex={virtualRow.index + 2}
+                  style={sharedStyle}
+                >
+                  <div role="cell" style={{ gridColumn: "1 / -1" }}>
+                    <GroupButton
+                      label={displayRow.label}
+                      count={displayRow.count}
+                      collapsed={displayRow.collapsed}
+                      onToggle={() => onToggleGroup(displayRow.key)}
+                    />
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div
+                key={`sheet:${displayRow.entry.row.drawing_id}`}
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
+                role="row"
+                aria-rowindex={virtualRow.index + 2}
+                style={sharedStyle}
+              >
+                {renderSheetCells(displayRow.entry, true)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GroupBlock({
+  label,
+  count,
+  collapsed,
+  onToggle,
+  colCount,
+}: {
+  label: string;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+  colCount: number;
+}) {
+  return (
+    <tr className="cmd-table__group">
+      <td colSpan={colCount} style={{ padding: 0, borderBottom: "1px solid var(--cmd-border, var(--border-default))" }}>
+        <GroupButton
+          label={label}
+          count={count}
+          collapsed={collapsed}
+          onToggle={onToggle}
+        />
+      </td>
+    </tr>
+  );
+}
+
+function GroupButton({
+  label,
+  count,
+  collapsed,
+  onToggle,
+}: {
+  label: string;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      style={{
+        display: "flex", alignItems: "center", gap: 8, width: "100%",
+        padding: "8px 12px", background: "var(--cmd-surface-2, color-mix(in srgb, var(--bg-surface-high, #1a1f27) 80%, transparent))",
+        border: "none", cursor: "pointer", textAlign: "left",
+        color: "var(--cmd-text)", fontFamily: "var(--font-mono, inherit)",
+        fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
+      }}
+    >
+      {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+      <span style={{ flex: 1 }}>{label}</span>
+      <span style={{ color: "var(--cmd-text-muted)", fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>
+        {count} sheet{count === 1 ? "" : "s"}
+      </span>
+    </button>
   );
 }

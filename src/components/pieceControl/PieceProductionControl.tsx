@@ -1,5 +1,4 @@
-import { useMemo, useState, type ChangeEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo, type ChangeEvent } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -9,18 +8,14 @@ import {
   Loader2,
   ShieldAlert,
 } from 'lucide-react';
-import {
-  advancePieceStation,
-  fetchProductionSnapshot,
-  splitPieceLot,
-  type LotAllocation,
-} from '../../lib/pieceControl/productionRepository';
-import {
-  calculateWeightedProductionProgress,
-  earnedPercentForPiece,
-  groupPiecesByCurrentStation,
-} from '../../lib/pieceControl/stationProgress';
-import { toast } from 'sonner';
+import { earnedPercentForPiece } from '../../lib/pieceControl/stationProgress';
+import { DecisionPanel } from '@/components/command';
+import { presentPieceControlError } from '@/lib/pieceControl/errorPresentation';
+import { formatWorkPackageTitle } from '@/lib/workPackages/formatWorkPackageTitle';
+import { UNASSIGNED_WP_FILTER } from '@/lib/pieceControl/productionScope';
+import type { ProductionSnapshot } from '@/lib/pieceControl/productionRepository';
+import { derivePieceProductionView } from './pieceProductionControl.derive';
+import { usePieceProductionControl } from './usePieceProductionControl';
 
 const Button = ({ variant: _variant, size: _size, ...props }: any) => (
   <button type="button" {...props} />
@@ -37,236 +32,423 @@ const compactNumber = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+const EMPTY_PRODUCTION_SNAPSHOT: ProductionSnapshot = {
+  pieces: [],
+  stations: [],
+  completions: [],
+  canonicalReleaseWorkPackageIds: [],
+};
+
 export function PieceProductionControl({
   projectId,
   pieceControlMode,
   workPackageId,
 }: PieceProductionControlProps) {
-  const queryClient = useQueryClient();
-  const enabled = pieceControlMode !== 'off';
-  const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
-  const [splitRows, setSplitRows] = useState<LotAllocation[]>([
-    { lot_code: 'A', quantity: 0 },
-    { lot_code: 'B', quantity: 0 },
-  ]);
-  const [overrideStationKey, setOverrideStationKey] = useState<string | null>(null);
-  const [overrideReason, setOverrideReason] = useState('');
-
-  const snapshotQuery = useQuery({
-    queryKey: ['piece-production', projectId, workPackageId ?? 'all'],
-    queryFn: () => fetchProductionSnapshot(projectId, workPackageId),
-    enabled,
+  const controller = usePieceProductionControl({
+    projectId,
+    pieceControlMode,
+    workPackageId,
   });
-  const snapshot = snapshotQuery.data;
-  const pieces = snapshot?.pieces ?? [];
-  const stations = snapshot?.stations ?? [];
-  const completions = snapshot?.completions ?? [];
-  const selectedPiece =
-    pieces.find((piece) => piece.id === selectedPieceId) ??
-    pieces.find((piece) => !piece.is_container) ??
-    null;
-  const grouped = useMemo(
-    () => groupPiecesByCurrentStation(pieces),
-    [pieces],
+  const {
+    enabled,
+    lockedToWorkPackage,
+    boardWorkPackageFilter,
+    selectedPieceId,
+    bulkSelectedIds,
+    bulkStationKey,
+    bulkOverrideReason,
+    splitRows,
+    overrideStationKey,
+    overrideReason,
+    holdReason,
+    workPackagesQuery,
+    snapshotQuery,
+    splitMutation,
+    advanceMutation,
+    bulkAdvanceMutation,
+    holdMutation,
+    setSelectedPieceId,
+    setBulkSelectedIds,
+    setBulkStationKey,
+    setBulkOverrideReason,
+    setSplitRows,
+    setOverrideStationKey,
+    setOverrideReason,
+    setHoldReason,
+    toggleBulkSelected,
+    onBoardWorkPackageFilterChange,
+  } = controller;
+  const view = useMemo(
+    () =>
+      derivePieceProductionView({
+        snapshot: snapshotQuery.data ?? EMPTY_PRODUCTION_SNAPSHOT,
+        selectedPieceId,
+        splitRows,
+        bulkSelectedIds,
+        bulkStationKey,
+      }),
+    [
+      bulkSelectedIds,
+      bulkStationKey,
+      selectedPieceId,
+      snapshotQuery.data,
+      splitRows,
+    ],
   );
-  const progress = calculateWeightedProductionProgress(
-    pieces,
+  const {
     stations,
     completions,
-  );
-
-  const invalidateProduction = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['piece-production', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['piece-register', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['piece-relationships', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['canonical-release-gate'] }),
-      queryClient.invalidateQueries({ queryKey: ['canonical-reporting', projectId] }),
-    ]);
-  };
-
-  const splitMutation = useMutation({
-    mutationFn: () => splitPieceLot(projectId, selectedPiece!.id, splitRows),
-    onSuccess: async () => {
-      toast.success('Piece lot split into actionable child lots.');
-      setSelectedPieceId(null);
-      await invalidateProduction();
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const advanceMutation = useMutation({
-    mutationFn: ({
-      stationKey,
-      override,
-      reason,
-    }: {
-      stationKey: string;
-      override: boolean;
-      reason?: string;
-    }) =>
-      advancePieceStation(
-        projectId,
-        selectedPiece!.id,
-        stationKey,
-        override,
-        reason,
-      ),
-    onSuccess: async () => {
-      toast.success('Production station recorded.');
-      setOverrideStationKey(null);
-      setOverrideReason('');
-      await invalidateProduction();
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    selectedPiece,
+    grouped,
+    progress,
+    selectedCompletions,
+    nextStation,
+    splitTotal,
+    splitValid,
+    released,
+    stationDisabledReason,
+    leafPieces,
+    bulkNextPlan,
+    bulkStationPlan,
+    bulkNeedsOverride,
+  } = view;
 
   if (!enabled) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-        <div className="flex items-center gap-2 font-semibold text-slate-700">
-          <Factory className="h-4 w-4" />
-          Canonical production
-        </div>
-        <p className="mt-2 text-sm text-slate-500">
-          Production stations and lot splitting are disabled while Piece Control is off.
+      <section className="piece-operation-state">
+        <h2 className="piece-operation-state__title">
+          <Factory size={16} />
+          Production
+        </h2>
+        <p>
+          Production stations and lot splitting are unavailable until the Piece Register is set up.
         </p>
       </section>
     );
   }
 
-  if (snapshotQuery.isLoading) {
+  if (snapshotQuery.isLoading && !snapshotQuery.data) {
     return (
-      <section className="flex min-h-32 items-center justify-center rounded-xl border border-slate-200">
-        <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+      <section className="piece-operation-state is-loading" aria-label="Loading production">
+        <Loader2 size={20} className="piece-operation-spinner" />
       </section>
     );
   }
 
   if (snapshotQuery.error) {
     return (
-      <section className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        Unable to load canonical production: {(snapshotQuery.error as Error).message}
+      <section className="piece-operation-state is-error">
+        <span>
+          {presentPieceControlError(
+            snapshotQuery.error,
+            'Production data could not be loaded.',
+          )}
+        </span>
+        <button
+          type="button"
+          className="cmd-btn cmd-btn--secondary"
+          onClick={() => void snapshotQuery.refetch()}
+        >
+          Try again
+        </button>
       </section>
     );
   }
 
-  const selectedCompletions = selectedPiece
-    ? completions.filter((completion) => completion.piece_id === selectedPiece.id)
-    : [];
-  const completedKeys = new Set(
-    selectedCompletions.map((completion) => completion.station_key),
-  );
-  const nextStation = stations.find((station) => !completedKeys.has(station.station_key));
-  const splitTotal = splitRows.reduce(
-    (total, row) => total + (Number(row.quantity) || 0),
-    0,
-  );
-  const normalizedLotCodes = splitRows.map((row) => row.lot_code.trim().toUpperCase());
-  const splitValid =
-    Boolean(selectedPiece) &&
-    !selectedPiece!.is_container &&
-    splitRows.length >= 2 &&
-    splitRows.every(
-      (row) =>
-        row.lot_code.trim() &&
-        row.lot_code.trim().toUpperCase() !== 'ALL' &&
-        Number(row.quantity) > 0,
-    ) &&
-    new Set(normalizedLotCodes).size === normalizedLotCodes.length &&
-    splitTotal === Number(selectedPiece!.quantity);
-  const released =
-    Boolean(selectedPiece?.work_package_id) &&
-    snapshot!.canonicalReleaseWorkPackageIds.includes(selectedPiece!.work_package_id!);
+  const selectColumnLots = (columnKey: string) => {
+    const columnLots = (grouped[columnKey as keyof typeof grouped] ?? [])
+      .filter((piece) => !piece.is_container)
+      .map((piece) => piece.id);
+    setBulkSelectedIds((current) =>
+      Array.from(new Set([...current, ...columnLots])),
+    );
+  };
 
   return (
-    <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 font-semibold text-slate-900">
-            <Factory className="h-4 w-4 text-amber-600" />
-            Canonical production
+    <section className="piece-operations">
+      <header className="piece-operations__head">
+        <div className="piece-operations__intro">
+          <span className="piece-operations__icon" aria-hidden="true">
+            <Factory size={17} />
+          </span>
+          <div>
+            <h2>Production</h2>
+            <p>Record controlled physical station transitions.</p>
+            <p className="piece-operations__safety">
+              Completed events cannot be overridden or reversed. Select multiple lots to advance in bulk.
+            </p>
           </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Active leaf lots only. Earned progress is weight-based and excludes roll-up containers.
-          </p>
         </div>
-        <div className="rounded-lg bg-slate-900 px-4 py-2 text-right text-white">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
-            Earned progress
-          </div>
-          <div className="text-xl font-semibold">{progress.toFixed(1)}%</div>
+        <div className="piece-operations__summary" aria-label="Production summary">
+          <span>
+            <small>Active lots</small>
+            <strong>{leafPieces.length}</strong>
+          </span>
+          <span>
+            <small>Earned progress</small>
+            <strong>{progress.toFixed(1)}%</strong>
+          </span>
         </div>
-      </div>
+      </header>
 
-      {pieces.filter((piece) => !piece.is_container).length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-          No actionable canonical piece lots are in this scope.
+      {!lockedToWorkPackage ? (
+        <div className="piece-production-filters" aria-label="Production filters">
+          <label className="piece-production-filters__field" htmlFor="piece-production-wp-filter">
+            Work package
+            <select
+              id="piece-production-wp-filter"
+              className="piece-command-control"
+              value={boardWorkPackageFilter}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                onBoardWorkPackageFilterChange(event.target.value)
+              }
+            >
+              <option value="">All work packages</option>
+              <option value={UNASSIGNED_WP_FILTER}>Unassigned</option>
+              {(workPackagesQuery.data ?? []).map((wp: { id: string }) => (
+                <option key={wp.id} value={wp.id}>
+                  {formatWorkPackageTitle(wp as any)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
+      ) : null}
+
+      {leafPieces.length === 0 ? (
+        <p className="piece-operation-empty">
+          No active production lots are in this scope.
+        </p>
       ) : (
-        <div className="overflow-x-auto pb-2">
-          <div className="grid min-w-[980px] grid-cols-7 gap-2">
+        <div className="piece-production-board">
+          {bulkSelectedIds.length > 0 ? (
+            <div className="piece-production-bulkbar" aria-label="Bulk production actions">
+              <div className="piece-production-bulkbar__meta">
+                <strong>{bulkSelectedIds.length}</strong>
+                <span>lot{bulkSelectedIds.length === 1 ? '' : 's'} selected</span>
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  onClick={() => setBulkSelectedIds([])}
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="piece-production-bulkbar__actions">
+                <Button
+                  className="cmd-btn cmd-btn--primary"
+                  disabled={
+                    bulkAdvanceMutation.isPending ||
+                    bulkNextPlan.eligiblePieceIds.length === 0
+                  }
+                  onClick={() =>
+                    bulkAdvanceMutation.mutate({
+                      pieceIds: bulkNextPlan.eligiblePieceIds,
+                      stationKey: null,
+                    })
+                  }
+                >
+                  {bulkAdvanceMutation.isPending ? (
+                    <Loader2 size={16} className="piece-operation-spinner" />
+                  ) : null}
+                  Complete next station ({bulkNextPlan.eligiblePieceIds.length})
+                </Button>
+                <label className="piece-production-bulkbar__station">
+                  <span className="sr-only">Bulk station</span>
+                  <select
+                    className="piece-command-control"
+                    aria-label="Bulk station"
+                    value={bulkStationKey}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                      setBulkStationKey(event.target.value)
+                    }
+                  >
+                    <option value="">Choose station…</option>
+                    {stations.map((station) => (
+                      <option key={station.id} value={station.station_key}>
+                        {station.station_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {bulkNeedsOverride ? (
+                  <Input
+                    className="piece-command-control"
+                    aria-label="Bulk override reason"
+                    placeholder="Override reason (required)"
+                    value={bulkOverrideReason}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setBulkOverrideReason(event.target.value)
+                    }
+                  />
+                ) : null}
+                <Button
+                  className="cmd-btn"
+                  disabled={
+                    bulkAdvanceMutation.isPending ||
+                    !bulkStationKey ||
+                    bulkStationPlan.eligiblePieceIds.length === 0 ||
+                    (bulkNeedsOverride && !bulkOverrideReason.trim())
+                  }
+                  onClick={() =>
+                    bulkAdvanceMutation.mutate({
+                      pieceIds: bulkStationPlan.eligiblePieceIds,
+                      stationKey: bulkStationKey,
+                      override: bulkNeedsOverride,
+                      reason: bulkNeedsOverride
+                        ? bulkOverrideReason.trim()
+                        : undefined,
+                    })
+                  }
+                >
+                  Complete station ({bulkStationPlan.eligiblePieceIds.length})
+                </Button>
+              </div>
+              {bulkNextPlan.skipped.length > 0 || bulkStationPlan.skipped.length > 0 ? (
+                <p className="piece-production-bulkbar__hint">
+                  Ineligible lots are skipped in the count above (hold, release, containers, already complete).
+                  The server rejects the whole batch if any submitted lot fails.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="piece-operations__grid">
             {[
               { key: 'not_started', name: 'Not Started' },
               ...stations.map((station) => ({
                 key: station.station_key,
                 name: station.station_name,
               })),
-            ].map((column) => (
-              <div key={column.key} className="rounded-lg bg-slate-50 p-2">
-                <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <span>{column.name}</span>
-                  <span>{grouped[column.key as keyof typeof grouped]?.length ?? 0}</span>
-                </div>
-                <div className="space-y-2">
-                  {(grouped[column.key as keyof typeof grouped] ?? []).map((piece) => (
-                    <button
-                      key={piece.id}
-                      type="button"
-                      onClick={() => setSelectedPieceId(piece.id)}
-                      className={`w-full rounded-md border p-2 text-left text-xs transition ${
-                        selectedPiece?.id === piece.id
-                          ? 'border-amber-500 bg-amber-50'
-                          : 'border-slate-200 bg-white hover:border-slate-400'
-                      }`}
-                    >
-                      <div className="font-semibold text-slate-900">
-                        {piece.piece_mark} / {piece.lot_code}
+            ].map((column) => {
+              const columnLots = grouped[column.key as keyof typeof grouped] ?? [];
+              return (
+              <section key={column.key} className="piece-production-column">
+                <header className="piece-production-column__head">
+                  <h3>{column.name}</h3>
+                  <div className="piece-production-column__meta">
+                    <span>{columnLots.length}</span>
+                    {columnLots.length > 0 ? (
+                      <button
+                        type="button"
+                        className="piece-production-column__select-all"
+                        onClick={() => selectColumnLots(column.key)}
+                      >
+                        Select all
+                      </button>
+                    ) : null}
+                  </div>
+                </header>
+                <div className="piece-production-column__lots">
+                  {columnLots.map((piece) => {
+                    const checked = bulkSelectedIds.includes(piece.id);
+                    return (
+                      <div
+                        key={piece.id}
+                        className={`piece-production-lot${
+                          selectedPiece?.id === piece.id ? ' is-selected' : ''
+                        }${checked ? ' is-checked' : ''}`}
+                      >
+                        <label className="piece-production-lot__check">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            aria-label={`Select ${piece.piece_mark} / ${piece.lot_code}`}
+                            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                              toggleBulkSelected(piece.id, event.target.checked)
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          aria-pressed={selectedPiece?.id === piece.id}
+                          onClick={() => setSelectedPieceId(piece.id)}
+                          className="piece-production-lot__focus"
+                        >
+                          <strong>
+                            {piece.piece_mark} / {piece.lot_code}
+                          </strong>
+                          <span>Qty {compactNumber.format(Number(piece.quantity))}</span>
+                        </button>
                       </div>
-                      <div className="mt-1 text-slate-500">
-                        Qty {compactNumber.format(Number(piece.quantity))}
-                      </div>
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
-              </div>
-            ))}
+              </section>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {selectedPiece && (
-        <div className="grid gap-5 border-t border-slate-200 pt-5 xl:grid-cols-[1.35fr_1fr]">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+      {selectedPiece ? (
+        <div className="piece-production-controls">
+          <section className="piece-operation-card">
+            <header className="piece-operation-card__head">
               <div>
-                <h3 className="font-semibold text-slate-900">
+                <span className="piece-operation-card__eyebrow">Station controls</span>
+                <h3>
                   {selectedPiece.piece_mark} / {selectedPiece.lot_code}
                 </h3>
-                <p className="text-sm text-slate-500">
+                <p>
                   {earnedPercentForPiece(selectedPiece.id, stations, completions).toFixed(1)}%
                   earned
                 </p>
               </div>
-              {!released && (
-                <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  <ShieldAlert className="h-4 w-4" />
-                  Canonical work-package release required
+              {stationDisabledReason ? (
+                <div className="piece-operation-prerequisite">
+                  <ShieldAlert size={16} />
+                  {stationDisabledReason}
                 </div>
+              ) : null}
+            </header>
+
+            <div className="piece-operation-hold" style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+              <span className="piece-operation-card__eyebrow">Hold control</span>
+              {selectedPiece.on_hold ? (
+                <>
+                  <p>
+                    Held{selectedPiece.on_hold_reason ? `: ${selectedPiece.on_hold_reason}` : ''}
+                  </p>
+                  <Button
+                    size="sm"
+                    className="cmd-btn cmd-btn--secondary"
+                    disabled={holdMutation.isPending || selectedPiece.is_container}
+                    onClick={() => holdMutation.mutate({ onHold: false })}
+                  >
+                    Release hold
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Input
+                    className="piece-command-control"
+                    aria-label="Hold reason"
+                    placeholder="Hold reason (required)"
+                    value={holdReason}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setHoldReason(event.target.value)
+                    }
+                  />
+                  <Button
+                    size="sm"
+                    className="cmd-btn"
+                    disabled={
+                      holdMutation.isPending ||
+                      selectedPiece.is_container ||
+                      !holdReason.trim()
+                    }
+                    onClick={() =>
+                      holdMutation.mutate({ onHold: true, reason: holdReason.trim() })
+                    }
+                  >
+                    Apply hold
+                  </Button>
+                </>
               )}
             </div>
 
-            <div className="space-y-2">
+            <div className="piece-production-stations">
               {stations.map((station) => {
                 const completion = selectedCompletions.find(
                   (entry) => entry.station_key === station.station_key,
@@ -275,32 +457,27 @@ export function PieceProductionControl({
                 return (
                   <div
                     key={station.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+                    className={`piece-production-station${
+                      completion ? ' is-complete' : ''
+                    }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`flex h-7 w-7 items-center justify-center rounded-full ${
-                          completion
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-slate-100 text-slate-400'
-                        }`}
-                      >
-                        {completion ? <Check className="h-4 w-4" /> : station.sort_order}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">
-                          {station.station_name}
-                        </div>
-                        <div className="text-xs text-slate-500">
+                    <div className="piece-production-station__identity">
+                      <span className="piece-production-station__number">
+                        {completion ? <Check size={15} /> : station.sort_order}
+                      </span>
+                      <span>
+                        <strong>{station.station_name}</strong>
+                        <small>
                           {station.earned_percent}% earned
                           {completion?.is_override ? ' · override' : ''}
-                        </div>
-                      </div>
+                        </small>
+                      </span>
                     </div>
-                    {!completion && (
+                    {!completion ? (
                       <Button
                         size="sm"
                         variant={isNext ? 'default' : 'outline'}
+                        className={`cmd-btn${isNext ? ' cmd-btn--primary' : ''}`}
                         disabled={
                           advanceMutation.isPending ||
                           selectedPiece.on_hold ||
@@ -319,35 +496,37 @@ export function PieceProductionControl({
                         }}
                       >
                         {isNext ? 'Complete' : 'Override'}
-                        <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                        <ChevronRight size={14} />
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 );
               })}
             </div>
 
-            {overrideStationKey && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-                <div className="flex items-center gap-2 font-medium text-amber-900">
-                  <AlertTriangle className="h-4 w-4" />
+            {overrideStationKey ? (
+              <div className="piece-operation-warning">
+                <div className="piece-operation-warning__title">
+                  <AlertTriangle size={16} />
                   Out-of-sequence confirmation
                 </div>
-                <p className="mt-1 text-xs text-amber-800">
+                <p>
                   The server will preserve missing prior stations as incomplete and record this
                   exception permanently.
                 </p>
                 <Input
-                  className="mt-3 bg-white"
+                  className="piece-command-control"
+                  aria-label="Override reason"
                   value={overrideReason}
                   onChange={(event: ChangeEvent<HTMLInputElement>) =>
                     setOverrideReason(event.target.value)
                   }
                   placeholder="Required override reason"
                 />
-                <div className="mt-3 flex gap-2">
+                <div className="piece-command-actions">
                   <Button
                     size="sm"
+                    className="cmd-btn cmd-btn--primary"
                     disabled={!overrideReason.trim() || advanceMutation.isPending}
                     onClick={() =>
                       advanceMutation.mutate({
@@ -362,6 +541,7 @@ export function PieceProductionControl({
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="cmd-btn"
                     onClick={() => {
                       setOverrideStationKey(null);
                       setOverrideReason('');
@@ -371,67 +551,80 @@ export function PieceProductionControl({
                   </Button>
                 </div>
               </div>
-            )}
-          </div>
+            ) : null}
+          </section>
 
-          <div className="space-y-4 rounded-lg bg-slate-50 p-4">
-            <div className="flex items-center gap-2 font-semibold text-slate-900">
-              <GitBranch className="h-4 w-4" />
-              Split this lot
-            </div>
-            <p className="text-xs leading-relaxed text-slate-600">
-              Splitting converts this row into a roll-up container and creates actionable child
-              lots. The container remains for traceability but does not count toward quantity,
+          <section className="piece-operation-card piece-production-split">
+            <header className="piece-operation-card__head">
+              <div>
+                <span className="piece-operation-card__eyebrow">Lot control</span>
+                <h3 className="piece-operation-card__title-with-icon">
+                  <GitBranch size={16} />
+                  Split this lot
+                </h3>
+              </div>
+            </header>
+            <p className="piece-production-split__copy">
+              Splitting converts this row into a tracking record and creates physical production
+              lots. The tracking record remains for traceability but does not count toward quantity,
               tonnage, release scope, or production progress.
             </p>
-            {splitRows.map((row, index) => (
-              <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                <Input
-                  value={row.lot_code}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setSplitRows((current) =>
-                      current.map((entry, rowIndex) =>
-                        rowIndex === index
-                          ? { ...entry, lot_code: event.target.value.toUpperCase() }
-                          : entry,
-                      ),
-                    )
-                  }
-                  placeholder="Lot"
-                />
-                <Input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={row.quantity || ''}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setSplitRows((current) =>
-                      current.map((entry, rowIndex) =>
-                        rowIndex === index
-                          ? { ...entry, quantity: Number(event.target.value) }
-                          : entry,
-                      ),
-                    )
-                  }
-                  placeholder="Quantity"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={splitRows.length <= 2}
-                  onClick={() =>
-                    setSplitRows((current) =>
-                      current.filter((_, rowIndex) => rowIndex !== index),
-                    )
-                  }
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
+            <div className="piece-production-split__rows">
+              {splitRows.map((row, index) => (
+                <div key={index} className="piece-production-split__row">
+                  <Input
+                    className="piece-command-control"
+                    aria-label={`Child lot ${index + 1} code`}
+                    value={row.lot_code}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setSplitRows((current) =>
+                        current.map((entry, rowIndex) =>
+                          rowIndex === index
+                            ? { ...entry, lot_code: event.target.value.toUpperCase() }
+                            : entry,
+                        ),
+                      )
+                    }
+                    placeholder="Lot"
+                  />
+                  <Input
+                    className="piece-command-control"
+                    aria-label={`Child lot ${index + 1} quantity`}
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={row.quantity || ''}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setSplitRows((current) =>
+                        current.map((entry, rowIndex) =>
+                          rowIndex === index
+                            ? { ...entry, quantity: Number(event.target.value) }
+                            : entry,
+                        ),
+                      )
+                    }
+                    placeholder="Quantity"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="cmd-btn"
+                    disabled={splitRows.length <= 2}
+                    onClick={() =>
+                      setSplitRows((current) =>
+                        current.filter((_, rowIndex) => rowIndex !== index),
+                      )
+                    }
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
             <Button
               variant="outline"
               size="sm"
+              className="cmd-btn piece-production-split__add"
               onClick={() =>
                 setSplitRows((current) => [
                   ...current,
@@ -442,26 +635,71 @@ export function PieceProductionControl({
               Add child lot
             </Button>
             <div
-              className={`text-xs ${
-                splitTotal === Number(selectedPiece.quantity)
-                  ? 'text-emerald-700'
-                  : 'text-slate-500'
+              className={`piece-production-allocation${
+                splitTotal === Number(selectedPiece.quantity) ? ' is-valid' : ''
               }`}
             >
               Allocated {compactNumber.format(splitTotal)} of{' '}
               {compactNumber.format(Number(selectedPiece.quantity))}
             </div>
             <Button
-              className="w-full"
+              className="cmd-btn cmd-btn--primary piece-production-split__submit"
               disabled={!splitValid || splitMutation.isPending}
               onClick={() => splitMutation.mutate()}
             >
-              {splitMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {splitMutation.isPending ? (
+                <Loader2 size={16} className="piece-operation-spinner" />
+              ) : null}
               Split lot
             </Button>
-          </div>
+          </section>
         </div>
-      )}
+      ) : null}
+
+      <DecisionPanel title="Production history">
+        {!selectedPiece ? (
+          <p className="piece-operation-empty">
+            Select a piece lot to inspect its immutable station history.
+          </p>
+        ) : (
+          <div className="piece-operation-history">
+            <div className="piece-operation-history__intro">
+              <div>
+                <strong>
+                  {selectedPiece.piece_mark} / {selectedPiece.lot_code}
+                </strong>
+                <span>{selectedCompletions.length} completed stations</span>
+              </div>
+              <p>Station completions are read-only.</p>
+            </div>
+            {selectedCompletions.length === 0 ? (
+              <p className="piece-operation-empty is-compact">
+                No production station events recorded.
+              </p>
+            ) : (
+              <div className="piece-operation-history__list">
+                {selectedCompletions.map((completion) => (
+                  <div key={completion.id} className="piece-operation-history__row">
+                    <span className="piece-operation-history__status">
+                      <Check size={14} />
+                    </span>
+                    <span>
+                      <strong>{completion.station_name}</strong>
+                      <small>
+                        {completion.earned_percent}% earned
+                        {completion.is_override ? ' · override' : ''}
+                      </small>
+                    </span>
+                    <time dateTime={completion.completed_at}>
+                      {new Date(completion.completed_at).toLocaleString()}
+                    </time>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </DecisionPanel>
     </section>
   );
 }

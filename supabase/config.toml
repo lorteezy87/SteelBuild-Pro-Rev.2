@@ -117,12 +117,46 @@ enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 
-# Uncomment to configure local storage buckets
-# [storage.buckets.images]
-# public = false
-# file_size_limit = "50MiB"
-# allowed_mime_types = ["image/png", "image/jpeg"]
-# objects_path = "./images"
+# The three buckets that exist in production kjrwqagyeswwoxpjkcko, declared so a
+# branch or a local stack comes up with the same storage surface. Without these a
+# new branch has no buckets at all ("No buckets found" in the branch build log),
+# so every drawing, model and attachment upload path fails there and cannot be
+# tested. Limits and MIME lists are copied from the live buckets.
+#
+# app-files: drawings, models, documents, photos. Private.
+[storage.buckets.app-files]
+public = false
+file_size_limit = "50MiB"
+allowed_mime_types = [
+  "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
+  "image/tiff", "image/bmp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/csv", "text/plain", "text/xml",
+  "model/gltf-binary", "model/gltf+json", "model/obj", "model/stl",
+  "application/x-step", "application/acad", "application/dxf",
+  "application/zip", "application/x-zip-compressed",
+  "application/xml", "application/json",
+  "video/mp4", "video/quicktime",
+  "application/octet-stream",
+]
+
+# email-attachments: inbound email intake. Private, and no MIME restriction in
+# production because attachments arrive as whatever the sender used.
+[storage.buckets.email-attachments]
+public = false
+file_size_limit = "25MiB"
+
+# sheets-files: the only PUBLIC bucket in production. Sheet renders served
+# straight to the browser.
+[storage.buckets.sheets-files]
+public = true
+file_size_limit = "200MiB"
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
@@ -156,11 +190,26 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# Supplied per environment so a branch never inherits a localhost redirect base:
+# a hardcoded 127.0.0.1 here breaks password reset and magic links anywhere that
+# is not a developer's laptop. env() reads .env at the
+# repo root (gitignored); set SUPABASE_AUTH_SITE_URL there, documented in
+# supabase/README.md. If it is unset the CLI substitutes an empty string and
+# local auth redirects break -- check this first if `supabase start` will not
+# sign you in.
+site_url = "env(SUPABASE_AUTH_SITE_URL)"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# An exact-match allow-list, not a secret, so it is committed rather than
+# env()-substituted: every environment needs the same set and a missing entry
+# is an outage. Kept minimal on purpose.
+additional_redirect_urls = [
+  "http://127.0.0.1:3000",
+  "http://localhost:3000",
+  "https://steelbuild-pro.com",
+  "https://www.steelbuild-pro.com",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -223,13 +272,19 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# Production has this ON. config.toml is pushed to every branch, so a weaker
+# value here silently hands each new environment an auth posture production
+# rejected -- and would strip production itself if its branch were ever
+# un-protected. Local dev still works: `supabase start` routes mail to Inbucket.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
-# Number of characters used in the email OTP.
-otp_length = 6
+# 1s let one address be used to mail-bomb a victim and brute-force an OTP;
+# production throttles at a minute.
+max_frequency = "1m0s"
+# Number of characters used in the email OTP. Production uses 8, not 6.
+otp_length = 8
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
@@ -300,8 +355,10 @@ max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+# Production has TOTP enrollment and verification enabled; keep parity so a
+# branch cannot be used to demonstrate a flow production will not allow.
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
@@ -381,6 +438,16 @@ policy = "per_worker"
 inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
+
+[functions.command-center-session-handoff]
+# Redemption starts from the native desktop before a caller JWT is available.
+# The function performs its own strict create/redeem authorization checks.
+verify_jwt = false
+
+[functions.command-center-read]
+# Validate the bearer token inside the function through Supabase Auth, then use
+# that same caller authorization on the anon client so project RLS is authoritative.
+verify_jwt = false
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"

@@ -22,12 +22,10 @@ moat.
 - **Viewers**: a **self-hosted IFC viewer** (`web-ifc` wasm + `three.js`,
   lazy-loaded) for the Detailing Control Center's 3D tab; `pdf.js` for drawings.
 - **Data**: Supabase (Postgres + RLS + Storage + Auth + Edge Functions).
-- **Hosting**: Vercel. Production deploys are **CI-gated** — a push to `main`
-  runs `.github/workflows/ci.yml` (lint + TS/JS typechecks + strictNullChecks +
-  noImplicitAny + Vitest + production build) and only a green run triggers the
-  gated `deploy` job. Vercel's own git auto-deploy is **OFF**
-  (`vercel.json` → `git.deploymentEnabled.main: false`), so a red push cannot
-  reach <https://steelbuild-pro.com> (Vercel project `steelbuildpro-og`).
+- **Hosting**: Cloudflare Workers (`steelbuild-pro-rev-2`). Production deploys
+  are **CI-gated** — a push to `main` runs `.github/workflows/ci.yml` (lint +
+  TS/JS typechecks + strictNullChecks + noImplicitAny + Vitest + production
+  build), and only a green run publishes the Worker. Vercel is retired.
 - **LLM**: a provider-agnostic gateway via the `llm-proxy` Edge Function
   (currently OpenAI `gpt-4o` / `gpt-4o-mini`). Never call a provider from the browser.
 - **Billing**: Stripe subscription plans via the `stripe-billing` Edge Function.
@@ -46,13 +44,12 @@ another's data. See
 
 ## Workflow (the moat)
 
-The detailing/submittal flow has 7 stages. **Submittals are the source of truth**
-for workflow status; drawings are document artifacts.
+The detailing/submittal flow has 8 **derived** workflow stages (7 stored sheet
+stages). **Submittals are the source of truth** for workflow status; drawings
+are document artifacts. See `docs/architecture/drawing-workflow-dual-source.md`.
 
 ```
-Not Started → IFA → OFA → BFA → OFS → IFC → Released for Fab
-                              ↑
-                              └─ R&R loops back to IFA
+Not Started → IFA → OFA → BFA → R&R → OFS → IFC → Released for Fab
 ```
 
 New users are walked through this flow by a data-driven **Getting Started**
@@ -101,6 +98,8 @@ billing secrets live server-side in the Edge Functions' environment.
 | `npm run typecheck:noimplicitany` | noImplicitAny ratchet — all `.ts/.tsx` except the grandfathered list |
 | `npm test`             | Vitest run (unit + jsdom integration tests)    |
 | `npm run test:watch`   | Vitest in watch mode                           |
+| `npm run supabase:drift` | Compare remote Supabase schema vs migrations (skips without token / `ALLOW_SKIP=1`) |
+| `npm run supabase:delete-deprecated-fns` | Dry-run delete of retired Edge Functions (`DRY_RUN=0` to apply) |
 
 ## Layout
 
@@ -113,10 +112,11 @@ src/
   api/           Supabase client (entities/auth/integrations/functions) + storage helpers
   lib/           shared utilities, AuthContext, billing/, org/, ifc/, payapp/, backcharge/, field/
   services/      deterministic domain engines (costRollup, marginRiskEngine, …)
+  utils/         shared deterministic helpers, including the typed PCC scoring engine
 supabase/
   migrations/    ordered SQL migrations (timestamped `YYYYMMDDhhmmss_name.sql`)
-  functions/     Edge Functions (llm-proxy, schedule-assistant, email-ingest,
-                 email-send, project-export, stripe-billing, …)
+  functions/     Edge Functions (llm-proxy, email-ingest, email-send,
+                 project-export, stripe-billing, …)
 public/          static assets, web-ifc wasm, pdf workers
 ```
 
@@ -156,6 +156,22 @@ session) and **change password** (Settings → Profile → Security). Optional
 factor is gated to a step-up challenge before entering the app. All via the
 Supabase Auth API in `AuthContext`.
 
+## Personal settings
+
+**Settings** is the signed-in user's personalization center. Preferences sync
+through the user's Supabase profile metadata and apply across the app: system,
+light, or dark theme; accent, font scale, contrast, motion, table density;
+date/time, number, currency, and measurement formats; sidebar mode, recents,
+keyboard hints, project-number visibility, and in-app alert/quiet-hour rules.
+
+The **My Workspace** tab adds Project Manager, Field, Fabrication, and Executive
+presets with a review-before-apply summary, plus server-backed favorite modules
+and projects. **Reset & Portability** can export a versioned, allowlisted JSON
+preference file, validate an import before applying it, or restore individual
+sections or all defaults with a typed confirmation. These settings are
+presentation-only and never grant
+roles, permissions, project access, or other authorization.
+
 ## Billing & plans
 
 Free / Pro / Business tiers (`src/lib/billing/plans.ts`). `organizations.plan`
@@ -185,7 +201,7 @@ suites (default `node` env) plus jsdom integration tests
 Supabase client mocked. Playwright smoke and fab-release gate specs are available
 under `e2e/`, but remain opt-in and nonblocking until dedicated test fixtures are
 configured. Counts change as tested helper modules are added; run `npm test --
---run` for the current total.
+--run` for the current total (479 files / 4,417 tests as of 2026-09-07).
 
 ## CI/CD
 
@@ -193,35 +209,36 @@ configured. Counts change as tested helper modules are added; run `npm test --
 targeting the supported bases: lint, four typecheck gates
 (TS, JS/JSX, the **strictNullChecks** ratchet, and the **noImplicitAny**
 ratchet), Vitest, and a production build — all blocking. Only a green `ci` job
-lets the gated `deploy` job publish to Vercel, followed by a post-deploy health
-check. An advisory `dependency-audit` job (`npm audit`, non-blocking) and an
-opt-in post-deploy Playwright smoke round it out. A concurrency group cancels
-redundant runs (but never a `main`/`staging` run mid-deploy).
+lets the gated deploy job publish the `steelbuild-pro-rev-2` Cloudflare Worker,
+followed by a post-deploy health check. An advisory `dependency-audit` job
+(`npm audit`, non-blocking) and an opt-in post-deploy Playwright smoke round it
+out. A concurrency group cancels redundant runs without interrupting a
+production deploy.
 
 ## Deployment
 
 Feature work lands on a feature branch and is reviewed through a pull request. A
 push to **`main`** runs the `ci` job; **only if it passes**
-does the `deploy` job ship the prebuilt output to Vercel
-(`vercel pull/build/deploy --prebuilt --prod`). A red run cannot deploy —
-production stays on the last good build. Vercel's git auto-deploy is disabled
-(`vercel.json`), so the GitHub Action is the sole production path. Remaining gap:
+does the deploy job publish the static-asset Cloudflare Worker configured in
+`wrangler.jsonc`. A red run cannot deploy — production stays on the last good
+build. The GitHub Action is the sole production path. Remaining gap:
 no branch-protection required check (repo plan), so red/unreviewed commits can
 still land on `main` even though they cannot deploy. [`CLAUDE.md`](./CLAUDE.md)
 documents the full workflow + git-safety rules. Edge Functions deploy separately
 (Supabase MCP `deploy_edge_function` or `supabase functions deploy`).
 
-**Staging.** A pre-production environment (separate Vercel project + separate
-Supabase project) deploys from the **`staging`** branch via the guarded
-`deploy-staging` job, reusing the same `ci` gate as prod. Rehearse migrations,
-edge-function changes, and destructive features (e.g. erasure) here before prod.
-Setup + promotion flow: [`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
+**Staging.** The former Vercel and Supabase staging projects are retired, so
+staging E2E jobs cannot run until the environment is rebuilt. Setup requirements
+remain in [`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
 
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
 `{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor
 target. Enterprise-readiness remediation status + owner action list live in
-[`ENTERPRISE_READINESS_AUDIT.md`](./ENTERPRISE_READINESS_AUDIT.md) and
-[`docs/runbooks/owner-checklist.md`](./docs/runbooks/owner-checklist.md).
+[`ENTERPRISE_READINESS_AUDIT.md`](./ENTERPRISE_READINESS_AUDIT.md),
+[`docs/runbooks/owner-checklist.md`](./docs/runbooks/owner-checklist.md), and the
+Tier 1 split matrix
+[`docs/runbooks/tier1-enterprise-status.md`](./docs/runbooks/tier1-enterprise-status.md)
+(code-complete vs owner-only: PITR, Stripe Tax dashboard, branch protection, …).
 
 ## Error monitoring
 
@@ -249,6 +266,13 @@ const show3dViewer = useFlag("viewer_3d");
 Per-user overrides use `feature_flags.user_overrides` as a jsonb map and must not
 contain personal email addresses in source-controlled seeds.
 
+**Module scope-cut gates** (nav + route): deprioritized modules (Cost, advanced
+Reports/Portfolio, Procurement, Risk, Quality suite extras, Resources, Closeout,
+Email Inbox, Integrations, …) are hidden and deep-link-blocked unless their
+`module_*` flag is on. Core steel workflow (Dashboard, Detailing Control Center,
+RFIs, Work Packages / Piece Register / Fab, Schedule, Field, Projects, Settings)
+stays always on. Config: `src/config/moduleGating.js` + `useModuleAccess`.
+
 ## Notes on viewers
 
 - **3D**: a self-hosted IFC viewer (`web-ifc` + `three`) lazy-loaded into the
@@ -256,13 +280,32 @@ contain personal email addresses in source-controlled seeds.
   `web-ifc.wasm` is version-pinned and copied to `public/wasm/` by a Vite plugin
   on every build — a worker/package mismatch silently yields zero geometry. (The
   old `@thatopen/components` IFC/BIM stack was removed to shrink the bundle.)
+  **Fab color mode** paints linked lots from `pieces.lifecycle_status` (Production /
+  Logistics / fab-release invalidate `canonical-pieces-3d`). Measure snap targets
+  **1/16″**. Zoom/orbit do not "run out of gas" (unbounded camera).
 - **PDF**: `src/pages/DrawingViewer.jsx` defaults to a browser-native `<iframe>`;
   a pdf.js canvas mode is available via the toolbar toggle. Multi-sheet PDFs rely
   on correct `drawings.pdf_page`.
+
+## Product surfaces (recent)
+
+- **Drawing Register** — flat Doc Control sheet table with **set name filter** /
+  grouping (Detailing Control Center).
+- **Detailing event glue** — Create submittal from package (`?targetSetId=`),
+  revision **Attach / Not now** confirm, status → BIC/dates **suggest strip**
+  (`src/lib/submittalLinkGlue.ts`).
+- **Piece Register** — Overview / Register / **Board** (WP drag-assign columns) /
+  Imports / Lots & links / Production / Logistics / Settings. Lifecycle writes
+  refresh 3D Fab colors.
+- **Theme** — SteelBuild Dark uses **opaque** panel tokens (`--sbd-bg-panel*`)
+  and `.sbp-opaque-popout` for menus (no frosted glass wash-out on selects).
+- **Signup** — Terms/Privacy clickwrap required before account creation.
 
 ## Where to find things
 
 - **Architecture + decisions** → [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 - **Known issues + remediation** → [`TECH_DEBT.md`](./TECH_DEBT.md)
-- **Agent / deploy conventions** → [`CLAUDE.md`](./CLAUDE.md)
+- **Enterprise Tier 1 status** → [`docs/runbooks/tier1-enterprise-status.md`](./docs/runbooks/tier1-enterprise-status.md)
+- **Agent / deploy conventions** → [`CLAUDE.md`](./CLAUDE.md) · concurrent claims → [`AGENT_CLAIMS.md`](./AGENT_CLAIMS.md)
 - **Drawing/submittal stage glossary** → [`ARCHITECTURE.md#domain-workflow`](./ARCHITECTURE.md#domain-workflow)
+- **Agent session memory** → [`.claude/agent-memory/construction-pm-dev/MEMORY.md`](./.claude/agent-memory/construction-pm-dev/MEMORY.md)

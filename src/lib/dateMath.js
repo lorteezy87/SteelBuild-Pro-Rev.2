@@ -16,7 +16,7 @@
  * wrong 48h / 10-day window.
  *
  * Anything that does day-math should import from here. Display
- * formatting can still use toLocaleDateString / formatters.jsx.
+ * formatting can still use toLocaleDateString / shared formatters.
  */
 
 const MS_PER_DAY = 86_400_000;
@@ -104,11 +104,40 @@ export function isToday(value) {
   return daysUntil(value) === 0;
 }
 
-/** YYYY-MM-DD string for today in local time. */
-export function todayLocalISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+/**
+ * YYYY-MM-DD string for today in local time.
+ *
+ * `now` is injectable so the timezone behaviour is testable: the vitest runner
+ * is pinned to TZ=UTC, where local and UTC agree and the §2.5 bug is invisible,
+ * and Node caches the zone before a test file can switch it.
+ */
+export function todayLocalISO(now = new Date()) {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+/**
+ * Today's LOCAL calendar date, anchored at UTC midnight.
+ *
+ * For code that compares "today" against task dates parsed with
+ * `parseDateUTC` (which reads a stored 'YYYY-MM-DD' as `T00:00:00Z`). Those
+ * comparisons need both sides on the same UTC-midnight anchor — that part of
+ * the Gantt's design is correct and this preserves it.
+ *
+ * What was wrong (audit §2.5) is taking the UTC *calendar date* of "now":
+ *
+ *   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+ *
+ * Arizona is UTC-7, so from 5 PM local onward `getUTCDate()` is already
+ * tomorrow. The today line jumped a day early, overdue flipped a day early,
+ * and the 6-week look-ahead window slid forward.
+ *
+ * Local getters, UTC constructor: the date is the user's actual today, the
+ * anchor is still UTC midnight. Do NOT "simplify" this to all-UTC or
+ * all-local getters — each breaks one of the two halves.
+ */
+export function todayUtcMidnightFromLocal(now = new Date()) {
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 }

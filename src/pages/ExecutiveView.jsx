@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatBudgetPercent } from "../components/shared/formatters";
-import { computeCostCodeTotals } from "@/services/costRollup";
+import { computeCostCodeTotals, resolveProjectSpend } from "@/services/costRollup";
 import StatusBadge from "../components/shared/StatusBadge";
 import KPIStrip from "../components/shared/KPIStrip";
 import {
@@ -12,7 +12,10 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import TrueHealthChart from "../components/dashboard/TrueHealthChart";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { isRfiOpen } from "@/lib/entityPredicates";
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -57,26 +60,85 @@ const healthColors = [
 
 export default function ExecutiveView() {
   const navigate = useNavigate();
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => entities.Project.list(), staleTime: 5 * 60 * 1000 });
-  const { data: rfis = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => entities.RFI.list() });
-  const { data: cos = [] } = useQuery({ queryKey: ["change-orders-global"], queryFn: () => entities.ChangeOrder.list() });
-  const { data: codes = [] } = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => entities.CostCode.list() });
-  const { data: wps = [] } = useQuery({ queryKey: ["work-packages-global"], queryFn: () => entities.WorkPackage.list() });
-  const { data: tasks = [] } = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => entities.ScheduleTask.list() });
+  // Portfolio-wide rollup: listAll() pages through every row instead of the
+  // capped list() read, so totals don't silently truncate as a tenant grows.
+  // Keys sit under each entity's cacheRegistry primary prefix (so mutations
+  // still invalidate them) but are distinct from the capped list() caches
+  // ("rfis-all", "expenses-all", …) so a full read is never served from — or
+  // overwritten by — a truncated one.
+  const projectsQ = useQuery({ queryKey: ["projects", "executive-all"], queryFn: () => entities.Project.listAll(), staleTime: 5 * 60 * 1000 });
+  const rfisQ = useQuery({ queryKey: ["rfis", "executive-all"], queryFn: () => entities.RFI.listAll() });
+  const cosQ = useQuery({ queryKey: ["change-orders", "executive-all"], queryFn: () => entities.ChangeOrder.listAll() });
+  const codesQ = useQuery({ queryKey: ["cost-codes", "executive-all"], queryFn: () => entities.CostCode.listAll() });
+  const wpsQ = useQuery({ queryKey: ["work-packages", "executive-all"], queryFn: () => entities.WorkPackage.listAll() });
+  const tasksQ = useQuery({ queryKey: ["schedule-tasks", "executive-all"], queryFn: () => entities.ScheduleTask.listAll() });
+  const expensesQ = useQuery({ queryKey: ["expenses", "executive-all"], queryFn: () => entities.Expense.listAll() });
+
+  const {
+    projects = [], rfis = [], cos = [], codes = [], wps = [], tasks = [], expenses = [],
+  } = {
+    projects: projectsQ.data, rfis: rfisQ.data, cos: cosQ.data, codes: codesQ.data,
+    wps: wpsQ.data, tasks: tasksQ.data, expenses: expensesQ.data,
+  };
+
+  // An executive rollup must never present $0/empty as truth while loading or
+  // after a failed fetch — gate on the queries the KPIs are computed from.
+  const allQueries = [projectsQ, rfisQ, cosQ, codesQ, wpsQ, tasksQ, expensesQ];
+  const isLoading = allQueries.some((q) => q.isLoading);
+  const failedQuery = allQueries.find((q) => q.isError);
+
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="page" />
+      </div>
+    );
+  }
+
+  if (failedQuery) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 16 }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load portfolio data
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(failedQuery.error, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => failedQuery.refetch()}>Retry</Button>
+      </div>
+    );
+  }
+
+  // Trimmed comparison matches computeRevisedContractValue — real data has
+  // carried whitespace-padded CO statuses.
+  const isApprovedCO = (c) => String(c.status ?? "").trim() === "Approved";
 
   const totalContract = projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
-  const approvedCOVal = cos.filter((c) => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+  const approvedCOVal = cos.filter(isApprovedCO).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
   const revisedTotal = totalContract + approvedCOVal;
-  const { budget: totalBudget, actual: totalSpend } = computeCostCodeTotals(codes);
+  const { budget: totalBudget } = computeCostCodeTotals(codes);
+  // Canonical spend model per project (typed-in cost-code actuals win, paid
+  // expenses fall back, unmapped expenses count) so the executive "Total
+  // Spend" agrees with the Dashboard/Portfolio instead of reading $0 for
+  // expense-driven projects. Resolved per project because cost-code numbers
+  // repeat across projects.
+  const spendByProjectId = new Map(projects.map((p) => [
+    p.id,
+    resolveProjectSpend(
+      codes.filter((c) => c.project_id === p.id),
+      expenses.filter((e) => e.project_id === p.id),
+    ).actual,
+  ]));
+  const totalSpend = [...spendByProjectId.values()].reduce((s, v) => s + v, 0);
   const totalBudgetHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0) + (Number(w.field_hours_budget) || 0), 0);
   const totalActualHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0) + (Number(w.field_hours_actual) || 0), 0);
 
   const kpis = [
     { label: "Portfolio Value", value: formatCurrency(revisedTotal), color: "green" },
     { label: "Total Spend", value: formatCurrency(totalSpend), sub: `of ${formatCurrency(totalBudget)} budget`, color: totalSpend > totalBudget ? "rose" : "blue" },
-    { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${cos.filter((c) => c.status === "Approved").length} orders`, color: "purple" },
+    { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${cos.filter(isApprovedCO).length} orders`, color: "purple" },
     { label: "Labor Burn", value: formatBudgetPercent(totalBudgetHrs > 0 ? totalActualHrs / totalBudgetHrs * 100 : 0), sub: `${totalActualHrs.toLocaleString()} hrs actual`, color: "amber" },
-    { label: "Open RFIs", value: rfis.filter((r) => r.status === "Open" || r.status === "Under Review").length, color: "blue" },
+    { label: "Open RFIs", value: rfis.filter(isRfiOpen).length, color: "blue" },
     { label: "At Risk Projects", value: projects.filter((p) => p.health_status === "At Risk").length, color: "rose" },
     {
       label: 'Delayed Tasks',
@@ -87,7 +149,7 @@ export default function ExecutiveView() {
       label: 'Complete This Week',
       value: tasks.filter(t => {
         if (t.status !== 'Complete') return false;
-        const d = new Date(t.end_date || t.updated_date || '');
+        const d = new Date(t.end_date || t.updated_at || '');
         const now = new Date();
         const weekAgo = new Date(now - 7 * 86400000);
         return d >= weekAgo && d <= now;
@@ -99,12 +161,12 @@ export default function ExecutiveView() {
   // Charts data
   const projectBudgetData = projects.map((p) => {
     const pc = codes.filter((c) => c.project_id === p.id);
-    const approvedCO = cos.filter((c) => c.project_id === p.id && c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+    const approvedCO = cos.filter((c) => c.project_id === p.id && isApprovedCO(c)).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     const pcTotals = computeCostCodeTotals(pc);
     return {
       name: p.project_number || p.name?.slice(0, 10),
       budget: pcTotals.budget,
-      actual: pcTotals.actual,
+      actual: spendByProjectId.get(p.id) ?? 0,
       revised: (Number(p.original_contract_value) || 0) + approvedCO,
     };
   });
@@ -127,7 +189,7 @@ export default function ExecutiveView() {
   });
 
   const waterfallData = [{ name: "Original", value: totalContract, fill: "var(--accent)" }];
-  cos.filter((c) => c.status === "Approved").forEach((c) => {
+  cos.filter(isApprovedCO).forEach((c) => {
     waterfallData.push({ name: c.co_number, value: Number(c.co_amount) || 0, fill: (Number(c.co_amount) || 0) >= 0 ? "var(--status-success)" : "var(--status-error)" });
   });
   waterfallData.push({ name: "Revised", value: revisedTotal, fill: "var(--phase-detailing)" });
@@ -150,7 +212,7 @@ export default function ExecutiveView() {
   // RFI aging table
   const rfiAging = projects.map(p => {
     const pRFIs = rfis.filter(r => r.project_id === p.id);
-    const open = pRFIs.filter(r => !["Answered", "Closed"].includes(r.status));
+    const open = pRFIs.filter(isRfiOpen);
     const overdue = open.filter(r => r.date_required && new Date(r.date_required) < new Date());
     const avgDays = open.length > 0
       ? Math.round(open.reduce((s, r) => {
@@ -385,7 +447,7 @@ export default function ExecutiveView() {
             const pc = codes.filter((c) => c.project_id === p.id);
             const { budget, actual } = computeCostCodeTotals(pc);
             const pctSpend = budget > 0 ? actual / budget * 100 : 0;
-            const projRFIs = rfis.filter((r) => r.project_id === p.id && (r.status === "Open" || r.status === "Under Review")).length;
+            const projRFIs = rfis.filter((r) => r.project_id === p.id && isRfiOpen(r)).length;
             return (
               <div key={p.id}
                 style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: 14, cursor: "pointer", transition: "all 0.15s", background: "var(--bg-surface-low)" }}

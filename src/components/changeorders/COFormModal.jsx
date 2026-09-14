@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "../shared/formatters";
-import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
+import PhoenixModal, { btnPrimary, btnSecondary, btnDanger, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
 // `inputDisabledStyle` is no longer used for CO Number — it stays imported for
 // the read-only Margin $ helper / Original Contract Value fields below.
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
+import { buildChangeOrderPayload } from "./changeOrderPayload";
 
 const empty = {
   project_id: "", project_name: "", title: "", description: "",
@@ -16,7 +17,7 @@ const empty = {
   source_rfi_id: null, sov_line_item_id: "", sov_line_number: null,
 };
 
-export default function COFormModal({ open, onClose, onSave, isSaving, co, projects = [], nextNumber, prefill = null, sovItems = [], sourceRfiLabel = "" }) {
+export default function COFormModal({ open, onClose, onSave, onDelete = null, isSaving, co, projects = [], nextNumber, prefill = null, sovItems = [], sourceRfiLabel = "" }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
 
@@ -49,15 +50,7 @@ export default function COFormModal({ open, onClose, onSave, isSaving, co, proje
 
   const handleSave = () => {
     if (!validate()) return;
-    const data = {
-      ...form,
-      co_amount: Number(form.co_amount) || 0,
-      margin_percent: Number(form.margin_percent) || 0,
-      schedule_impact_days: Number(form.schedule_impact_days) || 0,
-      sov_line_item_id: form.sov_line_item_id || null,
-      sov_line_number: form.sov_line_number ?? null,
-      source_rfi_id: form.source_rfi_id || null,
-    };
+    const data = buildChangeOrderPayload(form);
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
     onSave(data);
@@ -73,6 +66,15 @@ export default function COFormModal({ open, onClose, onSave, isSaving, co, proje
       onClose={onClose}
       title={co ? `Edit ${co.co_number || "CO"}` : "New Change Order"}
       footer={<>
+        {co && onDelete ? (
+          <button
+            style={{ ...btnDanger, marginRight: "auto" }}
+            onClick={() => onDelete(co)}
+            disabled={isSaving}
+          >
+            Delete
+          </button>
+        ) : null}
         <button style={btnSecondary} onClick={onClose}>Cancel</button>
         <button style={btnPrimary} onClick={handleSave} disabled={isSaving}>
           {isSaving ? "Saving…" : co ? "Update" : "Create"}
@@ -108,8 +110,8 @@ export default function COFormModal({ open, onClose, onSave, isSaving, co, proje
           )}
         </FormField>
         <FormField label="Project *" error={errors.project_id}>
-          <Select value={form.project_id} onValueChange={v => set("project_id", v)} disabled={false}>
-            <SelectTrigger disabled={false}><SelectValue placeholder="Select project" /></SelectTrigger>
+          <Select value={form.project_id} onValueChange={v => set("project_id", v)} disabled={!!co}>
+            <SelectTrigger disabled={!!co}><SelectValue placeholder="Select project" /></SelectTrigger>
             <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
           </Select>
         </FormField>

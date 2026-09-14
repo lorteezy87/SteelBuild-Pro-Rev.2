@@ -107,6 +107,8 @@ export function normalizeImportRow(
   if (!normalizedPieceMark) warnings.push("missing piece mark");
 
   const quantityValue = firstValue(payload, ["quantity"]);
+  // Missing quantity defaults to 1. When an existing root already has a different
+  // quantity, reconcile flags "conflicting quantity" instead of silently updating.
   const quantity = quantityValue === null
     ? 1
     : parseNumber(payload, ["quantity"], "quantity", warnings);
@@ -137,6 +139,15 @@ export function normalizeImportRow(
   if (weightEachLbs !== null && weightEachLbs < 0) warnings.push("weight each cannot be negative");
   if (weightTotalLbs !== null && weightTotalLbs < 0) warnings.push("total weight cannot be negative");
   if (lengthInches !== null && lengthInches < 0) warnings.push("length cannot be negative");
+  if (
+    weightEachLbs !== null &&
+    weightTotalLbs !== null &&
+    quantity !== null &&
+    quantity > 0 &&
+    Math.abs(weightEachLbs * quantity - weightTotalLbs) > Math.max(0.01, weightTotalLbs * 0.01)
+  ) {
+    warnings.push("inconsistent weight each vs total");
+  }
 
   return {
     sourceRowNumber,
@@ -241,6 +252,12 @@ export function reconcileImportRows(
       return { ...row, warnings, decision: "conflict", matchedPieceId: root.id };
     }
 
+    if (
+      row.quantity !== null &&
+      numberDiffers(Number(root.quantity), row.quantity)
+    ) {
+      warnings.push("conflicting quantity");
+    }
     if (
       row.weightEachLbs !== null &&
       root.weight_each_lbs !== null &&

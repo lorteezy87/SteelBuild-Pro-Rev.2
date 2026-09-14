@@ -9,8 +9,10 @@
  * to what the classic Command Center shows.
  */
 
-import { riskScore } from "@/pages/rfis/rfiControlCenter.derive";
+import { riskScore, rfiUrgencyLabel } from "@/pages/rfis/rfiControlCenter.derive";
 import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
+import { isOpenScheduleTask } from "@/components/schedule/scheduleGanttHelpers";
+import { RFI_OPEN_STATUSES, CO_PENDING_STATUSES } from "@/lib/entityPredicates";
 
 // ── Source record shapes (subset of entity fields we actually read) ────────
 
@@ -38,7 +40,8 @@ export interface SubmittalSource {
   title?: string | null;
   status?: string | null;
   ball_in_court?: string | null;
-  due_date?: string | null;
+  /** submittals.required_date — the only date-due column on the table (no due_date). */
+  required_date?: string | null;
   project_id?: string | null;
   [key: string]: unknown;
 }
@@ -128,6 +131,7 @@ export interface PanelRow {
   label: string;
   sub: string;
   tone: PanelTone;
+  badge: string;
   itemType: string;
 }
 
@@ -197,10 +201,17 @@ function toneFromCount(count: number, warnAt: number, dangerAt: number): PanelTo
 
 // ── Panel row builders ────────────────────────────────────────────────────
 
-const OPEN_RFI_STATUSES = new Set(["Open", "Under Review", "Incomplete Response"]);
-const PENDING_SUB_STATUSES = new Set(["IFA", "OFA", "BFA", "OFS", "IFC", "R&R", "Pending", "Under Review", "Resubmit"]);
-const PENDING_CO_STATUSES = new Set(["Draft", "Submitted", "Under Review", "Pending"]);
-const WAITING_SUB_STATUSES = new Set(["IFA", "OFA"]);
+// Status vocabularies are the live DB CHECK constraints (see entityPredicates):
+//   submittals.status ∈ Draft / Submitted / Under Review / Approved / Approved as Noted /
+//                       Revise and Resubmit / Rejected / Released for Fabrication / Void
+//   change_orders.status ∈ Draft / Submitted / Under Review / Approved / Rejected / Void
+// (IFA/OFA/BFA/… are drawing *stages*, not submittal statuses.)
+const OPEN_RFI_STATUSES = RFI_OPEN_STATUSES;
+/** Submittals still in our or the reviewer's hands — not yet at a terminal disposition. */
+const PENDING_SUB_STATUSES = new Set(["Draft", "Submitted", "Under Review", "Revise and Resubmit"]);
+const PENDING_CO_STATUSES = CO_PENDING_STATUSES;
+/** Submittals sitting with the GC/EOR awaiting a response. */
+const WAITING_SUB_STATUSES = new Set(["Submitted", "Under Review"]);
 
 function rfiTodayPriority(rfi: RfiSource): PanelRow | null {
   if (!OPEN_RFI_STATUSES.has(rfi.status || "Open")) return null;
@@ -219,14 +230,14 @@ function rfiTodayPriority(rfi: RfiSource): PanelRow | null {
     label: `${rfi.rfi_number || "RFI"} — ${rfi.title || rfi.subject || "Untitled RFI"}`,
     sub: subParts.join(" · "),
     tone: overdue ? "danger" : isDueToday ? "warn" : "neutral",
+    badge: rfiUrgencyLabel(rfi as Parameters<typeof rfiUrgencyLabel>[0]),
     itemType: "RFI",
   };
 }
 
 function submittialWaitingRow(sub: SubmittalSource): PanelRow | null {
   if (!WAITING_SUB_STATUSES.has(sub.status || "")) return null;
-  const bic = sub.ball_in_court || "";
-  const dueDays = daysUntilDate(sub.due_date);
+  const dueDays = daysUntilDate(sub.required_date);
   const subParts: string[] = [sub.status || "Pending"];
   if (sub.ball_in_court) subParts.push(sub.ball_in_court);
   if (dueDays !== null && dueDays < 0) subParts.push(`${Math.abs(dueDays)}d overdue`);
@@ -235,6 +246,7 @@ function submittialWaitingRow(sub: SubmittalSource): PanelRow | null {
     label: `${sub.submittal_number || "SUB"} — ${sub.title || "Untitled Submittal"}`,
     sub: subParts.join(" · "),
     tone: dueDays !== null && dueDays < 0 ? "danger" : "neutral",
+    badge: dueDays !== null && dueDays < 0 ? "Overdue" : "Waiting",
     itemType: "SUB",
   };
 }
@@ -248,6 +260,7 @@ function coRiskRow(co: ChangeOrderSource): PanelRow | null {
     label: `${co.co_number || "CO"} — ${co.title || co.description || "Change Order"}`,
     sub: `${co.status} · ${age}d pending`,
     tone: age > 21 ? "danger" : "warn",
+    badge: age > 21 ? "Stale" : "Watch",
     itemType: "CO",
   };
 }
@@ -263,17 +276,20 @@ function deliveryTodayRow(del: DeliverySource): PanelRow | null {
     label: del.delivery_title || del.description || "Delivery",
     sub: isLate ? `Delayed — ${Math.abs(dueDays ?? 0)}d` : "Arriving today",
     tone: isLate ? "danger" : "neutral",
+    badge: isLate ? "Delayed" : "Due Today",
     itemType: "DEL",
   };
 }
 
 function workPackageBlockedRow(wp: WorkPackageSource): PanelRow | null {
-  if (wp.status !== "On Hold" && wp.status !== "Blocked") return null;
+  // work_packages.status ∈ Not Started / In Progress / Complete / On Hold — no "Blocked".
+  if (wp.status !== "On Hold") return null;
   return {
     id: wp.id || String(Math.random()),
     label: `${wp.wp_number || "WP"} — ${wp.name || "Work Package"}`,
     sub: `${wp.phase || "—"} · On Hold`,
     tone: "danger",
+    badge: "Blocked",
     itemType: "WP",
   };
 }
@@ -311,7 +327,7 @@ function submittalToActionItems(subs: SubmittalSource[]): ActionItem[] {
   return subs
     .filter((s) => PENDING_SUB_STATUSES.has(s.status || ""))
     .map((s): ActionItem => {
-      const dueDays = daysUntilDate(s.due_date);
+      const dueDays = daysUntilDate(s.required_date);
       const overdue = dueDays !== null && dueDays < 0;
       return {
         id: s.id || String(Math.random()),
@@ -320,7 +336,7 @@ function submittalToActionItems(subs: SubmittalSource[]): ActionItem[] {
         status: s.status || null,
         priority: null,
         owner: s.ball_in_court || null,
-        dueDate: s.due_date || null,
+        dueDate: s.required_date || null,
         linkedTo: null,
         projectId: s.project_id || null,
         urgency: overdue ? "overdue" : "awaiting",
@@ -378,12 +394,12 @@ function deliveriesToActionItems(dels: DeliverySource[]): ActionItem[] {
 
 function workPackagesToActionItems(workPackages: WorkPackageSource[]): ActionItem[] {
   return workPackages
-    .filter((w) => w.status === "On Hold" || w.status === "Blocked")
+    .filter((w) => w.status === "On Hold")
     .map((w): ActionItem => ({
       id: w.id || String(Math.random()),
       itemType: "WP",
       title: `${w.wp_number || "WP"} — ${w.name || "Work Package"}`,
-      status: w.status || "Blocked",
+      status: w.status || "On Hold",
       priority: null,
       owner: null,
       dueDate: null,
@@ -414,12 +430,16 @@ function deriveScheduleHealth(tasks: ScheduleTaskSource[]): { label: string; ton
   const parentIds = buildParentIdSet(tasks);
   const leafTasks = tasks.filter((t) => !isSummaryTask(t, parentIds));
   if (leafTasks.length === 0) return { label: "On Track", tone: "good" };
-  const activeTasks = leafTasks.filter((t) => t.status !== "Complete" && t.status !== "Cancelled");
+  // Same open-task predicate the Schedule Command Center uses, so both
+  // surfaces agree on what "active" means.
+  const activeTasks = leafTasks.filter((t) => isOpenScheduleTask(t));
   if (activeTasks.length === 0) return { label: "On Track", tone: "good" };
   const delayed = activeTasks.filter((t) => t.status === "Delayed").length;
+  // Overdue = past its end_date only. A task with no end_date has no finish
+  // commitment to miss; its start_date must not stand in as a deadline.
   const overdueTasks = activeTasks.filter((t) => {
-    const d = daysUntilDate(t.end_date || t.start_date);
-    return d !== null && d < 0 && t.status !== "Complete";
+    const d = daysUntilDate(t.end_date);
+    return d !== null && d < 0;
   }).length;
   const atRiskCount = delayed + overdueTasks;
   const ratio = atRiskCount / activeTasks.length;
@@ -444,11 +464,10 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
   const openActionItems = openRfis.length + pendingSubmittals.length + pendingCOs.length;
 
   // "Approvals Pending" = submittals waiting for GC/EOR response
-  const approvalStatuses = new Set(["OFA", "IFA"]);
-  const approvalsPending = submittals.filter((s) => approvalStatuses.has(s.status || "")).length;
+  const approvalsPending = submittals.filter((s) => WAITING_SUB_STATUSES.has(s.status || "")).length;
 
   // "Field Issues" = WPs on hold + deliveries delayed
-  const wpOnHold = workPackages.filter((w) => w.status === "On Hold" || w.status === "Blocked").length;
+  const wpOnHold = workPackages.filter((w) => w.status === "On Hold").length;
   const deliveriesDelayed = deliveries.filter((d) => d.status === "Delayed" || (d.status !== "Delivered" && (() => {
     const dd = daysUntilDate(d.scheduled_date);
     return dd !== null && dd < 0;
@@ -513,6 +532,7 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
       label: `${rfi.rfi_number || "RFI"} — ${rfi.title || rfi.subject || "Untitled RFI"}`,
       sub: `${bic} · ${age}d`,
       tone: age > 14 ? "warn" : "neutral",
+      badge: "Waiting",
       itemType: "RFI",
     });
   }
@@ -533,6 +553,7 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
       label: `${rfi.rfi_number || "RFI"} — ${rfi.title || rfi.subject || "Untitled RFI"}`,
       sub: overdue ? `${Math.abs(daysUntilDate(rfi.date_required) ?? 0)}d past due` : `Open ${age}d`,
       tone: overdue ? "danger" : rfi.priority === "Critical" || rfi.priority === "High" ? "warn" : "neutral",
+      badge: rfiUrgencyLabel(rfi as Parameters<typeof rfiUrgencyLabel>[0]),
       itemType: "RFI",
     });
   }
@@ -552,6 +573,17 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
     ...workPackagesToActionItems(workPackages),
   ].sort((a, b) => urgencyOrder(a.urgency) - urgencyOrder(b.urgency));
 
+  const assignedPanelItems = new Set<string>();
+  const takeUnique = (rows: PanelRow[]) => rows.filter((row) => {
+    const key = `${row.itemType}:${row.id}`;
+    if (assignedPanelItems.has(key)) return false;
+    assignedPanelItems.add(key);
+    return true;
+  });
+  const uniqueTodayPriorities = takeUnique(todayPriorities);
+  const uniqueWaitingOn = takeUnique(waitingOn);
+  const uniqueRiskWatchlist = takeUnique(riskWatchlist);
+
   return {
     kpis: {
       openActionItems,
@@ -562,9 +594,9 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
       scheduleHealth: scheduleHealthLabel,
     },
     panels: {
-      todayPriorities: todayPriorities.slice(0, 6),
-      waitingOn: waitingOn.slice(0, 6),
-      riskWatchlist: riskWatchlist.slice(0, 5),
+      todayPriorities: uniqueTodayPriorities.slice(0, 6),
+      waitingOn: uniqueWaitingOn.slice(0, 6),
+      riskWatchlist: uniqueRiskWatchlist.slice(0, 5),
     },
     tones,
     actionItems,

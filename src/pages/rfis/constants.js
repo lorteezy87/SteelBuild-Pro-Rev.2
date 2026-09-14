@@ -9,11 +9,11 @@
 export const mono = { fontFamily: "var(--font-mono)" };
 
 export const BIC_COLORS = {
-  Contractor: { bg: "rgba(0,229,255,0.15)",   text: "var(--accent)" },
-  GC:         { bg: "rgba(68,226,205,0.18)",  text: "var(--secondary)" },
-  Engineer:   { bg: "rgba(255,185,95,0.15)",  text: "var(--status-warning)" },
-  Architect:  { bg: "rgba(168,240,203,0.18)", text: "var(--status-success)" },
-  Owner:      { bg: "rgba(255,180,171,0.18)", text: "var(--status-error)" },
+  Contractor: { bg: "var(--info-muted)",   text: "var(--accent)" },
+  GC:         { bg: "var(--accent-muted)",  text: "var(--secondary)" },
+  Engineer:   { bg: "var(--warning-muted)",  text: "var(--status-warning)" },
+  Architect:  { bg: "var(--success-muted)", text: "var(--status-success)" },
+  Owner:      { bg: "var(--danger-muted)", text: "var(--status-error)" },
 };
 
 export const PRIORITY_CFG = {
@@ -23,9 +23,18 @@ export const PRIORITY_CFG = {
   Low:      { color: "var(--text-muted)",     bg: "var(--hover-bg)"      },
 };
 
+/**
+ * Legacy status palette for the older ListView / DetailPanel surfaces.
+ *
+ * `rfiStatus.ts` is the canonical model — prefer `rfiStatusView()` in new code.
+ * Void is included here because both call sites resolve with
+ * `STATUS_CFG[status] || STATUS_CFG.Open`, so its absence made a **voided RFI
+ * render as an amber "Open" pill** — the exact opposite of its meaning.
+ */
 export const STATUS_CFG = {
   Open:                  { color: "var(--status-warning)", bg: "var(--warning-muted)" },
   "Under Review":        { color: "var(--status-info)",    bg: "var(--info-muted)"    },
+  Void:                  { color: "var(--text-disabled)",  bg: "var(--hover-bg)"      },
   // "Incomplete Response" — GC replied but the response doesn't fully address
   // the question; another round is required. Treated as still-open (not in
   // ["Answered","Closed"]). Uses the danger palette to flag "needs another
@@ -35,19 +44,22 @@ export const STATUS_CFG = {
   Closed:                { color: "var(--text-muted)",     bg: "var(--hover-bg)"      },
 };
 
-export const statusColumns = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
+// Board columns. Void is included so a voided RFI still lands somewhere —
+// without a column it was dropped from the board entirely while remaining in
+// the total count.
+export const statusColumns = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed", "Void"];
 
-// RFI numbers arrive from several paths: app-created values use "RFI #001",
+// RFI numbers arrive from several paths: app-created values use "RFI 001",
 // older imports may store "001", and vendor logs often use "RFI-001".
 // Sorting should treat all of those as the same numeric sequence.
 export const RFI_NUMBER_PATTERN = /(\d+)/;
 
 export const KPI_ACCENT_MAP = {
-  "var(--status-success)": "rgba(34,197,94,0.10)",
-  "var(--status-warning)": "rgba(245,158,11,0.10)",
-  "var(--status-error)":   "rgba(239,68,68,0.10)",
-  "var(--status-info)":    "rgba(96,165,250,0.10)",
-  "var(--accent)":         "rgba(200,155,32,0.08)",
+  "var(--status-success)": "var(--success-muted)",
+  "var(--status-warning)": "var(--warning-muted)",
+  "var(--status-error)":   "var(--danger-muted)",
+  "var(--status-info)":    "var(--info-muted)",
+  "var(--accent)":         "var(--accent-muted)",
 };
 
 export const BIC_PARTIES = ["Contractor", "GC", "Engineer", "Architect", "Owner"];

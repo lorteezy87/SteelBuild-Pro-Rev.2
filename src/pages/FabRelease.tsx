@@ -18,6 +18,7 @@ import { logActivity } from "@/services/auditLogger";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { invalidateEntity, getQueryKey } from "@/services/cacheRegistry";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -26,7 +27,9 @@ import {
 } from "@/components/shared/crudFeedback";
 import { usePermissions } from "@/services/permissions";
 import { getNextNumber } from "@/components/shared/numberSequencing";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
+import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
 import WPFormModalRaw from "@/components/workpackages/WPFormModal";
 import { Button as ButtonRaw, EmptyState as EmptyStateRaw } from "@/components/design-system";
 import SequenceFilterRaw from "@/components/shared/SequenceFilter";
@@ -80,7 +83,9 @@ export default function FabRelease() {
   const [view, setView] = useState("flow");
   const [stageFilter, setStageFilter] = useState("all");
   const [riskFilter, setRiskFilter] = useState("all");
-  const [search, setSearch] = useState("");
+  // `?search=WP-014` from the Work Package Control Center scopes the gate to
+  // that package on arrival.
+  const [search, setSearch] = useState(() => searchParams.get("search")?.trim() || "");
   const [seqFilter, setSeqFilter] = useState<unknown>(null);
   const [detailWP, setDetailWP] = useState<EnrichedWorkPackage | null>(null);
   const [editingWP, setEditingWP] = useState<Record<string, unknown> | null>(null);
@@ -88,6 +93,13 @@ export default function FabRelease() {
   const [deleteTarget, setDeleteTarget] = useState<EnrichedWorkPackage | null>(null);
   const allocationInFlightRef = useRef(false);
   const [isAllocatingNumber, setIsAllocatingNumber] = useState(false);
+
+  useResetOnProjectChange(projectId, () => {
+    setDetailWP(null);
+    setEditingWP(null);
+    setWPModalOpen(false);
+    setDeleteTarget(null);
+  });
 
   useEffect(() => {
     const savedView = localStorage.getItem("fabReleaseView");
@@ -166,7 +178,9 @@ export default function FabRelease() {
   const invalidateWorkPackages = () => invalidateEntity(qc, "work_package", projectId);
 
   const createWPMut = useMutation({
-    mutationFn: (data: any) => entities.WorkPackage.create(data),
+    mutationFn: (data: any) => entities.WorkPackage.create(
+      withProjectId(data as Record<string, unknown>, projectId),
+    ),
     onSuccess: async (created) => {
       logActivity("work_package", "created", created, { projectId });
       appendRecordToCaches(qc, wpQueryKeys, created, ((record: any, key: any) => !key[1] || record.project_id === key[1]) as unknown as () => boolean);
@@ -471,6 +485,9 @@ export default function FabRelease() {
   return (
     <div className="sb-dashboard-reference-page fab-release-page">
       <style>{FAB_RELEASE_STYLES}</style>
+      <div style={{ padding: "0 24px" }}>
+        <ListTruncationNotice count={workPackages.length} label="fab packages" />
+      </div>
       <FabReleaseControlCenter
         projectName={projectName}
         metrics={metrics}

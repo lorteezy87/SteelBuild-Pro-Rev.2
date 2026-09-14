@@ -26,6 +26,13 @@
   --sbd-bg-elevated:     rgba(15,22,38,0.85);
   --sbd-bg-input:        rgba(255,255,255,0.04);
   --sbd-bg-row-hover:    rgba(86,176,255,0.06);
+  /* Opaque solids for menus / native <select> / floating panels.
+     Frosted rgba surfaces are fine for in-page cards (backdrop-filter),
+     but dropdowns and option lists composite against black and go unreadable. */
+  --sbd-bg-panel:        #161B22;
+  --sbd-bg-panel-hi:     #21262D;
+  --sbd-bg-panel-input:  #1C2128;
+  --sbd-bg-panel-hover:  #2D333B;
 
   /* Borders */
   --sbd-border:          rgba(255,255,255,0.10);

@@ -97,7 +97,7 @@ export default function NudgeDraftModal({ rfi, open, onClose, fromName }) {
     >
       <div style={{
         display: "flex", gap: 8, alignItems: "flex-start",
-        background: "var(--accent-muted, rgba(96,165,250,0.1))",
+        background: "var(--accent-muted, var(--info-muted))",
         border: "1px solid var(--border-default)", borderRadius: 8,
         padding: "8px 12px", marginBottom: 14,
       }}>

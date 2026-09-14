@@ -25,9 +25,13 @@ export function filterPieceRegisterRows(
       ![
         row.piece_mark,
         row.normalized_piece_mark,
+        row.lot_code,
         row.workPackageLabel,
         row.profile,
         row.material_grade,
+        row.sequence_number,
+        row.erection_area,
+        row.external_ref,
         row.source_system,
       ].some((value) => String(value ?? "").toUpperCase().includes(search))
     ) return false;

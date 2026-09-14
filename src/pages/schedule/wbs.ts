@@ -1,5 +1,6 @@
 import { PHASE_NUMBER } from "@/utils/phases";
 import type { SanitizedTaskUpdate, ScheduleTask } from "./types";
+import { assertScheduleDateRange } from "./scheduleDateValidation";
 
 /**
  * Auto-generate a WBS code for a task. Format is now "<phase>.<n>"
@@ -123,11 +124,56 @@ export function sanitizeScheduleTaskUpdatePayload(data: ScheduleTask): Sanitized
   });
 
   if (isSummaryRow) {
-    if ("_stored_start_date" in data) fields.start_date = data._stored_start_date || null;
-    if ("_stored_end_date" in data) fields.end_date = data._stored_end_date || null;
-    if ("_stored_duration" in data) fields.duration = data._stored_duration;
-    if ("_stored_percent_complete" in data) fields.percent_complete = data._stored_percent_complete;
+    // A parent row DISPLAYS its children's rolled-up span, not the dates a PM
+    // typed; buildScheduleTree keeps the typed values on _stored_* and the
+    // derived ones on _rolled_*. Saving the displayed value would persist a
+    // derived date as if it were hand-entered, so an untouched field is
+    // restored from _stored_*.
+    //
+    // Restoring it UNCONDITIONALLY is what broke date editing on every parent
+    // row: the PM's new date was replaced by the old stored one and the
+    // mutation still reported "Task updated". So substitute only when the
+    // payload still carries the derived value — that is what "untouched" means.
+    //
+    // A row WITHOUT _rolled_* is restored unconditionally, as before. The
+    // rollup is not the only thing that overlays these columns: the
+    // predecessor cascade (computeEffectiveDates) also replaces start_date /
+    // end_date with computed values while preserving the originals on
+    // _stored_*. Against a cascade-overlaid payload "differs from _stored_*"
+    // is NOT evidence of an edit, so without the rolled-up reference there is
+    // no safe way to tell the two apart and the conservative restore stands.
+    const untouched = (field: string, rolledKey: string): boolean => {
+      if (!(field in fields)) return true;
+      if (!(rolledKey in data)) return true;
+      return fields[field] === (data as Record<string, unknown>)[rolledKey];
+    };
+
+    // start_date and end_date are decided as a PAIR. Restoring one while
+    // honouring the other can invert the window — edit a parent's start, let
+    // the end fall back to an older stored value, and the payload is
+    // start > end, which assertScheduleDateRange then rejects. The user edited
+    // a coherent pair on screen; they get a coherent pair written.
+    const startUntouched = !("_stored_start_date" in data)
+      || untouched("start_date", "_rolled_start_date");
+    const endUntouched = !("_stored_end_date" in data)
+      || untouched("end_date", "_rolled_end_date");
+
+    if (startUntouched && endUntouched) {
+      if ("_stored_start_date" in data) fields.start_date = data._stored_start_date || null;
+      if ("_stored_end_date" in data) fields.end_date = data._stored_end_date || null;
+    }
+    if ("_stored_duration" in data && untouched("duration", "_rolled_duration")) {
+      fields.duration = data._stored_duration;
+    }
+    if (
+      "_stored_percent_complete" in data
+      && untouched("percent_complete", "_rolled_percent_complete")
+    ) {
+      fields.percent_complete = data._stored_percent_complete;
+    }
   }
+
+  assertScheduleDateRange(fields as ScheduleTask);
 
   return { id, fields };
 }

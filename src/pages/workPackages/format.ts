@@ -61,11 +61,21 @@ export const VIEW_OPTIONS: ViewOption[] = [
   { id: "register", label: "Register", icon: List },
 ];
 
-export const RISK_FILTERS = [
-  { id: "all", label: "All" },
-  { id: "high", label: "Exceptions" },
-  { id: "medium", label: "Warnings" },
-  { id: "clear", label: "Clear" },
+/**
+ * "Focus" filter: the three risk levels plus the buckets the exception rail
+ * and KPI strip count, so clicking a count filters to exactly that set
+ * (the rail used to map "Drawing gaps" to plain `high`).
+ */
+export const RISK_FILTERS: Array<{ id: string; label: string; tone: string }> = [
+  { id: "all", label: "All", tone: "var(--accent)" },
+  { id: "high", label: "Exceptions", tone: "var(--status-error)" },
+  { id: "medium", label: "Warnings", tone: "var(--status-warning)" },
+  { id: "clear", label: "Clear", tone: "var(--status-success)" },
+  { id: "drawing_gaps", label: "Drawing gaps", tone: "var(--status-warning)" },
+  { id: "ready_fab", label: "Ready for fab", tone: "var(--status-success)" },
+  { id: "released", label: "Released", tone: "var(--phase-fab)" },
+  { id: "exception", label: "Exception release", tone: "var(--status-warning)" },
+  { id: "overdue", label: "Overdue", tone: "var(--status-error)" },
 ];
 
 export function num(value: unknown): number {

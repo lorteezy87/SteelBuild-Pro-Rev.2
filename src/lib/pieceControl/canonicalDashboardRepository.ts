@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { fetchAllProjectRowsPaged } from "./pagedSelect";
 import type {
   CanonicalRollupPiece,
   CanonicalWorkPackage,
@@ -13,7 +14,6 @@ export interface LegacyProductionRow {
   quantity: number | null;
   weight: number | null;
   status: string | null;
-  work_package_id: string | null;
   ship_date: string | null;
 }
 
@@ -29,13 +29,13 @@ export async function fetchCanonicalDashboardSnapshot(
   projectId: string,
 ): Promise<CanonicalDashboardSnapshot> {
   const db = supabase as any;
+  // pieces + completions are paged: a bare select is capped at 1000 rows
+  // server-side, which silently truncated Overview tonnage on big jobs.
   const [pieces, workPackages, stations, completions, legacyProduction] =
     await Promise.all([
-      db
-        .from("pieces")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("normalized_piece_mark"),
+      fetchAllProjectRowsPaged<CanonicalRollupPiece>(db, "pieces", projectId, {
+        orderBy: "normalized_piece_mark",
+      }).then((data) => ({ data, error: null as Error | null })),
       db
         .from("work_packages")
         .select("*")
@@ -49,13 +49,14 @@ export async function fetchCanonicalDashboardSnapshot(
         .eq("project_id", projectId)
         .eq("is_active", true)
         .order("sort_order"),
-      db
-        .from("piece_station_completions")
-        .select("*")
-        .eq("project_id", projectId),
+      fetchAllProjectRowsPaged<StationCompletion>(
+        db,
+        "piece_station_completions",
+        projectId,
+      ).then((data) => ({ data, error: null as Error | null })),
       db
         .from("piece_production")
-        .select("id,quantity,weight,status,work_package_id,ship_date")
+        .select("id,quantity,weight,status,ship_date")
         .eq("project_id", projectId)
         .eq("is_deleted", false),
     ]);

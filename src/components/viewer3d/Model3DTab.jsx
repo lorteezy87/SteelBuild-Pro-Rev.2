@@ -4,24 +4,48 @@
  * `modelMapping` read-model (summarizeElementStatuses.guidsByStatus), and shows a
  * status legend + a click-to-identify panel.
  *
- * Slice 1: the IFC is loaded from a local file the user picks (proves the render
- * + coloring + picking end to end). Slice 2 swaps the file picker for upload →
- * Storage + roster → model_elements, so the model persists per project.
+ * Piece tracking lives here too: find-by-mark, click-to-isolate legend with live
+ * counts, and a Piece Control panel that only offers the logistics action the
+ * whole selection is eligible for (ship / deliver / erect — same rules as the
+ * Piece Register). Everything derives from the roster + canonical pieces the tab
+ * already holds; nothing is stored on the model itself.
+ *
+ * The IFC is persisted per project (upload → Storage + roster → model_elements)
+ * and auto-loads on the next visit.
  */
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ELEMENT_STATUS_META, normalizePieceMark } from "@/services/modelElementStatus";
-import { FAB_STATUS_META, FAB_STATUS_ORDER } from "@/lib/fabStatus";
-import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, buildMarkByGuid, buildStatusByMark, buildSeqByMark, buildFabByMark, buildCanonicalPieceByGuid, colorFnFor } from "@/lib/ifc/viewerColoring";
+import { normalizePieceMark } from "@/services/modelElementStatus";
+import { findGuidsByMark, describeSelection } from "@/lib/ifc/viewerSelection";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
+import {
+  assertStorageObjectSize, describeEmptyRoster, describePersistFailure, describePersistProgress, formatMb,
+  persistLeftPartialWrite,
+} from "@/lib/ifc/persistSteps";
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
+import { pieceControlKeys, invalidatePieceControlQueries } from "@/lib/pieceControl/queryKeys";
+import { fetchAllProjectRowsPaged } from "@/lib/pieceControl/pagedSelect";
+import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import Model3dSyncPanel from "@/components/viewer3d/Model3dSyncPanel";
 import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
+import {
+  buildModel3DDisplayedClaims,
+  buildModel3DViewModel,
+} from "@/components/viewer3d/model3dTabDerive";
+import { useModel3DInteractionState } from "@/components/viewer3d/useModel3DInteractionState";
+import {
+  Model3DLegend,
+  Model3DRow,
+  PieceControlPanel,
+} from "@/components/viewer3d/Model3DTabViews";
+
+import "./viewerControls.css";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
 
@@ -34,13 +58,16 @@ const COLOR_MODES = [
   { key: "sequence", label: "Sequence" },
   { key: "status", label: "Detailing" },
 ];
-const TYPE_LABELS = [["beam", "Beam"], ["column", "Column"], ["plate", "Plate"], ["member", "Member"]];
+const viewerTools = {
+  position: "absolute", top: 10, left: 10, display: "flex", gap: 6, zIndex: 2, flexWrap: "wrap",
+  maxWidth: "calc(100% - 110px)",
+};
 
-const fsBtn = {
-  position: "absolute", top: 10, left: 10, padding: "6px 12px", borderRadius: 8,
+const toolBtn = {
+  padding: "6px 12px", borderRadius: 8,
   border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
   color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
-  fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer", zIndex: 2,
+  fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer",
 };
 
 const linkBtn = {
@@ -49,7 +76,7 @@ const linkBtn = {
 };
 
 const saveBanner = {
-  position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 3,
+  position: "absolute", top: 52, left: "50%", transform: "translateX(-50%)", zIndex: 3,
   display: "flex", alignItems: "center", gap: 12, padding: "8px 10px 8px 16px",
   borderRadius: 999, background: "color-mix(in srgb, var(--accent) 20%, rgba(13,17,23,0.92))",
   border: "1px solid color-mix(in srgb, var(--accent) 55%, transparent)",
@@ -57,62 +84,47 @@ const saveBanner = {
 };
 
 const loadingChip = {
-  position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 3,
+  position: "absolute", top: 52, left: "50%", transform: "translateX(-50%)", zIndex: 3,
   display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 999,
   background: "rgba(13,17,23,0.82)", border: "1px solid var(--border-default)",
   color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
   fontWeight: 600, letterSpacing: "0.04em", whiteSpace: "nowrap", boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
 };
 
-export default function Model3DTab({ modelMapping, modelElementRows, projectId, rosterLoading }) {
+const sectionHead = {
+  ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8,
+};
+
+const hintStyle = { color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 };
+
+export default function Model3DTab(props) {
+  return <ProjectModel3DTab key={props.projectId || "no-project"} {...props} />;
+}
+
+function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLoading, rosterError }) {
   const qc = useQueryClient();
   useCanonicalReportingRealtime(projectId);
-  // canonical light presentation (SP5): the Detailing hub runs under the canonical light command
-  // shell this tab is already inside `.detailing-cc`, so every var(--*) token +
-  // sbd-* class in the side panel below flips light automatically via the shipped
-  // `.detailing-cc` alias block. The ONE piece that doesn't is the outer
-  // container's hardcoded `--bg-base` fallback — swap that to the aliased surface
-  // so the frame reads light too. The canonical surface uses the light container.
-  // The 3D canvas + its floating overlays (fsBtn / saveBanner / loadingChip) sit
-  // ON the dark viewport and stay dark by design (chrome-only re-skin).
   const [buffer, setBuffer] = useState(null);
   const [fileName, setFileName] = useState(null);
-  const [modelFile, setModelFile] = useState(null); // the picked File (for upload)
-  const [source, setSource] = useState(null);        // null | "picked" | "stored"
-  const [picked, setPicked] = useState(null);
-  const [selectedGuids, setSelectedGuids] = useState([]);
+  const [modelFile, setModelFile] = useState(null);
+  const [source, setSource] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
-  // Persisted so the view (e.g. "Fab") survives leaving + returning to the tab —
-  // otherwise it resets to native colors and looks like the statuses "erased".
-  const [colorMode, setColorMode] = useState(() => {
-    try { return localStorage.getItem("sbp:viewer-colormode") || "model"; } catch { return "model"; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem("sbp:viewer-colormode", colorMode); } catch { /* ignore */ }
-  }, [colorMode]);
-  // Roster import: idle | extracting | confirm | importing | done
   const [roster, setRoster] = useState({ step: "idle" });
+  const {
+    viewerRef, containerRef, picked, setPicked, selectedGuids, setSelectedGuids,
+    colorStats, setColorStats, colorMode, setColorMode, markFallback, setMarkFallback,
+    isFullscreen, measureMode, setMeasureMode, measureResult, setMeasureResult,
+    isolatedKey, findQuery, setFindQuery, findResult, setFindResult,
+    clipEnabled, setClipEnabled, clipPct, setClipPct, resetViewerState,
+    toggleFullscreen, toggleMeasure, isolateBucket, isolateSelection, hideSelection, showAll,
+  } = useModel3DInteractionState(projectId);
 
-  const containerRef = useRef(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  useEffect(() => {
-    const onFs = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) containerRef.current?.requestFullscreen?.();
-    else document.exitFullscreen?.();
-  };
-
-  // Auto-load the project's stored model (slice 2b) so the tab opens without
-  // re-picking. A freshly-picked file takes precedence over the stored one.
-  const { data: storedModel } = useQuery({
+  const { data: storedModel, error: storedModelError } = useQuery({
     queryKey: ["project-model", projectId],
     enabled: !!projectId,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("model_registry")
         .select("id, file_name, file_url, coordinate_system")
         .eq("project_id", projectId)
@@ -123,24 +135,28 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         .order("upload_date", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (error) throw error;
       return data || null;
     },
   });
 
-  const { data: canonicalPieces = [] } = useQuery({
-    queryKey: ["canonical-pieces-3d", projectId],
+  const { data: canonicalPieces = [], isPending: piecesLoading, error: piecesError, refetch: refetchPieces } = useQuery({
+    queryKey: pieceControlKeys.canonicalPieces3d(projectId),
     enabled: !!projectId,
-    queryFn: async () => {
-      const db = supabase;
-      const { data, error } = await db
-        .from("pieces")
-        .select("id,lifecycle_status,on_hold,is_container,is_deleted,deleted_at")
-        .eq("project_id", projectId)
-        .eq("is_deleted", false)
-        .is("deleted_at", null);
-      if (error) throw error;
-      return data || [];
-    },
+    // Live model_elements events refresh linked changes. Poll the slim piece
+    // projection too: some deployments don't publish pieces, and a new split
+    // lot can change mark ambiguity without touching an existing model row.
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    // Paged: this is the join the Fab color mode paints from, and a bare
+    // select silently dropped every lot past row 1000 on big jobs.
+    queryFn: () =>
+      fetchAllProjectRowsPaged(supabase, "pieces", projectId, {
+        select: "id,parent_piece_id,piece_mark,lot_code,lifecycle_status,on_hold,on_hold_reason,is_container,is_deleted,deleted_at,work_package_id",
+        build: (query) => query.eq("is_deleted", false).is("deleted_at", null),
+        onTruncated: () => { throw new Error("Piece evidence exceeded the paging limit."); },
+      }),
   });
 
   useEffect(() => {
@@ -151,9 +167,10 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         const url = await resolveFileUrl(storedModel.file_url);
         if (!url) return;
         const res = await fetch(url);
+        // A signed-URL 403/404 used to fall through to web-ifc as a "model" and
+        // surface as a cryptic parse error; name the real failure instead.
+        if (!res.ok) throw new Error(`Saved model download failed (HTTP ${res.status}). Re-save the IFC to this project.`);
         let buf = await res.arrayBuffer();
-        // Inflate gzipped models (newer uploads are stored `<name>.gz`); older
-        // uncompressed `.ifc` models load as-is.
         if (storedModel.file_url.endsWith(".gz")) buf = await gunzipBuffer(buf);
         if (cancelled) return;
         setFileName(storedModel.file_name);
@@ -166,130 +183,134 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     return () => { cancelled = true; };
   }, [storedModel, buffer, source]);
 
-  // GlobalId → color maps from the page's data (logic + tests in viewerColoring).
-  const statusByGuid = useMemo(() => buildStatusByGuid(modelMapping), [modelMapping]);
-  const seqByGuid = useMemo(() => buildSeqByGuid(modelElementRows), [modelElementRows]);
-  // Optimistic fab colors: applied the instant you assign a status, so the model
-  // recolors immediately instead of waiting on a slow (12k-row) refetch. guid → status.
-  const [optimisticFab, setOptimisticFab] = useState(() => new Map());
-  // Optimistic mark-wide fab assignments (whole-assembly mode only). Kept SEPARATE
-  // from optimisticFab so a per-piece assign never leaks onto the mark map and
-  // bleeds color onto same-mark siblings. mark → status.
-  const [optimisticFabByMark, setOptimisticFabByMark] = useState(() => new Map());
-  // Assign scope: "piece" (per-GUID, default) flips only the clicked piece(s);
-  // "assembly" (per-mark) flips every part sharing the clicked piece's mark.
-  const [fabScope, setFabScope] = useState("piece");
-  // This tab is reused (not remounted) when the active project changes — it's
-  // rendered inline by DrawingSubmittalHub from project context, not keyed on an
-  // id — so reset the scope to the per-piece default per project instead of
-  // carrying the previous project's choice over.
-  useEffect(() => { setFabScope("piece"); }, [projectId]);
-  const fabByGuid = useMemo(() => {
-    const map = buildFabByGuid(modelElementRows);
-    for (const [guid, status] of optimisticFab) {
-      if (status) map.set(guid, status); else map.delete(guid);
-    }
-    return map;
-  }, [modelElementRows, optimisticFab]);
-  const hasRoster = (modelElementRows?.length || 0) > 0;
-  const canonicalPieceByGuid = useMemo(
-    () => buildCanonicalPieceByGuid(modelElementRows, canonicalPieces),
-    [modelElementRows, canonicalPieces],
-  );
-
-  // Mark-keyed fallback maps: color a part by its piece mark when its GUID isn't
-  // directly on a roster row (CSV imports leave element_guid NULL; a CSV update
-  // touches only one part of a multi-part assembly). markByGuid bridges the
-  // rendered part's GUID → its normalized mark. (guidToMark above stays RAW —
-  // it feeds the DB `.in("piece_mark", …)` query, which needs the real marks.)
-  const markByGuid = useMemo(() => buildMarkByGuid(modelElementRows), [modelElementRows]);
-  const seqByMark = useMemo(() => buildSeqByMark(modelElementRows), [modelElementRows]);
-  const statusByMark = useMemo(() => buildStatusByMark(modelMapping), [modelMapping]);
-  const fabByMark = useMemo(() => {
-    const map = buildFabByMark(modelElementRows);
-    // Mirror only WHOLE-ASSEMBLY optimistic assignments onto the mark map, so a
-    // mark-wide assign colors the whole assembly immediately. Per-piece assigns
-    // live in optimisticFab (guid-keyed) ONLY and must not touch the mark map —
-    // otherwise one piece's status would bleed onto its same-mark siblings.
-    for (const [mark, status] of optimisticFabByMark) {
-      const mk = normalizePieceMark(mark);
-      if (!mk) continue;
-      if (status) map.set(mk, status); else map.delete(mk);
-    }
-    return map;
-  }, [modelElementRows, optimisticFabByMark]);
-
-  // The mode-aware color function the viewer paints with (null → native IFC color).
-  const colorFor = useMemo(
-    () => colorFnFor(colorMode, {
-      statusByGuid, seqByGuid, fabByGuid,
-      markByGuid, statusByMark, seqByMark, fabByMark,
-      canonicalPieceByGuid,
-      // Per-piece coloring: a roster GUID with no individual fab status stays
-      // neutral instead of inheriting a same-mark sibling's color. Whole-assembly
-      // mode keeps the broad mark fallback so flipping a mark paints every part.
-      perPieceFab: fabScope === "piece",
+  const viewModel = useMemo(
+    () => buildModel3DViewModel({
+      projectId,
+      modelMapping,
+      modelElementRows,
+      canonicalPieces,
+      selectedGuids,
+      colorMode,
+      markFallback,
+      piecesLoading,
+      piecesError,
+      rosterLoading,
+      rosterError,
+      colorStats: null,
     }),
-    [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, canonicalPieceByGuid, fabScope],
+    [
+      projectId, modelMapping, modelElementRows, canonicalPieces, selectedGuids,
+      colorMode, markFallback, piecesLoading, piecesError, rosterLoading,
+      rosterError,
+    ],
+  );
+  const {
+    hasRoster, evidenceError, fabUnavailable, markByGuid, canonicalPieceByGuid,
+    canonicalDisplayByGuid, colorFor, fabLegend, selection, sequenceGuids,
+    sequences, statusLegend, registerHref,
+  } = viewModel;
+  const claims = useMemo(
+    () => buildModel3DDisplayedClaims({
+      colorMode,
+      colorStats,
+      evidenceError,
+      evidencePending: fabUnavailable && !evidenceError,
+      hasRoster,
+      directLinkCount: canonicalPieceByGuid.size,
+      displayLinkCount: canonicalDisplayByGuid.size,
+    }),
+    [
+      colorMode, colorStats, evidenceError, fabUnavailable, hasRoster,
+      canonicalPieceByGuid, canonicalDisplayByGuid,
+    ],
   );
 
-  // Persist a freshly-picked model so it auto-loads next time: upload the .ifc to
-  // Storage + write model_registry (file_url) + the piece roster (model_elements).
-  // Runs automatically on load — no separate "import" step — and doesn't block the
-  // render (the viewer already has the local buffer).
+  // Hover label / alt-click "whole mark": the roster's assembly mark by GUID.
+  const labelFor = useCallback((guid) => markByGuid.get(guid) || null, [markByGuid]);
+
   const persistModel = async (file, buf) => {
-    if (!projectId) return; // render-only outside a project
-    setRoster({ step: "extracting", done: 0, total: 0 });
+    if (!projectId) return;
+    // Which pipeline step is running — names the failure for the operator and
+    // for Sentry, since "Couldn't save the model" alone was undiagnosable.
+    let step = "extract";
+    setRoster({ step: "extracting", done: 0, total: 0, phase: "index" });
     try {
-      const result = await extractIfcRoster(buf, (done, total) =>
-        setRoster({ step: "extracting", done, total }),
+      // Reuse the viewer's already-parsed model when it is still open; a second
+      // OpenModel of a 100 MB+ IFC is what used to push Safari over its memory
+      // ceiling on the save path.
+      const model = viewerRef.current?.getModelHandle?.() || null;
+      const result = await extractIfcRoster(
+        buf,
+        (done, total, phase) => setRoster({ step: "extracting", done, total, phase }),
+        { model },
       );
-      // Guard the silent zero: if the IFC has no IfcBeam/Column/Plate/Member, both
-      // the geometry render and the roster come back empty (the viewer also skips
-      // non-structural types). That happens when the model is a reference/proxy
-      // export (members as IfcBuildingElementProxy). Saving it persists an empty,
-      // uncolorable model with a success toast — confusing. Stop and tell the user
-      // the real cause instead, and let them load a corrected export.
       if (!result.rows.length) {
-        setRoster({ step: "idle" });
-        toast.warning(
-          "No structural members found — this IFC has no beams, columns, plates, or members " +
-          "(it looks like a reference/proxy export). Re-export from your detailer with structural " +
-          "members, then load it again.",
-        );
+        // Say what the file DID contain (types, property sets, keys) so the
+        // detailer can fix the export config instead of guessing.
+        console.warn("[Model3DTab] IFC produced no roster rows:", result.diagnostics);
+        const message = describeEmptyRoster(result.diagnostics);
+        setRoster({ step: "error", message });
+        toast.warning(message, { duration: 15000 });
         return;
       }
-      setRoster({ step: "saving" });
-      // gzip the IFC before upload so large models (50 MB+) fit under the storage
-      // bucket limit and download faster. The stored object is `<name>.gz`; the
-      // auto-loader detects that suffix and inflates. Falls back to the raw file
-      // if the browser lacks CompressionStream.
+
+      step = "compress";
+      setRoster({ step: "saving", stage: "compressing model" });
       let uploadFile = file;
       const gz = await gzipBuffer(buf).catch(() => null);
       if (gz) uploadFile = new File([gz], `${file.name}.gz`);
+      assertStorageObjectSize(uploadFile.size, gz ? "compressed model" : "model");
+
+      step = "upload";
+      setRoster({ step: "saving", stage: `uploading ${formatMb(uploadFile.size)}` });
       const up = await integrations.Core.UploadFile({ file: uploadFile });
-      const { created } = await importIfcRoster({
+
+      step = "register";
+      setRoster({ step: "saving", stage: `writing pieces 0 / ${result.rows.length.toLocaleString()}` });
+      const { created, linkSummary } = await importIfcRoster({
         projectId, fileName: file.name, schema: result.schema, fileUrl: up.path, rows: result.rows,
+        onProgress: (done, total) =>
+          setRoster({ step: "saving", stage: `writing pieces ${done.toLocaleString()} / ${total.toLocaleString()}` }),
       });
-      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
       qc.invalidateQueries({ queryKey: ["project-model", projectId] });
+      await invalidatePieceControlQueries(qc, projectId, "import");
       setSource("stored");
       setRoster({ step: "done", created });
-      toast.success(`Model saved to this project${created ? ` · ${created.toLocaleString()} pieces` : ""}.`);
+      const linkNote = linkSummary
+        ? ` · linked ${linkSummary.linked ?? 0}` +
+          (linkSummary.ambiguous ? ` · ambiguous ${linkSummary.ambiguous}` : "") +
+          (linkSummary.unmatched ? ` · unmatched ${linkSummary.unmatched}` : "")
+        : "";
+      toast.success(
+        `Model saved to this project${created ? ` · ${created.toLocaleString()} pieces` : ""}${linkNote}.`,
+      );
     } catch (err) {
-      setRoster({ step: "error", message: err?.message || String(err) });
-      toast.error("Couldn't save the model: " + (err?.message || String(err)));
+      const message = describePersistFailure(step, err);
+      console.error(`[Model3DTab] save failed at step "${step}":`, err);
+      // What the banner may claim about the project comes from the import's
+      // VERIFIED rollback outcome, via the same helper the message uses, so the
+      // two can never contradict each other the way they did in the incident.
+      const partial = persistLeftPartialWrite(step, err);
+      setRoster({ step: "error", message, partial });
+      toast.error(message);
+      // The message talks about this project's piece count, so the tab must
+      // stop serving its pre-save read of model_registry / the roster.
+      if (step === "register") {
+        qc.invalidateQueries({ queryKey: ["project-model", projectId] });
+        await invalidatePieceControlQueries(qc, projectId, "import").catch(() => { /* offline: the message already says so */ });
+      }
     }
   };
 
   const pickFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setLoadErr(null); setPicked(null); setRoster({ step: "idle" });
+    setLoadErr(null); setRoster({ step: "idle" });
+    resetViewerState();
     try {
       const buf = await file.arrayBuffer();
       setModelFile(file);
-      setSource("picked");       // a local preview — not saved until the user clicks Save
+      setSource("picked");
       setFileName(file.name);
       setBuffer(buf);
     } catch (err) {
@@ -302,12 +323,12 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     if (!projectId) return;
     try {
       await removeProjectModel(projectId);
-      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
       qc.invalidateQueries({ queryKey: ["project-model", projectId] });
+      await invalidatePieceControlQueries(qc, projectId, "import");
       setBuffer(null); setModelFile(null); setSource(null); setFileName(null);
-      setPicked(null); setRoster({ step: "idle" }); setRemoveConfirm(false);
-      setOptimisticFab(new Map()); setOptimisticFabByMark(new Map());
-      setFabScope("piece");
+      setRoster({ step: "idle" }); setRemoveConfirm(false);
+      resetViewerState();
+      setMarkFallback(false);
       toast.success("Model removed from this project.");
     } catch (err) {
       toast.error("Couldn't remove the model: " + (err?.message || String(err)));
@@ -315,54 +336,33 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   };
 
   const canonicalLogistics = useMutation({
-    mutationFn: ({ action, pieceIds }) =>
-      transitionPieceLots(action, projectId, pieceIds, { source: "3d_viewer" }),
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] });
-      qc.invalidateQueries({ queryKey: ["canonical-reporting", projectId] });
-      toast.success(`Canonical ${variables.action} action recorded.`);
+    mutationFn: ({ action, pieceIds }) => {
+      if (fabUnavailable) throw new Error("Refresh piece and roster status before recording logistics.");
+      return transitionPieceLots(action, projectId, pieceIds, { source: "3d_viewer" });
     },
-    onError: (error) => toast.error(error?.message || "Canonical logistics action failed."),
+    onSuccess: async (_, variables) => {
+      await invalidatePieceControlQueries(qc, projectId, "logistics");
+      const n = variables.pieceIds.length;
+      toast.success(`${variables.label || variables.action} recorded for ${n.toLocaleString()} piece${n === 1 ? "" : "s"}.`);
+    },
+    onError: (error) => toast.error(presentPieceControlError(error, "Piece Control logistics action failed.")),
   });
 
-  // Canonical-linked selections may initiate only the immutable logistics
-  // commands supported here. Unlinked elements retain read-only legacy colors.
-  const setFab = (status) => {
-    const selectedCanonical = selectedGuids
-      .map((guid) => canonicalPieceByGuid.get(guid))
-      .filter(Boolean);
-    if (selectedCanonical.length > 0) {
-      const pieceIds = [...new Set(selectedCanonical.map((piece) => piece.id))];
-      if (
-        status === "shipped" &&
-        selectedCanonical.every((piece) => piece.lifecycle_status === "fabricated")
-      ) {
-        canonicalLogistics.mutate({ action: "ship", pieceIds });
-        return;
-      }
-      if (
-        status === "erected" &&
-        selectedCanonical.every((piece) => piece.lifecycle_status === "delivered")
-      ) {
-        canonicalLogistics.mutate({ action: "erect", pieceIds });
-        return;
-      }
-      toast.error(
-        "Canonical-linked pieces are read-only in 3D. Use Piece Control for station and delivery actions.",
-      );
-      return;
+  // ── Viewer-driven piece tracking ─────────────────────────────────────
+
+  const runFind = (raw) => {
+    const q = normalizePieceMark(raw);
+    if (!q) { setFindResult(null); return; }
+    const r = findGuidsByMark(q, markByGuid);
+    setFindResult(r);
+    if (r.guids.length) {
+      viewerRef.current?.selectGuids(r.guids, { fly: true });
     }
-    toast.error(
-      "This unlinked element uses legacy color fallback only. 3D status is read-only.",
-    );
   };
 
-  const legend = useMemo(() => {
-    const counts = modelMapping?.counts || {};
-    return Object.entries(ELEMENT_STATUS_META)
-      .map(([key, meta]) => ({ key, ...meta, count: counts[key] || 0 }))
-      .filter((b) => b.count > 0);
-  }, [modelMapping]);
+  useEffect(() => {
+    viewerRef.current?.setClipHeight(clipEnabled ? clipPct / 100 : null);
+  }, [clipEnabled, clipPct, buffer]);
 
   if (!buffer) {
     const loadingStored = !!storedModel?.file_url && !loadErr;
@@ -386,38 +386,110 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
             </label>
           </>
         )}
-        {loadErr && <div role="alert" style={{ color: "var(--status-error)", fontSize: 12 }}>{loadErr}</div>}
+        {(loadErr || storedModelError) && (
+          <div role="alert" style={{ color: "var(--status-error)", fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}>
+            {loadErr || "Saved model lookup failed. Retry by reopening the 3D tab."}
+            <label style={{ ...linkBtn, cursor: "pointer" }}>
+              Load a file instead
+              <input type="file" accept=".ifc" hidden onChange={pickFile} />
+            </label>
+          </div>
+        )}
       </div>
     );
   }
 
+  const filtering = !!isolatedKey;
+
   return (
     <div
       ref={containerRef}
+      className="model-3d-shell"
       style={{ display: "flex", height: isFullscreen ? "100vh" : "min(72vh, 720px)", minHeight: 420, border: isFullscreen ? "none" : "1px solid var(--border-default)", borderRadius: isFullscreen ? 0 : 10, overflow: "hidden", background: "var(--bg-surface)" }}
     >
-      <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+      <div className="model-3d-canvas" style={{ flex: 1, minWidth: 0, position: "relative" }}>
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <IfcModelViewer buffer={buffer} colorFor={colorFor} onPick={setPicked} onSelect={setSelectedGuids} />
+          <IfcModelViewer
+            ref={viewerRef}
+            buffer={buffer}
+            colorFor={colorFor}
+            labelFor={labelFor}
+            onPick={setPicked}
+            onSelect={setSelectedGuids}
+            onColorStats={setColorStats}
+            measureMode={measureMode}
+            onMeasure={setMeasureResult}
+          />
         </Suspense>
-        <button type="button" onClick={toggleFullscreen} title={isFullscreen ? "Exit full screen" : "Full screen"} style={fsBtn}>
-          {isFullscreen ? "Exit full screen" : "Full screen"}
-        </button>
+        <div style={viewerTools}>
+          <button type="button" onClick={toggleFullscreen} title={isFullscreen ? "Exit full screen" : "Full screen"} style={toolBtn}>
+            {isFullscreen ? "Exit full screen" : "Full screen"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleMeasure}
+            aria-pressed={measureMode}
+            title={measureMode ? "Exit measure (clear line)" : "Measure point-to-point distance"}
+            style={{
+              ...toolBtn,
+              border: `1px solid ${measureMode ? "#f5d90a" : "var(--border-default)"}`,
+              color: measureMode ? "#f5d90a" : "var(--text-secondary)",
+              background: measureMode ? "rgba(245,217,10,0.12)" : "rgba(13,17,23,0.72)",
+            }}
+          >
+            {measureMode ? "Measuring…" : "Measure"}
+          </button>
+          <button type="button" onClick={isolateSelection} disabled={!selectedGuids.length} title="Isolate selected parts — ghost everything else (I)" style={{ ...toolBtn, opacity: selectedGuids.length ? 1 : 0.5 }}>
+            Isolate
+          </button>
+          <button type="button" onClick={hideSelection} disabled={!selectedGuids.length} title="Hide selected parts (H)" style={{ ...toolBtn, opacity: selectedGuids.length ? 1 : 0.5 }}>
+            Hide
+          </button>
+          {filtering && (
+            <button type="button" onClick={showAll} title="Show every part again (U)" style={{ ...toolBtn, color: "var(--accent)", border: "1px solid var(--accent)" }}>
+              Show all
+            </button>
+          )}
+          <label
+            title="Level cut — hide everything above this height to look at one floor"
+            style={{ ...toolBtn, display: "flex", alignItems: "center", gap: 8, padding: "4px 10px" }}
+          >
+            <input type="checkbox" checked={clipEnabled} onChange={(e) => setClipEnabled(e.target.checked)} style={{ margin: 0 }} />
+            Level cut
+            <input
+              type="range" min={2} max={100} step={1} value={clipPct}
+              disabled={!clipEnabled}
+              onChange={(e) => setClipPct(Number(e.target.value))}
+              aria-label="Level cut height"
+              style={{ width: 90, opacity: clipEnabled ? 1 : 0.4 }}
+            />
+            {clipEnabled && <span style={{ minWidth: 34, textAlign: "right" }}>{clipPct}%</span>}
+          </label>
+        </div>
 
-        {/* The roster (model_elements) loads alongside the geometry; until it
-            lands, a color mode that depends on it can't fully paint — say so
-            instead of letting it read as "broken". */}
-        {buffer && rosterLoading && (colorMode === "fab" || colorMode === "sequence" || colorMode === "status") && (
-          <div style={loadingChip}>Loading {colorMode === "fab" ? "fab" : colorMode === "sequence" ? "sequence" : "status"} colors…</div>
+        {buffer && claims.loadingColorLabel && (
+          <div style={loadingChip}>Loading {claims.loadingColorLabel} colors…</div>
         )}
 
-        {/* Unmissable Save prompt while previewing an unsaved model. */}
         {source === "picked" && projectId && (
           <div style={saveBanner}>
             {(roster.step === "extracting" || roster.step === "saving") ? (
               <span style={{ ...mono, fontSize: 12, color: "var(--text-primary)" }}>
-                Saving to project…{roster.step === "extracting" && roster.total ? ` ${roster.done.toLocaleString()}/${roster.total.toLocaleString()}` : ""}
+                {describePersistProgress(roster)}
               </span>
+            ) : roster.step === "error" && roster.partial ? (
+              // "Previewing — not saved yet" would be a second false claim here:
+              // the roster write started and its undo is unconfirmed. Saving is
+              // still offered — a completed save replaces every earlier roster.
+              <>
+                <span style={{ fontSize: 12.5, color: "var(--status-error)" }}>
+                  Save didn't finish — this attempt may have left rows behind
+                </span>
+                <button className="sbd-btn sbd-btn-primary" style={{ padding: "6px 16px" }}
+                  onClick={() => modelFile && buffer && persistModel(modelFile, buffer)}>
+                  Save again
+                </button>
+              </>
             ) : (
               <>
                 <span style={{ fontSize: 12.5, color: "var(--text-primary)" }}>Previewing — not saved yet</span>
@@ -431,9 +503,9 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         )}
       </div>
 
-      <aside style={{ width: 270, flexShrink: 0, borderLeft: "1px solid var(--border-default)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <aside className="model-3d-sidebar" style={{ width: 290, flexShrink: 0, borderLeft: "1px solid var(--border-default)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
-          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>Model</div>
+          <div style={{ ...sectionHead, marginBottom: 0 }}>Model</div>
           <div style={{ fontSize: 12, color: "var(--text-primary)", marginTop: 2, wordBreak: "break-all" }}>{fileName}</div>
           <label style={{ ...mono, fontSize: 10, color: "var(--accent)", cursor: "pointer", display: "inline-block", marginTop: 6 }}>
             {source === "stored" ? "Replace with updated model…" : "Load a different model…"}
@@ -448,11 +520,10 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
             <div style={{ marginTop: 10 }}>
               {(roster.step === "extracting" || roster.step === "saving") && (
                 <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
-                  Saving to project…{roster.step === "extracting" && roster.total ? ` reading pieces ${roster.done.toLocaleString()} / ${roster.total.toLocaleString()}` : ""}
+                  {describePersistProgress(roster)}
                 </div>
               )}
 
-              {/* Unsaved preview → explicit Save (no accidental auto-save). */}
               {source === "picked" && roster.step === "idle" && (
                 <>
                   <button className="sbd-btn sbd-btn-primary" style={{ width: "100%", justifyContent: "center" }}
@@ -466,12 +537,11 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
               )}
               {source === "picked" && roster.step === "error" && (
                 <div style={{ ...mono, fontSize: 10, color: "var(--status-error)", lineHeight: 1.5 }}>
-                  Couldn&apos;t save: {roster.message}.{" "}
+                  {roster.message}{" "}
                   <button type="button" onClick={() => modelFile && buffer && persistModel(modelFile, buffer)} style={linkBtn}>Retry</button>
                 </div>
               )}
 
-              {/* Saved model → status + Remove. */}
               {source === "stored" && roster.step !== "extracting" && roster.step !== "saving" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ ...mono, fontSize: 10, color: "var(--status-success)" }}>✓ Saved to this project · auto-loads</div>
@@ -491,7 +561,45 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         </div>
 
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
-          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>Color by</div>
+          <div style={sectionHead}>Find mark</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              type="search"
+              value={findQuery}
+              onChange={(e) => setFindQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") runFind(findQuery); }}
+              placeholder={claims.findPlaceholder}
+              disabled={!hasRoster}
+              aria-label="Find piece mark"
+              style={{
+                flex: 1, minWidth: 0, padding: "6px 9px", borderRadius: 7,
+                border: "1px solid var(--border-default)", background: "var(--bg-surface)",
+                color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 12,
+              }}
+            />
+            <button type="button" className="sbd-btn" disabled={!hasRoster || !findQuery.trim()} onClick={() => runFind(findQuery)} style={{ padding: "6px 10px" }}>
+              Go
+            </button>
+          </div>
+          {findResult && (
+            <div style={{ ...mono, fontSize: 10, marginTop: 6, lineHeight: 1.5, color: findResult.guids.length ? "var(--text-secondary)" : "var(--status-warning)" }}>
+              {findResult.guids.length
+                ? `${findResult.guids.length.toLocaleString()} part${findResult.guids.length === 1 ? "" : "s"} · ${findResult.marks.length} mark${findResult.marks.length === 1 ? "" : "s"}${findResult.matchKind !== "exact" ? ` (${findResult.matchKind} match)` : ""} — selected + framed`
+                : `No mark matches "${findResult.query}" in this model.`}
+              {findResult.guids.length > 0 && (
+                <>
+                  {" · "}
+                  <button type="button" style={linkBtn} onClick={() => isolateBucket(`find:${findResult.query}`, findResult.guids)}>
+                    {isolatedKey === `find:${findResult.query}` ? "show all" : "isolate"}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
+          <div style={sectionHead}>Color by</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
             {COLOR_MODES.map((m) => {
               const active = colorMode === m.key;
@@ -514,174 +622,141 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
               );
             })}
           </div>
+          {colorMode === "model" && canonicalPieceByGuid.size > 0 && (
+            <div style={{ ...hintStyle, marginTop: 8 }}>
+              Switch to Fab to paint linked lots by Piece Control lifecycle.
+            </div>
+          )}
+          {colorMode === "fab" && (
+            <div style={{ ...hintStyle, marginTop: 8 }} role={evidenceError ? "alert" : "status"}>
+              {claims.fabCoverage}
+              {evidenceError && <> <button type="button" style={linkBtn} onClick={() => { void refetchPieces(); void qc.invalidateQueries({ queryKey: pieceControlKeys.modelElements(projectId) }); }}>Retry status</button></>}
+              {!fabUnavailable && claims.inferredLinkCount > 0 && <div>Matching-mark colors are inferred from one linked lot. Logistics requires an explicit part link.</div>}
+            </div>
+          )}
+          <div style={{ marginTop: 10 }}>
+            {!(colorMode === "fab" && fabUnavailable) && <Model3DLegend
+              mode={colorMode}
+              statusLegend={statusLegend}
+              fabLegend={fabLegend}
+              sequences={sequences}
+              sequenceGuids={sequenceGuids}
+              isolatedKey={isolatedKey}
+              onIsolate={isolateBucket}
+              markFallback={markFallback}
+              onMarkFallback={setMarkFallback}
+            />}
+          </div>
+          {projectId && hasRoster && (
+            <Model3dSyncPanel projectId={projectId} modelElementRows={modelElementRows} />
+          )}
         </div>
 
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
-          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>
-            Selected{selectedGuids.length > 1 ? ` · ${selectedGuids.length}` : ""}
+          <div style={sectionHead}>
+            Selected{selection.count ? ` · ${describeSelection(selection)}` : ""}
           </div>
-          {selectedGuids.length === 0 ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
-              Click a member. Ctrl / Shift-click to add more.
+          {selection.count === 0 ? (
+            <div style={hintStyle}>
+              Click a part. Ctrl / Shift-click adds, Alt-click grabs the whole mark. Hover shows the mark.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12 }}>
-              {selectedGuids.length > 1 ? (
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{selectedGuids.length} pieces selected</div>
-              ) : picked ? (
+              {selection.count === 1 ? (
                 <>
-                  <Row label="Assembly" value={picked.assemblyMark} strong />
-                  <Row label="Part" value={picked.partMark} />
-                  <Row label="Name" value={picked.name} />
-                  <Row label="Sequence" value={picked.sequence} />
-                  <Row label="GUID" value={picked.guid} small />
+                  <Model3DRow label="Assembly" value={picked?.assemblyMark || selection.marks[0]} strong />
+                  <Model3DRow label="Part" value={picked?.partMark} />
+                  <Model3DRow label="Name" value={picked?.name} />
+                  <Model3DRow label="Sequence" value={picked?.sequence || selection.sequences[0]} />
+                  <Model3DRow label="GUID" value={picked?.guid || selection.guids[0]} small />
                 </>
-              ) : null}
-
-              {projectId && (
-                <div style={{ marginTop: 8, borderTop: "1px solid var(--divider)", paddingTop: 9 }}>
-                  <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>Set fab status</div>
-                  {hasRoster ? (
-                    <>
-                      {/* Scope toggle: per-piece (default) vs whole-assembly. */}
-                      <div role="group" aria-label="Fab status scope" style={{ display: "flex", gap: 4, marginTop: 7 }}>
-                        {[["piece", "This piece"], ["assembly", "Whole assembly"]].map(([key, label]) => {
-                          const active = fabScope === key;
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              aria-pressed={active}
-                              onClick={() => setFabScope(key)}
-                              style={{
-                                flex: 1, padding: "5px 6px", borderRadius: 6, cursor: "pointer",
-                                border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
-                                background: active ? "color-mix(in srgb, var(--accent) 16%, var(--bg-surface-high))" : "var(--bg-surface-low)",
-                                color: active ? "var(--accent)" : "var(--text-muted)",
-                                fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700,
-                                letterSpacing: "0.04em", textTransform: "uppercase",
-                              }}
-                            >
-                              {label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 7 }}>
-                        {FAB_STATUS_ORDER.map((s) => {
-                          const single = selectedGuids.length === 1 ? selectedGuids[0] : null;
-                          const current = single ? fabByGuid.get(single) === s : false;
-                          return (
-                            <button
-                              key={s}
-                              type="button"
-                              disabled={canonicalLogistics.isPending}
-                              onClick={() => setFab(current ? null : s)}
-                              style={{
-                                display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
-                                padding: "6px 9px", borderRadius: 7, cursor: canonicalLogistics.isPending ? "default" : "pointer",
-                                border: `1px solid ${current ? FAB_STATUS_META[s].color : "var(--border-default)"}`,
-                                background: current ? `color-mix(in srgb, ${FAB_STATUS_META[s].color} 18%, var(--bg-surface-high))` : "var(--bg-surface-low)",
-                                color: current ? "var(--text-primary)" : "var(--text-secondary)",
-                                fontSize: 12, fontWeight: current ? 700 : 500,
-                              }}
-                            >
-                              <span style={{ width: 11, height: 11, borderRadius: 2, background: FAB_STATUS_META[s].color, flexShrink: 0 }} />
-                              {FAB_STATUS_META[s].label}
-                              {current && <span style={{ marginLeft: "auto", ...mono, fontSize: 9, color: "var(--text-muted)" }}>✓ clear</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div style={{ ...mono, fontSize: 8.5, color: "var(--text-muted)", marginTop: 7, lineHeight: 1.4 }}>
-                        {fabScope === "assembly"
-                          ? (selectedGuids.length > 1
-                              ? `Applies to every part of all ${selectedGuids.length} selected marks.`
-                              : `Applies to the whole assembly (${picked?.assemblyMark || picked?.partMark || "—"}).`)
-                          : (selectedGuids.length > 1
-                              ? `Applies only to the ${selectedGuids.length} selected pieces.`
-                              : "Applies only to this piece — same-mark siblings are unaffected.")}
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 7, lineHeight: 1.5 }}>
-                      Import the piece roster first, then you can assign fab status.
-                    </div>
-                  )}
-                </div>
+              ) : (
+                <>
+                  <Model3DRow label="Marks" value={selection.marks.slice(0, 8).join(", ") + (selection.marks.length > 8 ? ` +${selection.marks.length - 8}` : "")} strong />
+                  {selection.sequences.length > 0 && <Model3DRow label="Sequence" value={selection.sequences.join(", ")} />}
+                </>
               )}
+              <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                <button type="button" style={linkBtn} onClick={() => viewerRef.current?.fitToGuids(selectedGuids)}>Frame</button>
+                <span style={{ color: "var(--text-muted)" }}>·</span>
+                <button type="button" style={linkBtn} onClick={isolateSelection}>Isolate</button>
+                <span style={{ color: "var(--text-muted)" }}>·</span>
+                <button type="button" style={linkBtn} onClick={hideSelection}>Hide</button>
+                <span style={{ color: "var(--text-muted)" }}>·</span>
+                <button type="button" style={linkBtn} onClick={() => viewerRef.current?.clearSelection()}>Clear</button>
+              </div>
             </div>
           )}
         </div>
 
+        {projectId && (
+          <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
+            <div style={sectionHead}>Piece Control</div>
+            {fabUnavailable ? (
+              <div style={hintStyle}>Piece Control unavailable until piece and roster status loads successfully.</div>
+            ) : !hasRoster ? (
+              <div style={hintStyle}>Save the model to import its piece roster, then link marks to the Piece Register.</div>
+            ) : selection.count === 0 ? (
+              <div style={hintStyle}>
+                Select parts to see their Piece Register status and record ship / deliver / erect.
+              </div>
+            ) : (
+              <PieceControlPanel
+                selection={selection}
+                registerHref={registerHref}
+                pending={canonicalLogistics.isPending}
+                onAction={(a) => canonicalLogistics.mutate({ action: a.action, pieceIds: a.pieceIds, label: a.label })}
+              />
+            )}
+          </div>
+        )}
+
         <div style={{ padding: "12px 14px" }}>
-          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>Legend</div>
-          <Legend
-            mode={colorMode}
-            statusLegend={legend}
-            sequences={[...new Set(seqByGuid.values())].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))}
-          />
+          <div style={sectionHead}>Measure</div>
+          {measureMode ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {measureResult?.phase === "done" && measureResult?.ftIn ? (
+                <>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#f5d90a", fontFamily: "var(--font-mono)" }}>
+                    {measureResult.ftIn}
+                  </div>
+                  <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>
+                    {measureResult.decimalFeet != null ? `${measureResult.decimalFeet.toFixed(3)} ft` : ""}
+                    {measureResult.meters != null ? ` · ${measureResult.meters.toFixed(3)} m` : ""}
+                  </div>
+                  <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    Nearest 1/16″. Click two more points for a new measure. Toggle Measure off to clear.
+                  </div>
+                </>
+              ) : measureResult?.phase === "a" ? (
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  First point set{measureResult.snappedA ? " (vertex snap)" : ""}. Click the second point.
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  Click two points on the model. Ends snap to nearest vertices or edges (~2″). Result rounds to 1/16″.
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setMeasureMode(false)}
+                style={{ ...linkBtn, alignSelf: "flex-start", marginTop: 2 }}
+              >
+                Exit measure
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={hintStyle}>
+                Point-to-point distance with vertex/edge snap. Displayed to the nearest 1/16″.
+              </div>
+              <button type="button" onClick={() => setMeasureMode(true)} className="sbd-btn" style={{ alignSelf: "flex-start" }}>
+                Start measure
+              </button>
+            </div>
+          )}
         </div>
       </aside>
     </div>
   );
-}
-
-function Row({ label, value, strong, small }) {
-  return (
-    <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-      <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", width: 64, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
-      <span style={{ color: value ? "var(--text-primary)" : "var(--text-muted)", fontWeight: strong ? 700 : 400, fontSize: small ? 10 : 12, ...(small ? mono : {}), wordBreak: "break-all" }}>
-        {value || "—"}
-      </span>
-    </div>
-  );
-}
-
-const hintStyle = { color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 };
-
-function Swatch({ color, label, count }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-      <span style={{ width: 11, height: 11, borderRadius: 2, background: color, flexShrink: 0 }} />
-      <span style={{ color: "var(--text-secondary)", flex: 1 }}>{label}</span>
-      {count != null && <span style={{ ...mono, color: "var(--text-muted)", fontSize: 11 }}>{count}</span>}
-    </div>
-  );
-}
-
-function Legend({ mode, statusLegend, sequences }) {
-  if (mode === "type") {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {TYPE_LABELS.map(([k, l]) => <Swatch key={k} color={TYPE_PALETTE[k]} label={l} />)}
-      </div>
-    );
-  }
-  if (mode === "sequence") {
-    if (!sequences.length) return <div style={hintStyle}>Import the piece roster to color by erection sequence.</div>;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {sequences.slice(0, 24).map((s) => <Swatch key={s} color={seqColor(s)} label={`Seq ${s}`} />)}
-        {sequences.length > 24 && <div style={hintStyle}>+{sequences.length - 24} more</div>}
-      </div>
-    );
-  }
-  if (mode === "status") {
-    if (!statusLegend.length) return <div style={hintStyle}>No detailing status yet — pieces light up once they&apos;re linked to detailing packages. (For hand-set status, use the Fab mode.)</div>;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {statusLegend.map((b) => <Swatch key={b.key} color={b.color} label={b.label} count={b.count} />)}
-      </div>
-    );
-  }
-  if (mode === "fab") {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {FAB_STATUS_ORDER.map((s) => <Swatch key={s} color={FAB_STATUS_META[s].color} label={FAB_STATUS_META[s].label} />)}
-        <div style={hintStyle}>Click a piece, then set its status. Unassigned pieces keep their model color.</div>
-      </div>
-    );
-  }
-  return <div style={hintStyle}>Showing the model&apos;s own (Tekla) member colors.</div>;
 }

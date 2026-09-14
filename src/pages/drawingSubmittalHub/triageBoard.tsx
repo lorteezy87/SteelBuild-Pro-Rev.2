@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Boxes,
   CalendarClock,
-  CalendarDays,
   CheckCircle2,
   CircleDollarSign,
   ClipboardList,
@@ -14,24 +13,23 @@ import {
   FileQuestion,
   GitCompareArrows,
   ShieldCheck,
-  User,
 } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
-import { DRAFTING_STATES } from "@/lib/detailingPackageState";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import type { ElementStatusKey, ElementStatusSummary } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER, summarizeFabStatus } from "@/lib/fabStatus";
 import {
-  BIC_CHOICES,
   accent,
   border,
+  canWriteDetailingState,
+  canWriteDueDate,
+  canWriteOwner,
+  canWriteReadinessFlags,
   dueInfo,
   error,
   fmtDate,
   getActionTone,
-  getOperationalStateColor,
   info,
-  itemUrgency,
   mono,
   pluralize,
   review,
@@ -40,7 +38,6 @@ import {
   surface2,
   textMuted,
   textPrimary,
-  toDateInputValue,
   warning,
 } from "./format";
 import {
@@ -56,6 +53,24 @@ import {
   SeqMetric,
   TriageMetric,
 } from "./primitives";
+import {
+  InlineDateControl,
+  InlineDetailingControl,
+  InlineOwnerControl,
+} from "./inlineControls";
+import { buildControlBoardModel } from "./drawingControlCenter.derive";
+import type { HubTabKey } from "./hubLinks";
+import type {
+  DetailingReadiness,
+  DrawingKpis,
+  ModelElementViewRow,
+  RevisionImpactViewRow,
+  SequenceReadinessRow,
+  SubmittalKpis,
+  TriageItem,
+  TriageModel,
+} from "./types";
+import { useControlBoardNavigation } from "./useControlBoardNavigation";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -63,46 +78,39 @@ type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 
 interface TriageBoardProps {
-  triage: any;
-  kpis: any;
-  drawingKpis: any;
+  triage: TriageModel;
+  kpis: SubmittalKpis;
+  drawingKpis: DrawingKpis;
   isLoading: boolean;
-  onOpenTab: (key: string) => void;
-  onUpdateOwner: (item: any, owner: string) => void;
-  onUpdateDueDate: (item: any, date: string) => void;
-  onAdvanceDetailing: (item: any, next: string) => void;
-  onToggleReadiness: (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
-  sequenceReadiness: Array<{ sequence: string; packageCount: number; detailingPct: number; fabReadyCount: number; erectionReadyCount: number; atRiskCount: number }>;
-  revisionImpact: Array<any>;
+  onOpenTab: (key: HubTabKey) => void;
+  onUpdateOwner: (item: TriageItem, owner: string) => void;
+  onUpdateDueDate: (item: TriageItem, date: string) => void;
+  onAdvanceDetailing: (item: TriageItem, next: string) => void;
+  onToggleReadiness: (item: TriageItem, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
+  sequenceReadiness: SequenceReadinessRow[];
+  revisionImpact: RevisionImpactViewRow[];
   isSaving: boolean;
   /** Escalate a queue item into a draft RFI / potential CO. Absent = hidden. */
-  onEscalate?: (item: any, kind: "rfi" | "pco") => void;
+  onEscalate?: (item: TriageItem, kind: "rfi" | "pco") => void;
   /** Open the revision overlay compare for a sheet. Absent = hidden. */
   onCompareRevision?: (drawingId: string) => void;
   /** 3D model element mapping rollup (Phase 0 of the BIM integration). */
   modelMapping?: ElementStatusSummary | null;
   /** The raw model_elements rows (for the per-bucket member drill-down). */
-  modelElementRows?: any[];
+  modelElementRows?: ModelElementViewRow[];
   /** Open the Tekla/SDS2 member CSV import. Absent = section hidden. */
   onImportModelElements?: () => void;
 }
 
 export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving, onEscalate, onCompareRevision, modelMapping, modelElementRows, onImportModelElements }: TriageBoardProps) {
+  const { openItem, createSubmittal } = useControlBoardNavigation({ onOpenTab });
   if (isLoading) return <LoadingSkeleton />;
 
-  const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
-  const focusTone = getActionTone(focusItem);
-  const topStatuses = Object.entries(triage.pipelineCounts)
-    .sort((a, b) => (b[1] as number) - (a[1] as number))
-    .slice(0, 6);
-  const focusRoute = focusItem?.routeTab || "matrix";
-  const criticalItems = Array.from(
-    new Map(
-      [...triage.overdue, ...triage.needsAction, ...triage.dueSoon]
-        .sort(itemUrgency)
-        .map((item: any) => [item.id, item]),
-    ).values(),
-  ).slice(0, 12) as any[];
+  const model = buildControlBoardModel(triage);
+  const focusItem = model.focusItem;
+  const topStatuses = model.topStatuses;
+  const focusDrawingSetId = focusItem?._drawingSetId ?? null;
+  const criticalItems = model.criticalItems;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -167,24 +175,26 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                   {focusItem.group} - {focusItem.status}
                 </span>
                 {focusItem.detailingState && <OperationalStateChip state={focusItem.detailingState} />}
-                {focusItem.isRR && <RRChip />}
+                {/* R&R is a first-class stage (2026-07-25): skip the extra badge
+                    when the state chip itself already reads R&R. */}
+                {focusItem.isRR && focusItem.detailingState !== "R&R" && <RRChip />}
               </div>
               {/* ── Inline Quick-Action Controls ──────────────────────── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
                 <InlineOwnerControl
                   currentOwner={focusItem.owner}
                   onAssign={(owner) => onUpdateOwner(focusItem, owner)}
-                  disabled={isSaving}
+                  disabled={isSaving || !canWriteOwner(focusItem)}
                 />
                 <InlineDateControl
                   currentDate={focusItem.dueDate}
                   isOverdue={focusItem.due.overdue}
                   onSetDate={(date) => onUpdateDueDate(focusItem, date)}
-                  disabled={isSaving}
+                  disabled={isSaving || !canWriteDueDate(focusItem)}
                 />
               </div>
               {/* ── Detailing-state advance (drafting phase only) ─────── */}
-              {focusItem.kind === "Drawing Set" && focusItem._canDraft && (
+              {focusItem.kind === "Drawing Set" && canWriteDetailingState(focusItem) && (
                 <InlineDetailingControl
                   current={focusItem._detailingStateRaw}
                   onAdvance={(next) => onAdvanceDetailing(focusItem, next)}
@@ -196,19 +206,30 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                 <ReadinessPanel
                   readiness={focusItem._readiness}
                   onToggle={(field, value) => onToggleReadiness(focusItem, field, value)}
-                  disabled={isSaving}
+                  disabled={isSaving || !canWriteReadinessFlags(focusItem)}
                 />
               )}
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
                 <button
                   type="button"
-                  onClick={() => onOpenTab(focusRoute)}
+                  onClick={() => openItem(focusItem)}
                   className="sbd-btn-primary"
                   style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
                 >
                   Open Work
                   <ArrowRight size={14} />
                 </button>
+                {focusItem.kind === "Drawing Set" && focusDrawingSetId && (focusItem._canDraft || focusItem._needsUnlinkedHint) && (
+                  <button
+                    type="button"
+                    className="sbd-btn-ghost"
+                    onClick={() => createSubmittal(focusDrawingSetId)}
+                    title="Create a submittal linked to this drawing set"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
+                  >
+                    Create submittal
+                  </button>
+                )}
                 {/* Contextual escalation — turn the blocker into a draft RFI
                     or a potential CO without leaving the control board. */}
                 {onEscalate && (
@@ -311,9 +332,30 @@ type OpenBucket =
   | { kind: "fab"; key: FabStatusKey }
   | null;
 
-export function ModelMappingSection({ summary, elements, onImport }: { summary?: ElementStatusSummary | null; elements?: any[]; onImport: () => void }) {
+export function ModelMappingSection({
+  summary, elements, onImport,
+  rosterCount = null, rosterCountLoading = false, rosterLoading = false, onLoadRoster,
+}: {
+  summary?: ElementStatusSummary | null;
+  elements?: ModelElementViewRow[];
+  onImport: () => void;
+  /** Live member count (HEAD count). null = not known yet. */
+  rosterCount?: number | null;
+  rosterCountLoading?: boolean;
+  rosterLoading?: boolean;
+  onLoadRoster?: () => void;
+}) {
   const total = summary?.total ?? 0;
   const [openBucket, setOpenBucket] = useState<OpenBucket>(null);
+
+  // What this card is allowed to claim depends on TWO facts, not one:
+  //   • does a roster exist?  → the cheap HEAD count (always available)
+  //   • is it loaded here?    → `total`, which needs the ~28k-row paged read
+  // Reading only the second is what made the card announce "no members yet" on
+  // projects with a full roster. Each state below says only what is known.
+  const rosterKnown = rosterCount !== null;
+  const rosterEmpty = rosterKnown && rosterCount === 0;
+  const rosterUnloaded = rosterKnown && (rosterCount ?? 0) > 0 && total === 0;
 
   // Members in the open bucket. Detailing buckets resolve via the summary's id
   // sets so the list always agrees with the chip counts (same engine, same
@@ -344,7 +386,10 @@ export function ModelMappingSection({ summary, elements, onImport }: { summary?:
       icon={Boxes}
       headerAction={
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {total > 0 && <span className="sbd-badge-info">{total} members</span>}
+          {/* Badge the COUNT, not the loaded array — it is true either way. */}
+          {rosterKnown && (rosterCount ?? 0) > 0 && (
+            <span className="sbd-badge-info">{(rosterCount ?? 0).toLocaleString()} members</span>
+          )}
           <button className="sbd-btn sbd-btn-ghost" onClick={onImport} style={{ fontSize: 12 }}>
             Import member CSV
           </button>
@@ -355,8 +400,32 @@ export function ModelMappingSection({ summary, elements, onImport }: { summary?:
         Steel members mapped to packages by piece mark — this drives the BIM viewer&apos;s status coloring.
       </p>
 
-      {total === 0 ? (
+      {rosterCountLoading || !rosterKnown ? (
+        <div style={{ fontFamily: mono, fontSize: 11, color: textMuted, padding: "6px 0" }}>
+          Checking for model members…
+        </div>
+      ) : rosterEmpty ? (
         <EmptyState text="No model members yet — export a member/assembly report (CSV) from Tekla or SDS2 and import it to map the physical steel to packages, sequences, and RFIs." />
+      ) : rosterUnloaded ? (
+        // A roster EXISTS but is not loaded on this tab. Say exactly that and
+        // offer to load it, rather than implying nothing has been imported.
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "4px 0" }}>
+          <span style={{ fontFamily: mono, fontSize: 11, color: textMuted }}>
+            {(rosterCount ?? 0).toLocaleString()} members imported · mapping not loaded
+          </span>
+          <button
+            type="button"
+            className="sbd-btn sbd-btn-ghost"
+            onClick={onLoadRoster}
+            disabled={rosterLoading || !onLoadRoster}
+            style={{ fontSize: 12 }}
+          >
+            {rosterLoading ? "Loading members…" : "Load mapping"}
+          </button>
+          <span style={{ fontFamily: mono, fontSize: 9, color: textMuted }}>
+            large rosters load on demand
+          </span>
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
@@ -507,15 +576,6 @@ const drillTd: CSSProperties = { padding: "6px 12px", borderBottom: `1px solid $
 // each sequence's detailing has progressed + how many packages are fab/erection
 // ready, so the schedule can pull detailing (design doc §7).
 
-interface SequenceReadinessRow {
-  sequence: string;
-  packageCount: number;
-  detailingPct: number;
-  fabReadyCount: number;
-  erectionReadyCount: number;
-  atRiskCount: number;
-}
-
 export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
   return (
     <SectionCard
@@ -573,7 +633,7 @@ export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[
 
 const REV_SEVERITY_TONE: Record<string, string> = { critical: error, high: warning, medium: info, low: textMuted };
 
-export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onCompare?: (drawingId: string) => void }) {
+export function RevisionImpactSection({ rows, onCompare }: { rows: RevisionImpactViewRow[]; onCompare?: (drawingId: string) => void }) {
   const shown = (rows || []).slice(0, 8);
   return (
     <SectionCard
@@ -588,7 +648,13 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onComp
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {shown.map((r) => {
+            // Two very different states hide behind "nothing reached": the sheet
+            // carries downstream dates and none has landed (genuinely pre-fab),
+            // or it carries none at all (we simply don't know). Only the first
+            // earns "caught pre-fab".
             const noneReached = !r.fabricated && !r.delivered && !r.inField;
+            const caughtPreFab = noneReached && r.downstreamKnown === true;
+            const downstreamUnknown = noneReached && r.downstreamKnown !== true;
             const pillTone = r.severity === "critical" || r.severity === "high" ? "danger"
               : r.severity === "medium" ? "review" : "neutral";
             return (
@@ -610,7 +676,15 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onComp
                   {r.fabricated && <ReadyChip ok={false} label="Fabricated" bad />}
                   {r.delivered && <ReadyChip ok={false} label="Delivered" bad />}
                   {r.inField && <ReadyChip ok={false} label="In field" bad />}
-                  {noneReached && <span style={{ color: textMuted, fontFamily: mono, fontSize: 10 }}>caught pre-fab</span>}
+                  {caughtPreFab && <span style={{ color: textMuted, fontFamily: mono, fontSize: 10 }}>caught pre-fab</span>}
+                  {downstreamUnknown && (
+                    <span
+                      style={{ color: warning, fontFamily: mono, fontSize: 10 }}
+                      title="No fabrication, delivery, or install date is recorded on this sheet, so its downstream state can't be determined."
+                    >
+                      downstream unknown
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {onCompare && r.drawingId && (
@@ -635,242 +709,6 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onComp
   );
 }
 
-// ── Inline Quick-Action Controls ────────────────────────────────────────────
-// Compact controls shown directly on the "Next Decision" card so users can
-// assign an owner or set a due date without navigating away.
-
-interface InlineOwnerControlProps {
-  currentOwner: string;
-  onAssign: (owner: string) => void;
-  disabled: boolean;
-  label?: string;
-}
-
-export function InlineOwnerControl({ currentOwner, onAssign, disabled, label = "Owner" }: InlineOwnerControlProps) {
-  const [open, setOpen] = useState(false);
-  const isUnassigned = !currentOwner || currentOwner === "Unassigned";
-
-  return (
-    <div style={{
-      padding: "10px 12px",
-      borderRadius: 10,
-      background: surface1,
-      border: `1px solid ${isUnassigned ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
-      position: "relative",
-    }}>
-      <div style={{
-        fontFamily: mono, fontSize: 8, color: textMuted,
-        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4,
-        display: "flex", alignItems: "center", gap: 5,
-      }}>
-        <User size={10} />
-        {label}
-      </div>
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          disabled={disabled}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            width: "100%",
-            background: "transparent",
-            border: "none",
-            padding: 0,
-            cursor: disabled ? "not-allowed" : "pointer",
-            color: isUnassigned ? warning : textPrimary,
-            fontSize: 12,
-            fontWeight: 700,
-            fontFamily: "inherit",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            textAlign: "left",
-          }}
-          title={`Click to assign ${label.toLowerCase()}`}
-        >
-          {isUnassigned ? "Assign..." : currentOwner}
-        </button>
-      ) : (
-        <select
-          autoFocus
-          value=""
-          disabled={disabled}
-          onChange={(e) => {
-            if (e.target.value) {
-              onAssign(e.target.value);
-              setOpen(false);
-            }
-          }}
-          onBlur={() => setOpen(false)}
-          style={{
-            width: "100%",
-            background: surface2,
-            border: `1px solid ${accent}`,
-            borderRadius: 6,
-            padding: "3px 6px",
-            color: textPrimary,
-            fontFamily: mono,
-            fontSize: 11,
-            fontWeight: 700,
-            outline: "none",
-            cursor: "pointer",
-          }}
-        >
-          <option value="" disabled>Select owner...</option>
-          {BIC_CHOICES.map((choice) => (
-            <option key={choice} value={choice}>{choice}</option>
-          ))}
-        </select>
-      )}
-    </div>
-  );
-}
-
-interface InlineDateControlProps {
-  currentDate: string | null;
-  isOverdue: boolean;
-  onSetDate: (date: string) => void;
-  disabled: boolean;
-}
-
-export function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: InlineDateControlProps) {
-  const [open, setOpen] = useState(false);
-  const hasDate = !!currentDate;
-
-  return (
-    <div style={{
-      padding: "10px 12px",
-      borderRadius: 10,
-      background: surface1,
-      border: `1px solid ${isOverdue ? "color-mix(in srgb, var(--status-error) 46%, transparent)" : !hasDate ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
-      position: "relative",
-    }}>
-      <div style={{
-        fontFamily: mono, fontSize: 8, color: textMuted,
-        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4,
-        display: "flex", alignItems: "center", gap: 5,
-      }}>
-        <CalendarDays size={10} />
-        Required
-      </div>
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          disabled={disabled}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            width: "100%",
-            background: "transparent",
-            border: "none",
-            padding: 0,
-            cursor: disabled ? "not-allowed" : "pointer",
-            color: isOverdue ? error : !hasDate ? warning : textPrimary,
-            fontSize: 12,
-            fontWeight: 700,
-            fontFamily: "inherit",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            textAlign: "left",
-          }}
-          title="Click to set due date"
-        >
-          {hasDate ? fmtDate(currentDate) : "Set date..."}
-        </button>
-      ) : (
-        <input
-          type="date"
-          autoFocus
-          disabled={disabled}
-          defaultValue={toDateInputValue(currentDate)}
-          onChange={(e) => {
-            if (e.target.value) {
-              onSetDate(e.target.value);
-              setOpen(false);
-            }
-          }}
-          onBlur={() => setOpen(false)}
-          style={{
-            width: "100%",
-            background: surface2,
-            border: `1px solid ${accent}`,
-            borderRadius: 6,
-            padding: "3px 6px",
-            color: textPrimary,
-            fontFamily: mono,
-            fontSize: 11,
-            fontWeight: 700,
-            outline: "none",
-            cursor: "pointer",
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Operational-state chip + drafting-state advance control ─────────────────
-
-interface InlineDetailingControlProps {
-  current: string | null | undefined;
-  onAdvance: (next: string) => void;
-  disabled: boolean;
-}
-
-// Manual drafting-state advance (In Detailing → Internal Review → Ready to
-// Submit). Only rendered for drawing-set packages with NO governing submittal —
-// once a submittal exists, the submittal machine owns the state (§20).
-export function InlineDetailingControl({ current, onAdvance, disabled }: InlineDetailingControlProps) {
-  return (
-    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
-      <div style={{
-        fontFamily: mono, fontSize: 8, color: textMuted,
-        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8,
-        display: "flex", alignItems: "center", gap: 5,
-      }}>
-        <ClipboardList size={10} />
-        Detailing state
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {DRAFTING_STATES.map((s) => {
-          const isCurrent = current === s;
-          const color = getOperationalStateColor(s);
-          return (
-            <button
-              key={s}
-              type="button"
-              disabled={disabled || isCurrent}
-              onClick={() => onAdvance(s)}
-              title={isCurrent ? `Already ${s}` : `Set to ${s}`}
-              style={{
-                padding: "5px 9px",
-                borderRadius: 8,
-                fontFamily: mono,
-                fontSize: 10,
-                fontWeight: 800,
-                letterSpacing: "0.04em",
-                cursor: disabled || isCurrent ? "default" : "pointer",
-                color: isCurrent ? "#0b0e14" : color,
-                background: isCurrent ? color : `color-mix(in srgb, ${color} 12%, transparent)`,
-                border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
-                opacity: disabled && !isCurrent ? 0.6 : 1,
-              }}
-            >
-              {s}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ── Backward schedule + readiness panel ─────────────────────────────────────
 
 const SCHEDULE_ROWS: Array<[string, string]> = [
@@ -883,7 +721,7 @@ const SCHEDULE_ROWS: Array<[string, string]> = [
 ];
 
 interface ReadinessPanelProps {
-  readiness: any;
+  readiness: DetailingReadiness;
   onToggle: (field: "material_impacted" | "long_lead_impact", value: boolean) => void;
   disabled: boolean;
 }
@@ -949,9 +787,9 @@ export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanel
 }
 
 interface PipelinePanelProps {
-  topStatuses: Array<[string, unknown]>;
+  topStatuses: Array<[string, number]>;
   openCount: number;
-  onOpenTab: (key: string) => void;
+  onOpenTab: (key: HubTabKey) => void;
 }
 
 function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps) {
@@ -973,7 +811,7 @@ function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps
           <EmptyState text="No open items to summarize." />
         ) : (
           topStatuses.map(([status, count]) => (
-            <PipelineBar key={status} status={status} count={count as number} total={openCount} />
+            <PipelineBar key={status} status={status} count={count} total={openCount} />
           ))
         )}
       </div>
@@ -984,11 +822,11 @@ function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps
 interface TriageListProps {
   title: string;
   subtitle: string;
-  items: any[];
+  items: TriageItem[];
   empty: string;
-  onOpenTab: (key: string) => void;
+  onOpenTab: (key: HubTabKey) => void;
   compact?: boolean;
-  onEscalate?: (item: any, kind: "rfi" | "pco") => void;
+  onEscalate?: (item: TriageItem, kind: "rfi" | "pco") => void;
 }
 
 function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false, onEscalate }: TriageListProps) {
@@ -1011,7 +849,7 @@ function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false,
   );
 }
 
-function TriageItemRow({ item, onOpen, onEscalate }: { item: any; onOpen: () => void; onEscalate?: (item: any, kind: "rfi" | "pco") => void }) {
+function TriageItemRow({ item, onOpen, onEscalate }: { item: TriageItem; onOpen: () => void; onEscalate?: (item: TriageItem, kind: "rfi" | "pco") => void }) {
   const tone = getActionTone(item);
   // div+role=button (not <button>) so the per-row escalation buttons can nest
   // without invalid button-in-button markup. Enter/Space still activate.
@@ -1069,7 +907,9 @@ function TriageItemRow({ item, onOpen, onEscalate }: { item: any; onOpen: () => 
           {item.detailingState
             ? <OperationalStateChip state={item.detailingState} />
             : <span style={{ color: textMuted, fontSize: 12, whiteSpace: "nowrap" }}>- {item.status}</span>}
-          {item.isRR && <RRChip />}
+          {/* R&R is a first-class stage (2026-07-25): skip the extra badge
+              when the state chip itself already reads R&R. */}
+          {item.isRR && item.detailingState !== "R&R" && <RRChip />}
         </div>
       </div>
       <div>

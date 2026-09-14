@@ -1,5 +1,7 @@
 import { parseDateUTC, toDateOnly } from "./scheduleDateUtils";
-import { displayPct } from "./scheduleTaskUtils";
+import { taskDurationDays } from "@/lib/schedule/duration";
+import { weightedPercentComplete } from "@/lib/schedule/rollup";
+import { percentCompleteOrNull } from "./scheduleTaskUtils";
 
 // Tree-sorting: parent/child hierarchy within each phase.
 //
@@ -65,10 +67,21 @@ export function buildTreeOrder(tasks, options = {}) {
     const minStart = starts.length ? new Date(Math.min(...starts.map((date) => date.getTime()))) : null;
     const maxEnd = ends.length ? new Date(Math.max(...ends.map((date) => date.getTime()))) : null;
     const summaryTaskCount = directChildren.reduce((sum, child) => sum + 1 + (Number(child._summaryTaskCount) || 0), 0);
-    const pctTotal = directChildren.reduce((sum, child) => sum + displayPct(child), 0);
-    const rolledPct = directChildren.length ? Math.round(pctTotal / directChildren.length) : displayPct(task);
+    // Duration-WEIGHTED, not a plain mean (§2.3). The unweighted version gave
+    // a 1-day punch item the same say as a 60-day erection sequence:
+    //
+    //   child A  "Punch 1 pc"     1 day, 100%   ┐ unweighted mean → 50%
+    //   child B  "Erect 60 days" 60 days,  0%   ┘ weighted truth  →  2%
+    //
+    // 50% is the number a PM reads off the screen and repeats to an owner.
+    // percentCompleteOrNull, not displayPct: a child whose progress is unknown
+    // is skipped by the roll-up rather than averaged in as 0 (§4.3).
+    const rolledPct = weightedPercentComplete(directChildren, percentCompleteOrNull, taskDurationDays)
+      ?? percentCompleteOrNull(task);
+    // The summary's span, inclusive: min start → max end is 4 days apart but
+    // spans 5 (§2.4). Falls back to the stored column when children are undated.
     const rolledDuration = minStart && maxEnd
-      ? Math.max(0, Math.round((maxEnd - minStart) / 86400000))
+      ? Math.max(1, Math.round((maxEnd - minStart) / 86400000) + 1)
       : task.duration;
 
     return {
@@ -82,6 +95,15 @@ export function buildTreeOrder(tasks, options = {}) {
       _directChildrenCount: directChildren.length,
       _summaryTaskCount: summaryTaskCount,
       _isRolledUpSummary: true,
+      // The rolled-up values are ALSO stamped under _rolled_* so a save can
+      // tell "the form still holds the derived value I displayed" from "the PM
+      // typed a new date". Without that distinction the sanitizer had to guess,
+      // and it guessed by always restoring _stored_*, which silently discarded
+      // every real edit to a parent row.
+      _rolled_start_date: minStart ? toDateOnly(minStart) : task.start_date || null,
+      _rolled_end_date: maxEnd ? toDateOnly(maxEnd) : task.end_date || null,
+      _rolled_duration: rolledDuration,
+      _rolled_percent_complete: rolledPct,
       wbs_code: displayWbs,
       start_date: minStart ? toDateOnly(minStart) : task.start_date || null,
       end_date: maxEnd ? toDateOnly(maxEnd) : task.end_date || null,

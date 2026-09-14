@@ -5,7 +5,8 @@
  * buildAtRiskEntry / buildScheduleAiNarrative are its internal stages. Pure
  * (no React) - takes the tasks array, returns the brief view-model.
  */
-import { computeEffectiveDates } from "@/services/scheduleCascade";
+import { applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
+import { computeFloat } from "@/services/scheduleFloat";
 import { PHASES } from "@/utils/phases";
 import { formatDateShort } from "@/components/shared/formatters";
 import { formatLocalDate } from "@/utils/dates";
@@ -214,8 +215,43 @@ function buildScheduleAiNarrative({
   };
 }
 
-export function buildBrief(tasks) {
-  const effectiveDates = computeEffectiveDates(tasks);
+export function buildBrief(storedTasks) {
+  // Throw rather than degrade. A brief built from nothing renders as "On Track",
+  // which is the most dangerous thing this component can say — a caller passing
+  // the wrong value would publish false reassurance instead of failing loudly.
+  if (!Array.isArray(storedTasks)) {
+    throw new TypeError(`buildBrief expects an array of schedule tasks, received ${typeof storedTasks}`);
+  }
+
+  // Overlay ONCE, here, so every classification below and every helper that
+  // reads task.start_date / task.end_date sees where the task EFFECTIVELY sits
+  // once predecessor links are followed — the same dates the Gantt draws.
+  //
+  // Previously the cascade was computed and then used only for the "shifted"
+  // narrative, while overdue / starts-soon / due-soon / active-now / stalled all
+  // classified from the STORED dates. The brief could therefore call a task
+  // overdue while its bar sat weeks in the future (audit §1.2).
+  //
+  // The originals stay on _stored_start_date / _stored_end_date for the one
+  // place that genuinely needs them: the cascade-variance report, which exists
+  // to compare the two. A half-dated row (start XOR end) is not overlaid at all,
+  // but the cascade cannot move such a row either — it has no computable
+  // duration — so for those rows effective and stored are equal by construction.
+  const effectiveDates = computeEffectiveDates(storedTasks);
+  // Backward pass over the SAME graph the forward pass just walked, so the
+  // brief's critical-path claims describe the bars the Gantt actually draws
+  // rather than a checkbox (§2.2). Stamped per task so every helper below —
+  // and the prose they generate — reads one answer.
+  const floats = computeFloat(storedTasks, effectiveDates);
+  const tasks = applyEffectiveDates(storedTasks, effectiveDates).map((task) => {
+    const f = task?.id ? floats[task.id] : null;
+    return f && f.totalFloat !== null
+      ? { ...task, _float: f, _is_critical_calculated: f.isCritical }
+      // No float (no dates, or a cycle): leave it unstamped so isCriticalTask
+      // falls back to the manual flag rather than silently reporting "not
+      // critical" for a task the calculation simply could not reach.
+      : task;
+  });
   const parentIds = new Set(tasks.map((task) => task?.parent_task_id).filter(Boolean));
 
   const openTasks = [];
@@ -496,7 +532,14 @@ export function buildBrief(tasks) {
     "Cascade variance:",
     ...(shiftedTasks.length ? shiftedTasks.map((task, index) => {
       const effective = effectiveDates[task.id];
-      return `${index + 1}. ${formatBriefTask(task)} - stored ${formatDateShort(task.start_date)} to ${formatDateShort(task.end_date)}, effective ${formatDateShort(effective.start)} to ${formatDateShort(effective.end)}, +${shiftedByDays(effective)}d`;
+      // The one keep-stored site: this line exists to CONTRAST the two windows.
+      // `task.start_date` is the effective value now, so read the preserved
+      // originals (falling back for a half-dated row, which is never overlaid).
+      // formatBriefTask is deliberately not used here — it appends the effective
+      // date in a parenthetical, which read as part of the "stored ..." clause.
+      const storedStart = task._stored_start_date ?? task.start_date;
+      const storedEnd = task._stored_end_date ?? task.end_date;
+      return `${index + 1}. ${taskName(task)} (${phaseOf(task)} / ${task?.status || "No status"}) - stored ${formatDateShort(storedStart)} to ${formatDateShort(storedEnd)}, effective ${formatDateShort(effective.start)} to ${formatDateShort(effective.end)}, +${shiftedByDays(effective)}d`;
     }) : ["No dependency cascade variance found."]),
     "",
     "Unassigned open work:",
@@ -507,4 +550,12 @@ export function buildBrief(tasks) {
   ].join("\n");
 
   return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, unassignedTasks, shiftedTasks, effectiveDates, totalShiftDays, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore, aiNarrative };
+}
+
+export function scheduleHealthFromBrief(brief) {
+  const level = brief?.aiNarrative?.riskLevel;
+  if (level === "HIGH") return "At Risk";
+  if (level === "MEDIUM") return "Watch";
+  if (level === "LOW") return "On Track";
+  return "Awaiting Data";
 }

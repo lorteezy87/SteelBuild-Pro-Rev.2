@@ -22,10 +22,23 @@ import {
 } from "lucide-react";
 import { PAGE_ICON, FallbackIcon } from "@/config/pageIcons";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 import { BrandLogo } from "./BrandLogo";
+import { mergeLegacyFavorites, shouldClearLegacyFavorites, toggleServerFavorite } from "./sidebarFavorites";
+import {
+  collapseAroundActivePage,
+  createInitialCollapseState,
+  createToggleAllCollapseState,
+  deriveFavoriteItems,
+  deriveRecentItems,
+  filterVisibleSidebarGroups,
+  hasExpandedCollapsibleGroup,
+  isDashboardSidebarItemActive,
+} from "./sidebarNavDerive";
 
 // ── Local storage helpers ───────────────────────────────────────────
 const RAIL_LS_KEY    = "sbp-sidebar-rail";
@@ -34,6 +47,11 @@ const MAX_RECENTS    = 4;
 
 function loadRailState() {
   try { return localStorage.getItem(RAIL_LS_KEY) === "1"; } catch { return false; }
+}
+function initialRailState(mode) {
+  if (mode === "rail") return true;
+  if (mode === "expanded") return false;
+  return loadRailState();
 }
 function saveRailState(v) {
   try { localStorage.setItem(RAIL_LS_KEY, v ? "1" : "0"); } catch { /* noop */ }
@@ -57,29 +75,55 @@ function loadFavorites() {
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
-function saveFavorites(pages) {
-  try { localStorage.setItem(FAVORITES_LS_KEY, JSON.stringify(pages)); } catch { /* noop */ }
+function clearLegacyFavorites() {
+  try { localStorage.removeItem(FAVORITES_LS_KEY); } catch { /* noop */ }
 }
 
 // ── Component ───────────────────────────────────────────────────────
-export default function SidebarNav({ currentPageName, onNavigate, visible, variant = "default" }) {
+export default function SidebarNav({
+  currentPageName,
+  onNavigate,
+  visible,
+  variant = "default",
+  forceRail = false,
+}) {
   const { theme } = useTheme();
   const isLightTheme = theme === "light";
   // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
-  const { pinned_modules } = useUserPrefs();
-  const [collapsed, setCollapsed] = useState(() => {
-    // Light (the command theme) shows EVERY group expanded so all modules are
-    // visible at once — matches the mockup's full sidebar list. Dark (legacy)
-    // keeps the accordion: all collapsed, the active group auto-expands below.
-    const def = {};
-    SIDEBAR_GROUPS.forEach((g) => { if (g.collapsible) def[g.label] = !isLightTheme; });
-    return def;
-  });
-  const [railModeState, setRailMode] = useState(loadRailState);
+  const { pinned_modules, sidebar_mode, show_recent_pages } = useUserPrefs();
+  const { savePatch, savePatchConfirmed } = useSaveUserPrefs();
+  const { isPageVisible } = useModuleAccess();
+  const [collapsed, setCollapsed] = useState(() =>
+    createInitialCollapseState(SIDEBAR_GROUPS, !isLightTheme)
+  );
+  const [railModeState, setRailMode] = useState(() => initialRailState(sidebar_mode));
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
-  const [favorites, setFavorites] = useState(loadFavorites);
-  const railMode = isLightTheme ? false : railModeState;
+  const [legacyFavorites, setLegacyFavorites] = useState(loadFavorites);
+  const legacyMigrationStarted = React.useRef(false);
+  // Sidebar Start Mode sets the initial choice and applies Settings changes.
+  // A manual toggle remains available until the next mount/preference change;
+  // remember mode reads that choice from the existing local storage key.
+  useEffect(() => {
+    setRailMode(initialRailState(sidebar_mode));
+  }, [sidebar_mode]);
+  const railMode = forceRail || railModeState;
+  const favorites = useMemo(
+    () => mergeLegacyFavorites(pinned_modules || [], legacyFavorites),
+    [pinned_modules, legacyFavorites],
+  );
+
+  // Older builds stored sidebar stars only on this device. Merge them into the
+  // signed-in user's canonical preference once, then retire the legacy key.
+  useEffect(() => {
+    if (legacyFavorites.length === 0 || legacyMigrationStarted.current) return;
+    legacyMigrationStarted.current = true;
+    void savePatchConfirmed({ pinned_modules: favorites }).then((result) => {
+      if (!shouldClearLegacyFavorites(result)) return;
+      clearLegacyFavorites();
+      setLegacyFavorites([]);
+    });
+  }, [favorites, legacyFavorites.length, savePatchConfirmed]);
 
   // Recent-pages tracking — kept here so reloads remember the last
   // few pages you visited.
@@ -97,17 +141,9 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
   // persist until the next navigation.
   useEffect(() => {
     if (isLightTheme) return; // light shows every group expanded (mockup parity) — no accordion
-    const activeGroup = SIDEBAR_GROUPS.find((g) => g.items.some((it) => it.page === currentPageName));
-    if (!activeGroup) return;
     setCollapsed((prev) => {
-      const next = {};
-      let changed = false;
-      for (const g of SIDEBAR_GROUPS) {
-        if (!g.collapsible) continue;
-        next[g.label] = g.label !== activeGroup.label;
-        if (next[g.label] !== !!prev[g.label]) changed = true;
-      }
-      if (!changed) return prev;
+      const next = collapseAroundActivePage(SIDEBAR_GROUPS, currentPageName, prev);
+      if (next === prev) return prev;
       saveSidebarState(next);
       return next;
     });
@@ -119,14 +155,8 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
   useEffect(() => {
     if (!isLightTheme) return;
     setCollapsed((prev) => {
-      const next = {};
-      let changed = false;
-      for (const g of SIDEBAR_GROUPS) {
-        if (!g.collapsible) continue;
-        next[g.label] = false;
-        if (prev[g.label]) changed = true;
-      }
-      return changed ? next : prev;
+      const next = createInitialCollapseState(SIDEBAR_GROUPS, false);
+      return Object.keys(next).some((label) => prev[label]) ? next : prev;
     });
   }, [isLightTheme]);
 
@@ -146,55 +176,36 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
     });
   };
 
-  const allCollapsibleGroups = SIDEBAR_GROUPS.filter((g) => g.collapsible);
-  const anyExpanded = allCollapsibleGroups.some((g) => !collapsed[g.label]);
+  const anyExpanded = hasExpandedCollapsibleGroup(SIDEBAR_GROUPS, collapsed);
 
   const toggleAll = () => {
-    const newState = {};
-    const shouldCollapse = anyExpanded;
-    allCollapsibleGroups.forEach((g) => { newState[g.label] = shouldCollapse; });
+    const newState = createToggleAllCollapseState(SIDEBAR_GROUPS, collapsed);
     setCollapsed(newState);
     saveSidebarState(newState);
   };
 
   // ── Favorites logic ──────────────────────────────────────────────
   const toggleFavorite = useCallback((page) => {
-    setFavorites((prev) => {
-      const next = prev.includes(page)
-        ? prev.filter((p) => p !== page)
-        : [...prev, page];
-      saveFavorites(next);
-      return next;
-    });
-  }, []);
+    savePatch({ pinned_modules: toggleServerFavorite(favorites, page) });
+  }, [favorites, savePatch]);
 
-  const favoriteItems = useMemo(() => {
-    const flat = SIDEBAR_GROUPS.flatMap((g) =>
-      g.items.map((it) => ({ ...it, _group: g.label }))
-    );
-    // Union of star-favorites (localStorage) + Settings "Pinned Modules" pref,
-    // deduped, favorites first.
-    const merged = [
-      ...favorites,
-      ...(pinned_modules || []).filter((p) => !favorites.includes(p)),
-    ];
-    return merged
-      .map((p) => flat.find((it) => it.page === p))
-      .filter(Boolean);
-  }, [favorites, pinned_modules]);
+  // Groups with gated-off pages removed (and emptied groups dropped).
+  const visibleGroups = useMemo(
+    () => filterVisibleSidebarGroups(SIDEBAR_GROUPS, isPageVisible),
+    [isPageVisible],
+  );
+
+  const favoriteItems = useMemo(
+    () => deriveFavoriteItems(visibleGroups, favorites),
+    [favorites, visibleGroups],
+  );
 
   // Recents filtered against the flat registry so a deleted/renamed
   // page falls out cleanly instead of rendering a dead entry.
-  const recentItems = useMemo(() => {
-    const flat = SIDEBAR_GROUPS.flatMap((g) =>
-      g.items.map((it) => ({ ...it, _group: g.label }))
-    );
-    return recents
-      .map((p) => flat.find((it) => it.page === p))
-      .filter(Boolean)
-      .filter((it) => it.page !== currentPageName)
-      .slice(0, 3);
-  }, [recents, currentPageName]);
+  const recentItems = useMemo(
+    () => deriveRecentItems(visibleGroups, recents, currentPageName),
+    [recents, currentPageName, visibleGroups],
+  );
 
   const openGlobalSearch = () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
@@ -207,11 +218,14 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
       <DashboardReferenceSidebar
         currentPageName={currentPageName}
         onNavigate={onNavigate}
+        forceRail={forceRail}
+        collapsed={railMode}
+        onToggleCollapsed={toggleRail}
       />
     );
   }
 
-  const width = isLightTheme ? 208 : (railMode ? 56 : 240);
+  const width = railMode ? 56 : (isLightTheme ? 208 : 240);
 
   return (
     <aside
@@ -236,69 +250,71 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
       )}
 
       {/* ── Top control strip (expand/collapse + rail toggle) ───────── */}
-      {<div
-        style={{
-          padding: railMode ? "12px 8px 8px" : "12px 14px 8px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: railMode ? "center" : "space-between",
-          gap: 6,
-          borderBottom: "1px solid var(--divider)",
-        }}
-      >
-        {!railMode && (
-          <button
-            onClick={toggleAll}
-            aria-label={anyExpanded ? "Collapse all groups" : "Expand all groups"}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "var(--font-mono)",
-              fontSize: 8,
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              color: "var(--text-muted)",
-              padding: "2px 4px",
-              borderRadius: 3,
-              transition: "color 140ms",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-          >
-            {anyExpanded ? "COLLAPSE" : "EXPAND"}
-          </button>
-        )}
-        <button
-          onClick={toggleRail}
-          title={railMode ? "Expand sidebar" : "Collapse to icons"}
-          aria-label={railMode ? "Expand sidebar" : "Collapse to icons"}
+      {!forceRail && (
+        <div
           style={{
-            width: 28, height: 28,
+            padding: railMode ? "12px 8px 8px" : "12px 14px 8px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            background: "transparent",
-            border: "1px solid var(--border-default)",
-            borderRadius: 6,
-            cursor: "pointer",
-            color: "var(--text-muted)",
-            transition: "all 140ms",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "var(--accent)";
-            e.currentTarget.style.borderColor = "var(--accent-border)";
-            e.currentTarget.style.background = "var(--accent-muted)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "var(--text-muted)";
-            e.currentTarget.style.borderColor = "var(--border-default)";
-            e.currentTarget.style.background = "transparent";
+            justifyContent: railMode ? "center" : "space-between",
+            gap: 6,
+            borderBottom: "1px solid var(--divider)",
           }}
         >
-          {railMode ? <ChevronsRight size={14} strokeWidth={1.75} /> : <ChevronsLeft size={14} strokeWidth={1.75} />}
-        </button>
-      </div>}
+          {!railMode && (
+            <button
+              onClick={toggleAll}
+              aria-label={anyExpanded ? "Collapse all groups" : "Expand all groups"}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "var(--font-mono)",
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                color: "var(--text-muted)",
+                padding: "2px 4px",
+                borderRadius: 3,
+                transition: "color 140ms",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+            >
+              {anyExpanded ? "COLLAPSE" : "EXPAND"}
+            </button>
+          )}
+          <button
+            onClick={toggleRail}
+            title={railMode ? "Expand sidebar" : "Collapse to icons"}
+            aria-label={railMode ? "Expand sidebar" : "Collapse to icons"}
+            style={{
+              width: 28, height: 28,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "transparent",
+              border: "1px solid var(--border-default)",
+              borderRadius: 6,
+              cursor: "pointer",
+              color: "var(--text-muted)",
+              transition: "all 140ms",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "var(--accent)";
+              e.currentTarget.style.borderColor = "var(--accent-border)";
+              e.currentTarget.style.background = "var(--accent-muted)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "var(--text-muted)";
+              e.currentTarget.style.borderColor = "var(--border-default)";
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            {railMode ? <ChevronsRight size={14} strokeWidth={1.75} /> : <ChevronsLeft size={14} strokeWidth={1.75} />}
+          </button>
+        </div>
+      )}
 
       {/* ── Global search trigger ──────────────────────────────── */}
       {!isLightTheme && <div style={{ padding: railMode ? "10px 8px 4px" : "10px 14px 4px" }}>
@@ -385,7 +401,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
           />
         )}
 
-        {SIDEBAR_GROUPS.map((group, groupIdx) => {
+        {visibleGroups.map((group, groupIdx) => {
           const isCollapsed = group.collapsible && collapsed[group.label];
           const isActiveGroup = group.items.some((it) => it.page === currentPageName);
           return (
@@ -472,7 +488,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
       </nav>
 
       {/* ── Recent section — only in expanded mode, when relevant ─ */}
-      {!railMode && recentItems.length > 0 && showRecents && (
+      {!railMode && recentItems.length > 0 && show_recent_pages && showRecents && (
         <div
           style={{
             padding: "8px 14px 12px",
@@ -530,7 +546,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
                   }}
                   onMouseEnter={(e) => {
                     prefetchRoute(it.page);
-                    e.currentTarget.style.background = "var(--nav-hover-bg, rgba(255,255,255,0.04))";
+                    e.currentTarget.style.background = "var(--nav-hover-bg, var(--bg-hover))";
                     e.currentTarget.style.color = "var(--text-secondary)";
                   }}
                   onFocus={() => prefetchRoute(it.page)}
@@ -553,11 +569,15 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
   );
 }
 
-function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
-  const [collapsed, setCollapsed] = useState(false);
+function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = false, collapsed, onToggleCollapsed }) {
   // Per-category collapse, persisted in the shared sidebar group state
   // (localStorage "sbp-nav-groups"). A missing/falsy entry means expanded.
   const [groupCollapsed, setGroupCollapsed] = useState(loadSidebarState);
+  const { isPageVisible } = useModuleAccess();
+  const visibleGroups = useMemo(
+    () => filterVisibleSidebarGroups(SIDEBAR_GROUPS, isPageVisible),
+    [isPageVisible],
+  );
 
   const toggleGroup = useCallback((label) => {
     setGroupCollapsed((prev) => {
@@ -569,8 +589,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
 
   const renderItem = (item) => {
     const Icon = PAGE_ICON[item.page] || FallbackIcon;
-    const active = currentPageName === item.page
-      || (item.page === "DrawingSubmittalHub" && ["Drawings", "Submittals"].includes(currentPageName));
+    const active = isDashboardSidebarItemActive(item.page, currentPageName);
     return (
       <button
         key={item.page}
@@ -599,7 +618,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
       </button>
 
       <nav className="sb-dashboard-reference-nav">
-        {SIDEBAR_GROUPS.map((group) => {
+        {visibleGroups.map((group) => {
           // Every category is collapsible here (incl. OVERVIEW), unlike the default
           // sidebar which pins OVERVIEW open — so ignore group.collapsible.
           const isGroupCollapsed = !!groupCollapsed[group.label];
@@ -631,15 +650,17 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
           {React.createElement(PAGE_ICON.Settings || FallbackIcon, { size: 17, strokeWidth: 1.85 })}
           <span>Settings</span>
         </button>
-        <button
-          type="button"
-          className="sb-dashboard-reference-nav__item"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={() => setCollapsed((value) => !value)}
-        >
-          {collapsed ? <ChevronsRight size={17} strokeWidth={1.85} /> : <ChevronsLeft size={17} strokeWidth={1.85} />}
-          <span>{collapsed ? "Expand" : "Collapse"}</span>
-        </button>
+        {!forceRail && (
+          <button
+            type="button"
+            className="sb-dashboard-reference-nav__item"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={onToggleCollapsed}
+          >
+            {collapsed ? <ChevronsRight size={17} strokeWidth={1.85} /> : <ChevronsLeft size={17} strokeWidth={1.85} />}
+            <span>{collapsed ? "Expand" : "Collapse"}</span>
+          </button>
+        )}
         <div className="sb-dashboard-reference-copyright">
           © {new Date().getFullYear()} SteelBuild Pro, Inc.<br />
           All rights reserved.
@@ -803,7 +824,7 @@ function FavoriteLink({ item, active, onClick, onUnpin }) {
           gap: 10,
           background: active
             ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+            : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
           border: "none",
           borderRadius: 6,
           cursor: "pointer",
@@ -911,7 +932,7 @@ function FavoriteRailLink({ item, active, onClick }) {
           justifyContent: "center",
           background: active
             ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+            : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
           border: active
             ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)"
             : "1px solid transparent",
@@ -953,7 +974,7 @@ function FavoriteRailLink({ item, active, onClick }) {
             fontWeight: 600,
             color: "var(--text-primary)",
             whiteSpace: "nowrap",
-            boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+            boxShadow: "var(--shadow-lg)",
             zIndex: 1000,
             pointerEvents: "none",
           }}
@@ -1000,7 +1021,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
             justifyContent: "center",
             background: active
               ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-              : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+              : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
             border: active
               ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)"
               : "1px solid transparent",
@@ -1042,7 +1063,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
               fontWeight: 600,
               color: "var(--text-primary)",
               whiteSpace: "nowrap",
-              boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+              boxShadow: "var(--shadow-lg)",
               zIndex: 1000,
               pointerEvents: "none",
             }}
@@ -1076,7 +1097,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
           gap: 10,
           background: active
             ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+            : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
           border: "none",
           borderRadius: 6,
           cursor: "pointer",

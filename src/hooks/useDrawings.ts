@@ -28,6 +28,12 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { sanitizeDrawingPayload } from "@/lib/drawingEnums";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import {
+  applyOptimisticBulkPatch,
+  applyOptimisticRowPatch,
+  shouldRollbackOptimistic,
+} from "@/lib/mutations/optimisticCache";
 
 export type Drawing = RowWithAliases<'drawings'>;
 
@@ -48,7 +54,7 @@ export function useDrawings(projectId: string | null | undefined) {
   // ── Primary query ───────────────────────────────────────────────────
   const {
     data: drawings = [],
-    isLoading,
+    isPending,
     error,
     refetch,
   } = useQuery<Drawing[]>({
@@ -57,6 +63,7 @@ export function useDrawings(projectId: string | null | undefined) {
     enabled: !!projectId,
     staleTime: 60_000,
   });
+  const isLoading = !!projectId && isPending;
 
   // ── Derived: group by set name ──────────────────────────────────────
   const { drawingSets, orphanedDrawings } = useMemo(() => {
@@ -127,7 +134,7 @@ export function useDrawings(projectId: string | null | undefined) {
       }
     },
     onError: (err) => {
-      toast.error(`Failed to create drawing: ${err.message}`);
+      toast.error(`Failed to create drawing: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -149,15 +156,15 @@ export function useDrawings(projectId: string | null | undefined) {
       await qc.cancelQueries({ queryKey });
       const previous = qc.getQueryData<Drawing[]>(queryKey);
       qc.setQueryData<Drawing[]>(queryKey, (old) =>
-        (old || []).map((d) =>
-          d.id === vars.id ? { ...d, ...vars } : d
-        )
+        applyOptimisticRowPatch(old, vars.id, vars as Partial<Drawing>),
       );
       return { previous };
     },
     onError: (err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(queryKey, context.previous);
-      toast.error(`Failed to update drawing: ${err.message}`);
+      if (shouldRollbackOptimistic(context?.previous)) {
+        qc.setQueryData(queryKey, context.previous);
+      }
+      toast.error(`Failed to update drawing: ${toUserErrorMessage(err)}`);
     },
     onSettled: async () => {
       await invalidateAll();
@@ -179,7 +186,7 @@ export function useDrawings(projectId: string | null | undefined) {
       toast.success("Drawing deleted");
     },
     onError: (err) => {
-      toast.error(`Failed to delete drawing: ${err.message}`);
+      toast.error(`Failed to delete drawing: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -193,8 +200,7 @@ export function useDrawings(projectId: string | null | undefined) {
           await entities.Drawing.update(id, { stage } as Update<'drawings'>);
           results.succeeded++;
         } catch (err: unknown) {
-          const msg = (err as { message?: string } | undefined)?.message ?? String(err);
-          results.failed.push({ id, error: msg });
+          results.failed.push({ id, error: toUserErrorMessage(err) });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
@@ -205,17 +211,16 @@ export function useDrawings(projectId: string | null | undefined) {
     onMutate: async ({ ids, stage }) => {
       await qc.cancelQueries({ queryKey });
       const previous = qc.getQueryData<Drawing[]>(queryKey);
-      const idSet = new Set(ids);
       qc.setQueryData<Drawing[]>(queryKey, (old) =>
-        (old || []).map((d) =>
-          idSet.has(d.id as string) ? { ...d, stage } : d
-        )
+        applyOptimisticBulkPatch(old, ids, { stage } as Partial<Drawing>),
       );
       return { previous };
     },
     onError: (err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(queryKey, context.previous);
-      toast.error(`Bulk update failed: ${err.message}`);
+      if (shouldRollbackOptimistic(context?.previous)) {
+        qc.setQueryData(queryKey, context.previous);
+      }
+      toast.error(`Bulk update failed: ${toUserErrorMessage(err)}`);
     },
     onSettled: async () => {
       await invalidateAll();
@@ -257,7 +262,7 @@ export function useDrawings(projectId: string | null | undefined) {
     },
     onError: (err) => {
       invalidateAll();
-      toast.error(`Bulk delete failed: ${err.message}`);
+      toast.error(`Bulk delete failed: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -302,7 +307,7 @@ export function useDrawings(projectId: string | null | undefined) {
     },
     onError: (err) => {
       invalidateAll(); // FIX: previous code did NOT invalidate on error
-      toast.error(`Set approval failed: ${err.message}`);
+      toast.error(`Set approval failed: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -335,7 +340,7 @@ export function useDrawings(projectId: string | null | undefined) {
     },
     onError: (err) => {
       invalidateAll();
-      toast.error(`Set rejection failed: ${err.message}`);
+      toast.error(`Set rejection failed: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -364,7 +369,7 @@ export function useDrawings(projectId: string | null | undefined) {
     },
     onError: (err) => {
       invalidateAll();
-      toast.error(`Supersede failed: ${err.message}`);
+      toast.error(`Supersede failed: ${toUserErrorMessage(err)}`);
     },
   });
 

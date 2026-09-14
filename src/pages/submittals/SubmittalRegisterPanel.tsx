@@ -26,12 +26,15 @@
  *     upstream; the countdown/stamping logic is untouched write-side code).
  *   - Revision (row R{total_rounds}; the text `revision` shows in SubmittalDetail).
  * Passing the identical props keeps every one of those behaviors byte-identical.
- * SubmittalDetail's internal re-skin is deferred to a later slice (see the panel
- * docstring note) — it is reused unchanged here, already tinted by the cascade.
+ * Detail workflow controls are reused; narrow screens switch between the
+ * register and selected detail without changing the owning page state.
  */
-import type { ComponentType, ReactNode } from "react";
+import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardList, Clock3, ShieldAlert, TrendingUp } from "lucide-react";
 import { FilterBar, useCommandSkin } from "@/components/command";
+import { useResponsiveBreakpoint } from "@/components/nav/useResponsiveBreakpoint";
+import "@/styles/command.css";
+import "./submittalWorkspace.css";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { BIC_CHOICES, STATUSES } from "./format";
 import type { SubmittalStats } from "./submittalRegister.derive";
@@ -79,6 +82,8 @@ function KpiCell({
 }
 
 export interface SubmittalRegisterPanelProps {
+  /** The Drawing/Submittal Hub already owns the title and KPI strip. */
+  embedded?: boolean;
   /** Derived register model — counts + the visible/total lengths for the
    *  header + KPI cells. The list/detail bodies come in pre-built (below). */
   filtered: Submittal[];
@@ -111,64 +116,96 @@ export interface SubmittalRegisterPanelProps {
    *  revision — is byte-identical. This panel only owns the CHROME. */
   list: ReactNode;
   detail: ReactNode;
+  /** True only when the owning page has resolved a selected record. */
+  detailOpen: boolean;
 }
 
 export default function SubmittalRegisterPanel({
+  embedded = false,
   filtered, rows, stats, reviewsAtRisk,
   filterStatus, filterBIC, search, onFilterStatus, onFilterBIC, onSearch,
   selectedIds, allSelected, toggleAll,
   projectLabel, canCreate, onNewSubmittal, onBulkAdd,
-  list, detail,
+  list, detail, detailOpen,
 }: SubmittalRegisterPanelProps) {
   useCommandSkin();
+  const { isDesktop } = useResponsiveBreakpoint();
+  const compact = !isDesktop;
+  const listRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const wasDetailOpen = useRef(false);
+  useEffect(() => {
+    if (compact) {
+      if (detailOpen) detailRef.current?.focus();
+      else if (wasDetailOpen.current) listRef.current?.focus();
+    }
+    wasDetailOpen.current = detailOpen;
+  }, [compact, detailOpen]);
   const countUnit = filtered.length !== rows.length ? ` of ${rows.length}` : "";
   const subtitle = stats.overdue > 0
     ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
-    : `${stats.pending} awaiting review · ${stats.approved} approved`;
+    : stats.pendingEor > 0
+      ? `${stats.pendingEor} incomplete — pending EOR/AOR response · ${stats.pending} awaiting review`
+      : `${stats.pending} awaiting review · ${stats.approved} approved`;
 
   return (
-    <div className="detailing-cc" style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0, overflow: "hidden" }}>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--cmd-text-muted)" }}>
-            {projectLabel} · Submittals
+    <div
+      className="detailing-cc submittal-register"
+      data-compact={compact}
+      style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0, overflow: compact && !detailOpen ? "auto" : "hidden" }}
+    >
+      <div className="submittal-register__controls" hidden={compact && detailOpen}>
+      {!embedded && (
+        <>
+          {/* ── Header ─────────────────────────────────────────────────── */}
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--cmd-text-muted)" }}>
+                {projectLabel} · Submittals
+              </div>
+              <h2 style={{ margin: "3px 0 0", fontSize: 22, fontWeight: 700, color: "var(--cmd-text)" }}>
+                Submittal Register
+                <span style={{ marginLeft: 10, fontSize: 14, fontWeight: 600, color: "var(--cmd-text-muted)" }}>
+                  {filtered.length}{countUnit}
+                </span>
+              </h2>
+              <div style={{ marginTop: 3, fontSize: 13, color: "var(--cmd-text-muted)" }}>{subtitle}</div>
+            </div>
           </div>
-          <h2 style={{ margin: "3px 0 0", fontSize: 22, fontWeight: 700, color: "var(--cmd-text)" }}>
-            Submittal Register
-            <span style={{ marginLeft: 10, fontSize: 14, fontWeight: 600, color: "var(--cmd-text-muted)" }}>
-              {filtered.length}{countUnit}
-            </span>
-          </h2>
-          <div style={{ marginTop: 3, fontSize: 13, color: "var(--cmd-text-muted)" }}>{subtitle}</div>
-        </div>
-      </div>
 
-      {/* ── KPI strip (click-to-filter, kit cmd-kpi cells) ─────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-        <KpiCell
-          label="Total" value={stats.total} Icon={ClipboardList} tone="info"
-          active={filterStatus === "all" && filterBIC === "all"}
-          onClick={() => { onFilterStatus("all"); onFilterBIC("all"); }}
-        />
-        <KpiCell
-          label="Pending" value={stats.pending} Icon={Clock3} tone="warn"
-          active={filterStatus === "__pending"}
-          onClick={() => onFilterStatus("__pending")}
-        />
-        <KpiCell
-          label="Approved" value={stats.approved} Icon={CheckCircle2} tone="good"
-          active={filterStatus === "__approved"}
-          onClick={() => onFilterStatus("__approved")}
-        />
-        <KpiCell
-          label="Rejected" value={stats.rejected} Icon={ShieldAlert} tone="danger"
-          active={filterStatus === "__rejected"}
-          onClick={() => onFilterStatus("__rejected")}
-        />
-        <KpiCell label="Overdue" value={stats.overdue} Icon={AlertTriangle} tone="danger" />
-        <KpiCell label="At risk" value={reviewsAtRisk} Icon={TrendingUp} tone="warn" sub="forecast" />
-      </div>
+          {/* ── KPI strip (click-to-filter, kit cmd-kpi cells) ─────────── */}
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${compact ? 100 : 150}px, 1fr))`, gap: compact ? 8 : 12 }}>
+            <KpiCell
+              label="Total" value={stats.total} Icon={ClipboardList} tone="info"
+              active={filterStatus === "all" && filterBIC === "all"}
+              onClick={() => { onFilterStatus("all"); onFilterBIC("all"); }}
+            />
+            <KpiCell
+              label="Pending" value={stats.pending} Icon={Clock3} tone="warn"
+              active={filterStatus === "__pending"}
+              onClick={() => onFilterStatus("__pending")}
+            />
+            <KpiCell
+              label="Approved" value={stats.approved} Icon={CheckCircle2} tone="good"
+              active={filterStatus === "__approved"}
+              onClick={() => onFilterStatus("__approved")}
+            />
+            <KpiCell
+              label="Rejected" value={stats.rejected} Icon={ShieldAlert} tone="danger"
+              active={filterStatus === "__rejected"}
+              onClick={() => onFilterStatus("__rejected")}
+            />
+            <KpiCell label="Overdue" value={stats.overdue} Icon={AlertTriangle} tone="danger" />
+            <KpiCell
+              label="Incomplete · EOR/AOR" value={stats.pendingEor} Icon={Clock3} tone="warn"
+              sub="unanswered notes"
+              active={filterStatus === "__pending_eor"}
+              onClick={() => onFilterStatus("__pending_eor")}
+            />
+            <KpiCell label="At risk" value={reviewsAtRisk} Icon={TrendingUp} tone="warn" sub="forecast" />
+          </div>
+        </>
+      )}
 
       <ListTruncationNotice count={rows.length} label="submittals" />
 
@@ -214,6 +251,7 @@ export default function SubmittalRegisterPanel({
               style={{ padding: "7px 10px", borderRadius: 8, fontSize: 12, minHeight: 34 }}
             >
               <option value="all">All Statuses</option>
+              <option value="__pending_eor">Incomplete — Pending EOR/AOR Response</option>
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             <select
@@ -230,10 +268,31 @@ export default function SubmittalRegisterPanel({
         }
       />
 
-      {/* ── Register body: list + detail (reused verbatim) ─────────────── */}
-      <div className="cmd-table-wrap" style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden", padding: 0 }}>
-        {list}
-        {detail}
+      </div>
+
+      {/* Keep both panes mounted to preserve list scroll and in-progress detail
+          state. Hidden panes leave the mobile tab order and accessibility tree. */}
+      <div className="cmd-table-wrap submittal-register__body" style={{ flex: compact && !detailOpen ? "1 0 360px" : 1, minHeight: 0, display: "flex", overflow: "hidden", padding: 0 }}>
+        <div
+          ref={listRef}
+          className="submittal-register__list"
+          role="region"
+          aria-label="Submittal register list"
+          tabIndex={-1}
+          hidden={compact && detailOpen}
+        >
+          {list}
+        </div>
+        <div
+          ref={detailRef}
+          className="submittal-register__detail"
+          role="region"
+          aria-label="Submittal details"
+          tabIndex={-1}
+          hidden={compact && !detailOpen}
+        >
+          {detail}
+        </div>
       </div>
     </div>
   );

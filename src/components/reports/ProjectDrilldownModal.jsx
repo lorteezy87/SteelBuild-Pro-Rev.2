@@ -10,6 +10,7 @@ import {
   Tooltip, ResponsiveContainer, BarChart, Bar
 } from "recharts";
 import { format, parseISO } from "date-fns";
+import { resolveProjectSpend, preferManualActual } from "@/services/costRollup";
 
 // ── Helpers ────────────────────────────────────────────────────────
 const fmt$ = (n) =>
@@ -132,6 +133,33 @@ export default function ProjectDrilldownModal({ project, onClose }) {
     staleTime: 2 * 60 * 1000,
   });
 
+  const { data: expenses = [] } = useQuery({
+    queryKey: ["modal-expenses", pid],
+    queryFn: () => entities.Expense.filter({ project_id: pid }),
+    enabled: !!pid,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // Canonical spend model (typed-in cost-code actuals win, paid expenses fall
+  // back, unmapped expenses count) — the modal previously read only the
+  // cost_codes.actual_cost column, showing $0 for expense-driven projects
+  // while the cost pages showed real spend.
+  const resolvedSpend = useMemo(
+    () => resolveProjectSpend(codes, expenses),
+    [codes, expenses],
+  );
+  // Paid expenses per cost code for the by-phase chart (same per-code rule).
+  const paidByCode = useMemo(() => {
+    const map = new Map();
+    for (const e of expenses) {
+      if (String(e?.payment_status ?? "").toLowerCase() !== "paid") continue;
+      const key = String(e?.cost_code ?? "");
+      if (!key) continue;
+      map.set(key, (map.get(key) ?? 0) + (Number(e.amount) || 0));
+    }
+    return map;
+  }, [expenses]);
+
   const isLoading = wpsLoading || cosLoading || rfisLoading || codesLoading || logsLoading;
 
   // ── Budget trend data ──────────────────────────────────────────────
@@ -145,7 +173,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
     const points = [{ month: "Original", contract: runningContract, actual: 0 }];
 
     sortedCOs.forEach((co) => {
-      if (co.status === "Approved") {
+      if (String(co.status ?? "").trim() === "Approved") {
         runningContract += Number(co.co_amount) || 0;
       }
       const dateStr = co.approved_date || co.submitted_date;
@@ -160,12 +188,11 @@ export default function ProjectDrilldownModal({ project, onClose }) {
       } catch {}
     });
 
-    // Overlay actual cost by phase (cost codes)
-    const totalActual = codes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
-    if (points.length > 1) points[points.length - 1].actual = totalActual;
+    // Overlay the resolved actual (typed columns + paid-expense fallback)
+    if (points.length > 1) points[points.length - 1].actual = resolvedSpend.actual;
 
     return points.length > 1 ? points : null;
-  }, [cos, codes, project]);
+  }, [cos, project, resolvedSpend]);
 
   // ── Cost breakdown by phase ────────────────────────────────────────
   const costByPhase = useMemo(() => {
@@ -174,17 +201,20 @@ export default function ProjectDrilldownModal({ project, onClose }) {
       const ph = c.phase || "Other";
       if (!phaseMap[ph]) phaseMap[ph] = { budget: 0, actual: 0 };
       phaseMap[ph].budget += Number(c.budget_amount) || 0;
-      phaseMap[ph].actual += Number(c.actual_cost) || 0;
+      phaseMap[ph].actual += preferManualActual(
+        c.actual_cost,
+        paidByCode.get(String(c.cost_code_number ?? "")) ?? 0,
+      );
     });
     return Object.entries(phaseMap).map(([phase, vals]) => ({ phase, ...vals }));
-  }, [codes]);
+  }, [codes, paidByCode]);
 
   if (!project) return null;
 
   // ── KPIs ───────────────────────────────────────────────────────────
   const totalBudget = codes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-  const totalActual = codes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
-  const approvedCOTotal = cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+  const totalActual = resolvedSpend.actual;
+  const approvedCOTotal = cos.filter(c => String(c.status ?? "").trim() === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
   const revisedContract = (Number(project.original_contract_value) || 0) + approvedCOTotal;
   const openRFIs = rfis.filter(r => !["Answered", "Closed"].includes(r.status)).length;
   const criticalRFIs = rfis.filter(r => r.priority === "Critical" && !["Answered", "Closed"].includes(r.status)).length;
@@ -431,7 +461,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                               </div>
                             </div>
                             <div style={{ textAlign: "right", flexShrink: 0 }}>
-                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "#0891B2" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
                                 {member.packages}
                               </div>
                               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
@@ -471,7 +501,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                         {cos.length}
                       </div>
                       <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
-                        {cos.filter(c => c.status === "Approved").length} approved
+                        {cos.filter(c => String(c.status ?? "").trim() === "Approved").length} approved
                       </div>
                     </div>
                   </div>

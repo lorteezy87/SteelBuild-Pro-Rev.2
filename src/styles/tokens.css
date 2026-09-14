@@ -430,6 +430,29 @@ html[data-accent="slate"] {
   --phase-erection:           #15803D;
   --phase-closeout:           #475569;
 
+  /* Gantt surfaces — light equivalents for the app-specific SBD Gantt
+     tokens used by inline schedule chrome without requiring .steelbuild-light. */
+  --sbd-gantt-bg:              #F8FAFC;
+  --sbd-gantt-panel:           #FFFFFF;
+  --sbd-gantt-panel-strong:    #F1F5F9;
+  --sbd-gantt-header:          #E2E8F0;
+  --sbd-gantt-left:            #FFFFFF;
+  --sbd-gantt-row:             #FFFFFF;
+  --sbd-gantt-row-alt:         #F8FAFC;
+  --sbd-gantt-row-hover:       rgba(29, 78, 216, 0.08);
+  --sbd-gantt-grid:            rgba(100, 116, 139, 0.22);
+  --sbd-gantt-grid-strong:     rgba(100, 116, 139, 0.34);
+  --sbd-gantt-weekend:         rgba(29, 78, 216, 0.045);
+  --sbd-gantt-today:           #EA580C;
+  --sbd-gantt-today-soft:      rgba(234, 88, 12, 0.14);
+  --sbd-gantt-preconstruction: #64748B;
+  --sbd-gantt-detailing:       #2563EB;
+  --sbd-gantt-procurement:     #B45309;
+  --sbd-gantt-fabrication:     #D97706;
+  --sbd-gantt-delivery:        #047857;
+  --sbd-gantt-installation:    #0891B2;
+  --sbd-gantt-closeout:        #475569;
+
   /* Shadows — noticeable, layered umbra for real depth */
   --shadow-sm:                0 1px 2px rgba(2,6,23,0.06), 0 1px 1px rgba(2,6,23,0.04);
   --shadow-card:              0 1px 3px rgba(2,6,23,0.08), 0 4px 10px rgba(2,6,23,0.04);
@@ -485,20 +508,24 @@ html.steelbuild-dark,
 [data-accent] html.steelbuild-dark,
 html .steelbuild-dark,
 .steelbuild-dark {
-  /* Surfaces — translucent over dark base */
+  /* Surfaces — frosted rgba for in-page glass; opaque solids for
+     elevated / input / secondary surfaces used by menus & popouts. */
   --bg-page:                  var(--sbd-bg-base) !important;
   --bg-base:                  var(--sbd-bg-base) !important;
-  --bg-surface:               var(--sbd-bg-surface) !important;
-  --bg-surface-low:           rgba(255,255,255,0.020) !important;
-  --bg-surface-high:          var(--sbd-bg-surface-hi) !important;
-  --bg-elevated:              var(--sbd-bg-elevated) !important;
-  --bg-input:                 var(--sbd-bg-input) !important;
-  --bg-card:                  var(--sbd-bg-surface) !important;
-  --bg-secondary:             var(--sbd-bg-surface) !important;
-  --bg-sidebar:               rgba(13,17,23,0.70) !important;
-  --bg-row-hover:             var(--sbd-bg-row-hover) !important;
-  --hover-bg:                 var(--sbd-bg-row-hover) !important;
-  --nav-bg:                   rgba(15,22,38,0.65) !important;
+  --bg-surface:               var(--sbd-bg-panel, #161B22) !important;
+  --bg-surface-low:           var(--sbd-bg-page, #0B0E11) !important;
+  --bg-surface-high:          var(--sbd-bg-panel-hi, #21262D) !important;
+  --bg-surface-secondary:     var(--sbd-bg-panel, #161B22) !important;
+  --bg-elevated:              var(--sbd-bg-panel-hi, #21262D) !important;
+  --bg-input:                 var(--sbd-bg-panel-input, #1C2128) !important;
+  --bg-card:                  var(--sbd-bg-panel, #161B22) !important;
+  --bg-secondary:             var(--sbd-bg-panel, #161B22) !important;
+  --bg-sidebar:               var(--sbd-bg-page, #0B0E11) !important;
+  --bg-row-hover:             var(--sbd-bg-panel-hover, #2D333B) !important;
+  --hover-bg:                 var(--sbd-bg-panel-hover, #2D333B) !important;
+  --bg-hover:                 var(--sbd-bg-panel-hover, #2D333B) !important;
+  --nav-bg:                   var(--sbd-bg-page, #0B0E11) !important;
+  /* Glass stays translucent — only for intentional backdrop-filter cards */
   --glass-bg:                 rgba(15,22,38,0.65) !important;
 
   /* Borders / dividers */

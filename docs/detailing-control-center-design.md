@@ -4,6 +4,11 @@ Status: **APPROVED 2026-05-26** (design + all §9 decisions signed off). Maps th
 vision onto the *actual* current schema/code and proposes a minimal, additive plan
 that does not break the working drawings/submittals flow (the killer workflow /
 moat). Phase 1 in progress.
+**Event glue (2026-07-26):** create/link prefill, revision attach confirm, and
+post-status BIC/dates suggest strip — see
+`docs/superpowers/specs/2026-07-26-detailing-cc-event-glue-design.md` and
+`docs/superpowers/plans/2026-07-26-detailing-cc-event-glue.md`.
+
 
 Vision (verbatim intent): stop tracking *"was it submitted?"* and start tracking
 *"what operational state is this package in, and what does the schedule need from
@@ -124,7 +129,7 @@ Prefer **derived** (deterministic engines) over manual flags wherever possible:
 
 | Readiness signal | Source |
 | --- | --- |
-| RFI Blocked | DERIVED — open linked RFIs via `constraintEngine.deriveOperationalConstraints()` / `linked_rfi_ids` |
+| RFI Blocked | DERIVED — open linked RFIs via `constraintEngine.deriveOperationalConstraints()` / `linked_rfi_ids`. **Two id spaces — see §10.1** |
 | CO Exposure | DERIVED — `marginRiskEngine.calculateMarginRisk()` |
 | Revision Impacted | DERIVED — a newer `drawing_revisions` rev not yet acknowledged downstream |
 | Fabrication Ready | DERIVED — state ≥ Released for Fab AND not RFI-blocked AND no impacting open revision |
@@ -233,3 +238,67 @@ status), **Sequence Readiness** (group packages by WP `sequence_number` → Deta
    drill-downs).
 4. **Partially Released granularity** — **per-sheet** (via
    `submittal_sheet_responses`), **rolled to a % on the package.**
+
+---
+
+## 10. Implementation notes (added 2026-09-07)
+
+The sections above are the **design spec as signed off**; these are corrections
+and constraints learned from shipping it, recorded so the spec is not read as
+describing current behavior where the two diverge. Full context in the
+ARCHITECTURE.md decision log entry for 2026-09-07.
+
+### 10.1 `linked_rfi_ids` is two different columns
+
+Referenced in §2 and §5, but the shapes are **not** interchangeable:
+
+| Column | Type | Holds |
+| --- | --- | --- |
+| `drawings.linked_rfi_ids` | `text` | CSV of RFI **numbers** — `"RFI #001, RFI #002"`, exactly what SheetFormModal's placeholder asks for |
+| `submittals.linked_rfi_ids` | `uuid[]` | FKs to `rfis.id` |
+| `drawing_sets.linked_rfi_ids` | — | **does not exist** |
+
+Match numbers with `normNum` + `linkedRfiNumbers` from `src/lib/fabReleaseGate.ts`
+(comma-only split; uppercase and strip non-alphanumerics). Pooling the two spaces
+meant a sheet-linked open RFI never blocked its package, so `RFI Blocked` read
+false and `Fabrication Ready` read true while an RFI was outstanding.
+
+### 10.2 Downstream status has four states, not three
+
+§7's Revision Impact Tracker derives downstream exposure from the per-sheet
+`fabrication_finish_date` / `final_delivery_date` / `ready_for_install_date`
+columns noted in §2. Those are optional, NULL by default, and only ever written
+by four date inputs in SheetFormModal — so on a project that tracks fabrication
+through the model roster or Piece Register instead, **all three are null**.
+Severity is therefore `critical > high > medium > unknown > low`:
+
+- `low` — dates **are** recorded and none has been reached (genuinely pre-fab)
+- `unknown` — no downstream date recorded, so the state cannot be determined
+
+`unknown` is counted as neither downstream nor low, sorts above `low`, and is
+surfaced as `unknownDownstreamCount` on the persisted revision summary. Never
+render it as an affirmative negative ("Not downstream", "caught pre-fab").
+
+### 10.3 The model roster is loaded lazily
+
+§8's BIM/piece mapping reads `model_elements`, which reaches ~28k rows per
+project against a 1000-row PostgREST ceiling, so `fetchAllModelElements` pages
+and the read is **on-demand** (the 3D tab, or an explicit "Load mapping").
+Anything that only needs to know a roster exists must use `countModelElements()`
+— one HEAD request, zero rows. An empty array means "not loaded", never "none
+imported", and import modals must fetch the roster themselves rather than
+receiving it as a prop (an empty dedupe basis silently duplicates the roster).
+
+### 10.4 Released ≠ closed
+
+`isClosedPackage` is terminal-**for-triage** and also fires on a Void submittal
+and on the deprecated `drawing_sets.set_approval_status = 'approved'`. Use
+`isPackageReleasedForFab` for any claim that the shop received work — §4's
+release phase (`Released` / `Partially Released` / `Released for Erection`).
+
+### 10.5 Deviation from §9.2 — per-package lead-time override
+
+§9 resolved lead times as "per-project defaults + per-package override". Only the
+**per-project** half shipped (`projects.metadata.detailing_lead_days`, edited
+from the Lead Times action in the hero). `resolveLeadDays` accepts a package
+argument and will honor a stored override, but there is no UI to set one.

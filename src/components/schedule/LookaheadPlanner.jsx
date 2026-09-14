@@ -1,4 +1,8 @@
 import React, { useMemo } from "react";
+import { todayUtcMidnightFromLocal } from "@/lib/dateMath";
+import { taskDurationDays } from "@/lib/schedule/duration";
+import { weightedPercentComplete } from "@/lib/schedule/rollup";
+import { percentCompleteOrNull } from "./scheduleTaskUtils";
 
 // Schedule audit fix (bug class 5): the previous implementation
 // constructed week boundaries in local time but compared against task
@@ -27,10 +31,9 @@ function parseTaskDate(s) {
 }
 
 export default function LookaheadPlanner({ tasks }) {
-  const todayUtc = useMemo(() => {
-    const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  }, []);
+  // LOCAL calendar date on a UTC-midnight anchor. Reading getUTCDate() here
+  // slid the whole 6-week window forward from 5 PM local onward (§2.5).
+  const todayUtc = useMemo(() => todayUtcMidnightFromLocal(), []);
 
   const weeks = useMemo(() => {
     // Anchor week 1 at the Monday on/before todayUtc. getUTCDay(): Sun=0..Sat=6.
@@ -66,10 +69,10 @@ export default function LookaheadPlanner({ tasks }) {
       {weeks.map((week) => {
         const weekTasks = getTasksForWeek(week.start, week.end);
         const complete = weekTasks.filter((t) => t.status === "Complete").length;
-        const progress =
-          weekTasks.length > 0
-            ? Math.round((complete / weekTasks.length) * 100)
-            : 0;
+        // Duration-weighted, not a head count (§2.3). By count, a week holding
+        // one finished punch item and one untouched 60-day erection sequence
+        // read 50% done.
+        const progress = weightedPercentComplete(weekTasks, percentCompleteOrNull, taskDurationDays) ?? 0;
 
         return (
           <div

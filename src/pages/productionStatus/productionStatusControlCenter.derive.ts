@@ -52,15 +52,19 @@ export interface ProductionSummary {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/**
+ * Local calendar date as YYYY-MM-DD (not UTC). Used for past-due checks so a
+ * US shop near midnight doesn't flip a day early via toISOString().
+ * Call once per derivation / render — never inside a per-row loop.
+ */
+export function localTodayISO(now: Date = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function isPastDue(piece: PieceProductionRow): boolean {
+function isPastDue(piece: PieceProductionRow, today: string): boolean {
   if (!piece.ship_date) return false;
   if (piece.status === "Shipped") return false;
-  return piece.ship_date < todayISO();
+  return piece.ship_date < today;
 }
 
 function num(v: number | null | undefined): number {
@@ -77,9 +81,16 @@ function num(v: number | null | undefined): number {
  * PieceProductionRow (confirmed from src/lib/production/repository.ts). A future
  * schema column (e.g. `on_hold: boolean`) would wire in here. The KPI is kept in
  * the interface so the UI renders the slot and makes the gap visible.
+ *
+ * @param now Optional clock for past-due (tests inject a fixed Date).
  */
-export function buildProductionSummary(pieces: PieceProductionRow[]): ProductionSummary {
+export function buildProductionSummary(
+  pieces: PieceProductionRow[],
+  now: Date = new Date(),
+): ProductionSummary {
   const total = pieces.length;
+  // Hoist once — isPastDue used to call todayISO() per piece.
+  const today = localTodayISO(now);
 
   // Stage distribution
   const stageCountMap: Record<string, number> = Object.fromEntries(
@@ -103,7 +114,7 @@ export function buildProductionSummary(pieces: PieceProductionRow[]): Production
       pctCount += 1;
     }
 
-    if (isPastDue(p)) {
+    if (isPastDue(p, today)) {
       pastDueQueue.push(p);
     }
   }

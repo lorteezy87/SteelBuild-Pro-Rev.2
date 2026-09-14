@@ -1,20 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
   buildFieldTodaySummary,
+  deriveFieldTaskPhase,
+  filterFieldTaskRows,
+  formatFieldDay,
+  isoDatePlusDays,
   ScheduleTaskRecord,
   PhotoRecord,
   PunchlistItemRecord,
 } from "../fieldTodayControlCenter.derive";
 
-// Build an ISO date string offset from today (YYYY-MM-DD).
-function isoOffset(days: number): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-const TODAY = isoOffset(0);
+const TODAY = "2026-09-08";
+const isoOffset = (days: number): string => isoDatePlusDays(TODAY, days);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -46,30 +43,51 @@ describe("buildFieldTodaySummary", () => {
   const s = buildFieldTodaySummary(tasks, photos, punches, TODAY, 0);
 
   describe("kpis", () => {
-    it("todaysTasks excludes deleted + far-future (> 7d) + done tasks", () => {
-      // t1 (overdue), t2 (due-today), t3 (active) are relevant.
-      // t4 (complete = 100%) is INCLUDED in todaysWork but is 'done' bucket → stays in tasksForToday list
-      // Actually tasksForToday keeps all except done (taskUrgency==='done' filters are inside the fn).
-      // Let's verify the exact count from the helper.
-      expect(s.kpis.todaysTasks).toBeGreaterThanOrEqual(3); // at minimum t1/t2/t3
+    it("counts only due-today and active-window work as today's tasks", () => {
+      expect(s.kpis.todaysTasks).toBe(2);
+      expect(s.planQueue.map((t) => t.id)).toEqual(["t2", "t3"]);
+      expect(s.tableRows.map((r) => r.id)).toEqual(["t2", "t3"]);
     });
 
-    it("overdueTasks counts tasks whose end_date is in the past and not complete", () => {
-      // t1: end_date = -2 days, 0% → overdue. t2 ends TODAY → not overdue.
-      expect(s.kpis.overdueTasks).toBe(1);
+    it("exposes overdue work through a separate recovery queue", () => {
+      expect(s.kpis.recoveryTasks).toBe(1);
+      expect(s.recoveryQueue.map((t) => t.id)).toEqual(["t1"]);
     });
 
-    it("completedToday counts tasks with percent_complete = 100 in todaysWork", () => {
-      // t4 has percent_complete=100 but tasksForToday skips done tasks (taskUrgency='done' → filtered)
-      // Actually: tasksForToday filters out done via taskUrgency===done. So completedToday = 0.
-      // But wait — the derive re-filters from todaysWork (which already excludes done).
-      // So completedToday should be 0 here.
-      expect(s.kpis.completedToday).toBe(0);
+    it("keeps every recovery row visible when the backlog exceeds six", () => {
+      const recovery = Array.from({ length: 7 }, (_, index) => ({
+        id: `recovery-${index}`,
+        task_name: `Recovery ${index}`,
+        start_date: isoOffset(-10),
+        end_date: isoOffset(-1),
+        percent_complete: 0,
+      }));
+      const backlog = buildFieldTodaySummary(recovery, [], [], TODAY, 0);
+      expect(backlog.kpis.recoveryTasks).toBe(7);
+      expect(backlog.recoveryQueue).toHaveLength(7);
+    });
+
+    it("does not fabricate completed-today evidence", () => {
+      expect(s.kpis.completedToday).toBeNull();
     });
 
     it("openPunchItems excludes Closed/Resolved punches", () => {
       // pu1 (Open) + pu2 (In Progress) = 2 open; pu3 (Closed) + pu4 (Resolved) excluded
       expect(s.kpis.openPunchItems).toBe(2);
+    });
+
+    it("openPunchItems uses the canonical punchlist closed set (Done/Completed/Complete are closed too)", () => {
+      const terminal = ["Closed", "Complete", "Completed", "Done", "Resolved"].map((status, i) => ({
+        id: `term-${i}`, status, priority: "Low", title: `Punch ${i}`,
+      }));
+      const live = [
+        { id: "open", status: "Open", priority: "Low", title: "Open punch" },
+        { id: "held", status: "On Hold", priority: "Low", title: "Held punch" },
+        { id: "deferred", status: "Deferred", priority: "Low", title: "Deferred punch" },
+      ];
+      const r = buildFieldTodaySummary([], [], [...terminal, ...live], TODAY, 0);
+      expect(r.kpis.openPunchItems).toBe(3);
+      expect(r.openPunchRows.map((row) => row.status)).toEqual(["Open", "On Hold", "Deferred"]);
     });
 
     it("photosToday counts only photos taken on todayIso", () => {
@@ -78,14 +96,23 @@ describe("buildFieldTodaySummary", () => {
     });
   });
 
-  describe("taskCompletionPct", () => {
+  describe("todayProgressPct", () => {
     it("is between 0 and 100", () => {
-      expect(s.taskCompletionPct).toBeGreaterThanOrEqual(0);
-      expect(s.taskCompletionPct).toBeLessThanOrEqual(100);
+      expect(s.todayProgressPct).toBeGreaterThanOrEqual(0);
+      expect(s.todayProgressPct).toBeLessThanOrEqual(100);
     });
-    it("is 0 when no tasks are complete in todaysWork", () => {
-      // Per above, completedToday=0 among todaysWork items
-      expect(s.taskCompletionPct).toBe(0);
+    it("reports average progress for today's plan", () => {
+      expect(s.todayProgressPct).toBe(38);
+    });
+    it("counts near upcoming work without including the far future", () => {
+      const withLookahead = buildFieldTodaySummary(
+        [...tasks, { id: "t7", task_name: "Near future", start_date: isoOffset(5), end_date: isoOffset(7) }],
+        photos,
+        punches,
+        TODAY,
+        0,
+      );
+      expect(withLookahead.upcomingCount).toBe(1);
     });
   });
 
@@ -118,14 +145,11 @@ describe("buildFieldTodaySummary", () => {
   describe("planQueue", () => {
     it("contains at most 6 items and is a subset of todaysWork", () => {
       expect(s.planQueue.length).toBeLessThanOrEqual(6);
+      expect(s.planRows.map((row) => row.id)).toEqual(s.planQueue.map((task) => task.id));
     });
-    it("puts overdue tasks ahead of active tasks", () => {
-      // t1 is overdue (end_date past), t3 is active — t1 must precede t3 in planQueue.
-      const t1idx = s.planQueue.findIndex((t) => t.id === "t1");
-      const t3idx = s.planQueue.findIndex((t) => t.id === "t3");
-      if (t1idx >= 0 && t3idx >= 0) {
-        expect(t1idx).toBeLessThan(t3idx);
-      }
+    it("keeps recovery work out of the plan queue", () => {
+      expect(s.planQueue.some((task) => task.id === "t1")).toBe(false);
+      expect(s.recoveryRows.map((row) => row.id)).toEqual(["t1"]);
     });
   });
 
@@ -134,14 +158,11 @@ describe("buildFieldTodaySummary", () => {
       expect(s.tableRows.length).toBe(s.kpis.todaysTasks);
     });
     it("row.status maps percent correctly", () => {
-      const t1row = s.tableRows.find((r) => r.id === "t1");
-      expect(t1row?.status).toBe("Not Started"); // 0%
       const t2row = s.tableRows.find((r) => r.id === "t2");
       expect(t2row?.status).toBe("In Progress"); // 50%
     });
-    it("row.urgencyBucket is overdue for t1", () => {
-      const t1row = s.tableRows.find((r) => r.id === "t1");
-      expect(t1row?.urgencyBucket).toBe("overdue");
+    it("keeps recovery rows out of today's table", () => {
+      expect(s.tableRows.some((r) => r.id === "t1")).toBe(false);
     });
   });
 
@@ -159,13 +180,72 @@ describe("buildFieldTodaySummary", () => {
     it("handles all-empty gracefully", () => {
       const empty = buildFieldTodaySummary([], [], [], TODAY, 0);
       expect(empty.kpis.todaysTasks).toBe(0);
-      expect(empty.kpis.overdueTasks).toBe(0);
+      expect(empty.kpis.recoveryTasks).toBe(0);
       expect(empty.kpis.openPunchItems).toBe(0);
       expect(empty.kpis.photosToday).toBe(0);
-      expect(empty.taskCompletionPct).toBe(0);
+      expect(empty.todayProgressPct).toBe(0);
       expect(empty.tableRows).toHaveLength(0);
       expect(empty.openPunchRows).toHaveLength(0);
       expect(empty.photoThumbnails).toHaveLength(0);
     });
+  });
+
+  describe("typed view models", () => {
+    it("preserves stored phases and marks inferred phases honestly", () => {
+      expect(deriveFieldTaskPhase({ task_name: "Set columns", phase: "Installation" }))
+        .toEqual({ phase: "Erection", phaseSource: "stored" });
+      expect(deriveFieldTaskPhase({ task_name: "Detail connection plates" }))
+        .toEqual({ phase: "Detailing", phaseSource: "derived" });
+    });
+
+    it("filters rows across status and searchable field text", () => {
+      expect(filterFieldTaskRows(s.tableRows, "crew", "all")).toEqual([]);
+      expect(filterFieldTaskRows(s.tableRows, "column", "due-today").map((row) => row.id))
+        .toEqual(["t2"]);
+      expect(filterFieldTaskRows(s.tableRows, "", "active").map((row) => row.id))
+        .toEqual(["t3"]);
+    });
+
+    it("uses deterministic fallback ids for records without database ids", () => {
+      const first = buildFieldTodaySummary(
+        [{ task_name: "Unnamed id task", start_date: TODAY, end_date: TODAY }],
+        [{ taken_date: TODAY }],
+        [{ status: "Open" }],
+        TODAY,
+        0,
+      );
+      const second = buildFieldTodaySummary(
+        [{ task_name: "Unnamed id task", start_date: TODAY, end_date: TODAY }],
+        [{ taken_date: TODAY }],
+        [{ status: "Open" }],
+        TODAY,
+        0,
+      );
+      expect(first.tableRows[0].id).toBe("task-0");
+      expect(first.photoThumbnails[0].id).toBe("photo-0");
+      expect(first.openPunchRows[0].id).toBe("punch-0");
+      expect(second).toEqual(first);
+    });
+  });
+});
+
+describe("Field Today local-day semantics", () => {
+  const TOKYO_OFFSET_MINUTES = -540;
+
+  function oldLocalRoundTrip(iso: string, days: number, offsetMinutes: number): string {
+    const [year, month, date] = iso.split("-").map(Number);
+    return new Date(
+      Date.UTC(year, month - 1, date + days) + offsetMinutes * 60_000,
+    ).toISOString().slice(0, 10);
+  }
+
+  it("keeps a local day token stable where local-midnight UTC serialization shifted it", () => {
+    expect(oldLocalRoundTrip("2026-09-08", 7, TOKYO_OFFSET_MINUTES)).toBe("2026-09-14");
+    expect(isoDatePlusDays("2026-09-08", 7)).toBe("2026-09-15");
+  });
+
+  it("formats the entered calendar day independently of the runner timezone", () => {
+    expect(formatFieldDay("2026-09-08T00:00:00Z")).toBe("Sep 8");
+    expect(formatFieldDay("2026-02-31")).toBe("TBD");
   });
 });

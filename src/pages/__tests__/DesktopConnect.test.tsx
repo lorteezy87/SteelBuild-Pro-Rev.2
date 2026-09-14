@@ -1,0 +1,290 @@
+// @vitest-environment jsdom
+import { render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import { DesktopConnect, resolveDesktopConnectSearch, type DesktopConnectDependencies } from "../DesktopConnect";
+import {
+  DesktopConnectQueryError,
+  DesktopSessionCryptoError,
+  DesktopSessionValidationError,
+} from "@/lib/desktopSessionHandoff";
+
+// desktopBrowserSessionSchema validates user.id with uuidSchema, so a
+// placeholder like "user-1" fails at the SESSION stage and the test never
+// reaches the crypto or handoff stage it was written to exercise. Every
+// fixture that is meant to get past the session gate needs a real UUID.
+const TEST_USER_ID = "11111111-1111-4111-8111-111111111111";
+
+describe("DesktopConnect", () => {
+  it("identifies invalid desktop request parameters before reading the browser session", async () => {
+    const dependencies: DesktopConnectDependencies = {
+      getSession: vi.fn(),
+      encryptSession: vi.fn(),
+      createHandoff: vi.fn(),
+      redirect: vi.fn(),
+    };
+
+    render(
+      <DesktopConnect
+        dependencies={dependencies}
+        search="?invalid=true"
+        parseQuery={() => { throw new DesktopConnectQueryError("invalid", "bad"); }}
+      />,
+    );
+
+    expect(await screen.findByText(/DC-QUERY\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/bad/i)).not.toBeInTheDocument();
+    expect(dependencies.getSession).not.toHaveBeenCalled();
+  });
+
+  it("shows a dedicated message when the connect query string is empty", async () => {
+    const dependencies: DesktopConnectDependencies = {
+      getSession: vi.fn(),
+      encryptSession: vi.fn(),
+      createHandoff: vi.fn(),
+      redirect: vi.fn(),
+    };
+
+    render(
+      <DesktopConnect
+        dependencies={dependencies}
+        search=""
+      />,
+    );
+
+    expect(await screen.findByText(/DC-QUERY-EMPTY/)).toBeInTheDocument();
+    expect(screen.getByText(/click Connect/i)).toBeInTheDocument();
+    expect(dependencies.getSession).not.toHaveBeenCalled();
+  });
+
+  it("re-reads window.location.search on retry when search is not pinned", async () => {
+    const getSession = vi.fn().mockRejectedValue(new Error("no session"));
+    const parseQuery = vi.fn((activeSearch: string) => {
+      if (!activeSearch.trim() || activeSearch.trim() === "?") {
+        throw new DesktopConnectQueryError("empty", "missing");
+      }
+      return {
+        state: "A".repeat(43),
+        challenge: "B".repeat(43),
+        publicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+      };
+    });
+    const dependencies: DesktopConnectDependencies = {
+      getSession,
+      encryptSession: vi.fn(),
+      createHandoff: vi.fn(),
+      redirect: vi.fn(),
+    };
+
+    window.history.pushState({}, "", "/DesktopConnect");
+    render(<DesktopConnect dependencies={dependencies} parseQuery={parseQuery} />);
+    expect(await screen.findByText(/DC-QUERY-EMPTY/)).toBeInTheDocument();
+    expect(getSession).not.toHaveBeenCalled();
+
+    window.history.pushState({}, "", `/DesktopConnect?state=${"A".repeat(43)}&challenge=${"B".repeat(43)}&publicKey=x`);
+    expect(resolveDesktopConnectSearch()).toContain("state=");
+
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+
+    await waitFor(() => expect(getSession).toHaveBeenCalled());
+    expect(parseQuery).toHaveBeenLastCalledWith(expect.stringContaining("state="));
+    expect(await screen.findByText(/DC-SESSION/)).toBeInTheDocument();
+  });
+
+  it("creates an encrypted handoff, keeps the page visible, and soft-redirects without credentials", async () => {
+    const attemptSoftRedirect = vi.fn();
+    const redirect = vi.fn();
+    const createHandoff = vi.fn().mockResolvedValue({
+      code: "C".repeat(43),
+      expiresAt: "2026-07-21T20:02:00.000Z",
+    });
+    const dependencies: DesktopConnectDependencies = {
+      getSession: vi.fn().mockResolvedValue({
+        access_token: "access-secret",
+        refresh_token: "refresh-secret",
+        expires_at: 1_800_000_000,
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
+      }),
+      encryptSession: vi.fn().mockResolvedValue({
+        algorithm: "P-256+A256GCM",
+        ephemeralPublicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+        iv: "I".repeat(16),
+        ciphertext: "E".repeat(64),
+      }),
+      createHandoff,
+      attemptSoftRedirect,
+      redirect,
+    };
+
+    render(
+      <DesktopConnect
+        dependencies={dependencies}
+        search={`?state=${"A".repeat(43)}&challenge=${"B".repeat(43)}&publicKey=test-key`}
+        parseQuery={() => ({
+          state: "A".repeat(43),
+          challenge: "B".repeat(43),
+          publicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+        })}
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: /connecting securely/i })).toBeInTheDocument();
+    await waitFor(() => expect(attemptSoftRedirect).toHaveBeenCalledTimes(1));
+    expect(redirect).not.toHaveBeenCalled();
+    const callback = attemptSoftRedirect.mock.calls[0]?.[0] as string;
+    expect(callback).toContain("desktop-command-center://steelbuild/callback?");
+    expect(callback).not.toContain("access-secret");
+    expect(callback).not.toContain("refresh-secret");
+    expect(await screen.findByRole("link", { name: /open desktop command center/i })).toBeInTheDocument();
+    expect(createHandoff).toHaveBeenCalledWith(expect.objectContaining({
+      state: "A".repeat(43),
+      codeChallenge: "B".repeat(43),
+    }));
+  });
+
+  it("offers a safe retry without rendering session material", async () => {
+    const dependencies: DesktopConnectDependencies = {
+      getSession: vi.fn().mockRejectedValue(new Error("refresh-secret leaked by provider")),
+      encryptSession: vi.fn(),
+      createHandoff: vi.fn(),
+      redirect: vi.fn(),
+    };
+
+    render(
+      <DesktopConnect
+        dependencies={dependencies}
+        search="?invalid=true"
+        parseQuery={() => ({
+          state: "A".repeat(43),
+          challenge: "B".repeat(43),
+          publicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+        })}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /retry/i })).toBeInTheDocument();
+    expect(screen.getByText(/DC-SESSION/)).toBeInTheDocument();
+    expect(screen.getAllByText(/sign in to SteelBuild/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/refresh-secret/i)).not.toBeInTheDocument();
+  });
+
+  it("identifies browser encryption failures without exposing the underlying error", async () => {
+    const dependencies: DesktopConnectDependencies = {
+      getSession: vi.fn().mockResolvedValue({
+        access_token: "access-secret-value",
+        refresh_token: "refresh-secret-value",
+        expires_at: 1_800_000_000,
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
+      }),
+      encryptSession: vi.fn().mockRejectedValue(new Error("private-key-material")),
+      createHandoff: vi.fn(),
+      redirect: vi.fn(),
+    };
+
+    render(
+      <DesktopConnect
+        dependencies={dependencies}
+        search="?valid=true"
+        parseQuery={() => ({
+          state: "A".repeat(43),
+          challenge: "B".repeat(43),
+          publicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/DC-CRYPTO/)).toBeInTheDocument();
+    expect(screen.queryByText(/private-key-material/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the safe WebCrypto substage when the failure is classified", async () => {
+    const dependencies: DesktopConnectDependencies = {
+      getSession: vi.fn().mockResolvedValue({
+        access_token: "access-secret-value",
+        refresh_token: "refresh-secret-value",
+        expires_at: 1_800_000_000,
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
+      }),
+      encryptSession: vi.fn().mockRejectedValue(new DesktopSessionCryptoError("import")),
+      createHandoff: vi.fn(),
+      redirect: vi.fn(),
+    };
+
+    render(
+      <DesktopConnect
+        dependencies={dependencies}
+        search="?valid=true"
+        parseQuery={() => ({
+          state: "A".repeat(43),
+          challenge: "B".repeat(43),
+          publicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/DC-CRYPTO-IMPORT/)).toBeInTheDocument();
+  });
+
+  it("shows the safe session field when encryption input validation fails", async () => {
+    const dependencies: DesktopConnectDependencies = {
+      getSession: vi.fn().mockResolvedValue({
+        access_token: "access-secret-value",
+        refresh_token: "refresh-secret-value",
+        expires_at: 1_800_000_000,
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
+      }),
+      encryptSession: vi.fn().mockRejectedValue(new DesktopSessionValidationError("refresh-token")),
+      createHandoff: vi.fn(),
+      redirect: vi.fn(),
+    };
+
+    render(
+      <DesktopConnect
+        dependencies={dependencies}
+        search="?valid=true"
+        parseQuery={() => ({
+          state: "A".repeat(43),
+          challenge: "B".repeat(43),
+          publicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/DC-SESSION-REFRESH/)).toBeInTheDocument();
+  });
+
+  it("identifies handoff service failures without exposing the underlying error", async () => {
+    const dependencies: DesktopConnectDependencies = {
+      getSession: vi.fn().mockResolvedValue({
+        access_token: "access-secret-value",
+        refresh_token: "refresh-secret-value",
+        expires_at: 1_800_000_000,
+        user: { id: TEST_USER_ID, email: "pm@example.com" },
+      }),
+      encryptSession: vi.fn().mockResolvedValue({
+        algorithm: "P-256+A256GCM",
+        ephemeralPublicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+        iv: "I".repeat(16),
+        ciphertext: "E".repeat(64),
+      }),
+      createHandoff: vi.fn().mockRejectedValue(new Error("backend-internal-detail")),
+      redirect: vi.fn(),
+    };
+
+    render(
+      <DesktopConnect
+        dependencies={dependencies}
+        search="?valid=true"
+        parseQuery={() => ({
+          state: "A".repeat(43),
+          challenge: "B".repeat(43),
+          publicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/DC-HANDOFF/)).toBeInTheDocument();
+    expect(screen.queryByText(/backend-internal-detail/i)).not.toBeInTheDocument();
+  });
+});

@@ -28,4 +28,7 @@ export type PermissionAction =
   | "approve"
   | "void"
   | "export"
-  | "view";
+  | "view"
+  // Place/release a sheet-level hold (drawing_holds). Entity override
+  // "drawing:hold" floors this at 'field', matching the table's RLS.
+  | "hold";

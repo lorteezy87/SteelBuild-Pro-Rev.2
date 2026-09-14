@@ -22,6 +22,7 @@ export function useUploadWizardState({ onClose }) {
   const [fileResults, setFileResults]     = useState([]);
   const [createdCount, setCreatedCount]   = useState(0);
   const [processError, setProcessError]   = useState(null);
+  const [supersedeResult, setSupersedeResult] = useState(null); // cross-set supersede { superseded, failed, skipped }
   const [aiFilledFields, setAiFilledFields] = useState({}); // { setName: true, ... }
   const [uploadBatchId, setUploadBatchId] = useState(null); // set once per upload attempt
   const cancelledRef                      = useRef(false);
@@ -30,6 +31,7 @@ export function useUploadWizardState({ onClose }) {
     cancelledRef.current = true;  // abort any in-progress operation
     setStep(0); setFiles([]); setSheets([]); setFileResults([]); setCreatedCount(0);
     setProcessError(null);
+    setSupersedeResult(null);
     setAiFilledFields({});
     setUploadBatchId(null);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "" });
@@ -47,6 +49,7 @@ export function useUploadWizardState({ onClose }) {
     fileResults, setFileResults,
     createdCount, setCreatedCount,
     processError, setProcessError,
+    supersedeResult, setSupersedeResult,
     aiFilledFields, setAiFilledFields,
     uploadBatchId, setUploadBatchId,
     cancelledRef,

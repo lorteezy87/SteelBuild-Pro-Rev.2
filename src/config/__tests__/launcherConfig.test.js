@@ -3,6 +3,7 @@ import {
   LAUNCHER_MODULES, LAUNCHER_CATEGORIES, DOCK_DEFAULT_PAGES,
   photoFor, modulesForCategory, searchModules, dockModules,
 } from "@/config/launcherConfig";
+import { NAV_GROUPS, SIDEBAR_GROUPS } from "@/config/moduleRegistry";
 
 describe("launcherConfig", () => {
   it("derives a flat module list with page, label, category", () => {
@@ -47,5 +48,29 @@ describe("launcherConfig", () => {
     const d = dockModules();
     expect(d.length).toBe(DOCK_DEFAULT_PAGES.length);
     expect(d.every((m) => typeof m.page === "string")).toBe(true);
+  });
+
+  it("lists Email Inbox in both Project Management navigation registries", () => {
+    const expected = { label: "Email Inbox", icon: "✉", page: "EmailInbox" };
+
+    for (const groups of [NAV_GROUPS, SIDEBAR_GROUPS]) {
+      const projectManagement = groups.find((group) => group.label === "PROJECT MANAGEMENT");
+      expect(projectManagement?.items).toContainEqual(expected);
+    }
+  });
+
+  it("lists Production Notes in both Project Management navigation registries", () => {
+    const expected = { label: "Production Notes", icon: "📝", page: "ProductionNotes" };
+
+    for (const groups of [NAV_GROUPS, SIDEBAR_GROUPS]) {
+      const projectManagement = groups.find((group) => group.label === "PROJECT MANAGEMENT");
+      expect(projectManagement?.items).toContainEqual(expected);
+    }
+  });
+
+  it("does not duplicate Integrations in either navigation registry", () => {
+    for (const groups of [NAV_GROUPS, SIDEBAR_GROUPS]) {
+      expect(groups.flatMap((group) => group.items).some((item) => item.page === "Integrations")).toBe(false);
+    }
   });
 });

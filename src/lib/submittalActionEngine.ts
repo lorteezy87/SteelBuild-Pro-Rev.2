@@ -7,7 +7,8 @@
  * to submittalStageMapping.js (no duplication — CLAUDE.md §29 / §20).
  *
  * Canonical flow:  Not Started → IFA → OFA → BFA → OFS → IFC → Released
- * (R&R / Rejected loop back to IFA.)
+ * (R&R is a first-class stage that resubmits to OFA; Approved and AAN both
+ * route through OFS by default — Slice 4.)
  *
  * Pure: no React, no network, no clock.
  */
@@ -62,12 +63,13 @@ const DONE_TERMINALS = new Set<string>(["Released for Fabrication", "Void"]);
  */
 export interface NextSubmittalActionOptions {
   /**
-   * When true, a BFA `Approved` disposition routes to the detailer scrub
-   * (OFS) instead of skipping straight to IFC — i.e. `Approved` follows the
-   * exact same OFS → IFC → Released path as `Approved as Noted`. Gated by the
-   * `submittal_approved_to_scrub` feature flag at the call sites.
+   * When true (default), a BFA `Approved` disposition routes to the detailer
+   * scrub (OFS) instead of skipping straight to IFC — i.e. `Approved` follows
+   * the same OFS → IFC → Released path as `Approved as Noted`. Call sites
+   * pass the `submittal_approved_to_scrub` feature flag; pass `false` only
+   * for the legacy skip-OFS path.
    *
-   * Default: false (unchanged legacy behavior — `Approved` → IFC).
+   * Default: true (Slice 4 — mandatory scrub).
    */
   approvedRoutesToScrub?: boolean;
 }
@@ -85,7 +87,7 @@ export function nextSubmittalAction(
   submittal: SubmittalLike | null | undefined,
   opts?: NextSubmittalActionOptions,
 ): SubmittalAction {
-  const approvedRoutesToScrub = opts?.approvedRoutesToScrub === true;
+  const approvedRoutesToScrub = opts?.approvedRoutesToScrub !== false;
   const status = submittal?.status || "Draft";
   const bic = submittal?.ball_in_court ?? null;
   const currentStage = submittalStatusToStage(status, bic, submittal?.approved_date) || "Not Started";
@@ -151,9 +153,14 @@ export function nextSubmittalAction(
   switch (currentStage) {
     case "Not Started":
     case "IFA":
-      // R&R/Rejected derive to IFA too — frame the move as a resubmit.
       nextStage = "OFA";
-      label = isRRStatus(status) ? "Resubmit for Approval (OFA)" : "Send for Approval (OFA)";
+      label = "Send for Approval (OFA)";
+      break;
+    case "R&R":
+      // First-class R&R stage (2026-07-25): the forward move is the
+      // resubmittal — identical outcome to the pre-promotion IFA branch.
+      nextStage = "OFA";
+      label = "Resubmit for Approval (OFA)";
       break;
     case "OFA":
       nextStage = "BFA";
@@ -187,10 +194,23 @@ export function nextSubmittalAction(
   }
 
   const next = stageToSubmittalStatus(nextStage) || { status: null, ball_in_court: null };
+  let nextStatus = next.status;
+  let nextBallInCourt = next.ball_in_court;
+  // OFS / IFC are derived from Approved/AAN + BIC. Preserve the disposition
+  // string when choreographing BFA→OFS→IFC so we never ask the status graph
+  // for Approved↔AAN (illegal) and never erase "Approved as Noted".
+  if (
+    (status === "Approved" || status === "Approved as Noted") &&
+    ((currentStage === "BFA" && nextStage === "OFS") ||
+      (currentStage === "OFS" && nextStage === "IFC"))
+  ) {
+    nextStatus = status;
+    nextBallInCourt = nextStage === "OFS" ? "Detailer" : "GC";
+  }
   return {
     label,
-    nextStatus: next.status,
-    nextBallInCourt: next.ball_in_court,
+    nextStatus,
+    nextBallInCourt,
     nextStage,
     currentStage,
     disabled: false,

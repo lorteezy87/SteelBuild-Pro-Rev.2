@@ -1,9 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
+import { useProjectId } from "@/hooks/useProjectId";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import ItemDetailDrawer from "@/components/commandcenter/ItemDetailDrawer";
 import ForwardLookDrawer from "@/components/commandcenter/ForwardLookDrawer";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import EmptyState from "@/components/design-system/EmptyState";
+import CommandBar from "@/components/design-system/CommandBar";
 import CommandCenterControlCenter from "./commandCenter/CommandCenterControlCenter";
 
 /**
@@ -15,6 +19,8 @@ const STALE_TIME = 60_000;
 const EMPTY_LIST = Object.freeze([]);
 
 export default function CommandCenter() {
+  const projectId = useProjectId();
+  const { activeProject } = useProjectContext();
   // Canonical control-center state.
   const [ccSearch, setCcSearch] = useState("");
   const [ccTypeFilter, setCcTypeFilter] = useState("All");
@@ -24,7 +30,7 @@ export default function CommandCenter() {
 
   // ── Data queries ────────────────────────────────────────────────────
   //
-  // Query keys deliberately mirror the registry's bare list-all family
+  // Query keys deliberately mirror the registry's project-scoped family
   // keys (see `src/services/cacheRegistry.js`). Earlier these were
   // `cc-rfis` / `cc-schedule-tasks` / etc. — disjoint from the keys
   // mutations invalidate (`["schedule-tasks", projectId]`,
@@ -36,44 +42,44 @@ export default function CommandCenter() {
   // call to `invalidateEntity(qc, "schedule_task", projectId)` (or any
   // matching prefix invalidation) wakes Command Center up immediately —
   // no special wiring needed per-mutation site, no cache-key drift.
-  const { data: projects = EMPTY_LIST, isLoading: projLoading } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => entities.Project.listAll(),
-    staleTime: STALE_TIME,
-    refetchOnWindowFocus: true,
-  });
+  const projects = activeProject?.id === projectId ? [activeProject] : EMPTY_LIST;
 
   const { data: rfis = EMPTY_LIST, isLoading: rfiLoading } = useQuery({
-    queryKey: ["rfis"],
-    queryFn: () => entities.RFI.listAll("-submitted_date"),
+    queryKey: ["rfis", projectId],
+    queryFn: () => entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
+    enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: submittals = EMPTY_LIST, isLoading: submittalsLoading } = useQuery({
-    queryKey: ["submittals"],
-    queryFn: () => entities.Submittal.listAll(),
+    queryKey: ["submittals", projectId],
+    queryFn: () => entities.Submittal.filter({ project_id: projectId }, "-created_at"),
+    enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: changeOrders = EMPTY_LIST } = useQuery({
-    queryKey: ["change-orders"],
-    queryFn: () => entities.ChangeOrder.listAll(),
+    queryKey: ["change-orders", projectId],
+    queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }, "-created_at"),
+    enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: deliveries = EMPTY_LIST } = useQuery({
-    queryKey: ["deliveries"],
-    queryFn: () => entities.Delivery.listAll(),
+    queryKey: ["deliveries", projectId],
+    queryFn: () => entities.Delivery.filter({ project_id: projectId }, "-created_at"),
+    enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: workPackages = EMPTY_LIST } = useQuery({
-    queryKey: ["work-packages"],
-    queryFn: () => entities.WorkPackage.listAll(),
+    queryKey: ["work-packages", projectId],
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }, "-created_at"),
+    enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
@@ -82,24 +88,42 @@ export default function CommandCenter() {
   // Detailing rows into the 48h + 10d windows so everything the user
   // sees on the Gantt also shows up here.
   const { data: scheduleTasks = EMPTY_LIST } = useQuery({
-    queryKey: ["schedule-tasks"],
-    queryFn: () => entities.ScheduleTask.listAll("-start_date"),
+    queryKey: ["schedule-tasks", projectId],
+    queryFn: () => entities.ScheduleTask.filter({ project_id: projectId }, "-start_date"),
+    enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const isLoading = projLoading || rfiLoading || submittalsLoading;
+  const isLoading = rfiLoading || submittalsLoading;
 
   // ── Project map ─────────────────────────────────────────────────────
   const projectMap = useMemo(() => {
     const m = {};
     for (const p of projects) {
-      m[p.id] = { project_number: p.project_number, name: p.name, gc_name: p.gc_name };
+      m[p.id] = { project_number: p.project_number, name: p.name, general_contractor: p.general_contractor };
     }
     return m;
   }, [projects]);
 
   // ── Render ──────────────────────────────────────────────────────────
+  if (!projectId) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
+        <CommandBar
+          eyebrow="SteelBuild Pro · Command"
+          title="Command Center"
+          subtitle="Pick a project from the switcher to see its live priorities and risks."
+        />
+        <EmptyState
+          icon="dashboard"
+          title="Select a project"
+          body="Command Center is scoped to one project so RFIs, submittals, deliveries, work packages, and schedule risks never mix across jobs."
+        />
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="sb-dashboard-reference-page">

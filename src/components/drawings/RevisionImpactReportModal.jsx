@@ -211,11 +211,22 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      {/* Radix centres this with translateY(-50%), so a box taller than the
+          viewport loses half its overflow ABOVE the top edge where it can't be
+          scrolled to. max-height + overflow:hidden keeps it bounded; dvh is
+          @supports-gated with a vh fallback. */}
+      <style>{`
+        .rev-impact-dialog { height: 92vh; max-height: 92vh; }
+        @supports (height: 92dvh) {
+          .rev-impact-dialog { height: 92dvh; max-height: 92dvh; }
+        }
+      `}</style>
       <DialogContent
-        className="detailing-cc"
+        className="detailing-cc rev-impact-dialog"
         style={{
-          maxWidth: "min(96vw, 1100px)", width: "96vw", height: "92vh",
+          maxWidth: "min(96vw, 1100px)", width: "96vw",
           display: "flex", flexDirection: "column", gap: 12, padding: 16,
+          overflow: "hidden", minHeight: 0,
           background: "var(--bg-surface)", border: "1px solid var(--border-default)",
         }}
       >
@@ -344,6 +355,10 @@ function SummaryStrip({ summary, onExport }) {
         <Kpi label="Rework risk" value={summary.downstreamExposure} color="#F85149" />
       )}
       {summary.sheetsBlocked > 0 && <Kpi label="No prior file" value={summary.sheetsBlocked} color="var(--text-muted)" />}
+      {/* Without this, a run where every sheet failed is indistinguishable from
+          a clean review that found nothing — the failure mode that hid a 403
+          on every comparison for two days. */}
+      {summary.errorCount > 0 && <Kpi label="Failed" value={summary.errorCount} color="#F85149" />}
       <div style={{ flex: 1 }} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {SEV_ORDER.filter((s) => summary.bySeverity[s] > 0).map((s) => (
@@ -373,17 +388,17 @@ function SheetSection({ result: r, onToggleDismiss, onCreateRfi, onLogBackcharge
         <Layers size={13} style={{ color: "var(--text-muted)" }} />
         <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{r.sheetNumber || "Sheet"}</span>
         {r.downstream && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: "#F85149", textTransform: "uppercase" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: "var(--status-error)", textTransform: "uppercase" }}>
             <AlertTriangle size={11} /> {r.downstream}
           </span>
         )}
         {reworkExposed && (backcharged ? (
-          <span title="A backcharge has been logged for this rework exposure" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: "#3FB950", textTransform: "uppercase" }}>
+          <span title="A backcharge has been logged for this rework exposure" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: "var(--status-success)", textTransform: "uppercase" }}>
             <Check size={11} /> BC logged
           </span>
         ) : (
           <button type="button" onClick={() => onLogBackcharge?.(r)} title="Log a rework backcharge for this already-fabricated/delivered sheet"
-            style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid rgba(248,81,73,0.4)", borderRadius: 4, padding: "1px 6px", cursor: "pointer", color: "#F85149", fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em" }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "1px 6px", cursor: "pointer", color: "var(--status-error)", fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em" }}>
             <DollarSign size={11} /> Log backcharge
           </button>
         ))}

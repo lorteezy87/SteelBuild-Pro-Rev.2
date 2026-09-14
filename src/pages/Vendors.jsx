@@ -5,10 +5,12 @@ import { useProjectContext } from "../components/shared/ProjectContext";
 import { toast } from "sonner";
 import VendorFormModal from "@/components/vendors/VendorFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { BulkActionBar } from "@/components/design-system";
 import { exportToCSV } from "@/lib/csv";
 import { batchProcess } from "@/utils/batchProcess";
 import VendorControlCenter from "./vendors/VendorControlCenter";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 export default function Vendors() {
   const qc = useQueryClient();
@@ -26,7 +28,13 @@ export default function Vendors() {
   const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   // ── Queries ──
-  const { data: vendors = [] } = useQuery({
+  const {
+    data: vendors = [],
+    isLoading: vendorsLoading,
+    isError: vendorsError,
+    error: vendorsErrorDetail,
+    refetch: refetchVendors,
+  } = useQuery({
     queryKey: ["vendors"],
     queryFn: () => entities.Vendor.list("-is_preferred"),
     staleTime: 5 * 60 * 1000,
@@ -127,7 +135,7 @@ export default function Vendors() {
       setEditing(null);
       toast.success("Vendor created");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to create vendor")),
   });
 
   const updateMut = useMutation({
@@ -138,7 +146,7 @@ export default function Vendors() {
       setEditing(null);
       toast.success("Vendor updated");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to update vendor")),
   });
 
   const deleteMut = useMutation({
@@ -148,7 +156,7 @@ export default function Vendors() {
       setDeleteTarget(null);
       toast.success("Vendor deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to delete vendor")),
   });
 
   // Bulk mutations (new — mirrors RFIs.jsx pattern)
@@ -169,7 +177,7 @@ export default function Vendors() {
         toast.success("Vendors updated");
       }
     },
-    onError: (err) => toast.error(`Bulk update failed: ${err?.message || "unknown error"}`),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk update failed")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -191,7 +199,7 @@ export default function Vendors() {
         toast.success(`${count} vendor${count === 1 ? "" : "s"} deleted`);
       }
     },
-    onError: (err) => toast.error(`Bulk delete failed: ${err?.message || "unknown error"}`),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   const handleSave = (data) => {
@@ -260,6 +268,31 @@ export default function Vendors() {
       />
     </>
   );
+
+  // Never render the "no vendors" empty state while loading or after a
+  // failed fetch — the register would assert an empty vendor book.
+  if (vendorsLoading) {
+    return (
+      <div className="vendor-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+  if (vendorsError) {
+    return (
+      <div className="vendor-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 16 }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load vendors
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(vendorsErrorDetail, "Something went wrong. Try again.")}
+        </p>
+        <button type="button" onClick={() => refetchVendors()} style={{ border: "1px solid var(--border-default)", background: "var(--bg-surface)", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="vendor-page">

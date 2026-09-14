@@ -15,8 +15,11 @@ import {
   isUnassignedTask,
   isOpenScheduleTask,
 } from "@/components/schedule/scheduleGanttHelpers";
-import { isMilestoneTask, displayPct } from "@/components/schedule/scheduleTaskUtils";
+import { isMilestoneTask, percentCompleteOrNull } from "@/components/schedule/scheduleTaskUtils";
 import { parseDateUTC } from "@/components/schedule/scheduleDateUtils";
+import { excludeSummaryTasks } from "@/lib/schedule/summaryTasks";
+import { taskDurationDays } from "@/lib/schedule/duration";
+import { weightedPercentComplete, weightedCoverage } from "@/lib/schedule/rollup";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +39,7 @@ export interface TaskRecord {
   blockers?: string | null;
   resource_names?: string | null;
   assigned_to?: string | null;
+  parent_task_id?: string | null;
   wbs_code?: string | null;
   metadata?: unknown;
   is_critical?: boolean | null;
@@ -66,8 +70,18 @@ export interface ScheduleSummary {
   overdue: number;
   /** Count of tasks starting/ending within the 14-day lookahead window. */
   inLookahead: number;
-  /** Mean displayPct across all actionable tasks, 0-100 rounded. */
+  /**
+   * Duration-weighted mean percent-complete across all actionable tasks, 0-100
+   * rounded. Weighted, not a plain mean — see lib/schedule/rollup.ts (§2.3).
+   */
   pctComplete: number;
+  /**
+   * How many actionable tasks actually carry a duration to weight by.
+   * A weighted percentage over 2 of 400 tasks is technically correct and
+   * practically meaningless; this lets the UI qualify it instead of presenting
+   * it as firm.
+   */
+  pctCompleteCoverage: { weighted: number; total: number };
   /** Count of tasks with no start_date AND no end_date (truly TBD). */
   tbd: number;
   /** Count of milestone tasks. */
@@ -97,7 +111,7 @@ function todayUTC(): Date {
  * parseDateUTC — same logic the Gantt uses.
  */
 function adaptedIsStalledTask(task: TaskRecord, today: Date): boolean {
-  return isStalledTask(task, today, (t: TaskRecord) => parseDateUTC(t.start_date));
+  return isStalledTask(task as any, today, (t: any) => parseDateUTC(t.start_date));
 }
 
 /**
@@ -106,10 +120,10 @@ function adaptedIsStalledTask(task: TaskRecord, today: Date): boolean {
  */
 function adaptedIsLookaheadTask(task: TaskRecord, today: Date, days = 14): boolean {
   return isLookaheadTask(
-    task,
+    task as any,
     today,
-    (t: TaskRecord) => t.start_date ?? null,
-    (t: TaskRecord) => t.end_date ?? null,
+    (t: any) => t.start_date ?? null,
+    (t: any) => t.end_date ?? null,
     days,
   );
 }
@@ -123,8 +137,8 @@ function riskScore(task: TaskRecord, today: Date, isOverdue: boolean): number {
   let score = 0;
   if (isOverdue) score += 900;
   if (adaptedIsStalledTask(task, today)) score += 400;
-  if (isCriticalTask(task)) score += 300;
-  if (isUnassignedTask(task)) score += 200;
+  if (isCriticalTask(task as any)) score += 300;
+  if (isUnassignedTask(task as any)) score += 200;
   if (task.blockers && String(task.blockers).trim()) score += 150;
   return score;
 }
@@ -151,8 +165,12 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
   const today = todayUTC();
 
   // --- base populations ---
-  const actionable = tasks.filter((t) => isActionableScheduleTask(t));
-  const open = actionable.filter((t) => isOpenScheduleTask(t));
+  // Raw entity rows are not always enriched with _hasChildren. The canonical
+  // list-aware predicate also identifies parents through child parent_task_id
+  // links, preventing parent rollups from being counted as leaf progress.
+  const actionable = (excludeSummaryTasks(tasks) as TaskRecord[])
+    .filter((t) => isActionableScheduleTask(t as any));
+  const open = actionable.filter((t) => isOpenScheduleTask(t as any));
 
   // --- overdue: open actionable with a real end_date before today ---
   const overdueList = open.filter((t) => {
@@ -161,12 +179,13 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
     return end !== null && end < today;
   });
 
-  // --- pctComplete: mean displayPct over all actionable tasks ---
-  const pctComplete = actionable.length === 0
-    ? 0
-    : Math.round(
-        actionable.reduce((sum, t) => sum + displayPct(t), 0) / actionable.length
-      );
+  // --- pctComplete: DURATION-WEIGHTED over all actionable tasks (§2.3) ---
+  // This is the headline number in the hero and the KPI strip — the one a PM
+  // reads off the screen and repeats to an owner. As a plain mean, a one-day
+  // punch item counted the same as a sixty-day erection sequence, so a job with
+  // one small task closed out and everything else untouched showed 50%.
+  const pctComplete = weightedPercentComplete(actionable, percentCompleteOrNull, taskDurationDays) ?? 0;
+  const pctCompleteCoverage = weightedCoverage(actionable, taskDurationDays);
 
   // --- atRisk: open actionable with Critical priority OR non-empty blockers ---
   const atRisk = open.filter((t) =>
@@ -174,7 +193,7 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
   ).length;
 
   // --- lookahead (14-day window) ---
-  const lookaheadAll = tasks.filter((t) => adaptedIsLookaheadTask(t, today, 14));
+  const lookaheadAll = actionable.filter((t) => adaptedIsLookaheadTask(t, today, 14));
 
   // --- milestones ---
   const milestoneAll = tasks.filter((t) => isMilestoneTask(t));
@@ -199,12 +218,13 @@ export function buildScheduleSummary(tasks: TaskRecord[]): ScheduleSummary {
 
   return {
     total: tasks.length,
-    critical: tasks.filter((t) => isCriticalTask(t)).length,
+    critical: tasks.filter((t) => isCriticalTask(t as any)).length,
     activities: actionable.length,
     atRisk,
     overdue: overdueList.length,
     inLookahead: lookaheadAll.length,
     pctComplete,
+    pctCompleteCoverage,
     tbd: tasks.filter((t) => !t.start_date && !t.end_date).length,
     milestones: milestoneAll.length,
     lookaheadQueue,

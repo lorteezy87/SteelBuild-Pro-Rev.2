@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { stripPrivilegeMeta } from '@/lib/authMeta';
 import { queryClientInstance } from '@/lib/query-client';
 import { clearPendingPhotos } from '@/lib/field/blobStore';
+import { assertTermsAccepted, TERMS_VERSION } from '@/lib/signupClickwrap';
 
 // Clear every trace of the previous user's tenant data from the browser so it
 // can never render for the next user on a shared device (M38): the React Query
@@ -53,12 +54,19 @@ export type AuthContextValue = {
   user: AppUser | null;
   isAuthenticated: boolean;
   isLoadingAuth: boolean;
+  /** True while a credential sign-in is in flight (distinct from bootstrap). */
+  isLoggingIn: boolean;
   isLoadingPublicSettings: boolean;
   authError: AuthError | null;
   appPublicSettings: unknown;
   logout: () => Promise<void>;
   loginWithPassword: (creds: { email: string; password: string }) => Promise<LoginResult>;
-  signUpWithPassword: (creds: { email: string; password: string; fullName?: string }) => Promise<SignUpResult>;
+  signUpWithPassword: (creds: {
+    email: string;
+    password: string;
+    fullName?: string;
+    termsAccepted?: boolean;
+  }) => Promise<SignUpResult>;
   // H22 — self-serve credential recovery/rotation.
   isPasswordRecovery: boolean;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -66,6 +74,9 @@ export type AuthContextValue = {
   // H23 — TOTP multi-factor auth. `mfaRequired` gates the app when the session
   // is aal1 but the user has a verified factor (must step up before entering).
   mfaRequired: boolean;
+  mfaStatusDegraded: boolean;
+  mfaStatusMessage: string | null;
+  retryMfaStatus: () => Promise<void>;
   listMfaFactors: () => Promise<Array<{ id: string; friendlyName: string; status: string }>>;
   enrollMfa: () => Promise<{ success: boolean; factorId?: string; qrCode?: string; secret?: string; uri?: string; error?: string }>;
   verifyMfaFactor: (factorId: string, code: string) => Promise<{ success: boolean; error?: string }>;
@@ -83,6 +94,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   // Kept for API compatibility with components that read this flag
   const [isLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
@@ -96,15 +108,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // True when the current session is aal1 but the user has a verified TOTP
   // factor (i.e. must complete an MFA challenge before entering the app). H23.
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaStatusDegraded, setMfaStatusDegraded] = useState(false);
+  const [mfaStatusMessage, setMfaStatusMessage] = useState<string | null>(null);
 
-  // Recompute whether the session needs an MFA step-up. Fail-open (never lock a
-  // user out on an AAL lookup error) — the DB/RLS boundary is the real gate.
+  // Recompute whether the session needs an MFA step-up. Fail closed on AAL
+  // lookup errors: block app entry until the MFA state can be confirmed.
   const refreshMfaRequired = async (): Promise<void> => {
     try {
       const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       setMfaRequired(!!data && data.currentLevel === 'aal1' && data.nextLevel === 'aal2');
+      setMfaStatusDegraded(false);
+      setMfaStatusMessage(null);
     } catch {
-      setMfaRequired(false);
+      setMfaRequired(true);
+      setMfaStatusDegraded(true);
+      setMfaStatusMessage('We could not verify your MFA status. Retry to continue or sign out.');
     }
   };
 
@@ -136,6 +154,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       id: sbUser.id,
       email: sbUser.email,
       full_name: fullName,
+      created_date: sbUser.created_at,
       role,
     };
   };
@@ -196,11 +215,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           }
           setUser(null);
           setIsAuthenticated(false);
+          setMfaRequired(false);
+          setMfaStatusDegraded(false);
+          setMfaStatusMessage(null);
           setAuthError({ type: 'auth_required', message: 'Authentication required' });
         }
       } catch {
         setUser(null);
         setIsAuthenticated(false);
+        setMfaRequired(false);
+        setMfaStatusDegraded(false);
+        setMfaStatusMessage(null);
         setAuthError({ type: 'auth_required', message: 'Authentication required' });
       } finally {
         setIsLoadingAuth(false);
@@ -228,21 +253,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const loginWithPassword = async ({ email, password }: { email: string; password: string }): Promise<LoginResult> => {
-    setAuthError(null);
-    setIsLoadingAuth(true);
+    setIsLoggingIn(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       syncIdentity(data.user?.id ?? null);
       setUser(await mapSupabaseUser(data.user));
       setIsAuthenticated(true);
-      setIsLoadingAuth(false);
+      setAuthError(null);
       // If this account has a verified TOTP factor, the session is still aal1
       // here — flag the required step-up so the app shows the MFA screen (H23).
       void refreshMfaRequired();
       return { success: true };
     } catch (error: unknown) {
-      setIsLoadingAuth(false);
       setIsAuthenticated(false);
       // Distinguish network/config errors from auth errors
       const err = error as { message?: string; status?: number } | undefined;
@@ -255,19 +278,39 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const authErr: AuthError = { type: 'auth_required', message };
       setAuthError(authErr);
       return { success: false, error: authErr };
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
   const signUpWithPassword = async (
-    { email, password, fullName }: { email: string; password: string; fullName?: string },
+    { email, password, fullName, termsAccepted }: {
+      email: string;
+      password: string;
+      fullName?: string;
+      termsAccepted?: boolean;
+    },
   ): Promise<SignUpResult> => {
     try {
+      // H12 clickwrap: Landing requires an affirmative checkbox before calling
+      // us. Refuse to mint acceptance metadata unless that flag is true so a
+      // non-UI caller cannot forge "accepted" without the UI gate.
+      try {
+        assertTermsAccepted(termsAccepted);
+      } catch (gateErr) {
+        const authErr: AuthError = {
+          type: 'auth_required',
+          message: gateErr instanceof Error ? gateErr.message : 'Terms acceptance required.',
+        };
+        return { success: false, error: authErr };
+      }
       // Record provable acceptance of the Terms of Service + Privacy Policy at
       // sign-up (H12). These land in user_metadata alongside full_name so each
       // account carries a durable, per-user acceptance timestamp + version.
       const signUpMeta: Record<string, unknown> = {
         terms_accepted_at: new Date().toISOString(),
-        terms_version: '2026-07-01',
+        terms_version: TERMS_VERSION,
+        terms_acceptance: 'clickwrap',
       };
       if (fullName) signUpMeta.full_name = fullName;
       const { data, error } = await supabase.auth.signUp({
@@ -400,10 +443,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setUser(null);
     setIsAuthenticated(false);
     setMfaRequired(false);
+    setMfaStatusDegraded(false);
+    setMfaStatusMessage(null);
+  };
+
+  const retryMfaStatus = async (): Promise<void> => {
+    await refreshMfaRequired();
   };
 
   const navigateToLogin = () => {
-    // In Supabase apps login is handled locally — AuthenticatedApp renders LocalLoginForm
+    // Auth UI is owned by AuthenticatedApp (Landing / MFA / OrgOnboarding).
     // Nothing to do here; the auth state change will trigger the UI update.
   };
 
@@ -440,6 +489,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       user,
       isAuthenticated,
       isLoadingAuth,
+      isLoggingIn,
       isLoadingPublicSettings,
       authError,
       appPublicSettings,
@@ -450,6 +500,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       sendPasswordReset,
       updatePassword,
       mfaRequired,
+      mfaStatusDegraded,
+      mfaStatusMessage,
+      retryMfaStatus,
       listMfaFactors,
       enrollMfa,
       verifyMfaFactor,

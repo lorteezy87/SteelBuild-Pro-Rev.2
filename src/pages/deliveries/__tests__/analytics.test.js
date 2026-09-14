@@ -4,7 +4,34 @@ import {
   deliveryLane,
   getDeliveryDisplayName,
   getDeliverySignals,
+  isProcurementRow,
 } from "../analytics";
+
+describe("deliveries union table handling", () => {
+  it("excludes PROCUREMENT pipeline rows from logistics KPIs", () => {
+    const metrics = buildDeliveryMetrics(
+      [
+        { id: "load", status: "Scheduled", scheduled_date: "2026-05-10", weight_tons: 5 },
+        { id: "po", status: "PO Issued", scheduled_date: "2026-05-10", weight_tons: 50, delivery_type: "PROCUREMENT" },
+        { id: "freight", status: "Delivered", actual_date: "2026-05-12", delivery_type: "Freight" },
+      ],
+      [],
+      { today: "2026-05-13" }
+    );
+    expect(metrics.totalCount).toBe(2);
+    expect(metrics.openCount).toBe(1);
+    expect(metrics.totalOpenTons).toBe(5);
+    expect(metrics.overdue.map((d) => d.id)).toEqual(["load"]);
+    expect(isProcurementRow({ delivery_type: "PROCUREMENT" })).toBe(true);
+    expect(isProcurementRow({ delivery_type: null })).toBe(false);
+  });
+
+  it("treats Received as closed (procurement-vocabulary terminal state on shared rows)", () => {
+    expect(getDeliverySignals({ status: "Received", scheduled_date: "2026-05-01" }, { today: "2026-05-13" }).open).toBe(false);
+    expect(getDeliverySignals({ status: "received", scheduled_date: "2026-05-01" }, { today: "2026-05-13" }).overdue).toBe(false);
+    expect(getDeliverySignals({ status: "In Transit", scheduled_date: "2026-05-01" }, { today: "2026-05-13" }).open).toBe(true);
+  });
+});
 
 describe("delivery analytics", () => {
   it("flags a late delivery and preserves the linked work package display fallback", () => {

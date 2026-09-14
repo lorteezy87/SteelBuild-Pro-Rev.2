@@ -1,14 +1,13 @@
 import React from "react";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
-import { auth } from "@/api/supabaseClient";
-import { toast } from "sonner";
+import { useSaveUserPrefs } from "@/hooks/useSaveUserPrefs";
 
 /**
  * DensityToggle — top-utility-bar button that switches the app between compact
  * and comfortable density. One click drives BOTH density systems:
  *
  *   1. The dashboard's `dashboard_density` USER PREFERENCE — persisted via
- *      auth.updateMe (→ Supabase user_metadata). The resulting USER_UPDATED auth
+ *      the ordered user-preference pipeline (→ Supabase user_metadata). The resulting USER_UPDATED auth
  *      event refreshes AuthContext, so the Dashboard's KPI strip + section
  *      spacing re-render live. This is the signal the dashboard actually reads
  *      (useUserPrefs → DashboardHeader), so it's what makes the toggle visibly
@@ -25,6 +24,7 @@ import { toast } from "sonner";
  */
 export default function DensityToggle() {
   const { dashboard_density } = useUserPrefs();
+  const { savePatchConfirmed } = useSaveUserPrefs();
   const isCompact = dashboard_density === "compact";
 
   const handleToggle = () => {
@@ -36,8 +36,13 @@ export default function DensityToggle() {
     } catch { /* ignore storage failures */ }
     // Persist the dashboard density pref; the USER_UPDATED auth event refreshes
     // AuthContext → the Dashboard re-renders at the new density.
-    auth.updateMe({ dashboard_density: next }).catch(() => {
-      toast.error("Couldn't save density preference");
+    void savePatchConfirmed({ dashboard_density: next }).then((result) => {
+      if (result.status !== "failed") return;
+      const restored = result.confirmed.dashboard_density ?? dashboard_density;
+      try {
+        document.documentElement.setAttribute("data-density", restored);
+        localStorage.setItem("sbp-density", restored);
+      } catch { /* ignore storage failures */ }
     });
   };
 

@@ -90,6 +90,8 @@ describe("buildBoardItems", () => {
     expect(sub!.needsAction).toBe(true);
     expect(sub!.isRR).toBe(true);
     expect(sub!.due.overdue).toBe(true); // required_date (Jul 3) is before pinned today (Jul 6)
+    expect(sub!.stage).toBe("R&R");
+    expect(sub!.risk?.tier).toBe("critical");
   });
 
   it("does not double-count a submittal that is linked to a package", () => {
@@ -104,6 +106,50 @@ describe("buildBoardItems", () => {
     vi.setSystemTime(PINNED_TODAY);
     const items = buildBoardItems([setPackage], [...setPackage.submittals, unlinkedSubmittal]);
     expect(items[0].due.overdue).toBe(true); // the overdue unlinked sub sorts first
+  });
+
+  // The submittal a card opens in the hub (hubHrefForBoardItem).
+  it("gives each card the submittal it opens: a set's, an unlinked submittal's own, none for a set without", () => {
+    const bareSet: any = {
+      key: "id:set-2",
+      setId: "set-2",
+      name: "Embeds",
+      parent: { id: "set-2", set_name: "Embeds" },
+      sheets: [{ id: "d9", drawing_set_id: "set-2", stage: "IFA" }],
+      submittals: [],
+    };
+    const items = buildBoardItems([setPackage, bareSet], [...setPackage.submittals, unlinkedSubmittal]);
+    const byId = new Map(items.map((item) => [item.id, item]));
+    expect(byId.get("set-id:set-1")).toMatchObject({ submittalId: "sub-1", drawingSetId: "set-1" });
+    expect(byId.get("submittal-sub-2")).toMatchObject({ submittalId: "sub-2" });
+    expect(byId.get("set-id:set-2")).toMatchObject({ submittalId: null, drawingSetId: "set-2", linked: false });
+  });
+
+  it("takes a set's governing submittal, the one whose number and status the card shows", () => {
+    const pkg: any = {
+      ...setPackage,
+      submittals: [
+        { id: "sub-old", submittal_number: "05-1000", status: "Approved", ball_in_court: "EOR", submitted_date: "2026-01-05", drawing_set_ids: ["set-1"] },
+        { id: "sub-new", submittal_number: "05-1001", status: "Submitted", ball_in_court: "EOR", submitted_date: "2026-03-02", drawing_set_ids: ["set-1"] },
+        // More recent, but neither can govern: one is deleted, Void has no stage.
+        { id: "sub-deleted", submittal_number: "05-1002", status: "Submitted", ball_in_court: "EOR", submitted_date: "2026-05-01", is_deleted: true, drawing_set_ids: ["set-1"] },
+        { id: "sub-void", submittal_number: "05-1003", status: "Void", submitted_date: "2026-04-01", drawing_set_ids: ["set-1"] },
+      ],
+    };
+    const [item] = buildBoardItems([pkg], pkg.submittals);
+    expect(item.submittalId).toBe("sub-new");
+    expect(item.submittalNumber).toBe("05-1001");
+    expect(item.status).toBe("Submitted");
+  });
+
+  it("opens a Void-only set's submittal, which is the one the card shows", () => {
+    const pkg: any = {
+      ...setPackage,
+      submittals: [{ id: "sub-void", submittal_number: "05-1003", status: "Void", submitted_date: "2026-04-01", drawing_set_ids: ["set-1"] }],
+    };
+    const [item] = buildBoardItems([pkg], pkg.submittals);
+    expect(item.status).toBe("Void");
+    expect(item.submittalId).toBe("sub-void");
   });
 });
 
@@ -183,11 +229,32 @@ describe("bucketByStage", () => {
 
 describe("summarizeBoard", () => {
   it("counts totals / overdue / needsAction / unlinked over the unfiltered list", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(PINNED_TODAY);
     const items = buildBoardItems([setPackage], [...setPackage.submittals, unlinkedSubmittal]);
     const summary = summarizeBoard(items);
     expect(summary.total).toBe(2);
     expect(summary.unlinked).toBe(1);
     expect(summary.needsAction).toBe(1);
     expect(summary.overdue).toBeGreaterThanOrEqual(1);
+    expect(summary.criticalRisk).toBeGreaterThanOrEqual(1);
+    expect(summary.pendingEor).toBe(0);
+  });
+
+  it("flags packages with unanswered approver notes as pending EOR/AOR", () => {
+    const pkg = {
+      ...setPackage,
+      submittals: [
+        {
+          ...setPackage.submittals[0],
+          approver_notes: [{ id: "n1", note: "Confirm CJP at B-4?", response: "" }],
+        },
+      ],
+    };
+    const items = buildBoardItems([pkg], pkg.submittals);
+    const row = items.find((i) => i.id === "set-id:set-1");
+    expect(row?.pendingEorResponse).toBe(true);
+    expect(summarizeBoard(items).pendingEor).toBe(1);
+    expect(filterItems(items, "pending-eor", "").map((i) => i.id)).toEqual(["set-id:set-1"]);
   });
 });

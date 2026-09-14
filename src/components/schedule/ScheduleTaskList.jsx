@@ -3,6 +3,13 @@ import { PHASES, PHASE_COLORS, PHASE_NUMBER, derivePhase } from "../../utils/pha
 import { formatDateShort } from "../shared/formatters";
 import DateOrTbdInput from "./DateOrTbdInput";
 import { buildTreeOrder } from "./scheduleTree";
+import { taskOwner } from "./scheduleGanttHelpers";
+import { SCHEDULE_STATUSES, SCHEDULE_PRIORITIES } from "@/lib/schedule/taskStatus";
+import {
+  computeFinishVariance,
+  formatVariance,
+  describeVariance,
+} from "@/lib/schedule/actuals";
 
 const PRIORITY_COLORS = {
   Critical: "var(--status-error)",
@@ -19,8 +26,31 @@ const STATUS_COLORS = {
   "On Hold": "var(--status-info)",
 };
 
-const STATUSES = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold", "Cancelled"];
-const PRIORITIES = ["Critical", "High", "Normal", "Low"];
+/**
+ * Finish variance is computed against the CURRENT plan until baselines exist —
+ * see computeFinishVariance's baselineFinish argument. Kept as a named helper
+ * so the column and its tooltip can never read from different sources.
+ */
+const varianceFor = (task) => computeFinishVariance(task);
+
+/**
+ * "unknown" is deliberately muted, not green: no actual finish recorded reads
+ * as absence of data, never as a task that landed on plan (§1.4).
+ */
+const VARIANCE_COLORS = {
+  unknown: "var(--text-muted)",
+  "no-plan": "var(--text-muted)",
+  "on-time": "var(--status-success)",
+  early: "var(--status-success)",
+  late: "var(--status-error)",
+};
+const varianceColor = (v) => VARIANCE_COLORS[v?.state] || "var(--text-muted)";
+
+// One vocabulary, shared with every other schedule surface and matching
+// chk_schedule_tasks_status. This list used to carry "Cancelled", which the
+// constraint rejects — choosing it failed the save (§4.1).
+const STATUSES = SCHEDULE_STATUSES;
+const PRIORITIES = SCHEDULE_PRIORITIES;
 const TASK_LIST_COLUMNS = [
   { key: "select", label: "" },
   { key: "wbs", label: "WBS" },
@@ -30,6 +60,7 @@ const TASK_LIST_COLUMNS = [
   { key: "assigned-to", label: "Assigned To" },
   { key: "priority", label: "Priority" },
   { key: "status", label: "Status" },
+  { key: "variance", label: "Var" },
   { key: "actions", label: "" },
 ];
 
@@ -63,8 +94,8 @@ const fmtDate = (d) => {
 };
 
 const INLINE_INPUT = {
-  background: "rgba(200,155,32,0.08)",
-  border: "1px solid rgba(200,155,32,0.4)",
+  background: "var(--accent-muted)",
+  border: "1px solid var(--accent-border)",
   borderRadius: 4,
   color: "var(--text-primary)",
   fontFamily: "var(--font-body)",
@@ -76,8 +107,8 @@ const INLINE_INPUT = {
 };
 
 const INLINE_SELECT = {
-  background: "rgba(200,155,32,0.08)",
-  border: "1px solid rgba(200,155,32,0.4)",
+  background: "var(--accent-muted)",
+  border: "1px solid var(--accent-border)",
   borderRadius: 4,
   color: "var(--text-primary)",
   fontFamily: "var(--font-mono)",
@@ -121,7 +152,10 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
       task_name:   task.task_name   || "",
       start_date:  task._stored_start_date ?? task.start_date ?? "",
       end_date:    task._stored_end_date   ?? task.end_date   ?? "",
-      assigned_to: task.assigned_to || "",
+      // taskOwner, not assigned_to: the column below shows the same value,
+      // and seeding the narrower field left the input blank on any row whose
+      // owner is held in resource_names (§4.3).
+      assigned_to: taskOwner(task),
       priority:    task.priority    || "Normal",
       status:      task.status      || "Not Started",
     });
@@ -206,7 +240,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
     outline: "none",
   };
 
-  const GRID = "28px 70px 2fr 90px 90px 1fr 80px 90px 130px";
+  const GRID = "28px 70px 2fr 90px 90px 1fr 80px 90px 62px 130px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -226,10 +260,10 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
         </select>
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={selectStyle}>
           <option value="all">Status: All</option>
-          <option value="Not Started">Not Started</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Complete">Complete</option>
-          <option value="Delayed">Delayed</option>
+          {/* Generated, so the filter can never offer fewer statuses than the
+              editor writes — it used to omit "On Hold" entirely, making those
+              tasks unfilterable. */}
+          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         {editingId && (
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.08em" }}>
@@ -300,9 +334,9 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                       gap: 12,
                       alignItems: "center",
                       transition: "background 0.1s",
-                      background: isEditing ? "rgba(200,155,32,0.04)" : "transparent",
+                      background: isEditing ? "var(--accent-muted)" : "transparent",
                       cursor: isEditing ? "default" : "pointer",
-                      outline: isEditing ? "1px solid rgba(200,155,32,0.25)" : "none",
+                      outline: isEditing ? "1px solid var(--accent-border)" : "none",
                     }}
                     onMouseEnter={(e) => { if (!isEditing) e.currentTarget.style.background = "var(--hover-bg)"; }}
                     onMouseLeave={(e) => { if (!isEditing) e.currentTarget.style.background = "transparent"; }}
@@ -442,8 +476,12 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                           style={INLINE_INPUT}
                         />
                       ) : (
-                        <span style={{ fontSize: 11, color: task.assigned_to ? "var(--text-secondary)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-                          {task.assigned_to || <em style={{ fontStyle: "italic", opacity: 0.5 }}>Unassigned</em>}
+                        <span style={{ fontSize: 11, color: taskOwner(task) ? "var(--text-secondary)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                          {/* taskOwner reads resource_names first, the same as
+                              the Gantt and the Rivet brief. Reading assigned_to
+                              alone printed "Unassigned" on the 164 production
+                              rows whose owner lives in the other column. */}
+                          {taskOwner(task) || <em style={{ fontStyle: "italic", opacity: 0.5 }}>Unassigned</em>}
                         </span>
                       )}
                     </div>
@@ -486,6 +524,18 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                       )}
                     </div>
 
+                    {/* Finish variance — actual vs planned (§1.4 / §7.1).
+                        "—" here means no actual finish was recorded, which is
+                        NOT the same as finishing on time; the title spells out
+                        which of the two it is so the dash can't be misread. */}
+                    <div title={describeVariance(varianceFor(task))} style={{
+                      fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                      letterSpacing: "0.04em", color: varianceColor(varianceFor(task)),
+                      alignSelf: "center",
+                    }}>
+                      {formatVariance(varianceFor(task))}
+                    </div>
+
                     {/* Actions */}
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       {isEditing ? (
@@ -495,7 +545,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                             disabled={saving}
                             style={{
                               background: "var(--accent)", border: "none", borderRadius: 5,
-                              padding: "4px 9px", color: "#fff",
+                              padding: "4px 9px", color: "var(--on-accent)",
                               fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
                               cursor: saving ? "not-allowed" : "pointer", letterSpacing: "0.06em",
                             }}

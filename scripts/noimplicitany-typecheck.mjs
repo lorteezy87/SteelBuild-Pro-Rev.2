@@ -23,7 +23,6 @@ export const NOIMPLICITANY_IGNORE = [
   'src/pages/workPackages/styles.ts',
   'src/pages/Schedule.tsx',
   'src/pages/submittals/SubmittalFormModal.tsx',
-  'src/pages/Submittals.tsx',
   'src/pages/FabRelease.tsx',
   'src/pages/Procurement.tsx',
   'src/pages/WorkPackages.tsx',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { entities, resolveFileUrl } from "@/api/supabaseClient";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNextFormattedNumber } from "../shared/numberSequencing";
@@ -9,6 +9,20 @@ import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import { RFI_TYPES, buildRfiPreflight } from "@/lib/rfiPreflight";
 import { findDuplicateRfis } from "@/lib/rfiDedup";
 import FormField from "@/components/shared/FormField";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { buildRfiCreatePayload } from "@/pages/rfis/rfiMutationHelpers";
+import RfiPdfAttachments from "./RfiPdfAttachments";
+import { useRfiPdfAttachments } from "./useRfiPdfAttachments";
+import {
+  buildDrawingSetOptions,
+  buildRfiFormPayload,
+  buildWorkPackageOptions,
+  cleanRfiNumericFields,
+  deriveAutoLinkPatch,
+  getActiveRfiProjectId,
+  getRfiSubmissionError,
+  seedRfiForm,
+} from "./rfiFormDerivations";
 
 /** @type {import('react').CSSProperties} */
 const iStyle = {
@@ -101,91 +115,32 @@ const DuplicateWarning = ({ matches }) => {
 export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "", prefill = null }) {
   const qc = useQueryClient();
   const trapRef = useFocusTrap(true);
-  const pdfInputRef = useRef(null);
-
-  const empty = {
-    project_id: projectId || "",
-    title: "", description: "", question: "", answer: "",
-    drawing_reference: "", spec_section: "",
-    priority: "Medium", status: "Open",
-    // Discipline drives the RFIs page filter chips (All / Structural /
-    // Connections / Misc Metals / Anchor Bolts) and the row's
-    // discipline column. Field was missing from this form, so RFIs
-    // imported from CSV showed a discipline but the user couldn't
-    // change it — only fix it via the bulk-edit modal.
-    discipline: "",
-    submitted_by: "", submitted_date: new Date().toISOString().split("T")[0],
-    date_required: "", date_answered: "",
-    assigned_to: "", answered_by: "",
-    ball_in_court: "Contractor",
-    cost_impact: false, cost_impact_amount: "",
-    schedule_impact: false, schedule_impact_days: "",
-    distribution_list: "",
-    work_package_id: "",
-    drawing_set_id: "",
-    area_sequence: "",
-    // RFI workflow backbone fields. Held as local form fields and folded into
-    // metadata.{rfi_type,proposed_solution} on submit, so no schema change is
-    // required.
-    rfi_type: "",
-    proposed_solution: "",
-    // Fabrication-protection fields — also metadata-held (no schema change):
-    //   fab_hold     → mark that this RFI should hold fabrication of its sheets
-    //   piece_marks  → affected piece marks (comma/space separated)
-    fab_hold: false,
-    piece_marks: "",
-    // Qualitative impact flags (metadata-held like the fields above) — beyond the
-    // cost/schedule columns; shown on the RFI and used as answer-time triggers.
-    fab_impact: false,
-    erection_impact: false,
-    drawing_revision_required: false,
-    change_order_likely: false,
-  };
-
-  // Seed the workflow-backbone fields from metadata when editing an existing
-  // RFI (they live under metadata, not as top-level columns).
-  const seedFromRfi = (r) => ({
-    ...empty,
-    ...r,
-    rfi_type: r?.metadata?.rfi_type || "",
-    proposed_solution: r?.metadata?.proposed_solution || "",
-    fab_hold: !!r?.metadata?.fab_hold,
-    piece_marks: r?.metadata?.piece_marks || "",
-    fab_impact: !!r?.metadata?.fab_impact,
-    erection_impact: !!r?.metadata?.erection_impact,
-    drawing_revision_required: !!r?.metadata?.drawing_revision_required,
-    change_order_likely: !!r?.metadata?.change_order_likely,
-  });
-
-  // Pre-fill drawing_reference when the modal is opened for a NEW
-  // RFI (rfi === null) — used by the drawing-hub "Create RFI from
-  // zone" flow so the user sees the sheet + zone context baked in
-  // before they start typing. Still editable, just not blank.
-  // `prefill` (optional) seeds a brand-new RFI with values carried in from
-  // another screen — e.g. the "Create RFI from revision delta" flow. The user
-  // still reviews/edits before saving; project_id always wins last so the RFI
-  // lands on the right project regardless of what prefill carries.
-  const seedEmpty = {
-    ...empty,
-    drawing_reference: initialDrawingReference || empty.drawing_reference,
-    ...(prefill || {}),
-    project_id: projectId || empty.project_id,
-  };
-  const [formData, setFormData] = useState(rfi ? seedFromRfi(rfi) : seedEmpty);
-  const [pendingPdfFiles, setPendingPdfFiles] = useState([]);
+  const [formData, setFormData] = useState(() => seedRfiForm({
+    projectId,
+    rfi,
+    initialDrawingReference,
+    prefill,
+  }));
+  const {
+    inputRef: pdfInputRef,
+    pendingFiles: pendingPdfFiles,
+    existingDocuments: existingPdfDocs,
+    addFiles: addPdfFiles,
+    removeFile: removePendingPdf,
+    resetPendingFiles,
+    openDocument: openAttachment,
+  } = useRfiPdfAttachments(rfi?.id);
   // Preflight override — when required checks fail, the author can still submit
   // by acknowledging and giving a reason (logged to metadata.preflight_override).
   const [overrideAck, setOverrideAck] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
 
   useEffect(() => {
-    setFormData(rfi
-      ? seedFromRfi(rfi)
-      : { ...empty, drawing_reference: initialDrawingReference || "", ...(prefill || {}), project_id: projectId || "" });
-    setPendingPdfFiles([]);
+    setFormData(seedRfiForm({ projectId, rfi, initialDrawingReference, prefill }));
+    resetPendingFiles();
     setOverrideAck(false);
     setOverrideReason("");
-  }, [rfi, projectId, initialDrawingReference, prefill]);
+  }, [rfi, projectId, initialDrawingReference, prefill, resetPendingFiles]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -193,16 +148,8 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
-  const { data: existingPdfDocs = [] } = useQuery({
-    queryKey: ["rfi-documents", rfi?.id],
-    queryFn: () => rfi?.id ? entities.Document.filter({ rfi_id: rfi.id }, "-uploaded_date") : [],
-    enabled: !!rfi?.id,
-    initialData: [],
-    staleTime: 30 * 1000,
-  });
-
   // Work packages for the active project — used in the Linking section
-  const activeProjectId = formData.project_id || projectId;
+  const activeProjectId = getActiveRfiProjectId(formData.project_id, projectId);
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work_packages", activeProjectId],
     queryFn: () => entities.WorkPackage.filter({ project_id: activeProjectId }),
@@ -239,18 +186,13 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   // Shared-entry mutation used only when the parent does not supply onSave.
   const internalMutation = useMutation({
     mutationFn: async (data) => {
-      // Coerce empty-string numeric fields to null so Postgres doesn't reject them
-      const clean = {
-        ...data,
-        cost_impact_amount:   data.cost_impact_amount   === "" ? null : data.cost_impact_amount   !== undefined ? Number(data.cost_impact_amount)   : null,
-        schedule_impact_days: data.schedule_impact_days === "" ? null : data.schedule_impact_days !== undefined ? Number(data.schedule_impact_days) : null,
-      };
+      const clean = cleanRfiNumericFields(data);
       if (rfi) {
         return entities.RFI.update(rfi.id, clean);
       }
-      if (!clean.project_id) throw new Error("Select a project before creating an RFI.");
+      const scoped = buildRfiCreatePayload(clean, projectId || clean.project_id);
       const rfiNumber = await getNextFormattedNumber({
-        projectId: clean.project_id,
+        projectId: scoped.project_id,
         recordType: "RFI",
         entityName: "RFI",
         fieldName: "rfi_number",
@@ -258,7 +200,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       });
       if (!rfiNumber) throw new Error("RFI number allocation failed. The RFI was not saved.");
       return entities.RFI.create({
-        ...clean,
+        ...scoped,
         rfi_number: rfiNumber,
       });
     },
@@ -270,7 +212,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       onClose();
     },
     onError: (err) =>
-      toast.error("Failed to save RFI: " + (err?.message || "Unknown error")),
+      toast.error(`Failed to save RFI: ${toUserErrorMessage(err, "Unknown error")}`),
   });
 
   const submitInFlightRef = useRef(false);
@@ -283,100 +225,28 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       toast.success(`Status set to ${status}`);
       setFormData((f) => ({ ...f, status }));
     },
-    onError: () => toast.error("Status update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Status update failed")),
   });
 
   // Whether save is in progress — prefer parent's flag, fall back to internal
   const isSaving = saving || internalMutation.isPending;
 
   const set = (k, v) => setFormData((f) => ({ ...f, [k]: v }));
-  const addPdfFiles = (fileList) => {
-    const incoming = Array.from(fileList || []);
-    const pdfs = [];
-    const rejected = [];
-    for (const file of incoming) {
-      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
-      if (isPdf) pdfs.push(file);
-      else rejected.push(file.name || "Unknown file");
-    }
-    if (rejected.length) toast.warning("Only PDF files can be attached to RFIs");
-    if (!pdfs.length) return;
-    setPendingPdfFiles((prev) => {
-      const existing = new Set(prev.map((file) => `${file.name}:${file.size}`));
-      return [...prev, ...pdfs.filter((file) => !existing.has(`${file.name}:${file.size}`))];
-    });
-  };
-  const removePendingPdf = (fileName, size) => {
-    setPendingPdfFiles((prev) => prev.filter((file) => !(file.name === fileName && file.size === size)));
-    if (pdfInputRef.current) pdfInputRef.current.value = "";
-  };
-  const isAllowedFileReference = (value) => {
-    if (!value || typeof value !== "string") return false;
-    const trimmed = value.trim();
-    if (!trimmed) return false;
-    if (/^https?:\/\//i.test(trimmed)) return true;
-    // Treat non-protocol values as storage paths that must be signed.
-    return !/^[a-z][a-z0-9+.-]*:/i.test(trimmed);
-  };
-
-  const openAttachment = async (fileUrl) => {
-    if (!isAllowedFileReference(fileUrl)) {
-      toast.error("Blocked unsafe attachment URL");
-      return;
-    }
-    const resolvedUrl = await resolveFileUrl(fileUrl);
-    if (!resolvedUrl || !/^https?:\/\//i.test(resolvedUrl)) {
-      toast.error("Unable to open attachment");
-      return;
-    }
-    window.open(resolvedUrl, "_blank", "noopener,noreferrer");
-  };
-
-  const buildPayload = (pf, overrideReasonText = null) => {
-    // rfi_type / proposed_solution are local-only fields — fold them into the
-    // existing metadata JSON and strip the top-level keys so we never send a
-    // non-column (no schema dependency). The preflight score + any override
-    // reason are recorded the same way — queryable, no migration.
-    const { rfi_type, proposed_solution, fab_hold, piece_marks, fab_impact, erection_impact, drawing_revision_required, change_order_likely, ...rest } = formData;
-    return {
-      ...rest,
-      metadata: {
-        ...(formData.metadata || {}),
-        rfi_type,
-        proposed_solution,
-        fab_hold: !!fab_hold,
-        piece_marks: (piece_marks || "").trim(),
-        fab_impact: !!fab_impact,
-        erection_impact: !!erection_impact,
-        drawing_revision_required: !!drawing_revision_required,
-        change_order_likely: !!change_order_likely,
-        preflight_score: pf ? pf.score : (formData.metadata?.preflight_score ?? null),
-        preflight_override: overrideReasonText
-          ? { reason: overrideReasonText, score: pf?.score ?? null, blockers: (pf?.blockers || []).map((b) => b.key), at: new Date().toISOString() }
-          : (formData.metadata?.preflight_override ?? null),
-      },
-    };
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!formData.title?.trim()) return toast.error("Title is required");
-
-    // Preflight gate — required-check failures block submission so
-    // under-specified RFIs don't ship. The author can still submit by
-    // acknowledging the override and giving a reason (logged). Soft checks
-    // never block.
+  const handleSubmit = () => {
     const pf = buildRfiPreflight(formData);
-    if (!pf.passed) {
-      if (!overrideAck) {
-        return toast.error(`Preflight: resolve ${pf.blockers.map((b) => b.label).join("; ")} — or check "Submit anyway" and give a reason`);
-      }
-      if (!overrideReason.trim()) {
-        return toast.error("Enter a reason to override the preflight and submit");
-      }
-    }
+    const validationError = getRfiSubmissionError(
+      formData,
+      pf,
+      overrideAck,
+      overrideReason,
+    );
+    if (validationError) return toast.error(validationError);
 
-    const payload = buildPayload(pf, !pf.passed ? overrideReason.trim() : null);
+    const payload = buildRfiFormPayload(
+      formData,
+      pf,
+      !pf.passed ? overrideReason.trim() : null,
+    );
 
     // If parent supplied onSave, delegate to it (parent handles persistence + cache).
     if (typeof onSave === "function") {
@@ -398,10 +268,19 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       onSettled: () => { submitInFlightRef.current = false; },
     });
   };
+  const handleFormKeyDown = (event) => {
+    if (
+      event.key !== "Enter"
+      || event.target instanceof HTMLTextAreaElement
+      || event.target instanceof HTMLButtonElement
+    ) return;
+    event.preventDefault();
+    handleSubmit();
+  };
 
   const statusBtnStyle = (s) => ({
     background: formData.status === s ? "var(--accent)" : "var(--bg-surface)",
-    color: formData.status === s ? "white" : "var(--text-muted)",
+    color: formData.status === s ? "var(--on-accent)" : "var(--text-muted)",
     border: `1px solid ${formData.status === s ? "var(--accent)" : "var(--border-default)"}`,
     borderRadius: 6, padding: "4px 10px", fontFamily: "var(--font-mono)",
     fontSize: 8, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
@@ -414,10 +293,12 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
 
   const preflight = buildRfiPreflight(formData);
   const duplicateMatches = findDuplicateRfis(formData, existingRfis);
+  const workPackageOptions = buildWorkPackageOptions(workPackages);
+  const drawingSetOptions = buildDrawingSetOptions(drawingSets);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={trapRef} className="sbd-card-strong" style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", maxWidth: 780, width: "96%", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.8)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 65%, transparent)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={trapRef} className="sbd-card-strong" style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", maxWidth: 780, width: "96%", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px color-mix(in srgb, var(--bg-base) 80%, transparent)" }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 24px 12px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", flexShrink: 0 }}>
           <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.10em" }}>{title}</h2>
@@ -432,7 +313,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
           )}
         </div>
 
-        <form id="rfi-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: "auto", padding: "0 24px 16px" }}>
+        <div id="rfi-form" onKeyDown={handleFormKeyDown} style={{ flex: 1, overflowY: "auto", padding: "0 24px 16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
 
             {/* Section 1 — Identity */}
@@ -467,7 +348,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                   style={iStyle}
                   value={formData.rfi_number || ""}
                   onChange={(e) => set("rfi_number", e.target.value)}
-                  placeholder="RFI #001"
+                  placeholder="RFI 001"
                 />
               ) : (
                 <input
@@ -533,13 +414,8 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 entity={formData}
                 sources={{ drawings: projectDrawings, workPackages: workPackages, rfis: existingRfis }}
                 onLink={(suggestion) => {
-                  if (suggestion.type === "work_package" || suggestion.type === "sequence") {
-                    set("work_package_id", suggestion.entityId);
-                  }
-                  if (suggestion.type === "drawing") {
-                    const drawing = suggestion.matchedEntity;
-                    if (drawing.drawing_set_id) set("drawing_set_id", drawing.drawing_set_id);
-                  }
+                  const patch = deriveAutoLinkPatch(suggestion);
+                  if (patch) setFormData((current) => ({ ...current, ...patch }));
                 }}
               />
             </div>
@@ -548,10 +424,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 value={formData.work_package_id || ""}
                 onChange={(value) => set("work_package_id", value || null)}
                 placeholder="None"
-                options={workPackages.map((wp) => ({
-                  value: wp.id,
-                  label: [wp.wp_number, wp.name].filter(Boolean).join(" — ") || wp.id.slice(0, 8),
-                }))}
+                options={workPackageOptions}
               />
             </Field>
             <Field label="Drawing Set" span={1}>
@@ -559,12 +432,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 value={formData.drawing_set_id || ""}
                 onChange={(value) => set("drawing_set_id", value || null)}
                 placeholder="None"
-                options={drawingSets
-                  .filter((ds) => !ds.is_deleted)
-                  .map((ds) => ({
-                    value: ds.id,
-                    label: [ds.set_name, ds.revision ? `Rev ${ds.revision}` : null].filter(Boolean).join(" — ") || ds.id.slice(0, 8),
-                  }))}
+                options={drawingSetOptions}
               />
             </Field>
             <Field label="Area / Sequence" span={1}>
@@ -704,53 +572,14 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             </div>
 
             <SectionLabel>PDF Attachments</SectionLabel>
-            <div style={{ gridColumn: "span 3" }}>
-              <input
-                ref={pdfInputRef}
-                type="file"
-                accept="application/pdf,.pdf"
-                multiple
-                style={{ display: "none" }}
-                onChange={(e) => addPdfFiles(e.target.files)}
-              />
-              <div
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); addPdfFiles(e.dataTransfer.files); }}
-                style={attachmentDropStyle}
-              >
-                <div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                    Attach RFI PDFs
-                  </div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                    Upload sketches, vendor responses, marked-up sheets, or official RFI PDFs. Files are linked to this RFI after save.
-                  </div>
-                </div>
-                <button type="button" onClick={() => pdfInputRef.current?.click()} style={uploadButtonStyle}>
-                  Select PDF
-                </button>
-              </div>
-              {(existingPdfDocs.length > 0 || pendingPdfFiles.length > 0) && (
-                <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-                  {existingPdfDocs.map((doc) => (
-                    <AttachmentRow
-                      key={doc.id}
-                      name={doc.display_name || doc.file_name || "RFI PDF"}
-                      meta={`${Math.round(Number(doc.file_size_kb) || 0)} KB - uploaded`}
-                      onOpen={() => openAttachment(doc.file_url)}
-                    />
-                  ))}
-                  {pendingPdfFiles.map((file) => (
-                    <AttachmentRow
-                      key={`${file.name}:${file.size}`}
-                      name={file.name}
-                      meta={`${Math.round(file.size / 1024)} KB - pending save`}
-                      onRemove={() => removePendingPdf(file.name, file.size)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+            <RfiPdfAttachments
+              inputRef={pdfInputRef}
+              existingDocuments={existingPdfDocs}
+              pendingFiles={pendingPdfFiles}
+              onAddFiles={addPdfFiles}
+              onOpenDocument={openAttachment}
+              onRemoveFile={removePendingPdf}
+            />
 
           </div>
 
@@ -766,13 +595,13 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
               />
             </div>
           )}
-        </form>
+        </div>
         {/* Footer */}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "12px 24px", borderTop: "1px solid var(--divider)", background: "var(--bg-surface)", flexShrink: 0 }}>
           <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Cancel
           </button>
-          <button type="submit" form="rfi-form" disabled={isSaving} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.6 : 1 }}>
+          <button type="button" onClick={handleSubmit} disabled={isSaving} style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.6 : 1 }}>
             {isSaving ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
           </button>
         </div>
@@ -828,31 +657,6 @@ function DarkSelect({ value, options, onChange, placeholder = "Select..." }) {
   );
 }
 
-function AttachmentRow({ name, meta, onOpen, onRemove }) {
-  return (
-    <div style={attachmentRowStyle}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 800, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {name}
-        </div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
-          {meta}
-        </div>
-      </div>
-      {onOpen && (
-        <button type="button" onClick={onOpen} style={attachmentActionStyle}>
-          Open
-        </button>
-      )}
-      {onRemove && (
-        <button type="button" onClick={onRemove} style={{ ...attachmentActionStyle, color: "var(--status-error)", borderColor: "var(--danger-border)" }}>
-          Remove
-        </button>
-      )}
-    </div>
-  );
-}
-
 const darkSelectButtonStyle = {
   ...iStyle,
   minHeight: 37,
@@ -878,7 +682,7 @@ const darkSelectMenuStyle = {
   background: "var(--bg-surface-secondary)",
   border: "1px solid color-mix(in srgb, var(--accent) 32%, var(--border-default))",
   borderRadius: 10,
-  boxShadow: "0 18px 46px rgba(0,0,0,0.74), inset 0 1px 0 rgba(255,255,255,0.06)",
+  boxShadow: "0 18px 46px color-mix(in srgb, var(--bg-base) 74%, transparent), inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent)",
 };
 
 const darkSelectOptionStyle = (active) => ({
@@ -894,55 +698,3 @@ const darkSelectOptionStyle = (active) => ({
   fontWeight: active ? 800 : 600,
   cursor: "pointer",
 });
-
-const attachmentDropStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 14,
-  padding: 14,
-  border: "1px dashed color-mix(in srgb, var(--accent) 45%, var(--border-default))",
-  borderRadius: 12,
-  background: "linear-gradient(135deg, rgba(86,176,255,0.08), rgba(255,255,255,0.025))",
-};
-
-const uploadButtonStyle = {
-  border: "1px solid var(--accent-border)",
-  borderRadius: 8,
-  background: "var(--accent-muted)",
-  color: "var(--accent)",
-  padding: "8px 13px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  fontWeight: 900,
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-};
-
-const attachmentRowStyle = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) auto",
-  gap: 10,
-  alignItems: "center",
-  padding: "9px 10px",
-  border: "1px solid var(--border-default)",
-  borderRadius: 9,
-  background: "rgba(255,255,255,0.035)",
-};
-
-const attachmentActionStyle = {
-  border: "1px solid var(--border-default)",
-  borderRadius: 7,
-  background: "rgba(255,255,255,0.04)",
-  color: "var(--accent)",
-  padding: "5px 8px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 8,
-  fontWeight: 900,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  textDecoration: "none",
-  cursor: "pointer",
-};

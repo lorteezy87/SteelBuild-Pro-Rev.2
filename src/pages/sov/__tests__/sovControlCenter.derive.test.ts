@@ -153,6 +153,22 @@ describe("buildSovSummary", () => {
     expect(ids).toContain("d"); // the over-billed item
   });
 
+  it("dedupes multi-application rows to the latest app per line item for KPI totals", () => {
+    // One 24k line item billed across two applications, Draft+Certified rows
+    // each — the raw-row sum would report 96k contract / 72k billed.
+    const multiApp: SovLineItem[] = [
+      { id: "m1", project_id: "p", line_item_number: 1, application_number: 1, status: "Draft", scheduled_value: 24_000, previous_percent_complete: 0, current_percent_complete: 50, retainage_percent: 10 },
+      { id: "m2", project_id: "p", line_item_number: 1, application_number: 1, status: "Certified", scheduled_value: 24_000, previous_percent_complete: 0, current_percent_complete: 50, retainage_percent: 10 },
+      { id: "m3", project_id: "p", line_item_number: 1, application_number: 2, status: "Draft", scheduled_value: 24_000, previous_percent_complete: 50, current_percent_complete: 100, retainage_percent: 10 },
+      { id: "m4", project_id: "p", line_item_number: 1, application_number: 2, status: "Certified", scheduled_value: 24_000, previous_percent_complete: 50, current_percent_complete: 100, retainage_percent: 10 },
+    ];
+    const s = buildSovSummary(multiApp);
+    expect(s.contractValue).toBe(24_000);
+    expect(s.billedToDate).toBe(24_000);
+    // Billing Progress intentionally stays per-application (raw rows)
+    expect(s.billingProgress).toHaveLength(2);
+  });
+
   it("works on empty array", () => {
     const s = buildSovSummary([]);
     expect(s.contractValue).toBe(0);

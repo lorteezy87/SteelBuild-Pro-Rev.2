@@ -87,6 +87,11 @@ export interface DocumentsSummary {
 const REVIEW_STATUSES = new Set(["Under Review", "Revise & Resubmit"]);
 
 /** Parse an ISO date string to a Date, returning null if absent/invalid. */
+/** Trim + lowercase a status so tab filtering survives import/legacy casing. */
+function normalizeStatus(value?: string | null): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 function parseDate(s?: string | null): Date | null {
   if (!s) return null;
   const d = new Date(s);
@@ -222,9 +227,14 @@ export function filterDocuments(input: DocumentFilterInput): DocumentRecord[] {
     result = result.filter((d) => disciplineFilters.includes(d.discipline || ""));
   }
   if (statusTab !== "all") {
-    result = result.filter((d) => d.status === statusTab);
+    // Trimmed, case-insensitive: an exact === match meant a document stored as
+    // "under review" (import/legacy casing) vanished from the Under Review tab,
+    // so clicking Review Queue looked like it did nothing.
+    const wanted = normalizeStatus(statusTab);
+    result = result.filter((d) => normalizeStatus(d.status) === wanted);
   } else if (statusFilters.length > 0) {
-    result = result.filter((d) => statusFilters.includes(d.status || ""));
+    const wanted = new Set(statusFilters.map(normalizeStatus));
+    result = result.filter((d) => wanted.has(normalizeStatus(d.status)));
   }
 
   return [...result].sort((a, b) => {

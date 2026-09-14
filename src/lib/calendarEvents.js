@@ -70,13 +70,19 @@ function eventsFromScheduleTask(t) {
     entityId:  t.id,
     type:      isMilestone ? "milestone" : "task",
     title:     taskTitle,
-    subtitle:  t.phase || t.status || "",
+    // Provenance. When a row carries the cascade overlay, say so — otherwise a
+    // pill silently claims a date the user never typed, which trades a visible
+    // divergence (calendar vs Gantt) for an invisible one. `_shifted` is derived
+    // from the PRESERVED stored date, so it is correct even for a row pinned
+    // exactly on its constraint.
+    subtitle:  [t.phase || t.status || "", t._shifted ? `cascaded +${t._shifted_by || 0}d` : ""]
+                 .filter(Boolean).join(" · "),
     start,
     end:       isMilestone ? start : end,
     status:    t.status,
     accent:    isMilestone ? EVENT_COLOR.milestone : EVENT_COLOR.task,
     icon:      isMilestone ? "◆" : "▰",
-    navTo:     `/Schedule`,
+    navTo:     `/ScheduleHub`,
     priority:  isMilestone ? 0 : 1,
     raw:       t,
   }];
@@ -302,6 +308,25 @@ function eventsFromProject(p) {
 
 // ── Public: build event list from raw entity arrays ───────────────────
 
+/**
+ * Build the flat event list the calendar grid and the .ics export both render.
+ *
+ * The JSDoc is load-bearing: without it TypeScript infers each `= []` default as
+ * `never[]`, so a typed caller cannot pass a real array at all. That made the
+ * strictNullChecks gate reject every genuine call site.
+ *
+ * @param {{
+ *   scheduleTasks?: any[],
+ *   deliveries?: any[],
+ *   rfis?: any[],
+ *   submittals?: any[],
+ *   changeOrders?: any[],
+ *   actionItems?: any[],
+ *   inspections?: any[],
+ *   dailyLogs?: any[],
+ *   project?: any,
+ * }} [input]
+ */
 export function buildCalendarEvents({
   scheduleTasks = [],
   deliveries = [],

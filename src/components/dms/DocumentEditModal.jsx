@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const INPUT_STYLE = {
   width: "100%",
@@ -67,7 +68,13 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       submittal_id: doc.submittal_id || doc.submittalId || "",
       is_current: doc.is_current ?? true,
     }));
-  }, [doc]);
+    // Re-seed only when a DIFFERENT document is being edited. Depending on the
+    // whole `doc` object re-seeded on every refetch: normalizeDocument builds
+    // new object identities each time the documents query settles (realtime
+    // invalidation, another mutation, window focus), so a background refetch
+    // overwrote every field mid-typing and the user lost their edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.id]);
 
   const mut = useMutation({
     mutationFn: (payload) => entities.Document.update(doc.id, payload),
@@ -76,7 +83,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       toast.success("Document updated");
       onClose();
     },
-    onError: (err) => toast.error(err?.message || "Update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -91,7 +98,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       .map((t) => t.trim())
       .filter(Boolean);
 
-    mut.mutate({
+    mut.mutate(withProjectId({
       display_name: form.displayName,
       document_number: form.documentNumber,
       revision_number: form.revisionNumber,
@@ -106,8 +113,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       change_order_id: form.change_order_id || null,
       submittal_id: form.submittal_id || null,
       is_current: form.is_current,
-      project_id: projectId,
-    });
+    }, projectId));
   };
 
   return (
@@ -115,7 +121,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.65)",
+        background: "color-mix(in srgb, var(--bg-page) 72%, transparent)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

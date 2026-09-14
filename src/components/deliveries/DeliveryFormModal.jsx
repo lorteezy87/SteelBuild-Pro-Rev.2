@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { isFabComplete as isFabCompleteForDelivery } from "@/pages/deliveries/utils";
 
 export default function DeliveryFormModal({ projectId, onClose, delivery = null }) {
   const qc = useQueryClient();
@@ -95,28 +97,28 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
 
   const mutation = useMutation({
     mutationFn: (data) =>
-      isEdit ? entities.Delivery.update(delivery.id, data) : entities.Delivery.create(data),
+      isEdit
+        ? entities.Delivery.update(delivery.id, data)
+        : entities.Delivery.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["deliveries"] });
       toast.success(isEdit ? "Delivery updated" : "Delivery created");
       onClose();
     },
-    onError: (err) => toast.error((isEdit ? "Update" : "Create") + " failed: " + err.message),
+    onError: (err) =>
+      toast.error(
+        `${isEdit ? "Update" : "Create"} failed: ${toUserErrorMessage(err)}`,
+      ),
   });
 
   const set = (k, v) => setFormData((p) => ({ ...p, [k]: v }));
 
-  // Check if linked WP has completed fabrication
-  const isFabComplete = () => {
-    if (!formData.work_package_id) return true;
-    const wp = workPackages.find(w => w.id === formData.work_package_id);
-    if (!wp) return true;
-    const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
-    const rank = PHASE_RANK[wp.phase] ?? 0;
-    if (rank >= 2) return true;
-    if (rank === 1 && wp.status === "Complete") return true;
-    return false;
-  };
+  // Check if linked WP has completed fabrication. Delegates to the shared
+  // helper so this modal and the Deliveries page can't disagree about whether
+  // a load is releasable (this copy required status === "Complete" exactly and
+  // blocked packages already fabricated to 100%).
+  const isFabComplete = () =>
+    isFabCompleteForDelivery({ work_package_id: formData.work_package_id }, workPackages);
 
   const handleSubmit = () => {
     if (!runValidation(formData)) {

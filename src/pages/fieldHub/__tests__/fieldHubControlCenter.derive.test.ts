@@ -3,7 +3,7 @@
  * No React, no network — pure function.
  */
 import { describe, it, expect, afterAll, vi } from "vitest";
-import { buildFieldHubSummary } from "../fieldHubControlCenter.derive";
+import { buildFieldHubSummary, FIELD_HUB_PANEL_COPY } from "../fieldHubControlCenter.derive";
 import type { DailyLogRecord, InspectionRecord, SafetyIncidentRecord, PunchlistItemRecord } from "../fieldHubControlCenter.derive";
 
 // Pin today to a known date so date-sensitive KPIs are deterministic.
@@ -40,6 +40,8 @@ const inspections: InspectionRecord[] = [
 const incidents: SafetyIncidentRecord[] = [
   { id: "s1", incident_date: "2026-06-27", incident_type: "Near Miss", severity: "High", status: "Open", location: "Beam line 3", reported_by: "T. Adams", investigation_completed: false },
   { id: "s2", incident_date: "2026-06-20", incident_type: "First Aid", severity: "Low", status: "Closed", location: "Shop", reported_by: "B. Cruz" },
+  { id: "s3", incident_date: "2026-06-21", incident_type: "Near Miss", severity: "Medium", status: "Completed", location: "Yard", reported_by: "C. Diaz" },
+  { id: "s4", incident_date: "2026-06-22", incident_type: "Property Damage", severity: "High", status: "Under Investigation", location: "Level 3", reported_by: "D. Ellis" },
 ];
 
 const punchlistItems: PunchlistItemRecord[] = [
@@ -69,14 +71,37 @@ describe("buildFieldHubSummary", () => {
     expect(result.openFieldIssues).toBe(3);
   });
 
-  it("counts scheduled inspections due (including today)", () => {
-    // i1 Scheduled today, i2 Scheduled future → 2; i3 Completed excluded; i4 In Progress not Scheduled
-    expect(result.inspectionsDue).toBe(2);
+  it("treats every terminal punchlist status as closed", () => {
+    const terminal = ["Closed", "Complete", "Completed", "Done", "Resolved"].map((status, index) => ({
+      id: `terminal-${index}`,
+      status,
+    }));
+    expect(buildFieldHubSummary([], [], [], terminal).openFieldIssues).toBe(0);
   });
 
-  it("counts open (non-closed) safety incidents", () => {
-    // s1 Open → 1; s2 Closed excluded
-    expect(result.openSafetyObs).toBe(1);
+  it("counts inspections still owed: Scheduled (any date) and In Progress", () => {
+    // i1 Scheduled today, i2 Scheduled future, i4 In Progress → 3; i3 Completed excluded
+    expect(result.inspectionsDue).toBe(3);
+  });
+
+  it("keeps a past-due Scheduled inspection in Inspections Due (overdue is not done)", () => {
+    const overdue = [
+      { id: "late", inspection_date: "2026-06-01", status: "Scheduled" },
+      { id: "undated", inspection_date: null, status: "Scheduled" },
+      { id: "held", inspection_date: "2026-06-01", status: "On Hold" },
+      { id: "cancelled", inspection_date: "2026-06-01", status: "Cancelled" },
+    ];
+    expect(buildFieldHubSummary([], overdue, [], []).inspectionsDue).toBe(2);
+  });
+
+  it("counts open safety incidents, excluding both Completed and Closed", () => {
+    // s1 Open, s4 Under Investigation → 2; s2 Closed and s3 Completed excluded
+    expect(result.openSafetyObs).toBe(2);
+    const coordSafety = result.coordinationQueue.filter((r) => r.type === "safety").map((r) => r.id);
+    expect(coordSafety).toContain("s1");
+    expect(coordSafety).toContain("s4");
+    expect(coordSafety).not.toContain("s2");
+    expect(coordSafety).not.toContain("s3");
   });
 
   it("sums deficiencies from active inspections only", () => {
@@ -106,8 +131,8 @@ describe("buildFieldHubSummary", () => {
   });
 
   it("activityRows includes all non-empty source rows", () => {
-    // 3 logs + 4 inspections + 2 incidents + 4 punchlist = 13 rows
-    expect(result.activityRows.length).toBe(13);
+    // 3 logs + 4 inspections + 4 incidents + 4 punchlist = 15 rows
+    expect(result.activityRows.length).toBe(15);
   });
 
   it("activityRows are sorted newest date first", () => {
@@ -127,6 +152,19 @@ describe("buildFieldHubSummary", () => {
     expect(empty.todayQueue.length).toBe(0);
     expect(empty.inspectionQueue.length).toBe(0);
     expect(empty.coordinationQueue.length).toBe(0);
+  });
+});
+
+describe("Field Hub panel copy", () => {
+  it("labels punchlist and inspection queues with the records they actually contain", () => {
+    expect(FIELD_HUB_PANEL_COPY.fieldIssues).toEqual({
+      title: "Open Field Issues",
+      empty: "No open punchlist items.",
+    });
+    expect(FIELD_HUB_PANEL_COPY.inspections).toEqual({
+      title: "Active Inspections",
+      empty: "No active inspections.",
+    });
   });
 });
 

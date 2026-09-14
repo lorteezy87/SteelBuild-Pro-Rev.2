@@ -80,11 +80,18 @@ export default function RevisionSummaryCard({ summary, onClose, onRunDeepDive, o
               ))}
             </Section>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 2 }}>
-              <button type="button" className="sbd-btn sbd-btn-primary" onClick={() => onRunDeepDive?.(summary)}>
-                <Sparkles size={13} style={{ marginRight: 6 }} /> Run AI deep-dive →
-              </button>
-            </div>
+            {/* Only render when a handler exists — `onRunDeepDive` is passed
+                solely when the `revision_ai_diff` flag is on, so with the flag
+                off this was an enabled primary button whose click did nothing:
+                no navigation, no toast, no disabled state. Matches the Create
+                RFI button above, which is already gated this way. */}
+            {onRunDeepDive && (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 2 }}>
+                <button type="button" className="sbd-btn sbd-btn-primary" onClick={() => onRunDeepDive(summary)}>
+                  <Sparkles size={13} style={{ marginRight: 6 }} /> Run AI deep-dive →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </DialogContent>

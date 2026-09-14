@@ -18,6 +18,7 @@ import {
   computeBackwardDates,
   computeScheduleRisk,
 } from "@/lib/detailingSchedule";
+import { linkedRfiNumbers, normNum } from "@/lib/fabReleaseGate";
 
 const ORDER_INDEX = (state) => {
   const i = DETAILING_STATE_ORDER.indexOf(state);
@@ -26,17 +27,48 @@ const ORDER_INDEX = (state) => {
 const RELEASED_IDX = ORDER_INDEX("Released");
 const ERECTION_RELEASED_IDX = ORDER_INDEX("Released for Erection");
 
-/** Collect linked RFI ids from a package's sheets + submittals + the set row. */
-function collectLinkedRfiIds(pkg, submittals, sheets) {
+/**
+ * Linked RFIs arrive in TWO INCOMPATIBLE SHAPES and must never be pooled:
+ *
+ *   submittals.linked_rfi_ids → uuid[]  — FKs to rfis.id
+ *   drawings.linked_rfi_ids   → text    — a CSV of RFI *numbers* ("RFI #001,
+ *                                         RFI #002"), which is literally what
+ *                                         SheetFormModal's placeholder asks the
+ *                                         detailer to type
+ *   drawing_sets.linked_rfi_ids         — does not exist
+ *
+ * These used to be merged into one Set and intersected with a set of UUIDs, so a
+ * sheet-linked open RFI could never match: a package with an unanswered RFI
+ * against it still reported `rfiBlocked: false` and `fabricationReady: true`,
+ * while the Drawing Health Score on the same screen deducted for that same RFI.
+ * Keep the two id spaces separate and match each against its own open set.
+ */
+function collectLinkedRfiUuids(submittals) {
   const ids = new Set();
-  const add = (val) => {
-    if (Array.isArray(val)) val.forEach((v) => v && ids.add(String(v)));
-    else if (typeof val === "string") val.split(/[,\s]+/).forEach((v) => v && ids.add(v));
-  };
-  (sheets || []).forEach((s) => add(s?.linked_rfi_ids));
-  (submittals || []).forEach((s) => add(s?.linked_rfi_ids));
-  add(pkg?.linked_rfi_ids);
+  for (const s of submittals || []) {
+    const val = s?.linked_rfi_ids;
+    if (Array.isArray(val)) {
+      for (const v of val) if (v) ids.add(String(v));
+    } else if (typeof val === "string") {
+      for (const v of val.split(",")) {
+        const t = v.trim();
+        if (t) ids.add(t);
+      }
+    }
+  }
   return ids;
+}
+
+/** Normalized RFI NUMBERS linked from a package's sheets ("RFI #001" → "RFI001"). */
+function collectLinkedRfiNumbers(sheets) {
+  const nums = new Set();
+  for (const s of sheets || []) {
+    for (const raw of linkedRfiNumbers(s)) {
+      const key = normNum(raw);
+      if (key) nums.add(key);
+    }
+  }
+  return nums;
 }
 
 /**
@@ -45,15 +77,18 @@ function collectLinkedRfiIds(pkg, submittals, sheets) {
  * @param {object} args
  * @param {object} args.pkg            — the drawing_set row (carries detailing_state, material_impacted, long_lead_impact, metadata)
  * @param {Array}  args.submittals     — submittals linked to the package
- * @param {Array}  args.sheets         — drawings in the package
+ * @param {Array}  args.sheets         — LIVE drawings (buildSetPackages keeps superseded ones out)
+ * @param {Array}  [args.supersededSheets] — superseded drawings, passed separately so counts/dues are unaffected
  * @param {object|null} [args.project] — for project-level lead-day defaults (project.metadata)
  * @param {object|null} [args.workPackage] — the linked WP (for the erection sequence date)
- * @param {Set<string>|null} [args.openRfiIds] — ids of OPEN rfis; when provided, rfiBlocked is precise
+ * @param {Set<string>|null} [args.openRfiIds] — UUIDs of OPEN rfis (matches submittal links)
+ * @param {Set<string>|null} [args.openRfiNumbers] — normNum'd numbers of OPEN rfis (matches SHEET links)
  * @param {string} [args.today]        — YYYY-MM-DD override (tests)
  * @returns {object} readiness model
  */
 export function computeDetailingReadiness({
-  pkg, submittals = [], sheets = [], project = null, workPackage = null, openRfiIds = null, today,
+  pkg, submittals = [], sheets = [], supersededSheets = [], project = null, workPackage = null,
+  openRfiIds = null, openRfiNumbers = null, today,
 } = {}) {
   const effectiveState = effectiveDetailingState(pkg, submittals, sheets);
   const stateIdx = ORDER_INDEX(effectiveState);
@@ -63,19 +98,35 @@ export function computeDetailingReadiness({
   const backwardDates = computeBackwardDates(erectionStart, leadDays);
   const scheduleRisk = computeScheduleRisk({ backwardDates, effectiveState, today });
 
-  // RFI blocked: precise when an open-RFI set is supplied (intersect the
-  // package's linked RFI ids); otherwise fall back to "has any linked RFI".
-  const linkedRfiIds = collectLinkedRfiIds(pkg, submittals, sheets);
-  const rfiBlocked = openRfiIds
-    ? [...linkedRfiIds].some((id) => openRfiIds.has(id))
-    : linkedRfiIds.size > 0;
+  // RFI blocked: precise when an open-RFI set is supplied — intersect submittal
+  // links against open UUIDs and sheet links against open NUMBERS, each in its
+  // own id space. Falls back to "has any linked RFI" when neither set is given.
+  const linkedRfiUuids = collectLinkedRfiUuids(submittals);
+  const linkedRfiNums = collectLinkedRfiNumbers(sheets);
+  const rfiBlocked = (openRfiIds || openRfiNumbers)
+    ? (!!openRfiIds && [...linkedRfiUuids].some((id) => openRfiIds.has(id)))
+      || (!!openRfiNumbers && [...linkedRfiNums].some((n) => openRfiNumbers.has(n)))
+    : linkedRfiUuids.size > 0 || linkedRfiNums.size > 0;
 
   // Revision impacted: some (but not all) sheets superseded → a new revision is
-  // working through the package. Fully superseded = the package itself is dead
-  // (surfaced via isPackageSuperseded), not "impacted".
-  const fullySuperseded = isPackageSuperseded(sheets);
-  const revisionImpacted = !fullySuperseded &&
-    (sheets || []).some((s) => s && !s.is_deleted && s.is_superseded === true);
+  // working through the package. Fully superseded = the package itself is dead,
+  // not "impacted".
+  //
+  // The caller passes superseded sheets SEPARATELY (`supersededSheets`), because
+  // buildSetPackages keeps them out of `sheets` so counts and due dates are
+  // unaffected. Deriving both signals from `sheets` alone — which by then holds
+  // only live sheets — made them permanently false. The legacy single-array
+  // form is still honoured for callers that pass everything in `sheets`.
+  const liveSheets = (sheets || []).filter((s) => s && !s.is_deleted);
+  const supersededFromCaller = (supersededSheets || []).filter((s) => s && !s.is_deleted);
+  const supersededInSheets = liveSheets.filter((s) => s.is_superseded === true);
+  const supersededCount = supersededFromCaller.length + supersededInSheets.length;
+  const notSupersededCount = liveSheets.filter((s) => s.is_superseded !== true).length;
+
+  const fullySuperseded = supersededFromCaller.length > 0
+    ? notSupersededCount === 0
+    : isPackageSuperseded(sheets);
+  const revisionImpacted = !fullySuperseded && supersededCount > 0;
 
   const materialImpacted = !!pkg?.material_impacted;
   const longLeadImpact = !!pkg?.long_lead_impact;
@@ -108,7 +159,12 @@ export function computeDetailingReadiness({
   };
 }
 
-const MAX_STATE_IDX = DETAILING_STATE_ORDER.length - 1;
+// Detailing is COMPLETE at "Released" (released for fabrication). The two
+// states after it — Partially Released / Released for Erection — are erection
+// progress, not detailing progress, so dividing by the full order length made
+// "Detailing %" top out at 83% (10/12) for a fully released package and read
+// "Seq 3 — Detailing 83%" next to "Fab 4/4".
+const DETAILING_COMPLETE_IDX = ORDER_INDEX("Released");
 
 /**
  * Sequence-aware readiness rollup: group packages by erection sequence and
@@ -132,7 +188,10 @@ export function computeSequenceReadiness(entries) {
     const g = groups.get(seq);
     g.packageCount += 1;
     const idx = DETAILING_STATE_ORDER.indexOf(e?.effectiveState);
-    g._progressSum += MAX_STATE_IDX > 0 ? Math.max(0, idx) / MAX_STATE_IDX : 0;
+    // Clamped: the post-release erection states are still 100% detailed.
+    g._progressSum += DETAILING_COMPLETE_IDX > 0
+      ? Math.min(1, Math.max(0, idx) / DETAILING_COMPLETE_IDX)
+      : 0;
     if (e?.fabricationReady) g.fabReadyCount += 1;
     if (e?.erectionReady) g.erectionReadyCount += 1;
     if (e?.atRisk) g.atRiskCount += 1;

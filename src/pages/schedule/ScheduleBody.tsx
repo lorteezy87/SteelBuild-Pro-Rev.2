@@ -5,9 +5,8 @@
  * state, mutation objects, and handlers.
  */
 import { Suspense } from "react";
+import { todayLocalISO } from "@/lib/dateMath";
 import type { ComponentType, PropsWithChildren } from "react";
-import { entities } from "@/api/supabaseClient";
-import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
@@ -16,14 +15,14 @@ import ScheduleRivetBriefRaw from "@/components/schedule/ScheduleRivetBrief";
 import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
 import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawerRaw from "@/components/schedule/TaskDetailDrawer";
-import { sanitizeScheduleTaskUpdatePayload } from "./wbs";
-import { invalidateEntity } from "@/services/cacheRegistry";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import BulkActionToolbar from "./BulkActionToolbar";
 import PhaseKpiTiles from "./PhaseKpiTiles";
 import ViewTabs from "./ViewTabs";
 import BulkParentModal from "./BulkParentModal";
 import type { ScheduleTask } from "./types";
+import type { UseScheduleBaselinesResult } from "@/hooks/useScheduleBaselines";
+import type { TaskFloat } from "@/services/scheduleFloat";
 import type { ScheduleModals } from "./useScheduleModals";
 import type { TaskSelection } from "./useTaskSelection";
 
@@ -50,6 +49,9 @@ const BulkDurationEditModal = lazyWithRetry(
 const WbsBuilderModal = lazyWithRetry(
   () => import("@/components/schedule/WbsBuilderModal"),
 ) as unknown as ComponentType<AnyProps>;
+const ScheduleCsvImportModal = lazyWithRetry(
+  () => import("@/components/schedule/ScheduleCsvImportModal"),
+) as unknown as ComponentType<AnyProps>;
 
 interface ScheduleBodyProps {
   // Backdrop for the bulk "Set Parent" modal.
@@ -57,6 +59,7 @@ interface ScheduleBodyProps {
 
   // Derived data
   phaseCounts: Record<string, number>;
+  scheduleBrief: any;
   tasksWithEffective: ScheduleTask[];
   enrichedTasks: ScheduleTask[];
   // Only `.length` is read (the truncation notice). Structural type so the raw
@@ -65,9 +68,10 @@ interface ScheduleBodyProps {
   submittals: any[];
   weatherRisk: any;
   effectiveDatesMap: any;
+  scheduleBaselines: UseScheduleBaselinesResult;
+  floatMap: Record<string, TaskFloat>;
   selectedProject: any;
   projectId: string | null | undefined;
-  qc: any;
   bulkParentOptions: ScheduleTask[];
 
   // View / filter state
@@ -120,15 +124,17 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
   const {
     bulkParentBackdrop,
     phaseCounts,
+    scheduleBrief,
     tasksWithEffective,
     enrichedTasks,
     scheduleTasksRaw,
     submittals,
     weatherRisk,
     effectiveDatesMap,
+  scheduleBaselines,
+  floatMap,
     selectedProject,
     projectId,
-    qc,
     bulkParentOptions,
     view,
     setView,
@@ -184,6 +190,8 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
     setShowBulkParent,
     showBulkDeleteConfirm,
     setShowBulkDeleteConfirm,
+    showCsvImport,
+    setShowCsvImport,
   } = modals;
 
   return (
@@ -199,7 +207,8 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
       <ViewTabs view={view} onSetView={setView} />
 
       <ScheduleRivetBrief
-        tasks={tasksWithEffective}
+        tasks={enrichedTasks}
+        brief={scheduleBrief}
         project={selectedProject}
         phaseFilter={phaseFilter}
         onSetPhaseFilter={setPhaseFilter}
@@ -223,21 +232,28 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
                 tasks={enrichedTasks}
                 submittals={submittals}
                 weatherRisk={weatherRisk}
+                // Full-scope cascade, computed once in Schedule.tsx over EVERY
+                // task. The Gantt must not recompute it from its phase-filtered
+                // rows — that drops cross-phase predecessors and silently shows
+                // un-cascaded dates (audit §1.1).
+                effectiveDates={effectiveDatesMap}
+                // Baselines are project-scoped, so they are fetched in
+                // Schedule.tsx and passed down — deriving them from the
+                // Gantt's phase-filtered rows is the §1.1/§1.5 mistake.
+                projectId={projectId}
+                baselineMap={scheduleBaselines.baselineMap}
+                onBaselineChange={scheduleBaselines.refetch}
+                floatMap={floatMap}
                 expandedTask={expandedTask}
                 setExpandedTask={setExpandedTask}
                 onTaskClick={(task: ScheduleTask) => { setSelectedTask(task); setShowDrawer(true); }}
-                onSave={async (data: ScheduleTask) => {
-                  const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                  try {
-                    if (!id) throw new Error("Cannot update a task without an id");
-                    await entities.ScheduleTask.update(id, fields);
-                    invalidateEntity(qc, "schedule_task", projectId);
-                    toast.success("Task saved");
-                  } catch (err: any) {
-                    toast.error("Save failed: " + (err?.message || "unknown error"));
-                    throw err;
-                  }
-                }}
+                // The canonical update path (§4.2). This used to inline its own
+                // ScheduleTask.update, which meant the inline row editor and the
+                // bar drag skipped actuals stamping, the status/percent
+                // reconciliation the database requires, and the optimistic
+                // paint. mutateAsync keeps the await-and-throw contract the
+                // Gantt's own commitEdit relies on to hold the editor open.
+                onSave={(data: ScheduleTask) => updateTaskMut.mutateAsync(data)}
                 onReparent={(p: { ids: string[]; newParentId: string | null; dropIndex?: number | null }) =>
                   reparentMut.mutate(p)
                 }
@@ -275,18 +291,8 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
                 setShowDrawer(true);
               }}
               onDelete={(task: ScheduleTask) => setDeleteTarget(task)}
-              onSave={async (data: ScheduleTask) => {
-                const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                try {
-                  if (!id) throw new Error("Cannot update a task without an id");
-                  await entities.ScheduleTask.update(id, fields);
-                  invalidateEntity(qc, "schedule_task", projectId);
-                  toast.success("Task saved");
-                } catch (err: any) {
-                  toast.error("Save failed: " + (err?.message || "unknown error"));
-                  throw err;
-                }
-              }}
+              // Same canonical path as the Gantt above — see the note there.
+              onSave={(data: ScheduleTask) => updateTaskMut.mutateAsync(data)}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}
             />
@@ -315,8 +321,11 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
           <AddTaskModal
             open={showAddTask}
             onClose={() => setShowAddTask(false)}
+            // mutateAsync, not mutate: the modal awaits the result so "Save &
+            // Add Next" can clear the form only when the task really landed,
+            // and can leave it exactly as typed when it did not.
             onSubmit={(data: ScheduleTask) =>
-              createTaskMut.mutate({
+              createTaskMut.mutateAsync({
                 ...data,
                 project_id: projectId,
                 percent_complete: 0,
@@ -324,7 +333,7 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
             }
             isSaving={createTaskMut.isPending}
             projectName={selectedProject?.name || ""}
-            prefilledDate={new Date().toISOString().split("T")[0]}
+            prefilledDate={todayLocalISO()}
             existingTasks={enrichedTasks}
           />
         </Suspense>
@@ -339,6 +348,18 @@ export default function ScheduleBody(props: ScheduleBodyProps) {
             projectName={selectedProject?.name || ""}
             isSaving={bulkSaving}
             existingTasks={enrichedTasks}
+          />
+        </Suspense>
+      )}
+
+      {showCsvImport && (
+        <Suspense fallback={null}>
+          <ScheduleCsvImportModal
+            open={showCsvImport}
+            projectId={projectId}
+            projectName={selectedProject?.name || ""}
+            existingTasks={enrichedTasks}
+            onClose={() => setShowCsvImport(false)}
           />
         </Suspense>
       )}

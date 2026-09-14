@@ -6,6 +6,7 @@ import { FileText, Link2, Paperclip, Reply, ReplyAll, Send, X } from "lucide-rea
 import { entities } from "@/api/supabaseClient";
 import { Modal as ModalRaw } from "@/components/design-system";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { sendEmail, buildReplyDefaults } from "@/services/emailSendService";
 import {
   ENTITY_TYPE_OPTIONS,
@@ -87,35 +88,35 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
       const aiPriority = extracted?.priority ? (priorityMap[extracted.priority] || "Medium") : "Medium";
 
       if (entityType === "rfi") {
-        createdRecord = await entities.RFI.create({
-          project_id: projectId, subject: title, question: description,
+        createdRecord = await entities.RFI.create(withProjectId({
+          subject: title, question: description,
           status: "Open", priority: aiPriority,
           ...(extracted?.rfi_number ? { rfi_number: extracted.rfi_number } : {}),
           ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
           ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
-        } as any);
+        }, projectId) as any);
         invalidateEntity(qc, "rfi", projectId);
       } else if (entityType === "action_item") {
-        createdRecord = await entities.ActionItem.create({
-          project_id: projectId, title, description, status: "Open", priority: aiPriority,
+        createdRecord = await entities.ActionItem.create(withProjectId({
+          title, description, status: "Open", priority: aiPriority,
           ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
           ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
-        } as any);
+        }, projectId) as any);
         invalidateEntity(qc, "action_item", projectId);
       } else if (entityType === "submittal") {
-        createdRecord = await entities.Submittal.create({
+        createdRecord = await entities.Submittal.create(withProjectId({
           // "Draft" is the canonical not-yet-submitted status. ("Open" is valid
           // for RFI/ActionItem above but is rejected by submittals_status_check,
           // which previously made this create always throw.)
-          project_id: projectId, title, description, status: "Draft",
+          title, description, status: "Draft",
           ...(extracted?.submittal_number ? { submittal_number: extracted.submittal_number } : {}),
-        } as any);
+        }, projectId) as any);
         invalidateEntity(qc, "submittal", projectId);
       } else if (entityType === "change_order") {
-        createdRecord = await entities.ChangeOrder.create({
-          project_id: projectId, title, description, status: "Pending",
+        createdRecord = await entities.ChangeOrder.create(withProjectId({
+          title, description, status: "Pending",
           ...(extracted?.due_date ? { response_due: extracted.due_date } : {}),
-        } as any);
+        }, projectId) as any);
         invalidateEntity(qc, "change_order", projectId);
       }
       if (createdRecord) {
@@ -133,8 +134,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
             try {
               const ext = (att.filename || "").split(".").pop()?.toLowerCase() || "other";
               const knownTypes = ["pdf","dwg","dxf","ifc","rvt","jpg","jpeg","png","xlsx","xls","docx","doc","csv","zip"];
-              await entities.Document.create({
-                project_id: projectId,
+              await entities.Document.create(withProjectId({
                 display_name: att.filename,
                 description: `Filed from email: ${message.subject || "(no subject)"}\nFrom: ${message.sender_name || message.sender_email}`,
                 file_name: att.filename,
@@ -156,7 +156,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
                 uploaded_date: today,
                 source_type: "email",
                 source_id: message.id,
-              } as any);
+              }, projectId) as any);
               filedCount++;
             } catch (docErr) {
               console.error(`[EmailInbox] Failed to file attachment ${att.filename}:`, docErr);
@@ -172,7 +172,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
       toast.success(`${typeName} created from email${attMsg}`);
       onSuccess();
     } catch (err: any) {
-      toast.error("Failed: " + (err?.message || "Unknown error"));
+      toast.error(`Failed: ${toUserErrorMessage(err)}`);
     } finally { setSaving(false); }
   };
 
@@ -343,7 +343,7 @@ export function LinkToExistingModal({ message, projectId, onClose, onSuccess }: 
       toast.success("Email linked to existing record");
       onSuccess();
     } catch (err: any) {
-      toast.error("Failed: " + (err?.message || "Unknown error"));
+      toast.error(`Failed: ${toUserErrorMessage(err)}`);
     } finally { setSaving(false); }
   };
 

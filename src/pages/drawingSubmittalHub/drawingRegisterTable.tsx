@@ -15,14 +15,13 @@ import {
   accent,
   border,
   currentRevisionForPackage,
-  dueInfoFor,
-  getSubmittalDueDate,
   isClosedPackage,
   mono,
   success,
   surface1,
   textMuted,
   textPrimary,
+  resolveDrawingPackageDue,
 } from "./format";
 import type { CurrentRevisionInfo } from "./types";
 import {
@@ -54,6 +53,7 @@ const DrawingLogImportModal = lazyWithRetry(() => import("@/components/drawings/
 // element differs (<td> in the table, grid <div> in the virtual list).
 interface RegisterRowHandlers {
   rowBtn: CSSProperties;
+  canEdit: boolean;
   aiDiffEnabled: boolean;
   onOpenSummary?: (summary: any) => void;
   setHealthDetail: (h: any) => void;
@@ -82,7 +82,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", minWidth: 0 }}>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.pkg.name}</span>
           {r.locked && (
-            <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "#f59e0b", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.4)", textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
+            <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "var(--cmd-warn-text)", background: "var(--cmd-chip-warn-bg)", border: "1px solid color-mix(in srgb, var(--cmd-warn) 40%, transparent)", textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
               <Lock size={9} /> Locked
             </span>
           )}
@@ -103,7 +103,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
       <GridCell><DueChip info={r.due} /></GridCell>
       <GridCell align="right" style={{ color: textMuted }}>{r.maxRev || "—"}</GridCell>
       <GridCell align="right" style={{ whiteSpace: "nowrap" }}>
-        {r.pkg.parent && (
+        {h.canEdit && r.pkg.parent && (
           <button
             type="button"
             disabled={r.locked}
@@ -143,7 +143,7 @@ function RegisterVirtualList({
   });
 
   return (
-    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
+    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflowX: "auto", background: surface1 }}>
       <div style={{
         display: "grid", gridTemplateColumns: REGISTER_GRID_COLS,
         borderBottom: `1px solid ${border}`, borderLeft: "3px solid transparent",
@@ -240,7 +240,9 @@ export function DrawingRegisterTable({
   const allSheets = useMemo(() => (setPackages || []).flatMap((p: any) => p.sheets || []), [setPackages]);
   const existingSetNames = useMemo(() => [...new Set((setPackages || []).map((p: any) => p.name).filter(Boolean))], [setPackages]);
   const refetchDrawings = () => {
-    qc.invalidateQueries({ queryKey: ["drawings"] });
+    // Scope every key with projectId — bare ["drawings"] refetches every
+    // project's drawing queries still in the cache (portfolio fan-out).
+    qc.invalidateQueries({ queryKey: ["drawings", projectId] });
     qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
     qc.invalidateQueries({ queryKey: ["drawing-revisions", projectId] });
     // Doc Control register reads the current revision from drawing_register_view
@@ -260,7 +262,8 @@ export function DrawingRegisterTable({
       .map((pkg: any) => {
         const sheets: any[] = pkg.sheets || [];
         const submittals: any[] = pkg.submittals || [];
-        const latestSubmittal = submittals.slice().sort((a, b) => (b.round_number || 1) - (a.round_number || 1))[0] || null;
+        const packageDue = resolveDrawingPackageDue(pkg, workdayDues);
+        const latestSubmittal = packageDue.governingSubmittal;
         const sheetCount = sheets.length || (pkg.parent?.sheet_count ?? 0);
         // Per-sheet "released" count is DISPLAY ONLY (the n/total badge). It still
         // reads the legacy columns to show progress, but it MUST NOT decide the
@@ -276,7 +279,7 @@ export function DrawingRegisterTable({
         // Released column — a mid-flow submittal can't render alongside a green
         // "Released", and a released package reads "Released" in both columns.
         const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);
-        const due = dueInfoFor(getSubmittalDueDate(latestSubmittal), { closed: done, useWorkdays: workdayDues });
+        const due = packageDue.due;
         const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
         // §20-21: the displayed Rev is a per-set rollup of the AUTHORITATIVE
         // current revision (drawing_revisions.is_current via currentRevByDrawingId)
@@ -324,7 +327,7 @@ export function DrawingRegisterTable({
   const VIRTUALIZE_THRESHOLD = 100;
   const shouldVirtualize = rows.length > VIRTUALIZE_THRESHOLD;
   const rowHandlers: RegisterRowHandlers = {
-    rowBtn, aiDiffEnabled, onOpenSummary, setHealthDetail, setRevisionSet, setReportSet,
+    rowBtn, canEdit, aiDiffEnabled, onOpenSummary, setHealthDetail, setRevisionSet, setReportSet,
   };
 
   if (isLoading) return <LoadingSkeleton />;
@@ -363,7 +366,7 @@ export function DrawingRegisterTable({
         // kit table styling without breaking the virtual renderer's grid geometry.
         <RegisterVirtualList rows={rows} sortByHealth={sortByHealth} setSortByHealth={setSortByHealth} h={rowHandlers} />
       ) : (
-      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
+      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflowX: "auto", background: surface1 }}>
         {/* desk-table: kit table class — plain-table codepath only (see note on RegisterVirtualList above). */}
         <table className="desk-table" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -411,7 +414,7 @@ export function DrawingRegisterTable({
                 <Td style={{ color: textPrimary, fontWeight: 600 }}>
                   {r.pkg.name}
                   {r.locked && (
-                    <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "#f59e0b", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.4)", textTransform: "uppercase", letterSpacing: "0.04em", verticalAlign: "middle" }}>
+                    <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "var(--cmd-warn-text)", background: "var(--cmd-chip-warn-bg)", border: "1px solid color-mix(in srgb, var(--cmd-warn) 40%, transparent)", textTransform: "uppercase", letterSpacing: "0.04em", verticalAlign: "middle" }}>
                       <Lock size={9} /> Locked
                     </span>
                   )}
@@ -444,7 +447,7 @@ export function DrawingRegisterTable({
                 <Td><DueChip info={r.due} /></Td>
                 <Td className="is-num" style={{ textAlign: "right", color: textMuted }}>{r.maxRev || "—"}</Td>
                 <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                  {r.pkg.parent && (
+                  {canEdit && r.pkg.parent && (
                     <button
                       type="button"
                       disabled={r.locked}
@@ -466,9 +469,9 @@ export function DrawingRegisterTable({
 
       {healthDetail && <HealthBreakdownDialog health={healthDetail} onClose={() => setHealthDetail(null)} />}
 
-      {revisionSet && (
+      {canEdit && revisionSet && (
         <Suspense fallback={<ModalLoadingFallback />}>
-          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => { onRevisionUploaded?.(revisionSet?.key); setRevisionSet(null); }} activeProject={activeProject} preSelectedSet={revisionSet?.parent || revisionSet} drawingSets={drawingSets} />
+          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => { refetchDrawings(); onRevisionUploaded?.(revisionSet?.key); setRevisionSet(null); }} activeProject={activeProject} preSelectedSet={revisionSet?.parent || revisionSet} drawingSets={drawingSets} />
         </Suspense>
       )}
       {reportSet && (
