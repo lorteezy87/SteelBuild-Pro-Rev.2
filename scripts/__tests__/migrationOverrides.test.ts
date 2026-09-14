@@ -149,4 +149,96 @@ describe('the real manifest', () => {
       expect(entry.evidence.length).toBeGreaterThan(40);
     }
   });
+
+  it('leaves no local migration unclassified', () => {
+    // Every local migration must either be in the remote ledger or carry an
+    // override. A gap here means a file nothing can ever account for.
+    const overridden = new Set(
+      (manifest.local.migrationOverrides ?? []).map((e: { version: string }) => e.version),
+    );
+    const unaccounted = local.migrations.filter(
+      (v: string) => !overridden.has(v) && !LEDGER.has(v),
+    );
+    expect(unaccounted).toEqual([]);
+  });
+
+  it('records uncertain lineage as unresolved, never as frozen', () => {
+    // The runbook's lifecycle contract: an identifier with uncertain source or
+    // lineage is recorded as unresolved and never silently allowlisted.
+    // unresolved always fails drift until an owner restores the lineage, which
+    // is the point — freezing these would hide them.
+    const byVersion = new Map<string, { lifecycle: string; evidence: string }>(
+      (manifest.local.migrationOverrides ?? []).map((e: { version: string }) => [e.version, e]),
+    );
+    for (const version of ['20260727232000', '20260801013000', '20260913090000']) {
+      expect(byVersion.get(version)?.lifecycle, `${version} must stay unresolved`).toBe('unresolved');
+    }
+  });
+
+  it('spells out the fab-release gate drift rather than burying it', () => {
+    // 20260727232000 is the P0 path. The live gate is two layers of untracked
+    // drift and the divergence is bidirectional, so neither stamping nor
+    // applying is safe — an owner has to decide.
+    const entry = (manifest.local.migrationOverrides ?? [])
+      .find((e: { version: string }) => e.version === '20260727232000');
+    expect(entry.lifecycle).toBe('unresolved');
+    expect(entry.evidence).toMatch(/work_package_drawing_set_reports/);
+    expect(entry.evidence).toMatch(/evaluate_fab_release_set/);
+    expect(entry.evidence).toMatch(/bidirectional/i);
+    expect(entry.evidence).toMatch(/do not stamp and do not apply/i);
+  });
+
+  it('marks a migration whose data repair was never verified as schema-only', () => {
+    const byVersion = new Map<string, { lifecycle: string; evidence: string }>(
+      (manifest.local.migrationOverrides ?? []).map((e: { version: string }) => [e.version, e]),
+    );
+    for (const version of ['20260904120000', '20260908140000']) {
+      const entry = byVersion.get(version);
+      expect(entry?.lifecycle).toBe('intentionally-frozen');
+      // must not read as a blanket "applied"
+      expect(entry?.evidence).toMatch(/NEVER VERIFIED|never verified/);
+      expect(entry?.evidence).toMatch(/schema-only/i);
+    }
+  });
+
+  it('refuses to stamp a repair the ledger already records under another version', () => {
+    const entry = (manifest.local.migrationOverrides ?? [])
+      .find((e: { version: string }) => e.version === '20260817020000');
+    expect(entry.lifecycle).toBe('intentionally-frozen');
+    expect(entry.evidence).toMatch(/20260817083550/);
+    expect(entry.evidence).toMatch(/MUST NOT BE STAMPED/);
+  });
 });
+
+/**
+ * The live ledger at the time these overrides were written (121 rows). Kept as
+ * a literal so the "nothing unclassified" test above is deterministic and needs
+ * no network access.
+ */
+const LEDGER = new Set([
+  '20260101000000', '20260101000010', '20260101000020', '20260620231716', '20260623032908',
+  '20260623042453', '20260626041744', '20260629091126', '20260629184030', '20260630000310',
+  '20260630040350', '20260630060251', '20260630060302', '20260630131332', '20260702032954',
+  '20260702034009', '20260702035058', '20260703152625', '20260703170000', '20260703180000',
+  '20260704000000', '20260704000005', '20260704000010', '20260704020000', '20260704020010',
+  '20260704030000', '20260705000000', '20260707061933', '20260707120000', '20260710070047',
+  '20260710080000', '20260712000000', '20260712141821', '20260715235514', '20260716081258',
+  '20260718000000', '20260718010000', '20260718020000', '20260718030000', '20260718040000',
+  '20260718050000', '20260718070000', '20260720195844', '20260720213000', '20260721030200',
+  '20260721031557', '20260721031606', '20260721060621', '20260721230000', '20260724120000',
+  '20260724130000', '20260724140000', '20260724150000', '20260725183000', '20260725190000',
+  '20260725193000', '20260725194500', '20260725200000', '20260725203000', '20260725210000',
+  '20260727012111', '20260727192742', '20260802090000', '20260802090500', '20260817072554',
+  '20260817083550', '20260906040515', '20260908045525', '20260909011728', '20260909014620',
+  '20260909020328', '20260909021554', '20260909025658', '20260909031838', '20260909033138',
+  '20260909034903', '20260909042216', '20260909043638', '20260909050350', '20260909051637',
+  '20260909053304', '20260909055216', '20260909062016', '20260909062929', '20260909064310',
+  '20260909065749', '20260909070839', '20260909073142', '20260909073500', '20260909074754',
+  '20260909080453', '20260909082019', '20260909083319', '20260909084749', '20260909090445',
+  '20260909091118', '20260909092236', '20260909093448', '20260909100010', '20260909104609',
+  '20260909111157', '20260909113533', '20260910025557', '20260910031027', '20260910031540',
+  '20260910034739', '20260910040138', '20260910044641', '20260911062832', '20260912023827',
+  '20260912034015', '20260912042823', '20260912045532', '20260912052502', '20260912055243',
+  '20260912062606', '20260913201853', '20260913201900', '20260913203000', '20260914010000',
+  '20260914020000',
+]);
