@@ -127,7 +127,9 @@ export default function PayApplications() {
     mutationFn: (input) => {
       assertProjectId(projectId);
       if (!sourcesReady || !Number.isFinite(contract.netChangeOrders) || contractQuery.data?.original_contract_value == null) throw new Error("Wait for current SOV and change orders before creating an application.");
-      return createPayApplication({ projectId, ...input }, { sovItems, contract });
+      // generate_pay_application() reads the SOV and the contract server-side,
+      // so the client no longer hands them in.
+      return createPayApplication({ projectId, ...input });
     },
     onSuccess: (app) => { logActivity("pay_application", "created", app, { projectId }); refresh(); setNewOpen(false); setSelectedId(app.id); toast.success(`Pay Application #${app.application_number} created`); },
     onError: (e) => {

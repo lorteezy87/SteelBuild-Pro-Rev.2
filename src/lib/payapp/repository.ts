@@ -5,10 +5,19 @@
  * the prior app's completed work forward), persists edits, and keeps the header
  * totals in sync. The tables aren't in the generated DB types, so we use an
  * untyped `from` and enforce shape via these typed signatures.
+ *
+ * Writes go through RPCs, not the tables. enforce_pay_application_guards
+ * rejects a direct INSERT ("Use generate_pay_application() — application
+ * numbers are minted there"), any status or stamp change ("Pay-application
+ * status and stamps move only through move_pay_application()") and any typed
+ * header total ("G702 totals are computed from the G703 lines, never typed").
+ * Each guard tests a transaction-local steelbuild.payapp_rpc GUC that only the
+ * RPCs set, so a PostgREST client can never satisfy it — creating or advancing
+ * an application by writing the table failed with 42501 every time.
  */
 import { supabase } from "@/lib/supabase";
-import { applyLineProgress, buildLinesFromSov, computeG702 } from "./g702";
-import type { ContractContext, PayApplication, PayApplicationLine } from "./types";
+import { applyLineProgress } from "./g702";
+import type { PayApplication, PayApplicationLine } from "./types";
 
  
 const from = (table: string): any => (supabase.from as unknown as (t: string) => any)(table);
@@ -69,64 +78,65 @@ export async function listPayAppChangeOrders(projectId: string): Promise<PayAppC
 }
 
 /**
- * Create the next pay application for a project: drafts G703 lines from the SOV,
- * carries the prior app's completed work forward, and seeds the G702 figures.
+ * Create the next pay application for a project.
+ *
+ * generate_pay_application() does all of it in one transaction: mints the
+ * number from get_next_sequence_number(project,'pay_application'), reads the
+ * contract and retainage off the project, sums the live SOV, drafts the G703
+ * lines via build_pay_application_lines(), then refreshes the G702 header with
+ * refresh_pay_application_totals(). It also refuses a second open draft
+ * ("Finish or void the open draft pay application first") and records whether
+ * the SOV reconciles against contract + approved change orders.
+ *
+ * So the client no longer derives the application number (that was a
+ * client-side mint, against the number-sequence rule), builds lines, or
+ * computes header totals — the guard rejects typed totals outright.
  */
 export async function createPayApplication(
-  input: { projectId: string; periodFrom?: string | null; periodTo?: string | null; retainagePercent: number; notes?: string | null },
-  ctx: { sovItems: SovLineLike[]; contract: ContractContext },
+  input: { projectId: string; periodFrom?: string | null; periodTo?: string | null; retainagePercent?: number; notes?: string | null },
 ): Promise<PayApplication> {
-  const existing = await listPayApplications(input.projectId); // desc by app #
-  // App numbers are never reused (continue past the highest existing, incl. void),
-  // but the financial carry-forward basis must come from the last NON-VOID app: a
-  // voided app certified nothing, so seeding G703 previous-work / G702 line 7 from
-  // it would overstate the new certificate's "less previous certificates".
-  const highest = existing[0] || null;
-  const prior = existing.find((a) => a.status !== "void") || null;
-  const applicationNumber = (highest?.application_number || 0) + 1;
-  const priorLines = prior ? await listLines(prior.id) : [];
-  // G702 line 7: cumulative earned-less-retainage certified through the prior app
-  // (total completed & stored − retainage; the column isn't stored, so derive it).
-  const lessPreviousCertificates = prior ? subPrior(prior) : 0;
-
-  const draftLines = buildLinesFromSov({ sovItems: ctx.sovItems, priorLines, retainagePercent: input.retainagePercent });
-  const g = computeG702({ contract: ctx.contract, lines: draftLines, lessPreviousCertificates });
-
-  const { data: app, error } = await from("pay_applications").insert({
-    project_id: input.projectId,
-    application_number: applicationNumber,
-    period_from: input.periodFrom ?? null,
-    period_to: input.periodTo ?? null,
-    retainage_percent: input.retainagePercent,
-    original_contract_sum: ctx.contract.originalContractSum,
-    net_change_orders: ctx.contract.netChangeOrders,
-    total_completed_stored: g.totalCompletedStored,
-    total_retainage: g.totalRetainage,
-    less_previous_certificates: lessPreviousCertificates,
-    current_payment_due: g.currentPaymentDue,
-    notes: input.notes ?? null,
-  }).select().single();
+  const { data, error } = await supabase.rpc("generate_pay_application", {
+    p_project_id: input.projectId,
+    p_period_from: input.periodFrom ?? null,
+    p_period_to: input.periodTo ?? null,
+    p_notes: input.notes ?? null,
+  });
   if (error) throw error;
+  const app = data as unknown as PayApplication;
 
-  if (draftLines.length) {
-    const rows = draftLines.map((l) => ({
-      pay_application_id: app.id,
-      project_id: input.projectId,
-      sov_item_id: l.sov_item_id ?? null,
-      line_item_number: l.line_item_number ?? null,
-      description: l.description ?? null,
-      scheduled_value: l.scheduled_value,
-      work_completed_previous: l.work_completed_previous,
-      work_completed_this_period: l.work_completed_this_period,
-      materials_stored: l.materials_stored,
-      percent_complete: l.percent_complete,
-      retainage: l.retainage,
-      sort_order: l.sort_order ?? 0,
-    }));
-    const { error: lerr } = await from("pay_application_lines").insert(rows);
-    if (lerr) throw lerr;
+  // The RPC seeds retainage from projects.retainage_percent. If the form asked
+  // for a different rate, set it while the application is still draft (the
+  // guard permits period and retainage edits only in draft) and re-touch the
+  // lines: each line's retainage is computed by the BEFORE trigger from the
+  // header rate, and that trigger only fires on a line write.
+  const wanted = Number(input.retainagePercent);
+  if (Number.isFinite(wanted) && num(app.retainage_percent) !== wanted) {
+    const { error: rateError } = await from("pay_applications")
+      .update({ retainage_percent: wanted })
+      .eq("id", app.id);
+    if (rateError) throw rateError;
+    await retouchLines(app.id);
+    return recomputeTotals(String(app.id));
   }
-  return app as PayApplication;
+  return app;
+}
+
+/**
+ * Fire compute_pay_application_line on every line without changing intent.
+ *
+ * Writing materials_stored back to itself is a no-op to the data and the whole
+ * point: the BEFORE trigger recomputes total_completed_stored, percent_complete,
+ * retainage and balance_to_finish from the header's retainage rate, and there is
+ * no other way to ask it to run.
+ */
+async function retouchLines(payApplicationId: string): Promise<void> {
+  const lines = await listLines(payApplicationId);
+  for (const line of lines) {
+    const { error } = await from("pay_application_lines")
+      .update({ materials_stored: line.materials_stored ?? 0 })
+      .eq("id", line.id);
+    if (error) throw error;
+  }
 }
 
 // Fallback if an older prior app didn't persist total_earned_less_retainage.
@@ -134,23 +144,18 @@ function subPrior(prior: PayApplication): number {
   return num(prior.total_completed_stored) - num(prior.total_retainage);
 }
 
-/** Recompute + persist the G702 header totals from the current lines. */
+/**
+ * Recompute + persist the G702 header totals from the current lines.
+ *
+ * refresh_pay_application_totals() is the only way: the guard rejects a typed
+ * total_completed_stored / total_retainage / current_payment_due outright.
+ */
 export async function recomputeTotals(payApplicationId: string): Promise<PayApplication> {
+  const { error } = await supabase.rpc("refresh_pay_application_totals", { p_id: payApplicationId });
+  if (error) throw error;
   const app = await getPayApplication(payApplicationId);
   if (!app) throw new Error("Pay application not found");
-  const lines = await listLines(payApplicationId);
-  const g = computeG702({
-    contract: { originalContractSum: num(app.original_contract_sum), netChangeOrders: num(app.net_change_orders), retainagePercent: num(app.retainage_percent) },
-    lines,
-    lessPreviousCertificates: num(app.less_previous_certificates),
-  });
-  const { data, error } = await from("pay_applications").update({
-    total_completed_stored: g.totalCompletedStored,
-    total_retainage: g.totalRetainage,
-    current_payment_due: g.currentPaymentDue,
-  }).eq("id", payApplicationId).select().single();
-  if (error) throw error;
-  return data as PayApplication;
+  return app;
 }
 
 /** Apply a % / stored edit to a line, then resync the header. Returns the app. */
@@ -160,17 +165,53 @@ export async function updateLine(
   retainagePercent: number,
 ): Promise<PayApplication> {
   const next = applyLineProgress(line, edit, retainagePercent);
+  // Only the two columns a person actually enters. compute_pay_application_line
+  // derives total_completed_stored, percent_complete, retainage and
+  // balance_to_finish from these plus the header rate, and overwrites whatever
+  // is sent for them — so sending a percent was at best ignored and at worst a
+  // different number from the one the database then stored.
   const { error } = await from("pay_application_lines").update({
-    percent_complete: next.percent_complete,
     work_completed_this_period: next.work_completed_this_period,
     materials_stored: next.materials_stored,
-    retainage: next.retainage,
   }).eq("id", line.id);
   if (error) throw error;
   return recomputeTotals(String(line.pay_application_id));
 }
 
+/**
+ * Columns the guard reserves for move_pay_application(): the status itself plus
+ * every stamp that records who moved it and when.
+ */
+const MOVE_ONLY_COLUMNS = [
+  "status",
+  "submitted_date",
+  "submitted_by",
+  "certified_date",
+  "approved_by",
+  "paid_date",
+  "void_reason",
+] as const;
+
 export async function updatePayApplication(id: string, patch: Partial<PayApplication>): Promise<PayApplication> {
+  const moving = MOVE_ONLY_COLUMNS.some((column) => column in patch);
+  if (moving) {
+    // move_pay_application() validates the transition against
+    // pay_application_transition_allowed, requires a written reason to void,
+    // refuses to submit an application with no G703 lines, rolls the certified
+    // percentages onto the SOV on approval (and marks it Paid on payment), and
+    // re-refreshes every LATER draft application, whose "less previous
+    // certificates" depends on this one. None of that is reproducible from a
+    // table UPDATE, which is why the guard rejects one.
+    const { data, error } = await supabase.rpc("move_pay_application", {
+      p_id: id,
+      p_status: String((patch as Record<string, unknown>).status ?? ""),
+      p_notes: (patch.void_reason ?? patch.notes ?? null) as string | null,
+      p_actor: null,
+      p_date: null,
+    });
+    if (error) throw error;
+    return data as unknown as PayApplication;
+  }
   const { data, error } = await from("pay_applications").update(patch).eq("id", id).select().single();
   if (error) throw error;
   return data as PayApplication;
