@@ -14,7 +14,7 @@
     "deploy": "wrangler deploy",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
-    "typecheck": "tsc -p ./tsconfig.json",
+    "typecheck": "tsc -p ./tsconfig.json && tsc -p ./tsconfig.scripts.json",
     "typecheck:js": "tsc -p ./jsconfig.json",
     "typecheck:strict": "node scripts/strict-typecheck.mjs",
     "typecheck:noimplicitany": "node scripts/noimplicitany-typecheck.mjs",

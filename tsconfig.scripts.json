@@ -1,0 +1,31 @@
+{
+  // Type-checks the Node tooling under scripts/ (CLI helpers and their tests).
+  // tsconfig.json only includes src/, so no scripts/**/*.ts was compiled by any
+  // gate before this file existed. Run as part of `npm run typecheck`.
+  //
+  // Some of these files are executed directly by Node's built-in type stripping
+  // (`node scripts/supabase-retire-deprecated.ts` in the retirement workflow),
+  // so the options below reject what that runtime cannot run: extensionless
+  // relative imports (nodenext), enums/namespaces/parameter properties
+  // (erasableSyntaxOnly), and unmarked type-only imports (verbatimModuleSyntax).
+  "compilerOptions": {
+    "target": "esnext",
+    "lib": ["esnext"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    // The .mjs helpers these files import are typed by inference from their
+    // source. checkJs stays off, so this gate reports errors in .ts files only.
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.ts", "scripts/**/*.mts", "scripts/**/*.cts"]
+}
