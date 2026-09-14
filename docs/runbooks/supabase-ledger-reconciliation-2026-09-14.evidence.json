@@ -80,10 +80,11 @@
     "20260905130000",
     "20260909014620"
    ],
-   "recorded": true,
+   "recorded": false,
    "evidence": "Live; its refresh body was later replaced by 20260905130000, and 20260914120000 adopts production's soft_delete_project",
    "verification": "confirmed by independent reviewer",
-   "decisive_queries": "Q0 production ledger: SELECT version FROM supabase_migrations.schema_migrations WHERE version IN ('20260801013000','20260801120000','20260802010000','20260805030000','20260805030100','20260805100000') returns 0 rows. The range 20260730-20260807 holds only 20260802090000 and 20260802090500.\nQ1 production: SELECT p.proname, md5(p.prosrc), md5(replace(p.prosrc,E'\\r\\n',E'\\n')), strpos(p.prosrc,'skip_wp_progress_refresh')>0, (SELECT string_agg(s.version,',') FROM supabase_migrations.schema_migrations s WHERE strpos(replace(array_to_string(s.statements,E'\\n'),E'\\r\\n',E'\\n'), replace(p.prosrc,E'\\r\\n',E'\\n'))>0) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('refresh_work_package_progress','work_packages_soft_delete_unassign_pieces','soft_delete_project')\nResults: refresh f37f50a4... skip=t, no stamps; work_packages_soft_delete_unassign_pieces raw ba4e1adb..., LF 9cc100455e94ed9297a20952aef1c4c2, skip=t, no stamps; soft_delete_project 6ac048fb..., skip=t, stamp 20260909014620.\nQ2 replay, same md5(prosrc): refresh f37f50a4, trigger function 9cc10045, soft_delete_project 5dc9d55d. Function bodies extracted between the dollar quotes of the files: 20260801013000 refresh 923bb7e0, trigger function 9cc10045, soft_delete_project 5dc9d55d; 20260905130000 refresh f37f50a4.\nQ3 production and replay: has_function_privilege('anon'|'authenticated'|'service_role', 'public.soft_delete_project(uuid)'::regprocedure, 'EXECUTE') returns f/t/f in bo"
+   "decisive_queries": "Q0 production ledger: SELECT version FROM supabase_migrations.schema_migrations WHERE version IN ('20260801013000','20260801120000','20260802010000','20260805030000','20260805030100','20260805100000') returns 0 rows. The range 20260730-20260807 holds only 20260802090000 and 20260802090500.\nQ1 production: SELECT p.proname, md5(p.prosrc), md5(replace(p.prosrc,E'\\r\\n',E'\\n')), strpos(p.prosrc,'skip_wp_progress_refresh')>0, (SELECT string_agg(s.version,',') FROM supabase_migrations.schema_migrations s WHERE strpos(replace(array_to_string(s.statements,E'\\n'),E'\\r\\n',E'\\n'), replace(p.prosrc,E'\\r\\n',E'\\n'))>0) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('refresh_work_package_progress','work_packages_soft_delete_unassign_pieces','soft_delete_project')\nResults: refresh f37f50a4... skip=t, no stamps; work_packages_soft_delete_unassign_pieces raw ba4e1adb..., LF 9cc100455e94ed9297a20952aef1c4c2, skip=t, no stamps; soft_delete_project 6ac048fb..., skip=t, stamp 20260909014620.\nQ2 replay, same md5(prosrc): refresh f37f50a4, trigger function 9cc10045, soft_delete_project 5dc9d55d. Function bodies extracted between the dollar quotes of the files: 20260801013000 refresh 923bb7e0, trigger function 9cc10045, soft_delete_project 5dc9d55d; 20260905130000 refresh f37f50a4.\nQ3 production and replay: has_function_privilege('anon'|'authenticated'|'service_role', 'public.soft_delete_project(uuid)'::regprocedure, 'EXECUTE') returns f/t/f in bo",
+   "not_recorded_reason": "Main manifest keeps its lineage unresolved: two of its three function bodies are not live and their provenance is not established."
   },
   {
    "version": "20260801120000",
@@ -161,19 +162,21 @@
    "version": "20260813120000",
    "name": "note_folders_job_linking",
    "classification": "superseded",
-   "recorded": true,
+   "recorded": false,
    "evidence": "Production ran this exact file under restamp 20260817072554",
    "verification": "checked directly (reviewer agents stalled)",
-   "decisive_queries": "Ledger 20260817072554 statements[1]: 41049 bytes, md5 78c37e933c4375375d5739d404a76a55, equal to the file."
+   "decisive_queries": "Ledger 20260817072554 statements[1]: 41049 bytes, md5 78c37e933c4375375d5739d404a76a55, equal to the file.",
+   "not_recorded_reason": "Production ran this file under restamp 20260817072554; a second row would record one migration twice (main manifest: the filename version will never appear in the ledger)."
   },
   {
    "version": "20260817020000",
    "name": "repair_bimc_rfi_and_schedule_dates",
    "classification": "superseded",
-   "recorded": true,
+   "recorded": false,
    "evidence": "Production ran the same two guarded UPDATEs under restamp 20260817083550; their target rows no longer exist, so a re-run would change nothing",
    "verification": "checked directly (reviewer agents stalled)",
-   "decisive_queries": "Ledger 20260817083550 statements[1] (631 bytes) holds the same two UPDATE statements as the file (918 bytes; only comments differ). Counts of the three target rows in production: 0 (query role bypasses RLS; tables not forced)."
+   "decisive_queries": "Ledger 20260817083550 statements[1] (631 bytes) holds the same two UPDATE statements as the file (918 bytes; only comments differ). Counts of the three target rows in production: 0 (query role bypasses RLS; tables not forced).",
+   "not_recorded_reason": "Production ran the same UPDATEs under restamp 20260817083550; main manifest: MUST NOT BE STAMPED, since a second row would assert two applications of one migration."
   },
   {
    "version": "20260818233000",
@@ -241,10 +244,11 @@
    "name": "piece_archive_projection_sync",
    "classification": "present",
    "superseded_by": [],
-   "recorded": true,
+   "recorded": false,
    "evidence": "Live exactly as written",
    "verification": "confirmed by independent reviewer",
-   "decisive_queries": "PROD ledger: with s as (select version, array_to_string(statements,E'\\n') sql from supabase_migrations.schema_migrations) select p.proname, string_agg(s.version,',') filter (where strpos(s.sql,p.prosrc)>0), string_agg(s.version,',') filter (where s.sql ilike '%function public.pieces_projection_after_change%') from pg_proc p cross join s where p.proname='pieces_projection_after_change' group by 1 -> exact body: none; CREATE: 20260725210000 only. Name regex '(piece_archive|projection)' -> 0 rows.\nPROD and REPLAY: select md5(prosrc), proconfig, proacl from pg_proc where oid='public.pieces_projection_after_change()'::regprocedure -> ca8dbd0cd282c812ba2cda2f910a894a | {search_path=public} | {postgres=X/postgres} on both.\nPROD and REPLAY: select pg_get_triggerdef(oid), tgenabled from pg_trigger where tgname='trg_pieces_projection_after_change' -> identical 7-column UPDATE OF list, 'O'.\nPROD: select count(*) from model_elements me join pieces p on p.id=me.piece_id where me.is_deleted=false and (coalesce(p.is_deleted,false) or p.deleted_at is not null) -> 0."
+   "decisive_queries": "PROD ledger: with s as (select version, array_to_string(statements,E'\\n') sql from supabase_migrations.schema_migrations) select p.proname, string_agg(s.version,',') filter (where strpos(s.sql,p.prosrc)>0), string_agg(s.version,',') filter (where s.sql ilike '%function public.pieces_projection_after_change%') from pg_proc p cross join s where p.proname='pieces_projection_after_change' group by 1 -> exact body: none; CREATE: 20260725210000 only. Name regex '(piece_archive|projection)' -> 0 rows.\nPROD and REPLAY: select md5(prosrc), proconfig, proacl from pg_proc where oid='public.pieces_projection_after_change()'::regprocedure -> ca8dbd0cd282c812ba2cda2f910a894a | {search_path=public} | {postgres=X/postgres} on both.\nPROD and REPLAY: select pg_get_triggerdef(oid), tgenabled from pg_trigger where tgname='trg_pieces_projection_after_change' -> identical 7-column UPDATE OF list, 'O'.\nPROD: select count(*) from model_elements me join pieces p on p.id=me.piece_id where me.is_deleted=false and (coalesce(p.is_deleted,false) or p.deleted_at is not null) -> 0.",
+   "not_recorded_reason": "Schema live, but its one-off data repair was never verified; main manifest records it as schema-only, and a ledger row would read as fully applied."
   },
   {
    "version": "20260905090000",
@@ -293,10 +297,11 @@
    "name": "schedule_baselines",
    "classification": "present",
    "superseded_by": [],
-   "recorded": true,
+   "recorded": false,
    "evidence": "Live exactly as written",
    "verification": "confirmed by independent reviewer",
-   "decisive_queries": "PROD/REPLAY: combined catalog query over pg_indexes, pg_constraint, information_schema.columns, pg_class.relrowsecurity and pg_policy for schedule_baselines and schedule_baseline_tasks -> identical rows. The only difference is relacl: prod has no anon entry.\nPROD: select pg_get_userbyid(defaclrole), defaclobjtype, defaclacl from pg_default_acl where defaclnamespace='public'::regnamespace -> postgres tables {postgres,authenticated,service_role}. REPLAY -> {postgres,anon,authenticated,service_role}.\nPROD: select count(*) from pg_class where relnamespace='public'::regnamespace and relkind='r' and has_table_privilege('anon',oid,'SELECT') -> 1 of 139 (replay 110).\nPROD: count of tasks with metadata ? 'baseline_start' or ? 'baseline_end' -> 0; schedule_baselines -> 0; schedule_baseline_tasks -> 0.\nPROD ledger: 'schedule_baseline_tasks' -> no rows. The only 'schedule_baselines' hit is a comment in 20260909062929."
+   "decisive_queries": "PROD/REPLAY: combined catalog query over pg_indexes, pg_constraint, information_schema.columns, pg_class.relrowsecurity and pg_policy for schedule_baselines and schedule_baseline_tasks -> identical rows. The only difference is relacl: prod has no anon entry.\nPROD: select pg_get_userbyid(defaclrole), defaclobjtype, defaclacl from pg_default_acl where defaclnamespace='public'::regnamespace -> postgres tables {postgres,authenticated,service_role}. REPLAY -> {postgres,anon,authenticated,service_role}.\nPROD: select count(*) from pg_class where relnamespace='public'::regnamespace and relkind='r' and has_table_privilege('anon',oid,'SELECT') -> 1 of 139 (replay 110).\nPROD: count of tasks with metadata ? 'baseline_start' or ? 'baseline_end' -> 0; schedule_baselines -> 0; schedule_baseline_tasks -> 0.\nPROD ledger: 'schedule_baseline_tasks' -> no rows. The only 'schedule_baselines' hit is a comment in 20260909062929.",
+   "not_recorded_reason": "Schema live, but its one-off data seed was never verified; main manifest records it as schema-only, and a ledger row would read as fully applied."
   },
   {
    "version": "20260908150000",
@@ -333,30 +338,33 @@
    "name": "m3_7_auto_archive_empty_drawing_sets",
    "classification": "superseded",
    "superseded_by": [],
-   "recorded": true,
+   "recorded": false,
    "evidence": "Sibling-app version; production ran it under restamp 20260909062016",
    "verification": "confirmed by independent reviewer",
-   "decisive_queries": "PROD: select md5(prosrc),length(prosrc),prosecdef,proconfig,proacl from pg_proc where oid='public.recount_drawing_set(uuid)'::regprocedure -> 510e63a36ccb6d16d46245bdb9a61140, 890, true, {search_path=public}, {postgres=X/postgres,service_role=X/postgres}.\nPROD: select md5(substring(array_to_string(statements,E'\\n') from '\\$\\$(.*)\\$\\$')) from supabase_migrations.schema_migrations where version='20260909062016' -> 510e63a36ccb6d16d46245bdb9a61140 (same as live). Ledger row: name m3_7_auto_archive_empty_drawing_sets, 1 statement, md5_all 6cedf2d6c185daf6491a36115c451fdf, 1744 bytes. No row for 20260909060000.\nLOCAL (python, scratchpad fnbody.py): body between $$ of the sibling file -> md5 ab8bebb9741d6a189d01b4e416562378, len 1075. Replacing its two '  -- Once the set...' / '  -- doesn't linger...' lines with a blank line -> 510e63a36ccb6d16d46245bdb9a61140, len 890.\nPROD ledger: statements ilike '%recount_drawing_set%' -> 20260909020328 and 20260909062016 only. REPLAY: to_regprocedure('public.recount_drawing_set(uuid)') -> null.\nPROD counts: select count(*) from public.drawing_sets where not is_deleted and sheet_count=0 -> 0; ... where not is_deleted and not exists (live drawing in set) -> 0."
+   "decisive_queries": "PROD: select md5(prosrc),length(prosrc),prosecdef,proconfig,proacl from pg_proc where oid='public.recount_drawing_set(uuid)'::regprocedure -> 510e63a36ccb6d16d46245bdb9a61140, 890, true, {search_path=public}, {postgres=X/postgres,service_role=X/postgres}.\nPROD: select md5(substring(array_to_string(statements,E'\\n') from '\\$\\$(.*)\\$\\$')) from supabase_migrations.schema_migrations where version='20260909062016' -> 510e63a36ccb6d16d46245bdb9a61140 (same as live). Ledger row: name m3_7_auto_archive_empty_drawing_sets, 1 statement, md5_all 6cedf2d6c185daf6491a36115c451fdf, 1744 bytes. No row for 20260909060000.\nLOCAL (python, scratchpad fnbody.py): body between $$ of the sibling file -> md5 ab8bebb9741d6a189d01b4e416562378, len 1075. Replacing its two '  -- Once the set...' / '  -- doesn't linger...' lines with a blank line -> 510e63a36ccb6d16d46245bdb9a61140, len 890.\nPROD ledger: statements ilike '%recount_drawing_set%' -> 20260909020328 and 20260909062016 only. REPLAY: to_regprocedure('public.recount_drawing_set(uuid)') -> null.\nPROD counts: select count(*) from public.drawing_sets where not is_deleted and sheet_count=0 -> 0; ... where not is_deleted and not exists (live drawing in set) -> 0.",
+   "not_recorded_reason": "Sibling source version that production recorded as 20260909062016; main manifest: never applied and never will be."
   },
   {
    "version": "20260909060100",
    "name": "m2_1_scope_project_number_uniqueness_to_org",
    "classification": "superseded",
    "superseded_by": [],
-   "recorded": true,
+   "recorded": false,
    "evidence": "Sibling-app version; production ran it under restamp 20260909073500",
    "verification": "confirmed by independent reviewer",
-   "decisive_queries": "PROD: select indexname,indexdef from pg_indexes where schemaname='public' and tablename='projects' and indexdef ilike '%project_number%' -> only idx_projects_org_project_number (definition above). select to_regclass('public.idx_projects_project_number') -> null.\nPROD ledger: select version,name,array_to_string(statements,E'\\n') from supabase_migrations.schema_migrations where version='20260909073500' -> name m2_1_scope_project_number_uniqueness_to_org, 1 statement, md5 579392b98fb224cbb0a6ae99206cbece, 521 bytes: 'drop index if exists public.idx_projects_project_number; create unique index if not exists idx_projects_org_project_number on public.projects (org_id, project_number) where project_number is not null and coalesce(is_deleted, false) = false;'. No row for 20260909060100.\nPROD count: select count(*) from (select org_id,project_number from public.projects where project_number is not null and coalesce(is_deleted,false)=false group by 1,2 having count(*)>1) d -> 0.\nREPLAY: to_regclass('public.idx_projects_org_project_number') -> null; idx_projects_project_number = CREATE UNIQUE INDEX ... (project_number) WHERE ..."
+   "decisive_queries": "PROD: select indexname,indexdef from pg_indexes where schemaname='public' and tablename='projects' and indexdef ilike '%project_number%' -> only idx_projects_org_project_number (definition above). select to_regclass('public.idx_projects_project_number') -> null.\nPROD ledger: select version,name,array_to_string(statements,E'\\n') from supabase_migrations.schema_migrations where version='20260909073500' -> name m2_1_scope_project_number_uniqueness_to_org, 1 statement, md5 579392b98fb224cbb0a6ae99206cbece, 521 bytes: 'drop index if exists public.idx_projects_project_number; create unique index if not exists idx_projects_org_project_number on public.projects (org_id, project_number) where project_number is not null and coalesce(is_deleted, false) = false;'. No row for 20260909060100.\nPROD count: select count(*) from (select org_id,project_number from public.projects where project_number is not null and coalesce(is_deleted,false)=false group by 1,2 having count(*)>1) d -> 0.\nREPLAY: to_regclass('public.idx_projects_org_project_number') -> null; idx_projects_project_number = CREATE UNIQUE INDEX ... (project_number) WHERE ...",
+   "not_recorded_reason": "Sibling source version that production recorded as 20260909073500; main manifest: never applied and never will be."
   },
   {
    "version": "20260909090000",
    "name": "m19_reset_org_data",
    "classification": "superseded",
    "superseded_by": [],
-   "recorded": true,
+   "recorded": false,
    "evidence": "Sibling-app version; production ran the same SQL under alias 20260909090445, and Rev.2 20260912052502 now defines the live function",
    "verification": "confirmed by independent reviewer",
-   "decisive_queries": "PROD: select md5(prosrc),length(prosrc),prosecdef,proconfig,proacl,obj_description(oid,'pg_proc') from pg_proc where oid='public.reset_org_data(uuid,text)'::regprocedure -> 0fe2ca5f76e49797419753a4241a477e, 4128, true, {search_path=public}, {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}, 'Owner-only. Erases every project ...'. REPLAY: md5 0fe2ca5f76e49797419753a4241a477e, acl {postgres=X/postgres,authenticated=X/postgres}, comment empty.\nPROD: select md5(substring(array_to_string(statements,E'\\n') from '\\$\\$(.*)\\$\\$')) from supabase_migrations.schema_migrations where version='20260909090445' -> 9a3966ed53a6dbf770a3895780e561cd. Ledger row: 1 statement, md5_all 7d4f0fa54bf8c8f8e3eae455ca9381ad, 3466 bytes.\nLOCAL (fnbody.py) body md5s: sibling 20260909090000 = 9a3966ed53a6dbf770a3895780e561cd; migrations_external/20260909090445 = 9a3966ed...; Rev.2 20260912034015 = be9d6a5e...; 20260912042823 = 0b2fdd60...; 20260912052502 = 0fe2ca5f76e49797419753a4241a477e (len 4128).\nPROD ledger: select version,coalesce(array_length(statements,1),0) from supabase_migrations.schema_migrations where version in ('20260912034015','20260912042823','20260912052502') -> all present with 0 statements. No row for 20260909090000.\nPROD: select has_function_privilege('anon'|'authenticated'|'service_role','public.reset_org_data(uuid,text)','EXECUTE') -> false/true/true.\nREPO: git show 57215f57c -- supabase/migrations/20260912052502_reset_org_data_suppress_triggers_in_org_tail.sql ad"
+   "decisive_queries": "PROD: select md5(prosrc),length(prosrc),prosecdef,proconfig,proacl,obj_description(oid,'pg_proc') from pg_proc where oid='public.reset_org_data(uuid,text)'::regprocedure -> 0fe2ca5f76e49797419753a4241a477e, 4128, true, {search_path=public}, {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}, 'Owner-only. Erases every project ...'. REPLAY: md5 0fe2ca5f76e49797419753a4241a477e, acl {postgres=X/postgres,authenticated=X/postgres}, comment empty.\nPROD: select md5(substring(array_to_string(statements,E'\\n') from '\\$\\$(.*)\\$\\$')) from supabase_migrations.schema_migrations where version='20260909090445' -> 9a3966ed53a6dbf770a3895780e561cd. Ledger row: 1 statement, md5_all 7d4f0fa54bf8c8f8e3eae455ca9381ad, 3466 bytes.\nLOCAL (fnbody.py) body md5s: sibling 20260909090000 = 9a3966ed53a6dbf770a3895780e561cd; migrations_external/20260909090445 = 9a3966ed...; Rev.2 20260912034015 = be9d6a5e...; 20260912042823 = 0b2fdd60...; 20260912052502 = 0fe2ca5f76e49797419753a4241a477e (len 4128).\nPROD ledger: select version,coalesce(array_length(statements,1),0) from supabase_migrations.schema_migrations where version in ('20260912034015','20260912042823','20260912052502') -> all present with 0 statements. No row for 20260909090000.\nPROD: select has_function_privilege('anon'|'authenticated'|'service_role','public.reset_org_data(uuid,text)','EXECUTE') -> false/true/true.\nREPO: git show 57215f57c -- supabase/migrations/20260912052502_reset_org_data_suppress_triggers_in_org_tail.sql ad",
+   "not_recorded_reason": "Sibling source version whose SQL production recorded as 20260909090445; main manifest: never applied and never will be."
   },
   {
    "version": "20260913084700",
@@ -372,20 +380,22 @@
    "name": "drawing_transmittal_targets",
    "classification": "present",
    "superseded_by": [],
-   "recorded": true,
+   "recorded": false,
    "evidence": "Live exactly as written",
    "verification": "confirmed by independent reviewer",
-   "decisive_queries": "PROD+REPLAY: select a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull from pg_attribute a where a.attrelid='public.drawing_transmittal_items'::regclass and a.attnum>0 and not a.attisdropped; select conname,convalidated,pg_get_constraintdef(oid) from pg_constraint where conrelid='public.drawing_transmittal_items'::regclass; select indexname,indexdef from pg_indexes where schemaname='public' and tablename='drawing_transmittal_items'. PROD one_target = ((drawing_id IS NOT NULL)::integer + (gc_drawing_id IS NOT NULL)::integer) = 1, validated; REPLAY = num_nonnulls(drawing_id, gc_drawing_id) = 1.\nREPLAY: select count(*) filter (where (num_nonnulls(a,b)=1) is distinct from (((a is not null)::integer + (b is not null)::integer) = 1)), count(*) from (values (null::uuid,null::uuid),(gen_random_uuid(),null),(null,gen_random_uuid()),(gen_random_uuid(),gen_random_uuid())) v(a,b) -> 0 | 4.\nPROD counts: select (select count(*) from public.drawing_transmittal_items) total, (select count(*) from public.drawing_transmittal_items i join public.drawing_revisions r on r.id=i.drawing_revision_id where i.drawing_id is null and i.gc_drawing_id is null) pending, (select count(*) from public.drawing_transmittal_items where num_nonnulls(drawing_id,gc_drawing_id)<>1) violations, (select count(*) from public.drawing_transmittal_items where drawing_revision_id is null) null_rev, (select count(*) from public.drawing_transmittal_items i join public.drawing_revisions r on r.id=i.drawing_revision_id"
+   "decisive_queries": "PROD+REPLAY: select a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull from pg_attribute a where a.attrelid='public.drawing_transmittal_items'::regclass and a.attnum>0 and not a.attisdropped; select conname,convalidated,pg_get_constraintdef(oid) from pg_constraint where conrelid='public.drawing_transmittal_items'::regclass; select indexname,indexdef from pg_indexes where schemaname='public' and tablename='drawing_transmittal_items'. PROD one_target = ((drawing_id IS NOT NULL)::integer + (gc_drawing_id IS NOT NULL)::integer) = 1, validated; REPLAY = num_nonnulls(drawing_id, gc_drawing_id) = 1.\nREPLAY: select count(*) filter (where (num_nonnulls(a,b)=1) is distinct from (((a is not null)::integer + (b is not null)::integer) = 1)), count(*) from (values (null::uuid,null::uuid),(gen_random_uuid(),null),(null,gen_random_uuid()),(gen_random_uuid(),gen_random_uuid())) v(a,b) -> 0 | 4.\nPROD counts: select (select count(*) from public.drawing_transmittal_items) total, (select count(*) from public.drawing_transmittal_items i join public.drawing_revisions r on r.id=i.drawing_revision_id where i.drawing_id is null and i.gc_drawing_id is null) pending, (select count(*) from public.drawing_transmittal_items where num_nonnulls(drawing_id,gc_drawing_id)<>1) violations, (select count(*) from public.drawing_transmittal_items where drawing_revision_id is null) null_rev, (select count(*) from public.drawing_transmittal_items i join public.drawing_revisions r on r.id=i.drawing_revision_id",
+   "not_recorded_reason": "Main manifest keeps its lineage unresolved: a second review attributes its live objects to two other recorded migrations."
   },
   {
    "version": "20260913202900",
    "name": "schedule_tasks_soft_delete_columns",
    "classification": "present",
    "superseded_by": [],
-   "recorded": true,
+   "recorded": false,
    "evidence": "Both columns live exactly as defined; its ADD COLUMN IF NOT EXISTS changes nothing in production (20260913203000, which needs them, is already recorded)",
    "verification": "checked directly",
-   "decisive_queries": "information_schema.columns for public.schedule_tasks in production: is_deleted boolean NOT NULL DEFAULT false; deleted_at timestamptz nullable, no default. Ledger has 20260913203000 but not 20260913202900."
+   "decisive_queries": "information_schema.columns for public.schedule_tasks in production: is_deleted boolean NOT NULL DEFAULT false; deleted_at timestamptz nullable, no default. Ledger has 20260913203000 but not 20260913202900.",
+   "not_recorded_reason": "Replay-only no-op; main manifest: it will never reach the ledger."
   }
  ]
 }
