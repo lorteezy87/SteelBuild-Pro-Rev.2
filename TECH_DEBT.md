@@ -188,33 +188,45 @@ rows" evidence can be quoted as current.
   2026-09-14, the same day as the newest migration. It goes stale on every
   schema change, so re-check rather than assume.
 
-### Production carries ~86 functions no migration defines (2026-09-15)
+### 171 of 351 production functions are defined by no migration (2026-09-15)
 
-Found while trying to capture the four functions the Supabase drift runbook
-names as undocumented. The gap is far wider than four, and it includes the
-fab-release gate — the P0 path.
+Found while trying to capture the four functions the Supabase drift runbook names
+as undocumented. The gap is far wider than four, and it includes the fab-release
+gate — the P0 path.
 
-**Method.** Took the 351 `public` functions live in `kjrwqagyeswwoxpjkcko`,
-sampled the 140 that are business logic rather than triggers/utilities, and
-searched `supabase/migrations/` for a definition of each (case-insensitive,
-multiline-aware, `public.`-qualified or not). **86 of those 140 are defined by
-no migration file.** The true total is likely higher — 211 functions were not
-sampled.
+**Captured, not guessed.** `supabase/_capture/production-public-functions-2026-09-15.sql`
+now holds all 171 definitions verbatim, pulled through the Supabase MCP with
+`pg_get_functiondef()` and verified byte-for-byte against md5s computed by the
+database itself. It is a **reference dump, not a replayable migration** — ordered
+by oid, never replayed against an empty Postgres. See `supabase/_capture/README.md`.
 
-Spot-checked against the whole `supabase/` tree, not just migrations:
-`create_rfi`, `evaluate_fab_release_set`, `release_package_for_fabrication` and
-`ops_snapshot` have **zero** defining occurrences anywhere in the repo.
-`submittal_derived_stage` appears only in a test fixture
-(`supabase/tests/function-search-path/live-helper-fixture.sql`), which is not a
-definition the database would ever run.
+**The counts, verified rather than sampled:**
+
+| | count |
+|---|---|
+| Live in `public`, extension-owned excluded | **351** (350 distinct names; `add_updated_at_trigger` is the one overload) |
+| Defined by a migration in `supabase/migrations/` | 180 |
+| **Defined by no migration anywhere in the repo** | **171** |
+| └ of those, `SECURITY DEFINER` | 86 |
+| └ of those, wired to a live trigger | 65 |
+| Defined in a migration but missing from production | 0 |
+
+An earlier revision of this entry said "~86", from a 140-function sample. 86 is
+the `SECURITY DEFINER` subset of the real answer, not the total.
+
+**A reset does not merely drift — it fails.** Two migrations `ALTER` a function
+that no migration `CREATE`s:
+
+- `20260911062832_pin_workflow_helper_search_paths.sql` → `submittal_derived_stage`
+- `20260914020000_revoke_internal_helper_execute_from_authenticated.sql` → `erase_my_account`
 
 **Why it matters.** These are not helpers. The list includes `create_rfi`,
-`create_submittal`, `create_change_order`, `create_work_package`,
-`generate_pay_application`, `release_package_for_fabrication`, `answer_rfi`,
-`close_rfi`, `void_rfi`, and the whole fab-release gate chain. If the project
-were restored from a snapshot, or a function dropped, **none of them could be
-rebuilt from this repository.** CLAUDE.md treats the fab-release gate as P0 and
-the repo cannot reproduce it.
+`answer_rfi`, `close_rfi`, `void_rfi`, `create_submittal`, `create_change_order`,
+`create_work_package`, `generate_pay_application`, `release_package_for_fabrication`,
+`ops_snapshot`, and the whole fab-release gate chain. Production is fine; what
+cannot be done today is rebuild a staging or preview environment that behaves
+like it, or review a change to a function whose current text lives only in the
+database.
 
 **The gate's chain, as an example of the shape.** Each layer pulls in another
 missing leaf:
@@ -231,31 +243,32 @@ piece_control_drawing_is_approved     (missing)
   └─ evaluate_fab_release_set         (missing)
 ```
 
-**Do not fix this by hand-writing migrations.** Two reasons, both learned the
-hard way here. The dependency closure is not knowable up front — every capture
-surfaced another missing leaf. And the bodies contain Postgres regex word
-boundaries (`\m`, `\M` in `submittal_bic_class`) plus dollar-quoted blocks,
-so transcribing them through any intermediate encoding risks a
-character-level error that produces a function which looks correct and behaves
-differently. On the fab-release path that is the worst possible failure mode.
+**Do not close this by hand-writing migrations from memory.** The bodies contain
+Postgres regex word boundaries (`\m`, `\M` in `submittal_bic_class`), dollar-quoted
+blocks and CRLF line endings (the piece-control `*_impl` functions), so
+transcription risks a character-level error that produces a function which looks
+correct and behaves differently. On the fab-release path that is the worst
+possible failure mode. Promote from the capture file, which is byte-exact.
 
-**The fix is one `pg_dump -s`.** A schema-only dump captures all 351 function
-bodies byte-exact, with their grants, in a single pass and with no
-transcription. It needs the database password, which is not available to CI or
-to an agent session today — only `SUPABASE_ACCESS_TOKEN` (management API) and
-the anon key are. Options, cheapest first:
+**What is left to do**, cheapest first:
 
-1. Owner runs `pg_dump -s` against production once and commits the result as a
-   baseline capture, classified `intentionally-frozen` in
-   `supabase/production-ownership-manifest.json` so the drift check does not
-   then demand it be stamped (default `local.migrationLifecycle` is `required`,
-   so an unclassified new file lands in `missingMigrations`).
-2. Add a database-password secret to CI and run the dump on a schedule, so the
-   repo tracks production rather than diverging from it silently.
+1. **Promote in small batches** — leaf helpers with no dependencies first
+   (`submittal_bic_class`, `risk_severity`, `risk_transition_allowed`,
+   `submittal_derived_stage`), then their callers. Delete each promoted
+   definition from the capture in the same PR, so the file always answers "what
+   is still unreproducible". Promotion is what actually closes this item; the
+   capture only makes it reviewable.
+2. **Delete `_tmp_timeout_probe()`** — a live leftover diagnostic that sleeps 3
+   seconds. It is in the capture because it is in production, not because it
+   should be kept.
+3. **Keep it current.** A scheduled re-capture (the MCP path needs no database
+   password) would stop the repo from diverging silently again; the README
+   carries the one query that detects divergence.
 
-Until one of those happens, the migrations directory is not a reproducible
-description of this database, and the drift check's "inventory green" — which
-its own header already disclaims — is the only assurance there is.
+Until promotion happens, the migrations directory is not a reproducible
+description of this database, and the drift check's "inventory green" — which its
+own header already disclaims, since it compares versions and slugs rather than
+SQL — is the only assurance there is.
 
 ### Monetization / go-to-market
 

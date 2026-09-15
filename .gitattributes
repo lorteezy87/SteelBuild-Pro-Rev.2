@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Captures under supabase/_capture/ are verbatim records of what is live in
+# production, checkable against an md5 the database itself computed. Some
+# function bodies genuinely contain CRLF (the piece-control *_impl functions),
+# so the `* text=auto` rule above would rewrite 446 bytes and break that check.
+# `-text` (not `binary`) keeps the bytes exact while keeping the files diffable.
+supabase/_capture/** -text
