@@ -163,16 +163,34 @@ describe('the real manifest', () => {
     expect(unaccounted).toEqual([]);
   });
 
-  it('records uncertain lineage as unresolved, never as frozen', () => {
+  it('never silently allowlists: a frozen lineage must say how it was settled', () => {
     // The runbook's lifecycle contract: an identifier with uncertain source or
     // lineage is recorded as unresolved and never silently allowlisted.
-    // unresolved always fails drift until an owner restores the lineage, which
-    // is the point — freezing these would hide them.
+    // unresolved always fails drift until an owner restores the lineage — which
+    // is the point, and which is also the documented way out of it.
+    //
+    // These three were restored on 2026-09-15 by checking each file against
+    // production rather than against markers, so they are frozen now. The guard
+    // did not go away, it moved: freezing is only allowed to mean "we looked and
+    // decided", so the evidence has to carry the decision and the proof. An
+    // entry that flips to frozen with a vague string fails here exactly as a
+    // silent allowlist would.
     const byVersion = new Map<string, { lifecycle: string; evidence: string }>(
       (manifest.local.migrationOverrides ?? []).map((e: { version: string }) => [e.version, e]),
     );
     for (const version of ['20260727232000', '20260801013000', '20260913090000']) {
-      expect(byVersion.get(version)?.lifecycle, `${version} must stay unresolved`).toBe('unresolved');
+      const entry = byVersion.get(version);
+      expect(['intentionally-frozen', 'unresolved'], `${version} must stay classified`)
+        .toContain(entry?.lifecycle);
+      if (entry?.lifecycle === 'intentionally-frozen') {
+        // Says it was settled, and when.
+        expect(entry.evidence, `${version} must record that it was resolved`)
+          .toMatch(/RESOLVED \d{4}-\d{2}-\d{2}/);
+        // Cites production, not a marker match — that mistake is what put
+        // 20260801013000 here in the first place.
+        expect(entry.evidence, `${version} must cite production`)
+          .toMatch(/schema_migrations|production/i);
+      }
     }
   });
 
@@ -182,7 +200,13 @@ describe('the real manifest', () => {
     // applying is safe — an owner has to decide.
     const entry = (manifest.local.migrationOverrides ?? [])
       .find((e: { version: string }) => e.version === '20260727232000');
-    expect(entry.lifecycle).toBe('unresolved');
+    // Frozen since 2026-09-15 — production is authoritative and the file may
+    // never run. The gate chain is still only half captured, so the entry has
+    // to keep naming what is open rather than reading as "all clear".
+    expect(entry.lifecycle).toBe('intentionally-frozen');
+    expect(entry.evidence).toMatch(/STILL OPEN/);
+    expect(entry.evidence).toMatch(/evaluate_release_gate/);
+    expect(entry.evidence).toMatch(/piece_control_drawing_is_approved/);
     expect(entry.evidence).toMatch(/work_package_drawing_set_reports/);
     expect(entry.evidence).toMatch(/evaluate_fab_release_set/);
     expect(entry.evidence).toMatch(/bidirectional/i);

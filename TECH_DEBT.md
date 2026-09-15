@@ -188,7 +188,7 @@ rows" evidence can be quoted as current.
   2026-09-14, the same day as the newest migration. It goes stale on every
   schema change, so re-check rather than assume.
 
-### 171 of 351 production functions are defined by no migration (2026-09-15)
+### 220 of 351 production functions cannot be rebuilt from this repo (2026-09-15)
 
 Found while trying to capture the four functions the Supabase drift runbook names
 as undocumented. The gap is far wider than four, and it includes the fab-release
@@ -205,14 +205,36 @@ by oid, never replayed against an empty Postgres. See `supabase/_capture/README.
 | | count |
 |---|---|
 | Live in `public`, extension-owned excluded | **351** (350 distinct names; `add_updated_at_trigger` is the one overload) |
-| Defined by a migration in `supabase/migrations/` | 180 |
-| **Defined by no migration anywhere in the repo** | **171** |
+| **Defined by no migration anywhere in the repo** (captured) | **171** |
 | └ of those, `SECURITY DEFINER` | 86 |
 | └ of those, wired to a live trigger | 65 |
+| **Defined by a migration, but production's body differs from every repo version** (not captured) | **49** |
+| Defined by a migration and production matches | 131 |
 | Defined in a migration but missing from production | 0 |
 
-An earlier revision of this entry said "~86", from a 140-function sample. 86 is
-the `SECURITY DEFINER` subset of the real answer, not the total.
+So the repo reproduces **131 of 351** function bodies, not 180. Two revisions of
+this entry were wrong before this one: "~86" came from a 140-function sample and
+is really the `SECURITY DEFINER` subset; "171" counted only the functions no
+migration *defines by name* and missed the 49 that a migration defines while
+production runs something else.
+
+**The 49 are the worse half.** A missing function announces itself; a drifted one
+does not. They include the core RLS helpers — `user_has_project_access`,
+`user_has_project_role_at_least`, `user_is_system_admin`, `user_is_org_admin`,
+`user_org_role_at_least`, `get_my_project_role` — and the P0 fab-release path:
+`enforce_fab_release_gate`, `evaluate_release_gate`,
+`piece_control_drawing_is_approved`. Replaying the repo over production would
+silently *revert* all 49. They are not in the capture file, whose contract is
+"no migration defines these"; capturing them is the next piece of work.
+
+**Measure this with line endings normalised.** Production stores some bodies with
+CRLF and the repo's `* text=auto` rewrites the checked-in copy to LF, so a raw
+md5 comparison reports drift where the SQL is identical. That is not theoretical:
+it is why `work_packages_soft_delete_unassign_pieces` was recorded as diverged in
+the ownership manifest for a day — the two bodies differ by exactly 55 CR bytes
+and nothing else. Compare `md5(replace(prosrc, chr(13), ''))` against a
+CR-stripped repo body. The same `* text=auto` rule silently corrupted the capture
+file on its first commit, which is why `supabase/_capture/** -text` exists.
 
 **A reset does not merely drift — it fails.** Two migrations `ALTER` a function
 that no migration `CREATE`s:
@@ -268,7 +290,9 @@ possible failure mode. Promote from the capture file, which is byte-exact.
 Until promotion happens, the migrations directory is not a reproducible
 description of this database, and the drift check's "inventory green" — which its
 own header already disclaims, since it compares versions and slugs rather than
-SQL — is the only assurance there is.
+SQL — is the only assurance there is. That disclaimer is the whole point: the
+drift check went green on 2026-09-15 when the last three `unresolved` migrations
+were settled, and none of the 220 functions above moved.
 
 ### Monetization / go-to-market
 

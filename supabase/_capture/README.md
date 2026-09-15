@@ -19,6 +19,16 @@ reviewable in git — not so they can be replayed.
 - **Not a backup.** No data, no RLS policies, no grants, no triggers — function
   bodies only. Supabase's own PITR is the backup.
 
+## The two files here, and why they are different
+
+- `production-public-functions-2026-09-15.sql` — **171** functions that **no
+  migration defines by name**. Captured byte-exact.
+- `DRIFTED-FUNCTIONS-2026-09-15.md` — **49** functions a migration *does* define,
+  where production runs a different body. An inventory only; **not captured yet**.
+
+The second is the more dangerous set, because nothing looks missing. Together
+they are why the repo reproduces 131 of 351 live function bodies.
+
 ## Why the capture exists
 
 `supabase/migrations/` cannot reproduce production. Two independently checked
@@ -26,7 +36,9 @@ facts, as of 2026-09-15:
 
 1. **171 of the 351 live `public` functions** (extension-owned functions
    excluded) are defined by no migration anywhere in the repo. 86 of the 171 are
-   `SECURITY DEFINER`; 65 are wired to a live trigger.
+   `SECURITY DEFINER`; 65 are wired to a live trigger. A further **49** are
+   defined by a migration but have drifted in production — see
+   `DRIFTED-FUNCTIONS-2026-09-15.md`.
 2. At least two migrations `ALTER` a function they never `CREATE`, so a reset
    from scratch fails outright rather than merely drifting:
    - `20260911062832_pin_workflow_helper_search_paths.sql` → `submittal_derived_stage`
@@ -65,6 +77,11 @@ select md5(string_agg(pg_get_functiondef(p.oid), E'\n\n' order by p.oid))
 That query covers **all** live `public` functions, so it will not match a capture
 that holds only the migration-less subset. Use it to detect that production has
 changed; use the per-file header md5 to confirm a file is intact.
+
+**Comparing repo SQL against production needs line endings normalised.**
+Production stores some bodies with CRLF while this repo's `* text=auto` rewrites
+the checked-in copy to LF, so a raw md5 reports drift where the SQL is identical.
+Compare `md5(replace(prosrc, chr(13), ''))` against a CR-stripped repo body.
 
 ## Retiring a capture
 
