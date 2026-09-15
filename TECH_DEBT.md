@@ -127,6 +127,67 @@ log). These are what is left.
   `ui/dialog` primitive has 17 importers, so this is a repo-wide decision); and
   "Run AI deep-dive →" renders unconditionally while its handler is flag-gated.
 
+### Scheduling module — audit remainder, Batch 5 (2026-09-15)
+
+From `docs/audits/SCHEDULE_MODULE_AUDIT_2026-09-08.md` §8. Batches 1–4 are
+merged — Batch 1 `#311`, Batch 2 `#316`, Batch 3 `#319`, Batch 4 `#322` (the
+audit itself is `#308`); §8 items 19–26 are what is left.
+Verified against `origin/main@d6d2d79b` on 2026-09-15 — the audit's own wording
+is a week old and some of it has already moved.
+
+**Before starting any of this, re-measure.** The audit's census was 427
+`schedule_tasks` rows. The table now holds **28 rows across 4 projects, all
+created on or after 2026-09-08** — it was repopulated during the week's drift
+repair, so every row-count in the audit is stale and none of the "N production
+rows" evidence can be quoted as current.
+
+- **Re-importing a schedule duplicates it (§5.1, item 19).** The only item here
+  that corrupts data. `commitImportedScheduleTasks`
+  (`src/pages/schedule/commitImportedTasks.ts`) calls `ScheduleTask.create` for
+  every parsed row unconditionally; its `existingTasks` argument feeds only the
+  running WBS snapshot, never a match. Import the same MPP/CSV twice and the
+  project carries two of everything, with the second copy's `uid → id` map
+  silently rewiring the dependency links. This is the same shape as the model
+  roster importer already called out in CLAUDE.md (fixed `0d88e7b7`). Needs
+  match-on-`uid`/`wbs_code`, update-instead-of-insert, and a preview showing
+  create/update/skip counts.
+
+- **CSV import can bind a baseline date as the live date (§5.2, item 20).**
+  `COLUMN_ALIASES` in `src/lib/importScheduleCsv.ts` lists `"baseline start"`
+  among the `start_date` aliases and `"baseline finish"` among the finish
+  aliases, and the binder takes the **first alias hit in column order** with no
+  exact-match-first pass. A P6 export carrying both `Start` and `Baseline Start`
+  binds whichever appears first. Needs exact-match binding before the alias
+  fallback.
+
+- **`buildTreeOrder` has no cycle guard (§2.8, item 25).** Still no `visited`
+  set in `src/components/schedule/scheduleTree.js`. A parent cycle in
+  `parent_task_id` hangs the render. `20260626041744_prevent_schedule_task_cycle.sql`
+  guards the database, so this is defence-in-depth against imported or
+  hand-edited data, not a live hang.
+
+- **URL state is half-wired (§3.3, item 23).** `?phase=` is read
+  (`Schedule.tsx:38`, via `normalizeSchedulePhase`), but `?view=` is not, so the
+  tab a user shares in a link is lost. `ViewTabs.tsx` still has no `role="tab"`
+  or `aria-selected` — the tab strip is unreachable by keyboard semantics.
+
+- **IA consolidation needs re-scoping before it is worth doing (§3.1/§3.2,
+  items 21–22).** The audit asked for one SCHEDULE nav entry with Crew
+  Scheduling as a Hub tab, but "Crew Scheduling" has since become
+  `src/pages/ResourceScheduling.tsx`, so the finding's wording no longer matches
+  the app. The standalone `src/pages/LookAheadSchedule.jsx` does still exist
+  alongside the Schedule page's own lookahead view. Re-survey the nav before
+  acting on the audit's text.
+
+- **Dead-code sweep is partly moot (§6.2, item 24).** The delivery overlay is
+  already gone; `expandedTask` and `void view` each survive in one file. Small,
+  and worth folding into whichever batch-5 PR touches those files rather than
+  doing alone.
+
+- **Item 26 (regenerate `src/types/supabase.ts`) is done** — regenerated
+  2026-09-14, the same day as the newest migration. It goes stale on every
+  schema change, so re-check rather than assume.
+
 ### Monetization / go-to-market
 
 - **Legal pages** — the self-serve signup needs ToS / privacy / a basic DPA to
