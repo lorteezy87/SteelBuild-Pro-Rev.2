@@ -73,12 +73,24 @@ export const THRESHOLDS = {
   TASK_HORIZON_DAYS: 90,
   TASK_DUE_SOON_DAYS: 7,
   NOTE_DUE_SOON_DAYS: 3,
+  // No real fabrication RFI stays open for years — a raw age past this many
+  // days almost certainly means a bad import or placeholder submitted_date,
+  // not a genuinely decades-open RFI (one surfaced at 9,144 days). Clamp
+  // rather than let a single corrupt date show a "9137d past target" nobody
+  // should trust and permanently dominate the feed's sort order.
+  RFI_MAX_PLAUSIBLE_OPEN_DAYS: 730,
 };
 
 // ── RFI ─────────────────────────────────────────────────────────────────
 
 export function rfiUrgency(rfi, projectMap = {}) {
-  const daysOpen = daysSince(rfi.submitted_date || rfi.created_date);
+  // Clamp to [0, RFI_MAX_PLAUSIBLE_OPEN_DAYS]: negative means submitted_date
+  // is in the future (clock skew / bad data, not a real age), and an
+  // unbounded upper end is the absurd-historical-date case above.
+  const daysOpen = Math.min(
+    Math.max(daysSince(rfi.submitted_date || rfi.created_date), 0),
+    THRESHOLDS.RFI_MAX_PLAUSIBLE_OPEN_DAYS,
+  );
   const dueDays = daysUntil(rfi.date_required);
   const isBlocking = !!(rfi.schedule_impact || rfi.cost_impact);
   const bic = rfi.ball_in_court || "Contractor";

@@ -53,6 +53,16 @@ describe("routes — page registry", () => {
     });
   });
 
+  it("redirects the old /Detailing link to the Detailing Control Center", () => {
+    // /Detailing 404'd for anyone with the old link/bookmark bar shortcut —
+    // the page was renamed to DrawingSubmittalHub with no compatibility alias.
+    expect(STATIC_ROUTE_METADATA["/Detailing"]).toMatchObject({
+      lifecycle: "legacy",
+      kind: "redirect",
+      target: "/DrawingSubmittalHub",
+    });
+  });
+
   it("has no duplicate route paths", () => {
     const seen = new Set();
     for (const path of ALL_ROUTE_PATHS) {
