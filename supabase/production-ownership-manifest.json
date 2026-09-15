@@ -9,8 +9,8 @@
     "functionOverrides": [
       {
         "slug": "account-delete",
-        "lifecycle": "intentionally-frozen",
-        "evidence": "docs/PHASE_0_AGENT_HANDOFF.md and migrations 20260912034015/20260912055243/20260912062606: owner release and rollback evidence remain required before deployment"
+        "lifecycle": "required",
+        "evidence": "Deployed 2026-09-15 on the owner's explicit instruction (verify_jwt: true), superseding docs/PHASE_0_AGENT_HANDOFF.md's earlier 'keep frozen pending owner release' hold - that release is this instruction. Pre-deploy, confirmed hard_delete_organization (the RPC it calls) still carries the 20260912055243/20260912062606 fixes and its own ARCHIVE_FIRST guard against erasing an org with any live project. This activates DangerZone.jsx and DeleteAccountZone.jsx for real; see PR referencing 20260915100000 for the erase_my_account finding made during this deploy."
       },
       {
         "slug": "legacy-app-files-copy",
