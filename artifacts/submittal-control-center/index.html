@@ -1583,6 +1583,12 @@ function captureFocus(){
   const t = (ae.type || "").toLowerCase();
   if ((ae.tagName === "TEXTAREA" || t === "text" || t === "url" || t === "search") && "selectionStart" in ae){
     o.val = ae.value; o.s = ae.selectionStart; o.e = ae.selectionEnd;
+  } else if (t === "date"){
+    /* No selectionStart on a date input, so no cursor/segment to save — but
+       an in-progress (incomplete) date never reaches state until it commits,
+       so still snapshot .value or a render mid-entry would wipe it back to
+       the last saved date. */
+    o.val = ae.value;
   }
   return o;
 }
@@ -1672,7 +1678,16 @@ function fieldWrite(fk, el){
     if (field === "returned" && v && p && (p.status === "submitted" || p.status === "in_review")) patch.status = "returned";
     if (field === "submitted" && v && p && (p.status === "not_started" || p.status === "detailing" || p.status === "internal")) patch.status = "submitted";
 
-    const soft = (el.tagName === "TEXTAREA" || el.type === "text" || el.type === "url" || el.type === "number");
+    /* Date is "soft" too: a native <input type=date> fires "change" the
+       instant typed digits form a complete value — often while the user is
+       still mid-entry, cursor sitting in whatever segment they just typed.
+       Rendering synchronously here would tear that exact node out of the
+       DOM and rebuild it; the browser has no way to restore "which segment
+       had focus" on the replacement, so the next keystrokes land on the
+       wrong segment or focus is dropped outright. Debounce it like text: the
+       edit lands in local state immediately, the write follows after the
+       user stops, and only *then* does a render touch the DOM. */
+    const soft = (el.tagName === "TEXTAREA" || el.type === "text" || el.type === "url" || el.type === "number" || el.type === "date");
     if (soft) patchDebounced("pkg", id, patch, field);
     else { patchPkg(id, patch); render(); }
     return;
