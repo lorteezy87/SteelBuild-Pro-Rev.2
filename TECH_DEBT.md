@@ -188,6 +188,75 @@ rows" evidence can be quoted as current.
   2026-09-14, the same day as the newest migration. It goes stale on every
   schema change, so re-check rather than assume.
 
+### Production carries ~86 functions no migration defines (2026-09-15)
+
+Found while trying to capture the four functions the Supabase drift runbook
+names as undocumented. The gap is far wider than four, and it includes the
+fab-release gate — the P0 path.
+
+**Method.** Took the 351 `public` functions live in `kjrwqagyeswwoxpjkcko`,
+sampled the 140 that are business logic rather than triggers/utilities, and
+searched `supabase/migrations/` for a definition of each (case-insensitive,
+multiline-aware, `public.`-qualified or not). **86 of those 140 are defined by
+no migration file.** The true total is likely higher — 211 functions were not
+sampled.
+
+Spot-checked against the whole `supabase/` tree, not just migrations:
+`create_rfi`, `evaluate_fab_release_set`, `release_package_for_fabrication` and
+`ops_snapshot` have **zero** defining occurrences anywhere in the repo.
+`submittal_derived_stage` appears only in a test fixture
+(`supabase/tests/function-search-path/live-helper-fixture.sql`), which is not a
+definition the database would ever run.
+
+**Why it matters.** These are not helpers. The list includes `create_rfi`,
+`create_submittal`, `create_change_order`, `create_work_package`,
+`generate_pay_application`, `release_package_for_fabrication`, `answer_rfi`,
+`close_rfi`, `void_rfi`, and the whole fab-release gate chain. If the project
+were restored from a snapshot, or a function dropped, **none of them could be
+rebuilt from this repository.** CLAUDE.md treats the fab-release gate as P0 and
+the repo cannot reproduce it.
+
+**The gate's chain, as an example of the shape.** Each layer pulls in another
+missing leaf:
+
+```
+evaluate_release_gate                 (missing)
+  └─ work_package_drawing_set_reports (missing)
+       └─ evaluate_fab_release_set    (missing)
+            ├─ user_has_project_access    ✓ defined
+            ├─ fab_release_blocking_rfis  ✓ defined
+            └─ submittal_derived_stage (missing)
+                 └─ submittal_bic_class (missing)
+piece_control_drawing_is_approved     (missing)
+  └─ evaluate_fab_release_set         (missing)
+```
+
+**Do not fix this by hand-writing migrations.** Two reasons, both learned the
+hard way here. The dependency closure is not knowable up front — every capture
+surfaced another missing leaf. And the bodies contain Postgres regex word
+boundaries (`\m`, `\M` in `submittal_bic_class`) plus dollar-quoted blocks,
+so transcribing them through any intermediate encoding risks a
+character-level error that produces a function which looks correct and behaves
+differently. On the fab-release path that is the worst possible failure mode.
+
+**The fix is one `pg_dump -s`.** A schema-only dump captures all 351 function
+bodies byte-exact, with their grants, in a single pass and with no
+transcription. It needs the database password, which is not available to CI or
+to an agent session today — only `SUPABASE_ACCESS_TOKEN` (management API) and
+the anon key are. Options, cheapest first:
+
+1. Owner runs `pg_dump -s` against production once and commits the result as a
+   baseline capture, classified `intentionally-frozen` in
+   `supabase/production-ownership-manifest.json` so the drift check does not
+   then demand it be stamped (default `local.migrationLifecycle` is `required`,
+   so an unclassified new file lands in `missingMigrations`).
+2. Add a database-password secret to CI and run the dump on a schedule, so the
+   repo tracks production rather than diverging from it silently.
+
+Until one of those happens, the migrations directory is not a reproducible
+description of this database, and the drift check's "inventory green" — which
+its own header already disclaims — is the only assurance there is.
+
 ### Monetization / go-to-market
 
 - **Legal pages** — the self-serve signup needs ToS / privacy / a basic DPA to
