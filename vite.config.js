@@ -102,6 +102,30 @@ function vendorChunk(id) {
   return undefined
 }
 
+// Pin the test runner to UTC. Schedule dates are date-only strings parsed at
+// UTC midnight, several suites assert week/day bucket membership, and many
+// fixtures build "today" as a UTC date and compare it with a page's local day.
+// Under a non-zero offset those drift apart and results depend on where and
+// when the suite runs (green on UTC CI, red on an Arizona dev box after 5 PM).
+//
+// This must run in the main process before Vitest starts any worker. Putting TZ
+// in `test.env` did not work: Vitest writes that into each worker's
+// process.env, which under the `threads` pool is a per-thread copy Node never
+// re-reads the zone from, so workers kept the host zone while process.env.TZ
+// said "UTC". Assigning it on the main thread makes Node reset the zone for the
+// whole process, so workers start in UTC under either pool and on any OS
+// (unlike a shell `TZ=UTC` prefix, which Windows cmd can't parse). Guarded by
+// src/__tests__/testRunnerTimezone.test.ts, which CI runs from a non-UTC TZ.
+// Gated on VITEST (set by the vitest CLI before it loads this file) so
+// `vite dev` and `vite build` keep the machine's zone.
+//
+// Tests that must prove local-vs-UTC behaviour (audit §2.5) can't undo this by
+// assigning process.env.TZ in the file — that is a no-op in a worker thread.
+// Inject the zone instead: stub the Date getters or pass an explicit offset, as
+// src/lib/__tests__/todayLocal.test.js and
+// src/services/__tests__/scheduleCascadeDateMath.test.ts do.
+if (process.env.VITEST) process.env.TZ = 'UTC'
+
 export default defineConfig({
   logLevel: 'info',
   resolve: {
@@ -178,17 +202,8 @@ export default defineConfig({
     env: {
       VITE_SUPABASE_URL: 'https://ci-placeholder.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'ci-placeholder-anon-key',
-      // Pin the runner's timezone. Schedule dates are date-only strings parsed
-      // at UTC midnight, and several suites assert week/day bucket membership;
-      // under a non-zero UTC offset those buckets shift and the assertions turn
-      // machine-dependent (green in CI and on this container, both UTC, red on
-      // an Arizona dev box). CI and the container are already UTC, so this
-      // changes no current result — it stops the suite from silently depending
-      // on where it runs.
-      // NOTE for the working-day/local-date work (audit §2.5): tests that must
-      // prove local-vs-UTC behaviour have to set TZ per-file rather than rely
-      // on this default, which deliberately hides that difference.
-      TZ: 'UTC',
+      // No TZ here: a per-worker env var can't move the zone under the threads
+      // pool. The UTC pin is set in the main process, above defineConfig.
     },
     setupFiles: ['./vitest.setup.js', './src/setupTests.ts'],
     // Use the worker_threads pool. Threads are terminated forcibly at teardown,

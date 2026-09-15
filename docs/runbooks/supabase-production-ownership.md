@@ -68,9 +68,9 @@ Never feed a generated action list directly to a shell.
 
 Use the manual
 [`supabase-retire-deprecated.yml`](../../.github/workflows/supabase-retire-deprecated.yml)
-workflow on `main` for the five reviewed versions: `bluebeam-proxy` 23,
-`schedule-assistant` 32, `sharepoint-proxy` 26, `stripe-setup` 10, and
-`stripe-worker` 10. Run its default dry run first, inspect the source-backup
+workflow on `main` for the five reviewed versions: `bluebeam-proxy` 24,
+`schedule-assistant` 33, `sharepoint-proxy` 27, `stripe-setup` 11, and
+`stripe-worker` 11. Run its default dry run first, inspect the source-backup
 artifact, then run with `apply=true`. The workflow verifies the fixed project,
 current inventory, exact versions, complete downloaded local dependencies, and
 backup hashes. A successful artifact upload is required before deletion. Each

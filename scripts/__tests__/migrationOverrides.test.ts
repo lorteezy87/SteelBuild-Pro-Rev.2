@@ -169,16 +169,19 @@ describe('the real manifest', () => {
     // unresolved always fails drift until an owner restores the lineage — which
     // is the point, and which is also the documented way out of it.
     //
-    // These three were restored on 2026-09-15 by checking each file against
-    // production rather than against markers, so they are frozen now. The guard
-    // did not go away, it moved: freezing is only allowed to mean "we looked and
-    // decided", so the evidence has to carry the decision and the proof. An
-    // entry that flips to frozen with a vague string fails here exactly as a
-    // silent allowlist would.
+    // Two of the three were restored on 2026-09-15 by checking each file
+    // against production rather than against markers, so they are frozen now.
+    // The guard did not go away, it moved: freezing is only allowed to mean "we
+    // looked and decided", so the evidence has to carry the decision and the
+    // proof. An entry that flips to frozen with a vague string fails here
+    // exactly as a silent allowlist would.
+    //
+    // 20260727232000 is deliberately not in this list — the test below pins it
+    // to unresolved, because the owner decided on 2026-09-14 that it stays red.
     const byVersion = new Map<string, { lifecycle: string; evidence: string }>(
       (manifest.local.migrationOverrides ?? []).map((e: { version: string }) => [e.version, e]),
     );
-    for (const version of ['20260727232000', '20260801013000', '20260913090000']) {
+    for (const version of ['20260801013000', '20260913090000']) {
       const entry = byVersion.get(version);
       expect(['intentionally-frozen', 'unresolved'], `${version} must stay classified`)
         .toContain(entry?.lifecycle);
@@ -196,21 +199,22 @@ describe('the real manifest', () => {
 
   it('spells out the fab-release gate drift rather than burying it', () => {
     // 20260727232000 is the P0 path. The live gate is two layers of untracked
-    // drift and the divergence is bidirectional, so neither stamping nor
-    // applying is safe — an owner has to decide.
+    // drift and the divergence is bidirectional, so applying is unsafe. The
+    // owner decided on 2026-09-14 to record it and document the divergence; it
+    // stays unresolved until the sibling gate is ported.
     const entry = (manifest.local.migrationOverrides ?? [])
       .find((e: { version: string }) => e.version === '20260727232000');
-    // Frozen since 2026-09-15 — production is authoritative and the file may
-    // never run. The gate chain is still only half captured, so the entry has
-    // to keep naming what is open rather than reading as "all clear".
-    expect(entry.lifecycle).toBe('intentionally-frozen');
-    expect(entry.evidence).toMatch(/STILL OPEN/);
-    expect(entry.evidence).toMatch(/evaluate_release_gate/);
-    expect(entry.evidence).toMatch(/piece_control_drawing_is_approved/);
+    // Deliberately still red. The 2026-09-14 owner decision is to record and
+    // document rather than resolve, because production keeps the sibling app's
+    // stricter gate and porting it into Rev.2 is a product task. Freezing this
+    // would turn a standing reminder into silence, so it stays unresolved even
+    // though its two siblings below were settled on 2026-09-15.
+    expect(entry.lifecycle).toBe('unresolved');
     expect(entry.evidence).toMatch(/work_package_drawing_set_reports/);
     expect(entry.evidence).toMatch(/evaluate_fab_release_set/);
     expect(entry.evidence).toMatch(/bidirectional/i);
-    expect(entry.evidence).toMatch(/do not stamp and do not apply/i);
+    expect(entry.evidence).toMatch(/OWNER DECISION 2026-09-14: record and document/);
+    expect(entry.evidence).toMatch(/do not apply/i);
   });
 
   it('marks a migration whose data repair was never verified as schema-only', () => {
@@ -265,5 +269,5 @@ const LEDGER = new Set([
   '20260910034739', '20260910040138', '20260910044641', '20260911062832', '20260912023827',
   '20260912034015', '20260912042823', '20260912045532', '20260912052502', '20260912055243',
   '20260912062606', '20260913201853', '20260913201900', '20260913203000', '20260914010000',
-  '20260914020000',
+  '20260914020000', '20260914120000', '20260914120100',
 ]);

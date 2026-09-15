@@ -23,11 +23,13 @@ reviewable in git — not so they can be replayed.
 
 - `production-public-functions-2026-09-15.sql` — **171** functions that **no
   migration defines by name**. Captured byte-exact.
-- `DRIFTED-FUNCTIONS-2026-09-15.md` — **49** functions a migration *does* define,
+- `DRIFTED-FUNCTIONS-2026-09-15.md` — **48** functions a migration *does* define,
   where production runs a different body. An inventory only; **not captured yet**.
 
 The second is the more dangerous set, because nothing looks missing. Together
-they are why the repo reproduces 131 of 351 live function bodies.
+they are why the repo reproduces 132 of 351 live function bodies. Most of the 48
+are the sibling app's: `SteelBuild-Pro-2026` shares this production project, so
+its migrations land in the same database and Rev.2's history never records them.
 
 ## Why the capture exists
 
@@ -36,7 +38,7 @@ facts, as of 2026-09-15:
 
 1. **171 of the 351 live `public` functions** (extension-owned functions
    excluded) are defined by no migration anywhere in the repo. 86 of the 171 are
-   `SECURITY DEFINER`; 65 are wired to a live trigger. A further **49** are
+   `SECURITY DEFINER`; 65 are wired to a live trigger. A further **48** are
    defined by a migration but have drifted in production — see
    `DRIFTED-FUNCTIONS-2026-09-15.md`.
 2. At least two migrations `ALTER` a function they never `CREATE`, so a reset

@@ -188,7 +188,7 @@ rows" evidence can be quoted as current.
   2026-09-14, the same day as the newest migration. It goes stale on every
   schema change, so re-check rather than assume.
 
-### 220 of 351 production functions cannot be rebuilt from this repo (2026-09-15)
+### 219 of 351 production functions cannot be rebuilt from this repo (2026-09-15)
 
 Found while trying to capture the four functions the Supabase drift runbook names
 as undocumented. The gap is far wider than four, and it includes the fab-release
@@ -208,24 +208,34 @@ by oid, never replayed against an empty Postgres. See `supabase/_capture/README.
 | **Defined by no migration anywhere in the repo** (captured) | **171** |
 | └ of those, `SECURITY DEFINER` | 86 |
 | └ of those, wired to a live trigger | 65 |
-| **Defined by a migration, but production's body differs from every repo version** (not captured) | **49** |
-| Defined by a migration and production matches | 131 |
+| **Defined by a migration, but production's body differs from every repo version** (not captured) | **48** |
+| Defined by a migration and production matches | 132 |
 | Defined in a migration but missing from production | 0 |
 
-So the repo reproduces **131 of 351** function bodies, not 180. Two revisions of
+So the repo reproduces **132 of 351** function bodies, not 180. Two revisions of
 this entry were wrong before this one: "~86" came from a 140-function sample and
 is really the `SECURITY DEFINER` subset; "171" counted only the functions no
-migration *defines by name* and missed the 49 that a migration defines while
+migration *defines by name* and missed the 48 that a migration defines while
 production runs something else.
 
-**The 49 are the worse half.** A missing function announces itself; a drifted one
+**The 48 are the worse half.** A missing function announces itself; a drifted one
 does not. They include the core RLS helpers — `user_has_project_access`,
 `user_has_project_role_at_least`, `user_is_system_admin`, `user_is_org_admin`,
 `user_org_role_at_least`, `get_my_project_role` — and the P0 fab-release path:
 `enforce_fab_release_gate`, `evaluate_release_gate`,
 `piece_control_drawing_is_approved`. Replaying the repo over production would
-silently *revert* all 49. They are not in the capture file, whose contract is
-"no migration defines these"; capturing them is the next piece of work.
+silently *revert* all 48. They are listed in
+`supabase/_capture/DRIFTED-FUNCTIONS-2026-09-15.md`.
+
+**Mostly they are the sibling app's.** `SteelBuild-Pro-2026` shares this
+production Supabase project, so its migrations land in the same database and
+Rev.2's history never records them. `20260914120000_adopt_production_soft_delete_project.sql`
+says so outright — production ran the sibling's definition from *its* ledger entry
+`20260909014620` — and is the worked example of clearing one: copy the sibling
+file byte for byte, confirm the body md5 matches production, adopt. That migration
+is why this count is 48 and not the 49 first measured. So the question behind most
+of these is not "who edited production" but "which repo owns this function", which
+CLAUDE.md records as still undecided.
 
 **Measure this with line endings normalised.** Production stores some bodies with
 CRLF and the repo's `* text=auto` rewrites the checked-in copy to LF, so a raw
@@ -290,9 +300,16 @@ possible failure mode. Promote from the capture file, which is byte-exact.
 Until promotion happens, the migrations directory is not a reproducible
 description of this database, and the drift check's "inventory green" — which its
 own header already disclaims, since it compares versions and slugs rather than
-SQL — is the only assurance there is. That disclaimer is the whole point: the
-drift check went green on 2026-09-15 when the last three `unresolved` migrations
-were settled, and none of the 220 functions above moved.
+SQL — is the only assurance there is.
+
+**The drift check is deliberately still red**, on one entry. `20260801013000` and
+`20260913090000` were settled on 2026-09-15 by checking each file against
+production. `20260727232000` was not, and must not be: the owner decided on
+2026-09-14 to record and document it rather than resolve it, because production
+keeps the sibling app's stricter fab-release gate and porting that into Rev.2 is a
+product task. Freezing it would turn a standing reminder into silence. It clears
+when the gate is ported, not before — and a test pins it so nobody clears it by
+accident.
 
 ### Monetization / go-to-market
 
