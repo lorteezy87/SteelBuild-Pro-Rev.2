@@ -178,15 +178,17 @@ describe('the real manifest', () => {
 
   it('spells out the fab-release gate drift rather than burying it', () => {
     // 20260727232000 is the P0 path. The live gate is two layers of untracked
-    // drift and the divergence is bidirectional, so neither stamping nor
-    // applying is safe — an owner has to decide.
+    // drift and the divergence is bidirectional, so applying is unsafe. The
+    // owner decided on 2026-09-14 to record it and document the divergence; it
+    // stays unresolved until the sibling gate is ported.
     const entry = (manifest.local.migrationOverrides ?? [])
       .find((e: { version: string }) => e.version === '20260727232000');
     expect(entry.lifecycle).toBe('unresolved');
     expect(entry.evidence).toMatch(/work_package_drawing_set_reports/);
     expect(entry.evidence).toMatch(/evaluate_fab_release_set/);
     expect(entry.evidence).toMatch(/bidirectional/i);
-    expect(entry.evidence).toMatch(/do not stamp and do not apply/i);
+    expect(entry.evidence).toMatch(/OWNER DECISION 2026-09-14: record and document/);
+    expect(entry.evidence).toMatch(/do not apply/i);
   });
 
   it('marks a migration whose data repair was never verified as schema-only', () => {
@@ -241,5 +243,5 @@ const LEDGER = new Set([
   '20260910034739', '20260910040138', '20260910044641', '20260911062832', '20260912023827',
   '20260912034015', '20260912042823', '20260912045532', '20260912052502', '20260912055243',
   '20260912062606', '20260913201853', '20260913201900', '20260913203000', '20260914010000',
-  '20260914020000',
+  '20260914020000', '20260914120000', '20260914120100',
 ]);
