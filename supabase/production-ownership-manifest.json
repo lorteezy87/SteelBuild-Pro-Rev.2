@@ -9,8 +9,8 @@
     "functionOverrides": [
       {
         "slug": "account-delete",
-        "lifecycle": "intentionally-frozen",
-        "evidence": "docs/PHASE_0_AGENT_HANDOFF.md and migrations 20260912034015/20260912055243/20260912062606: owner release and rollback evidence remain required before deployment"
+        "lifecycle": "required",
+        "evidence": "Deployed 2026-09-15 on the owner's explicit instruction (verify_jwt: true), superseding docs/PHASE_0_AGENT_HANDOFF.md's earlier 'keep frozen pending owner release' hold - that release is this instruction. Pre-deploy, confirmed hard_delete_organization (the RPC it calls) still carries the 20260912055243/20260912062606 fixes and its own ARCHIVE_FIRST guard against erasing an org with any live project. This activates DangerZone.jsx and DeleteAccountZone.jsx for real; see PR referencing 20260915100000 for the erase_my_account finding made during this deploy."
       },
       {
         "slug": "legacy-app-files-copy",
@@ -198,6 +198,11 @@
         "version": "20260914122050",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - not yet in the ledger. Re-asserts 20260914010000's revoke of link_unlinked_model_elements_for_piece from PUBLIC, anon and authenticated, then aborts unless has_function_privilege shows anon and authenticated refused and service_role kept. Written because a read-only production check on 2026-09-14 still showed authenticated=X although the ledger records 20260914010000. If production already refuses authenticated, close the PR instead of applying. Once applied and recorded as 20260914122050, move the version into the LEDGER literal in scripts/__tests__/migrationOverrides.test.ts and drop this override."
+      },
+      {
+        "version": "20260915100000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Revokes authenticated/anon/public EXECUTE on public.erase_my_account(text) - a second, independent self-service account-deletion RPC discovered live in production, not called anywhere in this repo and not created by any migration here (most likely a leftover from the sibling SteelBuild-Pro-2026 app sharing this database). Verified 2026-09-15 via has_function_privilege('authenticated', 'public.erase_my_account(text)', 'EXECUTE'): true before, false after, applied on the owner's explicit instruction. Ledger holds no row for this version."
       }
     ]
   },
