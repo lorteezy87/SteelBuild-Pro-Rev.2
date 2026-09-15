@@ -163,16 +163,37 @@ describe('the real manifest', () => {
     expect(unaccounted).toEqual([]);
   });
 
-  it('records uncertain lineage as unresolved, never as frozen', () => {
+  it('never silently allowlists: a frozen lineage must say how it was settled', () => {
     // The runbook's lifecycle contract: an identifier with uncertain source or
     // lineage is recorded as unresolved and never silently allowlisted.
-    // unresolved always fails drift until an owner restores the lineage, which
-    // is the point — freezing these would hide them.
+    // unresolved always fails drift until an owner restores the lineage — which
+    // is the point, and which is also the documented way out of it.
+    //
+    // Two of the three were restored on 2026-09-15 by checking each file
+    // against production rather than against markers, so they are frozen now.
+    // The guard did not go away, it moved: freezing is only allowed to mean "we
+    // looked and decided", so the evidence has to carry the decision and the
+    // proof. An entry that flips to frozen with a vague string fails here
+    // exactly as a silent allowlist would.
+    //
+    // 20260727232000 is deliberately not in this list — the test below pins it
+    // to unresolved, because the owner decided on 2026-09-14 that it stays red.
     const byVersion = new Map<string, { lifecycle: string; evidence: string }>(
       (manifest.local.migrationOverrides ?? []).map((e: { version: string }) => [e.version, e]),
     );
-    for (const version of ['20260727232000', '20260801013000', '20260913090000']) {
-      expect(byVersion.get(version)?.lifecycle, `${version} must stay unresolved`).toBe('unresolved');
+    for (const version of ['20260801013000', '20260913090000']) {
+      const entry = byVersion.get(version);
+      expect(['intentionally-frozen', 'unresolved'], `${version} must stay classified`)
+        .toContain(entry?.lifecycle);
+      if (entry?.lifecycle === 'intentionally-frozen') {
+        // Says it was settled, and when.
+        expect(entry.evidence, `${version} must record that it was resolved`)
+          .toMatch(/RESOLVED \d{4}-\d{2}-\d{2}/);
+        // Cites production, not a marker match — that mistake is what put
+        // 20260801013000 here in the first place.
+        expect(entry.evidence, `${version} must cite production`)
+          .toMatch(/schema_migrations|production/i);
+      }
     }
   });
 
@@ -183,6 +204,11 @@ describe('the real manifest', () => {
     // stays unresolved until the sibling gate is ported.
     const entry = (manifest.local.migrationOverrides ?? [])
       .find((e: { version: string }) => e.version === '20260727232000');
+    // Deliberately still red. The 2026-09-14 owner decision is to record and
+    // document rather than resolve, because production keeps the sibling app's
+    // stricter gate and porting it into Rev.2 is a product task. Freezing this
+    // would turn a standing reminder into silence, so it stays unresolved even
+    // though its two siblings below were settled on 2026-09-15.
     expect(entry.lifecycle).toBe('unresolved');
     expect(entry.evidence).toMatch(/work_package_drawing_set_reports/);
     expect(entry.evidence).toMatch(/evaluate_fab_release_set/);

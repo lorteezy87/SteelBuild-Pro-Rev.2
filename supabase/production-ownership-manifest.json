@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "projectRef": "kjrwqagyeswwoxpjkcko",
-  "reviewedAt": "2026-09-13",
+  "reviewedAt": "2026-09-15",
   "local": {
     "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
     "migrationLifecycle": "required",
@@ -156,13 +156,13 @@
       },
       {
         "version": "20260801013000",
-        "lifecycle": "unresolved",
-        "evidence": "LINEAGE UNRESOLVED - do not stamp and do not apply without review. Two of this file's three functions are NOT the live bodies, proven by md5 rather than marker matching: refresh_work_package_progress and soft_delete_project both differ from the file. An earlier marker-based probe wrongly read this as applied because the string Project % not found or already archived also appears in the later live version. The provenance of the live bodies is not established by any repo migration. Recorded unresolved per the runbook lifecycle contract rather than silently allowlisted."
+        "lifecycle": "intentionally-frozen",
+        "evidence": "RESOLVED 2026-09-15 - effects accounted for; do not stamp, and do not apply. Not in supabase_migrations.schema_migrations (checked against production 2026-09-15). All three of this file's functions are explained by md5 against live rather than by marker matching: (1) refresh_work_package_progress - live f37f50a4986852bbb436f6cdd80e06da (6858 chars) is an EXACT match for the later tracked migration 20260905130000_work_package_control_center.sql, so its difference from this file is a later migration overwriting it, not drift; the earlier note citing it as evidence of an unapplied file was mistaken. (2) work_packages_soft_delete_unassign_pieces - semantically IDENTICAL to this file; the apparent md5 difference was 55 CR bytes, because production stores the body CRLF and the repo's `* text=auto` normalises the checked-in file to LF. (3) soft_delete_project - a real difference, and production is the newer and safer side: live 6ac048fb85527ad236dadeda8db85530 (1487 chars) guards the dynamic child-table UPDATE with `if to_regclass('public.' || v_table) is not null then`, which this file's body (5dc9d55d222159c0be0cc28a6ba006b7, 1555 chars) lacks. That divergence is now CLOSED on the replay path by 20260914120000_adopt_production_soft_delete_project.sql, which adopts production's body and, being a later version, wins over this file on a fresh reset - so this file is harmless to replay and simply must not be stamped. That migration also names the provenance this entry could not: production runs the SIBLING APP's definition (SteelBuild-Pro-2026, its ledger 20260909014620 m2_projects_and_project_rbac), which is the general explanation for bodies in this shared database that no Rev.2 migration carries. The file stays in supabase/migrations/ rather than being quarantined, because its work_packages_soft_delete_unassign_pieces body IS production's and is the only definition of it on the replay path."
       },
       {
         "version": "20260913090000",
-        "lifecycle": "unresolved",
-        "evidence": "LINEAGE UNRESOLVED - do not stamp and do not apply without review. Of this file's 9 durable effects, ZERO are attributable to it: the second reviewer read the ledger statements text[] bodies and showed the live objects provably belong to two OTHER recorded migrations, so the end state being consistent says nothing about this file having run. The live drawing_transmittal_items table also carries objects this repo never defines anywhere. Recorded unresolved per the runbook lifecycle contract rather than silently allowlisted."
+        "lifecycle": "intentionally-frozen",
+        "evidence": "RESOLVED 2026-09-15 - applied to production under other version stamps; safe, and required on the replay path. Not in supabase_migrations.schema_migrations, but all seven of this file's durable effects are verified present in production: drawing_transmittal_items.drawing_id and .gc_drawing_id both exist, drawing_revision_id is nullable, drawing_transmittal_items_drawing_id_fkey exists, drawing_transmittal_items_one_target exists with convalidated=true, and both idx_drawing_transmittal_items_drawing_id and idx_drawing_transmittal_items_gc_drawing_id exist. Every statement in the file is idempotent (add column if not exists / drop constraint if exists then add / create index if not exists), so applying it against production is a proven no-op - which is why the earlier finding that its durable effects are attributable to two OTHER recorded migrations does not make the file removable. It must stay in supabase/migrations/: the baseline 20260101000010_baseline_schema.sql defines drawing_transmittal_items with drawing_revision_id NOT NULL and neither new column, and 20260913201900_harden_drifted_function_entrypoints.sql creates an index ON gc_drawing_id, so a fresh reset without this file fails. Frozen rather than required because it will never be stamped under this version."
       },
       {
         "version": "20260817020000",
