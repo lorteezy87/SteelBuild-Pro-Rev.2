@@ -31,18 +31,20 @@ import BoardMinimap from "@/components/board/BoardMinimap";
 import BoardToolbar from "@/components/board/BoardToolbar";
 import GanttLane from "@/components/board/GanttLane";
 import NodeInspector from "@/components/board/NodeInspector";
+import PlannerPanel from "@/components/board/PlannerPanel";
 import AssistantPanel from "@/components/board/AssistantPanel";
 import TimeMachine from "@/components/board/TimeMachine";
 import type { BoardTool } from "@/components/board/tools";
 import { resolveNodeRect } from "@/lib/board/document";
 import {
   createBookmark,
+  createDeliveryNode,
   createLinkNode,
   createOverlay,
   createPhotoNode,
   newId,
 } from "@/lib/board/factory";
-import { boundsOf, padRect } from "@/lib/board/geometry";
+import { boundsOf, padRect, rectCenter } from "@/lib/board/geometry";
 import { getAsset, putAsset, storageErrorMessage } from "@/lib/board/storage";
 import type { BoardColor } from "@/lib/board/types";
 import { centerOn, fitToRect, screenToWorld, zoomAt, type ViewportSize } from "@/lib/board/viewport";
@@ -151,6 +153,27 @@ export default function SubcontractorCommandCenter() {
     }
   };
 
+  const addDelivery = () => {
+    // Created empty and selected, like a link: the material and vendor are typed
+    // in the inspector rather than in a blocking prompt.
+    const node = createDeliveryNode(canvasCentre());
+    dispatch({ type: "add_node", node }, { label: "Added delivery" });
+    board.setSelection([node.id]);
+  };
+
+  /**
+   * Send the canvas to a card and select it — the planner's link to the job-site
+   * map. The zoom is left alone: the user's current scale is a choice, and
+   * snapping to a fixed one on every jump is disorienting.
+   */
+  const showOnMap = (nodeId: string) => {
+    const node = doc.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    board.setSelection([nodeId]);
+    setSelectedEdgeId(null);
+    setViewport((prev) => centerOn(prev, rectCenter(resolveNodeRect(doc, node)), size));
+  };
+
   const addLink = () => {
     // Created empty and selected: the URL is typed in the inspector rather than
     // in a blocking prompt, which on a tablet hides the board behind the keyboard.
@@ -185,6 +208,7 @@ export default function SubcontractorCommandCenter() {
         onRedo={board.redo}
         canUndo={board.canUndo}
         canRedo={board.canRedo}
+        onAddDelivery={addDelivery}
         onAddPhoto={() => photoInput.current?.click()}
         onAddLink={addLink}
         onAddSheet={() => sheetInput.current?.click()}
@@ -283,6 +307,13 @@ export default function SubcontractorCommandCenter() {
             dispatch={dispatch}
             readOnly={scrubbing}
             onDraftRfi={(nodeId) => setRfiNodeId(nodeId)}
+          />
+          <PlannerPanel
+            doc={doc}
+            dispatch={dispatch}
+            onShowOnMap={showOnMap}
+            onSelect={board.setSelection}
+            readOnly={scrubbing}
           />
           <AssistantPanel
             doc={doc}

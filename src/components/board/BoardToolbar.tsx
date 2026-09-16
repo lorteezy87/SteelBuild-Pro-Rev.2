@@ -26,6 +26,7 @@ export interface BoardToolbarProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onAddDelivery: () => void;
   onAddPhoto: () => void;
   onAddLink: () => void;
   onAddSheet: () => void;
@@ -89,6 +90,9 @@ export default function BoardToolbar(props: BoardToolbarProps) {
         <span className="sbp-toolbar__sep" />
 
         <div className="sbp-toolbar__group">
+          <button type="button" className="sbp-btn" onClick={props.onAddDelivery} disabled={scrubbing}>
+            Delivery
+          </button>
           <button type="button" className="sbp-btn" onClick={props.onAddPhoto} disabled={scrubbing}>
             Photo
           </button>

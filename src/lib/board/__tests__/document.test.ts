@@ -15,6 +15,7 @@ import {
   type BoardAction,
 } from "../document";
 import {
+  createDeliveryNode,
   createEdge,
   createInkNode,
   createLinkNode,
@@ -23,7 +24,7 @@ import {
   createPhotoNode,
   createTaskNode,
 } from "../factory";
-import type { BoardDoc, BoardTaskNode } from "../types";
+import type { BoardDeliveryNode, BoardDoc, BoardTaskNode } from "../types";
 
 const T0 = "2026-03-02T08:00:00.000Z";
 const T1 = "2026-03-02T09:00:00.000Z";
@@ -184,6 +185,46 @@ describe("typed updates", () => {
     expect(savedPhoto?.kind === "photo" && savedPhoto.caption).toBe("Bent gusset");
     expect(savedLink?.kind === "link" && savedLink.title).toBe("Spec 05 12 00");
     expect(savedLink?.kind === "link" && savedLink.url).toBe("https://example.test/spec");
+  });
+
+  it("patches a delivery and ignores a patch that changes nothing", () => {
+    const bolts = createDeliveryNode({ x: 0, y: 0 }, "Anchor bolts", "", "gold", T0);
+    const doc = applyBoardAction(board(), { type: "add_node", node: bolts }, T0);
+    const dated = applyBoardAction(
+      doc,
+      { type: "update_delivery", id: bolts.id, patch: { vendor: "Nucor", needed_by: "2026-03-10" } },
+      T1,
+    );
+    const updated = findNode(dated, bolts.id) as BoardDeliveryNode;
+    expect(updated.vendor).toBe("Nucor");
+    expect(updated.needed_by).toBe("2026-03-10");
+    expect(updated.received).toBe(false);
+    expect(
+      applyBoardAction(dated, { type: "update_delivery", id: bolts.id, patch: { vendor: "Nucor" } }, T1),
+    ).toBe(dated);
+  });
+
+  it("keeps received separate from the date, which only says whether it is late", () => {
+    const bolts = createDeliveryNode({ x: 0, y: 0 }, "Anchor bolts", "Nucor", "gold", T0);
+    let doc = applyBoardAction(board(), { type: "add_node", node: bolts }, T0);
+    doc = applyBoardAction(
+      doc,
+      { type: "update_delivery", id: bolts.id, patch: { needed_by: "2020-01-01" } },
+      T1,
+    );
+    expect((findNode(doc, bolts.id) as BoardDeliveryNode).received).toBe(false);
+    doc = applyBoardAction(doc, { type: "update_delivery", id: bolts.id, patch: { received: true } }, T1);
+    const received = findNode(doc, bolts.id) as BoardDeliveryNode;
+    expect(received.received).toBe(true);
+    expect(received.needed_by).toBe("2020-01-01");
+  });
+
+  it("only applies a delivery update to a delivery", () => {
+    const task = createTaskNode({ x: 0, y: 0 }, "Set columns", "info", T0);
+    const doc = applyBoardAction(board(), { type: "add_node", node: task }, T0);
+    expect(
+      applyBoardAction(doc, { type: "update_delivery", id: task.id, patch: { vendor: "Nucor" } }, T1),
+    ).toBe(doc);
   });
 
   it("rejects a stroke with fewer than two points", () => {

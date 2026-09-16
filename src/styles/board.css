@@ -457,3 +457,53 @@
   .sbp-board__body { flex-direction: column; }
   .sbp-board__aside { width: auto; max-height: 45%; border-left: none; border-top: 1px solid var(--cmd-border); }
 }
+
+/* ── Planner ──────────────────────────────────────────────────────────── */
+
+.sbp-planner__scroll { overflow-x: auto; }
+
+.sbp-planner {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.sbp-planner th,
+.sbp-planner td {
+  border: 1px solid var(--cmd-border);
+  padding: 4px;
+  vertical-align: top;
+  text-align: left;
+  color: var(--cmd-text);
+}
+
+.sbp-planner th[scope="col"] { font-weight: 600; color: var(--cmd-text-muted); white-space: nowrap; }
+.sbp-planner th[scope="row"] { min-width: 96px; font-weight: 600; }
+/* A cell is a drop target, so it needs to look like one and be tall enough to
+   hit with a finger even when empty. */
+.sbp-planner td { min-width: 72px; height: 44px; cursor: pointer; }
+.sbp-planner td:hover { background: var(--cmd-row-hover); }
+.sbp-planner__weekend { background: var(--cmd-chip-bg); }
+.sbp-planner__today { color: var(--cmd-gold); }
+
+.sbp-chip {
+  display: block;
+  width: 100%;
+  margin-bottom: 3px;
+  padding: 3px 6px;
+  border: 1px solid var(--cmd-border);
+  border-left: 3px solid var(--cmd-info);
+  border-radius: 5px;
+  background: var(--cmd-surface);
+  color: var(--cmd-text);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sbp-chip--delivery { border-left-color: var(--cmd-gold); }
+.sbp-chip--blocked { border-left-color: var(--cmd-danger); background: var(--cmd-chip-danger-bg); color: var(--cmd-danger-text); }
+.sbp-chip__sheet { display: block; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--cmd-text-muted); }
+
+.sbp-planner__tray { display: flex; flex-wrap: wrap; gap: 6px; }

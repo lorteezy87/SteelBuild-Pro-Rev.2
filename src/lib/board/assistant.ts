@@ -26,7 +26,15 @@
 
 import { durationFromDates } from "@/lib/schedule/duration";
 import { findOverlay } from "./document";
-import { isTaskNode, nodeText, type BoardDoc, type BoardNode, type BoardTaskNode } from "./types";
+import {
+  isDeliveryNode,
+  isTaskNode,
+  nodeText,
+  type BoardDeliveryNode,
+  type BoardDoc,
+  type BoardNode,
+  type BoardTaskNode,
+} from "./types";
 
 /** Placeholder for a section with nothing in it. See the file header. */
 export const NONE_RECORDED = "None recorded.";
@@ -96,6 +104,37 @@ export function sheetRegion(doc: BoardDoc, node: BoardNode): string | null {
   return `${vertical} ${horizontal}`;
 }
 
+/** Deliveries needed on `date`. */
+export function deliveriesOn(doc: BoardDoc, date: string): BoardDeliveryNode[] {
+  return doc.nodes.filter(isDeliveryNode).filter((d) => d.needed_by === date);
+}
+
+/**
+ * Deliveries whose date has passed and that are not marked received.
+ *
+ * Both halves are required. A past date on its own says nothing — most
+ * deliveries on a board are in the past by the end of a job — and an unreceived
+ * flag on its own is the normal state of everything still to come. Only the
+ * pair is a problem worth putting in front of a GC.
+ */
+export function overdueDeliveries(doc: BoardDoc, date: string): BoardDeliveryNode[] {
+  return doc.nodes
+    .filter(isDeliveryNode)
+    .filter((d) => !!d.needed_by && d.needed_by < date && !d.received);
+}
+
+function deliveryLine(delivery: BoardDeliveryNode, today: string): string {
+  const what = delivery.material.trim() || "(unnamed material)";
+  const who = delivery.vendor.trim() ? ` (${delivery.vendor.trim()})` : "";
+  if (delivery.received) return `${what}${who} — received`;
+  if (delivery.needed_by && delivery.needed_by < today) {
+    return `${what}${who} — was due ${delivery.needed_by}, not received`;
+  }
+  // Not "not delivered": the board knows it has not been *marked* received,
+  // which is not the same as knowing it did not arrive.
+  return `${what}${who} — expected, not marked received`;
+}
+
 export interface DailyLogSection {
   heading: string;
   lines: string[];
@@ -152,6 +191,11 @@ export function draftDailyLog(doc: BoardDoc, input: DailyLogInput): DailyLogDraf
     return `${task.text.trim() || "(untitled task)"}${where} — ${reason}`;
   });
 
+  const deliveryLines = [
+    ...deliveriesOn(doc, date).map((d) => deliveryLine(d, date)),
+    ...overdueDeliveries(doc, date).map((d) => deliveryLine(d, date)),
+  ];
+
   const photoLines = touched
     .filter((node) => node.kind === "photo")
     .map((node) => {
@@ -171,6 +215,7 @@ export function draftDailyLog(doc: BoardDoc, input: DailyLogInput): DailyLogDraf
   const sections: DailyLogSection[] = [
     { heading: "Work performed", lines: workLines },
     { heading: "Delays / blockers", lines: blockerLines },
+    { heading: "Material deliveries", lines: deliveryLines },
     { heading: "Photos logged", lines: photoLines },
     { heading: "Field notes", lines: noteLines },
   ];

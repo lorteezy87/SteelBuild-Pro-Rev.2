@@ -33,6 +33,7 @@ import {
   BOARD_SCHEMA_VERSION,
   type BoardBookmark,
   type BoardColor,
+  type BoardDeliveryNode,
   type BoardDoc,
   type BoardEdge,
   type BoardEdgeKind,
@@ -51,6 +52,11 @@ export type TaskPatch = Partial<
   >
 >;
 
+/** Fields of a delivery a caller may change. */
+export type DeliveryPatch = Partial<
+  Pick<BoardDeliveryNode, "material" | "vendor" | "needed_by" | "received">
+>;
+
 export type OverlayPatch = Partial<Pick<BoardOverlay, "name" | "sheet_number" | "opacity" | "locked" | "rect">>;
 
 export type EdgePatch = Partial<Pick<BoardEdge, "label" | "color" | "kind">>;
@@ -64,6 +70,7 @@ export type BoardAction =
   | { type: "set_node_color"; id: string; color: BoardColor }
   | { type: "update_note"; id: string; text: string }
   | { type: "update_task"; id: string; patch: TaskPatch }
+  | { type: "update_delivery"; id: string; patch: DeliveryPatch }
   | { type: "update_photo"; id: string; caption: string }
   | { type: "update_link"; id: string; url?: string; title?: string }
   | { type: "append_stroke"; id: string; stroke: InkStroke }
@@ -269,6 +276,15 @@ export function applyBoardAction(doc: BoardDoc, action: BoardAction, now: string
       return nodes ? commit(doc, { nodes }, now) : doc;
     }
 
+    case "update_delivery": {
+      const nodes = mapNode(doc, action.id, (node) => {
+        if (node.kind !== "delivery") return node;
+        const merged: BoardDeliveryNode = { ...node, ...action.patch, updated_at: now };
+        return deliveryEquals(node, merged) ? node : merged;
+      });
+      return nodes ? commit(doc, { nodes }, now) : doc;
+    }
+
     case "update_photo": {
       const nodes = mapNode(doc, action.id, (node) =>
         node.kind === "photo" && node.caption !== action.caption
@@ -452,6 +468,15 @@ function taskEquals(a: BoardTaskNode, b: BoardTaskNode): boolean {
     a.blocked === b.blocked &&
     a.blocked_reason === b.blocked_reason &&
     a.owner === b.owner
+  );
+}
+
+function deliveryEquals(a: BoardDeliveryNode, b: BoardDeliveryNode): boolean {
+  return (
+    a.material === b.material &&
+    a.vendor === b.vendor &&
+    a.needed_by === b.needed_by &&
+    a.received === b.received
   );
 }
 

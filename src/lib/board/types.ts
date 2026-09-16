@@ -50,7 +50,7 @@ export type BoardColor = (typeof BOARD_COLORS)[number];
 export const DEFAULT_BOARD_COLOR: BoardColor = "neutral";
 
 /** Node kinds the canvas can render. */
-export const BOARD_NODE_KINDS = ["note", "task", "photo", "link", "ink"] as const;
+export const BOARD_NODE_KINDS = ["note", "task", "delivery", "photo", "link", "ink"] as const;
 export type BoardNodeKind = (typeof BOARD_NODE_KINDS)[number];
 
 /**
@@ -115,6 +115,26 @@ export interface BoardTaskNode extends BoardNodeCommon {
   owner: string;
 }
 
+/**
+ * A material delivery.
+ *
+ * A **date, not a span** — which is the whole reason this is its own kind rather
+ * than a task with a vendor in the owner field. A delivery does not take five
+ * days; it either lands on the 12th or it does not, and the planner has to be
+ * able to say "this is due that morning" without inventing a finish date. Giving
+ * it a start and a finish would also put a five-day bar on the timeline for
+ * something that occupies a gate slot for an hour.
+ */
+export interface BoardDeliveryNode extends BoardNodeCommon {
+  kind: "delivery";
+  material: string;
+  vendor: string;
+  /** `YYYY-MM-DD` the material is needed on site, or null when not yet committed. */
+  needed_by: string | null;
+  /** Set when it has landed. Distinct from a date in the past, which only means it is late. */
+  received: boolean;
+}
+
 /** A jobsite photo. The bytes live in the asset store, not in the document. */
 export interface BoardPhotoNode extends BoardNodeCommon {
   kind: "photo";
@@ -147,6 +167,7 @@ export interface BoardInkNode extends BoardNodeCommon {
 export type BoardNode =
   | BoardNoteNode
   | BoardTaskNode
+  | BoardDeliveryNode
   | BoardPhotoNode
   | BoardLinkNode
   | BoardInkNode;
@@ -235,12 +256,18 @@ export function isInkNode(node: BoardNode | null | undefined): node is BoardInkN
   return !!node && node.kind === "ink";
 }
 
+export function isDeliveryNode(node: BoardNode | null | undefined): node is BoardDeliveryNode {
+  return !!node && node.kind === "delivery";
+}
+
 /** The text a node contributes to search, daily logs and RFI context. */
 export function nodeText(node: BoardNode): string {
   switch (node.kind) {
     case "note":
     case "task":
       return node.text;
+    case "delivery":
+      return [node.material, node.vendor].filter(Boolean).join(" — ");
     case "photo":
       return node.caption;
     case "link":

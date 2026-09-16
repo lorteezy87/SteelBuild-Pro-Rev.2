@@ -1,18 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { rect } from "../geometry";
 import { applyBoardAction, applyBoardActions, createBoardDoc } from "../document";
-import { createEdge, createNoteNode, createOverlay, createPhotoNode, createTaskNode } from "../factory";
+import {
+  createDeliveryNode,
+  createEdge,
+  createNoteNode,
+  createOverlay,
+  createPhotoNode,
+  createTaskNode,
+} from "../factory";
 import {
   NONE_RECORDED,
   blockedTasks,
+  deliveriesOn,
   draftDailyLog,
   draftRfiFromTask,
   nodesTouchedOn,
+  overdueDeliveries,
   sheetCitation,
   sheetRegion,
   tasksActiveOn,
 } from "../assistant";
-import type { BoardDoc, BoardTaskNode } from "../types";
+import type { BoardDeliveryNode, BoardDoc, BoardTaskNode } from "../types";
 
 const DAY = "2026-03-04";
 const TOUCHED = `${DAY}T15:20:00.000Z`;
@@ -162,6 +171,49 @@ describe("draftDailyLog", () => {
     expect(draft.text).toContain("DAILY LOG — Copper Ridge Phase 2");
     expect(draft.text).toContain(`Date: ${DAY}`);
     expect(draft.text).toContain("Prepared by: N. Lorteezy");
+  });
+});
+
+describe("deliveries in the daily log", () => {
+  function deliveryBoard(overrides: Partial<BoardDeliveryNode>): BoardDoc {
+    const node: BoardDeliveryNode = {
+      ...createDeliveryNode({ x: 0, y: 0 }, "Anchor bolts", "Nucor", "gold", TOUCHED),
+      ...overrides,
+    };
+    return applyBoardAction(emptyBoard(), { type: "add_node", node }, TOUCHED);
+  }
+
+  it("lists what is due that day", () => {
+    const doc = deliveryBoard({ needed_by: DAY });
+    expect(deliveriesOn(doc, DAY)).toHaveLength(1);
+    const section = draftDailyLog(doc, LOG_INPUT).sections.find((s) => s.heading === "Material deliveries");
+    expect(section?.lines).toEqual(["Anchor bolts (Nucor) — expected, not marked received"]);
+  });
+
+  it("says 'not marked received', not 'not delivered'", () => {
+    // The board knows what was recorded, not what happened on the gate.
+    const draft = draftDailyLog(deliveryBoard({ needed_by: DAY }), LOG_INPUT);
+    expect(draft.text).toContain("not marked received");
+    expect(draft.text).not.toContain("not delivered");
+  });
+
+  it("carries a past-due delivery forward until it is received", () => {
+    const doc = deliveryBoard({ needed_by: "2026-03-02" });
+    expect(overdueDeliveries(doc, DAY)).toHaveLength(1);
+    const section = draftDailyLog(doc, LOG_INPUT).sections.find((s) => s.heading === "Material deliveries");
+    expect(section?.lines).toEqual(["Anchor bolts (Nucor) — was due 2026-03-02, not received"]);
+  });
+
+  it("stops reporting one that has landed, however old", () => {
+    const doc = deliveryBoard({ needed_by: "2026-03-02", received: true });
+    expect(overdueDeliveries(doc, DAY)).toEqual([]);
+  });
+
+  it("reports nothing recorded when the board has no deliveries", () => {
+    const section = draftDailyLog(emptyBoard(), LOG_INPUT).sections.find(
+      (s) => s.heading === "Material deliveries",
+    );
+    expect(section?.lines).toEqual([]);
   });
 });
 

@@ -13,6 +13,7 @@ import {
   DEFAULT_BOARD_COLOR,
   type BoardBookmark,
   type BoardColor,
+  type BoardDeliveryNode,
   type BoardEdge,
   type BoardEdgeKind,
   type BoardInkNode,
@@ -28,6 +29,7 @@ import type { Viewport } from "./viewport";
 /** Default card footprint in world units — sized for a legible two-line note at 1:1. */
 export const DEFAULT_NOTE_SIZE = { w: 220, h: 140 };
 export const DEFAULT_TASK_SIZE = { w: 260, h: 160 };
+export const DEFAULT_DELIVERY_SIZE = { w: 250, h: 150 };
 export const DEFAULT_PHOTO_SIZE = { w: 260, h: 200 };
 export const DEFAULT_LINK_SIZE = { w: 240, h: 96 };
 
@@ -98,6 +100,23 @@ export function createTaskNode(
     blocked: false,
     blocked_reason: "",
     owner: "",
+  };
+}
+
+export function createDeliveryNode(
+  at: Vec2,
+  material = "",
+  vendor = "",
+  color: BoardColor = "gold",
+  now = nowIso(),
+): BoardDeliveryNode {
+  return {
+    ...base(newId("node"), centeredRect(at, DEFAULT_DELIVERY_SIZE), color, now),
+    kind: "delivery",
+    material,
+    vendor,
+    needed_by: null,
+    received: false,
   };
 }
 

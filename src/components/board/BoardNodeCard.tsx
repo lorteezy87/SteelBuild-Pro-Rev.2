@@ -25,6 +25,7 @@ export interface BoardNodeCardProps {
 const KIND_LABEL: Record<BoardNode["kind"], string> = {
   note: "Note",
   task: "Task",
+  delivery: "Delivery",
   photo: "Photo",
   link: "Link",
   ink: "Markup",
@@ -108,6 +109,22 @@ function renderBody(node: BoardNode, assetUrl: (assetId: string) => string | nul
             {/* An unscheduled task says so. Showing today's date, or nothing at
                 all, would both read as if it were planned. */}
             <span>{node.start_date && node.end_date ? `${node.start_date} → ${node.end_date}` : "not scheduled"}</span>
+          </div>
+        </>
+      );
+
+    case "delivery":
+      return (
+        <>
+          <div className={`sbp-card__text${node.material ? "" : " sbp-card__text--empty"}`}>
+            {node.material || "Untitled delivery"}
+          </div>
+          <div className="sbp-card__meta">
+            {node.vendor ? <span className="sbp-card__pill">{node.vendor}</span> : null}
+            {node.received ? <span className="sbp-card__pill">received</span> : null}
+            {/* A delivery lands on a day; it has no duration to show. Without a
+                date it is uncommitted, which is not the same as due today. */}
+            <span>{node.needed_by ? `needed ${node.needed_by}` : "no date committed"}</span>
           </div>
         </>
       );

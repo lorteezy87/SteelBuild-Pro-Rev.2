@@ -115,6 +115,67 @@ function NodeFields({ node, doc, dispatch, onDraftRfi, readOnly }: NodeFieldsPro
         </label>
       ) : null}
 
+      {node.kind === "delivery" ? (
+        <>
+          <label className="sbp-field">
+            <span>Material</span>
+            <input
+              value={node.material}
+              disabled={readOnly}
+              placeholder="Anchor bolts, AB-1 through AB-24"
+              onChange={(event) =>
+                dispatch(
+                  { type: "update_delivery", id: node.id, patch: { material: event.target.value } },
+                  { key: `text:${node.id}`, label: "Edited delivery" },
+                )
+              }
+            />
+          </label>
+          <label className="sbp-field">
+            <span>Vendor</span>
+            <input
+              value={node.vendor}
+              disabled={readOnly}
+              onChange={(event) =>
+                dispatch(
+                  { type: "update_delivery", id: node.id, patch: { vendor: event.target.value } },
+                  { key: `vendor:${node.id}`, label: "Set vendor" },
+                )
+              }
+            />
+          </label>
+          <label className="sbp-field">
+            <span>Needed on site</span>
+            <input
+              type="date"
+              value={node.needed_by ?? ""}
+              disabled={readOnly}
+              onChange={(event) =>
+                dispatch(
+                  { type: "update_delivery", id: node.id, patch: { needed_by: event.target.value || null } },
+                  { label: "Dated delivery" },
+                )
+              }
+            />
+          </label>
+          <label className="sbp-field" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={node.received}
+              disabled={readOnly}
+              style={{ minHeight: 0, width: 20, height: 20 }}
+              onChange={(event) =>
+                dispatch(
+                  { type: "update_delivery", id: node.id, patch: { received: event.target.checked } },
+                  { label: event.target.checked ? "Marked received" : "Cleared received" },
+                )
+              }
+            />
+            <span>Received on site</span>
+          </label>
+        </>
+      ) : null}
+
       {node.kind === "photo" ? (
         <label className="sbp-field">
           <span>Caption</span>
