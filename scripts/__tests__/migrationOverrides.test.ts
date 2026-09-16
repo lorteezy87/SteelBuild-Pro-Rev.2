@@ -169,19 +169,21 @@ describe('the real manifest', () => {
     // unresolved always fails drift until an owner restores the lineage — which
     // is the point, and which is also the documented way out of it.
     //
-    // Two of the three were restored on 2026-09-15 by checking each file
-    // against production rather than against markers, so they are frozen now.
-    // The guard did not go away, it moved: freezing is only allowed to mean "we
-    // looked and decided", so the evidence has to carry the decision and the
-    // proof. An entry that flips to frozen with a vague string fails here
-    // exactly as a silent allowlist would.
+    // All three were restored by checking each file against production rather
+    // than against markers, so they are frozen now. The guard did not go away,
+    // it moved: freezing is only allowed to mean "we looked and decided", so
+    // the evidence has to carry the decision and the proof. An entry that
+    // flips to frozen with a vague string fails here exactly as a silent
+    // allowlist would.
     //
-    // 20260727232000 is deliberately not in this list — the test below pins it
-    // to unresolved, because the owner decided on 2026-09-14 that it stays red.
+    // 20260727232000 settled later than the other two (2026-09-15, once the
+    // owner decided to adopt the sibling app's gate logic rather than port it
+    // by hand) — see the dedicated test below for its fuller evidence
+    // requirements.
     const byVersion = new Map<string, { lifecycle: string; evidence: string }>(
       (manifest.local.migrationOverrides ?? []).map((e: { version: string }) => [e.version, e]),
     );
-    for (const version of ['20260801013000', '20260913090000']) {
+    for (const version of ['20260801013000', '20260913090000', '20260727232000']) {
       const entry = byVersion.get(version);
       expect(['intentionally-frozen', 'unresolved'], `${version} must stay classified`)
         .toContain(entry?.lifecycle);
@@ -200,21 +202,23 @@ describe('the real manifest', () => {
   it('spells out the fab-release gate drift rather than burying it', () => {
     // 20260727232000 is the P0 path. The live gate is two layers of untracked
     // drift and the divergence is bidirectional, so applying is unsafe. The
-    // owner decided on 2026-09-14 to record it and document the divergence; it
-    // stays unresolved until the sibling gate is ported.
+    // owner decided on 2026-09-14 to record it and document the divergence
+    // rather than silently allowlist it, then on 2026-09-15 decided to adopt
+    // the sibling app's gate logic as Rev.2's own (20260915120000) instead of
+    // porting this file by hand — which is the product task this entry was
+    // waiting on. That closes the open question, so this freezes rather than
+    // staying unresolved: the file itself must still never be applied, but
+    // there is no longer anything left to decide.
     const entry = (manifest.local.migrationOverrides ?? [])
       .find((e: { version: string }) => e.version === '20260727232000');
-    // Deliberately still red. The 2026-09-14 owner decision is to record and
-    // document rather than resolve, because production keeps the sibling app's
-    // stricter gate and porting it into Rev.2 is a product task. Freezing this
-    // would turn a standing reminder into silence, so it stays unresolved even
-    // though its two siblings below were settled on 2026-09-15.
-    expect(entry.lifecycle).toBe('unresolved');
+    expect(entry.lifecycle).toBe('intentionally-frozen');
     expect(entry.evidence).toMatch(/work_package_drawing_set_reports/);
     expect(entry.evidence).toMatch(/evaluate_fab_release_set/);
     expect(entry.evidence).toMatch(/bidirectional/i);
     expect(entry.evidence).toMatch(/OWNER DECISION 2026-09-14: record and document/);
-    expect(entry.evidence).toMatch(/do not apply/i);
+    expect(entry.evidence).toMatch(/OWNER DECISION 2026-09-15: adopt/);
+    expect(entry.evidence).toMatch(/RESOLVED 2026-09-15/);
+    expect(entry.evidence).toMatch(/must never be applied/i);
   });
 
   it('marks a migration whose data repair was never verified as schema-only', () => {
