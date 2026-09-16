@@ -13,7 +13,7 @@ function hideNativePages(groups) {
 }
 
 export const PRIMARY_TABS = [
-  { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
+  { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter", "SubcontractorCommandCenter"] },
   { label: "PROJECTS",    pages: ["ProjectsHub", "Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
@@ -44,6 +44,7 @@ export const ALL_MODULES = [
   { icon: "\u25C8", name: "Dashboard",               group: "Overview",      page: "Dashboard" },
   { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
   { icon: "\u2726", name: "Portfolio Overview",       group: "Overview",      page: "PortfolioHub" },
+  { icon: "\u25A9", name: "Planning Board",            group: "Overview",      page: "SubcontractorCommandCenter" },
   { icon: "\u25C9", name: "Executive View",           group: "Overview",      page: "ExecutiveView" },
   { icon: "\u25A4", name: "Projects",                 group: "Projects",      page: "Projects" },
   { icon: "\u2261", name: "Scope & Exclusions",       group: "Projects",      page: "ScopeExclusions" },
@@ -106,6 +107,7 @@ export const NAV_GROUPS = hideNativePages([
     items: [
       { label: "Dashboard",          icon: "◈", page: "Dashboard" },
       { label: "Command Center",     icon: "⌘", page: "CommandCenter" },
+      { label: "Planning Board",     icon: "▩", page: "SubcontractorCommandCenter" },
       { label: "Portfolio Overview", icon: "✦", page: "PortfolioHub" },
       { label: "Alerts",             icon: "🔔", page: "AlertsCenter", badgeKey: "unread" },
     ],

@@ -44,6 +44,7 @@ const ROUTE_DOMAINS = {
     ProjectsHub:            r(lazyWithRetry(() => import("@/pages/ProjectsHub")),           "Projects"),
     Onboarding:             r(lazyWithRetry(() => import("@/pages/Onboarding")),            "Onboarding"),
     PortfolioHub:           r(lazyWithRetry(() => import("@/pages/PortfolioHub")),          "Portfolio Overview"),
+    SubcontractorCommandCenter: r(lazyWithRetry(() => import("@/pages/SubcontractorCommandCenter")), "Planning Board", { projectScoped: true }),
   },
   communications: {
     RFIs:             r(lazyWithRetry(() => import("@/pages/RFIs")),             "RFIs",                { projectScoped: true }),

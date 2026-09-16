@@ -1,0 +1,459 @@
+/* Subcontractor Command Center — the infinite board surface.
+   Colour comes from the command skin's --cmd-* tokens only, so the board
+   re-themes with the rest of the app and a saved board never carries a stale
+   palette. Sizes are tuned for touch: nothing interactive is under 44px. */
+
+.sbp-board {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--cmd-bg);
+  color: var(--cmd-text);
+}
+
+.sbp-board__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sbp-board__main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Canvas ───────────────────────────────────────────────────────────── */
+
+.sbp-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  /* The board owns every gesture: without this the browser pans the page out
+     from under a two-finger zoom and the canvas jumps. */
+  touch-action: none;
+  overscroll-behavior: contain;
+  background-color: var(--cmd-bg);
+  cursor: grab;
+}
+
+.sbp-canvas--panning { cursor: grabbing; }
+.sbp-canvas--ink { cursor: crosshair; }
+.sbp-canvas--connect { cursor: alias; }
+
+/* The grid is drawn on the element rather than in the world layer so it can be
+   sized from the live zoom without re-rendering a single node. */
+.sbp-canvas__grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--cmd-border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--cmd-border) 1px, transparent 1px);
+  opacity: 0.5;
+}
+
+.sbp-canvas__world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.sbp-canvas__svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* ── Sheets ───────────────────────────────────────────────────────────── */
+
+.sbp-sheet {
+  position: absolute;
+  border: 1px solid var(--cmd-border);
+  background: var(--cmd-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.sbp-sheet__img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  display: block;
+  pointer-events: none;
+}
+
+.sbp-sheet__tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--cmd-chip-bg);
+  color: var(--cmd-text);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────── */
+
+.sbp-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--cmd-border);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: var(--cmd-surface);
+  color: var(--cmd-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.sbp-card--ink {
+  background: transparent;
+  border-style: dashed;
+  border-left-width: 1px;
+  box-shadow: none;
+  padding: 0;
+}
+
+.sbp-card--selected {
+  outline: 2px solid var(--cmd-gold);
+  outline-offset: 2px;
+}
+
+.sbp-card--connect-source { outline: 2px dashed var(--cmd-info); outline-offset: 2px; }
+
+.sbp-card__kind {
+  font-family: "Barlow Condensed", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--cmd-text-muted);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sbp-card__text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sbp-card__text--empty { color: var(--cmd-text-muted); font-style: italic; }
+
+.sbp-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--cmd-text-muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.sbp-card__pill {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--cmd-chip-bg);
+  color: var(--cmd-text-muted);
+}
+
+.sbp-card__pill--blocked { background: var(--cmd-chip-danger-bg); color: var(--cmd-danger-text); }
+.sbp-card__pill--pinned { background: var(--cmd-chip-info-bg); color: var(--cmd-info-text); }
+
+.sbp-card__img { width: 100%; flex: 1; object-fit: cover; border-radius: 6px; display: block; }
+
+.sbp-card__link { color: var(--cmd-info-text); font-size: 13px; overflow-wrap: anywhere; }
+
+.sbp-card__handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  cursor: nwse-resize;
+  background:
+    linear-gradient(135deg, transparent 50%, var(--cmd-border) 50%);
+  border-bottom-right-radius: 9px;
+}
+
+/* ── Connectors ───────────────────────────────────────────────────────── */
+
+.sbp-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+.sbp-edge { fill: none; stroke-width: 2; stroke-linecap: round; }
+.sbp-edge--hit { stroke-width: 18; stroke: transparent; pointer-events: stroke; cursor: pointer; }
+.sbp-edge__label {
+  font-size: 11px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  paint-order: stroke;
+  stroke: var(--cmd-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+/* ── Panels ───────────────────────────────────────────────────────────── */
+
+.sbp-board__aside {
+  width: 320px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--cmd-border);
+  background: var(--cmd-surface);
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sbp-panel__title {
+  font-family: "Barlow Condensed", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  color: var(--cmd-text-muted);
+  margin: 0 0 8px;
+}
+
+.sbp-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.sbp-field > span { font-size: 11px; color: var(--cmd-text-muted); }
+.sbp-field input,
+.sbp-field select,
+.sbp-field textarea {
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 8px;
+  background: var(--cmd-bg);
+  color: var(--cmd-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.sbp-field textarea { min-height: 76px; resize: vertical; }
+
+/* ── Toolbar ──────────────────────────────────────────────────────────── */
+
+.sbp-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--cmd-border);
+  background: var(--cmd-surface);
+}
+
+.sbp-toolbar__group { display: flex; gap: 4px; align-items: center; }
+
+.sbp-toolbar__sep { width: 1px; height: 26px; background: var(--cmd-border); }
+
+.sbp-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 9px;
+  background: var(--cmd-surface);
+  color: var(--cmd-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.sbp-btn:hover:not(:disabled) { background: var(--cmd-menu-hover); }
+.sbp-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.sbp-btn--active { background: var(--cmd-gold); color: var(--cmd-on-gold); border-color: var(--cmd-gold); }
+.sbp-btn--sm { min-height: 34px; min-width: 34px; padding: 0 9px; font-size: 12px; }
+
+.sbp-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--cmd-text-muted);
+}
+
+.sbp-status__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cmd-text-muted); }
+.sbp-status__dot--offline { background: var(--cmd-warn); }
+.sbp-status__dot--error { background: var(--cmd-danger); }
+.sbp-status__dot--synced { background: var(--cmd-good); }
+
+.sbp-alert {
+  padding: 8px 12px;
+  border: 1px solid var(--cmd-danger);
+  border-radius: 8px;
+  background: var(--cmd-chip-danger-bg);
+  color: var(--cmd-danger-text);
+  font-size: 12px;
+}
+
+/* ── Minimap ──────────────────────────────────────────────────────────── */
+
+.sbp-minimap {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 200px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 10px;
+  background: var(--cmd-surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  overflow: hidden;
+}
+
+.sbp-minimap__canvas { position: relative; width: 100%; height: 130px; cursor: pointer; display: block; }
+.sbp-minimap__node { position: absolute; background: var(--cmd-text-muted); border-radius: 1px; }
+.sbp-minimap__sheet { position: absolute; border: 1px solid var(--cmd-info); background: var(--cmd-chip-info-bg); }
+.sbp-minimap__view { position: absolute; border: 2px solid var(--cmd-gold); background: rgba(242, 167, 6, 0.1); pointer-events: none; }
+.sbp-minimap__name {
+  flex: 1;
+  min-width: 90px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 8px;
+  background: var(--cmd-bg);
+  color: var(--cmd-text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.sbp-minimap__marks { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-top: 1px solid var(--cmd-border); }
+
+.sbp-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 999px;
+  background: var(--cmd-chip-bg);
+  color: var(--cmd-text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* ── Gantt lane ───────────────────────────────────────────────────────── */
+
+.sbp-lane {
+  border-top: 1px solid var(--cmd-border);
+  background: var(--cmd-surface);
+  max-height: 44%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sbp-lane__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--cmd-border);
+  font-size: 12px;
+  color: var(--cmd-text-muted);
+}
+
+.sbp-lane__scroll { overflow: auto; touch-action: pan-x pan-y; }
+.sbp-lane__grid { position: relative; min-height: 60px; }
+.sbp-lane__tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--cmd-border); }
+.sbp-lane__tick--month { background: var(--cmd-text-muted); }
+.sbp-lane__ticklabel { position: absolute; top: 2px; font-size: 10px; color: var(--cmd-text-muted); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.sbp-lane__today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--cmd-gold); }
+
+.sbp-bar {
+  position: absolute;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--cmd-border);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--cmd-text);
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  box-sizing: border-box;
+}
+
+.sbp-bar--selected { outline: 2px solid var(--cmd-gold); outline-offset: 1px; }
+.sbp-bar--blocked { border-color: var(--cmd-danger); }
+
+.sbp-bar__grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.sbp-bar__grip--start { left: 0; }
+.sbp-bar__grip--end { right: 0; }
+
+.sbp-lane__tray { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-top: 1px dashed var(--cmd-border); }
+
+/* ── Time machine ─────────────────────────────────────────────────────── */
+
+.sbp-time {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--cmd-border);
+  background: var(--cmd-surface);
+  font-size: 12px;
+  color: var(--cmd-text-muted);
+}
+
+.sbp-time input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--cmd-gold); height: 34px; }
+.sbp-time--scrubbing { background: var(--cmd-chip-warn-bg); color: var(--cmd-warn-text); }
+
+/* ── Draft output ─────────────────────────────────────────────────────── */
+
+.sbp-draft {
+  white-space: pre-wrap;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  background: var(--cmd-bg);
+  border: 1px solid var(--cmd-border);
+  border-radius: 8px;
+  padding: 10px;
+  max-height: 320px;
+  overflow: auto;
+  color: var(--cmd-text);
+}
+
+.sbp-empty { font-size: 12px; color: var(--cmd-text-muted); }
+
+/* Tablet portrait: the side panel becomes a bottom sheet so the canvas keeps
+   the full width, which is the whole point of the board on an iPad. */
+@media (max-width: 900px) {
+  .sbp-board__body { flex-direction: column; }
+  .sbp-board__aside { width: auto; max-height: 45%; border-left: none; border-top: 1px solid var(--cmd-border); }
+}
