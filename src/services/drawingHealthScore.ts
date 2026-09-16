@@ -49,6 +49,14 @@ export interface DrawingHealthScore {
 export interface HealthContext {
    
   rfis?: any[];
+  /**
+   * OPTIONAL fast path for `rfis`: the project's OPEN RFI numbers, already
+   * normalized with normNum. The caller scoring a whole fleet (the Detailing
+   * Control Center) builds this once; without it every package rescans the
+   * full RFI list, which is O(packages × rfis) per recompute. Same answer
+   * either way — it is the same predicate, hoisted.
+   */
+  openRfiNumbers?: ReadonlySet<string>;
    
   revisions?: any[]; // drawing_revisions for the set's sheets (optional)
   today?: string; // local YYYY-MM-DD; defaults to today
@@ -97,7 +105,7 @@ function severityFor(deduction: number, weight: number): FactorSeverity {
 }
 
 
-function countOpenRfis(sheets: any[], rfis: any[]): number {
+function countOpenRfis(sheets: any[], rfis: any[], openRfiNumbers?: ReadonlySet<string>): number {
   const linked = new Set<string>();
   for (const sheet of sheets || []) {
     // linkedRfiNumbers + normNum are the canonical pair (fabReleaseGate). The
@@ -110,6 +118,13 @@ function countOpenRfis(sheets: any[], rfis: any[]): number {
     }
   }
   if (linked.size === 0) return 0;
+  // Pre-built open set when the caller has one: intersect the set's linked
+  // numbers against it instead of walking every RFI on the project.
+  if (openRfiNumbers) {
+    let open = 0;
+    for (const n of linked) if (openRfiNumbers.has(n)) open += 1;
+    return open;
+  }
   let open = 0;
   for (const rfi of rfis || []) {
     if (!rfi || rfi.is_deleted) continue;
@@ -185,7 +200,7 @@ export function calculateDrawingHealthScore(pkg: any, context: HealthContext = {
   const submittalDetail = churnBits.length ? `Churn: ${churnBits.join(", ")}` : "Clean submittal progress";
 
   // ── Open RFIs ───────────────────────────────────────────────────────
-  const openCount = countOpenRfis(sheets, rfis);
+  const openCount = countOpenRfis(sheets, rfis, context.openRfiNumbers);
   const openRfiDed = Math.min(WEIGHTS.openRfis, openCount * 8);
   const openRfiDetail = openCount ? `${openCount} open RFI${openCount === 1 ? "" : "s"} linked` : "No open RFIs";
 

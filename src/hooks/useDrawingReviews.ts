@@ -30,7 +30,11 @@ export function useDrawingReviews(projectId: string | null) {
     queryFn: async (): Promise<DrawingReviewRow[]> => {
       const [rawReviews, rawRevisions] = await Promise.all([
         entities.DrawingReview.filter({ project_id: projectId }),
-        entities.DrawingRevision.filter({ project_id: projectId }),
+        // Paged to completeness: this is a LOOKUP TABLE keyed by revision id,
+        // not a list. Capped at PostgREST's 1000 rows, every row whose revision
+        // sat past the cap resolved to a blank sheet number and revision code —
+        // indistinguishable from a genuinely unmatched row.
+        entities.DrawingRevision.filterAll({ project_id: projectId }),
       ]);
       const revById = new Map<string, any>();
       for (const r of (rawRevisions as any[]) ?? []) {

@@ -401,7 +401,7 @@ describe("computeRevisedBudget", () => {
     // It raises the revised CONTRACT, so omitting it silently from the budget
     // makes margin read better than it is.
     const codes = [{ id: "cc1", budget_amount: 100_000 }];
-    const cos = [{ status: "Approved", co_amount: 40_000, cost_code_id: null }];
+    const cos = [{ status: "Approved", co_amount: 40_000, cost_code_id: null as string | null }];
     const r = computeRevisedBudget(codes, cos);
     expect(r.revisedBudget).toBe(100_000);
     expect(r.unallocatedExtras).toBe(40_000);

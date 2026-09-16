@@ -18,17 +18,26 @@ vi.setConfig({ testTimeout: 15000 });
 
 // Per-test entity overrides ({ Name: { filter } }). Every other entity answers
 // with no rows. Cleared after each test.
+//
+// The hub reads its claim-bearing tables (rfis, drawing_revisions, drawing_sets,
+// work_packages) with filterAll, which pages past PostgREST's 1000-row cap, so
+// an override that pins only `filter` would leave that read unmocked. Overrides
+// naming just `filter` are widened to both by `withFilterAll` below.
 const entityOverrides = vi.hoisted(() => ({}));
 vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
     filter: vi.fn().mockResolvedValue([]),
+    filterAll: vi.fn().mockResolvedValue([]),
     get: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockResolvedValue(null),
     create: vi.fn().mockResolvedValue(null),
   };
+  // An override that pins `filter` and not `filterAll` means "this table reads
+  // like so" — apply it to whichever call the hub actually makes.
+  const withFilterAll = (o) => (o.filter && !o.filterAll ? { ...o, filterAll: o.filter } : o);
   return {
-    entities: new Proxy({}, { get: (_target, name) => (entityOverrides[name] ? { ...noop, ...entityOverrides[name] } : noop) }),
+    entities: new Proxy({}, { get: (_target, name) => (entityOverrides[name] ? { ...noop, ...withFilterAll(entityOverrides[name]) } : noop) }),
     resolveFileUrl: vi.fn((u) => u),
     integrations: { Core: { UploadFile: vi.fn() } },
   };

@@ -92,11 +92,16 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
       const [rawTransmittals, rawItems, rawRevisions] = await Promise.all([
         entities.DrawingTransmittal.filter({ project_id: projectId }),
         entities.DrawingTransmittalItem.filter({ project_id: projectId }),
-        entities.DrawingRevision.filter({ project_id: projectId }),
+        // Paged to completeness: this is a LOOKUP TABLE keyed by revision id,
+        // not a list. Capped at PostgREST's 1000 rows, every row whose revision
+        // sat past the cap resolved to a blank sheet number and revision code —
+        // indistinguishable from a genuinely unmatched row.
+        entities.DrawingRevision.filterAll({ project_id: projectId }),
       ]);
       // Counted on the raw reads, before soft-deleted headers are dropped.
-      // A truncated revisions read needs no flag: its items resolve to no
-      // drawing and are already reported as unmatched.
+      // Revisions are read paged (above), so an unmatched item now means the
+      // revision really is missing — it no longer also means "your project has
+      // more than 1000 revisions".
       const possiblyTruncated =
         ((rawTransmittals as any[]) ?? []).length >= TRANSMITTAL_LOG_READ_CAP ||
         ((rawItems as any[]) ?? []).length >= TRANSMITTAL_LOG_READ_CAP;

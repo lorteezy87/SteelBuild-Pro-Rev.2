@@ -19,6 +19,10 @@ vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
     filter: vi.fn().mockResolvedValue([]),
+    // The hub reads its claim-bearing tables (rfis, drawing_revisions,
+    // drawing_sets, work_packages) with filterAll, which pages past
+    // PostgREST's 1000-row cap.
+    filterAll: vi.fn().mockResolvedValue([]),
     get: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockResolvedValue(null),
     create: vi.fn().mockResolvedValue(null),

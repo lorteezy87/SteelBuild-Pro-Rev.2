@@ -180,6 +180,39 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
   },
 
   /**
+   * filter() paged to completeness. See the EntityClient type for when to
+   * choose this over filter(). Pages are ordered by the caller's sort plus an
+   * `id` tiebreaker so page boundaries can't drop or duplicate a row.
+   */
+  filterAll: async (conditions = {}, sortBy) => {
+    const PAGE = SERVER_MAX_ROWS;
+    const SAFETY_MAX_ROWS = 100_000;
+    const sort = parseSortBy(sortBy);
+    const all: Array<RowWithAliases<T>> = [];
+    for (let offset = 0; offset < SAFETY_MAX_ROWS; offset += PAGE) {
+      let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
+      q = applyLiveProjectScope(q, tableName as string);
+      if (SOFT_DELETE_TABLES.has(tableName as string) && !('is_deleted' in conditions)) {
+        q = q.eq('is_deleted', false);
+      }
+      if ((tableName as string) === 'projects' && !('on_hold' in conditions)) {
+        q = q.eq('on_hold', false);
+      }
+      q = applyConditions(q, conditions);
+      if (sort) q = q.order(sort.column, { ascending: sort.ascending });
+      else q = q.order('created_at', { ascending: false });
+      q = q.order('id', { ascending: true }).range(offset, offset + PAGE - 1);
+      const { data, error } = await q;
+      if (error) throw new SupabaseOperationError(tableName as string, 'filterAll', error);
+      all.push(...addAliasesToList<RowWithAliases<T>>(data, tableName as string));
+      if (!data || data.length < PAGE) return all;
+    }
+     
+    console.warn(`[supabaseClient] ${tableName}.filterAll() stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
+    return all;
+  },
+
+  /**
    * Get a single record by id.
    *
    * Soft-delete aware. list() and filter() already skip rows where

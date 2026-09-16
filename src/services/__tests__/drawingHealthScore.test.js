@@ -144,3 +144,68 @@ describe("summarizeFleetHealth", () => {
     expect(fleet.worst).toHaveLength(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// openRfiNumbers fast path — the SAME predicate, hoisted out of the per-package
+// loop. Scoring a fleet rescanned the project's whole RFI list once per set;
+// the Detailing Control Center already builds this set for readiness.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { normNum } from "@/lib/fabReleaseGate";
+
+describe("calculateDrawingHealthScore — openRfiNumbers", () => {
+  const RFIS = [
+    { rfi_number: "RFI-001", status: "Open", is_deleted: false },
+    { rfi_number: "RFI-002", status: "open", is_deleted: false },
+    { rfi_number: "RFI-009", status: "Closed", is_deleted: false },
+    { rfi_number: "RFI-050", status: "Open", is_deleted: false },
+    { rfi_number: "RFI-051", status: "Open", is_deleted: true },
+  ];
+  const openSet = new Set(
+    RFIS.filter((r) => !r.is_deleted && !["Answered", "Closed", "Void"].includes(r.status))
+      .map((r) => normNum(r.rfi_number)),
+  );
+
+  const linked = (value) => {
+    const pkg = perfectPkg();
+    pkg.sheets[0].linked_rfi_ids = value;
+    return pkg;
+  };
+
+  it("gives the same deduction as the full scan", () => {
+    const pkg = linked("RFI-001, RFI-002, RFI-009");
+    const scanned = calculateDrawingHealthScore(pkg, ctx({ rfis: RFIS }));
+    const hoisted = calculateDrawingHealthScore(pkg, ctx({ rfis: RFIS, openRfiNumbers: openSet }));
+    expect(hoisted.score).toBe(scanned.score);
+    expect(factor(hoisted, "openRfis").deduction).toBe(factor(scanned, "openRfis").deduction);
+    expect(factor(hoisted, "openRfis").detail).toBe(factor(scanned, "openRfis").detail);
+  });
+
+  it("still ignores RFIs the set does not link", () => {
+    const res = calculateDrawingHealthScore(linked("RFI-001"), ctx({ rfis: RFIS, openRfiNumbers: openSet }));
+    expect(factor(res, "openRfis").deduction).toBe(8); // RFI-050 is open but unlinked
+  });
+
+  it("counts nothing when the set links no RFIs", () => {
+    const res = calculateDrawingHealthScore(perfectPkg(), ctx({ rfis: RFIS, openRfiNumbers: openSet }));
+    expect(factor(res, "openRfis").deduction).toBe(0);
+    expect(res.score).toBe(100);
+  });
+
+  it("does not consult the rfis array at all when the set is supplied", () => {
+    // Proves the fast path is the one taken: an EMPTY rfis list with a populated
+    // open set still deducts, which the scan could never do.
+    const res = calculateDrawingHealthScore(linked("RFI-001, RFI-002"), ctx({ rfis: [], openRfiNumbers: openSet }));
+    expect(factor(res, "openRfis").deduction).toBe(16);
+  });
+
+  it("matches the canonical normalization, not a looser one", () => {
+    // "RFI #001" → "RFI001". A local normalizer that kept the "#" is exactly
+    // the bug this module already carries a comment about.
+    const res = calculateDrawingHealthScore(
+      linked("RFI #001"),
+      ctx({ rfis: [], openRfiNumbers: new Set([normNum("RFI-001")]) }),
+    );
+    expect(factor(res, "openRfis").deduction).toBe(8);
+  });
+});

@@ -6,8 +6,15 @@
  *
  * Left: an eyebrow (project number · name), the h1 with the holds badge beside
  * it, the subtitle and an optional status line. Right: actions. Bottom row:
- * whatever the caller passes (the shell's tab strip). From 769px up the header
- * sticks to the top of main#main-content; command.css owns that rule.
+ * whatever the caller passes (the shell's tab strip).
+ *
+ * NOT sticky. This used to claim it pinned to the top of main#main-content
+ * from 769px up, but command.css has never had that rule and says why: main
+ * has no bounded height, so the document scrolls and position:sticky here
+ * would never pin. Pinning needs the app shell to bound main's height, which
+ * changes every dashboard-chrome page. The header is otherwise ready for it
+ * (opaque page background, bleeds over the 16px gutter) — see the block
+ * comment above the .detailing-cc__header rules.
  */
 import type { ReactNode } from "react";
 import { ShieldAlert } from "lucide-react";

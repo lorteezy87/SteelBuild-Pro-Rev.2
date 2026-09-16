@@ -249,10 +249,13 @@ function DetailingControlCenter() {
     isLoading: submittalsLoading, error: submittalsError, refetch: refetchSubmittals,
   } = useSubmittals(projectId);
 
-  // Drawing sets (for matrix)
+  // Drawing sets. Paged: setPackages is built from these, and every claim on
+  // this page — a set's stage, its readiness, its Fab Ready share — is derived
+  // from that. A capped read does not show fewer sets, it drops them from the
+  // denominators too.
   const { data: drawingSets = [], isPending: drawingSetsLoading, error: drawingSetsError, refetch: refetchDrawingSets } = useQuery({
     queryKey: ["drawing-sets", projectId],
-    queryFn: () => entities.DrawingSet.filter({ project_id: projectId }),
+    queryFn: () => entities.DrawingSet.filterAll({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -277,21 +280,38 @@ function DetailingControlCenter() {
 
   // Work packages (for the erection sequence date → backward scheduling) + RFIs
   // (to know which linked RFIs are still open → rfiBlocked readiness).
+  // Work packages carry the erection start that the whole backward schedule
+  // (Submit by / Approval by / Fab release by) and the At Risk badge hang on.
+  // A set whose work package fell past the cap silently loses its dates and
+  // stops being flagged at risk.
   const { data: workPackages = [], isPending: workPackagesLoading, error: workPackagesError, refetch: refetchWorkPackages } = useQuery({
     queryKey: ["work-packages", projectId],
-    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
+    queryFn: () => entities.WorkPackage.filterAll({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
+  // RFIs gate readiness, so this read must be complete — it is the one that can
+  // make the page say something dangerous. openRfiIds / openRfiNumbers below
+  // are built from it, and computeDetailingReadiness treats an RFI that is not
+  // in those sets as CLOSED. Capped at PostgREST's 1000 rows, an open RFI past
+  // the cap stopped blocking its package, and the set reported Fab Ready with
+  // that RFI still open — the same outcome as the two linked-RFI matching bugs
+  // on record (e40711b8, df1d885e), reached from a different direction.
   const { data: rfis = [], isPending: rfisLoading, error: rfisError, refetch: refetchRfis } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () => entities.RFI.filter({ project_id: projectId }),
+    queryFn: () => entities.RFI.filterAll({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
+  // Paged to completeness, not capped. drawing_revisions accrues one row per
+  // sheet per revision, so a busy project passes PostgREST's 1000-row cap —
+  // and this read is not a list, it is the source of two CLAIMS: the Register's
+  // "Rev" column and the matrix's "revised since last sent". Truncated, every
+  // sheet past the cap printed a stale or blank revision and read as "sent at
+  // current rev", with nothing on screen to say the data was cut off.
   const revisionsQuery = useQuery({
     queryKey: ["drawing-revisions", projectId],
-    queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
+    queryFn: () => entities.DrawingRevision.filterAll({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -365,15 +385,50 @@ function DetailingControlCenter() {
       ? "ready"
       : transmittalsQuery.isError || revisionsQuery.isError ? "error" : "loading";
 
+  // The project's OPEN RFIs, in BOTH id spaces. Hoisted above the health score
+  // and readiness, which are the two consumers: submittal links are uuids
+  // (submittals.linked_rfi_ids) while sheet links are a CSV of RFI NUMBERS
+  // (drawings.linked_rfi_ids, "RFI #001"). Readiness needs both shapes or a
+  // sheet-linked open RFI silently fails to block the package.
+  const openRfiIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of (rfis as any[]) || []) {
+      if (r && !r.is_deleted && r.id && isRfiOpen(r)) s.add(String(r.id));
+    }
+    return s;
+  }, [rfis]);
+
+  // The SAME open RFIs keyed by normalized NUMBER. Sheet links live in
+  // drawings.linked_rfi_ids, which is a CSV of RFI numbers ("RFI #001"), not
+  // uuids — readiness needs the open set in both shapes or a sheet-linked open
+  // RFI silently fails to block the package.
+  const openRfiNumbers = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of (rfis as any[]) || []) {
+      if (!r || r.is_deleted || !isRfiOpen(r)) continue;
+      const key = normNum(r.rfi_number);
+      if (key) s.add(key);
+    }
+    return s;
+  }, [rfis]);
+
   // Per-set Drawing Health Score (slice 2) — deterministic; feeds the Register
   // Health column + the Control Board fleet rollup.
   const healthByKey = useMemo(() => {
     const m = new Map<string, any>();
     for (const pkg of setPackages) {
-      m.set(pkg.key, calculateDrawingHealthScore(pkg, { rfis: rfis as any[], revisions: drawingRevisions as any[] }));
+      // openRfiNumbers is the set readiness already builds; handing it over
+      // turns the per-package "count my open RFIs" step from a full scan of
+      // the project's RFIs into a lookup, so scoring the fleet stops being
+      // O(packages × rfis). Same predicate, hoisted — the score is unchanged.
+      m.set(pkg.key, calculateDrawingHealthScore(pkg, {
+        rfis: rfis as any[],
+        openRfiNumbers,
+        revisions: drawingRevisions as any[],
+      }));
     }
     return m;
-  }, [setPackages, rfis, drawingRevisions]);
+  }, [setPackages, rfis, openRfiNumbers, drawingRevisions]);
   const fleetHealth = useMemo(() => summarizeFleetHealth([...healthByKey.values()]), [healthByKey]);
 
   // Revision Summary (slice 3): on upload, build the instant digest from fresh
@@ -389,8 +444,11 @@ function DetailingControlCenter() {
         invalidateEntity(qc, "drawingSet", projectId),
       ]);
       const freshRevisions = await qc.fetchQuery({
+        // Same paged read as the cached query above — a truncated refetch here
+        // would write a wrong revision summary to drawing_revision_summaries,
+        // where it outlives the session.
         queryKey: ["drawing-revisions", projectId],
-        queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
+        queryFn: () => entities.DrawingRevision.filterAll({ project_id: projectId }),
       });
        
       const pkg = setPackages.find((p: any) => p.key === pkgKey);
@@ -459,7 +517,8 @@ function DetailingControlCenter() {
     }
   };
 
-  // Lookup maps for readiness: WP by id, and the set of OPEN rfi ids.
+  // Lookup map for readiness: work package by id. (The open-RFI sets are built
+  // higher up, above the health score that also reads them.)
   const wpById = useMemo(() => {
     const m = new Map<string, any>();
     for (const wp of (workPackages as any[]) || []) {
@@ -467,28 +526,6 @@ function DetailingControlCenter() {
     }
     return m;
   }, [workPackages]);
-
-  const openRfiIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of (rfis as any[]) || []) {
-      if (r && !r.is_deleted && r.id && isRfiOpen(r)) s.add(String(r.id));
-    }
-    return s;
-  }, [rfis]);
-
-  // The SAME open RFIs keyed by normalized NUMBER. Sheet links live in
-  // drawings.linked_rfi_ids, which is a CSV of RFI numbers ("RFI #001"), not
-  // uuids — readiness needs the open set in both shapes or a sheet-linked open
-  // RFI silently fails to block the package.
-  const openRfiNumbers = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of (rfis as any[]) || []) {
-      if (!r || r.is_deleted || !isRfiOpen(r)) continue;
-      const key = normNum(r.rfi_number);
-      if (key) s.add(key);
-    }
-    return s;
-  }, [rfis]);
 
   // Per-package readiness read-model, keyed by package key.
   const readinessByKey = useMemo(() => {

@@ -10,7 +10,7 @@
  *
  * No React here beyond the icon references the strip renders.
  */
-import { AlertTriangle, CalendarClock, CheckCircle, ClipboardList, FileStack, Gauge } from "lucide-react";
+import { Activity, AlertTriangle, CalendarClock, CheckCircle, ClipboardList, FileStack, Gauge } from "lucide-react";
 import type { ReactNode } from "react";
 import type { KpiCellDef, KpiTone } from "@/components/command";
 
@@ -123,7 +123,41 @@ export function buildDetailingKpiCells(kpis: DetailingKpis, pending: boolean): K
       sublabel: "schedule risk",
       tone: tone(kpis.atRisk > 0 ? "warn" : "neutral"),
     },
+    {
+      // fleetAverageScore was computed on every render, passed into the shell,
+      // and shown nowhere — the Drawing Health Score reached the Register's per
+      // set column but never its own rollup. null is "no scored sets", which is
+      // not 100: an em dash rather than a perfect grade on an empty project.
+      label: "Fleet Health",
+      value: pending || kpis.fleetAverageScore == null ? KPI_PENDING : kpis.fleetAverageScore,
+      sublabel:
+        pending || kpis.fleetAverageScore == null
+          ? "no scored sets"
+          : `avg score · ${fleetGrade(kpis.fleetAverageScore)}`,
+      tone: pending || kpis.fleetAverageScore == null ? "neutral" : fleetTone(kpis.fleetAverageScore),
+      Icon: Activity,
+    },
   ];
+}
+
+/**
+ * Letter grade for a fleet average. Thresholds mirror `gradeFor` in
+ * services/drawingHealthScore.ts, which grades each individual set — the
+ * rollup must not invent a second scale.
+ */
+export function fleetGrade(score: number): string {
+  if (score >= 90) return "A";
+  if (score >= 80) return "B";
+  if (score >= 70) return "C";
+  if (score >= 60) return "D";
+  return "F";
+}
+
+/** Tone for a fleet average, on the same thresholds as the grade. */
+function fleetTone(score: number): KpiTone {
+  if (score >= 80) return "good";
+  if (score >= 60) return "warn";
+  return "danger";
 }
 
 /** Sheets fab-ready as "n/d". "—" while loading, or when no sheet counts toward it. */
