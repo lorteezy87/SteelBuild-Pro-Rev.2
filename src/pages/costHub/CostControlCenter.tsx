@@ -36,6 +36,9 @@ import { formatCurrency, formatCurrencyShort } from "@/components/shared/formatt
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import { usePermissions } from "@/services/permissions";
 import { computeRevisedContractValue } from "@/services/costRollup";
+import { isCoApproved, isCoPending } from "@/lib/entityPredicates";
+import { exportToCSV } from "@/lib/csv";
+import type { CsvCell } from "@/lib/csv";
 import {
   buildBarChartData,
   buildCumulativeData,
@@ -124,10 +127,8 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   const coAging = useMemo(() => buildCoAging(changeOrders), [changeOrders]);
 
   // CO pipeline counts
-  const coPending = changeOrders.filter((co) =>
-    ["Submitted", "Under Review"].includes(co.status ?? ""),
-  ).length;
-  const coApproved = changeOrders.filter((co) => String(co.status ?? "").trim() === "Approved").length;
+  const coPending = changeOrders.filter(isCoPending).length;
+  const coApproved = changeOrders.filter(isCoApproved).length;
   const coStale = coAging.filter((co) => co.isStale).length;
   const topStaleCOs = coAging.filter((co) => co.isStale).slice(0, 5);
 
@@ -136,12 +137,10 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   // summed raw budget_amount while labeled "revised", so the KPI Variance
   // disagreed with the table on any project with approved COs.
   const totalBudget = summary.revisedBudget;
-  // EAC from the expense-rolled actuals (costCodeRows) + forecast-to-complete,
-  // consistent with the Actual/Committed KPIs.
-  const totalEAC = useMemo(
-    () => costCodeRows.reduce((s, c) => s + Number(c.actual_cost || 0) + Number(c.forecast_to_complete || 0), 0),
-    [costCodeRows],
-  );
+  // EAC from the expense-rolled actuals + forecast-to-complete. Read off the
+  // shared summary rather than re-reduced here, so this card and the Margin at
+  // Risk stat above it can never be computed from two different definitions.
+  const totalEAC = summary.eac;
 
   // Budget Used %
   const budgetUsedPct = totalBudget > 0 ? (summary.committed / totalBudget) * 100 : 0;
@@ -149,12 +148,16 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   // Stale CO count for KPI
   const staleCOsCount = coAging.filter((co) => co.isStale).length;
 
-  // Contingency left: total budget + project contingency - consumed overages
+  // Contingency consumed = Σ per-code overage. Measured COMMITTED vs REVISED
+  // budget, the same test as `is_over` and the table's Variance column — it
+  // compared `actual_cost` to raw `budget_amount`, so a code whose overage was
+  // committed-but-unpaid, or whose budget already carried an approved CO, ate
+  // contingency on this card while reading On Track two rows below.
   const contingency = Number((project as Record<string, unknown>)?.contingency_amount ?? 0);
-  const consumedContingency = costCodeRows.reduce((s, c) => {
-    const v = Number(c.actual_cost || 0) - Number(c.budget_amount || 0);
-    return s + Math.max(0, v);
-  }, 0);
+  const consumedContingency = costCodeRows.reduce(
+    (s, c) => s + Math.max(0, c.committed_cost - c.revised_budget),
+    0,
+  );
   const contingencyRemaining = Math.max(0, contingency - consumedContingency);
 
   // ── Hero ──
@@ -166,7 +169,9 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
 
   const heroStats = [
     { value: formatCurrencyShort(revisedContract), label: "Revised Contract" },
-    { value: formatCurrencyShort(summary.marginAtRisk), label: "Margin at Risk" },
+    // Contract − max(committed, EAC). Committed alone ignored forecast-to-
+    // complete, so a project with real work left showed margin it will not keep.
+    { value: formatCurrencyShort(summary.marginAtRisk), label: "Margin vs Projected Cost" },
   ];
 
   // ── KPI strip ──
@@ -255,25 +260,22 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   // ── CSV export ──
   const handleExport = () => {
     const headers = ["Code", "Description", "Phase", "Budget", "Actual", "Committed", "Forecast", "EAC", "Variance", "% Used", "Status"];
-    const rows = filteredRows.map((r) => {
+    const rows: CsvCell[][] = filteredRows.map((r) => {
       const v = r.committed_cost - r.revised_budget;
       const eac = r.actual_cost + Number((r as Record<string, unknown>).forecast_to_complete ?? 0);
       return [
         r.cost_code_number, r.description, r.phase,
         r.revised_budget, r.actual_cost, r.committed_cost,
-        (r as Record<string, unknown>).forecast_to_complete ?? 0,
+        Number((r as Record<string, unknown>).forecast_to_complete ?? 0),
         eac, v, `${r.used_pct.toFixed(1)}%`,
         r.is_over ? "Over Budget" : r.used_pct > 85 ? "Watch" : "On Track",
       ];
     });
-    const csv = [headers, ...rows].map((row) => row.map((c) => `"${c ?? ""}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "cost_control_center.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    // The canonical exporter: RFC 4180 quote-doubling plus formula
+    // neutralisation. The inline version here wrapped each cell in bare quotes,
+    // so a description containing a quote split across columns and shifted
+    // every money column to its right by one.
+    exportToCSV({ filename: "cost_control_center.csv", headers, rows });
   };
 
   // ── Row click → edit ──
@@ -318,6 +320,15 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
       {/* Decision panels */}
       <div className="cmd-panels">
         <DecisionPanel title="Cost Control Flags">
+          {summary.unallocatedCOTotal !== 0 && (
+            <div className="cmd-row">
+              <Pill tone="warn">Unbudgeted</Pill>
+              <span className="cmd-row__meta" style={{ flex: 1, marginLeft: 8 }}>
+                {formatCurrencyShort(summary.unallocatedCOTotal)} of approved change orders
+                carry no cost code — in the revised contract, not in the revised budget.
+              </span>
+            </div>
+          )}
           {reviewFlags.map((f, i) => (
             <div key={i} className="cmd-row">
               <Pill tone={f.tone === "error" ? "danger" : "warn"}>
@@ -337,7 +348,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
               </div>
             </div>
           ))}
-          {reviewFlags.length === 0 && varianceAlerts.length === 0 && (
+          {reviewFlags.length === 0 && varianceAlerts.length === 0 && summary.unallocatedCOTotal === 0 && (
             <div className="cmd-row__meta">No flags — cost codes look clean.</div>
           )}
         </DecisionPanel>

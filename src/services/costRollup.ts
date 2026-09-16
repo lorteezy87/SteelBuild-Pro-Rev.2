@@ -84,9 +84,43 @@ export interface ProjectSpend {
   committed: number;
 }
 
+/**
+ * Expense payment-status vocabulary. `expenses.payment_status` is free text
+ * (no CHECK constraint); the UI offers Unpaid / Paid / Pending Approval /
+ * Disputed / Voided, and the CSV importer coerces anything else to Unpaid —
+ * but rows predating the importer, and rows written by the MCP server, carry
+ * whitespace and case variants ("void", " Paid").
+ *
+ * Every cost surface must ask these predicates rather than compare the raw
+ * string. Six inline copies had drifted: useFinancials / Expenses /
+ * budgetCalculations matched `!== "Voided"` exactly (so a row saved as "void"
+ * counted as committed), while resolveProjectSpend below matched a lowercase
+ * {voided, void} set (so it did not). Same expense, two different project
+ * totals, under the same label.
+ */
+const normStatus = (value: unknown): string => String(value ?? "").trim().toLowerCase();
+
 const VOIDED = new Set(["voided", "void"]);
-const isVoided = (e: ExpenseLike) => VOIDED.has(String(e?.payment_status ?? "").toLowerCase());
-const isPaid = (e: ExpenseLike) => String(e?.payment_status ?? "").toLowerCase() === "paid";
+/** Outstanding = owed but not yet paid. Mirrors the Expenses page's filter. */
+const OUTSTANDING = new Set(["unpaid", "pending approval"]);
+
+/** True when an expense has been voided and must not count toward any total. */
+export const isVoidedExpense = (e: ExpenseLike | null | undefined): boolean =>
+  VOIDED.has(normStatus(e?.payment_status));
+/** True when an expense is paid — the ACTUAL-cost bucket. */
+export const isPaidExpense = (e: ExpenseLike | null | undefined): boolean =>
+  normStatus(e?.payment_status) === "paid";
+/** True when an expense is owed but unpaid — the accounts-payable bucket. */
+export const isOutstandingExpense = (e: ExpenseLike | null | undefined): boolean =>
+  OUTSTANDING.has(normStatus(e?.payment_status));
+
+/** Non-voided expenses — the COMMITTED-cost population. */
+export function activeExpenses<T extends ExpenseLike>(expenses: readonly T[] | null | undefined): T[] {
+  return (expenses || []).filter((e): e is T => Boolean(e) && !isVoidedExpense(e));
+}
+
+const isVoided = isVoidedExpense;
+const isPaid = isPaidExpense;
 
 /**
  * Resolve a project's actual + committed spend, reconciling the two models that
@@ -127,11 +161,19 @@ export function resolveProjectSpend(
   let mappedActual = 0;
   let mappedCommitted = 0;
   const knownCodes = new Set<string>();
+  // Two cost-code rows sharing one number (the create-time duplicate guard is
+  // client-side only, so a concurrent add can mint one) would each claim that
+  // number's FULL expense rollup and double the project's actuals. The expense
+  // fallback is therefore consumed once: the first row carrying a number takes
+  // it, later rows fall back to 0 and contribute only their typed columns.
+  const claimed = new Set<string>();
   for (const c of codes) {
     const number = String(c.cost_code_number ?? "");
     if (number) knownCodes.add(number);
-    mappedActual += preferManualActual(c.actual_cost, paidByCode.get(number) ?? 0);
-    mappedCommitted += preferManualActual(c.committed_cost, allByCode.get(number) ?? 0);
+    const firstClaim = Boolean(number) && !claimed.has(number);
+    if (number) claimed.add(number);
+    mappedActual += preferManualActual(c.actual_cost, firstClaim ? (paidByCode.get(number) ?? 0) : 0);
+    mappedCommitted += preferManualActual(c.committed_cost, firstClaim ? (allByCode.get(number) ?? 0) : 0);
   }
 
   let unmappedActual = 0;
@@ -164,8 +206,18 @@ export interface ProjectContractLike {
 export interface ChangeOrderLike {
   status?: string | null;
   co_amount?: number | string | null;
+  /** FK to cost_codes.id. Approved COs raise THAT code's revised budget. */
+  cost_code_id?: string | null;
   [key: string]: unknown;
 }
+
+/**
+ * The money definition of "approved". Trimmed because real rows carry
+ * whitespace-padded statuses; `isCoApproved` in entityPredicates is the same
+ * rule and is what the COUNT beside these dollars uses.
+ */
+const isApprovedCo = (co: ChangeOrderLike | null | undefined): boolean =>
+  String(co?.status ?? "").trim() === "Approved";
 
 /**
  * Revised contract value = original_contract_value + Σ approved change-order
@@ -185,9 +237,86 @@ export function computeRevisedContractValue(
   let approved = 0;
   for (const co of changeOrders || []) {
     if (!co) continue;
-    if (String(co.status ?? "").trim() === "Approved") approved += num(co.co_amount);
+    if (isApprovedCo(co)) approved += num(co.co_amount);
   }
   return original + approved;
+}
+
+/**
+ * Allocate approved change-order dollars onto the cost codes they were booked
+ * against. `change_orders.cost_code_id` is the FK (expenses have no such
+ * column — they match by cost-code NUMBER instead; do not confuse the two).
+ *
+ * `unallocated` is approved CO money carrying no `cost_code_id`. It still
+ * raises the revised CONTRACT (computeRevisedContractValue), so leaving it out
+ * of the revised BUDGET makes margin look better than it is. Surfaces that
+ * show a revised budget must show this number too, rather than silently
+ * dropping it.
+ */
+export interface ApprovedCoAllocation {
+  byCostCodeId: Record<string, number>;
+  unallocated: number;
+  approvedTotal: number;
+}
+
+export function allocateApprovedCos(
+  changeOrders: ChangeOrderLike[] | null | undefined,
+): ApprovedCoAllocation {
+  const byCostCodeId: Record<string, number> = {};
+  let unallocated = 0;
+  let approvedTotal = 0;
+  for (const co of changeOrders || []) {
+    if (!co || !isApprovedCo(co)) continue;
+    const amount = num(co.co_amount);
+    approvedTotal += amount;
+    const key = co.cost_code_id == null ? "" : String(co.cost_code_id);
+    if (key) byCostCodeId[key] = (byCostCodeId[key] ?? 0) + amount;
+    else unallocated += amount;
+  }
+  return { byCostCodeId, unallocated, approvedTotal };
+}
+
+export interface RevisedBudgetTotals {
+  /** Σ budget_amount — the ORIGINAL (pre-change-order) budget. */
+  originalBudget: number;
+  /** Approved CO dollars that landed on a cost code. */
+  signedExtras: number;
+  /** Approved CO dollars with no cost_code_id — in the contract, not the budget. */
+  unallocatedExtras: number;
+  /** originalBudget + signedExtras — what the cost pages label "Budget (revised)". */
+  revisedBudget: number;
+}
+
+/**
+ * THE definition of a project's revised budget. There is no revised-budget
+ * column: it is Σ budget_amount plus the approved COs booked to those codes.
+ *
+ * Before this existed, Cost Control Center computed it inline while the
+ * Portfolio, Executive View, the Financial Scorecard and the portfolio
+ * overview report all showed `computeCostCodeTotals().budget` (the raw column
+ * sum, no CO extras) under the same word "Budget". On any project with an
+ * approved CO the two disagreed, and so did every variance derived from them.
+ * Use this wherever the label says revised; use computeCostCodeTotals().budget
+ * only where the label says original.
+ */
+export function computeRevisedBudget(
+  costCodes: CostCodeLike[] | null | undefined,
+  changeOrders: ChangeOrderLike[] | null | undefined,
+): RevisedBudgetTotals {
+  const { byCostCodeId, unallocated } = allocateApprovedCos(changeOrders);
+  let originalBudget = 0;
+  let signedExtras = 0;
+  for (const c of costCodes || []) {
+    if (!c) continue;
+    originalBudget += num(c.budget_amount);
+    signedExtras += byCostCodeId[String(c.id ?? "")] ?? 0;
+  }
+  return {
+    originalBudget,
+    signedExtras,
+    unallocatedExtras: unallocated,
+    revisedBudget: originalBudget + signedExtras,
+  };
 }
 
 /**

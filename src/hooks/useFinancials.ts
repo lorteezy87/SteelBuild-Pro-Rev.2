@@ -24,10 +24,19 @@ import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
-import { computeRevisedContractValue, preferManualActual } from "@/services/costRollup";
+import {
+  activeExpenses as selectActiveExpenses,
+  allocateApprovedCos,
+  computeRevisedContractValue,
+  isOutstandingExpense,
+  isPaidExpense,
+  preferManualActual,
+} from "@/services/costRollup";
+import { isCoApproved, isCoPending, isCoRejected } from "@/lib/entityPredicates";
+import { diffCalendarDays } from "@/lib/workingDays";
 import { COST_CODES } from "@/components/shared/costCodes";
 import { formatCurrencyWhole as formatCurrency } from "@/components/shared/formatters";
-import { sovScheduledTotal } from "@/pages/dashboard/projectMetrics";
+import { latestCertifiedPerLineItem, sovScheduledTotal, totalBilled } from "@/pages/dashboard/projectMetrics";
 import { calcEVM } from "@/utils/projectKpis";
 import { logActivity } from "@/services/auditLogger";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
@@ -46,6 +55,15 @@ export type ProjectLike = Partial<RowWithAliases<'projects'>> & {
   original_contract_value?: number | null;
   scope_complete_pct_override?: number | null;
 };
+
+/**
+ * Canonical form of a cost-code number for identity comparisons. Expenses match
+ * cost codes by this text, so " 01 " and "01" are one budget bucket even though
+ * they are two rows.
+ */
+export function normalizeCostCodeNumber(value: unknown): string {
+  return String(value ?? "").trim().toUpperCase();
+}
 
 // ─── Safe number helper ─────────────────────────────────────────────────
 export function safeNumber(value: unknown): number {
@@ -88,7 +106,18 @@ export type CostCodeRow = CostCode & {
 export type FinancialSummary = {
   contractValue: number;
   sovTotal: number;
+  /** Σ budget_amount + approved COs booked to those codes. */
   revisedBudget: number;
+  /** Σ budget_amount — the pre-change-order budget. */
+  originalBudget: number;
+  /** Approved CO dollars with no cost_code_id: in the contract, not the budget. */
+  unallocatedCOTotal: number;
+  /** Σ forecast_to_complete over the cost codes. */
+  forecastToComplete: number;
+  /** actual + forecastToComplete. */
+  eac: number;
+  /** max(committed, eac) — the defensible projected final cost. */
+  projectedCost: number;
   actual: number;
   committed: number;
   exposure: number;
@@ -149,8 +178,12 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const isLoading = loadingCC || loadingExp || loadingSOV || loadingCO || loadingWP;
 
   // ── Derived: active expenses (exclude voided) ───────────────────────
+  // Non-voided expenses. Uses the shared predicate so a row saved as "void"
+  // or " Voided " is excluded here exactly as resolveProjectSpend excludes it —
+  // the exact `!== "Voided"` compare that used to live here counted those rows
+  // as committed, so this hook and the Portfolio reported different totals.
   const activeExpenses = useMemo(
-    () => expenses.filter((e) => e.payment_status !== "Voided"),
+    () => selectActiveExpenses(expenses),
     [expenses]
   );
 
@@ -159,7 +192,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   // carried whitespace-padded statuses, and summary.contractValue already
   // trims, so exact-matching here would let the two KPIs disagree.
   const approvedCOs = useMemo(
-    () => changeOrders.filter((co) => String(co.status ?? "").trim() === "Approved"),
+    () => changeOrders.filter(isCoApproved),
     [changeOrders]
   );
 
@@ -169,13 +202,13 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   );
 
   // ── Derived: CO amounts by cost_code_id ─────────────────────────────
-  const coByCostCodeId = useMemo<Record<string, number>>(() => {
-    return approvedCOs.reduce<Record<string, number>>((acc, co) => {
-      const key = co.cost_code_id || "__unmapped__";
-      acc[key] = (acc[key] || 0) + safeNumber(co.co_amount);
-      return acc;
-    }, {});
-  }, [approvedCOs]);
+  // Approved CO dollars per cost_code_id, plus the tail that carries no
+  // cost_code_id. That tail raises the revised CONTRACT but lands on no code,
+  // so it never reaches revisedBudget — surfaced here rather than dropped,
+  // because silently omitting it makes margin read better than it is.
+  const coAllocation = useMemo(() => allocateApprovedCos(approvedCOs), [approvedCOs]);
+  const coByCostCodeId = coAllocation.byCostCodeId;
+  const unallocatedCOTotal = coAllocation.unallocated;
 
   // ── Derived: cost code rows with budget calculations ────────────────
   const costCodeRows = useMemo<CostCodeRow[]>(() => {
@@ -195,7 +228,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       // wins, fall back to expenses." Previously expenses always won, so a typed
       // actual saved to the column but never displayed → looked like it "didn't save".)
       const expenseActual = relatedExpenses
-        .filter((e) => e.payment_status === "Paid")
+        .filter(isPaidExpense)
         .reduce((s, e) => s + safeNumber(e.amount), 0);
       const expenseCommitted = relatedExpenses.reduce((s, e) => s + safeNumber(e.amount), 0);
 
@@ -236,13 +269,23 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     const actual = costCodeRows.reduce((s, r) => s + r.actual_cost, 0);
     const committed = costCodeRows.reduce((s, r) => s + r.committed_cost, 0);
     const exposure = committed;
-    const marginAtRisk = contractValue - exposure;
+    // Projected final cost. Committed alone ignores forecast-to-complete, so a
+    // project with real remaining work reported margin it will not keep; EAC
+    // alone ignores commitments already placed above the forecast. The larger
+    // of the two is the defensible exposure.
+    const forecastToComplete = costCodeRows.reduce(
+      (s, r) => s + safeNumber((r as Record<string, unknown>).forecast_to_complete),
+      0,
+    );
+    const eac = actual + forecastToComplete;
+    const projectedCost = Math.max(committed, eac);
+    const marginAtRisk = contractValue - projectedCost;
     const totalRemaining = revisedBudget - committed;
     const totalPaid = activeExpenses
-      .filter((e) => e.payment_status === "Paid")
+      .filter(isPaidExpense)
       .reduce((s, e) => s + safeNumber(e.amount), 0);
     const totalOutstanding = activeExpenses
-      .filter((e) => ["Unpaid", "Pending Approval"].includes(e.payment_status as string))
+      .filter(isOutstandingExpense)
       .reduce((s, e) => s + safeNumber(e.amount), 0);
     const pctUsed = revisedBudget > 0 ? (committed / revisedBudget) * 100 : 0;
 
@@ -250,6 +293,11 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       contractValue,
       sovTotal,
       revisedBudget,
+      originalBudget: costCodeRows.reduce((s, r) => s + safeNumber(r.budget_amount), 0),
+      unallocatedCOTotal,
+      forecastToComplete,
+      eac,
+      projectedCost,
       actual,
       committed,
       exposure,
@@ -260,10 +308,10 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       pctUsed,
       approvedCOTotal,
       pendingCOTotal: changeOrders
-        .filter((co) => ["Submitted", "Under Review"].includes(co.status as string))
+        .filter(isCoPending)
         .reduce((s, co) => s + safeNumber(co.co_amount), 0),
     };
-  }, [costCodeRows, sovItems, activeExpenses, changeOrders, approvedCOTotal, project]);
+  }, [costCodeRows, sovItems, activeExpenses, changeOrders, approvedCOTotal, unallocatedCOTotal, project]);
 
   // ── Derived: review flags ───────────────────────────────────────────
   const reviewFlags = useMemo<ReviewFlag[]>(() => {
@@ -306,24 +354,29 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
 
   // ── KPI 1: Change Order Impact ─────────────────────────────────────
   const changeOrderImpact = useMemo(() => {
-    const approved = changeOrders.filter((co) => String(co.status ?? "").trim() === "Approved");
-    const pending  = changeOrders.filter((co) => ["Submitted", "Under Review"].includes(co.status as string));
-    const rejected = changeOrders.filter((co) => ["Rejected", "Void"].includes(co.status as string));
+    const approved = changeOrders.filter(isCoApproved);
+    const pending  = changeOrders.filter(isCoPending);
+    const rejected = changeOrders.filter(isCoRejected);
 
     const approvedTotal        = approved.reduce((s, co) => s + safeNumber(co.co_amount), 0);
     const approvedMarginDollar = approved.reduce(
       (s, co) => s + safeNumber(co.co_amount) * safeNumber(co.margin_percent) / 100, 0
     );
-    const approvedAvgMargin = approvedTotal > 0
-      ? (approvedMarginDollar / approvedTotal) * 100
+    // Deductive COs make the net total negative or zero while real margin is
+    // still at stake, and `> 0` silently reported 0%. Weight by the absolute
+    // dollars moved so a +$100k / −$100k pair reads its true blended margin.
+    const approvedGross = approved.reduce((s, co) => s + Math.abs(safeNumber(co.co_amount)), 0);
+    const approvedAvgMargin = approvedGross > 0
+      ? (approvedMarginDollar / approvedGross) * 100
       : 0;
 
     const pendingTotal        = pending.reduce((s, co) => s + safeNumber(co.co_amount), 0);
     const pendingMarginDollar = pending.reduce(
       (s, co) => s + safeNumber(co.co_amount) * safeNumber(co.margin_percent) / 100, 0
     );
-    const pendingAvgMargin = pendingTotal > 0
-      ? (pendingMarginDollar / pendingTotal) * 100
+    const pendingGross = pending.reduce((s, co) => s + Math.abs(safeNumber(co.co_amount)), 0);
+    const pendingAvgMargin = pendingGross > 0
+      ? (pendingMarginDollar / pendingGross) * 100
       : 0;
 
     const rejectedTotal = rejected.reduce((s, co) => s + safeNumber(co.co_amount), 0);
@@ -370,10 +423,15 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
 
   // ── KPI 2: Labor Cost Utilization ──────────────────────────────────
   const laborUtilization = useMemo(() => {
-    // Filter cost code rows to Labor category using the canonical COST_CODES catalog
+    // Labor rows. The COST_CODES catalog covers codes 01–14 only, so matching
+    // on it ALONE dropped every project-specific code from the labor budget —
+    // the KPI then reported a burn rate against a fraction of the real labor
+    // money. A code the catalog doesn't know falls back to its own `phase`
+    // column, which is what the Cost Control Center's phase filter reads.
     const laborRows = costCodeRows.filter((r) => {
       const def = COST_CODES.find((c: { code: string; category: string }) => c.code === r.cost_code_number);
-      return def?.category === "Labor";
+      if (def) return def.category === "Labor";
+      return String(r.phase ?? "").trim() === "Labor";
     });
 
     const laborBudget = laborRows.reduce((s, r) => s + r.revised_budget, 0);
@@ -442,9 +500,11 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
 
   // ── KPI 3: Billing vs. Cost Ratio ─────────────────────────────────
   const billingVsCost = useMemo(() => {
-    const cumulativeBillings = sovItems.reduce(
-      (s, item) => s + safeNumber(item.scheduled_value) * safeNumber(item.current_percent_complete) / 100, 0
-    );
+    // sov_items holds one row per (line item × application × status), so a raw
+    // row sum multiplies billings by the number of pay applications. totalBilled
+    // is the canonical billed-to-date over the latest CERTIFIED row per line
+    // item — the same figure Contract Management and the Dashboard show.
+    const cumulativeBillings = totalBilled(sovItems);
 
     const cumulativeCost = summary.actual;
 
@@ -486,18 +546,30 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
 
   // ── KPI 4: Days Sales Outstanding (DSO) ────────────────────────────
   const daysSalesOutstanding = useMemo(() => {
-    const today = new Date();
+    // Local calendar day. `new Date("2026-07-03")` is UTC midnight, which in
+    // Arizona (UTC-7, no DST) is 17:00 the PREVIOUS local day — differencing it
+    // against a local `new Date()` shifts every age by a day. parseLocalDate /
+    // diffCalendarDays anchor both sides at local noon. The test runner is
+    // TZ=UTC, so this can only be proven by injecting a zone.
+    const todayIso = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
+
+    // One SOV row per line item — the latest CERTIFIED pay app. Summing raw
+    // rows counted the same line item once per application, so the outstanding
+    // value and its age were multiplied by the number of pay apps filed.
+    const currentSov = latestCertifiedPerLineItem(sovItems);
 
     // Completed payment cycles — both dates present
-    const completedItems = sovItems.filter(
+    const completedItems = currentSov.filter(
       (item) => item.submitted_date && item.payment_received_date
     );
 
-    const dsoValues = completedItems.map((item) => {
-      const submitted = new Date(item.submitted_date as string);
-      const received  = new Date(item.payment_received_date as string);
-      return Math.max(0, Math.round((received.getTime() - submitted.getTime()) / 86400000));
-    });
+    const dsoValues = completedItems
+      .map((item) => diffCalendarDays(item.submitted_date as string, item.payment_received_date as string))
+      .filter((d): d is number => d !== null)
+      .map((d) => Math.max(0, d));
 
     const avgDSO = dsoValues.length > 0
       ? dsoValues.reduce((s, d) => s + d, 0) / dsoValues.length
@@ -514,11 +586,10 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     }
 
     // Outstanding invoices — submitted but not yet paid
-    const outstandingInvoices = sovItems
+    const outstandingInvoices = currentSov
       .filter((item) => item.submitted_date && !item.payment_received_date)
       .map((item) => {
-        const submitted = new Date(item.submitted_date as string);
-        const daysOutstanding = Math.max(0, Math.round((today.getTime() - submitted.getTime()) / 86400000));
+        const daysOutstanding = Math.max(0, diffCalendarDays(item.submitted_date as string, todayIso) ?? 0);
         const currentBillingValue =
           safeNumber(item.scheduled_value) * safeNumber(item.current_percent_complete) / 100;
         return {
@@ -575,10 +646,14 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     mutationFn: async (data) => {
       const errors = validate("cost_code", data, "create");
       if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
-      // Duplicate check
-      const existing = costCodes.find(
-        (cc) => cc.cost_code_number === data.cost_code_number
-      );
+      // Duplicate check. Compared case- and whitespace-insensitively: two rows
+      // whose numbers differ only by padding are the same code to every expense
+      // rollup (they match on the number), and each would otherwise claim that
+      // number's full expense total.
+      const wanted = normalizeCostCodeNumber(data.cost_code_number);
+      const existing = wanted
+        ? costCodes.find((cc) => normalizeCostCodeNumber(cc.cost_code_number) === wanted)
+        : undefined;
       if (existing) throw new Error(`Cost code ${data.cost_code_number} already exists in this project.`);
       return await entities.CostCode.create(data as Insert<'cost_codes'>);
     },
@@ -597,6 +672,10 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const costCodeUpdateMut = useMutation<CostCode, Error, CostCodeUpdate>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
+      // Create validated and update did not, so an edit could park a cost code
+      // in a state the create path refuses (a blank number, a negative budget).
+      const errors = validate("cost_code", data, "update");
+      if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
       return await entities.CostCode.update(id, data as Update<'cost_codes'>);
     },
     onSuccess: async (updated) => {

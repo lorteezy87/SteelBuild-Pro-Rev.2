@@ -32,7 +32,7 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 import { safeNum, buildRedFlagAlerts, exportExpensesCSV } from "./expenses/utils";
-import { computeCostCodeTotals } from "@/services/costRollup";
+import { computeCostCodeTotals, isOutstandingExpense, isPaidExpense, isVoidedExpense } from "@/services/costRollup";
 import KpiStrip      from "./expenses/KpiStrip";
 import AnalyticsGrid from "./expenses/AnalyticsGrid";
 import AlertChips    from "./expenses/AlertChips";
@@ -202,15 +202,18 @@ export default function ExpensesPage() {
 
   /* ── KPI rollups ── */
   const totalBudget     = roundCurrency(computeCostCodeTotals(costCodes).budget);
-  const activeExpenses  = useMemo(() => expenses.filter((e) => e.payment_status !== "Voided"), [expenses]);
+  // Shared predicates: a row saved as "void" or " Voided " is excluded here
+  // exactly as the cost rollups exclude it, so this page's totals and the Cost
+  // Control Center's cannot drift on the same data.
+  const activeExpenses  = useMemo(() => expenses.filter((e) => !isVoidedExpense(e)), [expenses]);
   const totalCommitted  = roundCurrency(activeExpenses.reduce((s, e) => s + safeNum(e.amount), 0));
-  const totalPaid       = roundCurrency(activeExpenses.filter((e) => e.payment_status === "Paid").reduce((s, e) => s + safeNum(e.amount), 0));
-  const paidCount       = activeExpenses.filter((e) => e.payment_status === "Paid").length;
+  const totalPaid       = roundCurrency(activeExpenses.filter(isPaidExpense).reduce((s, e) => s + safeNum(e.amount), 0));
+  const paidCount       = activeExpenses.filter(isPaidExpense).length;
   const totalRemaining  = roundCurrency(totalBudget - totalCommitted);
   const pctUsed         = totalBudget > 0 ? Math.min(100, Math.round((totalCommitted / totalBudget) * 100)) : 0;
   const totalOutstanding = roundCurrency(
     activeExpenses
-      .filter((e) => e.payment_status === "Unpaid" || e.payment_status === "Pending Approval")
+      .filter(isOutstandingExpense)
       .reduce((s, e) => s + safeNum(e.amount), 0)
   );
 
@@ -263,7 +266,7 @@ export default function ExpensesPage() {
       const matchStatus =
         statusFilter === "all" ? true :
         statusFilter === "_outstanding"
-          ? e.payment_status === "Unpaid" || e.payment_status === "Pending Approval"
+          ? isOutstandingExpense(e)
           : e.payment_status === statusFilter;
       const matchWP = wpFilter === "all" || e.work_package_id === wpFilter;
       return matchSearch && matchCC && matchType && matchStatus && matchWP && filterByDate(e);

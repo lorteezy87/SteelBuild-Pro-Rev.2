@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatBudgetPercent } from "../components/shared/formatters";
-import { computeCostCodeTotals, resolveProjectSpend } from "@/services/costRollup";
+import { computeRevisedBudget, resolveProjectSpend } from "@/services/costRollup";
 import StatusBadge from "../components/shared/StatusBadge";
 import KPIStrip from "../components/shared/KPIStrip";
 import {
@@ -116,7 +116,11 @@ export default function ExecutiveView() {
   const totalContract = projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
   const approvedCOVal = cos.filter(isApprovedCO).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
   const revisedTotal = totalContract + approvedCOVal;
-  const { budget: totalBudget } = computeCostCodeTotals(codes);
+  // REVISED budget (Σ budget_amount + approved COs booked to those codes) —
+  // the same definition the Cost Control Center prints. This read the raw
+  // column sum, so on any project with an approved CO the executive "of $X
+  // budget" was lower than the cost page's Budget KPI under the same word.
+  const { revisedBudget: totalBudget } = computeRevisedBudget(codes, cos);
   // Canonical spend model per project (typed-in cost-code actuals win, paid
   // expenses fall back, unmapped expenses count) so the executive "Total
   // Spend" agrees with the Dashboard/Portfolio instead of reading $0 for
@@ -162,10 +166,10 @@ export default function ExecutiveView() {
   const projectBudgetData = projects.map((p) => {
     const pc = codes.filter((c) => c.project_id === p.id);
     const approvedCO = cos.filter((c) => c.project_id === p.id && isApprovedCO(c)).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-    const pcTotals = computeCostCodeTotals(pc);
+    const pcTotals = computeRevisedBudget(pc, cos.filter((c) => c.project_id === p.id));
     return {
       name: p.project_number || p.name?.slice(0, 10),
-      budget: pcTotals.budget,
+      budget: pcTotals.revisedBudget,
       actual: spendByProjectId.get(p.id) ?? 0,
       revised: (Number(p.original_contract_value) || 0) + approvedCO,
     };
@@ -445,7 +449,12 @@ export default function ExecutiveView() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
           {projects.map((p) => {
             const pc = codes.filter((c) => c.project_id === p.id);
-            const { budget, actual } = computeCostCodeTotals(pc);
+            // Same two numbers as the Total Spend KPI above: the REVISED budget
+            // and the resolved spend. This card read the raw `actual_cost`
+            // column sum, so a project whose actuals come from logged expenses
+            // showed 0% spent here while the KPI strip showed real dollars.
+            const { revisedBudget: budget } = computeRevisedBudget(pc, cos.filter((c) => c.project_id === p.id));
+            const actual = spendByProjectId.get(p.id) ?? 0;
             const pctSpend = budget > 0 ? actual / budget * 100 : 0;
             const projRFIs = rfis.filter((r) => r.project_id === p.id && isRfiOpen(r)).length;
             return (

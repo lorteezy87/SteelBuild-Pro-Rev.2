@@ -20,8 +20,18 @@ export type ExportToCSVArgs = {
   rows: ReadonlyArray<ReadonlyArray<CsvCell>>;
 };
 
+/**
+ * Leading characters Excel / Sheets / LibreOffice treat as the start of a
+ * formula. A description typed as "=cmd|..." or "+A1" is data, not a formula,
+ * and these exports are opened by PMs and emailed on to GCs.
+ */
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+
 const escapeCell = (cell: CsvCell): string => {
-  const raw = cell == null ? "" : String(cell);
+  let raw = cell == null ? "" : String(cell);
+  // Neutralise only free TEXT. Numbers are checked before coercion so a
+  // negative dollar figure still exports as a number, not as text.
+  if (typeof cell === "string" && FORMULA_LEAD.test(raw)) raw = `'${raw}`;
   // Per RFC 4180: double-up internal quotes, then wrap the whole thing in quotes.
   return `"${raw.replace(/"/g, '""')}"`;
 };
