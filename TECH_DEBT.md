@@ -302,14 +302,20 @@ description of this database, and the drift check's "inventory green" — which 
 own header already disclaims, since it compares versions and slugs rather than
 SQL — is the only assurance there is.
 
-**The drift check is deliberately still red**, on one entry. `20260801013000` and
-`20260913090000` were settled on 2026-09-15 by checking each file against
-production. `20260727232000` was not, and must not be: the owner decided on
-2026-09-14 to record and document it rather than resolve it, because production
-keeps the sibling app's stricter fab-release gate and porting that into Rev.2 is a
-product task. Freezing it would turn a standing reminder into silence. It clears
-when the gate is ported, not before — and a test pins it so nobody clears it by
-accident.
+**The drift check was deliberately red on one entry, and now is not.**
+`20260801013000` and `20260913090000` were settled on 2026-09-15 by checking
+each file against production. `20260727232000` stayed unresolved past that,
+because the owner had recorded and documented the fab-release gate's divergence
+on 2026-09-14 without yet deciding whether to port the sibling app's stricter
+gate into Rev.2 — freezing it before that decision would have turned a standing
+reminder into silence. The owner made that call on 2026-09-15 ("adopt the
+sibling app's logic as Rev.2's own"), and `20260915120000_adopt_2026_fab_release_gate.sql`
+is the port: it tracks the current live `evaluate_release_gate` /
+`evaluate_fab_release_set` / `work_package_drawing_set_reports` /
+`piece_control_drawing_is_approved`. `20260727232000` itself still must never be
+applied — its embedded bodies are the old, superseded ones — so it freezes
+rather than becoming required; the test that pins its evidence now checks for
+that resolution instead of pinning it red.
 
 ### Monetization / go-to-market
 
