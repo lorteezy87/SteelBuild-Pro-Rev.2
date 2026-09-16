@@ -53,6 +53,27 @@ const sharedPlugins = {
   "jsx-a11y": pluginJsxA11y,
 };
 
+// Rules for every JavaScript block. As with tsRules below, the src/ and scripts/
+// blocks share this one object so tooling code can never be linted more
+// leniently than app code.
+const jsRules = {
+  ...pluginJs.configs.recommended.rules,
+  ...pluginReact.configs.flat.recommended.rules,
+  // Restore the recommended floor. A block's explicit `rules` key replaces the
+  // rules of any config spread into that block, which once dropped these from
+  // the src/ block. `no-undef` in particular catches the class of bug that
+  // shipped as "qc is not defined".
+  "no-undef": "error",
+  ...sharedRules,
+};
+
+// Rules for every TypeScript block. The src/ and scripts/ blocks share this one
+// object so tooling code can never be linted more leniently than app code.
+const tsRules = {
+  ...pluginReact.configs.flat.recommended.rules,
+  ...sharedRules,
+};
+
 export default [
   {
     ignores: [
@@ -100,16 +121,7 @@ export default [
     plugins: {
       ...sharedPlugins,
     },
-    rules: {
-      ...pluginJs.configs.recommended.rules,
-      ...pluginReact.configs.flat.recommended.rules,
-      // Restore the recommended floor (these were previously dropped because
-      // the explicit `rules` block shadowed the spreads above). `no-undef`
-      // in particular catches the class of bug that shipped as
-      // "qc is not defined".
-      "no-undef": "error",
-      ...sharedRules,
-    },
+    rules: jsRules,
   },
   // ── TypeScript / TSX (finding #8, step 1) ───────────────────────────────────
   // Previously the entire .ts/.tsx surface was UNLINTED. Lint it with the TS
@@ -141,9 +153,67 @@ export default [
       ...sharedPlugins,
       "@typescript-eslint": tseslint.plugin,
     },
-    rules: {
-      ...pluginReact.configs.flat.recommended.rules,
-      ...sharedRules,
+    rules: tsRules,
+  },
+  // ── TypeScript under scripts/ ───────────────────────────────────────────────
+  // Node tooling and its tests. With no block matching them, `eslint .` skipped
+  // every scripts/**/*.ts as "File ignored because no matching configuration
+  // was supplied" and still exited 0. Same parser and rules as the src/ TS
+  // block above; Node globals instead of browser ones.
+  {
+    files: ["scripts/**/*.{ts,mts,cts}"],
+    languageOptions: {
+      parser: tseslint.parser,
+      globals: globals.node,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: "module",
+      },
+    },
+    settings: {
+      react: {
+        version: "detect",
+      },
+    },
+    plugins: {
+      ...sharedPlugins,
+      "@typescript-eslint": tseslint.plugin,
+    },
+    rules: tsRules,
+  },
+  // ── JavaScript under scripts/ ───────────────────────────────────────────────
+  // ESLint 9 matches **/*.{js,mjs,cjs} by default, so `eslint .` visited these
+  // files, but no block configured them and they passed against zero rules:
+  // the enforced Supabase drift check, the audit gate, the storage backup and
+  // the typecheck ratchet runners among them. Same rules as the src/ JS block.
+  //
+  // Globals: ES modules get nodeBuiltin, not node. `globals.node` also declares
+  // the CommonJS wrapper variables (require, module, exports, __dirname,
+  // __filename). Those don't exist in an ES module, so declaring them would
+  // hide the ReferenceError no-undef is here to catch. Only .cjs gets them.
+  {
+    files: ["scripts/**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      // In languageOptions, not parserOptions, so the .cjs block can override it.
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: globals.nodeBuiltin,
+    },
+    settings: {
+      react: {
+        version: "detect",
+      },
+    },
+    plugins: {
+      ...sharedPlugins,
+    },
+    rules: jsRules,
+  },
+  {
+    files: ["scripts/**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: globals.node,
     },
   },
 ];

@@ -215,7 +215,7 @@ export function SubmittalDetail({
 
   if (!submittal) {
     return (
-      <div style={{ width: 480, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6, color: "var(--text-muted)", background: "var(--bg-page, var(--bg-page))" }}>
+      <div className="submittal-detail submittal-detail--empty" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6, color: "var(--text-muted)", background: "var(--bg-page, var(--bg-page))" }}>
         <div style={{ fontSize: 32 }}>◆</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase" }}>Select a submittal</div>
       </div>
@@ -232,8 +232,11 @@ export function SubmittalDetail({
   } = deriveSubmittalDetailSummary(submittal);
 
   return (
-    <div style={{ width: 480, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--bg-page, var(--bg-page))", minHeight: 0 }}>
-      <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-hover)" }}>
+    <div className="submittal-detail" style={{ display: "flex", flexDirection: "column", background: "var(--bg-page, var(--bg-page))", minHeight: 0 }}>
+      <button type="button" className="submittal-detail__back" onClick={onClose}>
+        ← Back to register
+      </button>
+      <div style={{ flexShrink: 0, padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-hover)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.08em" }}>
@@ -360,7 +363,7 @@ export function SubmittalDetail({
         )}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "14px 20px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 20px" }}>
         <SubmittalReviewStrip
           submittal={submittal}
           allSubmittals={allSubmittals}
@@ -714,7 +717,7 @@ export function SubmittalDetail({
         </DetailSection>
       </div>
 
-      <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "var(--bg-hover)", display: "flex", gap: 8 }}>
+      <div style={{ flexShrink: 0, padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "var(--bg-hover)", display: "flex", gap: 8 }}>
         <button
           onClick={onEdit}
           style={{ flex: 1, background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 4, padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}

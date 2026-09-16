@@ -144,3 +144,46 @@ describe("daysValue sort invariant — higher = more urgent within a bucket", ()
     }
   });
 });
+
+describe("RFI: date-sanity guard on daysOpen", () => {
+  it("clamps an absurdly old submitted_date instead of reporting a decades-old age", () => {
+    // A bad import/placeholder date (e.g. epoch or a typo'd year) must not
+    // surface as a literal "9137d past target" or dominate the feed forever.
+    const corrupt = rfiUrgency({
+      id: "1", status: "Open", project_id: "p1",
+      ball_in_court: "EOR",
+      submitted_date: "2001-01-01",
+    });
+    expect(corrupt.urgency).toBe("overdue");
+    expect(corrupt.daysValue).toBeLessThanOrEqual(730);
+    expect(corrupt.displayStatus).not.toMatch(/\b[0-9]{4,}d\b/);
+  });
+
+  it("clamps a future submitted_date (clock skew / bad data) to 0 rather than a negative age", () => {
+    const future = rfiUrgency({
+      id: "2", status: "Open", project_id: "p1",
+      ball_in_court: "EOR",
+      schedule_impact: true, // force it through as "blocking" so it isn't gated out
+      submitted_date: daysFromNow(30),
+    });
+    expect(future.displayStatus).not.toMatch(/-\d/);
+  });
+
+  it("still ranks a genuinely stale-but-plausible RFI as more urgent than a less-stale one", () => {
+    // Both ages are inside the clamp ceiling, so the guard must not flatten
+    // real within-bucket ordering for plausible (if neglected) RFIs.
+    const stale = rfiUrgency({
+      id: "1", status: "Open", project_id: "p1",
+      ball_in_court: "EOR",
+      submitted_date: daysFromNow(-400),
+    });
+    const lessStale = rfiUrgency({
+      id: "2", status: "Open", project_id: "p1",
+      ball_in_court: "EOR",
+      submitted_date: daysFromNow(-100),
+    });
+    expect(stale.urgency).toBe("overdue");
+    expect(lessStale.urgency).toBe("overdue");
+    expect([lessStale, stale].sort(defaultFeedSort)[0]).toBe(stale);
+  });
+});

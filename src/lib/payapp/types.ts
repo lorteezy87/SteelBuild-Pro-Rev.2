@@ -36,6 +36,8 @@ export interface PayApplication {
   certified_date?: string | null;
   paid_date?: string | null;
   notes?: string | null;
+  /** Written only by move_pay_application() when an application is voided. */
+  void_reason?: string | null;
   metadata?: Record<string, unknown> | null;
   created_by?: string | null;
   is_deleted?: boolean | null;

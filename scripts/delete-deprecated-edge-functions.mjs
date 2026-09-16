@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /**
+ * Legacy inventory helper. Apply is blocked while stripe-webhook is held; use
+ * .github/workflows/supabase-retire-deprecated.yml for the five reviewed versions.
  * Owner-run helper for deleting production Edge Functions classified as
  * deprecated in the reviewed ownership manifest.
  *
@@ -63,6 +65,9 @@ export function main() {
     process.env.CONFIRM_DELETE_DEPRECATED_FUNCTIONS,
   );
   const deprecated = deprecatedFunctionSlugs(manifest, localInventory());
+  if (!dryRun && deprecated.includes('stripe-webhook')) {
+    throw new Error('stripe-webhook is protected while Stripe endpoint evidence remains enabled. Use the manual supabase-retire-deprecated.yml workflow for the five reviewed versions.');
+  }
 
   console.log(`Project: ${projectRef}`);
   console.log(`Mode: ${dryRun ? 'DRY_RUN' : 'APPLY'}`);
@@ -75,6 +80,10 @@ export function main() {
   console.log('');
 
   for (const slug of deprecated) {
+    if (slug === 'stripe-webhook') {
+      console.log('[held] stripe-webhook: enabled Stripe endpoint evidence; no deletion permitted.');
+      continue;
+    }
     const args = ['functions', 'delete', slug, '--project-ref', projectRef];
     if (dryRun) {
       console.log(`[dry-run] npx supabase ${args.join(' ')}`);

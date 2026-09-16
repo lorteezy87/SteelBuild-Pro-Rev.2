@@ -12,6 +12,8 @@
 --   1. inserting a child rolls the parent's dates up (MIN start / MAX end)
 --   2. reparenting a child moves the rollup from the old parent to the new one
 --   3. deleting a task's last child clears its is_summary flag
+--   5. soft-deleting a child drops it from the rollup; undeleting restores it
+--      (the soft-delete rollup fix, which needs schedule_tasks.is_deleted)
 -- Plus: upward propagation to a grandparent.
 --
 -- Uses a throwaway project so RLS/policies aren't in the way (runs as the
@@ -28,11 +30,18 @@ declare
   v_p2 uuid;
   v_c1 uuid;
   v_c2 uuid;
+  v_org uuid;
+  v_sp uuid;
+  v_early uuid;
+  v_late uuid;
   r record;
 begin
-  -- Throwaway project.
-  insert into public.projects (name, project_number)
-  values ('__rollup_test__', 'ROLLUP-TEST')
+  -- Throwaway organization and project (projects.org_id is required).
+  insert into public.organizations (name)
+  values ('__rollup_test__')
+  returning id into v_org;
+  insert into public.projects (org_id, name, project_number)
+  values (v_org, '__rollup_test__', 'ROLLUP-TEST')
   returning id into v_project;
 
   -- ── Scenario 1: child insert rolls the parent's dates ────────────────────
@@ -110,6 +119,37 @@ begin
   select is_summary into r from public.schedule_tasks where id = v_p;
   if r.is_summary is not false then
     raise exception 'S3: parent should no longer be a summary after last child deleted, got %', r.is_summary;
+  end if;
+
+  -- ── Scenario 5: soft-deleting and undeleting children re-rolls the parent ─
+  insert into public.schedule_tasks (project_id, task_name, status)
+  values (v_project, 'Soft-delete parent', 'Not Started')
+  returning id into v_sp;
+  insert into public.schedule_tasks (project_id, task_name, parent_task_id, start_date, end_date, status)
+  values (v_project, 'Early child', v_sp, date '2026-03-05', date '2026-03-10', 'Not Started')
+  returning id into v_early;
+  insert into public.schedule_tasks (project_id, task_name, parent_task_id, start_date, end_date, status)
+  values (v_project, 'Late child', v_sp, date '2026-03-12', date '2026-03-20', 'Not Started')
+  returning id into v_late;
+
+  update public.schedule_tasks set is_deleted = true, deleted_at = now() where id = v_early;
+  select is_summary, start_date, end_date into r from public.schedule_tasks where id = v_sp;
+  if r.is_summary is not true or r.start_date <> date '2026-03-12' then
+    raise exception 'S5a: soft-deleting the early child should move the parent start to 2026-03-12, got is_summary=% % .. %',
+      r.is_summary, r.start_date, r.end_date;
+  end if;
+
+  update public.schedule_tasks set is_deleted = true, deleted_at = now() where id = v_late;
+  select is_summary into r from public.schedule_tasks where id = v_sp;
+  if r.is_summary is not false then
+    raise exception 'S5b: parent should stop being a summary once every child is soft-deleted, got %', r.is_summary;
+  end if;
+
+  update public.schedule_tasks set is_deleted = false, deleted_at = null where id = v_late;
+  select is_summary, start_date, end_date into r from public.schedule_tasks where id = v_sp;
+  if r.is_summary is not true or r.start_date <> date '2026-03-12' or r.end_date <> date '2026-03-20' then
+    raise exception 'S5c: undeleting a child should restore the parent span, got is_summary=% % .. %',
+      r.is_summary, r.start_date, r.end_date;
   end if;
 
   raise notice 'schedule_summary_rollup_test: ALL ASSERTIONS PASSED';

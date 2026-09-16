@@ -21,7 +21,7 @@ export function useSubmittalQueries(
 
   const {
     data: submittals = [],
-    isLoading,
+    isPending,
     error,
     refetch,
   } = useQuery<Submittal[]>({
@@ -31,7 +31,7 @@ export function useSubmittalQueries(
     staleTime: SUBMITTAL_QUERY_STALE_TIME,
   });
 
-  const { data: rounds = [], isLoading: roundsLoading } = useQuery<
+  const { data: rounds = [], isPending: roundsPending, error: roundsError, refetch: refetchRounds } = useQuery<
     SubmittalRound[]
   >({
     queryKey: roundsQueryKey,
@@ -66,9 +66,9 @@ export function useSubmittalQueries(
     submittals,
     rounds,
     roundsBySubmittal,
-    isLoading: isLoading || roundsLoading,
-    error,
-    refetch,
+    isLoading: !!projectId && (isPending || roundsPending),
+    error: error ?? roundsError,
+    refetch: async () => { await refetchRounds(); return refetch(); },
     byStatus,
     byDrawingSet,
     overdue,

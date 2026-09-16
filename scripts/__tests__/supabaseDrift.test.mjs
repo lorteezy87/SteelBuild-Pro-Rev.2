@@ -22,18 +22,15 @@ const local = {
 };
 
 describe('Supabase production ownership evidence', () => {
-  it('validates the reviewed repository manifest and preserves its blockers', () => {
+  it('validates the reviewed repository manifest after restoring ledger source', () => {
     const repositoryManifest = drift.readManifest();
     const repositoryLocal = drift.localInventory();
     expect(() => drift.validateManifest(repositoryManifest, repositoryLocal)).not.toThrow();
     expect(repositoryManifest.migrations).toHaveLength(45);
+    const recoveredVersions = ['20260909090445', '20260910034739', '20260910044641'];
     expect(repositoryManifest.migrations
-      .filter(entry => entry.lifecycle === 'unresolved')
-      .map(entry => entry.version)).toEqual([
-      '20260909090445',
-      '20260910034739',
-      '20260910044641',
-    ]);
+      .filter(entry => recoveredVersions.includes(entry.version))
+      .map(entry => entry.lifecycle)).toEqual(['intentionally-frozen', 'required', 'required']);
   });
 
   it('requires active local and external required assets in production', () => {

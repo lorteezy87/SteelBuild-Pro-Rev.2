@@ -18,6 +18,7 @@ export const STATIC_ROUTE_METADATA = {
   "/Financials": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/CostDashboard": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/BudgetControl": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
+  "/Detailing": { lifecycle: "legacy", kind: "redirect", target: "/DrawingSubmittalHub" },
   "/Team": { lifecycle: "legacy", kind: "redirect", target: "/OrgMembers" },
   "/ProjectDetail": { lifecycle: "legacy", kind: "redirect", target: "/Projects" },
   "/ResourceManagement": { lifecycle: "legacy", kind: "redirect", target: "/ResourceHub" },

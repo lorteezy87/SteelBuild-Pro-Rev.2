@@ -19,6 +19,7 @@ import { seatCapacity } from "@/lib/billing/plans";
 import { isNativePlatform } from "@/lib/native/platform";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import {
   listOrgMembers, listInvitations, createInvitation, revokeInvitation,
   updateMemberRole, removeMember, inviteLink, updateOrgDefaultProjectRole,
@@ -39,12 +40,17 @@ export default function OrgMembers() {
   const [busy, setBusy] = useState(false);
   const [ccSearch, setCcSearch] = useState("");
 
-  const { data: members = [], isLoading: loadingMembers } = useQuery({
+  const membersQuery = useQuery({
     queryKey: ["org-members", orgId], queryFn: () => listOrgMembers(orgId), enabled: !!orgId,
   });
-  const { data: invites = [], isLoading: loadingInvites } = useQuery({
+  const invitesQuery = useQuery({
     queryKey: ["org-invites", orgId], queryFn: () => listInvitations(orgId), enabled: !!orgId,
   });
+
+  const { data: members = [] } = membersQuery;
+  const { data: invites = [] } = invitesQuery;
+  const teamError = membersQuery.error || invitesQuery.error;
+  const teamReady = membersQuery.isSuccess && invitesQuery.isSuccess;
 
   const ownerCount = useMemo(() => members.filter((m) => m.role === "owner").length, [members]);
 
@@ -76,7 +82,7 @@ export default function OrgMembers() {
   useEffect(() => {
     if (seededRef.current) return;
     if (!Array.isArray(prefill) || prefill.length === 0) return;
-    if (!orgId || loadingMembers || loadingInvites) return;
+    if (!orgId || !teamReady) return;
     const { invites: prepared, skipped } = prepareOnboardingInvites(prefill, {
       existingEmails: members.map((m) => m.email),
       pendingEmails: invites.map((i) => i.email),
@@ -89,7 +95,7 @@ export default function OrgMembers() {
       const dropped = skipped.alreadyMember + skipped.alreadyInvited + skipped.invalid + skipped.duplicate;
       if (dropped > 0) toast.info(`Everyone from setup is already on the team or invited (${dropped} skipped)`);
     }
-  }, [prefill, orgId, loadingMembers, loadingInvites, members, invites, isOwner]);
+  }, [prefill, orgId, teamReady, members, invites, isOwner]);
 
   const stagedSkippedNote = useMemo(() => {
     if (!stagedSkipped) return "";
@@ -201,7 +207,11 @@ export default function OrgMembers() {
     return <div className="page-content" style={{ padding: 24 }}><CommandBar eyebrow="Workspace" title="Team" /></div>;
   }
 
-  if (loadingMembers || loadingInvites) {
+  if (teamError) {
+    return <WorkflowFetchState label="Team" error={teamError} onRetry={() => { void Promise.all([membersQuery.refetch(), invitesQuery.refetch()]); }} />;
+  }
+
+  if (!teamReady) {
     return (
       <div className="page-content" style={{ padding: 24 }}>
         <LoadingSkeleton variant="page" />

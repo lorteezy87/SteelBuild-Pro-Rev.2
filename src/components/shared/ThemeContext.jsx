@@ -97,8 +97,10 @@ function name(key) {
 
 export function ThemeProvider({ children }) {
   const [initial] = useState(() => resolveInitialTheme({
-    storage: typeof localStorage !== "undefined" ? localStorage : { getItem: () => null },
-    matchMedia: typeof window !== "undefined" ? window.matchMedia.bind(window) : undefined,
+    // Defer accessing the storage getter until readStoredTheme's try/catch.
+    // Browsers can deny the window.localStorage property itself.
+    storage: { getItem: (key) => localStorage.getItem(key) },
+    // readSystemTheme guards both matchMedia access and invocation.
   }));
   const [theme,     setThemeState]     = useState(initial.theme);
   const [themeSource, setThemeSource]  = useState(initial.source);

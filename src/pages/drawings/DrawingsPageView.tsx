@@ -1,3 +1,4 @@
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import type { ComponentType } from "react";
 import type { RowWithAliases } from "@/api/supabaseClient";
 import type { Drawing } from "@/hooks/useDrawings";
@@ -81,6 +82,10 @@ export default function DrawingsPageView({
         </p>
       </div>
     );
+  }
+
+  if (data.queryError || data.isLoading) {
+    return <WorkflowFetchState label="Drawings" error={data.queryError} onRetry={() => { void data.refetch(); }} />;
   }
 
   const openSheetEditor = (drawing: Drawing) => {

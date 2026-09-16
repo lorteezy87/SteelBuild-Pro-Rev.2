@@ -7872,6 +7872,47 @@ export type Database = {
             } & "Could not choose the best candidate function between: public.add_updated_at_trigger(tbl => text), public.add_updated_at_trigger(tbl => regclass). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
       create_project: { Args: { project_data: Json }; Returns: Json }
+      create_expense: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["expenses"]["Row"]
+      }
+      generate_pay_application: {
+        // public.pay_applications is not in the generated Tables (see
+        // src/lib/payapp/repository.ts), so the row comes back as Json and that
+        // module's typed signatures enforce the shape.
+        Args: { p_project_id: string; p_period_from: string | null; p_period_to: string | null; p_notes?: string | null }
+        Returns: Json
+      }
+      move_pay_application: {
+        Args: {
+          p_id: string
+          p_status: string
+          p_notes?: string | null
+          p_actor?: string | null
+          p_date?: string | null
+        }
+        Returns: Json
+      }
+      refresh_pay_application_totals: { Args: { p_id: string }; Returns: undefined }
+      create_backcharge: {
+        // public.backcharges is not in the generated Tables yet (see
+        // src/lib/backcharge/repository.ts), so the row comes back as Json and
+        // that module's typed signatures enforce the shape.
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Json
+      }
+      create_change_order: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["change_orders"]["Row"]
+      }
+      create_change_request: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["change_requests"]["Row"]
+      }
+      create_delivery: {
+        Args: { p_project_id: string; p_payload: Json }
+        Returns: Database["public"]["Tables"]["deliveries"]["Row"]
+      }
       create_sov_item: {
         Args: { p_project_id: string; p_payload: Json }
         Returns: Database["public"]["Tables"]["sov_items"]["Row"]

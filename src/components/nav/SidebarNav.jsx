@@ -48,6 +48,11 @@ const MAX_RECENTS    = 4;
 function loadRailState() {
   try { return localStorage.getItem(RAIL_LS_KEY) === "1"; } catch { return false; }
 }
+function initialRailState(mode) {
+  if (mode === "rail") return true;
+  if (mode === "expanded") return false;
+  return loadRailState();
+}
 function saveRailState(v) {
   try { localStorage.setItem(RAIL_LS_KEY, v ? "1" : "0"); } catch { /* noop */ }
 }
@@ -91,17 +96,18 @@ export default function SidebarNav({
   const [collapsed, setCollapsed] = useState(() =>
     createInitialCollapseState(SIDEBAR_GROUPS, !isLightTheme)
   );
-  const [railModeState, setRailMode] = useState(loadRailState);
+  const [railModeState, setRailMode] = useState(() => initialRailState(sidebar_mode));
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
   const [legacyFavorites, setLegacyFavorites] = useState(loadFavorites);
   const legacyMigrationStarted = React.useRef(false);
-  const preferredRail = sidebar_mode === "rail"
-    ? true
-    : sidebar_mode === "expanded"
-      ? false
-      : railModeState;
-  const railMode = forceRail ? true : preferredRail;
+  // Sidebar Start Mode sets the initial choice and applies Settings changes.
+  // A manual toggle remains available until the next mount/preference change;
+  // remember mode reads that choice from the existing local storage key.
+  useEffect(() => {
+    setRailMode(initialRailState(sidebar_mode));
+  }, [sidebar_mode]);
+  const railMode = forceRail || railModeState;
   const favorites = useMemo(
     () => mergeLegacyFavorites(pinned_modules || [], legacyFavorites),
     [pinned_modules, legacyFavorites],
@@ -213,6 +219,8 @@ export default function SidebarNav({
         currentPageName={currentPageName}
         onNavigate={onNavigate}
         forceRail={forceRail}
+        collapsed={railMode}
+        onToggleCollapsed={toggleRail}
       />
     );
   }
@@ -561,12 +569,10 @@ export default function SidebarNav({
   );
 }
 
-function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = false }) {
-  const [collapsed, setCollapsed] = useState(false);
+function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = false, collapsed, onToggleCollapsed }) {
   // Per-category collapse, persisted in the shared sidebar group state
   // (localStorage "sbp-nav-groups"). A missing/falsy entry means expanded.
   const [groupCollapsed, setGroupCollapsed] = useState(loadSidebarState);
-  const effectiveCollapsed = forceRail || collapsed;
   const { isPageVisible } = useModuleAccess();
   const visibleGroups = useMemo(
     () => filterVisibleSidebarGroups(SIDEBAR_GROUPS, isPageVisible),
@@ -601,7 +607,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
   };
 
   return (
-    <aside aria-label="Dashboard navigation" className={`sb-dashboard-reference-sidebar${effectiveCollapsed ? " is-collapsed" : ""}`}>
+    <aside aria-label="Dashboard navigation" className={`sb-dashboard-reference-sidebar${collapsed ? " is-collapsed" : ""}`}>
       <button
         type="button"
         className="sb-dashboard-reference-brand"
@@ -617,7 +623,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
           // sidebar which pins OVERVIEW open — so ignore group.collapsible.
           const isGroupCollapsed = !!groupCollapsed[group.label];
           // In rail (icon-only) mode show every item; headers are hidden via CSS.
-          const showItems = effectiveCollapsed || !isGroupCollapsed;
+          const showItems = collapsed || !isGroupCollapsed;
           return (
             <div key={group.label} className="sb-dashboard-reference-group">
               <button
@@ -649,7 +655,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
             type="button"
             className="sb-dashboard-reference-nav__item"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            onClick={() => setCollapsed((value) => !value)}
+            onClick={onToggleCollapsed}
           >
             {collapsed ? <ChevronsRight size={17} strokeWidth={1.85} /> : <ChevronsLeft size={17} strokeWidth={1.85} />}
             <span>{collapsed ? "Expand" : "Collapse"}</span>

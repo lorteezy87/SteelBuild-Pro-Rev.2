@@ -127,6 +127,196 @@ log). These are what is left.
   `ui/dialog` primitive has 17 importers, so this is a repo-wide decision); and
   "Run AI deep-dive →" renders unconditionally while its handler is flag-gated.
 
+### Scheduling module — audit remainder, Batch 5 (2026-09-15)
+
+From `docs/audits/SCHEDULE_MODULE_AUDIT_2026-09-08.md` §8. Batches 1–4 are
+merged — Batch 1 `#311`, Batch 2 `#316`, Batch 3 `#319`, Batch 4 `#322` (the
+audit itself is `#308`); §8 items 19–26 are what is left.
+Verified against `origin/main@d6d2d79b` on 2026-09-15 — the audit's own wording
+is a week old and some of it has already moved.
+
+**Before starting any of this, re-measure.** The audit's census was 427
+`schedule_tasks` rows. The table now holds **28 rows across 4 projects, all
+created on or after 2026-09-08** — it was repopulated during the week's drift
+repair, so every row-count in the audit is stale and none of the "N production
+rows" evidence can be quoted as current.
+
+- **Re-importing a schedule duplicates it (§5.1, item 19).** The only item here
+  that corrupts data. `commitImportedScheduleTasks`
+  (`src/pages/schedule/commitImportedTasks.ts`) calls `ScheduleTask.create` for
+  every parsed row unconditionally; its `existingTasks` argument feeds only the
+  running WBS snapshot, never a match. Import the same MPP/CSV twice and the
+  project carries two of everything, with the second copy's `uid → id` map
+  silently rewiring the dependency links. This is the same shape as the model
+  roster importer already called out in CLAUDE.md (fixed `0d88e7b7`). Needs
+  match-on-`uid`/`wbs_code`, update-instead-of-insert, and a preview showing
+  create/update/skip counts.
+
+- **CSV import can bind a baseline date as the live date (§5.2, item 20).**
+  `COLUMN_ALIASES` in `src/lib/importScheduleCsv.ts` lists `"baseline start"`
+  among the `start_date` aliases and `"baseline finish"` among the finish
+  aliases, and the binder takes the **first alias hit in column order** with no
+  exact-match-first pass. A P6 export carrying both `Start` and `Baseline Start`
+  binds whichever appears first. Needs exact-match binding before the alias
+  fallback.
+
+- **`buildTreeOrder` has no cycle guard (§2.8, item 25).** Still no `visited`
+  set in `src/components/schedule/scheduleTree.js`. A parent cycle in
+  `parent_task_id` hangs the render. `20260626041744_prevent_schedule_task_cycle.sql`
+  guards the database, so this is defence-in-depth against imported or
+  hand-edited data, not a live hang.
+
+- **URL state is half-wired (§3.3, item 23).** `?phase=` is read
+  (`Schedule.tsx:38`, via `normalizeSchedulePhase`), but `?view=` is not, so the
+  tab a user shares in a link is lost. `ViewTabs.tsx` still has no `role="tab"`
+  or `aria-selected` — the tab strip is unreachable by keyboard semantics.
+
+- **IA consolidation needs re-scoping before it is worth doing (§3.1/§3.2,
+  items 21–22).** The audit asked for one SCHEDULE nav entry with Crew
+  Scheduling as a Hub tab, but "Crew Scheduling" has since become
+  `src/pages/ResourceScheduling.tsx`, so the finding's wording no longer matches
+  the app. The standalone `src/pages/LookAheadSchedule.jsx` does still exist
+  alongside the Schedule page's own lookahead view. Re-survey the nav before
+  acting on the audit's text.
+
+- **Dead-code sweep is partly moot (§6.2, item 24).** The delivery overlay is
+  already gone; `expandedTask` and `void view` each survive in one file. Small,
+  and worth folding into whichever batch-5 PR touches those files rather than
+  doing alone.
+
+- **Item 26 (regenerate `src/types/supabase.ts`) is done** — regenerated
+  2026-09-14, the same day as the newest migration. It goes stale on every
+  schema change, so re-check rather than assume.
+
+### 219 of 351 production functions cannot be rebuilt from this repo (2026-09-15)
+
+Found while trying to capture the four functions the Supabase drift runbook names
+as undocumented. The gap is far wider than four, and it includes the fab-release
+gate — the P0 path.
+
+**Captured, not guessed.** `supabase/_capture/production-public-functions-2026-09-15.sql`
+now holds all 171 definitions verbatim, pulled through the Supabase MCP with
+`pg_get_functiondef()` and verified byte-for-byte against md5s computed by the
+database itself. It is a **reference dump, not a replayable migration** — ordered
+by oid, never replayed against an empty Postgres. See `supabase/_capture/README.md`.
+
+**The counts, verified rather than sampled:**
+
+| | count |
+|---|---|
+| Live in `public`, extension-owned excluded | **351** (350 distinct names; `add_updated_at_trigger` is the one overload) |
+| **Defined by no migration anywhere in the repo** (captured) | **171** |
+| └ of those, `SECURITY DEFINER` | 86 |
+| └ of those, wired to a live trigger | 65 |
+| **Defined by a migration, but production's body differs from every repo version** (not captured) | **48** |
+| Defined by a migration and production matches | 132 |
+| Defined in a migration but missing from production | 0 |
+
+So the repo reproduces **132 of 351** function bodies, not 180. Two revisions of
+this entry were wrong before this one: "~86" came from a 140-function sample and
+is really the `SECURITY DEFINER` subset; "171" counted only the functions no
+migration *defines by name* and missed the 48 that a migration defines while
+production runs something else.
+
+**The 48 are the worse half.** A missing function announces itself; a drifted one
+does not. They include the core RLS helpers — `user_has_project_access`,
+`user_has_project_role_at_least`, `user_is_system_admin`, `user_is_org_admin`,
+`user_org_role_at_least`, `get_my_project_role` — and the P0 fab-release path:
+`enforce_fab_release_gate`, `evaluate_release_gate`,
+`piece_control_drawing_is_approved`. Replaying the repo over production would
+silently *revert* all 48. They are listed in
+`supabase/_capture/DRIFTED-FUNCTIONS-2026-09-15.md`.
+
+**Mostly they are the sibling app's.** `SteelBuild-Pro-2026` shares this
+production Supabase project, so its migrations land in the same database and
+Rev.2's history never records them. `20260914120000_adopt_production_soft_delete_project.sql`
+says so outright — production ran the sibling's definition from *its* ledger entry
+`20260909014620` — and is the worked example of clearing one: copy the sibling
+file byte for byte, confirm the body md5 matches production, adopt. That migration
+is why this count is 48 and not the 49 first measured. So the question behind most
+of these is not "who edited production" but "which repo owns this function", which
+CLAUDE.md records as still undecided.
+
+**Measure this with line endings normalised.** Production stores some bodies with
+CRLF and the repo's `* text=auto` rewrites the checked-in copy to LF, so a raw
+md5 comparison reports drift where the SQL is identical. That is not theoretical:
+it is why `work_packages_soft_delete_unassign_pieces` was recorded as diverged in
+the ownership manifest for a day — the two bodies differ by exactly 55 CR bytes
+and nothing else. Compare `md5(replace(prosrc, chr(13), ''))` against a
+CR-stripped repo body. The same `* text=auto` rule silently corrupted the capture
+file on its first commit, which is why `supabase/_capture/** -text` exists.
+
+**A reset does not merely drift — it fails.** Two migrations `ALTER` a function
+that no migration `CREATE`s:
+
+- `20260911062832_pin_workflow_helper_search_paths.sql` → `submittal_derived_stage`
+- `20260914020000_revoke_internal_helper_execute_from_authenticated.sql` → `erase_my_account`
+
+**Why it matters.** These are not helpers. The list includes `create_rfi`,
+`answer_rfi`, `close_rfi`, `void_rfi`, `create_submittal`, `create_change_order`,
+`create_work_package`, `generate_pay_application`, `release_package_for_fabrication`,
+`ops_snapshot`, and the whole fab-release gate chain. Production is fine; what
+cannot be done today is rebuild a staging or preview environment that behaves
+like it, or review a change to a function whose current text lives only in the
+database.
+
+**The gate's chain, as an example of the shape.** Each layer pulls in another
+missing leaf:
+
+```
+evaluate_release_gate                 (missing)
+  └─ work_package_drawing_set_reports (missing)
+       └─ evaluate_fab_release_set    (missing)
+            ├─ user_has_project_access    ✓ defined
+            ├─ fab_release_blocking_rfis  ✓ defined
+            └─ submittal_derived_stage (missing)
+                 └─ submittal_bic_class (missing)
+piece_control_drawing_is_approved     (missing)
+  └─ evaluate_fab_release_set         (missing)
+```
+
+**Do not close this by hand-writing migrations from memory.** The bodies contain
+Postgres regex word boundaries (`\m`, `\M` in `submittal_bic_class`), dollar-quoted
+blocks and CRLF line endings (the piece-control `*_impl` functions), so
+transcription risks a character-level error that produces a function which looks
+correct and behaves differently. On the fab-release path that is the worst
+possible failure mode. Promote from the capture file, which is byte-exact.
+
+**What is left to do**, cheapest first:
+
+1. **Promote in small batches** — leaf helpers with no dependencies first
+   (`submittal_bic_class`, `risk_severity`, `risk_transition_allowed`,
+   `submittal_derived_stage`), then their callers. Delete each promoted
+   definition from the capture in the same PR, so the file always answers "what
+   is still unreproducible". Promotion is what actually closes this item; the
+   capture only makes it reviewable.
+2. **Delete `_tmp_timeout_probe()`** — a live leftover diagnostic that sleeps 3
+   seconds. It is in the capture because it is in production, not because it
+   should be kept.
+3. **Keep it current.** A scheduled re-capture (the MCP path needs no database
+   password) would stop the repo from diverging silently again; the README
+   carries the one query that detects divergence.
+
+Until promotion happens, the migrations directory is not a reproducible
+description of this database, and the drift check's "inventory green" — which its
+own header already disclaims, since it compares versions and slugs rather than
+SQL — is the only assurance there is.
+
+**The drift check was deliberately red on one entry, and now is not.**
+`20260801013000` and `20260913090000` were settled on 2026-09-15 by checking
+each file against production. `20260727232000` stayed unresolved past that,
+because the owner had recorded and documented the fab-release gate's divergence
+on 2026-09-14 without yet deciding whether to port the sibling app's stricter
+gate into Rev.2 — freezing it before that decision would have turned a standing
+reminder into silence. The owner made that call on 2026-09-15 ("adopt the
+sibling app's logic as Rev.2's own"), and `20260915120000_adopt_2026_fab_release_gate.sql`
+is the port: it tracks the current live `evaluate_release_gate` /
+`evaluate_fab_release_set` / `work_package_drawing_set_reports` /
+`piece_control_drawing_is_approved`. `20260727232000` itself still must never be
+applied — its embedded bodies are the old, superseded ones — so it freezes
+rather than becoming required; the test that pins its evidence now checks for
+that resolution instead of pinning it red.
+
 ### Monetization / go-to-market
 
 - **Legal pages** — the self-serve signup needs ToS / privacy / a basic DPA to

@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
@@ -25,7 +26,6 @@ import ExpenseImportModal from "../components/expenses/ExpenseImportModal";
 import { formatCurrencyShort, roundCurrency } from "../components/shared/formatters";
 import { COST_CODES } from "../components/shared/costCodes";
 import { toast } from "sonner";
-import { getNextNumber } from "../components/shared/numberSequencing";
 // Invalidate the FULL expense family (project list + ["expenses-all"] used by
 // Dashboard/Reports + cost rollups), not just the unscoped ["expenses"] prefix.
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -67,13 +67,7 @@ export default function ExpensesPage() {
   }, [search]);
 
   /* ── Queries ── */
-  const {
-    data: expenses = [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
+  const expensesQuery = useQuery({
     queryKey: ["expenses", activeProject?.id],
     queryFn: async () => {
       if (!activeProject?.id) return [];
@@ -83,24 +77,24 @@ export default function ExpensesPage() {
     enabled: !!activeProject?.id,
   });
 
-  const { data: projects = [] } = useQuery({
+  const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
   });
 
-  const { data: sovItems = [] } = useQuery({
+  const sovQuery = useQuery({
     queryKey: ["sov-items", activeProject?.id],
     queryFn: () => (activeProject?.id ? entities.SOVItem.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
   });
 
-  const { data: workPackages = [] } = useQuery({
+  const workPackagesQuery = useQuery({
     queryKey: ["work-packages", activeProject?.id],
     queryFn: () => (activeProject?.id ? entities.WorkPackage.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
   });
 
-  const { data: costCodes = [] } = useQuery({
+  const costCodesQuery = useQuery({
     queryKey: ["cost-codes", activeProject?.id],
     queryFn: () =>
       activeProject?.id
@@ -110,18 +104,20 @@ export default function ExpensesPage() {
     enabled: !!activeProject?.id,
   });
 
+  const { data: expenses = [], isLoading, isError, error, refetch } = expensesQuery;
+  const projects = projectsQuery.data ?? [];
+  const sovItems = sovQuery.data ?? [];
+  const workPackages = workPackagesQuery.data ?? [];
+  const costCodes = costCodesQuery.data ?? [];
+  const expenseQueries = [expensesQuery, projectsQuery, sovQuery, workPackagesQuery, costCodesQuery];
+  const expenseError = expenseQueries.find((query) => query.isError)?.error ?? null;
+  const expenseLoading = expenseQueries.some((query) => query.isPending);
+
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: async (d) => {
+    mutationFn: (d) => {
       const scoped = withProjectId(d, activeProject?.id);
-      let expenseNumber;
-      try {
-        expenseNumber = await getNextNumber(scoped.project_id, "EXPENSE");
-      } catch {
-        throw new Error("Unable to reserve an expense number. Please retry.");
-      }
-      if (!expenseNumber) throw new Error("Unable to reserve an expense number. Please retry.");
-      return entities.Expense.create({ ...scoped, expense_number: expenseNumber });
+      return entities.Expense.create(scoped);
     },
     onSuccess: () => {
       invalidateEntity(qc, "expense", activeProject?.id);
@@ -435,6 +431,10 @@ export default function ExpensesPage() {
         </div>
       </div>
     );
+  }
+
+  if (expenseError || expenseLoading) {
+    return <WorkflowFetchState label="Expenses" error={expenseError} onRetry={() => { void Promise.all(expenseQueries.map((query) => query.refetch())); }} />;
   }
 
   return (

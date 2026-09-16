@@ -1,4 +1,16 @@
-import { Suspense, useEffect, useState } from "react";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
+/**
+ * DrawingSubmittalHub — Unified Drawings & Submittals command center.
+ *
+ * Three+ tabs:
+ *   Control Board / Process Board / Drawing Register (embedded) /
+ *   Submittal Register (embedded) / Approval Matrix.
+ *
+ * This is a thin orchestrator. The existing pages render inside tab panels
+ * and keep all their internal state / queries. The hub adds a unified KPI
+ * strip, a shared CommandBar with tab navigation, and the Approval Matrix.
+ */
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { Box, CalendarCog } from "lucide-react";
@@ -103,7 +115,6 @@ function DetailingControlCenter() {
   };
 
   const isLoading = controller.drawingsLoading || controller.submittalsLoading;
-
   const activeTabPanel = (
     <ErrorBoundary>
       <Suspense fallback={<LoadingSkeleton />}>
@@ -213,7 +224,9 @@ function DetailingControlCenter() {
           leadDays={activeProject?.metadata?.detailing_lead_days || {}}
           defaults={DEFAULT_LEAD_DAYS}
           saving={controller.saveLeadsMut.isPending}
-          onSave={(leads) => controller.saveLeadsMut.mutate(leads)}
+          onSave={(leads) => controller.saveLeadsMut.mutate(leads, {
+            onSuccess: (nextMetadata) => projectCtx.updateActiveProject?.({ metadata: nextMetadata }),
+          })}
           onClose={() => controller.setLeadModalOpen(false)}
         />
       )}
@@ -269,6 +282,11 @@ function DetailingControlCenter() {
       )}
     </>
   );
+
+  const workflowError = controller.workflowError;
+  if (workflowError || isLoading) {
+    return <WorkflowFetchState label="Detailing workflow" error={workflowError} onRetry={controller.refetchWorkflow} />;
+  }
 
   return (
     <>

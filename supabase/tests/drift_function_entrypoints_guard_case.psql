@@ -1,0 +1,14 @@
+-- One guard rejection case for drift_function_entrypoints.sql, which sets
+-- :guard_case and includes this file once per row of drift_guard_cases.
+-- Tampering runs with ON_ERROR_STOP on. Only the migration runs with it off,
+-- and ON_ERROR_ROLLBACK lets psql carry on past the guard's error, so
+-- LAST_ERROR_MESSAGE holds it when the savepoint is rolled back.
+\set ON_ERROR_ROLLBACK on
+\set LAST_ERROR_MESSAGE ''
+SAVEPOINT guard_case;
+CALL pg_temp.drift_tamper(:guard_case);
+\set ON_ERROR_STOP off
+\ir ../migrations/20260913201900_harden_drifted_function_entrypoints.sql
+\set ON_ERROR_STOP on
+ROLLBACK TO SAVEPOINT guard_case;
+UPDATE drift_guard_cases SET observed = :'LAST_ERROR_MESSAGE' WHERE id = :guard_case;

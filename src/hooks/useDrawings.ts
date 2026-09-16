@@ -54,7 +54,7 @@ export function useDrawings(projectId: string | null | undefined) {
   // ── Primary query ───────────────────────────────────────────────────
   const {
     data: drawings = [],
-    isLoading,
+    isPending,
     error,
     refetch,
   } = useQuery<Drawing[]>({
@@ -63,6 +63,7 @@ export function useDrawings(projectId: string | null | undefined) {
     enabled: !!projectId,
     staleTime: 60_000,
   });
+  const isLoading = !!projectId && isPending;
 
   // ── Derived: group by set name ──────────────────────────────────────
   const { drawingSets, orphanedDrawings } = useMemo(() => {

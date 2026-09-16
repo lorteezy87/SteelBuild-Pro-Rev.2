@@ -1,0 +1,72 @@
+name: Retire five reviewed deprecated Supabase functions
+
+# Manual only. This is deliberately narrower than the manifest: stripe-webhook
+# still has enabled cached Stripe endpoints and must never be deleted here.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Delete the five approved versions after source backup upload (false is dry-run)
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-retire-five-kjrwqagyeswwoxpjkcko
+  cancel-in-progress: false
+
+jobs:
+  retire:
+    if: github.repository == 'lorteezy87/SteelBuild-Pro-Rev.2' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CONFIRM_PROJECT_REF: kjrwqagyeswwoxpjkcko
+    steps:
+      # Job-level env cannot read the runner context; GitHub rejects the whole
+      # file if it tries, failing a run on every push. Set the path here instead.
+      - name: Choose the backup directory
+        run: echo "BACKUP_ROOT=$RUNNER_TEMP/supabase-retirement-backup" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Verify fail-closed retirement behavior offline
+        run: npx vitest run scripts/__tests__/supabaseRetireDeprecated.test.ts
+      - name: Inventory and download the five exact reviewed versions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/supabase-retire-deprecated.ts prepare "$BACKUP_ROOT"
+      - name: Persist complete source backups before any deletion
+        id: backup
+        uses: actions/upload-artifact@v7
+        with:
+          name: supabase-retirement-backup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BACKUP_ROOT }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Verify dry-run or apply after successful artifact upload
+        # Normal success gating is intentional: failure/skipping of the backup
+        # step cannot reach this step. No shell input or custom slug is accepted.
+        env:
+          APPLY: ${{ inputs.apply }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          BACKUP_ARTIFACT_ID: ${{ steps.backup.outputs.artifact-id }}
+          BACKUP_ARTIFACT_DIGEST: ${{ steps.backup.outputs.artifact-digest }}
+        run: node scripts/supabase-retire-deprecated.ts apply "$BACKUP_ROOT"
+      - name: Retain before and after inventory evidence even if retirement stops
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: supabase-retirement-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BACKUP_ROOT }}-inventory
+          if-no-files-found: warn
+          retention-days: 30

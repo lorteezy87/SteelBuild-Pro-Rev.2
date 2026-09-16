@@ -12,6 +12,7 @@ import AnnotationLayer from "@/components/drawings/viewer/AnnotationLayer";
 import AnnotationToolbar from "@/components/drawings/viewer/AnnotationToolbar";
 import { useMarkup } from "@/components/drawings/viewer/useMarkup";
 import { extractStoragePathFromSignedUrl } from "@/components/drawings/viewer/storageUrl";
+import { resolveFileUrl } from "@/api/supabaseClient";
 import ZoneLayer from "@/components/drawings/viewer/ZoneLayer";
 import ZonePanel from "@/components/drawings/viewer/ZonePanel";
 import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
@@ -100,6 +101,8 @@ export default function DrawingViewer() {
     handleCalibrate,
     handleNewRevision,
     handleZoneDrawComplete,
+    handleZoneUpdate,
+    handleZoneDelete,
     onCalloutClick,
     handleAnnotationClick,
     handleFitWidth,
@@ -505,18 +508,13 @@ export default function DrawingViewer() {
         userId={userId}
         onZoneUpdate={async (patch) => {
           if (!panelZoneId) return;
-          // Note: I'm using a direct call here for now; normally we'd move this to the controller
-          // but I haven't added the updateZone/deleteZone handlers to the controller yet.
-          // Actually I should add them to the controller for consistency.
-          await updateZoneSvc(panelZoneId, patch);
-          await refetchZones();
+          await handleZoneUpdate(panelZoneId, patch);
         }}
         onZoneDelete={async () => {
           if (!panelZoneId) return;
-          await deleteZoneSvc(panelZoneId);
+          await handleZoneDelete(panelZoneId);
           setPanelZoneId(null);
           setSelectedZoneId(null);
-          await refetchZones();
         }}
         onSheetNavigate={(drawingId) => {
           if (!drawingId) return;

@@ -92,20 +92,20 @@ function LocationProbe() {
 }
 
 describe("Drawings page (smoke)", () => {
-  it("renders without crashing and shows the CommandBar title", () => {
+  it("renders without crashing and shows the CommandBar title", async () => {
     renderDrawings();
-    expect(screen.getByText("Drawings & Submittals")).toBeInTheDocument();
+    expect(await screen.findByText("Drawings & Submittals")).toBeInTheDocument();
   });
 
-  it("renders the page eyebrow scoped to the active project", () => {
+  it("renders the page eyebrow scoped to the active project", async () => {
     renderDrawings();
     // Eyebrow text is `DESIGN & DOCUMENTS · TEST PROJECT`
-    expect(screen.getByText(/DESIGN & DOCUMENTS/)).toBeInTheDocument();
+    expect(await screen.findByText(/DESIGN & DOCUMENTS/)).toBeInTheDocument();
   });
 
-  it("sends 'Back to the Hub' to the Detailing Control Center's Drawing Register", () => {
+  it("sends 'Back to the Hub' to the Detailing Control Center's Drawing Register", async () => {
     renderDrawings();
-    fireEvent.click(screen.getByRole("button", { name: /Back to the Hub/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Back to the Hub/ }));
     expect(screen.getByTestId("location").textContent).toBe("/DrawingSubmittalHub?hub_tab=drawings");
   });
 });

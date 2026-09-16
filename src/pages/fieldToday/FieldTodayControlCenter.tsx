@@ -110,6 +110,10 @@ export interface FieldTodayControlCenterProps {
   /** From useFieldOutbox */
   pendingSync: number;
   isLoading: boolean;
+  /** A failed/paused refresh may still provide cached task rows for offline progress. */
+  tasksUnavailable?: boolean;
+  photosUnavailable?: boolean;
+  punchItemsUnavailable?: boolean;
   search: string;
   onSearch: (v: string) => void;
   statusFilter: string;
@@ -151,7 +155,9 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
     pendingSync, isLoading, search, onSearch, statusFilter, onStatusFilter,
     onSetProgress, onAddPunch, onAddPhoto, onDailyLog, onFlushOutbox,
     savingTaskId, uploadingPhoto,
+    tasksUnavailable = false, photosUnavailable = false, punchItemsUnavailable = false,
   } = props;
+  const taskEvidenceMissing = isLoading || tasksUnavailable;
 
   useCommandSkin();
 
@@ -168,9 +174,9 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
 
   // ── Hero summary chips ──
   const chips = [
-    { label: `${s.kpis.todaysTasks} Tasks` },
-    { label: `${s.kpis.recoveryTasks} Recovery`, tone: s.kpis.recoveryTasks ? "danger" as const : "neutral" as const },
-    { label: `${s.kpis.photosToday} Photos Today` },
+    { label: taskEvidenceMissing ? "Tasks unavailable" : `${s.kpis.todaysTasks} Tasks` },
+    { label: taskEvidenceMissing ? "Recovery unavailable" : `${s.kpis.recoveryTasks} Recovery`, tone: !taskEvidenceMissing && s.kpis.recoveryTasks ? "danger" as const : "neutral" as const },
+    { label: photosUnavailable ? "Photos unavailable" : `${s.kpis.photosToday} Photos Today` },
   ];
 
   // ── KPI strip ──
@@ -183,16 +189,16 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
   const kpiCells: KpiCellDef[] = [
     {
       label: "Today's Tasks",
-      value: s.kpis.todaysTasks,
-      sublabel: "due or active today",
+      value: taskEvidenceMissing ? "—" : s.kpis.todaysTasks,
+      sublabel: taskEvidenceMissing ? "current total unavailable" : "due or active today",
       tone: "neutral" as KpiTone,
       Icon: CalendarCheck,
     },
     {
       label: "Recovery",
-      value: s.kpis.recoveryTasks,
-      sublabel: "overdue tasks",
-      tone: (s.kpis.recoveryTasks > 0 ? "danger" : "neutral") as KpiTone,
+      value: taskEvidenceMissing ? "—" : s.kpis.recoveryTasks,
+      sublabel: taskEvidenceMissing ? "current total unavailable" : "overdue tasks",
+      tone: (!taskEvidenceMissing && s.kpis.recoveryTasks > 0 ? "danger" : "neutral") as KpiTone,
       Icon: AlertTriangle,
     },
     {
@@ -204,15 +210,15 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
     },
     {
       label: "Open Punch Items",
-      value: s.kpis.openPunchItems,
-      sublabel: "items",
-      tone: (s.kpis.openPunchItems > 0 ? "warn" : "neutral") as KpiTone,
+      value: punchItemsUnavailable ? "—" : s.kpis.openPunchItems,
+      sublabel: punchItemsUnavailable ? "current total unavailable" : "items",
+      tone: (!punchItemsUnavailable && s.kpis.openPunchItems > 0 ? "warn" : "neutral") as KpiTone,
       Icon: ClipboardCheck,
     },
     {
       label: "Photos Today",
-      value: s.kpis.photosToday,
-      sublabel: "captured",
+      value: photosUnavailable ? "—" : s.kpis.photosToday,
+      sublabel: photosUnavailable ? "current total unavailable" : "captured",
       tone: "neutral" as KpiTone,
       Icon: Camera,
     },
@@ -288,7 +294,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           {isLoading ? (
             <div className="cmd-row__meta">Loading tasks…</div>
           ) : s.planRows.length === 0 ? (
-            <div className="cmd-row__meta">No open tasks for today.</div>
+            <div className="cmd-row__meta">{tasksUnavailable ? "Task records unavailable." : "No open tasks for today."}</div>
           ) : (
             s.planRows.map((row) => {
               const bucket = row.urgencyBucket;
@@ -357,7 +363,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           {isLoading ? (
             <div className="cmd-row__meta">Loading recovery work…</div>
           ) : s.recoveryRows.length === 0 ? (
-            <div className="cmd-row__meta">No overdue schedule tasks.</div>
+            <div className="cmd-row__meta">{tasksUnavailable ? "Recovery records unavailable." : "No overdue schedule tasks."}</div>
           ) : (
             <div style={{ maxHeight: 360, overflowY: "auto", overscrollBehavior: "contain" }}>
               {s.recoveryRows.map((row) => (
@@ -375,7 +381,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
               ))}
             </div>
           )}
-          {(s.planningGapCount > 0 || s.upcomingCount > 0) && (
+          {!taskEvidenceMissing && (s.planningGapCount > 0 || s.upcomingCount > 0) && (
             <div className="cmd-row__meta" style={{ marginTop: 8 }}>
               {s.planningGapCount} planning gap{s.planningGapCount === 1 ? "" : "s"} · {s.upcomingCount} starting within 7 days
             </div>
@@ -388,7 +394,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           onViewAll={navigation.showTaskTable}
         >
           {/* Progress ring (inline SVG, real value: today's average progress) */}
-          <div
+          {taskEvidenceMissing ? <div className="cmd-row__meta">Plan progress unavailable.</div> : <div
             style={{
               display: "flex",
               alignItems: "center",
@@ -418,7 +424,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
                 Average across {s.kpis.todaysTasks} task{s.kpis.todaysTasks === 1 ? "" : "s"}
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* Open punch items */}
           <div
@@ -434,7 +440,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           >
             Open Punch Items
           </div>
-          {s.openPunchRows.length === 0 ? (
+          {punchItemsUnavailable ? <div className="cmd-row__meta">Punch records unavailable.</div> : s.openPunchRows.length === 0 ? (
             <div className="cmd-row__meta">No open punch items.</div>
           ) : (
             s.openPunchRows.map((p) => (
@@ -466,7 +472,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
           title="Daily Photos"
           onViewAll={navigation.showDailyPhotos}
         >
-          {s.photoThumbnails.length === 0 ? (
+          {photosUnavailable ? <div className="cmd-row__meta">Photo records unavailable.</div> : s.photoThumbnails.length === 0 ? (
             <div
               style={{
                 display: "flex",
@@ -552,11 +558,11 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
       />
 
       <div ref={navigation.tableRef}>
-        <FieldTodayTaskTable
+        {taskEvidenceMissing && s.tableRows.length === 0 ? <div className="cmd-row__meta">Task records unavailable.</div> : <FieldTodayTaskTable
           rows={filtered}
           savingTaskId={savingTaskId}
           onSetProgress={onSetProgress}
-        />
+        />}
       </div>
     </div>
   );

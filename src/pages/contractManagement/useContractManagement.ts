@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
@@ -40,6 +40,13 @@ export function useContractManagement(projectId: string | null | undefined) {
   const [deleteSOVTarget, setDeleteSOVTarget] = useState<ContractSovItem | null>(null);
   const [editingContract, setEditingContract] = useState(false);
   const [contractForm, setContractForm] = useState<ContractEditForm>({});
+
+  // This hook survives project selection changes. A draft belongs only to
+  // the project whose contract was opened, never the next selected project.
+  useEffect(() => {
+    setEditingContract(false);
+    setContractForm({});
+  }, [projectId]);
 
   const projectQuery = useQuery({
     queryKey: getQueryKey("project", projectId),

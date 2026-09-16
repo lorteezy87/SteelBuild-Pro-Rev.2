@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "projectRef": "kjrwqagyeswwoxpjkcko",
-  "reviewedAt": "2026-09-12",
+  "reviewedAt": "2026-09-15",
   "local": {
     "owner": "lorteezy87/SteelBuild-Pro-Rev.2",
     "migrationLifecycle": "required",
@@ -9,8 +9,8 @@
     "functionOverrides": [
       {
         "slug": "account-delete",
-        "lifecycle": "intentionally-frozen",
-        "evidence": "docs/PHASE_0_AGENT_HANDOFF.md and migrations 20260912034015/20260912055243/20260912062606: owner release and rollback evidence remain required before deployment"
+        "lifecycle": "required",
+        "evidence": "Deployed 2026-09-15 on the owner's explicit instruction (verify_jwt: true), superseding docs/PHASE_0_AGENT_HANDOFF.md's earlier 'keep frozen pending owner release' hold - that release is this instruction. Pre-deploy, confirmed hard_delete_organization (the RPC it calls) still carries the 20260912055243/20260912062606 fixes and its own ARCHIVE_FIRST guard against erasing an org with any live project. This activates DangerZone.jsx and DeleteAccountZone.jsx for real; see PR referencing 20260915100000 for the erase_my_account finding made during this deploy."
       },
       {
         "slug": "legacy-app-files-copy",
@@ -21,6 +21,193 @@
         "slug": "staging-e2e-bootstrap",
         "lifecycle": "staging-only",
         "evidence": "docs/runbooks/staging-e2e-automation.md: hard-locked one-time staging fixture bootstrap"
+      }
+    ],
+    "migrationOverrides": [
+      {
+        "version": "20260913084700",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "MUST NOT BE APPLIED. Its create_expense() half is already live in production (verified 2026-09-14 by the 'Not authorized to log expenses for this project' marker in the live body), but it also drops every trigger on public.expenses and installs a create-only guard, enforce_expense_rpc_create, which is absent from production. Production instead carries trg_a_enforce_expense_guards -> enforce_expense_guards, which is strictly stronger: it enforces the same RPC-only insert rule ('Use create_expense() - expense numbers are minted there') plus project_id and expense_number immutability, status and stamp routing through move_expense(), an approved-expense freeze, a field-edit restriction, delete restrictions, and transition validation via expense_transition_allowed. Applying this file would tear all of that out. Superseded, not pending. QUARANTINED 2026-09-14: moved to supabase/migrations_quarantine/20260913084700_expense_atomic_creation.sql, outside every runner's glob, because an override silences the drift report but is not read by the Supabase CLI or the branching runner - a staging branch would have executed it and replaced the live guards."
+      },
+      {
+        "version": "20260727224500",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers against the live catalog: 6 of 6 durable effects present, including the piece_events_event_type_check constraint carrying this file's added value attributes_updated (live definition is a superset, not a gap), and both bulk_update_piece_attributes bodies. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260728040000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers against the live catalog, including the 500-lot cap marker in advance_piece_stations_impl. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260728053000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers; live link_model_elements_to_pieces carries this version's authorization message and link_model_elements_to_pieces_page exists. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260731003000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers; trg_pieces_projection_after_change present on public.pieces. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260801120000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers. Note this file, not 20260801013000, is the tracked definer of link_unlinked_model_elements_for_piece. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260802010000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers; live piece_control_pilot_readiness is drawing-set aware as this file defines. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260805030000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers, who each recounted the DO block table array at exactly 34 elements and confirmed every iteration landed: no surviving policy anywhere permits project_id IS NULL. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260805030100",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 14 of 14 effects, including the three trigger-function EXECUTE revokes (audit_log_trigger, enforce_drawing_set_unlock_role, enforce_user_projects_membership_identity all authenticated=false). Ledger holds no row for this version."
+      },
+      {
+        "version": "20260805100000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers; daily_logs.materials_received present. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260809223000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers; all three drawing_impacts role-floor policies present as RESTRICTIVE. The second reviewer closed the first reviewer's open provenance caveat about the later 20260913201853 producing a byte-identical end state. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260810053816",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 7 of 7 effects across 8 statements, including list_drawing_impact_assignees and the enforce_drawing_impact_assignee_membership trigger. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260813120000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied to production under restamped ledger version 20260817072554; this file is byte-identical to the recorded payload at 41049 bytes. Verified 2026-09-14 by two independent reviewers, the second mechanically re-deriving all 119 durable statements (5 CREATE TABLE, 6 CREATE INDEX, 19 functions, policies, comments) and confirming each live. Applying is unnecessary; the filename version will never appear in the ledger."
+      },
+      {
+        "version": "20260818233000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 5 of 5 effects; production_notes.date_noted and date_due present. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260818240000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers; drawing_sets.titleblock_revision_rect present. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260819001000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 9 of 9 effects, including organizations.member_default_project_role and the current bodies of user_has_project_access, user_has_project_role_at_least and get_my_project_role. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260819002000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 5 of 5 effects including both alert generators and the cron schedule. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260819003000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 4 of 4 effects. The file defines only apply_project_template and creates no project_workflow_templates table despite its filename, so the absence of such a table is not a gap. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260825140000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers; submittals.approver_notes present. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260905090000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 5 of 5 effects; live sync_production_stages_to_pieces_impl carries this version's authorization message. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260905130000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers across a 755-line file: 9 of 9 effects, the second reviewer additionally closing two gaps the first left open. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260908130000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 7 of 7 effects; schedule_tasks.actual_start_date and actual_finish_date present. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260908150000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 4 of 4 effects; live record_planner_action_event carries this version's field-access message. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260908160000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current for all durable objects. Verified 2026-09-14 by two independent reviewers: 4 durable objects present including trg_schedule_task_duration_sync. Its two one-off UPDATE repairs cannot be attributed to this migration specifically, but the invariant they establish holds live. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260908170000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Verified 2026-09-14 by two independent reviewers: 20 of 20 effects; project_calendars present. The second reviewer confirmed the high-risk statement classes are genuinely absent from the file (no CREATE OR REPLACE FUNCTION, no GRANT, no REVOKE, no DO block). Ledger holds no row for this version."
+      },
+      {
+        "version": "20260727232000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "RESOLVED 2026-09-15 - MUST NEVER BE APPLIED, permanently frozen, not pending. OWNER DECISION 2026-09-14: record and document. It is recorded as a repair row, with no SQL run, by the 2026-09-14 ledger reconciliation (docs/runbooks/supabase-ledger-reconciliation-2026-09-14.md). At that point production kept the sibling app's stricter gate and porting it into Rev.2 was a separate, undecided product task, so this was recorded unresolved rather than silently allowlisted. Most objects are present and byte-exact (link_piece_drawing_set md5 5e34a3f19acfab5164116e05709284b9, unlink 150f300f38f28bfd5189dcd7dd44eb87, the piece_drawing_sets table, its policy and its grants). But the fab-release gate had diverged: live evaluate_release_gate md5 c4d43eb981ea9bc43d096708e6e1b541 (10622 bytes) is NOT this file (d146c39a174e65f9c4924df665d8332d, 11524 bytes), and no repo migration redefined it, so this file was the tracked head while the live body was undocumented drift. The live gate delegates to work_package_drawing_set_reports(uuid), which then calls evaluate_fab_release_set(uuid,uuid). piece_control_drawing_is_approved had also drifted from a tracked SECURITY INVOKER per-sheet predicate to a 327-char SECURITY DEFINER set-level delegate, a privilege-level change. The divergence was bidirectional: applying this file would DELETE live blockers from the P0 path (open_rfis, active_holds, superseded sheets, no_file) and change the output keys two live callers consume (release_work_package_canonical_impl, piece_control_pilot_readiness). QUARANTINED 2026-09-14: moved to supabase/migrations_quarantine/20260727232000_piece_drawing_sets.sql so no runner can apply it while the lineage was open. OWNER DECISION 2026-09-15: adopt the sibling app's fab-release-gate logic as Rev.2's own - see 20260915120000, which now tracks the current live evaluate_release_gate/evaluate_fab_release_set/work_package_drawing_set_reports/piece_control_drawing_is_approved (the SECURITY DEFINER privilege change noted above included, since it was already live and that migration only tracks reality, not a new grant). That is the product task this entry was waiting on, and it is done: the lineage question is answered, not just recorded. This file's own embedded evaluate_release_gate/piece_control_drawing_is_approved remain the OLD, superseded bodies and must never be applied - the divergence and P0-blocker-deletion risk described above is permanent and will never be closed by applying this file, which is why it freezes here rather than becoming required or being unquarantined. Verified against production 2026-09-15 (not a marker match): this version has no row in supabase_migrations.schema_migrations. 20260915120000 is the adoption; this version is not, and never will be."
+      },
+      {
+        "version": "20260801013000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "RESOLVED 2026-09-15 - effects accounted for; do not stamp, and do not apply. Not in supabase_migrations.schema_migrations (checked against production 2026-09-15). All three of this file's functions are explained by md5 against live rather than by marker matching: (1) refresh_work_package_progress - live f37f50a4986852bbb436f6cdd80e06da (6858 chars) is an EXACT match for the later tracked migration 20260905130000_work_package_control_center.sql, so its difference from this file is a later migration overwriting it, not drift; the earlier note citing it as evidence of an unapplied file was mistaken. (2) work_packages_soft_delete_unassign_pieces - semantically IDENTICAL to this file; the apparent md5 difference was 55 CR bytes, because production stores the body CRLF and the repo's `* text=auto` normalises the checked-in file to LF. (3) soft_delete_project - a real difference, and production is the newer and safer side: live 6ac048fb85527ad236dadeda8db85530 (1487 chars) guards the dynamic child-table UPDATE with `if to_regclass('public.' || v_table) is not null then`, which this file's body (5dc9d55d222159c0be0cc28a6ba006b7, 1555 chars) lacks. That divergence is now CLOSED on the replay path by 20260914120000_adopt_production_soft_delete_project.sql, which adopts production's body and, being a later version, wins over this file on a fresh reset - so this file is harmless to replay and simply must not be stamped. That migration also names the provenance this entry could not: production runs the SIBLING APP's definition (SteelBuild-Pro-2026, its ledger 20260909014620 m2_projects_and_project_rbac), which is the general explanation for bodies in this shared database that no Rev.2 migration carries. The file stays in supabase/migrations/ rather than being quarantined, because its work_packages_soft_delete_unassign_pieces body IS production's and is the only definition of it on the replay path."
+      },
+      {
+        "version": "20260913090000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "RESOLVED 2026-09-15 - applied to production under other version stamps; safe, and required on the replay path. Not in supabase_migrations.schema_migrations, but all seven of this file's durable effects are verified present in production: drawing_transmittal_items.drawing_id and .gc_drawing_id both exist, drawing_revision_id is nullable, drawing_transmittal_items_drawing_id_fkey exists, drawing_transmittal_items_one_target exists with convalidated=true, and both idx_drawing_transmittal_items_drawing_id and idx_drawing_transmittal_items_gc_drawing_id exist. Every statement in the file is idempotent (add column if not exists / drop constraint if exists then add / create index if not exists), so applying it against production is a proven no-op - which is why the earlier finding that its durable effects are attributable to two OTHER recorded migrations does not make the file removable. It must stay in supabase/migrations/: the baseline 20260101000010_baseline_schema.sql defines drawing_transmittal_items with drawing_revision_id NOT NULL and neither new column, and 20260913201900_harden_drifted_function_entrypoints.sql creates an index ON gc_drawing_id, so a fresh reset without this file fails. Frozen rather than required because it will never be stamped under this version."
+      },
+      {
+        "version": "20260817020000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "PURE DATA REPAIR, PERMANENTLY UNVERIFIABLE, AND MUST NOT BE STAMPED. Zero DDL: its whole effect is 3 guarded row repairs in 2 UPDATEs. All three target rows are physically gone - guard project 9a085b09-df23-41d1-b0ab-55e2a04537f0 (BIMC ED Expansion, 26179) was hard-deleted 2026-09-12 via reset_org_data, along with the 3330 audit rows covering them. Both reviewers confirmed no evidence channel survives: data_erasure_log.storage_prefix is a deletion glob not an export, pma_audit_logs begins 2026-09-08 (three weeks after), ai_audit_log is empty. Decisively, stamping would CORRUPT the ledger: recorded version 20260817083550 already holds statements semantically identical to this file (631 chars, md5 1feff4b05feecf198b6f0b044a7e5eb2, differing only in condensed comment prose), so a stamp would assert two applications of one logical migration. Frozen, not pending."
+      },
+      {
+        "version": "20260904120000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "SCHEMA APPLIED AND CURRENT; DATA REPAIR NEVER VERIFIED. Both durable objects independently proven: pieces_projection_after_change body md5 ca8dbd0cd282c812ba2cda2f910a894a at 3128 bytes matches live byte for byte (not an existence check), and trg_pieces_projection_after_change carries the two added columns in declared order with tgenabled=O. Its third effect, a one-off UPDATE, is permanently unverifiable: every row in both target tables was created AFTER this migration's date (model_elements from 2026-09-12, pieces from 2026-09-10), so the satisfied post-condition is measured against data that did not exist when the repair would have run. No live corruption exists and the trigger will handle future archives. Recorded as schema-only rather than fully applied."
+      },
+      {
+        "version": "20260908140000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "SCHEMA APPLIED AND CURRENT; DATA SEED NEVER VERIFIED. Both reviewers found NO missing schema object across 2 tables, 20 columns, 9 constraints, 7 indexes, RLS on both tables, 6 policies and 5 comments, and the second overturned the first reviewer's central reasoning in the direction of the migration having run in full. Its two one-off INSERTs (the migrated baseline row and its per-task snapshots) are not reflected and are unknowable now because the source rows they read are gone. Recorded as schema-only rather than fully applied."
+      },
+      {
+        "version": "20260913202900",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Replay-only, and it will never reach the ledger. public.schedule_tasks.is_deleted and deleted_at are already in production, added by the sibling app's m10_schedule under ledger version 20260909062929 (present in the ledger; declared 2026-owned above). This file re-declares them with ADD COLUMN IF NOT EXISTS purely so a fresh Rev.2 environment can replay 20260913203000, which watches is_deleted and otherwise fails with column new.is_deleted does not exist. Verified 2026-09-14: both columns live, this version absent from the ledger, 20260909062929 present. Against production it is a no-op, so it is not pending."
+      },
+      {
+        "version": "20260908120000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band. Verified directly against production 2026-09-14 (single reviewer, not the two-pass audit that covered the other entries here): this file's exact COMMENT ON COLUMN public.schedule_tasks.dependencies is live, and re-running the migration's own orphan query - which resolves a link through either the object id key or a bare string - returns 0 orphans across 2 live links. The file creates no trigger; prevention of new orphans is client-side by design in src/lib/schedule/predecessorCleanup.ts, wired into deleteTaskMut and bulkDeleteMut. Its repair is one-off, so re-running would be a no-op."
+      },
+      {
+        "version": "20260727053000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "DELIBERATELY NOT APPLIED - it would contradict a newer decision, and buys no security. It adds RESTRICTIVE pm role-floor policies to four authority tables. Three already enforce pm through their permissive policies (drawing_revisions and project_closeout are pm on INSERT and UPDATE; no table has a DELETE policy, so deletes are already denied), making those nine policies pure defence in depth. The fourth is a live conflict: change_requests INSERT is field, and create_change_request is SECURITY INVOKER with its own field floor and inserts directly, so RLS applies as the caller. Adding a pm restrictive policy would make that RPC fail for field users with a raw RLS violation instead of its own message. Latent today (0 users hold field; every org defaults to viewer) but it would fire the first time a field user is added. The RPC is the later decision, so field users raising a PCO is read as current intent. Whether only PMs may open a change request is a product question for the owner; if the answer is pm, apply this file AND raise create_change_request to pm together so the error stays truthful. Only email_integration_settings received these policies when this migration last ran."
+      },
+      {
+        "version": "20260914122050",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - not yet in the ledger. Re-asserts 20260914010000's revoke of link_unlinked_model_elements_for_piece from PUBLIC, anon and authenticated, then aborts unless has_function_privilege shows anon and authenticated refused and service_role kept. Written because a read-only production check on 2026-09-14 still showed authenticated=X although the ledger records 20260914010000. If production already refuses authenticated, close the PR instead of applying. Once applied and recorded as 20260914122050, move the version into the LEDGER literal in scripts/__tests__/migrationOverrides.test.ts and drop this override."
+      },
+      {
+        "version": "20260915100000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current. Revokes authenticated/anon/public EXECUTE on public.erase_my_account(text) - a second, independent self-service account-deletion RPC discovered live in production, not called anywhere in this repo and not created by any migration here (most likely a leftover from the sibling SteelBuild-Pro-2026 app sharing this database). Verified 2026-09-15 via has_function_privilege('authenticated', 'public.erase_my_account(text)', 'EXECUTE'): true before, false after, applied on the owner's explicit instruction. Ledger holds no row for this version."
+      },
+      {
+        "version": "20260915120000",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "Applied out of band and current, on the owner's explicit 2026-09-15 instruction to adopt the sibling SteelBuild-Pro-2026 app's fab-release-gate logic. Re-declares piece_events_event_type_check, piece_drawing_sets (table/indexes/trigger/RLS/grants/backfill) and link_piece_drawing_set/unlink_piece_drawing_set byte-identical to 20260727232000's already-live versions, adds submittal_derived_stage/fab_release_blocking_rfis/evaluate_fab_release_set/work_package_drawing_set_reports (new to this repo, already live) and supersedes evaluate_release_gate/piece_control_drawing_is_approved with the current live bodies. Verified via md5(pg_get_functiondef(...)) before/after against kjrwqagyeswwoxpjkcko: identical for every object except three plpgsql bodies (evaluate_fab_release_set, evaluate_release_gate, work_package_drawing_set_reports) where this session's SQL execution path silently dropped inline `--` comments from inside the function body - a documentation-only side effect with no behavioral change, called out in the migration file's own header, and confirmed stable by re-applying and re-hashing (idempotent, same hashes both times). Ledger holds no row for this version. See 20260727232000's own entry for why its embedded (older, weaker) evaluate_release_gate stays quarantined rather than being unquarantined by this adoption."
       }
     ]
   },
@@ -124,14 +311,14 @@
     {
       "version": "20260909060000",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "required",
-      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060000_m3_7_auto_archive_empty_drawing_sets.sql"
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Source version of lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060000_m3_7_auto_archive_empty_drawing_sets.sql, which production restamped on apply as 20260909062016 (declared below). This version was never applied and never will be, so it cannot be 'required'."
     },
     {
       "version": "20260909060100",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "required",
-      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060100_m2_1_scope_project_number_uniqueness_to_org.sql"
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Source version of lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909060100_m2_1_scope_project_number_uniqueness_to_org.sql, which production restamped on apply as 20260909073500 (declared below). This version was never applied and never will be, so it cannot be 'required'."
     },
     {
       "version": "20260909062016",
@@ -208,14 +395,14 @@
     {
       "version": "20260909090000",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "required",
-      "evidence": "lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909090000_m19_reset_org_data.sql"
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Source version of lorteezy87/SteelBuild-Pro-2026:supabase/migrations/20260909090000_m19_reset_org_data.sql, which production restamped on apply as 20260909090445 (declared below). This version was never applied and never will be, so it cannot be 'required'."
     },
     {
       "version": "20260909090445",
       "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "unresolved",
-      "evidence": "Lineage to sibling 20260909090000_m19_reset_org_data.sql is explicitly confirmed by Rev.2 migration 20260912042823. Production was superseded by later Rev.2 replacements, so the original body is no longer observable and bookkeeping repair remains unsafe without full replay"
+      "lifecycle": "intentionally-frozen",
+      "evidence": "Exact production ledger payload archived at supabase/migrations_external/20260909090445_m19_reset_org_data.sql, SHA-256 ae1cc33e8a33185eba25e7d6935d4cb05e7f6f178d216cfb03e551310c1cd0bd; equals sibling 20260909090000_m19_reset_org_data.sql except its final newline. Historical alias superseded by Rev.2 replacements; current body matches 20260912052502. See migrations_external/provenance.json; do not replay or rewrite the ledger"
     },
     {
       "version": "20260909091118",
@@ -279,9 +466,9 @@
     },
     {
       "version": "20260910034739",
-      "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "unresolved",
-      "evidence": "Remote hard_delete_records stamp follows committed M28 and precedes M29. Its live footprint is six functions absent from all 38 sibling migrations (hard_delete_allowlist, hard_delete_merge_counts, hard_delete_record, hard_delete_records, hard_delete_release_dependents, hard_delete_toggle_triggers) plus data_erasure_log record_kind/table_name/record_id/record_label changes; exact source is absent"
+      "owner": "shared-production/kjrwqagyeswwoxpjkcko",
+      "lifecycle": "required",
+      "evidence": "Authenticated production ledger source archived at supabase/migrations_external/20260910034739_hard_delete_records.sql, SHA-256 c9754d64671cdfc27be6871bb326777af7ff8ca25790c81dfba0f12850fabbe9. All six function bodies and data_erasure_log columns/checks/index match live structure. Original author/repository commit unproven; see migrations_external/provenance.json. Already applied; archive is not deployment input"
     },
     {
       "version": "20260910040138",
@@ -291,9 +478,9 @@
     },
     {
       "version": "20260910044641",
-      "owner": "lorteezy87/SteelBuild-Pro-2026",
-      "lifecycle": "unresolved",
-      "evidence": "Remote m30_scope_items stamp follows committed M29. Its live footprint is six scope_items columns, four guard/progress/link functions, two FKs, two checks, three indexes, prepare/guard triggers, and field-plus/access RLS absent from the Rev.2 baseline and all 38 sibling migrations; exact source is absent"
+      "owner": "shared-production/kjrwqagyeswwoxpjkcko",
+      "lifecycle": "required",
+      "evidence": "Authenticated production ledger source archived at supabase/migrations_external/20260910044641_m30_scope_items.sql, SHA-256 942871f2a0f9c04659c54d25d418eac57f4cb639505865c9779c4830d8eb29c5. Four function bodies, six columns, constraints/indexes/triggers and RLS/grants match production. Original author/repository commit unproven; see migrations_external/provenance.json. Already applied; do not rerun its data backfill"
     }
   ],
   "functions": [

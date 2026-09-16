@@ -8,7 +8,8 @@ The reviewed inventory contract is
 [`supabase/production-ownership-manifest.json`](../../supabase/production-ownership-manifest.json).
 Rev.2 migrations and functions are classified from their active source
 directories using the manifest's local defaults and function overrides.
-Production-only assets are listed individually with an owning repository,
+Production-only assets are listed individually with an owning repository or
+explicit shared-production provenance when repository authorship is unproven,
 lifecycle, and evidence. An identifier with uncertain source or lineage is
 recorded as `unresolved`; it is never silently allowlisted.
 
@@ -35,7 +36,10 @@ configuration.
 ## Updating the manifest
 
 1. Identify the authoritative source repository and exact source path or commit
-   object. Do not infer ownership from a similar table or function name.
+   object. For an original recovered from the authenticated production ledger,
+   preserve exact SQL and hashes outside active migrations and name shared
+   production as the source when repository authorship is unproven. Do not infer
+   ownership from a similar table or function name.
 2. Add or update the entry with evidence and the narrowest accurate lifecycle.
 3. Keep active Rev.2 assets in `supabase/migrations/` or
    `supabase/functions/<slug>/`; do not duplicate them in the external lists.
@@ -62,22 +66,32 @@ deprecated/staging-only functions, unknown remote assets, and unresolved
 lineage. Use saved evidence from the intended disposable environment first.
 Never feed a generated action list directly to a shell.
 
-Deprecated Edge Function deletion is derived from the same reviewed manifest.
-The helper first requires a successful remote inventory read and defaults to a
-dry run:
+Use the manual
+[`supabase-retire-deprecated.yml`](../../.github/workflows/supabase-retire-deprecated.yml)
+workflow on `main` for the five reviewed versions: `bluebeam-proxy` 24,
+`schedule-assistant` 33, `sharepoint-proxy` 27, `stripe-setup` 11, and
+`stripe-worker` 11. Run its default dry run first, inspect the source-backup
+artifact, then run with `apply=true`. The workflow verifies the fixed project,
+current inventory, exact versions, complete downloaded local dependencies, and
+backup hashes. A successful artifact upload is required before deletion. Each
+delete checks that every untargeted function remains unchanged.
 
-```bash
-npm run supabase:delete-deprecated-fns
-DRY_RUN=0 \
-  CONFIRM_DELETE_DEPRECATED_FUNCTIONS=kjrwqagyeswwoxpjkcko \
-  npm run supabase:delete-deprecated-fns
-```
+The legacy `supabase:delete-deprecated-fns` helper remains useful for dry-run
+inventory, but its apply path is blocked while `stripe-webhook` is held.
+Cached Stripe metadata lists enabled endpoints targeting that function; current
+Stripe endpoint status must be verified separately. Both `stripe-webhook` and
+the active `stripe-billing` are excluded from the five-function workflow.
+`stripe-webhook` stays deprecated in the manifest, so its unresolved retirement
+continues to fail drift rather than silently becoming acceptable.
 
-Apply mode refuses a missing/mismatched project ref or confirmation value.
-Function-list failures abort; the helper never continues from a stale fixed
-deletion list.
+Never invoke `stripe-setup`'s uninstall action: it drops shared Stripe schema
+and secrets. Retirement deletes only the reviewed Edge Function deployments.
+Backups include source and inventory metadata, not secret values or an offline
+mirror of remote imports. Download the workflow artifact for durable retention
+before its 30-day expiration; restoration must preserve the recorded entrypoint
+and JWT configuration.
 
-## Current reconciliation blockers
+## Recovered lineage and remaining reconciliation gates
 
 The two evidence-backed Rev.2 Planner migrations are restored in active
 inventory as `20260802090000_planner_action_control.sql` and
@@ -85,22 +99,29 @@ inventory as `20260802090000_planner_action_control.sql` and
 byte-identical to git objects `8e3aab6595bcc97575c2667e0dd8e3c045e9f2ef` and
 `26216f3247b0cc63dc0ff03e7f756b0f64c9b762`, respectively.
 
-The manifest intentionally remains red for these three source/lineage gaps:
+On 2026-09-13, authenticated read-only queries recovered the original SQL for
+the three previously unresolved migrations from
+`supabase_migrations.schema_migrations.statements`. Exact UTF-8 bytes, SHA-256
+hashes, server MD5 values and current function/schema comparisons are preserved
+in [`supabase/migrations_external`](../../supabase/migrations_external/README.md),
+outside the active migration directory.
 
-- `20260909090445`: lineage to sibling
-  `20260909090000_m19_reset_org_data.sql` is confirmed by Rev.2 migration
-  `20260912042823`, but later Rev.2 migrations superseded the production body.
-  It is not byte-equivalent or repair-safe without replaying the canonical
-  source and every later replacement.
-- `20260910034739` (`hard_delete_records`): ledger order places it in the
-  SteelBuild-Pro-2026 sequence. Its isolated live footprint is six
-  `hard_delete_*` functions plus `data_erasure_log` record metadata changes,
-  none present in the 38 accessible sibling migrations; exact source is absent.
-- `20260910044641` (`m30_scope_items`): ledger order places it in the
-  SteelBuild-Pro-2026 sequence. Its isolated live footprint is six
-  `scope_items` columns, four functions, two foreign keys, two checks, three
-  indexes, two triggers, and replacement field/access RLS, none present in the
-  Rev.2 baseline or 38 accessible sibling migrations; exact source is absent.
+- `20260909090445` is a frozen historical alias: its recovered reset SQL equals
+  sibling `20260909090000_m19_reset_org_data.sql` except one final newline.
+  Current production matches the later Rev.2 `20260912052502` replacement.
+  Do not rerun the old reset body or rewrite either stamp.
+- `20260910034739` (`hard_delete_records`) is required. All six recovered
+  function bodies and its `data_erasure_log` columns, checks and index match
+  production.
+- `20260910044641` (`m30_scope_items`) is required. All four recovered function
+  bodies and its columns, constraints, indexes, triggers, RLS and grants match
+  production. Do not rerun its row backfill or number-sequence updates.
+
+The latter two entries name shared-production provenance: their original
+author, repository and commit remain unproven. This does not prevent preserving
+the exact applied source. No SQL replay or ledger mutation accompanies these
+classifications; disposable replay and review remain separate prerequisites for
+any bookkeeping repair.
 
 Recovered Rev.2 lineage now includes
 `20260906040515_fix_alerts_superseded_status.sql`. The original

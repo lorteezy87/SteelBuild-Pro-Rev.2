@@ -6,7 +6,7 @@
  * per G703 line, sees the live G702 summary, and exports the AIA pay app to PDF.
  * All math via the G702 engine (src/lib/payapp) on integer-cents money.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -74,6 +74,10 @@ export default function PayApplications() {
   const [newOpen, setNewOpen] = useState(false);
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
+  useEffect(() => {
+    setSelectedId(null);
+    setNewOpen(false);
+  }, [projectId]);
 
   const {
     data: payApps = [],
@@ -123,7 +127,9 @@ export default function PayApplications() {
     mutationFn: (input) => {
       assertProjectId(projectId);
       if (!sourcesReady || !Number.isFinite(contract.netChangeOrders) || contractQuery.data?.original_contract_value == null) throw new Error("Wait for current SOV and change orders before creating an application.");
-      return createPayApplication({ projectId, ...input }, { sovItems, contract });
+      // generate_pay_application() reads the SOV and the contract server-side,
+      // so the client no longer hands them in.
+      return createPayApplication({ projectId, ...input });
     },
     onSuccess: (app) => { logActivity("pay_application", "created", app, { projectId }); refresh(); setNewOpen(false); setSelectedId(app.id); toast.success(`Pay Application #${app.application_number} created`); },
     onError: (e) => {
@@ -316,13 +322,14 @@ export default function PayApplications() {
             </div>
           </div>
         )}
-        <NewAppModal
-          open={newOpen}
+        {newOpen && <NewAppModal
+          key={projectId}
+          open
           defaultRetainage={contract.retainagePercent}
           busy={createMut.isPending}
           onClose={() => setNewOpen(false)}
           onCreate={(input) => createMut.mutate(input)}
-        />
+        />}
       </>
     );
 }

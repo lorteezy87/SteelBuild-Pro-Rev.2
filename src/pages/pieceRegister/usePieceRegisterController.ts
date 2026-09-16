@@ -75,13 +75,17 @@ import {
   IMPORT_DECISION_TONE,
   EMPTY_PIECE_REGISTER_FILTERS,
 } from "./registerHelpers";
+import { buildPieceControlSummary } from "@/lib/pieceControl/presentation";
+import { deriveOverviewWorkPackages, selectUpcomingShipments } from "./overviewDerive";
+import { toast } from "sonner";
 
 const EMPTY_FILTERS = EMPTY_PIECE_REGISTER_FILTERS;
 const EMPTY_SELECTED_PIECE_IDS = new Set<string>();
 
 export function usePieceRegisterController(
   projectId: string | undefined,
-  setPieceRegisterLocation: (patch: any) => void
+  setPieceRegisterLocation: (patch: any) => void,
+  location: { view: string; pieceId: string | null; revisionId: string | null; focus: string | null }
 ) {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -191,9 +195,42 @@ export function usePieceRegisterController(
     enabled:
       Boolean(projectId) &&
       piecesQuery.isSuccess &&
-      hasActionablePieces,
+      hasActionablePieces &&
+      (location.view === "overview" || location.view === "impact" || Boolean(selectedPieceId)),
     staleTime: 15_000,
   });
+
+  const intelligenceModel = useMemo(
+    () => intelligenceQuery.data
+      ? derivePieceIntelligence(intelligenceQuery.data, new Date())
+      : null,
+    [intelligenceQuery.data],
+  );
+
+  const selectedPieceThread = useMemo(
+    () => selectedPieceId && intelligenceQuery.data
+      ? buildPieceDigitalThread(selectedPieceId, intelligenceQuery.data)
+      : null,
+    [intelligenceQuery.data, selectedPieceId],
+  );
+
+  const selectedRevisionImpact = useMemo(() => {
+    if (
+      !location.revisionId ||
+      !intelligenceQuery.data ||
+      !intelligenceModel?.revisions.some(
+        (revision) => revision.revisionId === location.revisionId,
+      )
+    ) {
+      return null;
+    }
+    const matching = intelligenceQuery.data.drawingImpacts.filter(
+      (impact) => impact.drawing_revision_id === location.revisionId,
+    );
+    return matching.find(
+      (impact) => impact.status !== "resolved" && impact.status !== "closed",
+    ) ?? matching[0] ?? null;
+  }, [intelligenceModel, intelligenceQuery.data, location.revisionId]);
 
   const batches = batchesQuery.data ?? [];
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) ?? batches[0] ?? null;
@@ -203,6 +240,140 @@ export function usePieceRegisterController(
     enabled: Boolean(projectId) && Boolean(selectedBatch?.id),
   });
 
+  const workPackageMap = useMemo(
+    () => buildWorkPackageLabelMap(workPackagesQuery.data ?? []),
+    [workPackagesQuery.data],
+  );
+  const displayRows = useMemo(
+    () => buildPieceDisplayRows(piecesQuery.data, workPackageMap),
+    [piecesQuery.data, workPackageMap],
+  );
+  const filteredRows = useMemo(
+    () => buildFilteredRegisterRows(displayRows, filters, attentionFocus, registerSort),
+    [attentionFocus, displayRows, filters, registerSort],
+  );
+  const actionablePieceIds = useMemo(
+    () => new Set(selectActionableLeafPieces(displayRows).map((piece) => piece.id)),
+    [displayRows],
+  );
+
+  const lastObservedPieceUrlValue = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!projectId || !piecesQuery.isSuccess) return;
+    if (projectSwitchReconciliationBlock.current === projectId) {
+      if (!location.pieceId) {
+        projectSwitchReconciliationBlock.current = null;
+        pendingSelectionUrlValue.current = null;
+        lastObservedPieceUrlValue.current = null;
+      }
+      return;
+    }
+    const requestedPieceId = location.pieceId;
+    if (requestedPieceId) {
+      pendingSelectionUrlValue.current = null;
+      lastObservedPieceUrlValue.current = requestedPieceId;
+      if (!actionablePieceIds.has(requestedPieceId)) {
+        selectedPieceIdsRef.current = EMPTY_SELECTED_PIECE_IDS;
+        selectedPieceProjectIdRef.current = projectId;
+        pendingSelectionUrlValue.current = "";
+        setSelectedPieceIdsState(EMPTY_SELECTED_PIECE_IDS);
+        setPieceRegisterLocation({ pieceId: null });
+        return;
+      }
+      if (
+        selectedPieceProjectIdRef.current !== projectId ||
+        selectedPieceIdsRef.current.size !== 1 ||
+        !selectedPieceIdsRef.current.has(requestedPieceId)
+      ) {
+        const next = new Set([requestedPieceId]);
+        selectedPieceIdsRef.current = next;
+        selectedPieceProjectIdRef.current = projectId;
+        setSelectedPieceIdsState(next);
+      }
+      return;
+    }
+    if (pendingSelectionUrlValue.current === "") {
+      pendingSelectionUrlValue.current = null;
+      lastObservedPieceUrlValue.current = null;
+      return;
+    }
+    pendingSelectionUrlValue.current = null;
+    const previousUrlValue = lastObservedPieceUrlValue.current;
+    lastObservedPieceUrlValue.current = null;
+    if (previousUrlValue) {
+      selectedPieceIdsRef.current = EMPTY_SELECTED_PIECE_IDS;
+      selectedPieceProjectIdRef.current = projectId;
+      setSelectedPieceIdsState(EMPTY_SELECTED_PIECE_IDS);
+    }
+  }, [actionablePieceIds, location.pieceId, piecesQuery.isSuccess, projectId, setPieceRegisterLocation]);
+
+  useEffect(() => {
+    if (location.view !== "impact" || !location.revisionId) return;
+    if (!intelligenceQuery.isSuccess || !intelligenceModel) return;
+    if (intelligenceQuery.data.availability.relationships !== "available") return;
+    const revisionIsAccessible = intelligenceModel.revisions.some(
+      (revision) => revision.revisionId === location.revisionId,
+    );
+    if (!revisionIsAccessible) {
+      setPieceRegisterLocation({ revisionId: null });
+    }
+  }, [location.view, intelligenceModel, intelligenceQuery.data, intelligenceQuery.isSuccess, location.revisionId, setPieceRegisterLocation]);
+
+  const overviewSnapshotQuery = useQuery({
+    queryKey: ["canonical-reporting", projectId],
+    queryFn: () => fetchCanonicalDashboardSnapshot(projectId!),
+    enabled: Boolean(projectId) && location.view === "overview" && piecesQuery.isSuccess && hasActionablePieces,
+    staleTime: 30_000,
+  });
+  const overviewWorkPackages = useMemo(
+    () => deriveOverviewWorkPackages(overviewSnapshotQuery.data),
+    [overviewSnapshotQuery.data],
+  );
+  const upcomingShipments = useMemo(
+    () => selectUpcomingShipments(overviewWorkPackages),
+    [overviewWorkPackages],
+  );
+
+  const profiles = useMemo(() => uniqueValues(displayRows.map((row) => row.profile)), [displayRows]);
+  const grades = useMemo(() => uniqueValues(displayRows.map((row) => row.material_grade)), [displayRows]);
+  const lifecycles = useMemo(() => uniqueValues(displayRows.map((row) => row.lifecycle_status)), [displayRows]);
+  const sources = useMemo(() => uniqueValues(displayRows.map((row) => row.source_system)), [displayRows]);
+  const presentation = useMemo(
+    () => buildPieceControlSummary(selectActionableLeafPieces(displayRows)),
+    [displayRows],
+  );
+
+  const kpiCells: KpiCellDef[] = [
+    { label: "Total Pieces", value: presentation.totalPieces.toLocaleString(), Icon: Boxes },
+    { label: "Known Tons", value: presentation.knownTons.toFixed(1), Icon: Scale },
+    { label: "In Fabrication", value: presentation.inFabricationPieces.toLocaleString(), tone: "info", Icon: Factory },
+    { label: "Ready to Ship", value: presentation.readyToShipPieces.toLocaleString(), tone: "good", Icon: Truck },
+    {
+      label: "Exceptions",
+      value: presentation.attention.reduce((total, item) => total + item.count, 0).toLocaleString(),
+      tone: presentation.attention.length > 0 ? "warn" : "good",
+      Icon: AlertTriangle
+    },
+  ];
+
+  const appliedAssignment = useMemo(
+    () => batchRowsQuery.data && piecesQuery.data
+        ? summarizeAppliedAssignment(batchRowsQuery.data, piecesQuery.data, (id) => workPackageMap.get(id) ?? id)
+        : null,
+    [batchRowsQuery.data, piecesQuery.data, workPackageMap],
+  );
+  const appliedSheetHintCount = useMemo(
+    () => collectAppliedPieceSheetHints(batchRowsQuery.data ?? []).length,
+    [batchRowsQuery.data],
+  );
+
+  const allFilteredSelected = allRowsSelected(filteredRows, selectedPieceIds);
+  const archiveEligibility = useMemo(
+    () => partitionArchiveSelection(piecesQuery.data ?? [], selectedPieceIds),
+    [piecesQuery.data, selectedPieceIds],
+  );
+  const archiveConfirmationText = buildArchiveConfirmationText(archiveEligibility.archivableIds.length);
+
   const invalidate = async () => {
     await invalidatePieceControlQueries(queryClient, projectId, "all");
   };
@@ -210,9 +381,7 @@ export function usePieceRegisterController(
   const invalidateProtectedActionQueries = async () => {
     await Promise.all([
       invalidatePieceControlQueries(queryClient, projectId, "all"),
-      queryClient.invalidateQueries({
-        queryKey: ["drawing-impacts", projectId],
-      }),
+      queryClient.invalidateQueries({ queryKey: ["drawing-impacts", projectId] }),
     ]);
   };
 
@@ -227,22 +396,12 @@ export function usePieceRegisterController(
       await invalidateProtectedActionQueries();
       toast.success(request.onHold ? "Piece hold applied" : "Piece hold cleared");
     },
-    onError: (error: Error) =>
-      toast.error(
-        presentPieceControlError(error, "The piece hold could not be updated."),
-      ),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "The piece hold could not be updated.")),
   });
 
   const drawingImpactMutation = useMutation({
     meta: reportingMeta("pieceRegister.drawingImpact.save"),
-    mutationFn: async ({
-      impactId,
-      revisionId,
-      draft,
-      previousStatus,
-      previousResolvedAt,
-    }: any) => {
-      // Validation logic here... (to be mirrored from the original component)
+    mutationFn: async ({ impactId, revisionId, draft, previousStatus, previousResolvedAt }: any) => {
       const payload = withProjectId({
         drawing_revision_id: revisionId,
         impact_type: draft.impact_type,
@@ -266,37 +425,24 @@ export function usePieceRegisterController(
       await invalidateProtectedActionQueries();
       toast.success(result === "created" ? "Drawing impact created" : "Drawing impact updated");
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "The drawing impact could not be saved.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "The drawing impact could not be saved.")),
   });
 
   const resolveDrawingImpactMutation = useMutation({
     meta: reportingMeta("pieceRegister.drawingImpact.resolve"),
     mutationFn: async (impactId: string) => {
-      await entities.DrawingImpact.update(
-        impactId,
-        withProjectId({
-          status: "resolved",
-          resolved_at: new Date().toISOString(),
-        }, projectId) as any,
-      );
+      await entities.DrawingImpact.update(impactId, withProjectId({ status: "resolved", resolved_at: new Date().toISOString() }, projectId) as any);
     },
     onSuccess: async () => {
       await invalidateProtectedActionQueries();
       toast.success("Drawing impact resolved");
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "The drawing impact could not be resolved.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "The drawing impact could not be resolved.")),
   });
 
   const stageMutation = useMutation({
     meta: reportingMeta("pieceRegister.import.stage"),
-    mutationFn: () => stagePieceImportBatch(
-      projectId!,
-      sourceType,
-      importFile?.name ?? "browser import",
-      importRows,
-    ),
+    mutationFn: () => stagePieceImportBatch(projectId!, sourceType, importFile?.name ?? "browser import", importRows),
     onSuccess: async (summary) => {
       setSelectedBatchId(String(summary.batch_id));
       setImportFile(null);
@@ -305,8 +451,7 @@ export function usePieceRegisterController(
       await invalidate();
       toast.success("Import staged for review");
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "The import could not be staged.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "The import could not be staged.")),
   });
 
   const approveMutation = useMutation({
@@ -316,15 +461,13 @@ export function usePieceRegisterController(
       await invalidate();
       toast.success("Batch approved. Confirm once more to apply.");
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "The import batch could not be approved.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "The import batch could not be approved.")),
   });
 
   const applyMutation = useMutation({
     meta: reportingMeta("pieceRegister.import.apply"),
     mutationFn: async () => {
       const summary = await applyPieceImportBatch(selectedBatch!.id);
-      // Finalize hints...
       return { summary };
     },
     onSuccess: async ({ summary }) => {
@@ -332,18 +475,12 @@ export function usePieceRegisterController(
       await invalidate();
       toast.success(`Import applied: ${summary.created ?? 0} created, ${summary.updated ?? 0} updated`);
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "The import batch could not be applied.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "The import batch could not be applied.")),
   });
 
   const archiveMutation = useMutation({
     meta: reportingMeta("pieceRegister.archive", PIECE_ARCHIVE_EXPECTED_ERRORS),
-    mutationFn: () => archivePieceLots(
-      projectId!,
-      selectedPieceIds.size > 0 ? [...selectedPieceIds] : [], // This will be updated by the controller's eligibility check
-      archiveConfirmation,
-      archiveReason.trim(),
-    ),
+    mutationFn: () => archivePieceLots(projectId!, archiveEligibility.archivableIds, archiveConfirmation, archiveReason.trim()),
     onSuccess: async (summary) => {
       setSelectedPieceIds(new Set());
       setArchiveOpen(false);
@@ -352,34 +489,29 @@ export function usePieceRegisterController(
       await invalidate();
       toast.success("Pieces archived");
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "The selected pieces could not be archived.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "The selected pieces could not be archived.")),
   });
 
   const bulkAssignMutation = useMutation({
     meta: reportingMeta("pieceRegister.bulk.assign"),
-    mutationFn: (workPackageId: string) =>
-      assignPiecesToWorkPackage(projectId!, [...selectedPieceIds], workPackageId),
+    mutationFn: (workPackageId: string) => assignPiecesToWorkPackage(projectId!, [...selectedPieceIds], workPackageId),
     onSuccess: async (summary) => {
       setSelectedPieceIds(new Set());
       await invalidate();
       toast.success("Pieces assigned to work package");
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "Selected pieces could not be assigned.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "Selected pieces could not be assigned.")),
   });
 
   const bulkUnassignMutation = useMutation({
     meta: reportingMeta("pieceRegister.bulk.unassign"),
-    mutationFn: () =>
-      unassignPiecesFromWorkPackage(projectId!, [...selectedPieceIds]),
+    mutationFn: () => unassignPiecesFromWorkPackage(projectId!, [...selectedPieceIds]),
     onSuccess: async (summary) => {
       setSelectedPieceIds(new Set());
       await invalidate();
       toast.success("Pieces unassigned");
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "Selected pieces could not be unassigned.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "Selected pieces could not be unassigned.")),
   });
 
   const bulkAttrsMutation = useMutation({
@@ -393,25 +525,21 @@ export function usePieceRegisterController(
       await invalidate();
       toast.success(`Updated ${summary.updated} piece(s)`);
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "Selected pieces could not be updated.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "Selected pieces could not be updated.")),
   });
 
   const bulkHoldMutation = useMutation({
     meta: reportingMeta("pieceRegister.bulk.hold"),
-    mutationFn: ({ onHold, reason }: { onHold: boolean; reason?: string }) =>
-      setPieceHold(projectId!, [...selectedPieceIds], onHold, reason),
+    mutationFn: ({ onHold, reason }: { onHold: boolean; reason?: string }) => setPieceHold(projectId!, [...selectedPieceIds], onHold, reason),
     onSuccess: async () => {
       setSelectedPieceIds(new Set());
       await invalidate();
       toast.success("Hold state updated");
     },
-    onError: (error: Error) =>
-      toast.error(presentPieceControlError(error, "Hold state could not be updated.")),
+    onError: (error: Error) => toast.error(presentPieceControlError(error, "Hold state could not be updated.")),
   });
 
   return {
-    // State
     filters, setFilters,
     sourceType, setSourceType,
     importFile, setImportFile,
@@ -426,19 +554,32 @@ export function usePieceRegisterController(
     archiveReason, setArchiveReason,
     archiveConfirmation, setArchiveConfirmation,
     attentionFocus, setAttentionFocus,
-
-    // Queries
     piecesQuery,
     batchesQuery,
     workPackagesQuery,
     intelligenceQuery,
     batchRowsQuery,
-
-    // Derived
+    overviewSnapshotQuery,
     selectedPieceId,
     hasActionablePieces,
-
-    // Mutations
+    intelligenceModel,
+    selectedPieceThread,
+    selectedRevisionImpact,
+    overviewWorkPackages,
+    upcomingShipments,
+    displayRows,
+    filteredRows,
+    profiles,
+    grades,
+    lifecycles,
+    sources,
+    presentation,
+    kpiCells,
+    appliedAssignment,
+    appliedSheetHintCount,
+    allFilteredSelected,
+    archiveEligibility,
+    archiveConfirmationText,
     holdMutation,
     drawingImpactMutation,
     resolveDrawingHandoffMutation: resolveDrawingImpactMutation,
@@ -450,8 +591,6 @@ export function usePieceRegisterController(
     bulkUnassignMutation,
     bulkAttrsMutation,
     bulkHoldMutation,
-
-    // Handlers
     invalidate,
     setSelectedPieceIds,
   };

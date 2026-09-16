@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| ~~2026-09-13~~ released | codex-supabase-drift-repair | Supabase production drift reconciliation | supabase/production-ownership-manifest.json; scripts/supabase*; scripts/__tests__/supabase*; recovered migration sources; docs/runbooks/supabase-production-ownership.md; focused drift evidence/tests | Compare live ledger/schema and repair verified drift; preserve data and release gates. |
 | ~~2026-09-13T08:33:29Z~~ released | copilot-merge-conflicts-5652236907 | Merge conflict resolution | AGENT_CLAIMS.md; conflicted files from merge with main | Merged current main, preserved workflow behavior, and reconciled the concurrent PR-head resolution. |
 | 2026-08-13T20:10:00Z | grok-notes-apple-pencil | Tools Notes Apple Pencil ink | src/pages/Notes.jsx; src/lib/notesInk/**; src/components/notes/InkCanvas.tsx | Upgrade Notes ink: coalesced/predicted strokes, pressure+tilt, palm rejection, highlighter, undo/redo, vector persistence. |
 | 2026-08-09T00:07:05Z | codex-ui-ux-liquid-glass | Professional UI/UX cleanup + native iOS Liquid Glass | docs/superpowers/{specs,plans}/2026-08-09-professional-ui-liquid-glass*; src/styles/{tokens,base,command,responsive}.css; src/pages/Settings.jsx; src/pages/settings/**; src/components/{settings,nav,ui,design-system}/**; src/lib/native/**; capacitor.config.ts; ios/**; mobile/ios/**; related tests/docs | Normalize typography, dark-theme contrast, spacing, icons and shared settings patterns; add an iOS 26 SwiftUI Liquid Glass command dock with earlier-iOS fallback. |
@@ -54,6 +55,7 @@ Notes:
 | 2026-07-06T19:05:00Z | dashboard-command-ui-handoff | Dashboard + Portfolio derive parity cleanup | src/pages/Dashboard.jsx, src/pages/portfolio/portfolioControlCenter.derive.ts, src/pages/portfolio/__tests__/portfolioControlCenter.derive.test.ts | Add command-mode portfolio entrypoint data wiring/buffering + sync scoring inputs with shared `computePortfolioProjectHealth` helper; update derive tests for delayed-task and late-delivery semantics. |
 
 ## Recently released
+- 2026-09-13 · claude-drift-followups · Made the Supabase retirement workflow file valid (GitHub had failed a run on every push) and hardened the drift entrypoint SQL test: six database shapes, a catalog-wide scope check and 13 guard cases.
 - 2026-08-06 · cursor-page-refactor-2696 · Piece Register and Onboarding large-page extracts re-landed clean and merged as #249 and #250; Resource Scheduling remains unclaimed for a future focused PR.
 - 2026-08-05 · pr-hygiene-train · Merged supersedes: #221–#225, #227, #229, #232–#233, #236–#237, #239 (Package Board chain still open if #240 pending). Dirty mega-PRs re-landed clean; see `.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md`.
 - 2026-08-05 · enterprise-tier1 · Signup clickwrap + PM write floor migration + Stripe Tax hooks + `supabase:drift` + vercel main deploy off (#236).

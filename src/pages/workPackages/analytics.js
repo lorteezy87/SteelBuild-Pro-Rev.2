@@ -4,9 +4,6 @@ import { derivePhaseFromPieces, isPieceDrivenPackage } from "./canonical";
 import { normalizeTonnage } from "@/utils/projectKpis";
 
 const PHASE_ORDER = ["Detailing", "Fabrication", "Delivery", "Erection"];
-
-
-const PHASE_ORDER = ["Detailing", "Fabrication", "Delivery", "Erection"];
 const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
 // Loose "has some approval" set — kept ONLY for the informational
 // `approvedCount` / `hasApproved` fields. It is deliberately NOT what decides

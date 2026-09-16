@@ -87,7 +87,7 @@ export async function readB2Inventory({ account, key, bucketName, fetcher = fetc
   let versions = 0;
   let cursor = {};
   const cursors = new Set();
-  do {
+  while (true) {
     const page = await call('b2_list_file_versions', { bucketId: bucket.bucketId, maxFileCount: 10000, ...cursor });
     if (!Array.isArray(page.files)) throw new Error('Invalid B2 versions response');
     for (const file of page.files) {
@@ -102,7 +102,7 @@ export async function readB2Inventory({ account, key, bucketName, fetcher = fetc
     const key = JSON.stringify(cursor);
     if (cursors.has(key)) throw new Error('Repeated B2 pagination cursor');
     cursors.add(key);
-  } while (true);
+  }
   return { storedBytes, versions, bucketName };
 }
 
@@ -169,7 +169,7 @@ export async function runIncrementalBackup({ plan, stageRoot, execute, inventory
     if (sample) {
       const restored = `${stageRoot}/restored/${item.bucket}`;
       await run(['copyto', `${item.current}/${sample.Path}`, `${restored}/${sample.Path}`, '--b2-version-at', restoreAt, ...COPY_FLAGS]);
-      await run(['check', item.local, restored, '--one-way', '--include', `/${sample.Path.replace(/([*?\[\]{}\\])/g, '\\$1')}`]);
+      await run(['check', item.local, restored, '--one-way', '--include', `/${sample.Path.replace(/([*?[\]{}\\])/g, '\\$1')}`]);
     }
     buckets.push({ ...manifestBucket(item), restoreAt, restoreSample: sample?.Path ?? null });
   }

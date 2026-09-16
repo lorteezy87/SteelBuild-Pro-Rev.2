@@ -1,10 +1,11 @@
 # CI + gated deploy — lint, typecheck, test, build, then ship.
 #
 # Jobs (defined below):
-#   - ci:        ESLint + TypeScript (.ts via tsconfig, .js/.jsx via jsconfig)
-#                + Vitest unit suite + production Vite build. Runs on EVERY push
-#                and pull request to any branch, so contributors get green/red
-#                feedback before merge.
+#   - ci:        ESLint + TypeScript (src .ts via tsconfig, scripts/ .ts via
+#                tsconfig.scripts.json, .js/.jsx via jsconfig) + Vitest unit
+#                suite + production Vite build. Runs on EVERY push and pull
+#                request to any branch, so contributors get green/red feedback
+#                before merge.
 #   - deploy-cloudflare: THE production deploy — `wrangler deploy` to the
 #                Cloudflare Worker. GATED on `ci` and ONLY on a push to main, so
 #                a red lint/typecheck/test/build cannot reach
@@ -120,6 +121,8 @@ jobs:
       - name: Typecheck (TypeScript)
         # Blocking: guards Supabase table names, hook contracts,
         # and TS/TSX integration points before anything is published.
+        # Also compiles scripts/**/*.ts under tsconfig.scripts.json (strict,
+        # nodenext); tsconfig.json itself only includes src/.
         run: npm run typecheck
 
       - name: Typecheck (JavaScript via jsconfig)
@@ -145,6 +148,12 @@ jobs:
         run: npm run typecheck:noimplicitany
 
       - name: Run Vitest tests
+        # Deliberately not UTC. vite.config.js pins every test worker to UTC;
+        # the runner is already UTC, which would hide a broken pin. From UTC+14
+        # src/__tests__/testRunnerTimezone.test.ts fails here if the pin stops
+        # reaching Date/Intl, instead of only on a non-UTC dev box.
+        env:
+          TZ: Pacific/Kiritimati
         run: npm test
 
       - name: Install Chromium for foundation acceptance

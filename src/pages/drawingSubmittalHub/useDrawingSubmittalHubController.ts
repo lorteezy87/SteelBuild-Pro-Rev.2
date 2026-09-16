@@ -48,10 +48,13 @@ export function useDrawingSubmittalHubController(projectId: string | undefined) 
   const summaryInFlight = useRef(new Set<string>());
 
   // Queries
-  const { drawings, isLoading: drawingsLoading } = useDrawings(projectId);
-  const { submittals, kpis, roundsBySubmittal, isLoading: submittalsLoading } = useSubmittals(projectId);
+  const { drawings, isLoading: drawingsLoading, error: drawingsError, refetch: refetchDrawings } = useDrawings(projectId);
+  const {
+    submittals, kpis, roundsBySubmittal,
+    isLoading: submittalsLoading, error: submittalsError, refetch: refetchSubmittals,
+  } = useSubmittals(projectId);
 
-  const { data: drawingSets = [], isPending: drawingSetsLoading } = useQuery({
+  const { data: drawingSets = [], isPending: drawingSetsLoading, error: drawingSetsError, refetch: refetchDrawingSets } = useQuery({
     queryKey: ["drawing-sets", projectId],
     queryFn: () => entities.DrawingSet.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -66,13 +69,13 @@ export function useDrawingSubmittalHubController(projectId: string | undefined) 
   const transmittalsQuery = useTransmittals(projectId ?? null, { enabled: false }); // enabled by view in shell
   const { data: transmittals, isPending: transmittalsPending } = transmittalsQuery;
 
-  const { data: workPackages = [] } = useQuery({
+  const { data: workPackages = [], error: workPackagesError, refetch: refetchWorkPackages } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
-  const { data: rfis = [] } = useQuery({
+  const { data: rfis = [], error: rfisError, refetch: refetchRfis } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () => entities.RFI.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -105,6 +108,14 @@ export function useDrawingSubmittalHubController(projectId: string | undefined) 
     enabled: !!projectId && (mappingRosterRequested), // 3D tab handled in shell
     staleTime: 60_000,
   });
+
+  // Core workflow evidence — any of these reads failing means the hub's
+  // counts and write controls would be built on incomplete data, so the
+  // shell gates the whole workflow behind a single error/retry surface.
+  const workflowError = drawingsError ?? submittalsError ?? drawingSetsError ?? workPackagesError ?? rfisError;
+  const refetchWorkflow = () => {
+    void Promise.all([refetchDrawings(), refetchSubmittals(), refetchDrawingSets(), refetchWorkPackages(), refetchRfis()]);
+  };
 
   // Derived
   const setPackages = useMemo(
@@ -396,6 +407,7 @@ export function useDrawingSubmittalHubController(projectId: string | undefined) 
     drawings, drawingsLoading,
     submittals, submittalsLoading,
     drawingSets, drawingSetsLoading,
+    workflowError, refetchWorkflow,
     holds, holdsStatus,
     activeHolds,
     transmittals, transmittalsPending,

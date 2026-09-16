@@ -59,6 +59,50 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 - **Row caps:** `LIST_ROW_CAP` (2000) is what a request *asks* for; `SERVER_MAX_ROWS` (1000) is PostgREST's `db-max-rows`. Truncation detectors must compare against `EFFECTIVE_LIST_CAP` (the min), or they can never fire.
 - **Bulk edit must respect gates.** `handleBulkEdit` in `pages/drawings/useDrawingsPageController.ts` must use `validateStageTransition` and `classifyDrawingStageMutation` when updating `stage` to prevent bypassing submittal approval gates (fixed 2026-09-13).
 
+## Schedule tasks — DO NOT regress
+- **Two CHECK constraints decide what saves.** `chk_schedule_tasks_status` accepts
+  only `Not Started / In Progress / Complete / On Hold / Delayed` — **`Cancelled`
+  is not a status** and was offered by two dropdowns where it could never save.
+  `schedule_status_pct_consistency` then ties status to `percent_complete`. A
+  CHECK is evaluated against the **whole resulting row**, so an UPDATE sending
+  `status` alone is validated against the percent already *stored*: → Complete
+  needs 100, → Not Started needs 0, → In Progress needs < 100. Every write path
+  except the bulk toolbar violated this, which made marking a task Complete and
+  reopening a finished one fail with a raw Postgres constraint name. Take the
+  vocabulary from `SCHEDULE_STATUSES` and let `withReconciledPercent` set the
+  percent — never hand-write either (`src/lib/schedule/taskStatus.ts`).
+- **Reopening clears the percent to NULL on purpose.** Complete → 100 and
+  Not Started → 0 are definitional; In Progress is not. The transition says the
+  task is no longer done but not how much remains, so the percent becomes
+  *unknown*. Don't "fix" that by inventing 0 or 99.
+- **Two percent readers, and they are not interchangeable.**
+  `percentCompleteOrNull` returns null when unknown — use it for any **claim**
+  (a printed figure, an average, a stalled test). `displayPct` flattens unknown
+  to 0 — use it only where the number is **geometry** (a bar width, a fill
+  fraction). This is the "Absence is not evidence" rule above: a reopened task
+  read through `displayPct` prints "0%" and lands in the stalled filter one click
+  after showing 100%.
+- **One write path.** Every task update goes through `updateTaskMut` →
+  `buildTaskUpdate` (`src/pages/schedule/useScheduleMutations.ts`), which is
+  where actuals stamping, the status/percent reconciliation, the milestone
+  columns and the assignment pair are applied. The Gantt's inline editor, the
+  Task List's inline editor and the bar drag each used to inline their own
+  `entities.ScheduleTask.update` and so stamped no `actual_finish_date`.
+  **`ScheduleBody` must write nothing** — a component that cannot call the
+  database cannot swallow its errors (a test asserts this).
+- **Duration is inclusive calendar days.** Mon → Fri is 5, a same-day task is 1.
+  Derive it with `durationFromDates` / `finishFromDuration`
+  (`src/lib/schedule/duration.ts`); the dates are the truth and the stored column
+  mirrors them via a trigger. Bulk Add was left on the old exclusive arithmetic
+  when this was unified and produced a bar one day long on every row it wrote —
+  never re-derive this inline.
+- **Milestone is three columns, assignment is two.** `isMilestoneTask` ORs
+  `task_type` / `is_milestone` / `milestone`, and `taskOwner` reads
+  `resource_names || assigned_to`. Writers must set every column a reader might
+  look at — use `withMilestoneFlags` and `withAssignmentPair`. Writing one half
+  is how milestones stayed invisible to the calendar and reports, and how typing
+  in the Task List's "Assigned To" cell saved and changed nothing visible.
+
 ## Drawings & submittals — how the team works
 - **Submittals are the workflow source of truth** for a set's stage, not `drawings.stage`. Fab release requires IFC / Released.
 - **One submittal per drawing set.** When a few pages need revising, the team creates a **new drawing set (new name) with a new submittal**, not new rounds on the original set.

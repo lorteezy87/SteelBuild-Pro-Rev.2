@@ -5,14 +5,17 @@ import { supabase } from "@/lib/supabase";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { useDrawingViewerSelection } from "./useDrawingViewerSelection";
 import { usePdfLoader } from "./usePdfLoader";
-import { usePdfRenderer } from "./pages/drawingViewer/usePdfRenderer"; // Wait, the path is src/pages/drawingViewer/usePdfRenderer
+import { usePdfRenderer } from "./usePdfRenderer";
 import { useZoneData } from "./useZoneData";
 import { useMarkup } from "@/components/drawings/viewer/useMarkup";
 import { deriveOverlayViewModel, deriveZonePanelSheet } from "./drawingViewerDerivations";
+import { normalizeSN, parseZonePayload } from "./drawingViewerUtils";
+import { parseAnnotationLink } from "./annotationLinks";
 import { createZone, updateZone, deleteZone, createNewRevisionAndCarryZones, unlockSet } from "@/lib/drawingHub";
 import { logActivity } from "@/services/auditLogger";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseRealDistance, formatScaleFraction } from "@/components/drawings/viewer/scaleParse";
+import { useAutoScaleOnLoad } from "./useAutoScaleOnLoad";
 
 export function useDrawingViewerController(projectId) {
   const qc = useQueryClient();
@@ -33,7 +36,7 @@ export function useDrawingViewerController(projectId) {
 
   // Markup State
   const [activeTool, setActiveTool] = useState("select");
-  const [activeColor, setActiveColor] = useState("#ff0000"); // Default or from MARKUP_COLORS
+  const [activeColor, setActiveColor] = useState("#ff0000");
   const [activeStamp, setActiveStamp] = useState("APPROVED");
   const [hideResolved, setHideResolved] = useState(false);
   const [exportMarkupOpen, setExportMarkupOpen] = useState(false);
@@ -100,6 +103,31 @@ export function useDrawingViewerController(projectId) {
     drawingRevisionId: currentRevision?.id || null,
   });
 
+  // --- Additional Queries from DrawingViewer.jsx ---
+  const setIdForActive = activeDrawing?.drawing_set_id || null;
+  const { data: activeDrawingSet } = useQuery({
+    queryKey: ["drawing_set", setIdForActive],
+    queryFn: async () => {
+      if (!setIdForActive) return null;
+      const { data, error } = await supabase
+        .from("drawing_sets")
+        .select("id, set_name, metadata, is_locked, locked_at, locked_by, locked_reason")
+        .eq("id", setIdForActive)
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    },
+    enabled: !!setIdForActive,
+    staleTime: 30_000,
+  });
+
+  const { handleAutoDetectScale } = useAutoScaleOnLoad({
+    activeDrawing,
+    pdfDoc,
+    projectId,
+    qc
+  });
+
   const overlayView = useMemo(() => deriveOverlayViewModel({
     activeDrawing,
     renderMode,
@@ -157,7 +185,7 @@ export function useDrawingViewerController(projectId) {
         newName: null,
         includeLinks: carryLinks,
       });
-      toast.success(`Revision ${res.revision.revision_code} created — ${res.zonesCloned} zones${res.linksClHinked ? ` + ${res.linksCloned} links` : ""} carried forward`);
+      toast.success(`Revision ${res.revision.revision_code} created — ${res.zonesCloned} zones${res.linksCloned ? ` + ${res.linksCloned} links` : ""} carried forward`);
       qc.invalidateQueries({ queryKey: ["drawing-revision-current"] });
       qc.invalidateQueries({ queryKey: ["drawing-zones"] });
       qc.invalidateQueries({ queryKey: ["drawing-zones-summaries"] });
@@ -185,6 +213,15 @@ export function useDrawingViewerController(projectId) {
       toast.error(`Couldn't save zone: ${err?.message || "unknown error"}`);
     }
   }, [currentRevision, activeDrawing, refetchZones]);
+
+  const handleZoneUpdate = useCallback(async (zoneId, patch) => {
+    await updateZone(zoneId, patch);
+    await refetchZones();
+  }, [refetchZones]);
+
+  const handleZoneDelete = useCallback(async (zoneId) => {
+    await deleteZone(zoneId);
+  }, []);
 
   const onCalloutClick = useCallback((callout) => {
     if (!callout?.targetSheetNumber) return;
@@ -254,6 +291,27 @@ export function useDrawingViewerController(projectId) {
     a.remove();
   };
 
+  const handleUnlock = useCallback(async (reason) => {
+    if (!activeDrawingSet) return;
+    try {
+      await unlockSet({ setId: activeDrawingSet.id, reason });
+      logActivity(
+        "drawing",
+        "updated",
+        { id: activeDrawingSet.id, project_id: projectId, name: activeDrawingSet.set_name },
+        {
+          projectId: projectId,
+          projectName: activeDrawing?.project_name || "Unknown Project", // This might need a better project name source
+          description: `Set "${activeDrawingSet.set_name || activeDrawingSet.id}" unlocked (admin override) — reason: ${String(reason || "").slice(0, 500)}`,
+        },
+      );
+      await qc.invalidateQueries({ queryKey: ["drawing_set", activeDrawingSet.id] });
+      toast.success("Set unlocked. Edits are now allowed.");
+    } catch (err) {
+      toast.error("Unlock failed: " + (err?.message || "Unknown error"));
+    }
+  }, [activeDrawingSet, projectId, qc]);
+
   return {
     userId,
     sidebarOpen, setSidebarOpen,
@@ -315,6 +373,8 @@ export function useDrawingViewerController(projectId) {
     handleCalibrate,
     handleNewRevision,
     handleZoneDrawComplete,
+    handleZoneUpdate,
+    handleZoneDelete,
     onCalloutClick,
     handleAnnotationClick,
     handleFitWidth,
@@ -322,5 +382,8 @@ export function useDrawingViewerController(projectId) {
     handleZoomPreset,
     handleCanvasWheel,
     handleDownload,
+    activeDrawingSet,
+    handleAutoDetectScale,
+    handleUnlock,
   };
 }
