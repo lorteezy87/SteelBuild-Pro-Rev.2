@@ -201,7 +201,7 @@ export function buildProjectsSummary(
     (project) => healthByProjectId[project.id]?.label === "At Risk",
   );
   const onHoldCount    = projects.filter((project) => project.on_hold).length;
-  const totalVal       = nonHoldProjects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
+  const totalVal = allRows.reduce((sum, p) => sum + p.revisedContract, 0);
 
   // Average % complete over active, non-closeout projects
   const progressable = activeProjects;

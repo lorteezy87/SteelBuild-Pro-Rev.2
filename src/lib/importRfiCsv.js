@@ -122,10 +122,16 @@ export function parseCsv(raw) {
 const COLUMN_ALIASES = {
   rfi_number: ["rfi #", "rfi number", "rfi no", "number", "no", "no.", "#", "rfi id", "id", "rfi"],
   title:      ["subject", "title", "description", "question", "summary"],
+  // Keys claim columns in order, so this only gets a "Question" column when
+  // a Subject/Title column already took `title`.
+  question:   ["question", "request", "requested information", "question text"],
   assigned_to: [
-    "assigned to", "to", "ball in court", "assignee", "recipient",
+    "assigned to", "to", "assignee", "recipient",
     "responsible", "reviewer", "from", "issued to",
   ],
+  // Its own field: as an assigned_to alias it put "Closed" into Assigned To
+  // when SteelBuild's own rfi-log.csv export was re-imported.
+  ball_in_court: ["ball in court", "bic"],
   date_submitted: [
     "date submitted", "submitted", "submitted date", "date", "date issued",
     "issued date", "issue date", "submit date", "submitted on", "date sent",
@@ -140,7 +146,25 @@ const COLUMN_ALIASES = {
     "date resolved", "response", "answer date",
   ],
   status: ["status", "state", "rfi status"],
+  priority: ["priority"],
+  answer: ["answer", "answer text", "official response", "response text"],
+  answered_by: ["answered by", "responded by", "response by"],
+  submitted_by: ["submitted by", "originator", "created by", "initiated by", "requested by"],
+  drawing_reference: ["drawing ref", "drawing reference", "drawing", "drawings", "sheet", "sheet ref", "reference sheets"],
+  spec_section: ["spec section", "spec", "specification", "spec ref"],
+  cost_impact: ["cost impact"],
+  cost_impact_amount: ["cost amount", "cost impact amount"],
+  schedule_impact: ["schedule impact"],
+  schedule_impact_days: ["schedule days", "schedule impact days"],
 };
+
+// Optional columns, passed through as raw text only when the file has them;
+// buildRfiImportRows validates and converts the values.
+const DETAIL_FIELDS = [
+  "question", "answer", "answered_by", "drawing_reference", "spec_section",
+  "submitted_by", "priority", "status", "ball_in_court",
+  "cost_impact", "cost_impact_amount", "schedule_impact", "schedule_impact_days",
+];
 
 // Job number can appear as a row in the file's header area *or* as a
 // column (one job number per row). We look for the column version; the
@@ -310,6 +334,9 @@ export function parseRfiCsv(csvText, { fileName = "" } = {}) {
       iso_required:   normalizeCsvDate(dReq),
       date_answered:  dAns || null,
       iso_answered:   normalizeCsvDate(dAns),
+      ...Object.fromEntries(
+        DETAIL_FIELDS.filter((key) => idx[key] >= 0).map((key) => [key, pick(key) || null]),
+      ),
     });
   }
 

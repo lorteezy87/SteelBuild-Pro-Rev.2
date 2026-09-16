@@ -10,17 +10,37 @@ import { computeRevisedContractValue } from "@/services/costRollup";
 import { isRfiOpen } from "@/lib/entityPredicates";
 
 /**
+ * Normalize weight to tons. If the value is obviously in pounds
+ * (e.g. > 5000 for a single package), divide by 2000.
+ * @param {unknown} value
+ * @returns {number} Weight in tons
+ */
+export function normalizeTonnage(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return n > 5000 ? n / 2000 : n;
+}
+
+/**
  * Work-package progress for a single project.
  * @param {object[]} workPackages - WPs already filtered to this project
  * @returns {{ totalCount, completeCount, pct, totalTons, completeTons }}
  */
 export function calcWpProgress(workPackages = []) {
-  const totalCount   = workPackages.length;
-  const completeWPs  = workPackages.filter(w => w.status === "Complete");
+  const totalCount = workPackages.length;
+  if (totalCount === 0) return { totalCount: 0, completeCount: 0, pct: 0, totalTons: 0, completeTons: 0 };
+
+  const totalTons = workPackages.reduce((s, w) => s + normalizeTonnage(w.tonnage), 0);
+  const totalPctWeighted = workPackages.reduce((sum, wp) => sum + (normalizeTonnage(wp.tonnage) * (Number(wp.percent_complete) || 0)), 0);
+
+  const pct = totalTons > 0
+    ? Math.round(totalPctWeighted / totalTons)
+    : Math.round(workPackages.reduce((sum, wp) => sum + (Number(wp.percent_complete) || 0), 0) / totalCount);
+
+  const completeWPs = workPackages.filter(w => w.status === "Complete");
   const completeCount = completeWPs.length;
-  const pct          = totalCount > 0 ? Math.round((completeCount / totalCount) * 100) : 0;
-  const totalTons    = workPackages.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const completeTons = completeWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const completeTons = completeWPs.reduce((s, w) => s + normalizeTonnage(w.tonnage), 0);
+
   return { totalCount, completeCount, pct, totalTons, completeTons };
 }
 

@@ -83,8 +83,10 @@ export function num(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+import { normalizeTonnage } from "@/utils/projectKpis";
+
 export function formatTons(value: unknown): string {
-  return `${num(value).toFixed(1)}T`;
+  return `${normalizeTonnage(value).toFixed(1)}T`;
 }
 
 export function formatHours(value: unknown): string {

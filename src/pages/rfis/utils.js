@@ -105,10 +105,13 @@ export const buildRfiNumberRepairs = (records) => {
 export const daysOpen = (r) => {
   if (!r.submitted_date) return 0;
   const start = new Date(r.submitted_date + "T00:00:00");
-  const end =
-    r.date_answered && isClosed(r)
-      ? new Date(r.date_answered + "T00:00:00")
-      : new Date();
+  let end;
+  if (isClosed(r)) {
+    const stopDate = r.date_answered || r.updated_at;
+    end = stopDate ? new Date(stopDate.slice(0, 10) + "T00:00:00") : start;
+  } else {
+    end = new Date();
+  }
   return Math.max(0, Math.floor((end - start) / 86400000));
 };
 

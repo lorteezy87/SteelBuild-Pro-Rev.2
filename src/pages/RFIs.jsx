@@ -85,7 +85,15 @@ export default function RFIs() {
     refetch: refetchProjects,
   } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => entities.Project.listAll(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("is_deleted", false)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
     staleTime: 5 * 60 * 1000,
   });
 

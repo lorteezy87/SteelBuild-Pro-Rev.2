@@ -273,18 +273,61 @@ export function buildRfiImportRows({ rfis = [], projectId, projectName, existing
       project_name:   projectName || null,
       rfi_number:     normalizeRfiNumber(r.rfi_number),
       title:          (r.title || "").slice(0, 200),
-      question:       (r.title || "").slice(0, 4000),
+      question:       (r.question || r.title || "").slice(0, 4000),
+      answer:         cleanText(r.answer, 8000),
+      answered_by:    cleanText(r.answered_by, 200),
+      drawing_reference: cleanText(r.drawing_reference, 500),
+      spec_section:   cleanText(r.spec_section, 100),
+      submitted_by:   cleanText(r.submitted_by, 200),
       assigned_to:    (r.assigned_to || "").slice(0, 200) || null,
       submitted_date: submitted,
       date_required:  required,
       date_answered:  answered,
-      status:         answered ? "Closed" : "Open",
-      priority:       "Medium",
-      ball_in_court:  answered ? "Contractor" : (r.assigned_to || "Engineer"),
+      // A Status column in the file wins; otherwise infer it from the answered date.
+      status:         matchAllowed(r.status, IMPORT_STATUSES) || (answered ? "Closed" : "Open"),
+      priority:       matchAllowed(r.priority, IMPORT_PRIORITIES) || "Medium",
+      ball_in_court:  cleanText(r.ball_in_court, 100) || (answered ? "Contractor" : (r.assigned_to || "Engineer")),
+      cost_impact:          parseYesNo(r.cost_impact) ?? false,
+      cost_impact_amount:   parseNumber(r.cost_impact_amount),
+      schedule_impact:      parseYesNo(r.schedule_impact) ?? false,
+      schedule_impact_days: roundOrNull(parseNumber(r.schedule_impact_days)),
     });
   }
 
   return { rows, skipped };
+}
+
+// "Void" is left out on purpose: rfis_void_reason_required rejects a void RFI
+// without a reason, and a log import has none to give.
+const IMPORT_STATUSES = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
+const IMPORT_PRIORITIES = ["Low", "Medium", "High", "Critical"];
+
+function cleanText(value, max) {
+  const s = String(value ?? "").trim();
+  return s ? s.slice(0, max) : null;
+}
+
+function matchAllowed(value, allowed) {
+  const v = String(value ?? "").trim().toLowerCase();
+  return allowed.find((a) => a.toLowerCase() === v) || null;
+}
+
+function parseYesNo(value) {
+  const v = String(value ?? "").trim().toLowerCase();
+  if (["yes", "y", "true", "1"].includes(v)) return true;
+  if (["no", "n", "false", "0"].includes(v)) return false;
+  return null;
+}
+
+function parseNumber(value) {
+  const s = String(value ?? "").replace(/[$,\s]/g, "");
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function roundOrNull(n) {
+  return n === null ? null : Math.round(n);
 }
 
 function assertDateHasYear(value, rfiNumber, fieldLabel) {

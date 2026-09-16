@@ -1,6 +1,10 @@
 import { isApprovedForFab } from "@/lib/exports/fabRelease";
 import { isRejectedSheet, isSupersededSheet, isUnresolvedCurrentRevision } from "@/lib/fabReleaseGate";
 import { derivePhaseFromPieces, isPieceDrivenPackage } from "./canonical";
+import { normalizeTonnage } from "@/utils/projectKpis";
+
+const PHASE_ORDER = ["Detailing", "Fabrication", "Delivery", "Erection"];
+
 
 const PHASE_ORDER = ["Detailing", "Fabrication", "Delivery", "Erection"];
 const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
@@ -270,12 +274,12 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     _signals: getWorkPackageSignals(wp, signalOptions),
   }));
 
-  const totalTons = enriched.reduce((sum, wp) => sum + num(wp.tonnage), 0);
-  const tonnageMissingCount = enriched.filter((wp) => num(wp.tonnage) <= 0).length;
+  const totalTons = enriched.reduce((sum, wp) => sum + normalizeTonnage(wp.tonnage), 0);
+  const tonnageMissingCount = enriched.filter((wp) => normalizeTonnage(wp.tonnage) <= 0).length;
   const totalBudgetHours = enriched.reduce((sum, wp) => sum + wp._signals.totalBudgetHours, 0);
   const totalActualHours = enriched.reduce((sum, wp) => sum + wp._signals.totalActualHours, 0);
   const progress = totalTons > 0
-    ? Math.round(enriched.reduce((sum, wp) => sum + num(wp.tonnage) * wp._signals.progress, 0) / totalTons)
+    ? Math.round(enriched.reduce((sum, wp) => sum + normalizeTonnage(wp.tonnage) * wp._signals.progress, 0) / totalTons)
     : Math.round(enriched.reduce((sum, wp) => sum + wp._signals.progress, 0) / Math.max(1, enriched.length));
   // How the headline progress was weighted, so the hero can say so instead of
   // presenting a tonnage-weighted number that silently ignored 36 packages.
