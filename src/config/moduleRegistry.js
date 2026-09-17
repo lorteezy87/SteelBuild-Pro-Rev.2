@@ -108,6 +108,7 @@ const OPERATIONAL_GROUPS = [
       { label: "Dashboard", icon: "◈", page: "Dashboard" },
       { label: "Command Center", icon: "⌘", page: "CommandCenter" },
       { label: "Alerts", icon: "🔔", page: "AlertsCenter", badgeKey: "unread" },
+      { label: "Action Items", icon: "☑", page: "ActionItems" },
     ],
   },
   {
@@ -139,6 +140,7 @@ const OPERATIONAL_GROUPS = [
       { label: "Production Status", icon: "🛠", page: "ProductionStatus" },
       { label: "Procurement", icon: "📦", page: "Procurement" },
       { label: "Deliveries", icon: "🚚", page: "Deliveries" },
+      { label: "Schedule", icon: "▥", page: "ScheduleHub" },
       { label: "Risk", icon: "⚠", page: "RiskHub" },
       { label: "Resources", icon: "👥", page: "ResourceHub" },
     ],
