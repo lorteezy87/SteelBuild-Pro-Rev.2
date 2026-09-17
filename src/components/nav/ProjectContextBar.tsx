@@ -11,6 +11,7 @@ export interface ProjectContext {
 export interface ProjectContextBarProps {
   project?: ProjectContext | null;
   showProjectNumber?: boolean;
+  showIdentity?: boolean;
   projectSwitcher?: ReactNode;
   controls?: ReactNode;
 }
@@ -18,6 +19,7 @@ export interface ProjectContextBarProps {
 export function ProjectContextBar({
   project,
   showProjectNumber = false,
+  showIdentity = true,
   projectSwitcher,
   controls,
 }: ProjectContextBarProps) {
@@ -27,14 +29,18 @@ export function ProjectContextBar({
   return (
     <div className="sbp-project-context" aria-label="Project context">
       <div className="sbp-project-context__identity">
-        <span className="sbp-project-context__label">Active project</span>
-        <span className="sbp-project-context__name">{projectName}</span>
-        {showProjectNumber && project?.project_number ? (
-          <span className="sbp-project-context__number" data-testid="project-number">
-            {project.project_number}
-          </span>
+        {showIdentity ? (
+          <>
+            <span className="sbp-project-context__label">Active project</span>
+            <span className="sbp-project-context__name">{projectName}</span>
+            {showProjectNumber && project?.project_number ? (
+              <span className="sbp-project-context__number" data-testid="project-number">
+                {project.project_number}
+              </span>
+            ) : null}
+            {phase ? <span className="sbp-project-context__phase">{phase}</span> : null}
+          </>
         ) : null}
-        {phase ? <span className="sbp-project-context__phase">{phase}</span> : null}
         {projectSwitcher ? <span className="sbp-project-context__switcher">{projectSwitcher}</span> : null}
       </div>
       {controls ? <div className="sbp-project-context__controls">{controls}</div> : null}
