@@ -42,7 +42,7 @@
   --text-secondary:            #A7B0B8;
   --text-muted:                #7D8892;
 
-  --accent:                   var(--brand-orange);
+  --accent:                    var(--brand-orange);
   --accent-light:              var(--brand-orange-light);
   --accent-hover:              var(--brand-orange-hover);
   --accent-muted:              var(--brand-orange-muted);
@@ -90,7 +90,7 @@
   --text-secondary:            #606A73;
   --text-muted:                #78828B;
 
-  --accent:                   var(--brand-orange);
+  --accent:                    var(--brand-orange);
   --accent-light:              var(--brand-orange-light);
   --accent-hover:              var(--brand-orange-hover);
   --accent-muted:              var(--brand-orange-muted);
@@ -151,4 +151,39 @@ html[data-theme="dark"].steelbuild-dark,
   --border-default:            #94A3B8;
   --border-strong:             #64748B;
   --border:                    #94A3B8;
+}
+
+/* Desktop reference shell: carry the flat SB identity into the permanent rail
+ * without introducing the dimensional marketing treatment into product UI. */
+.sb-dashboard-reference-brand__mark {
+  border-color: var(--brand-orange) !important;
+  border-radius: 5px !important;
+  background:
+    linear-gradient(90deg, currentColor 0 3px, transparent 3px 27px, currentColor 27px 30px),
+    linear-gradient(180deg, transparent 0 5px, currentColor 5px 8px, transparent 8px 24px, currentColor 24px 27px, transparent 27px),
+    var(--accent-muted) !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-display, 'Barlow Condensed', sans-serif) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.04em;
+  box-shadow: inset 0 -3px 0 var(--brand-orange);
+}
+
+.sb-dashboard-reference-brand > span:last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-family: var(--font-display, 'Barlow Condensed', sans-serif);
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.sb-dashboard-reference-brand > span:last-child::after {
+  content: "BUILT FOR WHAT YOU BUILD";
+  margin-top: 5px;
+  color: var(--text-muted);
+  font: 600 6px/1 var(--font-mono, monospace);
+  letter-spacing: 0.13em;
 }
