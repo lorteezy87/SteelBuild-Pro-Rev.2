@@ -1,14 +1,9 @@
 /**
  * launcherConfig — desktop launcher + dock configuration.
  *
- * Additive layer over moduleRegistry: derives a flat module list (with a
- * category per the existing SIDEBAR_GROUPS), the dock default set, and the
- * launcher tile background-photo resolver. moduleRegistry shape is left
- * untouched so its dev-time schema validator keeps passing.
- *
- * photoFor returns null until the construction-photo pack ships — ModuleTile
- * then renders its dark-gradient fallback. The pack fills PHOTO_ASSETS later
- * (public/photos/desktop/<page>.webp).
+ * The launcher follows the compact operational sidebar hierarchy. Deep pages
+ * remain reachable from their local hubs without making the launcher a second
+ * full navigation tree.
  */
 import { SIDEBAR_GROUPS } from "@/config/moduleRegistry";
 
@@ -20,22 +15,18 @@ export const LAUNCHER_MODULES = SIDEBAR_GROUPS.flatMap((g) =>
 /** Rail categories: ALL + each sidebar group, in order. */
 export const LAUNCHER_CATEGORIES = ["ALL", ...SIDEBAR_GROUPS.map((g) => g.label)];
 
-/** Default dock pages — the moat + the most-used destinations. */
+/** Default dock pages — high-frequency destinations represented in the compact nav. */
 export const DOCK_DEFAULT_PAGES = [
   "Dashboard",
   "DrawingSubmittalHub",
   "RFIs",
-  "ScheduleHub",
+  "WorkPackages",
   "FabRelease",
   "Deliveries",
   "CostHub",
   "FieldToday",
 ];
 
-/**
- * Background photos by page key, served from public/photos/desktop/.
- * A tile whose file is missing falls back to the gradient (ModuleTile onError).
- */
 export const PHOTO_ASSETS = {
   Dashboard: "/photos/desktop/Dashboard.webp",
   CommandCenter: "/photos/desktop/CommandCenter.webp",
@@ -70,18 +61,15 @@ export const PHOTO_ASSETS = {
   CalculatorsHub: "/photos/desktop/CalculatorsHub.webp",
 };
 
-/** Background photo path for a launcher tile, or null to use the gradient fallback. */
 export function photoFor(page) {
   return PHOTO_ASSETS[page] || null;
 }
 
-/** Modules in a category; "ALL" returns the full list. */
 export function modulesForCategory(category) {
   if (!category || category === "ALL") return LAUNCHER_MODULES;
   return LAUNCHER_MODULES.filter((m) => m.category === category);
 }
 
-/** Case-insensitive label/page search; empty query returns everything. */
 export function searchModules(query) {
   const q = (query || "").trim().toLowerCase();
   if (!q) return LAUNCHER_MODULES;
@@ -90,7 +78,6 @@ export function searchModules(query) {
   );
 }
 
-/** Dock module objects (resolved + filtered to known pages). */
 export function dockModules(pages = DOCK_DEFAULT_PAGES) {
   return pages
     .map((p) => LAUNCHER_MODULES.find((m) => m.page === p))
