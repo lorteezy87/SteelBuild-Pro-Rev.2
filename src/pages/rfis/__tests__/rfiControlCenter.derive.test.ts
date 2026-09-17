@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { daysUntil, riskScore, rfiUrgencyLabel, ballInCourtSummary, buildRfiSummary } from "../rfiControlCenter.derive";
+import {
+  daysUntil,
+  riskScore,
+  rfiUrgencyLabel,
+  ballInCourtSummary,
+  buildRfiSummary,
+  matchesRfiOperationalFilter,
+  rfiOperationalSignals,
+} from "../rfiControlCenter.derive";
 
 // Build an ISO date (YYYY-MM-DD) `offsetDays` from today (UTC midnight basis).
 function isoOffset(offsetDays: number): string {
@@ -101,5 +109,77 @@ describe("buildRfiSummary", () => {
     expect(s.riskQueue[0].id).toBe("1"); // overdue critical is hottest
     expect(s.workQueue.length).toBeGreaterThan(0);
     expect(s.ballInCourt).toBeInstanceOf(Array);
+  });
+});
+
+describe("RFI operational signals", () => {
+  it("derives due-soon, detailing, fab, field, external-response, and WP-link evidence from persisted fields", () => {
+    const rfi = {
+      id: "ops-1",
+      status: "Open",
+      ball_in_court: "Engineer",
+      date_required: isoOffset(2),
+      work_package_id: "wp-42",
+      metadata: {
+        fab_hold: true,
+        fab_impact: true,
+        erection_impact: true,
+        drawing_revision_required: true,
+      },
+    };
+
+    const signals = rfiOperationalSignals(rfi);
+    expect(signals.dueSoon).toBe(true);
+    expect(signals.blockingDetailing).toBe(true);
+    expect(signals.blockingFab).toBe(true);
+    expect(signals.fieldImpact).toBe(true);
+    expect(signals.unansweredExternal).toBe(true);
+    expect(signals.linkedWorkPackageId).toBe("wp-42");
+    expect(matchesRfiOperationalFilter(rfi, "due_soon")).toBe(true);
+    expect(matchesRfiOperationalFilter(rfi, "detailing_blocker")).toBe(true);
+    expect(matchesRfiOperationalFilter(rfi, "fab_blocker")).toBe(true);
+    expect(matchesRfiOperationalFilter(rfi, "field_impact")).toBe(true);
+    expect(matchesRfiOperationalFilter(rfi, "unanswered_external")).toBe(true);
+  });
+
+  it("keeps an answered RFI actionable when the recorded response still requires downstream work", () => {
+    const answered = {
+      id: "answered-followup",
+      status: "Answered",
+      ball_in_court: "GC",
+      cost_impact: true,
+      metadata: {
+        drawing_revision_required: true,
+        fab_impact: true,
+        change_order_likely: true,
+      },
+    };
+
+    const signals = rfiOperationalSignals(answered);
+    expect(signals.unansweredExternal).toBe(false);
+    expect(signals.downstreamAction).toBe(true);
+    expect(signals.blockingDetailing).toBe(true);
+    expect(signals.blockingFab).toBe(true);
+    expect(matchesRfiOperationalFilter(answered, "downstream_action")).toBe(true);
+  });
+
+  it("does not keep closed or void RFIs in operational impact queues", () => {
+    for (const status of ["Closed", "Void"]) {
+      const settled = {
+        id: status,
+        status,
+        metadata: {
+          fab_hold: true,
+          fab_impact: true,
+          erection_impact: true,
+          drawing_revision_required: true,
+        },
+      };
+      const signals = rfiOperationalSignals(settled);
+      expect(signals.blockingDetailing).toBe(false);
+      expect(signals.blockingFab).toBe(false);
+      expect(signals.fieldImpact).toBe(false);
+      expect(signals.downstreamAction).toBe(false);
+    }
   });
 });
