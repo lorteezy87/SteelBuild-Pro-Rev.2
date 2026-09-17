@@ -9,8 +9,8 @@ import { describe, it, expect, vi } from "vitest";
 // Mock the costCodes module so tests aren't coupled to the full catalog
 vi.mock("@/components/shared/costCodes", () => ({
   COST_CODES: [
-    { code: "01-100", name: "Structural Steel" },
-    { code: "01-200", name: "Misc Metals" },
+    { code: "01-100", name: "Structural Steel", category: "Materials" },
+    { code: "01-200", name: "Misc Metals", category: "Labor" },
   ],
   CATEGORY_ORDER: ["Labor", "Materials", "Subcontractor"],
   CATEGORY_COLORS: { Labor: "#3B82F6", Materials: "#F59E0B", Subcontractor: "#10B981" },
@@ -241,5 +241,137 @@ describe("costStatusTone", () => {
 
   it("returns good when fields are undefined", () => {
     expect(costStatusTone({})).toBe("good");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit 2026-09-16
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("buildVarianceAlerts — agrees with CostCodeRow.is_over", () => {
+  it("flags a code whose COMMITTED exceeds its REVISED budget", () => {
+    // is_over (useFinancials) is committed > revised_budget. This compared
+    // actual_cost against raw budget_amount, so the flags panel and the table
+    // beneath it listed different codes as over budget.
+    const rows = [
+      { id: "1", cost_code_number: "07", budget_amount: 100, revised_budget: 100, actual_cost: 40, committed_cost: 150 },
+    ];
+    const alerts = buildVarianceAlerts(rows);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].variance).toBe(50);
+    expect(alerts[0].pctOver).toBe(50);
+  });
+
+  it("does NOT flag a code an approved CO brought back under budget", () => {
+    // budget_amount 100, +150 of approved CO on this code → revised 250.
+    const rows = [
+      { id: "1", cost_code_number: "07", budget_amount: 100, revised_budget: 250, actual_cost: 200, committed_cost: 200 },
+    ];
+    expect(buildVarianceAlerts(rows)).toHaveLength(0);
+  });
+
+  it("falls back to budget_amount when no revised_budget is supplied", () => {
+    const rows = [{ id: "1", cost_code_number: "07", budget_amount: 100, committed_cost: 130 }];
+    expect(buildVarianceAlerts(rows)[0].variance).toBe(30);
+  });
+
+  it("marks an overage above the contingency", () => {
+    const rows = [{ id: "1", budget_amount: 100, revised_budget: 100, committed_cost: 400 }];
+    expect(buildVarianceAlerts(rows, 200)[0].exceedsContingency).toBe(true);
+    expect(buildVarianceAlerts(rows, 500)[0].exceedsContingency).toBe(false);
+  });
+});
+
+describe("buildCoAging — local calendar days", () => {
+  it("ages a CO by whole LOCAL days, not a UTC-midnight difference", () => {
+    // `new Date("2026-07-03")` is UTC midnight = 17:00 July 2 in Arizona
+    // (UTC-7). Differencing it against a local `new Date()` aged every CO by an
+    // extra day, tripping the >30d stale flag a day early. The runner is
+    // TZ=UTC, so this is proven by injecting `today` rather than by the clock.
+    const rows = buildCoAging(
+      [{ id: "1", status: "Submitted", submitted_date: "2026-07-03", co_amount: 100 }],
+      new Date(2026, 6, 13, 9, 30), // local July 13
+    );
+    expect(rows[0].daysOpen).toBe(10);
+  });
+
+  it("is stale at 31 days open and not at 30", () => {
+    const at = (d: number) =>
+      buildCoAging(
+        [{ id: "1", status: "Submitted", submitted_date: "2026-07-01", co_amount: 1 }],
+        new Date(2026, 6, d),
+      )[0];
+    expect(at(31).daysOpen).toBe(30);
+    expect(at(31).isStale).toBe(false);
+    expect(at(32).isStale).toBe(true);
+  });
+
+  it("never calls a decided CO stale, even with a padded status", () => {
+    const old = new Date(2026, 11, 1);
+    const rows = buildCoAging(
+      [
+        { id: "a", status: " Approved ", submitted_date: "2026-01-01", co_amount: 1 },
+        { id: "b", status: "Rejected", submitted_date: "2026-01-01", co_amount: 1 },
+        { id: "c", status: "Void", submitted_date: "2026-01-01", co_amount: 1 },
+        { id: "d", status: "Submitted", submitted_date: "2026-01-01", co_amount: 1 },
+      ],
+      old,
+    );
+    expect(rows.filter((r) => r.isStale).map((r) => r.id)).toEqual(["d"]);
+  });
+
+  it("leaves daysOpen null when the CO was never submitted", () => {
+    const rows = buildCoAging([{ id: "1", status: "Draft", co_amount: 1 }], new Date(2026, 6, 13));
+    expect(rows[0].daysOpen).toBeNull();
+    expect(rows[0].isStale).toBe(false);
+  });
+});
+
+describe("buildCategoryPieData — no silently dropped spend", () => {
+  it("falls back to the catalog category when phase is unset", () => {
+    // Matching on `phase` alone dropped every code with a null phase, so the
+    // donut summed to less than the Actual KPI beside it.
+    const data = buildCategoryPieData([
+      { cost_code_number: "01-200", phase: null, actual_cost: 1000 }, // catalog: Labor
+      { cost_code_number: "01-100", phase: "Materials", actual_cost: 500 },
+    ]);
+    expect(data.find((d) => d.name === "Labor")?.value).toBe(1000);
+    expect(data.find((d) => d.name === "Materials")?.value).toBe(500);
+  });
+
+  it("shows uncategorisable spend as Unassigned rather than discarding it", () => {
+    const data = buildCategoryPieData([
+      { cost_code_number: "ZZ-9", phase: null, actual_cost: 750 },
+    ]);
+    expect(data).toEqual([{ name: "Unassigned", value: 750 }]);
+  });
+
+  it("slices always sum to total actual spend", () => {
+    const rows = [
+      { cost_code_number: "01-200", phase: "Labor", actual_cost: 100 },
+      { cost_code_number: "01-100", phase: null, actual_cost: 200 },
+      { cost_code_number: "CUSTOM", phase: "", actual_cost: 300 },
+    ];
+    const total = buildCategoryPieData(rows).reduce((s, d) => s + d.value, 0);
+    expect(total).toBe(600);
+  });
+});
+
+describe("chart data scales to the revised budget", () => {
+  it("bars and variance use revised_budget when the row carries one", () => {
+    const [bar] = buildBarChartData([
+      { cost_code_number: "07", budget_amount: 100, revised_budget: 250, actual_cost: 80, committed_cost: 200 },
+    ]);
+    expect(bar.budget).toBe(250);
+    expect(bar.variance).toBe(-50);
+  });
+
+  it("orders the cumulative curve deterministically on equal budgets", () => {
+    const rows = [
+      { cost_code_number: "09", budget_amount: 100 },
+      { cost_code_number: "02", budget_amount: 100 },
+      { cost_code_number: "05", budget_amount: 100 },
+    ];
+    expect(buildCumulativeData(rows).map((d) => d.name)).toEqual(["02", "05", "09"]);
   });
 });

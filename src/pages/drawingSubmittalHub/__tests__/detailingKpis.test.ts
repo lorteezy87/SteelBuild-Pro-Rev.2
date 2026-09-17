@@ -5,7 +5,7 @@
  * byte for byte.
  */
 import { describe, expect, it } from "vitest";
-import { KPI_PENDING, buildDetailingKpiCells, buildStatusLine, totalOverdue } from "../detailingKpis";
+import { KPI_PENDING, buildDetailingKpiCells, buildStatusLine, fleetGrade, totalOverdue } from "../detailingKpis";
 import type { DetailingKpis } from "../detailingKpis";
 
 const KPIS: DetailingKpis = {
@@ -29,9 +29,12 @@ const byLabel = (cells: ReturnType<typeof buildDetailingKpiCells>, label: string
 };
 
 describe("buildDetailingKpiCells", () => {
-  it("keeps the seven cells, in order, with the scoped 'Submittals Needing Action' label", () => {
+  it("keeps the cells, in order, with the scoped 'Submittals Needing Action' label", () => {
     expect(buildDetailingKpiCells(KPIS, false).map((c) => c.label)).toEqual([
       "Drawing Sets", "Released", "In Review", "Submittals", "Submittals Needing Action", "Overdue", "At Risk",
+      // Fleet Health closes the strip: the rollup was computed and passed in
+      // from the first version of this shell and shown nowhere.
+      "Fleet Health",
     ]);
   });
 
@@ -45,17 +48,20 @@ describe("buildDetailingKpiCells", () => {
       [2, "rejected / returned", "warn"],
       [5, "3 sets · 2 unlinked subs", "danger"],
       [1, "schedule risk", "warn"],
+      [71, "avg score · C", "warn"],
     ]);
   });
 
   it("drops the alert tones to neutral when there's nothing to flag", () => {
     const tones = buildDetailingKpiCells(ZERO, false).map((c) => c.tone);
-    expect(tones).toEqual(["neutral", "good", "neutral", "neutral", "neutral", "neutral", "neutral"]);
+    // ZERO keeps KPIS' fleetAverageScore of 71 — a real, scored fleet in the
+    // C band, which is a warn whatever the counts say.
+    expect(tones).toEqual(["neutral", "good", "neutral", "neutral", "neutral", "neutral", "neutral", "warn"]);
   });
 
   it("shows an em dash and a neutral tone for every value while pending, never a 0", () => {
     const cells = buildDetailingKpiCells(KPIS, true);
-    expect(cells.map((c) => c.value)).toEqual(Array(7).fill(KPI_PENDING));
+    expect(cells.map((c) => c.value)).toEqual(Array(8).fill(KPI_PENDING));
     expect(cells.every((c) => c.tone === "neutral")).toBe(true);
     expect(byLabel(cells, "Drawing Sets").sublabel).toBe("loading…");
     expect(byLabel(cells, "Submittals").sublabel).toBe("loading…");
@@ -88,5 +94,58 @@ describe("buildStatusLine", () => {
 
   it("says '—' for every number while pending, never 0", () => {
     expect(buildStatusLine(ZERO, true)).toBe("— sets · — open · — overdue · — at risk · Fab Ready —");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fleet Health — the rollup that was computed and never rendered.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Fleet Health cell", () => {
+  const cell = (fleetAverageScore: number | null, pending = false) =>
+    buildDetailingKpiCells({ ...KPIS, fleetAverageScore }, pending)
+      .find((c) => c.label === "Fleet Health")!;
+
+  it("is on the strip at all", () => {
+    expect(cell(88)).toBeDefined();
+  });
+
+  it("shows the average score with its grade", () => {
+    expect(cell(88).value).toBe(88);
+    expect(cell(88).sublabel).toBe("avg score · B");
+  });
+
+  it("reads em dash, not 100, when no set has been scored", () => {
+    // summarizeFleetHealth returns averageScore 100 for an empty list; the hub
+    // maps that to null. A brand-new project has no health, not perfect health.
+    expect(cell(null).value).toBe(KPI_PENDING);
+    expect(cell(null).sublabel).toBe("no scored sets");
+    expect(cell(null).tone).toBe("neutral");
+  });
+
+  it("reads em dash while the queries are in flight", () => {
+    expect(cell(88, true).value).toBe(KPI_PENDING);
+    expect(cell(88, true).tone).toBe("neutral");
+  });
+
+  it("tones on the same thresholds as the grade", () => {
+    expect(cell(95).tone).toBe("good");
+    expect(cell(80).tone).toBe("good");
+    expect(cell(79).tone).toBe("warn");
+    expect(cell(60).tone).toBe("warn");
+    expect(cell(59).tone).toBe("danger");
+  });
+});
+
+describe("fleetGrade", () => {
+  it("matches gradeFor in drawingHealthScore — one scale, not two", () => {
+    expect(fleetGrade(90)).toBe("A");
+    expect(fleetGrade(89)).toBe("B");
+    expect(fleetGrade(80)).toBe("B");
+    expect(fleetGrade(79)).toBe("C");
+    expect(fleetGrade(70)).toBe("C");
+    expect(fleetGrade(69)).toBe("D");
+    expect(fleetGrade(60)).toBe("D");
+    expect(fleetGrade(59)).toBe("F");
   });
 });

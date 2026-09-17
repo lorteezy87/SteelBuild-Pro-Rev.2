@@ -37,6 +37,18 @@ export type EntityClient<T extends TableName> = {
    *  the cap as a tenant grows (CommandCenter / AIInsights). */
   listAll: (sortBy?: string) => Promise<Array<RowWithAliases<T>>>;
   filter: (conditions?: Conditions, sortBy?: string, limit?: number) => Promise<Array<RowWithAliases<T>>>;
+  /**
+   * Like filter() but PAGINATES to completeness. Use it wherever a truncated
+   * read would make the UI state something FALSE rather than merely show less:
+   * drawing_revisions drives the Register's "Rev" column and the Approval
+   * Matrix's "revised since last sent", and those are claims, not a row list —
+   * a project past the 1000-row server cap printed a stale revision for every
+   * sheet beyond it, with nothing on screen to say so.
+   *
+   * Costs one round-trip per 1000 rows, so prefer filter() for reads that are
+   * merely displayed as a capped list (those pair with ListTruncationNotice).
+   */
+  filterAll: (conditions?: Conditions, sortBy?: string) => Promise<Array<RowWithAliases<T>>>;
   get: (id: string) => Promise<RowWithAliases<T>>;
   create: (record: Insert<T>) => Promise<RowWithAliases<T>>;
   update: (id: string, updates: Update<T>) => Promise<RowWithAliases<T>>;

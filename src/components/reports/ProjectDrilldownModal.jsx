@@ -10,7 +10,7 @@ import {
   Tooltip, ResponsiveContainer, BarChart, Bar
 } from "recharts";
 import { format, parseISO } from "date-fns";
-import { resolveProjectSpend, preferManualActual } from "@/services/costRollup";
+import { resolveProjectSpend, preferManualActual, isPaidExpense, isVoidedExpense } from "@/services/costRollup";
 
 // ── Helpers ────────────────────────────────────────────────────────
 const fmt$ = (n) =>
@@ -152,7 +152,10 @@ export default function ProjectDrilldownModal({ project, onClose }) {
   const paidByCode = useMemo(() => {
     const map = new Map();
     for (const e of expenses) {
-      if (String(e?.payment_status ?? "").toLowerCase() !== "paid") continue;
+      // Voided first: resolveProjectSpend drops voided rows before looking at
+      // "paid", and this map did not — a voided row left at Paid inflated its
+      // phase here while the KPI above excluded it.
+      if (isVoidedExpense(e) || !isPaidExpense(e)) continue;
       const key = String(e?.cost_code ?? "");
       if (!key) continue;
       map.set(key, (map.get(key) ?? 0) + (Number(e.amount) || 0));

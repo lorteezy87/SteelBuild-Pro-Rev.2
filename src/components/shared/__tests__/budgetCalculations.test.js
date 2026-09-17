@@ -102,21 +102,53 @@ describe("getWorkPackageCostSummary", () => {
 });
 
 describe("getExpensesByCategory", () => {
-  it("buckets by cost-code category, excludes voided, zeroes unmapped categories", () => {
+  // Categories come from the COST_CODES catalog, the one place a code's
+  // category is declared. The hand-written map this replaced filed 01
+  // (Detailing) under Labor, left Subcontractor permanently empty, and knew
+  // nothing about 06 / 10 / 11 / 12 — so shop labor and deck install spend
+  // fell out of every category total.
+  it("buckets by the catalog's category, excludes voided, ignores unknown codes", () => {
     const expenses = [
-      { cost_code: "01", amount: 1000, payment_status: "Paid" }, // Labor
-      { cost_code: "07", amount: 500, payment_status: "Approved" }, // Labor
-      { cost_code: "03", amount: 2000, payment_status: "Paid" }, // Materials
+      { cost_code: "01", amount: 1000, payment_status: "Paid" }, // Detailing → Subcontractor
+      { cost_code: "07", amount: 500, payment_status: "Approved" }, // Field Labor → Labor
+      { cost_code: "03", amount: 2000, payment_status: "Paid" }, // Joist → Materials
       { cost_code: "09", amount: 800, payment_status: "Paid" }, // Equipment
       { cost_code: "01", amount: 9999, payment_status: "Voided" }, // excluded
       { cost_code: "99", amount: 1234, payment_status: "Paid" }, // unknown → ignored
     ];
     const r = getExpensesByCategory(expenses);
-    expect(r.Labor).toBe(1500);
+    expect(r.Labor).toBe(500);
+    expect(r.Subcontractor).toBe(1000);
     expect(r.Materials).toBe(2000);
     expect(r.Equipment).toBe(800);
-    expect(r.Subcontractor).toBe(0); // no codes mapped to it
     expect(r["Misc."]).toBe(0);
     expect(r.Overhead).toBe(0);
+  });
+
+  it("counts the codes the old hand-written map omitted entirely", () => {
+    const r = getExpensesByCategory([
+      { cost_code: "06", amount: 100, payment_status: "Paid" }, // Shop Labor → Labor
+      { cost_code: "10", amount: 200, payment_status: "Paid" }, // Shipping → Labor
+      { cost_code: "11", amount: 300, payment_status: "Paid" }, // Deck Install → Subcontractor
+      { cost_code: "12", amount: 400, payment_status: "Paid" }, // Special Coatings → Misc.
+      { cost_code: "14", amount: 500, payment_status: "Paid" }, // PM/Admin → Overhead
+    ]);
+    expect(r.Labor).toBe(300);
+    expect(r.Subcontractor).toBe(300);
+    expect(r["Misc."]).toBe(400);
+    expect(r.Overhead).toBe(500);
+  });
+
+  it("excludes lowercase / padded void statuses, not just exact 'Voided'", () => {
+    const r = getExpensesByCategory([
+      { cost_code: "07", amount: 100, payment_status: "Paid" },
+      { cost_code: "07", amount: 900, payment_status: "void" },
+      { cost_code: "07", amount: 900, payment_status: " Voided " },
+    ]);
+    expect(r.Labor).toBe(100);
+  });
+
+  it("trims padded cost-code text rather than dropping the row", () => {
+    expect(getExpensesByCategory([{ cost_code: " 07 ", amount: 250, payment_status: "Paid" }]).Labor).toBe(250);
   });
 });

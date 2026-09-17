@@ -79,7 +79,12 @@
 [data-skin="command"] .cmd-statcard__label { font-size: 11px; color: var(--cmd-text-muted); }
 
 /* KPI cards — a row of individual white cards */
-[data-skin="command"] .cmd-kpi-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
+/* Auto-fit, not a hardcoded 7. Control Centers ship between 5 and 8 cells:
+   at repeat(7, 1fr) the Piece Register's 5 left two dead columns, and the Cost
+   and Change Order strips' 8 dropped one card alone onto a second row. Every
+   strip now fills its row evenly whatever it carries. The narrow breakpoints
+   below still pin explicit column counts. */
+[data-skin="command"] .cmd-kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 [data-skin="command"] .cmd-kpi { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; padding: 14px; }
 [data-skin="command"] .cmd-kpi__icon { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: var(--cmd-kpi-icon-bg); color: var(--cmd-text-muted); margin-bottom: 8px; }
 [data-skin="command"] .cmd-kpi__value { font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--cmd-text); }
@@ -322,30 +327,24 @@ html.steelbuild-dark [data-skin="command"],
 [data-skin="command"] .detailing-cc .sbd-table tbody tr:hover { background: var(--cmd-row-hover); }
 
 /* Buttons used inside panels. */
-[data-skin="command"] .detailing-cc .desk-btn-primary,
 [data-skin="command"] .detailing-cc .sbd-btn-primary {
   display: inline-flex; align-items: center; gap: 6px; background: var(--cmd-gold);
   color: var(--cmd-on-gold); border: 1px solid var(--cmd-gold); border-radius: 8px;
   font-weight: 600; font-size: 12px; padding: 8px 14px; cursor: pointer;
 }
-[data-skin="command"] .detailing-cc .desk-btn-secondary,
 [data-skin="command"] .detailing-cc .sbd-btn,
 [data-skin="command"] .detailing-cc .sbd-btn-ghost {
   display: inline-flex; align-items: center; gap: 6px; background: var(--cmd-surface);
   color: var(--cmd-text); border: 1px solid var(--cmd-border); border-radius: 8px;
   font-size: 12px; padding: 8px 14px; cursor: pointer;
 }
-[data-skin="command"] .detailing-cc .desk-btn-danger {
-  display: inline-flex; align-items: center; gap: 6px; background: var(--cmd-chip-danger-bg);
-  color: var(--cmd-danger); border: 1px solid var(--cmd-chip-danger-bg); border-radius: 8px;
-  font-size: 12px; padding: 8px 14px; cursor: pointer;
-}
-
-/* Empty / loading states + badges. */
-[data-skin="command"] .detailing-cc .desk-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 36px 20px; color: var(--cmd-text-muted); }
-[data-skin="command"] .detailing-cc .desk-state__title { font-size: 14px; font-weight: 600; color: var(--cmd-text-muted); }
-[data-skin="command"] .detailing-cc .desk-state__msg { font-size: 12px; color: var(--cmd-text-muted); max-width: 360px; }
-[data-skin="command"] .detailing-cc .desk-skeleton { background: linear-gradient(90deg, rgba(30,41,59,.06), rgba(30,41,59,.12), rgba(30,41,59,.06)); background-size: 200% 100%; border-radius: 6px; animation: desk-shimmer 1.3s ease-in-out infinite; }
+/* Badges. The .desk-state / .desk-state__title / .desk-state__msg and
+   .desk-skeleton rules that sat here are gone: no component in the app renders
+   any of those class names, and .desk-skeleton also animated `desk-shimmer`,
+   which was never defined as @keyframes anywhere, on a hardcoded slate alpha
+   that would have been invisible on SteelBuild Dark had it ever rendered.
+   The live loading state is components/shared/LoadingSkeleton.jsx, which
+   carries its own theme-token gradient and injects its own keyframes. */
 [data-skin="command"] .detailing-cc .sbd-badge-info { background: var(--cmd-chip-info-bg); color: var(--cmd-info); border: 1px solid var(--cmd-chip-info-bg); }
 
 /* sbd-* cards — replace the dark white-alpha inset shadows with light ones. */

@@ -5,6 +5,9 @@
  * cap drops the OLDEST rows and leaves no trace. The flag is what keeps the
  * Approval Matrix from calling a set that was only sent on those rows
  * "Not sent yet".
+ *
+ * The revisions read is NOT one of the two the flag covers: it is paged with
+ * filterAll, so it cannot be short.
  */
 import type { ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -21,7 +24,10 @@ vi.mock("@/api/supabaseClient", async (importOriginal) => ({
   entities: {
     DrawingTransmittal: { filter: reads.transmittals },
     DrawingTransmittalItem: { filter: reads.items },
-    DrawingRevision: { filter: reads.revisions },
+    // Revisions are read with filterAll (paged past the 1000-row server cap):
+    // they are a LOOKUP keyed by revision id, and a truncated one made an item
+    // whose revision sat past the cap indistinguishable from an unmatched item.
+    DrawingRevision: { filterAll: reads.revisions },
   },
 }));
 

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeExpenses,
+  allocateApprovedCos,
   computeCostCodeTotals,
+  computeRevisedBudget,
   computeRevisedContractValue,
+  isOutstandingExpense,
+  isPaidExpense,
+  isVoidedExpense,
   preferManualActual,
   resolveProjectSpend,
 } from "../costRollup";
@@ -289,5 +295,141 @@ describe("resolveProjectSpend matches the legacy raw-expense sums when no column
     const typed = [{ cost_code_number: "01", actual_cost: 5000, committed_cost: 0 }, codes[1]];
     expect(resolveProjectSpend(typed, expenses).actual).not.toBe(legacyActual);
     expect(resolveProjectSpend(typed, expenses).actual).toBe(5000 + 50 + 20);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit 2026-09-16 — the drift classes this module now owns.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("expense status predicates", () => {
+  it("treats every stored spelling of void as voided", () => {
+    for (const status of ["Voided", "voided", "void", "Void", " Voided ", "VOID"]) {
+      expect(isVoidedExpense({ payment_status: status })).toBe(true);
+    }
+    expect(isVoidedExpense({ payment_status: "Paid" })).toBe(false);
+    expect(isVoidedExpense({ payment_status: null })).toBe(false);
+    expect(isVoidedExpense(null)).toBe(false);
+  });
+
+  it("matches paid case- and whitespace-insensitively", () => {
+    expect(isPaidExpense({ payment_status: " Paid " })).toBe(true);
+    expect(isPaidExpense({ payment_status: "paid" })).toBe(true);
+    expect(isPaidExpense({ payment_status: "Unpaid" })).toBe(false);
+  });
+
+  it("treats Unpaid and Pending Approval as outstanding, nothing else", () => {
+    expect(isOutstandingExpense({ payment_status: "unpaid" })).toBe(true);
+    expect(isOutstandingExpense({ payment_status: "Pending Approval" })).toBe(true);
+    expect(isOutstandingExpense({ payment_status: "Disputed" })).toBe(false);
+    expect(isOutstandingExpense({ payment_status: "Paid" })).toBe(false);
+  });
+
+  it("activeExpenses drops voided rows however they were spelled", () => {
+    const rows = [
+      { amount: 100, payment_status: "Paid" },
+      { amount: 200, payment_status: "void" },
+      { amount: 300, payment_status: "Unpaid" },
+      null,
+    ];
+    expect(activeExpenses(rows as never).map((e) => e.amount)).toEqual([100, 300]);
+  });
+
+  it("excludes a lowercase-void expense from project committed spend", () => {
+    // The exact `!== "Voided"` compares that used to live in useFinancials /
+    // Expenses / budgetCalculations counted this row; resolveProjectSpend did
+    // not — the same project reported two committed totals.
+    const codes = [{ cost_code_number: "07", budget_amount: 1000 }];
+    const spend = resolveProjectSpend(codes, [
+      { cost_code: "07", amount: 400, payment_status: "Paid" },
+      { cost_code: "07", amount: 600, payment_status: "void" },
+    ]);
+    expect(spend.committed).toBe(400);
+    expect(spend.actual).toBe(400);
+  });
+});
+
+describe("resolveProjectSpend — duplicate cost-code numbers", () => {
+  it("does not let two rows sharing a number both claim the expense rollup", () => {
+    // The create-time duplicate guard is client-side only, so a concurrent add
+    // can mint a second row with the same number. Both used to absorb that
+    // number's full expense total and double the project's actuals.
+    const codes = [
+      { id: "a", cost_code_number: "07", budget_amount: 5000 },
+      { id: "b", cost_code_number: "07", budget_amount: 0 },
+    ];
+    const spend = resolveProjectSpend(codes, [
+      { cost_code: "07", amount: 1000, payment_status: "Paid" },
+    ]);
+    expect(spend.mappedActual).toBe(1000);
+    expect(spend.actual).toBe(1000);
+    expect(spend.unmappedCount).toBe(0);
+  });
+
+  it("still adds a typed column on the duplicate row", () => {
+    const codes = [
+      { id: "a", cost_code_number: "07" },
+      { id: "b", cost_code_number: "07", actual_cost: 250 },
+    ];
+    const spend = resolveProjectSpend(codes, [
+      { cost_code: "07", amount: 1000, payment_status: "Paid" },
+    ]);
+    // Row a takes the 1000 expense rollup; row b's typed 250 wins on its own row.
+    expect(spend.mappedActual).toBe(1250);
+  });
+});
+
+describe("computeRevisedBudget", () => {
+  it("adds approved COs to the cost codes they were booked against", () => {
+    const codes = [
+      { id: "cc1", cost_code_number: "05", budget_amount: 100_000 },
+      { id: "cc2", cost_code_number: "07", budget_amount: 50_000 },
+    ];
+    const cos = [
+      { status: "Approved", co_amount: 25_000, cost_code_id: "cc1" },
+      { status: "Submitted", co_amount: 90_000, cost_code_id: "cc1" },
+      { status: "Rejected", co_amount: 90_000, cost_code_id: "cc2" },
+    ];
+    const r = computeRevisedBudget(codes, cos);
+    expect(r.originalBudget).toBe(150_000);
+    expect(r.signedExtras).toBe(25_000);
+    expect(r.revisedBudget).toBe(175_000);
+    expect(r.unallocatedExtras).toBe(0);
+  });
+
+  it("reports approved CO money with no cost code instead of dropping it", () => {
+    // It raises the revised CONTRACT, so omitting it silently from the budget
+    // makes margin read better than it is.
+    const codes = [{ id: "cc1", budget_amount: 100_000 }];
+    const cos = [{ status: "Approved", co_amount: 40_000, cost_code_id: null as string | null }];
+    const r = computeRevisedBudget(codes, cos);
+    expect(r.revisedBudget).toBe(100_000);
+    expect(r.unallocatedExtras).toBe(40_000);
+    expect(computeRevisedContractValue({ original_contract_value: 1_000_000 }, cos)).toBe(1_040_000);
+  });
+
+  it("counts a whitespace-padded Approved, like computeRevisedContractValue", () => {
+    const codes = [{ id: "cc1", budget_amount: 10 }];
+    const cos = [{ status: " Approved ", co_amount: 5, cost_code_id: "cc1" }];
+    expect(computeRevisedBudget(codes, cos).revisedBudget).toBe(15);
+  });
+
+  it("returns zeros for empty input", () => {
+    const r = computeRevisedBudget(null, null);
+    expect(r).toEqual({ originalBudget: 0, signedExtras: 0, unallocatedExtras: 0, revisedBudget: 0 });
+  });
+});
+
+describe("allocateApprovedCos", () => {
+  it("buckets by cost_code_id and totals only approved rows", () => {
+    const r = allocateApprovedCos([
+      { status: "Approved", co_amount: 10, cost_code_id: "a" },
+      { status: "Approved", co_amount: 15, cost_code_id: "a" },
+      { status: "Approved", co_amount: 7, cost_code_id: null },
+      { status: "Draft", co_amount: 999, cost_code_id: "a" },
+    ]);
+    expect(r.byCostCodeId).toEqual({ a: 25 });
+    expect(r.unallocated).toBe(7);
+    expect(r.approvedTotal).toBe(32);
   });
 });

@@ -156,7 +156,7 @@ describe("DetailingCommandShell — KPI strip and status line", () => {
     cleanup();
 
     mount({ activeTab: "overview", isLoading: true });
-    expect(within(screen.getByRole("tabpanel")).getAllByText("—")).toHaveLength(7);
+    expect(within(screen.getByRole("tabpanel")).getAllByText("—")).toHaveLength(8);
     expect(screen.getByText("Fab Ready —")).toBeInTheDocument();
   });
 });
