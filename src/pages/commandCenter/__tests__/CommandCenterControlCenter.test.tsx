@@ -5,7 +5,7 @@ import CommandCenterControlCenter from "../CommandCenterControlCenter";
 
 vi.mock("@/components/command", async () => {
   const actual = await vi.importActual<typeof import("@/components/command")>("@/components/command");
-  return { ...actual, useCommandSkin: () => undefined };
+  return { ...actual, useCommandSkin: (): void => undefined };
 });
 
 describe("CommandCenterControlCenter", () => {
