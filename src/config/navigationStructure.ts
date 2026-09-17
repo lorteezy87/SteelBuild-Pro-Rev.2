@@ -13,6 +13,9 @@ export interface OperationalNavGroup {
   items: OperationalNavItem[];
 }
 
+type RegistryNavItem = OperationalNavItem & { icon?: string };
+type RegistryNavGroup = OperationalNavGroup & { items: RegistryNavItem[] };
+
 /**
  * Typed projection of the canonical module registry.
  *
@@ -20,7 +23,9 @@ export interface OperationalNavGroup {
  * reachability and platform gating; this typed view exists for new TS/TSX
  * shell components and tests without maintaining a second navigation tree.
  */
-export const OPERATIONAL_NAV_GROUPS: OperationalNavGroup[] = SIDEBAR_GROUPS.map((group) => ({
+const registryGroups = SIDEBAR_GROUPS as RegistryNavGroup[];
+
+export const OPERATIONAL_NAV_GROUPS: OperationalNavGroup[] = registryGroups.map((group) => ({
   label: group.label,
   collapsible: group.collapsible,
   utility: group.utility,
