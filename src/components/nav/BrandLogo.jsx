@@ -1,114 +1,112 @@
 /**
- * BrandLogo — the SteelBuild PRO mark, as crisp vector (shared design with
- * SteelBuild Submittals). Silver "STEELBUILD" + gold "PRO" inside a chrome
- * diamond with gold accent points, on a self-contained dark "logo card" so it
- * reads on light surfaces (Pro's light theme) as well as dark.
+ * BrandLogo — application-ready SteelBuild-Pro identity.
  *
- * Inline SVG (not an <img>) so the wordmark renders with the app font and
- * stays razor-sharp at any size.
+ * The approved brand reference uses an SB structural-steel monogram, a strong
+ * STEELBUILD-PRO wordmark, and the SteelBuild orange accent. The product UI
+ * intentionally uses a flat vector interpretation so the mark remains legible
+ * at navigation sizes; the dimensional metallic treatment stays a marketing
+ * presentation style.
+ *
+ * `plate` is kept for backwards compatibility with older call sites. New code
+ * should normally leave it false and let the surrounding shell provide the
+ * surface.
  */
 
-import React, { useState } from "react";
+import React from "react";
 
-let _seq = 0;
+function SteelMark() {
+  return (
+    <g aria-hidden="true">
+      <rect x="8" y="7" width="11" height="50" rx="1.5" fill="currentColor" />
+      <rect x="51" y="7" width="11" height="50" rx="1.5" fill="currentColor" />
+      <rect x="18" y="10" width="34" height="8" rx="1.5" fill="currentColor" />
+      <rect x="18" y="46" width="34" height="8" rx="1.5" fill="currentColor" />
+      <path
+        d="M22 21h21.5c6.6 0 11 3.4 11 8.5 0 3.7-2.2 6.4-6 7.6 4.9 1 7.5 4 7.5 8.5C56 52 51 55 43.3 55H22v-8h20.3c2.8 0 4.4-1.2 4.4-3.3 0-2.2-1.6-3.3-4.5-3.3H27v-7.1h14.5c2.5 0 4-1.1 4-3.1 0-1.9-1.5-3-4-3H22V21Z"
+        fill="var(--brand-orange, #FF5A1F)"
+      />
+      <text
+        x="35"
+        y="39"
+        textAnchor="middle"
+        fontFamily="'Barlow Condensed', 'Arial Narrow', sans-serif"
+        fontWeight="900"
+        fontSize="20"
+        letterSpacing="-1"
+        fill="currentColor"
+      >
+        SB
+      </text>
+    </g>
+  );
+}
 
-export function BrandLogo({ height = 96, className, style, title = "SteelBuild Pro", plate = true }) {
-  const [u] = useState(() => `bl${++_seq}`);
-  const width = (height * 460) / 300;
+export function BrandLogo({
+  height = 64,
+  className,
+  style,
+  title = "SteelBuild Pro",
+  plate = false,
+  variant = "full",
+}) {
+  const compact = variant === "mark";
+  const width = compact ? height : Math.round(height * 3.9);
+  const viewBox = compact ? "0 0 70 64" : "0 0 250 64";
 
   return (
     <svg
       role="img"
       aria-label={title}
       className={className}
-      style={style}
+      style={{ color: "var(--text-primary)", ...style }}
       width={width}
       height={height}
-      viewBox="0 0 460 300"
+      viewBox={viewBox}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
       <title>{title}</title>
-      {/* Fixed logo gradients preserve the branded chrome asset across themes. */}
-      <defs>
-        <radialGradient id={`${u}-plate`} cx="0.5" cy="0.42" r="0.75">
-          <stop offset="0" stopColor="#15171c" />
-          <stop offset="1" stopColor="#08090b" />
-        </radialGradient>
-        <linearGradient id={`${u}-silver`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#f6f7f9" />
-          <stop offset="0.42" stopColor="#ffffff" />
-          <stop offset="0.5" stopColor="#e7eaef" />
-          <stop offset="0.6" stopColor="#c4c9d2" />
-          <stop offset="1" stopColor="#9aa0ac" />
-        </linearGradient>
-        <linearGradient id={`${u}-gold`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#f0d68f" />
-          <stop offset="0.45" stopColor="#f7e3a6" />
-          <stop offset="0.56" stopColor="#dab35e" />
-          <stop offset="1" stopColor="#a87a1e" />
-        </linearGradient>
-        <filter id={`${u}-glow`} x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="2.2" result="b" />
-          <feMerge>
-            <feMergeNode in="b" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-
-      {plate && (
+      {plate ? (
         <rect
-          x="3"
-          y="3"
-          width="454"
-          height="294"
-          rx="20"
-          fill={`url(#${u}-plate)`}
-          stroke="rgba(255,255,255,0.06)"
-          strokeWidth="1"
+          x="1"
+          y="1"
+          width={compact ? "68" : "248"}
+          height="62"
+          rx="8"
+          fill="var(--bg-sidebar, #101418)"
+          stroke="var(--border-default, #303942)"
         />
-      )}
+      ) : null}
 
-      <g filter={`url(#${u}-glow)`}>
-        <polygon points="230,30 430,150 230,270 30,150" stroke={`url(#${u}-silver)`} strokeWidth="2.6" strokeLinejoin="miter" />
-        <polygon points="230,48 410,150 230,252 50,150" stroke={`url(#${u}-silver)`} strokeWidth="1" opacity="0.45" strokeLinejoin="miter" />
-      </g>
+      <SteelMark />
 
-      {[
-        [230, 30],
-        [430, 150],
-        [230, 270],
-        [30, 150],
-      ].map(([cx, cy]) => (
-        <path key={`${cx}-${cy}`} d={`M${cx} ${cy - 8} L${cx + 8} ${cy} L${cx} ${cy + 8} L${cx - 8} ${cy} Z`} fill={`url(#${u}-gold)`} />
-      ))}
-
-      <text
-        x="230"
-        y="160"
-        textAnchor="middle"
-        fontFamily="'Space Grotesk', 'Archivo', 'Arial Narrow', 'Arial Black', system-ui, sans-serif"
-        fontWeight="800"
-        fontSize="52"
-        letterSpacing="1.5"
-        fill={`url(#${u}-silver)`}
-      >
-        STEELBUILD
-      </text>
-      <line x1="120" y1="174" x2="340" y2="174" stroke={`url(#${u}-silver)`} strokeWidth="1.5" opacity="0.85" />
-      <text
-        x="230"
-        y="210"
-        textAnchor="middle"
-        fontFamily="'Space Grotesk', 'Archivo', 'Arial Narrow', 'Arial Black', system-ui, sans-serif"
-        fontWeight="700"
-        fontSize="30"
-        letterSpacing="16"
-        fill={`url(#${u}-gold)`}
-      >
-        PRO
-      </text>
+      {!compact ? (
+        <g>
+          <text
+            x="77"
+            y="31"
+            fontFamily="'Barlow Condensed', 'Arial Narrow', sans-serif"
+            fontWeight="800"
+            fontSize="24"
+            letterSpacing="0.7"
+            fill="currentColor"
+          >
+            STEELBUILD-PRO
+          </text>
+          <rect x="77" y="38" width="155" height="2" rx="1" fill="var(--brand-orange, #FF5A1F)" />
+          <text
+            x="77"
+            y="52"
+            fontFamily="'IBM Plex Mono', ui-monospace, monospace"
+            fontWeight="600"
+            fontSize="7.2"
+            letterSpacing="1.5"
+            fill="var(--text-secondary, #A7B0B8)"
+          >
+            BUILT FOR WHAT YOU BUILD
+          </text>
+        </g>
+      ) : null}
     </svg>
   );
 }
