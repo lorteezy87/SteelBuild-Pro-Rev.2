@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { PRIMARY_TABS, SIDEBAR_GROUPS } from "@/config/moduleRegistry";
 
-const labels = SIDEBAR_GROUPS.map((group) => group.label);
+type NavItem = { page: string };
+type NavGroup = { label: string; items: NavItem[] };
+type PrimaryTab = { pages: string[] };
+
+const sidebarGroups = SIDEBAR_GROUPS as NavGroup[];
+const primaryTabs = PRIMARY_TABS as PrimaryTab[];
+const labels = sidebarGroups.map((group) => group.label);
 
 describe("SteelBuild navigation hierarchy", () => {
   it("uses the approved operating hierarchy", () => {
@@ -17,7 +23,7 @@ describe("SteelBuild navigation hierarchy", () => {
   });
 
   it("keeps core project routes reachable", () => {
-    const pages = new Set(SIDEBAR_GROUPS.flatMap((group) => group.items.map((item) => item.page)));
+    const pages = new Set(sidebarGroups.flatMap((group) => group.items.map((item) => item.page)));
     [
       "Dashboard",
       "CommandCenter",
@@ -33,6 +39,6 @@ describe("SteelBuild navigation hierarchy", () => {
   });
 
   it("keeps every primary tab non-empty", () => {
-    expect(PRIMARY_TABS.every((tab) => tab.pages.length > 0)).toBe(true);
+    expect(primaryTabs.every((tab) => tab.pages.length > 0)).toBe(true);
   });
 });
