@@ -1,4 +1,5 @@
 .sbp-project-context {
+  width: 100%;
   min-height: 52px;
   display: flex;
   align-items: center;
@@ -17,6 +18,9 @@
   align-items: center;
   gap: 9px;
 }
+
+.sbp-project-context__identity { flex: 1; }
+.sbp-project-context__controls { justify-content: flex-end; }
 
 .sbp-project-context__label {
   font: 700 8px/1.2 var(--font-mono, 'IBM Plex Mono', monospace);
@@ -49,8 +53,7 @@
   color: var(--accent);
 }
 
-.sbp-project-context__switcher { display: inline-flex; }
-.sbp-project-context__controls { justify-content: flex-end; }
+.sbp-project-context__switcher { display: inline-flex; min-width: 0; }
 
 @media (max-width: 767px) {
   .sbp-project-context { min-height: 48px; padding: 0 10px; }
