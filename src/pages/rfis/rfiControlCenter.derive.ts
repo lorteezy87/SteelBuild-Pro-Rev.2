@@ -5,6 +5,14 @@
  */
 import { daysOpen, isOverdue } from "./utils";
 
+export interface RfiMetadata extends Record<string, unknown> {
+  fab_hold?: boolean | null;
+  fab_impact?: boolean | null;
+  erection_impact?: boolean | null;
+  drawing_revision_required?: boolean | null;
+  change_order_likely?: boolean | null;
+}
+
 export interface RfiRecord {
   id?: string;
   rfi_number?: string | null;
@@ -20,6 +28,9 @@ export interface RfiRecord {
   cost_impact_amount?: number | null;
   schedule_impact?: boolean | null;
   schedule_impact_days?: number | null;
+  work_package_id?: string | null;
+  drawing_set_id?: string | null;
+  metadata?: RfiMetadata | null;
   [key: string]: unknown;
 }
 
@@ -46,7 +57,30 @@ export interface RfiSummary {
   ballInCourt: BicSummaryRow[];
 }
 
+export type RfiOperationalFilter =
+  | "all"
+  | "overdue"
+  | "due_soon"
+  | "detailing_blocker"
+  | "fab_blocker"
+  | "field_impact"
+  | "unanswered_external"
+  | "downstream_action";
+
+export interface RfiOperationalSignals {
+  overdue: boolean;
+  dueSoon: boolean;
+  blockingDetailing: boolean;
+  blockingFab: boolean;
+  fieldImpact: boolean;
+  unansweredExternal: boolean;
+  downstreamAction: boolean;
+  linkedWorkPackageId: string | null;
+}
+
 const OPEN_STATUSES = new Set(["Open", "Under Review", "Incomplete Response"]);
+const EXTERNAL_BIC = new Set(["GC", "Engineer", "Architect", "Owner"]);
+const SETTLED_STATUSES = new Set(["Closed", "Void"]);
 
 /** Whole days from today (UTC-midnight basis) until `dateStr`; null if absent/invalid. */
 export function daysUntil(dateStr?: string | null): number | null {
@@ -68,6 +102,51 @@ export function rfiUrgencyLabel(rfi: RfiRecord): RfiUrgencyLabel {
   if (dueDays === 0) return "Due Today";
   if (dueDays !== null && dueDays <= 3) return "Due Soon";
   return "Normal";
+}
+
+/**
+ * Operational evidence for the RFI control surface.
+ *
+ * These flags intentionally read only persisted RFI fields/metadata. They do
+ * not infer that an Answered RFI is fully resolved: an answer may still require
+ * a drawing revision, fab action, field action, or commercial follow-up. Closed
+ * and Void are the states that remove those impact flags from active queues.
+ */
+export function rfiOperationalSignals(rfi: RfiRecord): RfiOperationalSignals {
+  const metadata = rfi.metadata || {};
+  const status = rfi.status || "Open";
+  const settled = SETTLED_STATUSES.has(status);
+  const due = daysUntil(rfi.date_required);
+  const drawingFollowup = Boolean(metadata.drawing_revision_required);
+  const fabFollowup = Boolean(metadata.fab_hold || metadata.fab_impact);
+  const fieldFollowup = Boolean(metadata.erection_impact);
+  const commercialFollowup = Boolean(metadata.change_order_likely || rfi.cost_impact || rfi.schedule_impact);
+  const hasDownstreamFollowup = drawingFollowup || fabFollowup || fieldFollowup || commercialFollowup;
+
+  return {
+    overdue: isOverdue(rfi),
+    dueSoon: OPEN_STATUSES.has(status) && due !== null && due >= 0 && due <= 3,
+    blockingDetailing: !settled && drawingFollowup,
+    blockingFab: !settled && fabFollowup,
+    fieldImpact: !settled && fieldFollowup,
+    unansweredExternal: OPEN_STATUSES.has(status) && EXTERNAL_BIC.has(rfi.ball_in_court || ""),
+    downstreamAction: status === "Answered" && hasDownstreamFollowup,
+    linkedWorkPackageId: rfi.work_package_id || null,
+  };
+}
+
+/** Apply one operational view without duplicating page-level search/discipline logic. */
+export function matchesRfiOperationalFilter(rfi: RfiRecord, filter: RfiOperationalFilter): boolean {
+  if (filter === "all") return true;
+  const signals = rfiOperationalSignals(rfi);
+  if (filter === "overdue") return signals.overdue;
+  if (filter === "due_soon") return signals.dueSoon;
+  if (filter === "detailing_blocker") return signals.blockingDetailing;
+  if (filter === "fab_blocker") return signals.blockingFab;
+  if (filter === "field_impact") return signals.fieldImpact;
+  if (filter === "unanswered_external") return signals.unansweredExternal;
+  if (filter === "downstream_action") return signals.downstreamAction;
+  return true;
 }
 
 /** Urgency score used by the canonical RFI work queues. */
