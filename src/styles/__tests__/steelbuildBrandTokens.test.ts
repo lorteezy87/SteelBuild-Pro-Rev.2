@@ -9,7 +9,7 @@ const globalsCss = readFileSync(resolve(process.cwd(), "src/globals.css"), "utf8
 describe("SteelBuild brand tokens", () => {
   it("defines the approved orange brand contract in the final theme layer", () => {
     expect(brandCss).toContain("--brand-orange:              #FF5A1F");
-    expect(brandCss).toContain("--accent:                   var(--brand-orange)");
+    expect(brandCss).toMatch(/--accent:\s+var\(--brand-orange\)/);
     expect(globalsCss).toContain("@import './styles/brand-theme.css';");
   });
 
