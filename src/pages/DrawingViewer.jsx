@@ -89,6 +89,10 @@ export default function DrawingViewer() {
   const [renderMode, setRenderMode] = useState("canvas");
 
   const annotLayerRef = useRef(null);
+  // The element that actually scrolls and clips the page. Fit-width /
+  // fit-page must measure THIS, not the canvas wrapper (which is
+  // display:inline-block and therefore sized BY the canvas).
+  const scrollContainerRef = useRef(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -398,11 +402,14 @@ export default function DrawingViewer() {
     if (!pdfDoc || !canvasRef.current) return;
     const page = await pdfDoc.getPage(currentPage);
     const vp = page.getViewport({ scale: 1, rotation });
-    const container = canvasRef.current.parentElement;
+    // canvasRef.parentElement is an inline-block wrapper whose width IS the
+    // canvas width — measuring it makes fit-width a no-op that slowly shrinks
+    // the page on every press. Measure the scroll container instead.
+    const container = scrollContainerRef.current || canvasRef.current.parentElement;
     if (container) {
       // 16px pad so the page doesn't butt up against the scroll container edges.
       const target = (container.clientWidth - 32) / vp.width;
-      setZoom(+target.toFixed(2));
+      if (Number.isFinite(target) && target > 0) setZoom(+target.toFixed(2));
     }
   }, [pdfDoc, currentPage, rotation, canvasRef]);
 
@@ -410,11 +417,13 @@ export default function DrawingViewer() {
     if (!pdfDoc || !canvasRef.current) return;
     const page = await pdfDoc.getPage(currentPage);
     const vp = page.getViewport({ scale: 1, rotation });
-    const container = canvasRef.current.parentElement;
+    // Same inline-block trap as fit-width — measure the scroll container.
+    const container = scrollContainerRef.current || canvasRef.current.parentElement;
     if (!container) return;
     const sX = (container.clientWidth - 32) / vp.width;
     const sY = (container.clientHeight - 32) / vp.height;
-    setZoom(+Math.min(sX, sY).toFixed(2));
+    const next = Math.min(sX, sY);
+    if (Number.isFinite(next) && next > 0) setZoom(+next.toFixed(2));
   }, [pdfDoc, currentPage, rotation, canvasRef]);
 
   // Dispatch from the zoom preset <select>. Keeps the select value in sync
@@ -426,8 +435,16 @@ export default function DrawingViewer() {
     if (Number.isFinite(n) && n > 0) setZoom(n);
   }, [handleFitWidth, handleFitPage]);
 
-  // Ctrl/Cmd + wheel = zoom at cursor. Without the ctrl check, users trying
+  // Ctrl/Cmd + wheel = zoom. Without the ctrl check, users trying
   // to scroll the drawing with a touchpad would accidentally zoom.
+  //
+  // REGRESSION GUARD — this MUST stay on a native listener registered with
+  // { passive: false } (see the container ref callback below). React attaches
+  // onWheel as a PASSIVE root listener, where preventDefault() silently does
+  // nothing: the browser then performs its own ctrl+wheel page zoom at the
+  // same time the app changes `zoom`, and the viewer visibly shakes. On a
+  // touchpad or touchscreen a pinch gesture *is* a ctrl+wheel event, so this
+  // fires constantly in the field. Do not "simplify" this back to onWheel.
   const handleCanvasWheel = useCallback((e) => {
     if (!(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
@@ -437,6 +454,11 @@ export default function DrawingViewer() {
       return next;
     });
   }, []);
+
+  // Keep the native listener pointed at the current handler without
+  // rebinding (the container binds once, guarded by el._panBound).
+  const wheelHandlerRef = useRef(handleCanvasWheel);
+  useEffect(() => { wheelHandlerRef.current = handleCanvasWheel; }, [handleCanvasWheel]);
 
   // Spacebar-hold pan. Hook returns both the React state (drives the cursor
   // styling on the container) and a mutable ref read by the imperative
@@ -632,14 +654,23 @@ export default function DrawingViewer() {
           )}
         <div
           className={`drawing-viewer-canvas-scroll ${spacePan ? "is-panning" : ""}`}
-          onWheel={handleCanvasWheel}
           ref={(el) => {
             // Keep a pan drag ref so spacebar-hold → drag pans. This is the
             // standard pro-viewer pan: hold space, mouse drag scrolls the
             // container, cursor flips to grab/grabbing for feedback.
+            scrollContainerRef.current = el;
             if (!el) return;
             if (el._panBound) return;
             el._panBound = true;
+
+            // Zoom on a NATIVE non-passive listener so preventDefault() really
+            // suppresses the browser's own ctrl+wheel / pinch page zoom. React's
+            // onWheel is passive and cannot do this — see handleCanvasWheel.
+            el.addEventListener(
+              "wheel",
+              (ev) => wheelHandlerRef.current?.(ev),
+              { passive: false },
+            );
             let panning = false;
             let startX = 0, startY = 0, scrollX = 0, scrollY = 0;
             el.addEventListener("mousedown", (ev) => {
@@ -690,8 +721,12 @@ export default function DrawingViewer() {
               </div>
             ) : (
               <iframe
-                key={resolvedUrl}
-                src={resolvedUrl}
+                // Multi-sheet sets share ONE file_url. Without the page
+                // fragment every sheet in the set rendered the first sheet
+                // that was opened. The fragment is not part of the signed
+                // URL's signature, so appending it is safe.
+                key={`${resolvedUrl}#page=${currentPage}`}
+                src={`${resolvedUrl}#page=${currentPage}`}
                 title={activeDrawing.title || activeDrawing.sheet_number}
                 style={{ width: "100%", height: "100%", border: "none", background: PDF_PAGE_BACKGROUND }}
               />
