@@ -43,8 +43,8 @@ function SteelMark() {
 
 export function BrandLogo({
   height = 64,
-  className,
-  style,
+  className = undefined,
+  style = undefined,
   title = "SteelBuild Pro",
   plate = false,
   variant = "full",
