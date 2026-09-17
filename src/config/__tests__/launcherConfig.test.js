@@ -9,14 +9,14 @@ describe("launcherConfig", () => {
   it("derives a flat module list with page, label, category", () => {
     expect(LAUNCHER_MODULES.length).toBeGreaterThan(10);
     const dash = LAUNCHER_MODULES.find((m) => m.page === "Dashboard");
-    expect(dash).toMatchObject({ page: "Dashboard", category: "OVERVIEW" });
+    expect(dash).toMatchObject({ page: "Dashboard", category: "COMMAND" });
     expect(typeof dash.label).toBe("string");
   });
 
   it("categories start with ALL and include each sidebar group", () => {
     expect(LAUNCHER_CATEGORIES[0]).toBe("ALL");
     expect(LAUNCHER_CATEGORIES).toContain("DETAILING");
-    expect(LAUNCHER_CATEGORIES).toContain("COST");
+    expect(LAUNCHER_CATEGORIES).toContain("COMMERCIAL");
   });
 
   it("dock defaults reference real modules", () => {
@@ -33,9 +33,9 @@ describe("launcherConfig", () => {
 
   it("modulesForCategory filters; ALL returns everything", () => {
     expect(modulesForCategory("ALL").length).toBe(LAUNCHER_MODULES.length);
-    const cost = modulesForCategory("COST");
-    expect(cost.length).toBeGreaterThan(0);
-    expect(cost.every((m) => m.category === "COST")).toBe(true);
+    const commercial = modulesForCategory("COMMERCIAL");
+    expect(commercial.length).toBeGreaterThan(0);
+    expect(commercial.every((m) => m.category === "COMMERCIAL")).toBe(true);
   });
 
   it("searchModules matches label case-insensitively; empty returns all", () => {
@@ -50,21 +50,10 @@ describe("launcherConfig", () => {
     expect(d.every((m) => typeof m.page === "string")).toBe(true);
   });
 
-  it("lists Email Inbox in both Project Management navigation registries", () => {
-    const expected = { label: "Email Inbox", icon: "✉", page: "EmailInbox" };
-
+  it("uses the approved primary operating groups in both navigation registries", () => {
+    const expected = ["COMMAND", "PROJECTS", "DETAILING", "PRODUCTION", "FIELD", "COMMERCIAL", "REPORTS"];
     for (const groups of [NAV_GROUPS, SIDEBAR_GROUPS]) {
-      const projectManagement = groups.find((group) => group.label === "PROJECT MANAGEMENT");
-      expect(projectManagement?.items).toContainEqual(expected);
-    }
-  });
-
-  it("lists Production Notes in both Project Management navigation registries", () => {
-    const expected = { label: "Production Notes", icon: "📝", page: "ProductionNotes" };
-
-    for (const groups of [NAV_GROUPS, SIDEBAR_GROUPS]) {
-      const projectManagement = groups.find((group) => group.label === "PROJECT MANAGEMENT");
-      expect(projectManagement?.items).toContainEqual(expected);
+      expect(groups.slice(0, 7).map((group) => group.label)).toEqual(expected);
     }
   });
 
