@@ -1,0 +1,154 @@
+/*
+ * SteelBuild Pro brand theme overlay.
+ *
+ * tokens.css remains the broad compatibility catalog used by legacy surfaces.
+ * This final overlay establishes the approved SteelBuild-Pro identity without
+ * duplicating or weakening semantic status tokens. It is imported last by
+ * globals.css so both legacy and command surfaces inherit the same brand.
+ */
+
+:root {
+  --brand-orange:              #FF5A1F;
+  --brand-orange-hover:        #E94C14;
+  --brand-orange-light:        #FF7442;
+  --brand-orange-muted:        rgba(255, 90, 31, 0.11);
+  --brand-orange-border:       rgba(255, 90, 31, 0.38);
+}
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-void:                   #080A0C;
+  --bg-page:                   #0C0F12;
+  --bg-base:                   #0C0F12;
+  --bg-sidebar:                #101418;
+  --bg-surface:                #171C21;
+  --bg-card:                   #171C21;
+  --bg-surface-secondary:      #171C21;
+  --bg-surface-low:            #12171B;
+  --bg-surface-mid:            #1E252B;
+  --bg-elevated:               #1E252B;
+  --bg-surface-high:           #273039;
+  --bg-surface-highest:        #313B45;
+  --bg-input:                  #1E252B;
+
+  --border-default:            #303942;
+  --border-strong:             #46515B;
+  --border:                    #303942;
+  --divider:                   rgba(48, 57, 66, 0.72);
+
+  --text-primary:              #F2F4F5;
+  --text-secondary:            #A7B0B8;
+  --text-muted:                #7D8892;
+
+  --accent:                   var(--brand-orange);
+  --accent-light:              var(--brand-orange-light);
+  --accent-hover:              var(--brand-orange-hover);
+  --accent-muted:              var(--brand-orange-muted);
+  --accent-border:             var(--brand-orange-border);
+  --accent-text:               #111417;
+  --on-accent:                 #111417;
+  --secondary:                 var(--brand-orange);
+  --secondary-muted:           var(--brand-orange-muted);
+  --secondary-border:          var(--brand-orange-border);
+  --accent-orange:             var(--brand-orange);
+  --accent-orange-light:       var(--brand-orange-light);
+  --accent-orange-hover:       var(--brand-orange-hover);
+  --accent-orange-muted:       var(--brand-orange-muted);
+  --accent-orange-border:      var(--brand-orange-border);
+
+  --nav-bg:                    rgba(16, 20, 24, 0.98);
+  --nav-hover-bg:              rgba(255, 90, 31, 0.09);
+  --bg-hover:                  rgba(255, 255, 255, 0.045);
+  --bg-row-hover:              rgba(255, 255, 255, 0.035);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-void:                   #E6EAED;
+  --bg-page:                   #F2F4F5;
+  --bg-base:                   #F2F4F5;
+  --bg-sidebar:                #FFFFFF;
+  --bg-surface:                #FFFFFF;
+  --bg-card:                   #FFFFFF;
+  --bg-surface-secondary:      #FFFFFF;
+  --bg-surface-low:            #F7F8F9;
+  --bg-surface-mid:            #E9EDF0;
+  --bg-elevated:               #E9EDF0;
+  --bg-surface-high:           #DCE1E5;
+  --bg-surface-highest:        #CDD4D9;
+  --bg-input:                  #FFFFFF;
+
+  --border-default:            #CCD2D7;
+  --border-strong:             #AEB7BE;
+  --border:                    #CCD2D7;
+  --divider:                   rgba(174, 183, 190, 0.64);
+
+  --text-primary:              #181C20;
+  --text-secondary:            #606A73;
+  --text-muted:                #78828B;
+
+  --accent:                   var(--brand-orange);
+  --accent-light:              var(--brand-orange-light);
+  --accent-hover:              var(--brand-orange-hover);
+  --accent-muted:              var(--brand-orange-muted);
+  --accent-border:             var(--brand-orange-border);
+  --accent-text:               #111417;
+  --on-accent:                 #111417;
+  --secondary:                 var(--brand-orange);
+  --secondary-muted:           var(--brand-orange-muted);
+  --secondary-border:          var(--brand-orange-border);
+  --accent-orange:             var(--brand-orange);
+  --accent-orange-light:       var(--brand-orange-light);
+  --accent-orange-hover:       var(--brand-orange-hover);
+  --accent-orange-muted:       var(--brand-orange-muted);
+  --accent-orange-border:      var(--brand-orange-border);
+
+  --nav-bg:                    rgba(255, 255, 255, 0.98);
+  --nav-hover-bg:              rgba(255, 90, 31, 0.08);
+  --bg-hover:                  rgba(24, 28, 32, 0.045);
+  --bg-row-hover:              rgba(24, 28, 32, 0.035);
+}
+
+/* steelbuild-dark.css contains compatibility declarations with !important.
+ * Keep only the brand accent authoritative here; semantic state colors remain
+ * owned by the base token catalog. */
+html.steelbuild-dark,
+html[data-theme="dark"].steelbuild-dark,
+.steelbuild-dark {
+  --accent:                    var(--brand-orange) !important;
+  --accent-light:              var(--brand-orange-light) !important;
+  --accent-hover:              var(--brand-orange-hover) !important;
+  --accent-muted:              var(--brand-orange-muted) !important;
+  --accent-border:             var(--brand-orange-border) !important;
+  --secondary:                 var(--brand-orange) !important;
+  --secondary-muted:           var(--brand-orange-muted) !important;
+  --secondary-border:          var(--brand-orange-border) !important;
+  --accent-orange:             var(--brand-orange) !important;
+  --accent-orange-light:       var(--brand-orange-light) !important;
+  --accent-orange-hover:       var(--brand-orange-hover) !important;
+  --accent-orange-muted:       var(--brand-orange-muted) !important;
+  --accent-orange-border:      var(--brand-orange-border) !important;
+}
+
+/* Re-assert accessibility overrides after the brand layer. */
+[data-contrast="high"][data-theme="dark"],
+[data-contrast="high"].steelbuild-dark {
+  --text-primary:              #FFFFFF;
+  --text-secondary:            #D6DEF0;
+  --text-muted:                #A8B4C8;
+  --border-default:            #5A6677;
+  --border-strong:             #7A8899;
+  --border:                    #5A6677;
+}
+
+[data-contrast="high"][data-theme="light"] {
+  --text-primary:              #000000;
+  --text-secondary:            #1E293B;
+  --text-muted:                #334155;
+  --border-default:            #94A3B8;
+  --border-strong:             #64748B;
+  --border:                    #94A3B8;
+}
