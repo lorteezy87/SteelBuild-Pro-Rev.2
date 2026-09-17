@@ -13,16 +13,16 @@ vi.mock("../dashboardControlCenter.derive", () => ({
     healthScore: 82,
     healthLabel: "Watch",
     operationalHealth: { partial: false },
-    healthReasons: [],
+    healthReasons: [] as string[],
     kpis: [
       { label: "Open RFIs", value: 2, tone: "warn" },
       { label: "Schedule Progress", value: "55%", tone: "neutral" },
       { label: "Cost Health", value: "TBD", tone: "neutral" },
       { label: "Pending Submittals", value: 1, tone: "neutral" },
     ],
-    alerts: [],
-    summaryRows: [],
-    recentActivity: [],
+    alerts: [] as Array<Record<string, unknown>>,
+    summaryRows: [] as Array<Record<string, unknown>>,
+    recentActivity: [] as Array<Record<string, unknown>>,
     modules: [{ page: "RFIs", title: "RFIs", metric: "2 open", target: "rfis", photo: "" }],
     openRfis: 2,
     overdueRfis: 1,
@@ -44,7 +44,7 @@ vi.mock("../dashboardReference.derive", () => ({
 
 vi.mock("@/components/command", async () => {
   const actual = await vi.importActual<typeof import("@/components/command")>("@/components/command");
-  return { ...actual, useCommandSkin: () => undefined };
+  return { ...actual, useCommandSkin: (): void => undefined };
 });
 
 describe("DashboardControlCenter", () => {
