@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-09-17T03:20:00Z | gpt-steelbuild-ui-phase1 | SteelBuild Pro UI redesign Phase 1 | src/styles/{tokens,command}.css; src/components/{command,nav}/**; src/config/moduleRegistry.js; src/pages/{dashboardCC,commandCenter}/**; related tests | Implement approved orange/steel dual-theme foundation, app shell/navigation, Dashboard, and Command Center without changing business logic. |
 | ~~2026-09-13~~ released | codex-supabase-drift-repair | Supabase production drift reconciliation | supabase/production-ownership-manifest.json; scripts/supabase*; scripts/__tests__/supabase*; recovered migration sources; docs/runbooks/supabase-production-ownership.md; focused drift evidence/tests | Compare live ledger/schema and repair verified drift; preserve data and release gates. |
 | ~~2026-09-13T08:33:29Z~~ released | copilot-merge-conflicts-5652236907 | Merge conflict resolution | AGENT_CLAIMS.md; conflicted files from merge with main | Merged current main, preserved workflow behavior, and reconciled the concurrent PR-head resolution. |
 | 2026-08-13T20:10:00Z | grok-notes-apple-pencil | Tools Notes Apple Pencil ink | src/pages/Notes.jsx; src/lib/notesInk/**; src/components/notes/InkCanvas.tsx | Upgrade Notes ink: coalesced/predicted strokes, pressure+tilt, palm rejection, highlighter, undo/redo, vector persistence. |
