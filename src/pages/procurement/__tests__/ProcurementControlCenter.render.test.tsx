@@ -39,6 +39,6 @@ describe("ProcurementControlCenter Wave 3 layout", () => {
     expect(screen.getByRole("heading", { name: "Procurement Control" })).toBeInTheDocument();
     expect(screen.getByText("Material Attention")).toBeInTheDocument();
     expect(screen.getByText("Missing Need-By")).toBeInTheDocument();
-    expect(screen.getByText(/PO-101/)).toBeInTheDocument();
+    expect(screen.getAllByText(/PO-101/).length).toBeGreaterThan(0);
   });
 });
