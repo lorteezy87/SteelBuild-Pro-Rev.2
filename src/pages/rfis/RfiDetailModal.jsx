@@ -1,49 +1,128 @@
 import React from "react";
-import { Modal, Button, StatusPill, BicPill, PhaseChevron, Icon } from "@/components/design-system";
+import { Modal, Button, Icon } from "@/components/design-system";
+import {
+  DateRiskCell,
+  DetailRail,
+  ImpactBadge,
+  StatusBadge,
+  WorkflowStage,
+} from "@/components/command";
 import { daysOpen, isOverdue } from "./utils";
 import RfiCopilotPanel from "@/components/rfis/RfiCopilotPanel";
 import { recommendedDownstreamActions } from "@/lib/rfiDownstream";
 
-const STAGE_INDEX = { Open: 0, "Under Review": 1, "Incomplete Response": 2, Answered: 3, Closed: 4 };
-
-const STAGES = [
-  { id: "open",  label: "OPEN",       color: "var(--status-warning)" },
-  { id: "rev",   label: "REVIEW",     color: "var(--status-review)" },
-  { id: "incmp", label: "INCOMPLETE", color: "var(--status-error)" },
-  { id: "ans",   label: "ANSWERED",   color: "var(--status-success)" },
-  { id: "cls",   label: "CLOSED",     color: "var(--text-muted)" },
-];
+const STATUS_ORDER = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
 
 function formatDate(value) {
-  if (!value) return "No date";
+  if (!value) return "Unknown";
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function impactValue(rfi) {
-  const parts = [];
-  if (rfi.cost_impact) {
-    parts.push(rfi.cost_impact_amount ? `$${Number(rfi.cost_impact_amount).toLocaleString()}` : "Cost impact");
-  }
-  if (rfi.schedule_impact) {
-    parts.push(rfi.schedule_impact_days ? `${rfi.schedule_impact_days} days` : "Schedule impact");
-  }
-  return parts.join(" / ") || "No known impact";
+function statusTone(status) {
+  if (status === "Answered") return "success";
+  if (status === "Closed") return "neutral";
+  if (status === "Incomplete Response") return "danger";
+  if (status === "Under Review") return "info";
+  return "warning";
 }
 
-export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO, onDownstreamAction }) {
+function priorityTone(priority) {
+  if (priority === "Critical") return "danger";
+  if (priority === "High") return "warning";
+  if (priority === "Medium") return "info";
+  return "neutral";
+}
+
+function impactInfo(rfi) {
+  const m = rfi.metadata || {};
+  if (m.fab_hold || m.fab_impact) return { label: "Fabrication", level: "critical" };
+  if (m.drawing_revision_required) return { label: "Drawing revision", level: "high" };
+  if (m.erection_impact) return { label: "Field / erection", level: "high" };
+  if (rfi.schedule_impact) return { label: "Schedule", level: "high" };
+  if (rfi.cost_impact || m.change_order_likely) return { label: "Commercial", level: "medium" };
+  return { label: "No known impact", level: "none" };
+}
+
+export default function RfiDetailModal({
+  rfi,
+  onClose,
+  onAdvanceStatus,
+  onEdit,
+  onNudge,
+  onCreateCO,
+  onDownstreamAction,
+}) {
   if (!rfi) return null;
 
   const age = daysOpen(rfi);
   const overdue = isOverdue(rfi);
-  const activeIdx = STAGE_INDEX[rfi.status] ?? 0;
+  const activeIdx = Math.max(0, STATUS_ORDER.indexOf(rfi.status));
   const downstream = onDownstreamAction ? recommendedDownstreamActions(rfi) : [];
-  const priorityColor =
-    rfi.priority === "Critical" ? "var(--status-review)" :
-    rfi.priority === "High" ? "var(--status-warning)" :
-    rfi.priority === "Medium" ? "var(--status-info)" :
-    "var(--text-muted)";
+  const impact = impactInfo(rfi);
+
+  const stages = STATUS_ORDER.map((status, index) => ({
+    id: status,
+    label:
+      status === "Under Review" ? "REVIEW" :
+      status === "Incomplete Response" ? "INCOMPLETE" :
+      status.toUpperCase(),
+    state:
+      index < activeIdx ? "complete" :
+      index === activeIdx
+        ? (status === "Incomplete Response" ? "blocked" : "current")
+        : "upcoming",
+  }));
+
+  const railSections = [
+    {
+      key: "status",
+      label: "Status",
+      value: <StatusBadge label={rfi.status || "Open"} tone={statusTone(rfi.status)} />,
+    },
+    {
+      key: "bic",
+      label: "Ball in Court",
+      value: rfi.ball_in_court || "Contractor",
+      detail: rfi.assigned_to || "No individual assignee",
+    },
+    {
+      key: "priority",
+      label: "Priority",
+      value: <StatusBadge label={rfi.priority || "Medium"} tone={priorityTone(rfi.priority)} />,
+    },
+    {
+      key: "required",
+      label: "Required By",
+      value: (
+        <DateRiskCell
+          value={rfi.date_required ? formatDate(rfi.date_required) : null}
+          risk={rfi.date_required ? (overdue ? "overdue" : "upcoming") : "unknown"}
+          detail={rfi.date_required ? `${age} days open` : "Required date unavailable"}
+        />
+      ),
+    },
+    {
+      key: "wp",
+      label: "Linked Work Package",
+      value: rfi.work_package_id || "Not linked",
+    },
+    {
+      key: "drawing",
+      label: "Drawing / Set",
+      value: rfi.drawing_reference || rfi.drawing_set_id || "Not linked",
+    },
+    {
+      key: "impact",
+      label: "Impact",
+      value: <ImpactBadge label={impact.label} level={impact.level} />,
+      detail:
+        rfi.cost_impact_amount ? `$${Number(rfi.cost_impact_amount).toLocaleString()} cost exposure` :
+        rfi.schedule_impact_days ? `${rfi.schedule_impact_days}d schedule exposure` :
+        "Recorded evidence only",
+    },
+  ];
 
   return (
     <Modal
@@ -51,7 +130,7 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
       onClose={onClose}
       eyebrow={`${rfi.rfi_number || rfi.id} / ${(rfi.discipline || "GENERAL").toUpperCase()}`}
       title={rfi.title || "Untitled RFI"}
-      width={920}
+      width={1040}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Close</Button>
@@ -68,165 +147,106 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
         </>
       }
     >
-      <div className="rfi-detail-status">
-        <section className="rfi-detail-card">
-          <div className="rfi-detail-chip-row">
-            <StatusPill label={rfi.status || "Open"} />
-            <BicPill bic={rfi.ball_in_court || "Contractor"} />
-            <StatusPill label={rfi.priority || "Medium"} size="xs" color={priorityColor} />
-          </div>
-          <div className="rfi-detail-age">
-            <Metric label="Age" value={`${age}d`} alert={overdue || age > 14} />
-            <Metric label="Required" value={formatDate(rfi.date_required)} alert={overdue} />
-            <Metric label="Impact" value={impactValue(rfi)} alert={rfi.cost_impact || rfi.schedule_impact} />
-          </div>
-        </section>
+      <div className="rfi-detail-workspace">
+        <main className="rfi-detail-workspace__main">
+          <section className="rfi-detail-section">
+            <SectionLabel>Lifecycle</SectionLabel>
+            <WorkflowStage
+              stages={stages}
+              currentStage={rfi.status}
+              ariaLabel="RFI lifecycle"
+            />
+          </section>
 
-        <section className="rfi-detail-card">
-          <div className="rfi-detail-meta-grid">
-            <MetaCell label="Submitted" value={formatDate(rfi.submitted_date)} />
-            <MetaCell label="Submitter" value={rfi.submitted_by || "Not recorded"} />
-            <MetaCell label="Assigned To" value={rfi.assigned_to || "Not assigned"} />
-            <MetaCell label="Answered" value={rfi.date_answered ? formatDate(rfi.date_answered) : "Pending"} />
-          </div>
-        </section>
-      </div>
-
-      <section className="rfi-detail-section">
-        <SectionLabel>Lifecycle</SectionLabel>
-        <PhaseChevron stages={STAGES} activeIdx={activeIdx} showIcons={false} />
-      </section>
-
-      <section className="rfi-detail-section">
-        <SectionLabel>Question</SectionLabel>
-        <div className="rfi-detail-body-text">
-          {rfi.question || rfi.description || rfi.title || "No question text recorded."}
-        </div>
-      </section>
-
-      <RfiCopilotPanel rfi={rfi} />
-
-      {rfi.answer && (
-        <section className="rfi-detail-section">
-          <SectionLabel>Answer</SectionLabel>
-          <div className="rfi-detail-body-text">{rfi.answer}</div>
-          {rfi.answered_by && (
-            <div className="rfi-row-date-sub">
-              Answered by {rfi.answered_by} on {rfi.date_answered ? formatDate(rfi.date_answered) : "No date"}
+          <section className="rfi-detail-section">
+            <SectionLabel>Question / Issue</SectionLabel>
+            <div className="rfi-detail-body-text">
+              {rfi.question || rfi.description || rfi.title || "No question text recorded."}
             </div>
+          </section>
+
+          <RfiCopilotPanel rfi={rfi} />
+
+          <section className="rfi-detail-section">
+            <SectionLabel>Response</SectionLabel>
+            {rfi.answer ? (
+              <>
+                <div className="rfi-detail-body-text">{rfi.answer}</div>
+                <div className="rfi-row-date-sub">
+                  Answered by {rfi.answered_by || "Not recorded"} on {rfi.date_answered ? formatDate(rfi.date_answered) : "Unknown"}
+                </div>
+              </>
+            ) : (
+              <div className="rfi-detail-body-text" style={{ color: "var(--status-warning)" }}>
+                Awaiting response
+              </div>
+            )}
+          </section>
+
+          {downstream.length > 0 && (
+            <section className="rfi-detail-section">
+              <SectionLabel>Apply the answer downstream</SectionLabel>
+              <div className="rfi-downstream-actions">
+                {downstream.map((action) => (
+                  <button
+                    key={action.key}
+                    type="button"
+                    className={`cmd-btn ${action.primary ? "cmd-btn--primary" : "cmd-btn--ghost"}`}
+                    onClick={() => onDownstreamAction(action.key)}
+                    title={action.hint}
+                  >
+                    {action.icon && <Icon name={action.icon} size={13} />}
+                    <span>{action.label}</span>
+                    <small>{action.hint}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
-        </section>
-      )}
 
-      {downstream.length > 0 && (
-        <section className="rfi-detail-section">
-          <SectionLabel>Apply the answer downstream</SectionLabel>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {downstream.map((action) => (
-              <button
-                key={action.key}
-                type="button"
-                onClick={() => onDownstreamAction(action.key)}
-                title={action.hint}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                  gap: 2,
-                  padding: "8px 12px",
-                  minWidth: 152,
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  background: action.primary ? "var(--accent-muted)" : "var(--bg-input)",
-                  border: `1px solid ${action.primary ? "var(--accent)" : "var(--border)"}`,
-                  color: "var(--text-primary)",
-                }}
-              >
-                <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, fontSize: 13 }}>
-                  {action.icon && (
-                    <Icon name={action.icon} size={13} color={action.primary ? "var(--accent)" : "var(--text-muted)"} />
-                  )}
-                  {action.label}
-                </span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{action.hint}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {(rfi.drawing_reference || rfi.spec_section) && (
-        <section className="rfi-detail-section">
-          <SectionLabel>Reference</SectionLabel>
-          <div className="rfi-reference-row">
-            {rfi.drawing_reference && (
-              <div className="rfi-reference-chip">
-                <Icon name="drawings" size={12} color="var(--accent)" />
-                {rfi.drawing_reference}
+          {(rfi.drawing_reference || rfi.spec_section) && (
+            <section className="rfi-detail-section">
+              <SectionLabel>References</SectionLabel>
+              <div className="rfi-reference-row">
+                {rfi.drawing_reference && (
+                  <div className="rfi-reference-chip">
+                    <Icon name="drawings" size={12} color="var(--accent)" />
+                    {rfi.drawing_reference}
+                  </div>
+                )}
+                {rfi.spec_section && <div className="rfi-reference-chip">Spec / {rfi.spec_section}</div>}
               </div>
-            )}
-            {rfi.spec_section && <div className="rfi-reference-chip">Spec / {rfi.spec_section}</div>}
-          </div>
-        </section>
-      )}
+            </section>
+          )}
 
-      {(rfi.metadata?.fab_hold || rfi.metadata?.piece_marks) && (
-        <section className="rfi-detail-section">
-          <SectionLabel>Fabrication</SectionLabel>
-          <div className="rfi-reference-row">
-            {rfi.metadata?.fab_hold && (
-              <div
-                className="rfi-reference-chip"
-                style={{ color: "var(--status-error)", borderColor: "var(--status-error)", fontWeight: 700 }}
-              >
-                ⛔ Fab Hold
+          {(rfi.metadata?.fab_hold || rfi.metadata?.piece_marks) && (
+            <section className="rfi-detail-section">
+              <SectionLabel>Fabrication</SectionLabel>
+              <div className="rfi-reference-row">
+                {rfi.metadata?.fab_hold && <ImpactBadge label="Fab Hold" level="critical" />}
+                {rfi.metadata?.piece_marks && (
+                  <div className="rfi-reference-chip">Pieces / {rfi.metadata.piece_marks}</div>
+                )}
               </div>
-            )}
-            {rfi.metadata?.piece_marks && (
-              <div className="rfi-reference-chip">Pieces / {rfi.metadata.piece_marks}</div>
-            )}
-          </div>
-        </section>
-      )}
+            </section>
+          )}
+        </main>
 
-      {(rfi.metadata?.drawing_revision_required || rfi.metadata?.change_order_likely || rfi.metadata?.fab_impact || rfi.metadata?.erection_impact) && (
-        <section className="rfi-detail-section">
-          <SectionLabel>Impact</SectionLabel>
-          <div className="rfi-reference-row">
-            {rfi.metadata?.drawing_revision_required && (
-              <div className="rfi-reference-chip" style={{ color: "var(--status-warning)", borderColor: "var(--status-warning)", fontWeight: 700 }}>✎ Drawing revision required</div>
-            )}
-            {rfi.metadata?.change_order_likely && (
-              <div className="rfi-reference-chip" style={{ color: "var(--status-review)", borderColor: "var(--status-review)", fontWeight: 700 }}>$ Change order likely</div>
-            )}
-            {rfi.metadata?.fab_impact && <div className="rfi-reference-chip">Fabrication impact</div>}
-            {rfi.metadata?.erection_impact && <div className="rfi-reference-chip">Erection impact</div>}
-          </div>
-        </section>
-      )}
+        <DetailRail
+          title="Operational details"
+          sections={railSections}
+          actions={(
+            <>
+              {onNudge ? <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onNudge}>Nudge BIC</button> : null}
+              {onEdit ? <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onEdit}>Edit RFI</button> : null}
+            </>
+          )}
+        />
+      </div>
     </Modal>
   );
 }
 
 function SectionLabel({ children }) {
   return <div className="rfi-small-label">{children}</div>;
-}
-
-function Metric({ label, value, alert }) {
-  return (
-    <div className="rfi-detail-metric">
-      <div className="rfi-small-label">{label}</div>
-      <strong style={{ color: alert ? "var(--danger)" : "var(--text-primary)" }}>{value}</strong>
-    </div>
-  );
-}
-
-function MetaCell({ label, value }) {
-  return (
-    <div className="rfi-detail-meta-cell">
-      <div className="rfi-small-label">{label}</div>
-      <div className="rfi-detail-value">{value}</div>
-    </div>
-  );
 }
