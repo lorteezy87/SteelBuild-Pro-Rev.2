@@ -1,7 +1,7 @@
 import React from "react";
 import { ChevronRight, ChevronLeft, AlertTriangle } from "lucide-react";
 import { CHANGE_STYLE } from "../revisionUploadHelpers";
-import DocControlReviewPanel from "../DocControlReviewPanel";
+import { DocControlIntakePanel } from "../DocControlReviewPanel";
 import { useAuth } from "@/lib/AuthContext";
 // ── Step D: Sheet Comparison ───────────────────────────────────────
 export default function StepSheetComparison(props: any) {
@@ -72,7 +72,7 @@ export default function StepSheetComparison(props: any) {
       {/* Document Control read — title block, seal, register verdict, findings.
           Sits above the sheet diff because a held document should stop a
           reviewer before they scroll into the row-by-row comparison. */}
-      <DocControlReviewPanel
+      <DocControlIntakePanel
         intake={docControlIntake}
         reviewerName={user?.full_name || user?.email || ""}
       />

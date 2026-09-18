@@ -13,7 +13,7 @@
  * reintroduced here first.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { AlertTriangle, Check, Copy, FileWarning, HelpCircle, Stamp } from "lucide-react";
 import {
   attestFromHuman,
@@ -25,42 +25,57 @@ import {
   type IntakeInput,
 } from "@/lib/docControl";
 
-type AttestKind = "stamp" | "signature";
+export type AttestKind = "stamp" | "signature";
 
-export type DocControlReviewPanelProps = {
-  /** Everything the engine needs, minus the reviewer's attestations. */
-  intake: Omit<IntakeInput, "attestationsBySheetNumber">;
-  /** Who is attesting. Stamped into the attestation basis. */
-  reviewerName?: string;
-};
+/** Callback shape shared by every caller that lets a reviewer attest. */
+export type AttestHandler = (
+  sheetNumber: string,
+  kind: AttestKind,
+  state: "present" | "absent",
+) => void;
 
-export default function DocControlReviewPanel({
-  intake,
-  reviewerName = "",
-}: DocControlReviewPanelProps) {
-  const [attestations, setAttestations] = useState<
+/**
+ * Reviewer attestation state, keyed by exact sheet number.
+ *
+ * Lives in a hook rather than in the panel so the two surfaces that render the
+ * panel — the revision-upload wizard and the Document Control page — build their
+ * records from the same attestations without each inventing a store. The panel
+ * itself stays presentational: it decides nothing.
+ */
+export function useDocControlAttestations(reviewerName = "") {
+  const [attestationsBySheetNumber, setAttestations] = useState<
     Record<string, Partial<DocControlAttestations>>
   >({});
+
+  const attest = useCallback<AttestHandler>(
+    (sheetNumber, kind, state) => {
+      setAttestations((prev) => ({
+        ...prev,
+        [sheetNumber]: { ...prev[sheetNumber], [kind]: attestFromHuman(state, reviewerName) },
+      }));
+    },
+    [reviewerName],
+  );
+
+  return { attestationsBySheetNumber, attest };
+}
+
+export type DocControlReviewPanelProps = {
+  /** Records already built by the caller. The panel computes no verdicts. */
+  records: DocControlRecord[];
+  /** Omit to render read-only — every attest control disappears. */
+  onAttest?: AttestHandler | null;
+};
+
+export default function DocControlReviewPanel({ records, onAttest }: DocControlReviewPanelProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-
-  const records = useMemo(
-    () => buildIntakeRecords({ ...intake, attestationsBySheetNumber: attestations }),
-    [intake, attestations],
-  );
 
   const blockers = records.filter((r) => r.disposition === "hold").length;
   const warnings = records.reduce(
     (sum, r) => sum + r.findings.filter((f) => f.severity === "warning").length,
     0,
   );
-
-  const attest = (sheetNumber: string, kind: AttestKind, state: "present" | "absent") => {
-    setAttestations((prev) => ({
-      ...prev,
-      [sheetNumber]: { ...prev[sheetNumber], [kind]: attestFromHuman(state, reviewerName) },
-    }));
-  };
 
   const copyJson = () => {
     const payload = JSON.stringify(records, null, 2);
@@ -106,13 +121,39 @@ export default function DocControlReviewPanel({
               record={record}
               open={open}
               onToggle={() => setExpanded((prev) => ({ ...prev, [key]: !open }))}
-              onAttest={sheetNumber ? (kind, state) => attest(sheetNumber, kind, state) : null}
+              onAttest={
+                onAttest && sheetNumber
+                  ? (kind, state) => onAttest(sheetNumber, kind, state)
+                  : null
+              }
             />
           );
         })}
       </div>
     </div>
   );
+}
+
+/**
+ * The revision-upload wizard's adapter: intake input in, panel out.
+ *
+ * Kept separate from the panel so the Document Control page can cross-reference
+ * against the project's whole live register instead of the wizard's set-scoped
+ * match verdict, and still render exactly the same review.
+ */
+export function DocControlIntakePanel({
+  intake,
+  reviewerName = "",
+}: {
+  intake: Omit<IntakeInput, "attestationsBySheetNumber">;
+  reviewerName?: string;
+}) {
+  const { attestationsBySheetNumber, attest } = useDocControlAttestations(reviewerName);
+  const records = useMemo(
+    () => buildIntakeRecords({ ...intake, attestationsBySheetNumber }),
+    [intake, attestationsBySheetNumber],
+  );
+  return <DocControlReviewPanel records={records} onAttest={attest} />;
 }
 
 function SheetCard({

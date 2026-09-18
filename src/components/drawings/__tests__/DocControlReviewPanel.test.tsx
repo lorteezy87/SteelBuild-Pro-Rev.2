@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import DocControlReviewPanel from "../DocControlReviewPanel";
+import { DocControlIntakePanel } from "../DocControlReviewPanel";
 import type { UploadMatch } from "@/lib/docControl";
 
 const revised: UploadMatch = {
@@ -13,7 +13,7 @@ const revised: UploadMatch = {
 
 function renderPanel(overrides: Record<string, unknown> = {}) {
   return render(
-    <DocControlReviewPanel
+    <DocControlIntakePanel
       reviewerName="N. Lortie"
       intake={{
         matches: [revised],
