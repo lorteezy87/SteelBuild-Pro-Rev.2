@@ -504,10 +504,10 @@ export const registerShellStyle: CSSProperties = {
 
 export const registerHeaderStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "26px 86px minmax(220px, 1.4fr) 110px 116px 104px 132px 92px 70px 58px",
+  gridTemplateColumns: "26px 78px minmax(190px, 1.45fr) 88px 78px 82px 126px 108px 108px 112px 108px 108px 58px",
   gap: 10,
   alignItems: "center",
-  minWidth: 1000,
+  minWidth: 1320,
   padding: "9px 12px",
   borderBottom: "1px solid var(--divider)",
   background: "var(--bg-surface-low)",

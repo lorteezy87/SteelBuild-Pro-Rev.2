@@ -24,6 +24,47 @@ import type {
 import { PieceDigitalThread } from "./PieceDigitalThread";
 import { SelectFilter } from "./SelectFilter";
 
+
+const PIECE_LIFECYCLE_ORDER = [
+  "not_started",
+  "released",
+  "in_fabrication",
+  "fabricated",
+  "shipped",
+  "delivered",
+  "erected",
+] as const;
+
+function lifecycleReached(status: string, target: string): boolean {
+  const current = PIECE_LIFECYCLE_ORDER.indexOf(status as (typeof PIECE_LIFECYCLE_ORDER)[number]);
+  const goal = PIECE_LIFECYCLE_ORDER.indexOf(target as (typeof PIECE_LIFECYCLE_ORDER)[number]);
+  return current >= 0 && goal >= 0 && current >= goal;
+}
+
+function metadataText(piece: PieceRegisterDisplayRow, ...keys: string[]): string | null {
+  const metadata = piece.metadata ?? {};
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return null;
+}
+
+function StageCell({
+  done,
+  activeLabel,
+  active = false,
+}: {
+  done: boolean;
+  activeLabel?: string;
+  active?: boolean;
+}) {
+  if (done) return <span className="cmd-pill cmd-pill--good">Done</span>;
+  if (active && activeLabel) return <span className="cmd-pill cmd-pill--info">{activeLabel}</span>;
+  return <span className="piece-register-cell-meta">—</span>;
+}
+
 export type PieceRegisterWorkPackageOption = {
   id: string;
   wp_number?: string | null;
@@ -312,18 +353,19 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
                 </th>
                 {(
                   [
-                    { label: "Mark / lot", key: "mark" as const },
+                    { label: "Piece Mark", key: "mark" as const },
                     { label: "Qty", key: null },
-                    { label: "Profile", key: null },
-                    { label: "Grade", key: null },
-                    { label: "Wt each", key: null },
-                    { label: "Wt total", key: null },
-                    { label: "Tons", key: null },
-                    { label: "Work package", key: "work_package" as const },
-                    { label: "Lifecycle", key: null },
-                    { label: "Hold", key: null },
-                    { label: "Source", key: null },
-                    { label: "Last update", key: "updated_at" as const },
+                    { label: "Main Mark", key: null },
+                    { label: "Shape", key: null },
+                    { label: "Weight", key: null },
+                    { label: "WP", key: "work_package" as const },
+                    { label: "Sequence", key: null },
+                    { label: "Drawing", key: null },
+                    { label: "Release", key: null },
+                    { label: "Fab", key: null },
+                    { label: "Load", key: null },
+                    { label: "Ship", key: null },
+                    { label: "Erect", key: null },
                   ] as const
                 ).map((column) => (
                   <th key={column.label}>
@@ -354,14 +396,14 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
             <tbody>
               {piecesLoading && (
                 <tr>
-                  <td colSpan={13} className="cmd-table__empty">
+                  <td colSpan={14} className="cmd-table__empty">
                     Loading the project piece register...
                   </td>
                 </tr>
               )}
               {piecesError ? (
                 <tr>
-                  <td colSpan={13} className="cmd-table__empty">
+                  <td colSpan={14} className="cmd-table__empty">
                     <strong className="piece-register-error">
                       The Piece Register could not be loaded.
                     </strong>
@@ -404,62 +446,73 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
                           className="cmd-check"
                         />
                       </td>
-                      <td>
+                      <td className="piece-register-sticky piece-register-sticky--mark">
                         <div className="piece-register-mark">{piece.piece_mark}</div>
                         <div className="piece-register-cell-meta">
-                          {piece.parent_piece_id
-                            ? `Child lot ${piece.lot_code}`
-                            : piece.is_container
-                              ? `Container ${piece.lot_code}`
-                              : piece.lot_code === "ALL"
-                                ? "Root lot ALL"
-                                : `Lot ${piece.lot_code}`}
+                          {piece.on_hold
+                            ? "Held"
+                            : piece.parent_piece_id
+                              ? `Child lot ${piece.lot_code}`
+                              : piece.is_container
+                                ? `Container ${piece.lot_code}`
+                                : piece.lot_code === "ALL"
+                                  ? "Root lot ALL"
+                                  : `Lot ${piece.lot_code}`}
                         </div>
                       </td>
                       <td className="piece-register-number">{piece.quantity}</td>
-                      <td>{piece.profile || "—"}</td>
-                      <td>{piece.material_grade || "—"}</td>
-                      <td className="piece-register-number">
-                        {piece.weight_each_lbs == null
-                          ? "—"
-                          : Number(piece.weight_each_lbs).toFixed(1)}
+                      <td>
+                        <div>{metadataText(piece, "main_mark", "assembly_mark") || (piece.parent_piece_id ? piece.parent_piece_id.slice(0, 8) : piece.piece_mark)}</div>
+                        <div className="piece-register-cell-meta">{piece.parent_piece_id ? "Parent" : "Main"}</div>
+                      </td>
+                      <td>
+                        <div>{piece.profile || "—"}</div>
+                        <div className="piece-register-cell-meta">{piece.material_grade || "Grade unknown"}</div>
                       </td>
                       <td className="piece-register-number">
-                        {piece.weight_total_lbs == null
-                          ? "—"
-                          : Number(piece.weight_total_lbs).toFixed(1)}
-                      </td>
-                      <td className="piece-register-number piece-register-number--strong">
-                        {tons == null ? "—" : tons.toFixed(3)}
+                        <div>{piece.weight_total_lbs == null ? "—" : `${Number(piece.weight_total_lbs).toFixed(0)} lb`}</div>
+                        <div className="piece-register-cell-meta">{tons == null ? "Tons unknown" : `${tons.toFixed(3)} T`}</div>
                       </td>
                       <td>{piece.workPackageLabel}</td>
                       <td>
-                        <span className="cmd-pill cmd-pill--neutral">
-                          {pieceLifecycleLabel(piece.lifecycle_status)}
-                        </span>
+                        <div>{piece.sequence_number || "—"}</div>
+                        <div className="piece-register-cell-meta">{piece.erection_area || ""}</div>
+                      </td>
+                      <td>
+                        <div>{metadataText(piece, "drawing_number", "drawing_no", "sheet_number") || "—"}</div>
+                        <div className="piece-register-cell-meta">{metadataText(piece, "drawing_set_name") || ""}</div>
                       </td>
                       <td>
                         {piece.on_hold ? (
-                          <span className="piece-register-hold">Held</span>
+                          <span className="cmd-pill cmd-pill--danger">Held</span>
                         ) : (
-                          <span className="piece-register-cell-meta">Clear</span>
+                          <StageCell done={lifecycleReached(piece.lifecycle_status, "released")} />
                         )}
                       </td>
                       <td>
-                        <div>{piece.source_system || "—"}</div>
-                        <div className="piece-register-cell-meta piece-register-cell-meta--truncate">
-                          {piece.external_ref || ""}
-                        </div>
+                        <StageCell
+                          done={lifecycleReached(piece.lifecycle_status, "fabricated")}
+                          active={piece.lifecycle_status === "in_fabrication"}
+                          activeLabel="In Fab"
+                        />
                       </td>
-                      <td className="piece-register-updated">
-                        {new Date(piece.updated_at).toLocaleString()}
+                      <td>
+                        <div>{metadataText(piece, "load_number", "load_no") || "—"}</div>
+                        <div className="piece-register-cell-meta">{metadataText(piece, "trailer_number", "carrier") || ""}</div>
+                      </td>
+                      <td>
+                        <StageCell done={lifecycleReached(piece.lifecycle_status, "shipped")} />
+                      </td>
+                      <td>
+                        <StageCell done={lifecycleReached(piece.lifecycle_status, "erected")} />
+                        <div className="piece-register-cell-meta">{pieceLifecycleLabel(piece.lifecycle_status)}</div>
                       </td>
                     </tr>
                   );
                 })}
               {!piecesLoading && !piecesError && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="cmd-table__empty">
+                  <td colSpan={14} className="cmd-table__empty">
                     <PackageOpen size={28} />
                     <strong>
                       {displayRows.length === 0

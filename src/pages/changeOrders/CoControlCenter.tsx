@@ -8,30 +8,18 @@
  * This component is purely presentational — no network, no mutations.
  */
 import { useMemo } from "react";
-import {
-  FileSignature,
-  CheckCircle2,
-  DollarSign,
-  Clock,
-  TrendingUp,
-  AlertTriangle,
-  CalendarClock,
-  Link2,
-  FileEdit,
-  Trash2,
-} from "lucide-react";
+import { Download, Plus, Trash2, Upload } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
+  AttentionQueue,
+  OperationalSummary,
+  PageHeader,
   Pill,
   FilterBar,
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { AttentionItem, Column } from "@/components/command";
 import { buildCoSummary, coStatusTone } from "./coControlCenter.derive";
 import type { CoRecord } from "./coControlCenter.derive";
 import { formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
@@ -102,28 +90,46 @@ export default function CoControlCenter(props: CoControlCenterProps) {
   useCommandSkin();
   const s = useMemo(() => buildCoSummary(cos), [cos]);
 
-  // ── Hero ──────────────────────────────────────────────────────────────────
-  const heroStats = [
-    { value: formatCurrencyShort(revisedContract), label: "Revised Contract" },
-    { value: formatCurrencyShort(baseContract),    label: "Base Contract" },
-  ];
-  const chips = [
-    { label: `${s.total} Total` },
-    { label: `${s.approved} Approved`, tone: "good" as const },
-    { label: `${s.pending} Pending` },
+  const operationalMetrics = [
+    { label: "Approved", value: s.approved, sublabel: formatCurrencyShort(s.totalApproved), tone: s.approved ? "good" as const : "neutral" as const },
+    { label: "Pending Review", value: s.pending, sublabel: formatCurrencyShort(s.totalPending), tone: s.pending ? "warn" as const : "good" as const },
+    { label: "Draft", value: s.draft, sublabel: "pricing not submitted", tone: s.draft ? "neutral" as const : "good" as const },
+    { label: "At-Risk Value", value: formatCurrencyShort(s.atRiskValue), sublabel: "pending + draft", tone: s.atRiskValue ? "warn" as const : "good" as const },
+    { label: "Schedule Exposure", value: `${s.scheduleDays}d`, sublabel: "active impact", tone: s.scheduleDays ? "warn" as const : "neutral" as const },
+    { label: "RFI Linked", value: s.rfiLinked, sublabel: "change orders", tone: s.rfiLinked ? "info" as const : "neutral" as const },
+    { label: "Base Contract", value: formatCurrencyShort(baseContract), sublabel: "original", tone: "neutral" as const },
+    { label: "Revised Contract", value: formatCurrencyShort(revisedContract), sublabel: "approved COs included", tone: "neutral" as const },
   ];
 
-  // ── KPI strip ─────────────────────────────────────────────────────────────
-  const kpiCells: KpiCellDef[] = [
-    { label: "Approved",         value: s.approved,                               sublabel: "COs",          tone: "good",                                         Icon: CheckCircle2 },
-    { label: "Approved Value",   value: formatCurrencyShort(s.totalApproved),     sublabel: "executed",     tone: s.totalApproved > 0 ? "good" : "neutral",        Icon: DollarSign   },
-    { label: "Pending Review",   value: s.pending,                                sublabel: "COs",          tone: s.pending > 0 ? "warn" : "neutral",              Icon: Clock        },
-    { label: "Pending Value",    value: formatCurrencyShort(s.totalPending),      sublabel: "at owner",     tone: s.totalPending > 0 ? "warn" : "neutral",         Icon: TrendingUp   },
-    { label: "Draft",            value: s.draft,                                  sublabel: "COs",          tone: "neutral",                                       Icon: FileEdit     },
-    { label: "At-Risk Value",    value: formatCurrencyShort(s.atRiskValue),       sublabel: "pending + draft", tone: s.atRiskValue > 0 ? "warn" : "neutral",      Icon: AlertTriangle },
-    { label: "Schedule Exposure",value: `${s.scheduleDays}d`,                    sublabel: "active impact", tone: s.scheduleDays > 0 ? "warn" : "neutral",        Icon: CalendarClock },
-    { label: "Linked to RFI",    value: s.rfiLinked,                              sublabel: "COs",          tone: s.rfiLinked > 0 ? "info" : "neutral",            Icon: Link2        },
-  ];
+  const attentionItems: AttentionItem[] = (() => {
+    const seen = new Set<string>();
+    const source = [...s.workQueue, ...s.riskQueue];
+    const items: AttentionItem[] = [];
+    for (const co of source) {
+      const id = String(co.id || co.co_number || co.title || items.length);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const amount = Number(co.co_amount) || 0;
+      const days = Number(co.schedule_impact_days) || 0;
+      const risk = [
+        co.status === "Under Review" ? "Owner / GC decision pending" : null,
+        co.status === "Submitted" ? "Submitted · awaiting response" : null,
+        days > 0 ? `+${days}d schedule exposure` : null,
+        amount ? formatCurrencyShort(amount) : null,
+      ].filter(Boolean).join(" · ") || "Commercial follow-up";
+      items.push({
+        id,
+        issue: `${co.co_number || "CO"} · ${co.title || "Untitled change"}`,
+        deadline: co.submitted_date || null,
+        risk,
+        owner: co.status === "Under Review" || co.status === "Submitted" ? "External review" : null,
+        nextAction: co.status === "Draft" ? "Complete pricing and submit" : "Advance commercial decision",
+        tone: days > 0 || Math.abs(amount) >= 25000 ? "danger" : "warn",
+        onOpen: () => onOpenCo(co),
+      });
+    }
+    return items.slice(0, 10);
+  })();
 
   // ── DataTable columns ─────────────────────────────────────────────────────
   const selectable = !!(selectedIds && onToggleSelect && onToggleAll);
@@ -257,97 +263,89 @@ export default function CoControlCenter(props: CoControlCenterProps) {
   ];
 
   return (
-    <div className="co-cc">
-      <PageHero
-        Icon={FileSignature}
+    <div className="co-cc sbp-command-page">
+      <PageHeader
+        eyebrow={`${projectName} / Commercial`}
         title="Change Order Control"
-        subtitle="Manage contract exposure from draft pricing through approval with cost, schedule impact, and review status visible at a glance."
-        projectName={projectName}
-        chips={chips}
-        photoSrc={photoFor("ChangeOrders") ?? undefined}
-        stats={heroStats}
+        subtitle="Contract exposure from draft pricing through approval, with cost, schedule, and evidence relationships visible."
+        meta={[
+          projectHealth ? `Project health: ${projectHealth}` : "Project health: unknown",
+          percentComplete != null ? `${Math.round(percentComplete)}% project complete` : null,
+          `${s.total} change orders`,
+        ].filter(Boolean).join(" · ")}
+        actions={(
+          <>
+            {onImport ? (
+              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImport}>
+                <Upload size={14} /> Import
+              </button>
+            ) : null}
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}>
+              <Download size={14} /> Export
+            </button>
+            {onCreate ? (
+              <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate}>
+                <Plus size={14} /> New CO
+              </button>
+            ) : null}
+          </>
+        )}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Change order operational summary" />
 
-      <div className="cmd-panels">
-        {/* Panel 1: CO Work Queue — oldest pending COs needing action */}
-        <DecisionPanel
-          title="CO Work Queue"
-          onViewAll={() => { onFilterChange("Submitted"); scrollToTable(); }}
-        >
-          {s.workQueue.map((c) => (
-            <div className="cmd-row is-clickable" key={c.id} onClick={() => onOpenCo(c)}>
-              <div>
-                <div className="cmd-row__num">{c.co_number || "CO"}</div>
-                <div className="cmd-row__meta">{c.title || "—"}</div>
-              </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <Pill tone={coStatusTone(c.status)}>{c.status || "Draft"}</Pill>
-                <span className="cmd-row__meta">{formatCurrencyShort(Number(c.co_amount) || 0)}</span>
-              </div>
-            </div>
-          ))}
-          {s.workQueue.length === 0 ? (
-            <div className="cmd-row__meta">No pending COs — queue is clear.</div>
-          ) : null}
-        </DecisionPanel>
+      <AttentionQueue
+        title="Commercial Attention"
+        items={attentionItems}
+        emptyMessage="No pending change-order decisions or material commercial exposure."
+      />
 
-        {/* Panel 2: Needs Decision — Under Review (or Submitted fallback) */}
-        <DecisionPanel
-          title="Needs Decision"
-          onViewAll={() => { onFilterChange("Under Review"); scrollToTable(); }}
-        >
-          {s.decisionQueue.map((c) => (
-            <div className="cmd-row is-clickable" key={c.id} onClick={() => onOpenCo(c)}>
-              <div>
-                <div className="cmd-row__num">{c.co_number || "CO"}</div>
-                <div className="cmd-row__meta">{c.title || "—"}</div>
-              </div>
-              <span className="cmd-row__meta">{formatCurrencyShort(Number(c.co_amount) || 0)}</span>
-            </div>
-          ))}
-          {s.decisionQueue.length === 0 ? (
-            <div className="cmd-row__meta">No COs awaiting decision.</div>
-          ) : null}
-        </DecisionPanel>
-
-        {/* Panel 3: Risk & Exposure — hottest by amount × schedule */}
-        <DecisionPanel
-          title="Risk & Exposure"
-          onViewAll={scrollToTable}
-        >
-          {s.riskQueue.map((c) => {
-            const days = Number(c.schedule_impact_days) || 0;
-            return (
-              <div className="cmd-row is-clickable" key={c.id} onClick={() => onOpenCo(c)}>
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Needs Decision</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={() => { onFilterChange("Under Review"); scrollToTable(); }}>View register</button>
+          </div>
+          <div>
+            {s.decisionQueue.length === 0 ? (
+              <div className="sbp-attention__empty">No COs awaiting decision.</div>
+            ) : s.decisionQueue.map((co) => (
+              <button type="button" className="cmd-row is-clickable" key={co.id} onClick={() => onOpenCo(co)} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
                 <div>
-                  <div className="cmd-row__num">{c.co_number || "CO"}</div>
-                  <div className="cmd-row__meta">{c.title || "—"}</div>
+                  <div className="cmd-row__num">{co.co_number || "CO"}</div>
+                  <div className="cmd-row__meta">{co.title || "Untitled change"}</div>
                 </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <Pill tone={coStatusTone(c.status)}>{c.status || "Draft"}</Pill>
-                  {days > 0 ? (
-                    <span className="cmd-row__meta" style={{ color: "var(--status-warning)" }}>+{days}d</span>
-                  ) : null}
+                <span className="cmd-row__meta">{formatCurrencyShort(Number(co.co_amount) || 0)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Risk & Exposure</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={scrollToTable}>View register</button>
+          </div>
+          <div>
+            {s.riskQueue.length === 0 ? (
+              <div className="sbp-attention__empty">No active commercial risk exposure.</div>
+            ) : s.riskQueue.map((co) => (
+              <button type="button" className="cmd-row is-clickable" key={co.id} onClick={() => onOpenCo(co)} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
+                <div>
+                  <div className="cmd-row__num">{co.co_number || "CO"}</div>
+                  <div className="cmd-row__meta">{co.title || "Untitled change"}</div>
                 </div>
-              </div>
-            );
-          })}
-          {s.riskQueue.length === 0 ? (
-            <div className="cmd-row__meta">No active risk exposure.</div>
-          ) : null}
-        </DecisionPanel>
+                <Pill tone={coStatusTone(co.status)}>{co.status || "Draft"}</Pill>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
       <FilterBar
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search CO #, title, description, or reason code"
-        onImport={onImport}
-        onExport={onExport}
-        primaryLabel="New CO"
-        onPrimary={onCreate || null}
         filters={
           <>
             {STATUS_FILTERS.map((s) => (

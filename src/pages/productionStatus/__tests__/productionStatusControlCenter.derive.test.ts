@@ -51,6 +51,7 @@ describe("buildProductionSummary — empty input", () => {
     expect(s.notStarted).toBe(0);
     expect(s.qualityHold).toBe(0);
     expect(s.pastDue).toBe(0);
+    expect(s.missingShipDate).toBe(0);
     expect(s.pctComplete).toBe(0);
     expect(s.unknown).toBe(0);
   });
@@ -59,6 +60,7 @@ describe("buildProductionSummary — empty input", () => {
     expect(s.byArea).toEqual([]);
     expect(s.stageQueue).toEqual([]);
     expect(s.pastDueQueue).toEqual([]);
+    expect(s.missingShipDateQueue).toEqual([]);
   });
 
   it("returns byStage with canonical stages at 0", () => {
@@ -257,5 +259,26 @@ describe("buildProductionSummary — today hoist / injectable clock", () => {
     const s = buildProductionSummary(pieces, fixed);
     expect(s.pastDue).toBe(1);
     expect(s.pastDueQueue[0].ship_date).toBe("2026-06-14");
+  });
+});
+
+
+describe("buildProductionSummary — missing ship-date evidence", () => {
+  it("flags active production pieces with no ship date without treating planned not-started or shipped pieces as missing", () => {
+    const pieces = [
+      piece({ piece_mark: "ACTIVE-1", status: "Weld", ship_date: null }),
+      piece({ piece_mark: "ACTIVE-2", status: "Cut", ship_date: null }),
+      piece({ piece_mark: "PLANNED", status: "Not Started", ship_date: null }),
+      piece({ piece_mark: "DONE", status: "Shipped", ship_date: null }),
+      piece({ piece_mark: "DATED", status: "Fit", ship_date: "2026-07-01" }),
+    ];
+
+    const s = buildProductionSummary(pieces, new Date(2026, 5, 15, 12, 0, 0));
+
+    expect(s.missingShipDate).toBe(2);
+    expect(s.missingShipDateQueue.map((row) => row.piece_mark)).toEqual([
+      "ACTIVE-1",
+      "ACTIVE-2",
+    ]);
   });
 });

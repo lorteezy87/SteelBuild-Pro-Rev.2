@@ -169,6 +169,7 @@ describe("buildProcurementSummary", () => {
     expect(s.total).toBe(6);
     expect(s.open).toBe(4);          // Identified, PO Issued, In Production, Shipped
     expect(s.partiallyReceived).toBe(1); // just the Shipped row
+    expect(s.missingRequiredDate).toBe(0);
   });
 
   it("counts overdue correctly", () => {
@@ -205,5 +206,22 @@ describe("buildProcurementSummary", () => {
   it("returns a vendorSummary array", () => {
     const s = buildProcurementSummary(items);
     expect(Array.isArray(s.vendorSummary)).toBe(true);
+  });
+});
+
+
+describe("buildProcurementSummary — missing required-date evidence", () => {
+  it("keeps open items with no required date visible as management attention", () => {
+    const rows: ProcurementItem[] = [
+      { id: "undated", status: "PO Issued", vendor: "Nucor", required_date: null },
+      { id: "dated", status: "Confirmed", vendor: "CMC", required_date: isoOffset(20) },
+      { id: "received", status: "Received", vendor: "Other", required_date: null },
+    ];
+
+    const summary = buildProcurementSummary(rows);
+
+    expect(summary.missingRequiredDate).toBe(1);
+    expect(summary.missingRequiredDateQueue.map((row) => row.id)).toEqual(["undated"]);
+    expect(summary.attentionQueue.some((row) => row.id === "undated")).toBe(true);
   });
 });

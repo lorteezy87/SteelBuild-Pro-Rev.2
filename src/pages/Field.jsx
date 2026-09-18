@@ -12,7 +12,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { OperationalSummary, PageHeader, useCommandSkin } from "@/components/command";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { buildDeliveryMetrics } from "./deliveries/analytics";
 import {
@@ -21,8 +21,6 @@ import {
   CheckSquare,
   ClipboardList,
   Plus,
-  ShieldCheck,
-  TestTube2,
   Truck,
 } from "lucide-react";
 import { localToday } from "@/utils/dates";
@@ -39,6 +37,7 @@ import {
 import { useFieldDashboardNavigation } from "./field/useFieldDashboardNavigation";
 
 export default function Field() {
+  useCommandSkin();
   const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const filterArgs = projectId ? { project_id: projectId } : null;
@@ -154,83 +153,66 @@ export default function Field() {
   );
   const actions = useFieldDashboardNavigation(summary.todayLog?.id);
 
-  const tiles = [
+  const operationalMetrics = [
     {
-      key: "log-today",
-      label: "Daily Log Today",
-      value: summary.todayLog ? "✓" : "—",
-      color: summary.todayLog
-        ? "var(--status-success-bright)"
-        : "var(--text-muted)",
-      icon: ClipboardList,
-      onClick: actions.openDailyLogSummary,
-      sub: summary.todayLog
-        ? `${summary.todayLog.headcount || 0} crew`
-        : "log not started",
+      label: "Daily Log",
+      value: isLoading ? "Unknown" : summary.todayLog ? "Recorded" : "Missing",
+      sublabel: isLoading
+        ? "checking today"
+        : summary.todayLog
+          ? "today's field record"
+          : "no log found today",
+      tone: isLoading ? "neutral" : summary.todayLog ? "good" : "warn",
     },
     {
-      key: "photos-week",
-      label: "Photos · Week",
-      value: summary.photosThisWeek,
-      color: "var(--accent)",
-      icon: Camera,
-      onClick: actions.openPhotos,
+      label: "Crew",
+      value: isLoading
+        ? "Unknown"
+        : summary.todayLog
+          ? (summary.todayLog.headcount ?? "Unknown")
+          : "Unknown",
+      sublabel: summary.todayLog ? "today" : "daily log required",
+      tone: "neutral",
     },
     {
-      key: "open-punch",
-      label: "Open Punch",
-      value: summary.openPunch,
-      color:
-        summary.openPunch > 0
-          ? "var(--status-warning-bright)"
-          : "var(--status-success-bright)",
-      icon: CheckSquare,
-      onClick: actions.openPunchlist,
+      label: "Hours",
+      value: isLoading
+        ? "Unknown"
+        : summary.todayLog
+          ? (summary.todayLog.hours_worked ?? "Unknown")
+          : "Unknown",
+      sublabel: summary.todayLog ? "today" : "daily log required",
+      tone: "neutral",
     },
     {
-      key: "open-insp",
-      label: "Open Inspections",
-      value: summary.openInspections,
-      color:
-        summary.openInspections > 0
-          ? "var(--status-info)"
-          : "var(--text-muted)",
-      icon: ShieldCheck,
-      onClick: actions.openInspections,
-    },
-    {
-      key: "safety-ytd",
-      label: "Safety · YTD",
-      value: summary.safetyYtd,
-      color:
-        summary.safetyYtd > 0
-          ? "var(--status-error-bright)"
-          : "var(--status-success-bright)",
-      icon: AlertTriangle,
-      onClick: actions.openSafety,
-    },
-    {
-      key: "qc-month",
-      label: "QC · Month",
-      value: summary.qualityControlThisMonth,
-      color: "var(--phase-fabrication)",
-      icon: TestTube2,
-      onClick: actions.openQualityControl,
-    },
-    {
-      key: "delivery-today",
       label: "Loads Today",
-      value: deliveryMetrics.dueToday.length,
-      color:
-        deliveryMetrics.overdue.length > 0
-          ? "var(--status-error-bright)"
-          : "var(--phase-delivery)",
-      icon: Truck,
-      onClick: actions.receiveDelivery,
-      sub:
-        deliveryMetrics.overdue.length > 0
-          ? `${deliveryMetrics.overdue.length} late`
-          : `${deliveryMetrics.openCount} open`,
+      value: isLoading ? "Unknown" : deliveryMetrics.dueToday.length,
+      sublabel: isLoading ? "checking deliveries" : `${deliveryMetrics.openCount} open`,
+      tone: !isLoading && deliveryMetrics.overdue.length > 0 ? "danger" : "info",
+    },
+    {
+      label: "Late Loads",
+      value: isLoading ? "Unknown" : deliveryMetrics.overdue.length,
+      sublabel: "delivery exceptions",
+      tone: !isLoading && deliveryMetrics.overdue.length > 0 ? "danger" : "good",
+    },
+    {
+      label: "Open Punch",
+      value: isLoading ? "Unknown" : summary.openPunch,
+      sublabel: "field closeout",
+      tone: !isLoading && summary.openPunch > 0 ? "warn" : "good",
+    },
+    {
+      label: "Open Inspections",
+      value: isLoading ? "Unknown" : summary.openInspections,
+      sublabel: "field checks",
+      tone: !isLoading && summary.openInspections > 0 ? "info" : "neutral",
+    },
+    {
+      label: "Open Safety",
+      value: isLoading ? "Unknown" : summary.openSafety,
+      sublabel: "active items",
+      tone: !isLoading && summary.openSafety > 0 ? "danger" : "good",
     },
   ];
 
@@ -300,50 +282,36 @@ export default function Field() {
       className="sb-dashboard-reference-page field-mobile-console"
       style={{ display: "flex", flexDirection: "column", gap: 16 }}
     >
-      <CommandBar
-        eyebrow={activeProject ? activeProject.name : "ALL PROJECTS"}
-        title="Field"
-        count={summary.todayActivityCount}
-        unit=" · TODAY"
+      <PageHeader
+        eyebrow={activeProject ? `${activeProject.name} / Field` : "All Projects / Field"}
+        title="Field Today"
         subtitle={
-          summary.todayLog
-            ? `${summary.todayLog.headcount || 0} crew · ${
-                summary.todayLog.hours_worked || 0
-              } hrs · ${summary.recentPhotos.length} recent photos`
-            : "No log today — log first to start tracking man-hours"
+          isLoading
+            ? "Loading today's field execution record."
+            : summary.todayLog
+              ? `${summary.todayLog.headcount ?? "Unknown"} crew · ${summary.todayLog.hours_worked ?? "Unknown"} hrs · ${summary.photosToday} photos today`
+              : "Today's daily log has not been recorded. Crew and hours remain unknown until it is."
         }
-      >
-        {!summary.todayLog && projectId && (
-          <button
-            type="button"
-            onClick={actions.openTodayLog}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "var(--accent)",
-              color: "var(--bg-base)",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 14px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = "var(--accent-hover)";
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = "var(--accent)";
-            }}
-          >
-            <Plus size={12} /> Log Today
-          </button>
-        )}
-      </CommandBar>
+        meta={isLoading ? "Today's activity: unknown" : `${summary.todayActivityCount} field events today`}
+        actions={
+          projectId ? (
+            <button
+              type="button"
+              className={summary.todayLog ? "cmd-btn cmd-btn--ghost" : "cmd-btn cmd-btn--primary"}
+              onClick={actions.openTodayLog}
+              disabled={isLoading}
+            >
+              <Plus size={12} />
+              {summary.todayLog ? "Open Today's Log" : "Log Today"}
+            </button>
+          ) : null
+        }
+      />
+
+      <OperationalSummary
+        metrics={operationalMetrics}
+        ariaLabel="Today's field execution summary"
+      />
 
       <FieldFastCaptureRail actions={fastActions} />
 
@@ -355,27 +323,6 @@ export default function Field() {
         deliveryDueToday={deliveryMetrics.dueToday.length}
         deliveryLate={deliveryMetrics.overdue.length}
       />
-
-      <div
-        className="field-kpi-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-          gap: 10,
-        }}
-      >
-        {tiles.map((tile) => (
-          <KpiTile
-            key={tile.key}
-            compact
-            label={tile.label}
-            value={tile.value}
-            sub={tile.sub}
-            color={tile.color}
-            onClick={tile.onClick}
-          />
-        ))}
-      </div>
 
       <WeekActivityStrip days={summary.weekDays} />
 

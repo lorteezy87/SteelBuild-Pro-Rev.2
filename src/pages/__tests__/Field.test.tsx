@@ -100,8 +100,8 @@ describe("Field page", () => {
   it("keeps every dashboard source scoped to the selected project", async () => {
     renderField();
 
-    expect(await screen.findByRole("heading", { name: "Field" })).toBeInTheDocument();
-    expect(screen.getByText("Field Project")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Field Today" })).toBeInTheDocument();
+    expect(screen.getByText("Field Project / Field")).toBeInTheDocument();
 
     await waitFor(() => {
       for (const entity of Object.values(entitiesMock)) {
@@ -117,8 +117,11 @@ describe("Field page", () => {
   it("renders the assembled field overview after all source queries settle", async () => {
     renderField();
 
-    expect(await screen.findByText("Daily Log Today: ✓")).toBeInTheDocument();
-    expect(screen.getByText("Open Punch: 0")).toBeInTheDocument();
+    expect(await screen.findByText("Recorded")).toBeInTheDocument();
+    // "Open Punch" renders twice by design: once as an operational KPI tile
+    // (Field.jsx, "field closeout") and once as a Today's Activity chip
+    // (FieldDashboardSections.tsx). Two views of one metric, not a duplicate.
+    expect(screen.getAllByText("Open Punch").length).toBeGreaterThan(0);
     expect(screen.getByText("Today's Activity")).toBeInTheDocument();
     expect(screen.getByText("Recent Photos")).toBeInTheDocument();
     expect(screen.queryByText("field loading")).not.toBeInTheDocument();

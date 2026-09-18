@@ -33,6 +33,14 @@ function renderCC(props: Record<string, unknown> = {}) {
   );
 }
 
+describe("ScheduleCommandCenter — Wave 3 operating layout", () => {
+  it("uses the shared schedule-control header and attention queue", () => {
+    renderCC();
+    expect(screen.getByRole("heading", { name: "Schedule Control" })).toBeInTheDocument();
+    expect(screen.getByText("Schedule Attention")).toBeInTheDocument();
+  });
+});
+
 describe("ScheduleCommandCenter — Bulk Add + WBS Builder discoverability", () => {
   it("renders the Bulk Add and WBS Builder buttons and fires their handlers", () => {
     const onBulkAdd = vi.fn();
