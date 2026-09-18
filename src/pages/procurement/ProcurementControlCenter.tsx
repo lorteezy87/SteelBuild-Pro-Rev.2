@@ -19,18 +19,14 @@
  */
 
 import { useMemo } from "react";
-import {
-  PackageCheck, Truck, AlertTriangle, Clock, CircleCheck,
-  Activity, Gauge,
-} from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero, KpiStrip, DecisionPanel, Pill, statusTone,
+  AttentionQueue, OperationalSummary, PageHeader, Pill, statusTone,
   FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
-import { buildProcurementSummary, isOverdue, isLate, daysUntil } from "./procurementControlCenter.derive";
+import type { AttentionItem, Column } from "@/components/command";
+import { buildProcurementSummary, computedShipDate, isOverdue, isLate, daysUntil } from "./procurementControlCenter.derive";
 import type { ProcurementItem } from "./procurementControlCenter.derive";
 import { PROCUREMENT_CATEGORIES, ALL_STATUSES, fmtDate } from "./format";
 
@@ -100,246 +96,258 @@ export default function ProcurementControlCenter(props: ProcurementControlCenter
 
   const s = useMemo(() => buildProcurementSummary(items), [items]);
 
-  // ── Hero chips ──────────────────────────────────────────────────────────
-  const chips = [
-    { label: `${s.total} Items` },
-    { label: `${s.open} Open`, tone: "good" as const },
-    { label: `${s.overdue} Overdue` },
-  ];
+  const attentionItems: AttentionItem[] = s.attentionQueue
+    .filter((item) => {
+      const due = daysUntil(item.required_date);
+      return (
+        isOverdue(item) ||
+        isLate(item) ||
+        item.is_long_lead === true ||
+        !item.required_date ||
+        (due !== null && due >= 0 && due <= 7) ||
+        item.status === "Identified" ||
+        item.priority === "High"
+      );
+    })
+    .map((item) => {
+      let risk = "Procurement follow-up";
+      let nextAction = "Review procurement item";
+      let tone: AttentionItem["tone"] = "warn";
 
-  // ── KPI strip ──────────────────────────────────────────────────────────
-  const kpiCells: KpiCellDef[] = [
-    {
-      label: "Open POs",
-      value: s.open,
-      sublabel: "items",
-      tone: "warn",
-      Icon: Activity,
-    },
-    {
-      label: "Overdue",
-      value: s.overdue,
-      sublabel: "need-by passed",
-      tone: s.overdue > 0 ? "danger" : "neutral",
-      Icon: AlertTriangle,
-    },
-    {
-      label: "Awaiting Delivery",
-      value: s.partiallyReceived,
-      sublabel: "shipped / en route",
-      tone: s.partiallyReceived > 0 ? "info" : "neutral",
-      Icon: Truck,
-    },
-    {
-      label: "Long-Lead Items",
-      value: s.longLead,
-      sublabel: `${s.longLeadSlipping} slipping`,
-      tone: s.longLeadSlipping > 0 ? "danger" : "neutral",
-      Icon: Clock,
-    },
-    {
-      label: "LL Slipping",
-      value: s.longLeadSlipping,
-      sublabel: "ship after need-by",
-      tone: s.longLeadSlipping > 0 ? "danger" : "neutral",
-      Icon: AlertTriangle,
-    },
-    {
-      label: "Total Weight",
-      // No money; raw tons from weight_tons column.
-      value: `${s.totalWeightTons.toFixed(1)}T`,
-      sublabel: "procurement tons",
-      tone: "neutral",
-      Icon: Gauge,
-    },
-    {
-      label: "Received",
-      value: items.filter((i) => i.status === "Received").length,
-      sublabel: "complete",
-      tone: "good",
-      Icon: CircleCheck,
-    },
+      if (!item.required_date) {
+        risk = "Need-by date unknown";
+        nextAction = "Set required date";
+      } else if (isOverdue(item)) {
+        risk = "Required date passed";
+        nextAction = "Recover material / confirm delivery plan";
+        tone = "danger";
+      } else if (isLate(item)) {
+        risk = "Ship date slips need-by";
+        nextAction = "Escalate vendor commitment";
+        tone = "danger";
+      } else if (item.is_long_lead) {
+        risk = "Long-lead exposure";
+        nextAction = "Confirm long-lead commitment";
+      } else if (item.status === "Identified") {
+        risk = "Not yet quoted / ordered";
+        nextAction = "Advance quote / PO";
+      }
+
+      return {
+        id: item.id,
+        issue: `${item.po_number || item.procurement_category || "Item"} · ${item.description || "No description"}`,
+        deadline: item.required_date || null,
+        risk,
+        owner: item.vendor || null,
+        nextAction,
+        tone,
+        onOpen: () => onOpenItem(item),
+      };
+    })
+    .slice(0, 10);
+
+  const operationalMetrics = [
+    { label: "Open Items", value: s.open, sublabel: "not received / cancelled", tone: s.open ? "info" as const : "good" as const },
+    { label: "Overdue", value: s.overdue, sublabel: "need-by passed", tone: s.overdue ? "danger" as const : "good" as const },
+    { label: "Awaiting Delivery", value: s.partiallyReceived, sublabel: "shipped / en route", tone: s.partiallyReceived ? "info" as const : "neutral" as const },
+    { label: "Long Lead", value: s.longLead, sublabel: `${s.longLeadSlipping} slipping`, tone: s.longLeadSlipping ? "danger" as const : s.longLead ? "warn" as const : "neutral" as const },
+    { label: "Missing Need-By", value: s.missingRequiredDate, sublabel: "open items", tone: s.missingRequiredDate ? "warn" as const : "good" as const },
+    { label: "Total Weight", value: `${s.totalWeightTons.toFixed(1)}T`, sublabel: "recorded procurement", tone: "neutral" as const },
+    { label: "Received", value: items.filter((item) => item.status === "Received").length, sublabel: "complete", tone: "good" as const },
   ];
 
   // ── DataTable columns ───────────────────────────────────────────────────
   const columns: Column<ProcurementItem>[] = [
     {
-      key: "po",
-      header: "PO #",
-      render: (i) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700 }}>
-          {i.po_number || "—"}
-        </span>
+      key: "item",
+      header: "Item / Category",
+      grid: "minmax(210px, 1.7fr)",
+      render: (item) => (
+        <div>
+          <div style={{ fontWeight: 700 }}>{item.description || item.procurement_category || "Unspecified item"}</div>
+          <div className="cmd-row__meta">{item.procurement_category || "Category unknown"}</div>
+        </div>
       ),
     },
     {
       key: "vendor",
-      header: "Vendor",
-      render: (i) => i.vendor || <span style={{ color: "var(--text-muted)" }}>—</span>,
-    },
-    {
-      key: "description",
-      header: "Material / Description",
-      render: (i) => (
-        <span style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-          {i.description || i.procurement_category || "—"}
-        </span>
+      header: "Vendor / PO",
+      grid: "minmax(135px, 1fr)",
+      render: (item) => (
+        <div>
+          <div>{item.vendor || "Vendor unknown"}</div>
+          <div className="cmd-row__meta">{item.po_number ? `PO ${item.po_number}` : "PO not recorded"}</div>
+        </div>
       ),
     },
     {
-      key: "category",
-      header: "Category",
-      render: (i) => (
-        <span style={{ fontSize: 10, color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
-          {i.procurement_category || "—"}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (i) => <Pill tone={procStatusTone(i.status)}>{i.status || "—"}</Pill>,
-    },
-    {
-      key: "needby",
-      header: "Need By",
-      render: needByCell,
-    },
-    {
-      key: "ship",
-      header: "ETA / Ship",
-      render: (i) => {
-        const d = i.expected_ship_date || null;
-        if (!d) return <span style={{ color: "var(--text-muted)", fontSize: 11 }}>—</span>;
-        const late = isLate(i);
+      key: "package",
+      header: "WP / Seq",
+      grid: "minmax(110px, .8fr)",
+      render: (item) => {
+        const metadata = item.metadata || {};
+        const sequence =
+          typeof metadata.sequence_number === "string"
+            ? metadata.sequence_number
+            : typeof metadata.sequence === "string"
+              ? metadata.sequence
+              : null;
         return (
-          <span style={{
-            fontFamily: "var(--font-mono)", fontSize: 11,
-            color: late ? "var(--status-error)" : undefined,
-          }}>
-            {d}{late ? " · late" : ""}
-          </span>
+          <div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{item.work_package_id || "WP unknown"}</div>
+            <div className="cmd-row__meta">{sequence ? `Seq ${sequence}` : "Sequence unknown"}</div>
+          </div>
         );
       },
     },
     {
+      key: "needby",
+      header: "Need By",
+      grid: "minmax(112px, .9fr)",
+      render: needByCell,
+    },
+    {
+      key: "commitment",
+      header: "Ship / Delivery",
+      grid: "minmax(150px, 1fr)",
+      render: (item) => {
+        const ship = item.expected_ship_date || computedShipDate(item);
+        return (
+          <div>
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: ship && isLate(item) ? "var(--status-error)" : undefined,
+            }}>
+              {ship ? `Ship ${fmtDate(ship)}${isLate(item) ? " · late" : ""}` : "Ship date unknown"}
+            </div>
+            <div className="cmd-row__meta">
+              {item.scheduled_date ? `Delivery ${fmtDate(item.scheduled_date)}` : "Delivery commitment unknown"}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "Status",
+      grid: "minmax(110px, .8fr)",
+      render: (item) => <Pill tone={procStatusTone(item.status)}>{item.status || "Unknown"}</Pill>,
+    },
+    {
+      key: "risk",
+      header: "Risk",
+      grid: "minmax(135px, .9fr)",
+      render: (item) => {
+        if (!item.required_date) return <Pill tone="warn">Need-by unknown</Pill>;
+        if (isOverdue(item)) return <Pill tone="danger">Overdue</Pill>;
+        if (isLate(item)) return <Pill tone="danger">Slipping</Pill>;
+        if (item.is_long_lead) return <Pill tone="warn">Long Lead</Pill>;
+        return <Pill tone="good">Clear</Pill>;
+      },
+    },
+    {
       key: "weight",
-      header: "Wt (T)",
+      header: "Weight",
       align: "right",
-      render: (i) => i.weight_tons != null
-        ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{Number(i.weight_tons).toFixed(1)}</span>
-        : <span style={{ color: "var(--text-muted)" }}>—</span>,
+      grid: "minmax(80px, .65fr)",
+      render: (item) => item.weight_tons != null
+        ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{Number(item.weight_tons).toFixed(1)}T</span>
+        : <span style={{ color: "var(--text-muted)" }}>Unknown</span>,
     },
   ];
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="proc-cc">
-      <PageHero
-        Icon={PackageCheck}
-        title="Procurement Control Center"
-        subtitle="Track purchase orders, vendors, long-lead items, and delivery commitments for this steel project."
-        projectName={projectName}
-        chips={chips}
-        photoSrc={photoFor("Procurement") ?? undefined}
+    <div className="proc-cc sbp-command-page">
+      <PageHeader
+        eyebrow={`${projectName} / Production`}
+        title="Procurement Control"
+        subtitle="Material commitments, long-lead exposure, need-by dates, and vendor follow-up."
+        meta={`${s.total} items · ${s.open} open · ${s.overdue} overdue`}
+        actions={(
+          <>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}>
+              <Download size={14} /> Export
+            </button>
+            {onCreate ? (
+              <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate}>
+                <Plus size={14} /> Add Item
+              </button>
+            ) : null}
+          </>
+        )}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary
+        metrics={operationalMetrics}
+        ariaLabel="Procurement operational summary"
+      />
 
-      <div className="cmd-panels">
-        {/* Panel 1 — items needing attention (overdue / slipping / long-lead) */}
-        <DecisionPanel
-          title="Needs Attention"
-          onViewAll={() => { onStatusChange("all"); scrollToTable(); }}
-        >
-          {s.attentionQueue.map((item) => (
-            <div
-              className="cmd-row is-clickable"
-              key={item.id}
-              onClick={() => onOpenItem(item)}
-            >
-              <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700 }}>
-                  {item.po_number || item.procurement_category || "Item"}
-                </div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                  {item.vendor || "No vendor"} · {item.description ? item.description.slice(0, 40) : "—"}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {isOverdue(item) && <Pill tone="danger">Overdue</Pill>}
-                {!isOverdue(item) && isLate(item) && <Pill tone="warn">Slipping</Pill>}
-                {!isOverdue(item) && !isLate(item) && item.is_long_lead && <Pill tone="info">Long Lead</Pill>}
-                <Pill tone={procStatusTone(item.status)}>{item.status || "—"}</Pill>
-              </div>
-            </div>
-          ))}
-          {s.attentionQueue.length === 0 && (
-            <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "8px 0" }}>All items on track.</div>
-          )}
-        </DecisionPanel>
+      <AttentionQueue
+        title="Material Attention"
+        items={attentionItems}
+        emptyMessage="No procurement items currently require management attention."
+      />
 
-        {/* Panel 2 — shipped / awaiting delivery */}
-        <DecisionPanel
-          title="Awaiting Delivery"
-          onViewAll={() => { onStatusChange("Shipped"); scrollToTable(); }}
-        >
-          {s.awaitingDelivery.map((item) => (
-            <div
-              className="cmd-row is-clickable"
-              key={item.id}
-              onClick={() => onOpenItem(item)}
-            >
-              <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700 }}>
-                  {item.po_number || item.procurement_category || "Shipment"}
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Awaiting Delivery</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={() => { onStatusChange("Shipped"); scrollToTable(); }}>
+              View in transit
+            </button>
+          </div>
+          <div>
+            {s.awaitingDelivery.length === 0 ? (
+              <div className="sbp-attention__empty">No items in transit.</div>
+            ) : s.awaitingDelivery.map((item) => (
+              <button
+                type="button"
+                className="cmd-row is-clickable"
+                key={item.id}
+                onClick={() => onOpenItem(item)}
+                style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}
+              >
+                <div>
+                  <div className="cmd-row__num">{item.po_number || item.procurement_category || "Shipment"}</div>
+                  <div className="cmd-row__meta">{item.vendor || "Vendor unknown"}</div>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                  {item.vendor || "No vendor"}
-                  {item.expected_ship_date ? ` · ETA ${fmtDate(item.expected_ship_date)}` : ""}
-                </div>
-              </div>
-              {item.required_date && (
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
-                  Need {fmtDate(item.required_date)}
+                <span className="cmd-row__meta">
+                  {item.required_date ? `Need ${fmtDate(item.required_date)}` : "Need-by unknown"}
                 </span>
-              )}
-            </div>
-          ))}
-          {s.awaitingDelivery.length === 0 && (
-            <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "8px 0" }}>No items in transit.</div>
-          )}
-        </DecisionPanel>
+              </button>
+            ))}
+          </div>
+        </section>
 
-        {/* Panel 3 — vendor breakdown */}
-        <DecisionPanel
-          title="By Vendor"
-          onViewAll={scrollToTable}
-        >
-          {s.vendorSummary.slice(0, 6).map((row) => (
-            <div className="cmd-row" key={row.vendor}>
-              <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700 }}>{row.vendor}</div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                  {row.count} open · {row.pendingCount} pending · {row.overdueCount} overdue
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Vendor Load</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={scrollToTable}>View register</button>
+          </div>
+          <div>
+            {s.vendorSummary.length === 0 ? (
+              <div className="sbp-attention__empty">No open vendor commitments.</div>
+            ) : s.vendorSummary.slice(0, 6).map((row) => (
+              <div className="cmd-row" key={row.vendor}>
+                <div>
+                  <div className="cmd-row__num">{row.vendor}</div>
+                  <div className="cmd-row__meta">{row.count} open · {row.pendingCount} pending</div>
                 </div>
+                <Pill tone={row.overdueCount > 0 ? "danger" : "neutral"}>
+                  {row.overdueCount > 0 ? `${row.overdueCount} overdue` : "On record"}
+                </Pill>
               </div>
-              {row.overdueCount > 0 && <Pill tone="danger">{row.overdueCount} late</Pill>}
-            </div>
-          ))}
-          {s.vendorSummary.length === 0 && (
-            <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "8px 0" }}>No open items.</div>
-          )}
-        </DecisionPanel>
+            ))}
+          </div>
+        </section>
       </div>
 
       <FilterBar
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search description, vendor, or PO number"
-        onExport={onExport}
-        primaryLabel="Add Item"
-        onPrimary={onCreate ?? null}
         filters={
           <>
             {/* Category chips */}
