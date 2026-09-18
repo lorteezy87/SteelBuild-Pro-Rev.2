@@ -40,6 +40,7 @@ import { planRfiOverdueAlerts } from "./rfis/rfiOverdueAlerts";
 import { useRfiPageMutations } from "./rfis/useRfiPageMutations";
 import { scopeRfiPortfolioRows } from "./rfis/rfiPortfolioScope";
 import { buildOperationalHealthIndex } from "@/lib/projectHealth";
+import { matchesRfiOperationalFilter } from "./rfis/rfiControlCenter.derive";
 import { localToday } from "@/utils/dates";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
@@ -162,10 +163,25 @@ export default function RFIs() {
   const agendaUrgent = (agenda.counts?.overdue ?? 0) + (agenda.counts?.blocking ?? 0);
 
   /* ── Filtered list and selection ── */
-  const filtered = useMemo(
-    () => filterAndSortRfis(rfis, { filter, disciplineFilter, seqFilter, search }, matchesSequenceFilter),
-    [rfis, filter, disciplineFilter, seqFilter, search],
-  );
+  const filtered = useMemo(() => {
+    const base = filterAndSortRfis(
+      rfis,
+      { filter, disciplineFilter, seqFilter, search },
+      matchesSequenceFilter,
+    );
+    const operationalFilters = new Set([
+      "overdue",
+      "due_soon",
+      "detailing_blocker",
+      "fab_blocker",
+      "field_impact",
+      "unanswered_external",
+      "downstream_action",
+    ]);
+    return operationalFilters.has(filter)
+      ? base.filter((r) => matchesRfiOperationalFilter(r, filter))
+      : base;
+  }, [rfis, filter, disciplineFilter, seqFilter, search]);
 
   const { selectedIds, setSelectedIds, toggleSelect, toggleAll } = useRfiSelection(filtered);
   useEffect(() => {
