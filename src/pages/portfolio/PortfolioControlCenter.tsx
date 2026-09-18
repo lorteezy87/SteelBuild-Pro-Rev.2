@@ -125,7 +125,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
     { label: "Avg Complete", value: `${summary.kpis.avgPctComplete}%`, sublabel: "by work package", tone: "neutral" as const },
   ];
 
-  const attentionItems: AttentionItem[] = summary.atRiskQueue.map((row) => {
+  const attentionItems: AttentionItem[] = summary.atRiskQueue.map((row): AttentionItem => {
     const project = summary.allRows.find((candidate) => candidate.id === row.id);
     return {
       id: row.id,
