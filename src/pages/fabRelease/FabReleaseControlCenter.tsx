@@ -7,7 +7,6 @@
  */
 import { useMemo, useRef } from "react";
 import type { ReactNode } from "react";
-import { Factory } from "lucide-react";
 import "@/styles/command.css";
 import { AttentionQueue, OperationalSummary, PageHeader, StatusBadge, useCommandSkin } from "@/components/command";
 import type { AttentionItem } from "@/components/command";
