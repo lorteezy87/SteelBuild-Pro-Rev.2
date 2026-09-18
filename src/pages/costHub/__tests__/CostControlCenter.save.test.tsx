@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/components/command", () => ({
   PageHero: (): null => null,
   KpiStrip: (): null => null,
+  PageHeader: ({ actions }: { actions?: React.ReactNode }) => <header>{actions}</header>,
+  OperationalSummary: (): null => null,
+  AttentionQueue: (): null => null,
   DecisionPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   FilterBar: ({ primaryLabel, onPrimary }: { primaryLabel?: string; onPrimary?: () => void }) => (
@@ -61,7 +64,7 @@ vi.mock("@/hooks/useFinancials", () => ({
     costCodeRows: [] as any[],
     costCodes: [] as any[],
     changeOrders: [] as any[],
-    summary: { actual: 0, committed: 0, marginAtRisk: 0 },
+    summary: { actual: 0, committed: 0, marginAtRisk: 0, revisedBudget: 0, eac: 0, unallocatedCOTotal: 0 },
     reviewFlags: [] as any[],
     isLoading: false,
     costCodeCrud: {

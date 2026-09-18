@@ -17,19 +17,18 @@
  * No raw Supabase calls here.
  */
 import React, { useMemo, useState } from "react";
-import { DollarSign, TrendingDown, TrendingUp, Percent, Clock, BarChart2, ShieldAlert } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
+  AttentionQueue,
+  OperationalSummary,
+  PageHeader,
   Pill,
   FilterBar,
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { AttentionItem, Column } from "@/components/command";
 import { useFinancials } from "@/hooks/useFinancials";
 import type { CostCodeRow } from "@/hooks/useFinancials";
 import { formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
@@ -160,37 +159,61 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   );
   const contingencyRemaining = Math.max(0, contingency - consumedContingency);
 
-  // ── Hero ──
-  const heroChips = [
-    { label: `${costCodeRows.length} Cost Codes` },
-    { label: `${overBudgetCodes.length} Over Budget`, tone: overBudgetCodes.length > 0 ? ("danger" as const) : ("good" as const) },
-    { label: `${reviewFlags.length} Flags`, tone: reviewFlags.length > 0 ? ("warn" as const) : ("good" as const) },
+  const projectLabel = String((project as Record<string, unknown>)?.name || (project as Record<string, unknown>)?.project_name || "Project");
+
+  const operationalMetrics = [
+    { label: "Revised Budget", value: formatCurrencyShort(totalBudget), sublabel: "approved budget", tone: "neutral" as const },
+    { label: "Actual", value: formatCurrencyShort(summary.actual), sublabel: "paid", tone: "neutral" as const },
+    { label: "Committed", value: formatCurrencyShort(summary.committed), sublabel: "incl. unpaid", tone: budgetUsedPct > 100 ? "danger" as const : budgetUsedPct > 85 ? "warn" as const : "neutral" as const },
+    { label: "Forecast (EAC)", value: formatCurrencyShort(totalEAC), sublabel: "est. at completion", tone: totalEAC > totalBudget ? "danger" as const : "good" as const },
+    { label: "Variance", value: formatCurrencyShort(summary.committed - totalBudget), sublabel: summary.committed > totalBudget ? "over budget" : "under budget", tone: summary.committed > totalBudget ? "danger" as const : "good" as const },
+    { label: "Budget Used", value: `${budgetUsedPct.toFixed(1)}%`, sublabel: "committed / revised", tone: budgetUsedPct > 100 ? "danger" as const : budgetUsedPct > 85 ? "warn" as const : "good" as const },
+    { label: "Stale COs", value: staleCOsCount, sublabel: "open >30 days", tone: staleCOsCount > 0 ? "warn" as const : "good" as const },
+    { label: "Contingency Left", value: formatCurrencyShort(contingencyRemaining), sublabel: contingency > 0 ? `of ${formatCurrencyShort(contingency)}` : "not set", tone: contingency > 0 && consumedContingency > contingency ? "danger" as const : "neutral" as const },
   ];
 
-  const heroStats = [
-    { value: formatCurrencyShort(revisedContract), label: "Revised Contract" },
-    // Contract − max(committed, EAC). Committed alone ignored forecast-to-
-    // complete, so a project with real work left showed margin it will not keep.
-    { value: formatCurrencyShort(summary.marginAtRisk), label: "Margin vs Projected Cost" },
-  ];
-
-  // ── KPI strip ──
-  const kpiCells: KpiCellDef[] = [
-    { label: "Budget", value: formatCurrencyShort(totalBudget), sublabel: "revised", tone: "neutral", Icon: DollarSign },
-    { label: "Actual", value: formatCurrencyShort(summary.actual), sublabel: "paid", tone: "neutral", Icon: TrendingUp },
-    { label: "Committed", value: formatCurrencyShort(summary.committed), sublabel: "incl. unpaid", tone: "neutral", Icon: BarChart2 },
-    { label: "Forecast (EAC)", value: formatCurrencyShort(totalEAC), sublabel: "est. at completion", tone: totalEAC > totalBudget ? "danger" : "good", Icon: TrendingUp },
-    {
-      label: "Variance",
-      value: formatCurrencyShort(summary.committed - totalBudget),
-      sublabel: summary.committed > totalBudget ? "over budget" : "under budget",
-      tone: summary.committed > totalBudget ? "danger" : "good",
-      Icon: TrendingDown,
-    },
-    { label: "Budget Used", value: `${budgetUsedPct.toFixed(1)}%`, sublabel: "committed / revised", tone: budgetUsedPct > 100 ? "danger" : budgetUsedPct > 85 ? "warn" : "good", Icon: Percent },
-    { label: "Stale COs", value: staleCOsCount, sublabel: "open >30 days", tone: staleCOsCount > 0 ? "warn" : "neutral", Icon: Clock },
-    { label: "Contingency Left", value: formatCurrencyShort(contingencyRemaining), sublabel: contingency > 0 ? `of ${formatCurrencyShort(contingency)}` : "not set", tone: contingency > 0 && consumedContingency > contingency ? "danger" : "neutral", Icon: ShieldAlert },
-  ];
+  const attentionItems: AttentionItem[] = [
+    ...(summary.unallocatedCOTotal !== 0 ? [{
+      id: "unallocated-co",
+      issue: "Approved CO value not allocated to cost codes",
+      deadline: null,
+      risk: `${formatCurrencyShort(summary.unallocatedCOTotal)} in revised contract but outside revised budget`,
+      owner: "Project controls",
+      nextAction: "Allocate approved CO value to cost codes",
+      tone: "danger" as const,
+    } satisfies AttentionItem] : []),
+    ...reviewFlags.map((flag, index): AttentionItem => ({
+      id: `review-${index}`,
+      issue: flag.message,
+      deadline: null,
+      risk: flag.tone === "error" ? "Cost-control error" : "Cost-control warning",
+      owner: "Project controls",
+      nextAction: "Review financial source data",
+      tone: flag.tone === "error" ? "danger" as const : "warn" as const,
+    })),
+    ...varianceAlerts.slice(0, 6).map((alert): AttentionItem => ({
+      id: String(alert.id ?? alert.code),
+      issue: `${alert.code} · ${alert.description || "Cost code"}`,
+      deadline: null,
+      risk: `+${formatCurrencyShort(alert.variance)} · ${alert.pctOver.toFixed(1)}% over`,
+      owner: null,
+      nextAction: "Review forecast / commitment and recovery plan",
+      tone: "danger" as const,
+      onOpen: () => {
+        const row = costCodeRows.find((item) => String(item.id) === String(alert.id) || item.cost_code_number === alert.code);
+        if (row) handleRowClick(row);
+      },
+    })),
+    ...topStaleCOs.map((co): AttentionItem => ({
+      id: `stale-${co.id}`,
+      issue: `${co.co_number || "CO"} · ${co.title || "Change order"}`,
+      deadline: null,
+      risk: `${co.daysOpen}d open · ${formatCurrencyShort(co.co_amount)}`,
+      owner: "Commercial follow-up",
+      nextAction: "Advance CO decision",
+      tone: "warn" as const,
+    })),
+  ].slice(0, 12);
 
   // ── Columns ──
   const columns: Column<CostCodeRow>[] = [
@@ -296,19 +319,28 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   }
 
   return (
-    <div className="cost-cc">
-      <PageHero
-        Icon={DollarSign}
-        title="Cost Control Center"
-        subtitle="Budget · Actual · Committed · Forecast · Variance"
-        chips={heroChips}
-        photoSrc={photoFor("CostHub") ?? undefined}
-        stats={heroStats}
+    <div className="cost-cc sbp-command-page">
+      <PageHeader
+        eyebrow={`${projectLabel} / Commercial`}
+        title="Budget Control"
+        subtitle="Budget, actual, committed, forecast, margin exposure, and change-order impact."
+        meta={`${costCodeRows.length} cost codes · ${formatCurrencyShort(revisedContract)} revised contract · ${formatCurrencyShort(summary.marginAtRisk)} margin vs projected cost`}
+        actions={(
+          <>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={handleExport}><Download size={14} /> Export</button>
+            {can("create", "cost_code") ? (
+              <button type="button" className="cmd-btn cmd-btn--primary" onClick={() => { setEditingCode(null); setModalOpen(true); }}>
+                <Plus size={14} /> Add Cost Code
+              </button>
+            ) : null}
+          </>
+        )}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Budget operational summary" />
 
-      {/* Lifted Recharts charts — inline-styled wrapper */}
+      <AttentionQueue title="Cost Attention" items={attentionItems} emptyMessage="No current cost-control exceptions." />
+
       <CostChartRow
         barData={barData}
         cumulativeData={cumData}
@@ -317,103 +349,41 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
         contingency={contingency}
       />
 
-      {/* Decision panels */}
-      <div className="cmd-panels">
-        <DecisionPanel title="Cost Control Flags">
-          {summary.unallocatedCOTotal !== 0 && (
-            <div className="cmd-row">
-              <Pill tone="warn">Unbudgeted</Pill>
-              <span className="cmd-row__meta" style={{ flex: 1, marginLeft: 8 }}>
-                {formatCurrencyShort(summary.unallocatedCOTotal)} of approved change orders
-                carry no cost code — in the revised contract, not in the revised budget.
-              </span>
-            </div>
-          )}
-          {reviewFlags.map((f, i) => (
-            <div key={i} className="cmd-row">
-              <Pill tone={f.tone === "error" ? "danger" : "warn"}>
-                {f.tone === "error" ? "Error" : "Warning"}
-              </Pill>
-              <span className="cmd-row__meta" style={{ flex: 1, marginLeft: 8 }}>{f.message}</span>
-            </div>
-          ))}
-          {varianceAlerts.slice(0, 3).map((a) => (
-            <div key={a.id ?? a.code} className="cmd-row">
-              <Pill tone="danger">Over</Pill>
-              <div style={{ marginLeft: 8, flex: 1 }}>
-                <div className="cmd-row__num">{a.code}</div>
-                <div className="cmd-row__meta">
-                  {a.description} · +{formatCurrencyShort(a.variance)} ({a.pctOver.toFixed(1)}% over)
-                </div>
-              </div>
-            </div>
-          ))}
-          {reviewFlags.length === 0 && varianceAlerts.length === 0 && summary.unallocatedCOTotal === 0 && (
-            <div className="cmd-row__meta">No flags — cost codes look clean.</div>
-          )}
-        </DecisionPanel>
-
-        <DecisionPanel title="Margin at Risk">
-          {overBudgetCodes
-            .slice()
-            .sort((a, b) => (b.committed_cost - b.revised_budget) - (a.committed_cost - a.revised_budget))
-            .slice(0, 6)
-            .map((r) => {
-              const overage = r.committed_cost - r.revised_budget;
-              return (
-                <div key={r.id} className="cmd-row is-clickable" onClick={() => handleRowClick(r)}>
-                  <div>
-                    <div className="cmd-row__num">{r.cost_code_number}</div>
-                    <div className="cmd-row__meta">{r.description}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <Pill tone="danger">+{formatCurrencyShort(overage)}</Pill>
-                    <span className="cmd-row__meta">{r.used_pct.toFixed(0)}%</span>
-                  </div>
-                </div>
-              );
-            })}
-          {overBudgetCodes.length === 0 && (
-            <div className="cmd-row__meta">No over-budget codes.</div>
-          )}
-        </DecisionPanel>
-
-        <DecisionPanel title="Change Order Pipeline">
-          {/* Summary counts */}
-          <div className="cmd-row" style={{ justifyContent: "space-around" }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--status-warning)" }}>{coPending}</div>
-              <div className="cmd-row__meta">Pending</div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--status-success)" }}>{coApproved}</div>
-              <div className="cmd-row__meta">Approved</div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: coStale > 0 ? "var(--status-error)" : "var(--text-muted)" }}>{coStale}</div>
-              <div className="cmd-row__meta">Stale &gt;30d</div>
-            </div>
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>Margin at Risk</h2></div>
+          <div>
+            {overBudgetCodes.length === 0 ? <div className="sbp-attention__empty">No over-budget cost codes.</div> : overBudgetCodes
+              .slice()
+              .sort((a, b) => (b.committed_cost - b.revised_budget) - (a.committed_cost - a.revised_budget))
+              .slice(0, 6)
+              .map((row) => {
+                const overage = row.committed_cost - row.revised_budget;
+                return (
+                  <button type="button" className="cmd-row is-clickable" key={row.id} onClick={() => handleRowClick(row)} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
+                    <div><div className="cmd-row__num">{row.cost_code_number}</div><div className="cmd-row__meta">{row.description}</div></div>
+                    <div style={{ textAlign: "right" }}><div style={{ color: "var(--status-error)" }}>+{formatCurrencyShort(overage)}</div><div className="cmd-row__meta">{row.used_pct.toFixed(0)}%</div></div>
+                  </button>
+                );
+              })}
           </div>
-          {topStaleCOs.map((co) => (
-            <div key={co.id} className="cmd-row" style={{ borderLeft: "3px solid var(--status-warning)", paddingLeft: 10 }}>
-              <div>
-                <div className="cmd-row__num">{co.co_number}</div>
-                <div className="cmd-row__meta">{co.title}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--status-warning)" }}>
-                  {co.daysOpen}d open
-                </div>
-                <div className="cmd-row__meta" style={{ color: co.co_amount >= 0 ? "var(--status-success)" : "var(--status-error)" }}>
-                  {formatCurrencyShort(co.co_amount)}
-                </div>
-              </div>
+        </section>
+
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>Change Order Pipeline</h2></div>
+          <div>
+            <div className="cmd-row">
+              <div><div className="cmd-row__num">{coPending} pending</div><div className="cmd-row__meta">{coApproved} approved</div></div>
+              <div style={{ textAlign: "right" }}><div className="cmd-row__num">{coStale} stale</div><div className="cmd-row__meta">open &gt;30d</div></div>
             </div>
-          ))}
-          {coPending === 0 && coStale === 0 && (
-            <div className="cmd-row__meta">No pending or stale change orders.</div>
-          )}
-        </DecisionPanel>
+            {topStaleCOs.map((co) => (
+              <div className="cmd-row" key={co.id}>
+                <div><div className="cmd-row__num">{co.co_number}</div><div className="cmd-row__meta">{co.title}</div></div>
+                <div style={{ textAlign: "right" }}><div>{co.daysOpen}d open</div><div className="cmd-row__meta">{formatCurrencyShort(co.co_amount)}</div></div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
 
       {/* Filter bar */}
@@ -421,9 +391,6 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
         search={search}
         onSearch={setSearch}
         searchPlaceholder="Search cost code, description, or phase"
-        onExport={handleExport}
-        primaryLabel={can("create", "cost_code") ? "Add Cost Code" : undefined}
-        onPrimary={can("create", "cost_code") ? () => { setEditingCode(null); setModalOpen(true); } : null}
         filters={
           <>
             {PHASE_OPTIONS.map((phase) => (

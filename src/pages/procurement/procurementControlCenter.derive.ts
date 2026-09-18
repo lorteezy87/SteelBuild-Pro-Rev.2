@@ -94,6 +94,7 @@ export function riskScore(item: ProcurementItem): number {
   if (isOverdue(item)) score += 800;
   if (isLate(item)) score += 400;
   if (item.is_long_lead) score += 200;
+  if (!item.required_date && !TERMINAL_STATUSES.has(item.status ?? "")) score += 175;
   if (diff !== null && diff >= 0 && diff <= 7) score += 150;
   if (item.status === "Identified") score += 60;  // not yet quoted = at risk
   if (item.priority === "High") score += 80;
@@ -137,10 +138,12 @@ export interface ProcurementSummary {
   overdue: number;
   longLead: number;
   longLeadSlipping: number;
+  missingRequiredDate: number;
   totalWeightTons: number;
   // Panel queues
   attentionQueue: ProcurementItem[];  // open items sorted by riskScore desc
   awaitingDelivery: ProcurementItem[];  // Shipped items
+  missingRequiredDateQueue: ProcurementItem[];
   vendorSummary: VendorSummaryRow[];
 }
 
@@ -154,6 +157,7 @@ export function buildProcurementSummary(items: ProcurementItem[]): ProcurementSu
   const shipped = items.filter((i) => i.status === "Shipped");
   const longLead = items.filter((i) => i.is_long_lead === true);
   const longLeadSlipping = longLead.filter(isLate);
+  const missingRequiredDate = open.filter((i) => !i.required_date);
   const totalWeightTons = items.reduce((sum, i) => sum + (Number(i.weight_tons) || 0), 0);
 
   const byRisk = [...open].sort((a, b) => riskScore(b) - riskScore(a));
@@ -165,9 +169,11 @@ export function buildProcurementSummary(items: ProcurementItem[]): ProcurementSu
     overdue: overdue.length,
     longLead: longLead.length,
     longLeadSlipping: longLeadSlipping.length,
+    missingRequiredDate: missingRequiredDate.length,
     totalWeightTons,
     attentionQueue: byRisk.slice(0, 6),
     awaitingDelivery: shipped.slice(0, 6),
+    missingRequiredDateQueue: missingRequiredDate.slice(0, 6),
     vendorSummary: vendorSummary(items),
   };
 }

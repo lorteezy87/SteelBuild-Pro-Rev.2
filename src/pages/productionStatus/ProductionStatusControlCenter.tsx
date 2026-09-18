@@ -11,18 +11,18 @@
  */
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Factory, CheckCircle2, AlertTriangle, Clock, TrendingUp, Layers, Boxes } from "lucide-react";
+import { Boxes, Download, Upload } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
+  AttentionQueue,
+  OperationalSummary,
+  PageHeader,
   Pill,
   FilterBar,
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
+import type { AttentionItem, Column } from "@/components/command";
 import type { PieceProductionRow } from "@/lib/production/repository";
 import type { PieceDrawingLink } from "@/lib/production/pieceDrawingLinks";
 import { normalizePieceMark } from "@/services/modelElementStatus";
@@ -142,7 +142,6 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
     drawingCoverage,
     projectHealth,
     percentComplete,
-    photoSrc,
     selectedIds,
     onToggleRow,
     onToggleAll,
@@ -156,65 +155,81 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
   // Local calendar day once per render — not per row (UTC toISOString drifts near midnight).
   const today = localTodayISO();
 
-  // Hero chips: quick-glance totals
-  const chips = [
-    { label: `${s.total} Total` },
-    { label: `${s.completed} Shipped`, tone: "good" as const },
-    { label: `${s.pastDue} Past Due`, tone: "danger" as const },
-  ];
+  const attentionItems: AttentionItem[] = [
+    ...s.pastDueQueue.map((piece): AttentionItem => ({
+      id: `late-${piece.id}`,
+      issue: `${piece.piece_mark} · ${piece.status || "Stage unknown"}`,
+      deadline: piece.ship_date,
+      risk: [
+        "Past due ship date",
+        piece.erection_area || null,
+        piece.sequence_number ? `Seq ${piece.sequence_number}` : null,
+      ].filter(Boolean).join(" · "),
+      owner: null,
+      nextAction: "Confirm shop status and recover ship date",
+      tone: "danger" as const,
+    })),
+    ...s.missingShipDateQueue.map((piece): AttentionItem => ({
+      id: `undated-${piece.id}`,
+      issue: `${piece.piece_mark} · ${piece.status || "Stage unknown"}`,
+      deadline: null,
+      risk: [
+        "Ship date unknown",
+        piece.erection_area || null,
+        piece.sequence_number ? `Seq ${piece.sequence_number}` : null,
+      ].filter(Boolean).join(" · "),
+      owner: null,
+      nextAction: "Set planned ship date",
+      tone: "warn" as const,
+    })),
+  ].slice(0, 12);
 
-  // Hero stat cards (project-level context, real fields when available)
-  const heroStats = [
-    { value: projectHealth || "—", label: "Project Health" },
-    {
-      value: percentComplete != null ? `${Math.round(percentComplete)}%` : `${s.pctComplete}%`,
-      label: "Fab Complete",
-    },
-  ];
-
-  // KPI strip — 6 cells, all from real fields. qualityHold = MISSING (always 0).
-  const kpiCells: KpiCellDef[] = [
+  const operationalMetrics = [
     {
       label: "In Production",
       value: s.inProduction,
-      sublabel: "pieces",
-      tone: s.inProduction > 0 ? "warn" : "neutral",
-      Icon: Layers,
+      sublabel: "active shop pieces",
+      tone: s.inProduction > 0 ? "info" as const : "neutral" as const,
     },
     {
       label: "Shipped",
       value: s.completed,
       sublabel: "pieces",
-      tone: s.completed > 0 ? "good" : "neutral",
-      Icon: CheckCircle2,
+      tone: s.completed > 0 ? "good" as const : "neutral" as const,
     },
     {
       label: "Past Due",
       value: s.pastDue,
-      sublabel: "ship date",
-      tone: s.pastDue > 0 ? "danger" : "neutral",
-      Icon: AlertTriangle,
+      sublabel: "ship date passed",
+      tone: s.pastDue > 0 ? "danger" as const : "good" as const,
+    },
+    {
+      label: "Missing Ship Date",
+      value: s.missingShipDate,
+      sublabel: "active shop pieces",
+      tone: s.missingShipDate > 0 ? "warn" as const : "good" as const,
     },
     {
       label: "Not Started",
       value: s.notStarted,
       sublabel: "pieces",
-      tone: s.notStarted > 0 ? "info" : "neutral",
-      Icon: Clock,
+      tone: "neutral" as const,
     },
     {
       label: "Avg Complete",
       value: fmtPct(s.pctComplete),
-      sublabel: "all pieces",
-      tone: "info",
-      Icon: TrendingUp,
+      sublabel: "recorded production",
+      tone: "info" as const,
     },
     {
-      label: "Total Pieces",
-      value: s.total,
-      sublabel: "tracked",
-      tone: "neutral",
-      Icon: Boxes,
+      label: "Drawing Coverage",
+      value: drawingCoverage && drawingCoverage.total > 0 ? `${drawingCoverage.pct}%` : "Unknown",
+      sublabel: drawingCoverage && drawingCoverage.total > 0
+        ? `${drawingCoverage.linked}/${drawingCoverage.total} linked`
+        : "model-roster evidence unavailable",
+      tone: drawingCoverage && drawingCoverage.total > 0 && drawingCoverage.pct < 80
+        ? "warn" as const
+        : "neutral" as const,
     },
   ];
 
@@ -285,48 +300,78 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
   const selectedCount = selectedIds?.size ?? 0;
 
   return (
-    <div className="prod-cc">
-      <PageHero
-        Icon={Factory}
-        title="Production Status Control Center"
-        subtitle="Per-piece fabrication status from Tekla EPM / FabSuite — tracks what's ready to ship and erect."
-        projectName={projectName}
-        chips={chips}
-        stats={heroStats}
-        photoSrc={photoSrc}
+    <div className="prod-cc sbp-command-page">
+      <PageHeader
+        eyebrow={`${projectName} / Production`}
+        title="Production Status"
+        subtitle="Piece-level shop execution, drawing linkage, ship-date risk, and next actions."
+        meta={[
+          projectHealth ? `Project health: ${projectHealth}` : "Project health: unknown",
+          percentComplete != null ? `${Math.round(percentComplete)}% project complete` : `${s.pctComplete}% fab complete`,
+          `${s.total} tracked pieces`,
+        ].join(" · ")}
+        actions={(
+          <>
+            {onImport ? (
+              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImport}>
+                <Upload size={14} /> Import
+              </button>
+            ) : null}
+            {onImportEpm ? (
+              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImportEpm}>
+                <Boxes size={14} /> Tekla EPM
+              </button>
+            ) : null}
+            <button type="button" className="cmd-btn cmd-btn--primary" onClick={onExport}>
+              <Download size={14} /> Export
+            </button>
+          </>
+        )}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Production operational summary" />
 
-      <div className="cmd-panels">
-        {/* Panel 1: By Erection Area */}
-        <DecisionPanel title="By Erection Area" onViewAll={scrollToTable}>
-          {s.byArea.length === 0 ? (
-            <div className="cmd-row__meta">No erection-area data imported yet.</div>
-          ) : (
-            s.byArea.map((a) => (
-              <div className="cmd-row" key={a.area}>
+      <AttentionQueue
+        title="Production Attention"
+        items={attentionItems}
+        emptyMessage="No past-due or undated active production pieces."
+      />
+
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>By Erection Area</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={scrollToTable}>View register</button>
+          </div>
+          <div>
+            {s.byArea.length === 0 ? (
+              <div className="sbp-attention__empty">No erection-area data imported yet.</div>
+            ) : s.byArea.map((area) => (
+              <div className="cmd-row" key={area.area}>
                 <div>
-                  <div className="cmd-row__num">{a.area}</div>
-                  <div className="cmd-row__meta">{a.total} pieces · {a.shipped} shipped</div>
+                  <div className="cmd-row__num">{area.area}</div>
+                  <div className="cmd-row__meta">{area.total} pieces · {area.shipped} shipped</div>
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <Pill tone={a.avgPct >= 85 ? "good" : a.avgPct >= 40 ? "warn" : "neutral"}>
-                    {a.avgPct}%
+                  <Pill tone={area.avgPct >= 85 ? "good" : area.avgPct >= 40 ? "warn" : "neutral"}>
+                    {area.avgPct}%
                   </Pill>
-                  <span className="cmd-row__meta">{a.inFab} active</span>
+                  <span className="cmd-row__meta">{area.inFab} active</span>
                 </div>
               </div>
-            ))
-          )}
-        </DecisionPanel>
+            ))}
+          </div>
+        </section>
 
-        {/* Panel 2: By Stage / Status */}
-        <DecisionPanel title="By Stage" onViewAll={scrollToTable}>
-          {s.stageQueue.length === 0 ? (
-            <div className="cmd-row__meta">No active pieces in production.</div>
-          ) : (
-            s.stageQueue.map((row) => (
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Shop Stage Mix</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={scrollToTable}>View register</button>
+          </div>
+          <div>
+            {s.stageQueue.length === 0 ? (
+              <div className="sbp-attention__empty">No active pieces in production.</div>
+            ) : s.stageQueue.map((row) => (
               <div className="cmd-row" key={row.stage}>
                 <div>
                   <div className="cmd-row__num">{row.stage}</div>
@@ -334,36 +379,15 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
                 </div>
                 <Pill tone={stageTone(row.stage)}>{row.count}</Pill>
               </div>
-            ))
-          )}
-        </DecisionPanel>
-
-        {/* Panel 3: Past-Due / Quality Hold queue */}
-        <DecisionPanel title="Past Due" onViewAll={scrollToTable}>
-          {s.pastDueQueue.length === 0 ? (
-            <div className="cmd-row__meta">No pieces past their ship date.</div>
-          ) : (
-            s.pastDueQueue.map((p) => (
-              <div className="cmd-row" key={p.id}>
-                <div>
-                  <div className="cmd-row__num">{p.piece_mark}</div>
-                  <div className="cmd-row__meta">
-                    {p.erection_area || "No area"} · Ship: {p.ship_date}
-                  </div>
-                </div>
-                <Pill tone="danger">{p.status || "—"}</Pill>
-              </div>
-            ))
-          )}
-        </DecisionPanel>
+            ))}
+          </div>
+        </section>
       </div>
 
       <FilterBar
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search piece mark, assembly, area, or sequence"
-        onImport={onImport}
-        onExport={onExport}
         filters={
           <>
             {STAGE_FILTERS.map((stage) => (
@@ -376,32 +400,9 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
                 {stage}
               </button>
             ))}
-            {onImportEpm ? (
-              <button
-                type="button"
-                className="cmd-chip-btn"
-                onClick={onImportEpm}
-                title="Import Tekla EPM File"
-                style={{ marginLeft: 8 }}
-              >
-                <Boxes size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                Tekla EPM
-              </button>
-            ) : null}
           </>
         }
       />
-
-      {drawingCoverage && drawingCoverage.total > 0 ? (
-        <div
-          className="cmd-row__meta"
-          style={{ display: "flex", justifyContent: "flex-end", padding: "4px 2px" }}
-          title="Share of shown pieces whose mark resolves to a shop drawing in the model roster. Shop/detail numbers rarely match erection sheets, so most pieces have no sheet link yet."
-        >
-          Drawing coverage <strong style={{ margin: "0 4px" }}>{drawingCoverage.pct}%</strong>
-          ({drawingCoverage.linked}/{drawingCoverage.total} linked)
-        </div>
-      ) : null}
 
       {selectedIds && onBulkSetStage && onClearSelection ? (
         <ProductionStatusBulkBar

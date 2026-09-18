@@ -25,7 +25,8 @@ import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import { supabase } from "@/lib/supabase";
 import {
   DecisionPanel,
-  KpiStrip,
+  OperationalSummary,
+  PageHeader,
   PageHero,
   useCommandSkin,
   type KpiCellDef
@@ -1189,25 +1190,25 @@ export default function PieceRegister() {
 
   return (
     <div className="piece-control-command" data-skin="command">
-      <PageHero
-        Icon={Boxes}
+      <PageHeader
+        eyebrow={`${activeProject?.name || "Project"} / Production`}
         title="Piece Register"
-        subtitle="Controlled piece, lot, production, and logistics record."
-        projectName={activeProject?.name}
-        photoSrc={photoFor("PieceRegister") ?? undefined}
-      >
-        <div className="piece-register-hero-actions">
-          <PieceControlModeBadge presentation={modeInfo} />
-          <button
-            type="button"
-            className="cmd-btn cmd-btn--primary"
-            onClick={() => setActiveView("import")}
-          >
-            <FileUp size={16} />
-            Import pieces
-          </button>
-        </div>
-      </PageHero>
+        subtitle="Canonical piece, lot, production, and logistics record."
+        meta={`${presentation.totalPieces.toLocaleString()} actionable pieces · ${presentation.knownTons.toFixed(1)} known tons · ${modeInfo.label}`}
+        actions={(
+          <>
+            <PieceControlModeBadge presentation={modeInfo} />
+            <button
+              type="button"
+              className="cmd-btn cmd-btn--primary"
+              onClick={() => setActiveView("import")}
+            >
+              <FileUp size={16} />
+              Import pieces
+            </button>
+          </>
+        )}
+      />
 
       {piecesQuery.isLoading ? (
         <DecisionPanel title="Piece Register status">
@@ -1236,7 +1237,15 @@ export default function PieceRegister() {
         </DecisionPanel>
       ) : (
         <>
-          <KpiStrip cells={kpiCells} />
+          <OperationalSummary
+            ariaLabel="Piece Register operational summary"
+            metrics={kpiCells.map((cell) => ({
+              label: cell.label,
+              value: cell.value,
+              sublabel: cell.sublabel,
+              tone: cell.tone,
+            }))}
+          />
 
           <div className="piece-register-summary">
             <DecisionPanel title="Piece lifecycle">

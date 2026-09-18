@@ -139,6 +139,16 @@ describe("buildFieldDashboardSummary", () => {
     expect(summary.actionFeed[3].color).toBe("var(--status-error)");
   });
 
+  it("keeps missing daily-log evidence distinct from zero crew or zero hours", () => {
+    const withoutTodayLog: FieldDashboardRecords = {
+      ...records,
+      logs: [{ id: "log-old", date: "2026-09-11", headcount: 0, hours_worked: 0 }],
+    };
+    const summary = buildFieldDashboardSummary(withoutTodayLog, deliveryMetrics, dates);
+
+    expect(summary.todayLog).toBeNull();
+  });
+
   it("keeps recent logs sorted while preserving photo query order", () => {
     const summary = buildFieldDashboardSummary(records, deliveryMetrics, dates);
 

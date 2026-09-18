@@ -4,6 +4,7 @@ import {
   riskTone,
   stageTone,
   stageLabel,
+  releaseBlockerSummary,
 } from "../fabReleaseControlCenter.derive";
 import type { FabMetrics, EnrichedWorkPackage, FabSignals } from "../types";
 
@@ -298,5 +299,64 @@ describe("buildFabReleaseSummary – KPI cells", () => {
     );
     const burnKpi = s.kpis.find((k) => k.label === "Labor Burn");
     expect(burnKpi?.tone).toBe("danger");
+  });
+});
+
+
+describe("releaseBlockerSummary", () => {
+  it("summarizes authoritative blocker flags in severity order", () => {
+    const wp = makeWP("blocked", {
+      _signals: makeSignals({
+        risk: "high",
+        readyForRelease: false,
+        flags: [
+          { key: "approval", label: "2 IFC sheets missing", severity: "high" },
+          { key: "rfi", label: "RFI 018 unresolved", severity: "high" },
+          { key: "material", label: "Material ETA unconfirmed", severity: "medium" },
+        ],
+      }),
+    });
+
+    expect(releaseBlockerSummary(wp)).toBe(
+      "RELEASE BLOCKED — 2 IFC sheets missing · RFI 018 unresolved · Material ETA unconfirmed",
+    );
+  });
+
+  it("uses existing drawing evidence when links are explicitly missing", () => {
+    const wp = makeWP("drawings", {
+      _signals: makeSignals({
+        risk: "medium",
+        readyForRelease: false,
+        drawing: {
+          linkedIds: [],
+          linkedDrawings: [],
+          linkedCount: 2,
+          knownCount: 4,
+          missingLinks: 2,
+          releasedCount: 0,
+          hasAny: true,
+          hasReleased: false,
+          allKnownReleased: false,
+          packages: [],
+          packageNames: [],
+        },
+      }),
+    });
+
+    expect(releaseBlockerSummary(wp)).toBe("RELEASE BLOCKED — 2 drawing links missing");
+  });
+
+  it("does not invent a blocker when the evidence is unavailable", () => {
+    const wp = makeWP("unknown", {
+      _signals: makeSignals({ risk: "high", readyForRelease: false, flags: [] }),
+    });
+    expect(releaseBlockerSummary(wp)).toBe("RELEASE BLOCKED — blocker evidence unavailable");
+  });
+
+  it("reports ready only from the existing readyForRelease signal", () => {
+    const wp = makeWP("ready", {
+      _signals: makeSignals({ risk: "clear", readyForRelease: true }),
+    });
+    expect(releaseBlockerSummary(wp)).toBe("Ready for release");
   });
 });

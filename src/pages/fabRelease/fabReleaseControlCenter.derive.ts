@@ -72,6 +72,40 @@ export function stageLabel(stage: string): string {
   return labels[stage] ?? stage;
 }
 
+
+/**
+ * Human-readable release blocker summary derived only from authoritative
+ * FabSignals evidence. Presentation must never manufacture gate reasons.
+ */
+export function releaseBlockerSummary(wp: EnrichedWorkPackage): string {
+  const signals = wp._signals;
+  if (signals.readyForRelease) return "Ready for release";
+
+  const rankedFlags = [...signals.flags]
+    .filter((flag) => flag.severity === "high" || flag.severity === "medium")
+    .sort((a, b) => {
+      const rank: Record<string, number> = { high: 0, medium: 1, clear: 2 };
+      return (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2);
+    })
+    .map((flag) => flag.label)
+    .filter(Boolean);
+
+  if (rankedFlags.length > 0) {
+    return `RELEASE BLOCKED — ${rankedFlags.join(" · ")}`;
+  }
+
+  const missingLinks = Number(signals.drawing?.missingLinks ?? 0);
+  if (missingLinks > 0) {
+    return `RELEASE BLOCKED — ${missingLinks} drawing link${missingLinks === 1 ? "" : "s"} missing`;
+  }
+
+  if (signals.risk !== "clear" || signals.needsRelease) {
+    return "RELEASE BLOCKED — blocker evidence unavailable";
+  }
+
+  return "Release status unavailable";
+}
+
 // ---------------------------------------------------------------------------
 // Core derivation
 // ---------------------------------------------------------------------------

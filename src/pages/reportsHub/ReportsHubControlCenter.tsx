@@ -7,19 +7,17 @@
  * catalog shape only. "Last Run" shows "—" throughout.
  */
 import { useMemo } from "react";
-import { BarChart3, BookOpen, Star, LayoutGrid } from "lucide-react";
+import { Star } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
+  OperationalSummary,
+  PageHeader,
   Pill,
   FilterBar,
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { Column } from "@/components/command";
 import {
   buildReportsSummary,
   type ReportCatalogEntry,
@@ -110,50 +108,13 @@ export default function ReportsHubControlCenter(
 
   const s = useMemo(() => buildReportsSummary(catalog, favorites), [catalog, favorites]);
 
-  // ── Hero ─────────────────────────────────────────────────────────────────────
-  const chips = [
-    { label: `${s.totalReports} Reports`, tone: "good" as const },
-    { label: `${s.totalCategories} Categories` },
-    { label: `${s.favoritesCount} Favorites` },
-  ];
-
-  // ── KPI strip — all sourced from static catalog ───────────────────────────
-  const kpiCells: KpiCellDef[] = [
-    {
-      label: "Total Reports",
-      value: s.totalReports,
-      sublabel: "in catalog",
-      tone: "good",
-      Icon: BookOpen,
-    },
-    {
-      label: "Categories",
-      value: s.totalCategories,
-      sublabel: "report types",
-      tone: "neutral",
-      Icon: LayoutGrid,
-    },
-    {
-      label: "Schedule",
-      value: s.scheduleCount,
-      sublabel: "reports",
-      tone: "warn",
-      Icon: BarChart3,
-    },
-    {
-      label: "Financial + Cost",
-      value: s.financialCount,
-      sublabel: "reports",
-      tone: "good",
-      Icon: BarChart3,
-    },
-    {
-      label: "Risk",
-      value: s.riskCount,
-      sublabel: "reports",
-      tone: s.riskCount ? "danger" : "neutral",
-      Icon: BarChart3,
-    },
+  const operationalMetrics = [
+    { label: "Total Reports", value: s.totalReports, sublabel: "in catalog", tone: "good" as const },
+    { label: "Categories", value: s.totalCategories, sublabel: "report types", tone: "neutral" as const },
+    { label: "Schedule", value: s.scheduleCount, sublabel: "reports", tone: "warn" as const },
+    { label: "Financial + Cost", value: s.financialCount, sublabel: "reports", tone: "good" as const },
+    { label: "Risk", value: s.riskCount, sublabel: "reports", tone: s.riskCount ? "danger" as const : "neutral" as const },
+    { label: "Favorites", value: s.favoritesCount, sublabel: "saved reports", tone: s.favoritesCount ? "info" as const : "neutral" as const },
   ];
 
   // ── DataTable columns ─────────────────────────────────────────────────────
@@ -212,143 +173,56 @@ export default function ReportsHubControlCenter(
   ];
 
   return (
-    <div className="reports-hub-cc">
-      <PageHero
-        Icon={BarChart3}
+    <div className="reports-hub-cc sbp-command-page">
+      <PageHeader
+        eyebrow="Reports / Analysis"
         title="Reports & Insights"
-        subtitle="Analyze project performance and export the data that drives decisions."
-        chips={chips}
-        photoSrc={photoFor("ReportsHub") ?? undefined}
+        subtitle="Project, portfolio, schedule, financial, risk, and team reporting."
+        meta={`${s.totalReports} reports · ${s.totalCategories} categories · ${s.favoritesCount} favorites`}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Reports catalog summary" />
 
-      <div className="cmd-panels">
-        {/* Panel 1 — Report Library (curated / featured) */}
-        <DecisionPanel
-          title="Report Library"
-          onViewAll={scrollToTable}
-        >
-          {s.featuredReports.map((r) => {
-            const accent = CATEGORY_ACCENT[r.category] ?? "var(--accent)";
-            return (
-              <div
-                className="cmd-row is-clickable"
-                key={r.slug}
-                onClick={() => onOpenReport(r)}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    className="cmd-row__num"
-                    style={{
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {r.title}
-                  </div>
-                  <div
-                    className="cmd-row__meta"
-                    style={{
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {r.summary}
-                  </div>
-                </div>
-                <Pill tone={categoryTone(r.category)}>{r.category}</Pill>
-              </div>
-            );
-          })}
-          {s.featuredReports.length === 0 && (
-            <div className="cmd-row__meta">No reports in catalog.</div>
-          )}
-        </DecisionPanel>
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>Report Library</h2></div>
+          <div>
+            {s.featuredReports.length === 0 ? <div className="sbp-attention__empty">No reports in catalog.</div> : s.featuredReports.map((report) => (
+              <button type="button" className="cmd-row is-clickable" key={report.slug} onClick={() => onOpenReport(report)} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
+                <div><div className="cmd-row__num">{report.title}</div><div className="cmd-row__meta">{report.summary}</div></div>
+                <Pill tone={categoryTone(report.category)}>{report.category}</Pill>
+              </button>
+            ))}
+          </div>
+        </section>
 
-        {/* Panel 2 — Favorites or prompt to open reports */}
-        <DecisionPanel
-          title={
-            s.favoriteEntries.length > 0
-              ? "Favorites"
-              : "Recently Featured"
-          }
-          onViewAll={scrollToTable}
-        >
-          {s.favoriteEntries.length > 0 ? (
-            s.favoriteEntries.map((r) => (
-              <div
-                className="cmd-row is-clickable"
-                key={r.slug}
-                onClick={() => onOpenReport(r)}
-              >
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>{s.favoriteEntries.length > 0 ? "Favorites" : "Recently Featured"}</h2></div>
+          <div>
+            {(s.favoriteEntries.length > 0 ? s.favoriteEntries : catalog.slice(0, 5)).map((report) => (
+              <button type="button" className="cmd-row is-clickable" key={report.slug} onClick={() => onOpenReport(report)} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <Star
-                    size={11}
-                    style={{ color: "var(--cmd-gold, var(--accent))", flexShrink: 0 }}
-                  />
-                  <div>
-                    <div className="cmd-row__num">{r.title}</div>
-                    <div className="cmd-row__meta">{r.category}</div>
-                  </div>
+                  {s.favoriteEntries.length > 0 ? <Star size={11} style={{ color: "var(--accent)" }} /> : null}
+                  <div><div className="cmd-row__num">{report.title}</div><div className="cmd-row__meta">{report.category}</div></div>
                 </div>
-                <Pill tone={categoryTone(r.category)}>{r.category}</Pill>
-              </div>
-            ))
-          ) : (
-            /* No favorites yet — show the first few reports as a prompt */
-            catalog.slice(0, 5).map((r) => (
-              <div
-                className="cmd-row is-clickable"
-                key={r.slug}
-                onClick={() => onOpenReport(r)}
-              >
-                <div className="cmd-row__num">{r.title}</div>
-                <span className="cmd-row__meta">{r.category}</span>
-              </div>
-            ))
-          )}
-          {catalog.length === 0 && (
-            <div className="cmd-row__meta">No reports available.</div>
-          )}
-        </DecisionPanel>
-
-        {/* Panel 3 — By Category breakdown */}
-        <DecisionPanel
-          title="By Category"
-          onViewAll={scrollToTable}
-        >
-          {s.byCategory.map((row) => (
-            <div
-              className="cmd-row is-clickable"
-              key={row.category}
-              onClick={() => onCategoryChange(row.category)}
-            >
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: row.accent,
-                    flexShrink: 0,
-                  }}
-                />
-                <span className="cmd-row__num">{row.category}</span>
-              </div>
-              <div className="cmd-row__meta">
-                {row.count} report{row.count !== 1 ? "s" : ""}
-              </div>
-            </div>
-          ))}
-          {s.byCategory.length === 0 && (
-            <div className="cmd-row__meta">No categories found.</div>
-          )}
-        </DecisionPanel>
+                <Pill tone={categoryTone(report.category)}>{report.category}</Pill>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
+
+      <section className="sbp-work-panel">
+        <div className="sbp-work-panel__head"><h2>By Category</h2></div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+          {s.byCategory.map((row) => (
+            <button type="button" className="cmd-row is-clickable" key={row.category} onClick={() => onCategoryChange(row.category)} style={{ border: 0, borderRight: "1px solid var(--cmd-border)", background: "transparent", textAlign: "left" }}>
+              <span className="cmd-row__num">{row.category}</span>
+              <span className="cmd-row__meta">{row.count} report{row.count === 1 ? "" : "s"}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <FilterBar
         search={search}

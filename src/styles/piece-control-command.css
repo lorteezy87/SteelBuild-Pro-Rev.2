@@ -2992,3 +2992,41 @@
     min-width: 140px;
   }
 }
+
+
+/* Wave 2 operational register hierarchy */
+[data-skin="command"] .piece-register-table__table {
+  min-width: 1560px;
+}
+
+[data-skin="command"] .piece-register-table__table th:nth-child(2),
+[data-skin="command"] .piece-register-table__table td.piece-register-sticky--mark {
+  position: sticky;
+  left: 42px;
+  z-index: 2;
+  background: var(--cmd-surface);
+  box-shadow: 1px 0 0 var(--cmd-border);
+}
+
+[data-skin="command"] .piece-register-table__table th:nth-child(2) {
+  z-index: 4;
+  background: var(--cmd-row-hover);
+}
+
+[data-skin="command"] .piece-register-table__table th:first-child,
+[data-skin="command"] .piece-register-table__table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--cmd-surface);
+}
+
+[data-skin="command"] .piece-register-table__table th:first-child {
+  z-index: 5;
+  background: var(--cmd-row-hover);
+}
+
+[data-skin="command"] .piece-register-table__table tbody tr:hover td.piece-register-sticky--mark,
+[data-skin="command"] .piece-register-table__table tbody tr:hover td:first-child {
+  background: var(--cmd-icon-wash);
+}

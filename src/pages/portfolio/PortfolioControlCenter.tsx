@@ -11,19 +11,18 @@
  * Keeps this component presentational + derivation-focused.
  */
 import { useMemo, useCallback } from "react";
-import { LayoutGrid, DollarSign, AlertTriangle, TrendingUp, CheckCircle2, BarChart3, CalendarClock } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
+  AttentionQueue,
+  OperationalSummary,
+  PageHeader,
   Pill,
   FilterBar,
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { AttentionItem, Column } from "@/components/command";
 import {
   buildPortfolioSummary,
   healthTone,
@@ -117,51 +116,32 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
     });
   }, [summary.allRows, search, healthFilter]);
 
-  // KPI strip
-  const kpiCells: KpiCellDef[] = [
-    {
-      label: "Total Projects",
-      value: summary.kpis.totalProjects,
-      sublabel: "in portfolio",
-      tone: "neutral",
-      Icon: LayoutGrid,
-    },
-    {
-      label: "Active",
-      value: summary.kpis.activeProjects,
-      sublabel: "projects",
-      tone: "good",
-      Icon: CheckCircle2,
-    },
-    {
-      label: "At Risk",
-      value: summary.kpis.atRisk,
-      sublabel: "projects",
-      tone: summary.kpis.atRisk > 0 ? "danger" : "neutral",
-      Icon: AlertTriangle,
-    },
-    {
-      label: "Portfolio Value",
-      value: fmtMoney(summary.kpis.totalContractValue),
-      sublabel: "revised contract",
-      tone: "info",
-      Icon: DollarSign,
-    },
-    {
-      label: "On Schedule",
-      value: summary.kpis.onSchedule,
-      sublabel: "projects",
-      tone: "good",
-      Icon: TrendingUp,
-    },
-    {
-      label: "Avg Complete",
-      value: `${summary.kpis.avgPctComplete}%`,
-      sublabel: "by work package",
-      tone: "neutral",
-      Icon: BarChart3,
-    },
+  const operationalMetrics = [
+    { label: "Total Projects", value: summary.kpis.totalProjects, sublabel: "in portfolio", tone: "neutral" as const },
+    { label: "Active", value: summary.kpis.activeProjects, sublabel: "projects", tone: "good" as const },
+    { label: "At Risk", value: summary.kpis.atRisk, sublabel: "projects", tone: summary.kpis.atRisk > 0 ? "danger" as const : "good" as const },
+    { label: "Portfolio Value", value: fmtMoney(summary.kpis.totalContractValue), sublabel: "revised contract", tone: "info" as const },
+    { label: "On Schedule", value: summary.kpis.onSchedule, sublabel: "projects", tone: "good" as const },
+    { label: "Avg Complete", value: `${summary.kpis.avgPctComplete}%`, sublabel: "by work package", tone: "neutral" as const },
   ];
+
+  const attentionItems: AttentionItem[] = summary.atRiskQueue.map((row): AttentionItem => {
+    const project = summary.allRows.find((candidate) => candidate.id === row.id);
+    return {
+      id: row.id,
+      issue: `${row.projectNumber || "Project"} · ${row.name}`,
+      deadline: project?.target_completion_date || null,
+      risk: [
+        row.health,
+        row.openRfis > 0 ? `${row.openRfis} open RFIs` : null,
+        `${row.pctComplete}% complete`,
+      ].filter(Boolean).join(" · "),
+      owner: null,
+      nextAction: "Open project control center",
+      tone: row.health === "At Risk" ? "danger" : "warn",
+      onOpen: project ? () => onOpenProject(project) : undefined,
+    };
+  });
 
   // DataTable columns
   const columns: Column<EnrichedProject>[] = [
@@ -288,100 +268,46 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
   }, [summary.allRows]);
 
   return (
-    <div className="portfolio-cc">
-      <PageHero
-        Icon={LayoutGrid}
+    <div className="portfolio-cc sbp-command-page">
+      <PageHeader
+        eyebrow="Portfolio / Command"
         title="Portfolio Overview"
-        subtitle="Org-wide project health, contract value, schedule pressure, and steel-production progress."
-        // No projectName — this is org-wide, not project-scoped
-        photoSrc={photoFor("PortfolioHub") ?? undefined}
+        subtitle="Org-wide project health, contract value, schedule pressure, and structural-steel execution."
+        meta={`${summary.kpis.activeProjects} active · ${summary.kpis.atRisk} at risk · ${fmtMoney(summary.kpis.totalContractValue)} revised contract`}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Portfolio operational summary" />
 
-      <div className="cmd-panels">
-        {/* Panel 1 — At-Risk Projects (worst health score first) */}
-        <DecisionPanel title="Projects Needing Attention">
-          {summary.atRiskQueue.length === 0 ? (
-            <div className="cmd-row__meta">No Watch or At Risk projects. Review the project register below.</div>
-          ) : (
-            summary.atRiskQueue.map((row) =>
-              renderPanelRow(row, byId.get(row.id)),
-            )
-          )}
-        </DecisionPanel>
+      <AttentionQueue
+        title="Portfolio Attention"
+        items={attentionItems}
+        emptyMessage="No Watch or At Risk projects."
+      />
 
-        {/* Panel 2 — Top by Contract Value */}
-        <DecisionPanel title="Top by Contract Value">
-          {summary.topByValue.length === 0 ? (
-            <div className="cmd-row__meta">No contract values entered. Add contract values in project details.</div>
-          ) : (
-            summary.topByValue.map((row) => (
-              <div
-                className="cmd-row is-clickable"
-                key={row.id}
-                onClick={() => { const p = byId.get(row.id); if (p) onOpenProject(p); }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    className="cmd-row__num"
-                    style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
-                  >
-                    {row.name}
-                  </div>
-                  <div className="cmd-row__meta">{row.projectNumber || "—"}</div>
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                  <span
-                    className="cmd-row__num"
-                    style={{ fontSize: 13, fontWeight: 800 }}
-                  >
-                    {fmtMoney(row.revisedContract)}
-                  </span>
-                  <Pill tone={healthTone(row.health)}>{row.health}</Pill>
-                </div>
-              </div>
-            ))
-          )}
-        </DecisionPanel>
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>Top by Contract Value</h2></div>
+          <div>
+            {summary.topByValue.length === 0 ? <div className="sbp-attention__empty">No contract values entered.</div> : summary.topByValue.map((row) => (
+              <button type="button" className="cmd-row is-clickable" key={row.id} onClick={() => { const project = byId.get(row.id); if (project) onOpenProject(project); }} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
+                <div><div className="cmd-row__num">{row.name}</div><div className="cmd-row__meta">{row.projectNumber || "—"}</div></div>
+                <div style={{ textAlign: "right" }}><div>{fmtMoney(row.revisedContract)}</div><Pill tone={healthTone(row.health)}>{row.health}</Pill></div>
+              </button>
+            ))}
+          </div>
+        </section>
 
-        {/* Panel 3 — Closing Soon (target date in next 90 days) */}
-        <DecisionPanel title="Closing Soon">
-          {summary.closingSoon.length === 0 ? (
-            <div className="cmd-row__meta">No target dates within 90 days. Add dates in project details to populate this view.</div>
-          ) : (
-            summary.closingSoon.map((row) => (
-              <div
-                className="cmd-row is-clickable"
-                key={row.id}
-                onClick={() => { const p = byId.get(row.id); if (p) onOpenProject(p); }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    className="cmd-row__num"
-                    style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
-                  >
-                    {row.name}
-                  </div>
-                  <div className="cmd-row__meta">{row.projectNumber || "—"}</div>
-                </div>
-                <div
-                  style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}
-                >
-                  <CalendarClock
-                    size={13}
-                    color={row.isOverdue ? "var(--cmd-tone-danger)" : "var(--cmd-tone-warn)"}
-                  />
-                  <span
-                    className={row.isOverdue ? "cmd-overdue" : "cmd-row__meta"}
-                  >
-                    {daysLabel(row.daysLeft, row.isOverdue)}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </DecisionPanel>
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>Closing Soon</h2></div>
+          <div>
+            {summary.closingSoon.length === 0 ? <div className="sbp-attention__empty">No target dates within 90 days.</div> : summary.closingSoon.map((row) => (
+              <button type="button" className="cmd-row is-clickable" key={row.id} onClick={() => { const project = byId.get(row.id); if (project) onOpenProject(project); }} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
+                <div><div className="cmd-row__num">{row.name}</div><div className="cmd-row__meta">{row.projectNumber || "—"}</div></div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}><CalendarClock size={13} /><span className={row.isOverdue ? "cmd-overdue" : "cmd-row__meta"}>{daysLabel(row.daysLeft, row.isOverdue)}</span></div>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
       <FilterBar

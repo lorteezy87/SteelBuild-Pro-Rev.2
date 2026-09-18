@@ -62,7 +62,7 @@ describe("WorkPackageDetailModal", () => {
     expect(screen.getByText("80%")).toBeInTheDocument();
   });
 
-  it("mounts Piece Control in a command-skinned compact drawer", () => {
+  it("organizes package detail into the five operational work areas", () => {
     render(
       <WorkPackageDetailModal
         wp={sampleWp}
@@ -71,7 +71,21 @@ describe("WorkPackageDetailModal", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "piece control" }));
+    ["scope", "release gate", "production", "logistics", "field"].forEach((name) => {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    });
+  });
+
+  it("mounts production controls in a command-skinned compact drawer", () => {
+    render(
+      <WorkPackageDetailModal
+        wp={sampleWp}
+        onClose={vi.fn()}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "production" }));
 
     const drawerSurface = screen
       .getByText("Production controls")
