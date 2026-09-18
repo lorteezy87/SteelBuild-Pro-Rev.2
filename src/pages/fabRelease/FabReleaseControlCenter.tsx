@@ -7,31 +7,17 @@
  */
 import { useMemo, useRef } from "react";
 import type { ReactNode } from "react";
-import { Factory, AlertTriangle, CheckCircle2, Layers, Clock, Flame } from "lucide-react";
+import { Factory } from "lucide-react";
 import "@/styles/command.css";
-import { PageHero, KpiStrip, DecisionPanel, Pill, useCommandSkin } from "@/components/command";
-import type { KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
-import { buildFabReleaseSummary, riskTone, stageTone, stageLabel } from "./fabReleaseControlCenter.derive";
+import { AttentionQueue, OperationalSummary, PageHeader, StatusBadge, useCommandSkin } from "@/components/command";
+import type { AttentionItem } from "@/components/command";
+import { buildFabReleaseSummary, releaseBlockerSummary, stageTone, stageLabel } from "./fabReleaseControlCenter.derive";
 import type { EnrichedWorkPackage, FabMetrics } from "./types";
 import { formatDate } from "./format";
 
 function fmtTons(n: number | string | undefined): string {
   const v = Number(n);
   return Number.isFinite(v) && v > 0 ? `${v.toFixed(1)}T` : "-";
-}
-
-function readinessPill(score: number) {
-  const tone = score >= 80 ? "good" : score >= 50 ? "warn" : "danger";
-  return <Pill tone={tone}>{score}%</Pill>;
-}
-
-function topBlockerLabel(wp: EnrichedWorkPackage): string {
-  const high = wp._signals.flags.filter((f) => f.severity === "high");
-  if (high.length > 0) return high[0].label;
-  const med = wp._signals.flags.filter((f) => f.severity === "medium");
-  if (med.length > 0) return med[0].label;
-  return "-";
 }
 
 export interface FabReleaseControlCenterProps {
@@ -72,104 +58,140 @@ export default function FabReleaseControlCenter({
   const bodyRef = useRef<HTMLElement | null>(null);
   const scrollToBody = () => bodyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  const heroChips = [
-    { label: `${summary.totalCount} Packages` },
-    { label: `${summary.releasedCount} Released`, tone: "good" as const },
-    { label: `${summary.blockedCount} Blocked` },
-  ];
+  const releaseBlockers: AttentionItem[] = summary.blockedQueue.map((wp) => ({
+    id: wp.id,
+    issue: `${wp.wp_number || "WP"} · ${wp.name || wp.description || "Unnamed package"}`,
+    deadline: wp._signals.scheduledStart
+      ? wp._signals.scheduledStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : null,
+    risk: releaseBlockerSummary(wp),
+    owner: wp.crew || null,
+    nextAction: "Clear release gate",
+    tone: wp._signals.risk === "high" ? "danger" : "warn",
+    onOpen: () => onOpenWP(wp),
+  }));
 
-  const kpiCells: KpiCellDef[] = summary.kpis.map((kpi, index) => ({
+  const operationalMetrics = summary.kpis.map((kpi) => ({
     label: kpi.label,
     value: kpi.value,
     sublabel: kpi.sublabel,
     tone: kpi.tone,
-    Icon: [Factory, CheckCircle2, AlertTriangle, Flame, Layers, Clock][index],
   }));
 
   return (
-    <div className="fab-cc">
-      <PageHero
-        Icon={Factory}
+    <div className="fab-cc sbp-command-page">
+      <PageHeader
+        eyebrow={`${projectName} / Production`}
         title="Fab Release Control Center"
-        subtitle="Track shop release readiness, clear blockers, and move steel packages through fabrication."
-        projectName={projectName}
-        chips={heroChips}
-        photoSrc={photoFor("FabRelease") ?? undefined}
+        subtitle="Authoritative release-gate status for shop packages, blockers, and recent releases."
+        meta={`${summary.totalCount} packages · ${summary.releasedCount} released · ${summary.blockedCount} blocked`}
+        actions={(
+          <>
+            <button
+              type="button"
+              className="cmd-btn cmd-btn--ghost"
+              onClick={() => {
+                onStageFilter("all");
+                onRiskFilter("clear");
+                scrollToBody();
+              }}
+            >
+              Ready to Release
+            </button>
+            <button
+              type="button"
+              className="cmd-btn cmd-btn--ghost"
+              onClick={() => {
+                onRiskFilter("high");
+                scrollToBody();
+              }}
+            >
+              Blocked
+            </button>
+          </>
+        )}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Fab release operational summary" />
 
-      <div className="cmd-panels">
-        <DecisionPanel
-          title="Ready to Release"
-          onViewAll={() => {
-            onStageFilter("all");
-            onRiskFilter("clear");
-            scrollToBody();
-          }}
-        >
-          {summary.readyQueue.length === 0 ? (
-            <div className="cmd-row__meta">No packages ready for release.</div>
-          ) : summary.readyQueue.map((wp) => (
-            <div key={wp.id} className="cmd-row is-clickable" onClick={() => onOpenWP(wp)}>
-              <div>
-                <div className="cmd-row__num">{wp.wp_number || "WP"}</div>
-                <div className="cmd-row__meta">{wp.name || wp.description || "Unnamed"}</div>
-              </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {readinessPill(wp._signals.readinessScore)}
-                <span className="cmd-row__meta">{fmtTons(wp.tonnage)}</span>
-              </div>
-            </div>
-          ))}
-        </DecisionPanel>
+      <AttentionQueue
+        title="Release Blockers"
+        items={releaseBlockers}
+        emptyMessage="No packages currently have an authoritative release blocker."
+      />
 
-        <DecisionPanel
-          title="Blocked (RFI / Approval)"
-          onViewAll={() => {
-            onRiskFilter("high");
-            scrollToBody();
-          }}
-        >
-          {summary.blockedQueue.length === 0 ? (
-            <div className="cmd-row__meta">No packages blocked.</div>
-          ) : summary.blockedQueue.map((wp) => (
-            <div key={wp.id} className="cmd-row is-clickable" onClick={() => onOpenWP(wp)}>
-              <div>
-                <div className="cmd-row__num">{wp.wp_number || "WP"}</div>
-                <div className="cmd-row__meta">{topBlockerLabel(wp)}</div>
-              </div>
-              <Pill tone={riskTone(wp._signals.risk)}>
-                {wp._signals.risk === "high" ? "Exception" : "Warning"}
-              </Pill>
-            </div>
-          ))}
-        </DecisionPanel>
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Ready to Release</h2>
+            <span className="cmd-row__meta">{summary.readyQueue.length} queued</span>
+          </div>
+          <div>
+            {summary.readyQueue.length === 0 ? (
+              <div className="sbp-attention__empty">No packages ready for release.</div>
+            ) : summary.readyQueue.map((wp) => (
+              <button
+                type="button"
+                key={wp.id}
+                className="cmd-row is-clickable"
+                onClick={() => onOpenWP(wp)}
+                style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}
+              >
+                <div>
+                  <div className="cmd-row__num">{wp.wp_number || "WP"}</div>
+                  <div className="cmd-row__meta">{wp.name || wp.description || "Unnamed"}</div>
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <StatusBadge
+                    label={`${wp._signals.readinessScore}% ready`}
+                    tone={wp._signals.readinessScore >= 80 ? "success" : wp._signals.readinessScore >= 50 ? "warning" : "danger"}
+                  />
+                  <span className="cmd-row__meta">{fmtTons(wp.tonnage)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
 
-        <DecisionPanel
-          title="Recently Released"
-          onViewAll={() => {
-            onStageFilter("shop_released");
-            scrollToBody();
-          }}
-        >
-          {summary.recentlyReleased.length === 0 ? (
-            <div className="cmd-row__meta">No packages released yet.</div>
-          ) : summary.recentlyReleased.map((wp) => (
-            <div key={wp.id} className="cmd-row is-clickable" onClick={() => onOpenWP(wp)}>
-              <div>
-                <div className="cmd-row__num">{wp.wp_number || "WP"}</div>
-                <div className="cmd-row__meta">{wp.name || "Unnamed"}</div>
-              </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <Pill tone={stageTone(wp._signals.stage)}>{stageLabel(wp._signals.stage)}</Pill>
-                <span className="cmd-row__meta">
-                  {wp.released_date ? formatDate(wp.released_date as string) : "Date not recorded"}
-                </span>
-              </div>
-            </div>
-          ))}
-        </DecisionPanel>
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Recently Released</h2>
+            <button
+              type="button"
+              className="cmd-btn cmd-btn--ghost"
+              onClick={() => {
+                onStageFilter("shop_released");
+                scrollToBody();
+              }}
+            >
+              View released
+            </button>
+          </div>
+          <div>
+            {summary.recentlyReleased.length === 0 ? (
+              <div className="sbp-attention__empty">No packages released yet.</div>
+            ) : summary.recentlyReleased.map((wp) => (
+              <button
+                type="button"
+                key={wp.id}
+                className="cmd-row is-clickable"
+                onClick={() => onOpenWP(wp)}
+                style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}
+              >
+                <div>
+                  <div className="cmd-row__num">{wp.wp_number || "WP"}</div>
+                  <div className="cmd-row__meta">{wp.name || "Unnamed"}</div>
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <StatusBadge label={stageLabel(wp._signals.stage)} tone={stageTone(wp._signals.stage) === "good" ? "success" : "info"} />
+                  <span className="cmd-row__meta">
+                    {wp.released_date ? formatDate(wp.released_date as string) : "Date unknown"}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
       {toolbar}
