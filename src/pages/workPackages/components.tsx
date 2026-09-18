@@ -54,6 +54,7 @@ import {
   laneIconStyle,
   laneStyle,
   miniLabelStyle,
+  mono,
   packageCardStyle,
   packageNameStyle,
   panelHeaderStyle,
