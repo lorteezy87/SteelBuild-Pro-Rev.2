@@ -22,9 +22,9 @@ import {
   ArrowRight, FileQuestion, CircleDollarSign,
   AlertTriangle, Clock3, ShieldCheck, CalendarClock, ClipboardList,
 } from "lucide-react";
-import { DecisionPanel, Pill } from "@/components/command";
+import { DateRiskCell, DecisionPanel, Pill, StatusBadge, WorkflowStage } from "@/components/command";
 import type { PillTone } from "@/components/command";
-import { adaptControlBoardFocus, buildControlBoardModel } from "./drawingControlCenter.derive";
+import { adaptControlBoardFocus, buildControlBoardModel, buildProductionReadinessQueue } from "./drawingControlCenter.derive";
 import type { HubTabKey } from "./hubLinks";
 import {
   InlineOwnerControl,
@@ -64,6 +64,25 @@ type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 
 type EscalationKind = "rfi" | "pco";
+
+const APPROVAL_LIFECYCLE = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"] as const;
+
+function approvalStages(current?: string | null) {
+  const currentIndex = APPROVAL_LIFECYCLE.indexOf(current as (typeof APPROVAL_LIFECYCLE)[number]);
+  const rr = current === "R&R";
+  return APPROVAL_LIFECYCLE.map((stage, index) => ({
+    id: stage,
+    label: stage,
+    state:
+      rr && stage === "BFA"
+        ? "blocked" as const
+        : currentIndex >= 0 && index < currentIndex
+          ? "complete" as const
+          : currentIndex >= 0 && index === currentIndex
+            ? "current" as const
+            : "upcoming" as const,
+  }));
+}
 
 export interface ControlBoardPanelProps {
   triage: TriageModel;
@@ -161,6 +180,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
   const model = buildControlBoardModel(triage);
   const focusView = adaptControlBoardFocus(model.focusItem);
   const focus = focusView?.item ?? null;
+  const productionReadiness = buildProductionReadinessQueue(triage);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -177,6 +197,15 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
               {/* R&R is a first-class stage (2026-07-25): skip the extra badge
                   when the state chip itself already reads R&R. */}
               {focus.isRR && focus.detailingState !== "R&R" && <RRChip />}
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <WorkflowStage
+                stages={approvalStages(focus.detailingState || focus.status)}
+                currentStage={focus.detailingState || focus.status}
+                compact
+                ariaLabel="Detailing approval lifecycle"
+              />
             </div>
 
             {/* Inline owner + due-date editors (reused as-is). */}
@@ -279,6 +308,62 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
         <TriageMetric icon={CalendarClock} label="Missing Dates" value={triage.noDate.length} color={textMuted} sub="Needs cleanup" />
         <TriageMetric icon={ClipboardList} label="Pending Review" value={kpis.pending} color={warning} sub={`${kpis.total} total submittals`} />
       </div>
+
+      <section className="sbp-work-panel" aria-label="Production Readiness Queue">
+        <div className="sbp-work-panel__head">
+          <h2>Production Readiness Queue</h2>
+          <span className="cmd-row__meta">Approval dates come from the existing backward schedule. Unknown evidence stays unknown.</span>
+        </div>
+        <div className="cmd-table-wrap">
+          <table className="cmd-table">
+            <thead>
+              <tr>
+                <th>Package</th>
+                <th>Current Stage</th>
+                <th>Required IFC</th>
+                <th>Fab Start</th>
+                <th>Float</th>
+                <th>Blocker</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productionReadiness.map((row) => (
+                <tr key={row.id} className="is-clickable" onClick={() => openItem(row.item)}>
+                  <td>
+                    <div className="cmd-row__num">{row.package}</div>
+                    <div className="cmd-row__meta">{row.item.owner || "Owner unknown"}</div>
+                  </td>
+                  <td>
+                    <StatusBadge
+                      label={row.currentStage}
+                      tone={row.ready ? "success" : row.currentStage === "R&R" ? "danger" : "accent"}
+                    />
+                  </td>
+                  <td>
+                    <DateRiskCell
+                      value={row.requiredIfc}
+                      risk={row.requiredIfc ? (row.item._readiness?.scheduleRisk?.atRisk ? "warning" : "upcoming") : "unknown"}
+                    />
+                  </td>
+                  <td><DateRiskCell value={row.fabStart} risk="unknown" /></td>
+                  <td>{row.floatDays == null ? <span className="cmd-row__meta">Unknown</span> : `${row.floatDays}d`}</td>
+                  <td>
+                    <StatusBadge
+                      label={row.blocker}
+                      tone={row.ready ? "success" : row.blocker === "Readiness evidence unavailable" ? "neutral" : "warning"}
+                    />
+                  </td>
+                </tr>
+              ))}
+              {productionReadiness.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="cmd-table__empty">No open drawing packages.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* ── Queues (kit DecisionPanel + cmd-row) ────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 14 }}>
