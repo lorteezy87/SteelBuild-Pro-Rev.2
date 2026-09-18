@@ -63,12 +63,10 @@ it("renders without crashing and shows key landmark text", () => {
 
   // Page title
   expect(screen.getByText("RFI Control Center")).toBeTruthy();
-  // Operational metric cells (the redesign replaced the old "Need Action"
-  // rollup with the named metrics below).
+  // Operational summary + attention queue from the Wave 2 command grammar.
   expect(screen.getByText("Open RFIs")).toBeTruthy();
-  // "Overdue" is both a metric label and a row badge, hence getAllByText.
-  expect(screen.getAllByText("Overdue").length).toBeGreaterThan(0);
-  expect(screen.getByText("Cost Exposure")).toBeTruthy();
-  // DecisionPanel title for the work queue
   expect(screen.getByText("RFI Work Queue")).toBeTruthy();
+  expect(screen.getByText("42% complete")).toBeTruthy();
+  // Canonical register retains the operational impact column.
+  expect(screen.getByText("Impact")).toBeTruthy();
 });

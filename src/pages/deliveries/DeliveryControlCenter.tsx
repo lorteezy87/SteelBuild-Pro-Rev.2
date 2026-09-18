@@ -13,25 +13,16 @@
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
+  AttentionQueue,
+  OperationalSummary,
+  PageHeader,
   Pill,
   FilterBar,
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
-import {
-  Truck,
-  PackageCheck,
-  Clock3,
-  AlertTriangle,
-  CheckCircle2,
-  CalendarClock,
-  Package,
-} from "lucide-react";
+import type { AttentionItem, Column } from "@/components/command";
+import { Download, Plus, Upload } from "lucide-react";
 import { buildDeliveryPanels, deliveryStatusTone } from "./deliveryControlCenter.derive";
 import { formatDate, formatTons } from "./format";
 import { deliveryStyles } from "./styles";
@@ -157,18 +148,6 @@ const VIEW_OPTIONS = [
 // Helper: date cell with overdue highlight
 // ---------------------------------------------------------------------------
 
-function scheduledCell(delivery: DeliveryRecord) {
-  const signals = delivery._signals;
-  if (!signals?.scheduledDate) return <span style={{ color: "var(--cmd-text-muted)" }}>TBD</span>;
-  if (signals.overdue) {
-    return <span style={{ color: "var(--status-error)", fontWeight: 600 }}>{formatDate(delivery.scheduled_date)} · late</span>;
-  }
-  if (signals.dueToday) {
-    return <span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{formatDate(delivery.scheduled_date)} · today</span>;
-  }
-  return <span>{formatDate(delivery.scheduled_date)}</span>;
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -215,33 +194,55 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
   const selectable = !!(selectedIds && onToggleSelect && onToggleAll);
   const allSelected = selectable && filtered.length > 0 && selectedIds!.size === filtered.length;
 
-  // ---------------------------------------------------------------------------
-  // Hero
-  // ---------------------------------------------------------------------------
+  const attentionItems = useMemo<AttentionItem[]>(() => {
+    const candidates = [
+      ...metrics.overdue,
+      ...metrics.exceptions,
+      ...metrics.unscheduled,
+    ];
+    const unique = new Map<string, DeliveryRecord>();
+    for (const delivery of candidates) {
+      const key = delivery.id || String(delivery.delivery_title || delivery.load_number || delivery.delivery_number || unique.size);
+      if (!unique.has(key)) unique.set(key, delivery);
+    }
 
-  const heroStats = [
-    { value: projectHealth || "—", label: "Project Health" },
-    { value: percentComplete != null ? `${Math.round(percentComplete)}%` : "—", label: "Complete" },
-  ];
+    return [...unique.values()].slice(0, 12).map((delivery) => {
+      const signals = delivery._signals;
+      const flags = signals?.flags || [];
+      const load = delivery.delivery_title || delivery.load_number || delivery.delivery_number || "Load";
+      const risk = signals?.overdue
+        ? "Load is overdue"
+        : signals?.unscheduled
+          ? "Scheduled date unknown"
+          : flags.length
+            ? flags.map((flag) => flag.label).slice(0, 2).join(" · ")
+            : "Delivery exception";
 
-  const heroChips = [
-    { label: `${metrics.totalCount} Loads` },
-    { label: `${metrics.openCount} Open`, tone: "good" as const },
-    { label: `${metrics.exceptions.length} Exceptions`, tone: metrics.exceptions.length ? "danger" as const : "neutral" as const },
-  ];
+      return {
+        id: delivery.id || String(load),
+        issue: `${load} · ${signals?.status || delivery.status || "Status unknown"}`,
+        deadline: delivery.required_date || delivery.scheduled_date || null,
+        risk,
+        owner: delivery.carrier || null,
+        nextAction: signals?.unscheduled
+          ? "Set load date"
+          : signals?.overdue
+            ? "Recover delivery plan"
+            : "Clear delivery exception",
+        tone: signals?.risk === "high" || signals?.overdue ? "danger" : "warn",
+        onOpen: () => onOpenDelivery(delivery),
+      };
+    });
+  }, [metrics.exceptions, metrics.overdue, metrics.unscheduled, onOpenDelivery]);
 
-  // ---------------------------------------------------------------------------
-  // KPI strip (7 cells)
-  // ---------------------------------------------------------------------------
-
-  const kpiCells: KpiCellDef[] = [
-    { label: "Open Loads", value: metrics.openCount, sublabel: "active", tone: "info", Icon: PackageCheck },
-    { label: "Due Today", value: metrics.dueToday.length, sublabel: "loads", tone: metrics.dueToday.length ? "warn" : "neutral", Icon: Clock3 },
-    { label: "Overdue", value: metrics.overdue.length, sublabel: "loads", tone: metrics.overdue.length ? "danger" : "neutral", Icon: AlertTriangle },
-    { label: "Exceptions", value: metrics.exceptions.length, sublabel: "flagged", tone: metrics.exceptions.length ? "danger" : "neutral", Icon: AlertTriangle },
-    { label: "Ready to Receive", value: metrics.readyToReceive.length, sublabel: "loads", tone: "good", Icon: CheckCircle2 },
-    { label: "Long Lead Open", value: metrics.longLeadOpen.length, sublabel: "items", tone: metrics.longLeadOpen.length ? "warn" : "neutral", Icon: CalendarClock },
-    { label: "Total Pieces", value: metrics.totalOpenPieces.toLocaleString(), sublabel: "open", tone: "neutral", Icon: Package },
+  const operationalMetrics = [
+    { label: "Open Loads", value: metrics.openCount, sublabel: "active", tone: metrics.openCount ? "info" as const : "good" as const },
+    { label: "Due Today", value: metrics.dueToday.length, sublabel: "loads", tone: metrics.dueToday.length ? "warn" as const : "neutral" as const },
+    { label: "Overdue", value: metrics.overdue.length, sublabel: "loads", tone: metrics.overdue.length ? "danger" as const : "good" as const },
+    { label: "Exceptions", value: metrics.exceptions.length, sublabel: "flagged", tone: metrics.exceptions.length ? "danger" as const : "good" as const },
+    { label: "Unscheduled Loads", value: metrics.unscheduled.length, sublabel: "date unknown", tone: metrics.unscheduled.length ? "warn" as const : "good" as const },
+    { label: "Ready to Receive", value: metrics.readyToReceive.length, sublabel: "loads", tone: metrics.readyToReceive.length ? "good" as const : "neutral" as const },
+    { label: "Open Pieces", value: metrics.totalOpenPieces.toLocaleString(), sublabel: `${formatTons(metrics.totalOpenTons)} open`, tone: "neutral" as const },
   ];
 
   // ---------------------------------------------------------------------------
@@ -257,17 +258,17 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
               type="checkbox"
               className="cmd-check"
               checked={allSelected}
-              onChange={(e) => onToggleAll!(e.target.checked)}
+              onChange={(event) => onToggleAll!(event.target.checked)}
               aria-label="Select all deliveries"
             />
           ),
-          render: (d: DeliveryRecord) => (
+          render: (delivery: DeliveryRecord) => (
             <input
               type="checkbox"
               className="cmd-check"
-              checked={selectedIds!.has(d.id || "")}
-              onClick={(e) => e.stopPropagation()}
-              onChange={() => onToggleSelect!(d.id || "")}
+              checked={selectedIds!.has(delivery.id || "")}
+              onClick={(event) => event.stopPropagation()}
+              onChange={() => onToggleSelect!(delivery.id || "")}
               aria-label="Select delivery"
             />
           ),
@@ -276,56 +277,103 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
     {
       key: "load",
       header: "Load",
-      render: (d) => (
+      grid: "minmax(105px, 1fr)",
+      render: (delivery) => (
         <div>
-          <span className="cmd-row__num">{d.delivery_title || d.load_number || d.delivery_number || "—"}</span>
+          <div className="cmd-row__num">
+            {delivery.delivery_title || delivery.load_number || delivery.delivery_number || "Load"}
+          </div>
+          <div className="cmd-row__meta">{delivery.vendor || delivery.po_number ? [delivery.vendor, delivery.po_number ? `PO ${delivery.po_number}` : null].filter(Boolean).join(" · ") : "Vendor / PO unknown"}</div>
         </div>
       ),
     },
     {
-      key: "status",
-      header: "Status",
-      render: (d) => <Pill tone={deliveryStatusTone(d._signals?.status || d.status)}>{d._signals?.status || d.status || "Scheduled"}</Pill>,
-    },
-    {
-      key: "vendor",
-      header: "Vendor / PO",
-      render: (d) => (
+      key: "package",
+      header: "WP / Seq",
+      grid: "minmax(105px, .9fr)",
+      render: (delivery) => (
         <div>
-          <div>{d.vendor || "—"}</div>
-          {d.po_number && <div className="cmd-row__meta">PO {d.po_number}</div>}
+          <div>{delivery.work_package_id || "WP unknown"}</div>
+          <div className="cmd-row__meta">{delivery.sequence_number ? `Seq ${delivery.sequence_number}` : "Sequence unknown"}</div>
         </div>
       ),
     },
     {
-      key: "scheduled",
-      header: "Scheduled",
-      render: scheduledCell,
-    },
-    {
-      key: "required",
-      header: "Need By",
-      render: (d) => <span>{formatDate(d.required_date)}</span>,
-    },
-    {
-      key: "weight",
-      header: "Tons / Pcs",
-      align: "right" as const,
-      render: (d) => (
-        <span style={{ fontFamily: "var(--font-mono)" }}>
-          {formatTons(d.weight_tons)} / {d.pieces ? String(d.pieces) : "—"}
-        </span>
+      key: "quantity",
+      header: "Pieces / Tons",
+      align: "right",
+      grid: "minmax(95px, .8fr)",
+      render: (delivery) => (
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
+          <div>{delivery.pieces != null ? `${delivery.pieces} pcs` : "Pieces unknown"}</div>
+          <div className="cmd-row__meta">{delivery.weight_tons != null ? formatTons(delivery.weight_tons) : "Tons unknown"}</div>
+        </div>
       ),
+    },
+    {
+      key: "readiness",
+      header: "Readiness",
+      grid: "minmax(110px, .9fr)",
+      render: (delivery) => {
+        const signals = delivery._signals;
+        if (!signals) return <span className="cmd-row__meta">Unknown</span>;
+        return (
+          <div>
+            <Pill tone={signals.fabReady ? "good" : signals.risk === "high" ? "danger" : "warn"}>
+              {signals.readinessScore}% ready
+            </Pill>
+            <div className="cmd-row__meta">{signals.fabReady ? "Fab ready" : "Readiness open"}</div>
+          </div>
+        );
+      },
     },
     {
       key: "carrier",
       header: "Carrier",
-      render: (d) => d.carrier || <span className="cmd-row__meta">—</span>,
+      grid: "minmax(115px, .9fr)",
+      render: (delivery) => delivery.carrier || <span className="cmd-row__meta">Carrier unknown</span>,
     },
     {
-      key: "location",
+      key: "required",
+      header: "Required On Site",
+      grid: "minmax(110px, .9fr)",
+      render: (delivery) => delivery.required_date
+        ? <span>{formatDate(delivery.required_date)}</span>
+        : <span className="cmd-row__meta">Unknown</span>,
+    },
+    {
+      key: "scheduled",
+      header: "Ship / Scheduled",
+      grid: "minmax(125px, 1fr)",
+      render: (delivery) => {
+        const plannedShip = delivery.expected_ship_date || delivery.scheduled_date;
+        if (!plannedShip) return <span className="cmd-row__meta">Unknown</span>;
+        return (
+          <span style={{
+            color: delivery._signals?.overdue ? "var(--status-error)" : undefined,
+            fontWeight: delivery._signals?.overdue ? 700 : undefined,
+          }}>
+            {formatDate(plannedShip)}
+            {delivery._signals?.overdue ? " · late" : ""}
+          </span>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "Status",
+      grid: "minmax(105px, .85fr)",
+      render: (delivery) => (
+        <Pill tone={deliveryStatusTone(delivery._signals?.status || delivery.status)}>
+          {delivery._signals?.status || delivery.status || "Scheduled"}
+        </Pill>
+      ),
+    },
+    {
+      key: "receiving",
       header: "Receiving",
-      render: (d) => d.receiving_location || <span className="cmd-row__meta">—</span>,
+      grid: "minmax(115px, .95fr)",
+      render: (delivery) => delivery.receiving_location || <span className="cmd-row__meta">Location unknown</span>,
     },
   ];
 
@@ -342,87 +390,117 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="dlv-cc">
+    <div className="dlv-cc sbp-command-page">
       <style>{deliveryStyles}</style>
-      <PageHero
-        Icon={Truck}
-        title="Deliveries"
-        subtitle="Plan load-out, spot late trucks, confirm receiving, and keep field-ready steel visible before it turns into a site constraint."
-        projectName={projectName}
-        chips={heroChips}
-        photoSrc={photoFor("Deliveries") ?? undefined}
-        stats={heroStats}
+
+      <PageHeader
+        eyebrow={`${projectName} / Logistics`}
+        title="Delivery Control"
+        subtitle="Load readiness, ship dates, receiving, and field-facing delivery exceptions."
+        meta={[
+          projectHealth ? `Project health: ${projectHealth}` : "Project health: unknown",
+          percentComplete != null ? `${Math.round(percentComplete)}% project complete` : null,
+          `${metrics.totalCount} loads`,
+          `${metrics.totalOpenPieces.toLocaleString()} open pieces`,
+        ].filter(Boolean).join(" · ")}
+        actions={(
+          <>
+            {onImport ? (
+              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImport}>
+                <Upload size={14} /> Import Ticket
+              </button>
+            ) : null}
+            {onImportList ? (
+              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImportList}>
+                <Upload size={14} /> Shipping List
+              </button>
+            ) : null}
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}>
+              <Download size={14} /> Export
+            </button>
+            {onCreate ? (
+              <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate}>
+                <Plus size={14} /> Schedule Load
+              </button>
+            ) : null}
+          </>
+        )}
       />
 
       {receivingPanel}
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Delivery operational summary" />
 
-      <div className="cmd-panels">
-        <DecisionPanel
-          title="Next Loads"
-          onViewAll={() => { onScheduleFilterChange("all"); scrollToBody(); }}
-        >
-          {panels.workQueue.length === 0
-            ? <div className="cmd-row__meta">No upcoming loads.</div>
-            : panels.workQueue.map((d) => (
-              <div className="cmd-row is-clickable" key={d.id} onClick={() => onOpenDelivery(d)}>
+      <AttentionQueue
+        title="Load Attention"
+        items={attentionItems}
+        emptyMessage="No late, unscheduled, or flagged delivery loads."
+      />
+
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Next Loads</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={() => { onScheduleFilterChange("all"); scrollToBody(); }}>
+              View register
+            </button>
+          </div>
+          <div>
+            {panels.workQueue.length === 0 ? (
+              <div className="sbp-attention__empty">No upcoming loads.</div>
+            ) : panels.workQueue.map((delivery) => (
+              <button
+                type="button"
+                className="cmd-row is-clickable"
+                key={delivery.id}
+                onClick={() => onOpenDelivery(delivery)}
+                style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}
+              >
                 <div>
-                  <div className="cmd-row__num">{d.delivery_title || d.load_number || d.delivery_number || d.vendor || "Load"}</div>
-                  <div className="cmd-row__meta">{d.vendor || "—"} · {formatDate(d.scheduled_date)}</div>
-                </div>
-                <Pill tone={deliveryStatusTone(d._signals?.status || d.status)}>
-                  {d._signals?.status || d.status || "Scheduled"}
-                </Pill>
-              </div>
-            ))
-          }
-        </DecisionPanel>
-
-        <DecisionPanel
-          title="Receiving"
-          onViewAll={() => { onScheduleFilterChange("ready"); scrollToBody(); }}
-        >
-          {panels.receivingQueue.length === 0
-            ? <div className="cmd-row__meta">No loads ready to receive.</div>
-            : panels.receivingQueue.map((d) => (
-              <div className="cmd-row is-clickable" key={d.id} onClick={() => onOpenDelivery(d)}>
-                <div>
-                  <div className="cmd-row__num">{d.delivery_title || d.load_number || d.vendor || "Load"}</div>
-                  <div className="cmd-row__meta">{d.receiving_location || "—"} · {formatTons(d.weight_tons)}</div>
-                </div>
-                <Pill tone={deliveryStatusTone(d._signals?.status || d.status)}>
-                  {d._signals?.status || "In Transit"}
-                </Pill>
-              </div>
-            ))
-          }
-        </DecisionPanel>
-
-        <DecisionPanel
-          title="Exceptions & Flags"
-          onViewAll={() => { onRiskFilterChange("high"); scrollToBody(); }}
-        >
-          {panels.exceptionQueue.length === 0
-            ? <div className="cmd-row__meta">No exceptions — loads look clear.</div>
-            : panels.exceptionQueue.map((d) => {
-                const flags = d._signals?.flags || [];
-                const topFlag = flags[0];
-                return (
-                  <div className="cmd-row is-clickable" key={d.id} onClick={() => onOpenDelivery(d)}>
-                    <div>
-                      <div className="cmd-row__num">{d.delivery_title || d.load_number || d.vendor || "Load"}</div>
-                      {topFlag && <div className="cmd-row__meta">{topFlag.label}</div>}
-                      {flags.length > 1 && <div className="cmd-row__meta">+{flags.length - 1} more</div>}
-                    </div>
-                    <Pill tone={d._signals?.risk === "high" ? "danger" : "warn"}>
-                      {d._signals?.risk === "high" ? "Exception" : "Warning"}
-                    </Pill>
+                  <div className="cmd-row__num">{delivery.delivery_title || delivery.load_number || delivery.delivery_number || "Load"}</div>
+                  <div className="cmd-row__meta">
+                    {delivery.work_package_id || "WP unknown"} · {formatDate(delivery.scheduled_date)}
                   </div>
-                );
-              })
-          }
-        </DecisionPanel>
+                </div>
+                <Pill tone={deliveryStatusTone(delivery._signals?.status || delivery.status)}>
+                  {delivery._signals?.status || delivery.status || "Scheduled"}
+                </Pill>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Receiving Queue</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={() => { onScheduleFilterChange("ready"); scrollToBody(); }}>
+              Ready loads
+            </button>
+          </div>
+          <div>
+            {panels.receivingQueue.length === 0 ? (
+              <div className="sbp-attention__empty">No loads ready to receive.</div>
+            ) : panels.receivingQueue.map((delivery) => (
+              <button
+                type="button"
+                className="cmd-row is-clickable"
+                key={delivery.id}
+                onClick={() => onOpenDelivery(delivery)}
+                style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}
+              >
+                <div>
+                  <div className="cmd-row__num">{delivery.delivery_title || delivery.load_number || "Load"}</div>
+                  <div className="cmd-row__meta">
+                    {delivery.receiving_location || "Receiving location unknown"} · {formatTons(delivery.weight_tons)}
+                  </div>
+                </div>
+                <Pill tone={deliveryStatusTone(delivery._signals?.status || delivery.status)}>
+                  {delivery._signals?.status || "In Transit"}
+                </Pill>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
       {/* FilterBar with schedule + risk chips */}
@@ -430,29 +508,13 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search vendor, PO, load, carrier, truck, work package..."
-        onImport={null}
-        onExport={onExport}
         secondaryActions={
-          <>
-            {onImport && (
-              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImport}>
-                Import Ticket
-              </button>
-            )}
-            {onImportList && (
-              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImportList}>
-                Import Shipping List
-              </button>
-            )}
-            {onClearFilters && (
-              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onClearFilters}>
-                Clear Filters
-              </button>
-            )}
-          </>
+          onClearFilters ? (
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onClearFilters}>
+              Clear Filters
+            </button>
+          ) : null
         }
-        primaryLabel="Schedule Load"
-        onPrimary={onCreate || null}
         filters={
           <>
             {!projectId && onProjectChange && (

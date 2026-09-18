@@ -131,13 +131,10 @@ function readinessBlockers(item: TriageItem): string[] {
 export function buildProductionReadinessQueue(triage: TriageModel): ProductionReadinessRow[] {
   return triage.setItems
     .filter((item) => !item.closed)
-    // Annotated so the literal is checked against the interface: `fabStart` and
-    // `floatDays` are deliberately null, and a bare null widens to `any` under
-    // the noImplicitAny ratchet.
-    .map((item): ProductionReadinessRow => {
+    .map((item) => {
       const readiness = item._readiness;
       const blockers = readinessBlockers(item);
-      return {
+      const row: ProductionReadinessRow = {
         id: item.id,
         package: item.title,
         currentStage: item.detailingState || item.status || "Unknown",
@@ -150,6 +147,7 @@ export function buildProductionReadinessQueue(triage: TriageModel): ProductionRe
         ready: Boolean(readiness?.fabricationReady),
         item,
       };
+      return row;
     })
     .sort((a, b) => {
       if (a.ready !== b.ready) return a.ready ? 1 : -1;

@@ -8,14 +8,13 @@
  * components and the backchargeControlCenter.derive.ts engine.
  */
 import { useMemo } from "react";
-import { ScrollText, DollarSign, AlertTriangle, ShieldCheck, FileWarning, TrendingDown, BarChart2 } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero, KpiStrip, DecisionPanel, Pill, statusTone,
+  AttentionQueue, OperationalSummary, PageHeader, Pill, statusTone,
   FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { AttentionItem, Column } from "@/components/command";
 import { buildBackchargeSummary } from "./backchargeControlCenter.derive";
 import type { Backcharge } from "./backchargeControlCenter.derive";
 import {
@@ -92,58 +91,29 @@ export default function BackchargeControlCenter(props: BackchargeControlCenterPr
   useCommandSkin();
   const s = useMemo(() => buildBackchargeSummary(backcharges), [backcharges]);
 
-  // ── Hero chips
-  const chips = [
-    { label: `${s.total} Total` },
-    { label: `${s.open} Open`, tone: s.open ? ("warn" as const) : ("good" as const) },
-    { label: `${s.disputed} Disputed`, tone: s.disputed ? ("danger" as const) : ("neutral" as const) },
+  const operationalMetrics = [
+    { label: "Open Exposure", value: fmtMoney(s.openAmount), sublabel: "being chased", tone: s.openTone },
+    { label: "Total Logged", value: fmtMoney(s.totalAmount), sublabel: "all statuses", tone: "neutral" as const },
+    { label: "Recovered", value: fmtMoney(s.recoveredAmount), sublabel: "collected", tone: s.recoveredAmount > 0 ? "good" as const : "neutral" as const },
+    { label: "Disputed", value: s.disputed, sublabel: "backcharges", tone: s.disputed ? "danger" as const : "good" as const },
+    { label: "Defense Ready", value: s.defenseReady, sublabel: "notice on file", tone: s.total > 0 && s.defenseReady === s.total ? "good" as const : "warn" as const },
+    { label: "Notice Rate", value: `${s.noticeRate}%`, sublabel: "contractual coverage", tone: s.noticeRate === 100 ? "good" as const : s.total > 0 ? "warn" as const : "neutral" as const },
   ];
 
-  // ── KPI strip (6 cells)
-  const kpiCells: KpiCellDef[] = [
-    {
-      label: "Open Exposure",
-      value: fmtMoney(s.openAmount),
-      sublabel: "being chased",
-      tone: s.openTone,
-      Icon: DollarSign,
-    },
-    {
-      label: "Total Logged",
-      value: fmtMoney(s.totalAmount),
-      sublabel: "all statuses",
-      tone: "neutral",
-      Icon: BarChart2,
-    },
-    {
-      label: "Recovered",
-      value: fmtMoney(s.recoveredAmount),
-      sublabel: "collected",
-      tone: s.recoveredAmount > 0 ? "good" : "neutral",
-      Icon: TrendingDown,
-    },
-    {
-      label: "Disputed",
-      value: s.disputed,
-      sublabel: "backcharges",
-      tone: s.disputed ? "danger" : "neutral",
-      Icon: AlertTriangle,
-    },
-    {
-      label: "Defense Ready",
-      value: s.defenseReady,
-      sublabel: "have notice date",
-      tone: s.defenseReady === s.total && s.total > 0 ? "good" : s.defenseReady > 0 ? "warn" : "neutral",
-      Icon: ShieldCheck,
-    },
-    {
-      label: "Notice Rate",
-      value: `${s.noticeRate}%`,
-      sublabel: "contractual coverage",
-      tone: s.noticeRate === 100 ? "good" : s.noticeRate > 50 ? "warn" : s.total > 0 ? "danger" : "neutral",
-      Icon: FileWarning,
-    },
-  ];
+  const attentionItems: AttentionItem[] = s.openQueue.map((bc) => ({
+    id: String(bc.id || bc.backcharge_number || bc.title),
+    issue: `${bc.backcharge_number || "BC"} · ${bc.title || "Untitled backcharge"}`,
+    deadline: bc.notice_date || bc.incident_date || null,
+    risk: [
+      bc.status === "disputed" ? "Disputed" : "Open recovery",
+      !bc.notice_date ? "Notice missing" : null,
+      fmtMoney(Number(bc.amount || 0)),
+    ].filter(Boolean).join(" · "),
+    owner: bc.responsible_party || null,
+    nextAction: !bc.notice_date ? "Issue / document contractual notice" : bc.status === "disputed" ? "Resolve dispute" : "Advance recovery",
+    tone: bc.status === "disputed" || !bc.notice_date ? "danger" : "warn",
+    onOpen: () => onOpen(bc),
+  }));
 
   // ── DataTable columns
   const columns: Column<Backcharge>[] = [
@@ -208,118 +178,89 @@ export default function BackchargeControlCenter(props: BackchargeControlCenterPr
   ];
 
   return (
-    <div className="bc-cc">
-      <PageHero
-        Icon={ScrollText}
-        title="Backcharge Defense Control Center"
-        subtitle="Log backcharges, build T&M cost packages, and generate defensible audit trails to recover costs from responsible parties."
-        projectName={projectName}
-        chips={chips}
-        photoSrc={photoFor("Backcharges") ?? undefined}
+    <div className="bc-cc sbp-command-page">
+      <PageHeader
+        eyebrow={`${projectName} / Commercial`}
+        title="Backcharge Defense"
+        subtitle="Cost recovery, responsible parties, notice coverage, disputes, and defensible documentation."
+        meta={`${s.total} logged · ${s.open} open · ${fmtMoney(s.openAmount)} open exposure`}
+        actions={(
+          <>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}>
+              <Download size={14} /> Export
+            </button>
+            {onCreate ? (
+              <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate}>
+                <Plus size={14} /> New Backcharge
+              </button>
+            ) : null}
+          </>
+        )}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Backcharge operational summary" />
 
-      <div className="cmd-panels">
-        {/* Panel 1: Open backcharges — highest exposure first */}
-        <DecisionPanel
-          title="Open Backcharges"
-          onViewAll={() => { onStatusFilter("open"); scrollToTable(); }}
-        >
-          {s.openQueue.map((b) => (
-            <div
-              className="cmd-row is-clickable"
-              key={b.id}
-              onClick={() => onOpen(b)}
-            >
-              <div style={{ minWidth: 0 }}>
-                <div className="cmd-row__num">
-                  {b.backcharge_number ? `${b.backcharge_number} · ` : ""}
-                  {b.title}
-                </div>
-                <div className="cmd-row__meta">
-                  {b.responsible_party || "Unknown"} · {BACKCHARGE_STATUS_LABELS[b.status as BackchargeStatus] || b.status}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                <Pill tone={backchargeTone(b.status)}>
-                  {fmtMoney(Number(b.amount || 0))}
-                </Pill>
-                {!b.notice_date && (
-                  <Pill tone="warn">No notice</Pill>
-                )}
-              </div>
-            </div>
-          ))}
-          {s.openQueue.length === 0 && (
-            <div className="cmd-row__meta">No open backcharges.</div>
-          )}
-        </DecisionPanel>
+      <AttentionQueue
+        title="Recovery Attention"
+        items={attentionItems}
+        emptyMessage="No open backcharge recovery items."
+      />
 
-        {/* Panel 2: Disputed backcharges — need attention */}
-        <DecisionPanel
-          title="Disputed"
-          onViewAll={() => { onStatusFilter("disputed"); scrollToTable(); }}
-        >
-          {s.disputedQueue.map((d) => (
-            <div
-              className="cmd-row is-clickable"
-              key={d.id}
-              onClick={() => {
-                const bc = backcharges.find((b) => b.id === d.id);
-                if (bc) onOpen(bc);
-              }}
-            >
-              <div style={{ minWidth: 0 }}>
-                <div className="cmd-row__num">{d.title}</div>
-                <div className="cmd-row__meta">
-                  {d.responsible_party || "Unknown"} ·{" "}
-                  {d.notice_date ? `notice ${d.notice_date}` : "no notice on record"}
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Disputed</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={() => { onStatusFilter("disputed"); scrollToTable(); }}>View register</button>
+          </div>
+          <div>
+            {s.disputedQueue.length === 0 ? (
+              <div className="sbp-attention__empty">No disputed backcharges.</div>
+            ) : s.disputedQueue.map((row) => (
+              <button
+                type="button"
+                className="cmd-row is-clickable"
+                key={row.id}
+                onClick={() => {
+                  const bc = backcharges.find((item) => item.id === row.id);
+                  if (bc) onOpen(bc);
+                }}
+                style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}
+              >
+                <div>
+                  <div className="cmd-row__num">{row.title}</div>
+                  <div className="cmd-row__meta">{row.responsible_party || "Responsible party unknown"}</div>
                 </div>
-              </div>
-              <Pill tone="danger">{fmtMoney(d.amount)}</Pill>
-            </div>
-          ))}
-          {s.disputedQueue.length === 0 && (
-            <div className="cmd-row__meta">No disputed backcharges.</div>
-          )}
-        </DecisionPanel>
+                <Pill tone="danger">{fmtMoney(row.amount)}</Pill>
+              </button>
+            ))}
+          </div>
+        </section>
 
-        {/* Panel 3: By Vendor / Responsible Party */}
-        <DecisionPanel title="By Responsible Party" onViewAll={scrollToTable}>
-          {s.byVendor.map((v) => (
-            <div className="cmd-row" key={v.vendor}>
-              <div>
-                <div className="cmd-row__num">{v.vendor}</div>
-                <div className="cmd-row__meta">
-                  {v.count} backcharge{v.count !== 1 ? "s" : ""} · {v.statuses.join(", ")}
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>By Responsible Party</h2></div>
+          <div>
+            {s.byVendor.length === 0 ? (
+              <div className="sbp-attention__empty">No backcharges logged.</div>
+            ) : s.byVendor.slice(0, 8).map((vendor) => (
+              <div className="cmd-row" key={vendor.vendor}>
+                <div>
+                  <div className="cmd-row__num">{vendor.vendor}</div>
+                  <div className="cmd-row__meta">{vendor.count} backcharge{vendor.count === 1 ? "" : "s"}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div>{fmtMoney(vendor.totalAmount)}</div>
+                  <div className="cmd-row__meta">{vendor.openAmount > 0 ? `${fmtMoney(vendor.openAmount)} open` : "No open exposure"}</div>
                 </div>
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontFamily: "var(--font-mono, ui-monospace, monospace)", fontWeight: 700, fontSize: 13 }}>
-                  {fmtMoney(v.totalAmount)}
-                </div>
-                {v.openAmount > 0 && (
-                  <div className="cmd-row__meta">
-                    {fmtMoney(v.openAmount)} open
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          {s.byVendor.length === 0 && (
-            <div className="cmd-row__meta">No backcharges logged.</div>
-          )}
-        </DecisionPanel>
+            ))}
+          </div>
+        </section>
       </div>
 
       <FilterBar
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search title, responsible party, or backcharge number"
-        onExport={onExport}
-        primaryLabel="New Backcharge"
-        onPrimary={onCreate || null}
         filters={
           <>
             {STATUS_FILTERS.map((f) => (

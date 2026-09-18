@@ -214,10 +214,10 @@ export default function SubmittalRegisterPanel({
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search # / title / spec section"
-        primaryLabel={canCreate ? "New Submittal" : undefined}
-        onPrimary={canCreate ? onNewSubmittal : null}
+        primaryLabel={embedded && canCreate ? "New Submittal" : undefined}
+        onPrimary={embedded && canCreate ? onNewSubmittal : null}
         secondaryActions={
-          canCreate ? (
+          embedded && canCreate ? (
             <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onBulkAdd}>Bulk Add</button>
           ) : null
         }
