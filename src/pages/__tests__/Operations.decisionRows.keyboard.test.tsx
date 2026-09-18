@@ -23,10 +23,10 @@ it("opens schedule lookahead, milestone, and risk rows with Enter and Space", as
     onAddTask={vi.fn()} onBulkAdd={vi.fn()} onWbsBuilder={vi.fn()} onImportMpp={vi.fn()} onImportCsv={vi.fn()}
     importing={false} onExportIcs={vi.fn()} onExportPdf={vi.fn()} exportingPdf={false} projectAvailable hasTasks view="gantt"
   ><div>Schedule body</div></ScheduleCommandCenter>);
-  for (const title of ["14-Day Look-Ahead", "Milestone Tracker", "Schedule Risk"]) {
+  for (const title of ["14-Day Lookahead", "Milestones", "Schedule Attention"]) {
     const row = panel(title).getByRole("button", { name: /Release columns/ });
     expect(row).toHaveAttribute("tabindex", "0");
-    panel(title).getByRole("button", { name: "View all" }).focus();
+    panel(title).getByRole("button", { name: /View all|View schedule/ }).focus();
     await user.tab();
     expect(row).toHaveFocus();
     await user.keyboard("{Enter}");
