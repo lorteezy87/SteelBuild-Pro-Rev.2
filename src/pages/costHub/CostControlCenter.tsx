@@ -173,7 +173,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   ];
 
   const attentionItems: AttentionItem[] = [
-    ...(summary.unallocatedCOTotal !== 0 ? [({
+    ...(summary.unallocatedCOTotal !== 0 ? [{
       id: "unallocated-co",
       issue: "Approved CO value not allocated to cost codes",
       deadline: null,
@@ -181,7 +181,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
       owner: "Project controls",
       nextAction: "Allocate approved CO value to cost codes",
       tone: "danger" as const,
-    }] : []),
+    } satisfies AttentionItem] : []),
     ...reviewFlags.map((flag, index): AttentionItem => ({
       id: `review-${index}`,
       issue: flag.message,
