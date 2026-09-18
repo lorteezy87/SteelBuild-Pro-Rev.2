@@ -26,6 +26,9 @@
 @import './styles/steelbuild-dark.css';
 @import './styles/tailwind-compat.css';
 @import './styles/steelbuild-light.css';
+/* Approved SteelBuild-Pro charcoal / steel / orange identity. Imported last
+ * so both legacy theme overlays resolve to the same brand contract. */
+@import './styles/brand-theme.css';
 
 @tailwind base;
 @tailwind components;

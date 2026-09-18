@@ -93,3 +93,67 @@ export function buildControlBoardModel(triage: TriageModel): ControlBoardModel {
     openCount: triage.openItems.length,
   };
 }
+
+
+export interface ProductionReadinessRow {
+  id: string;
+  package: string;
+  currentStage: string;
+  requiredIfc: string | null;
+  fabStart: string | null;
+  floatDays: number | null;
+  blocker: string;
+  ready: boolean;
+  item: TriageItem;
+}
+
+function readinessBlockers(item: TriageItem): string[] {
+  const readiness = item._readiness;
+  if (!readiness) return ["Readiness evidence unavailable"];
+  const blockers: string[] = [];
+  if (readiness.rfiBlocked) blockers.push("Open RFI");
+  if (readiness.revisionImpacted) blockers.push("Revision impact");
+  if (readiness.materialImpacted) blockers.push("Material impact");
+  if (readiness.longLeadImpact) blockers.push("Long lead impact");
+  if (readiness.scheduleRisk?.atRisk && readiness.scheduleRisk.reasons?.length) {
+    blockers.push(readiness.scheduleRisk.reasons[0]);
+  }
+  if (!readiness.fabricationReady && blockers.length === 0) blockers.push("Not fabrication ready");
+  return blockers;
+}
+
+/**
+ * Production-facing detailing queue. This only reshapes readiness evidence the
+ * hub already computed; it does not derive new schedule dates, float, or release
+ * authority. Unknown fields stay null so the UI renders them explicitly as
+ * unknown instead of implying a date or healthy state.
+ */
+export function buildProductionReadinessQueue(triage: TriageModel): ProductionReadinessRow[] {
+  return triage.setItems
+    .filter((item) => !item.closed)
+    .map((item) => {
+      const readiness = item._readiness;
+      const blockers = readinessBlockers(item);
+      return {
+        id: item.id,
+        package: item.title,
+        currentStage: item.detailingState || item.status || "Unknown",
+        requiredIfc: readiness?.backwardDates?.fabReleaseRequiredBy || null,
+        // The detailing read-model does not currently expose an authoritative
+        // fabrication-start date or calculated float. Preserve unknown.
+        fabStart: null,
+        floatDays: null,
+        blocker: readiness?.fabricationReady ? "Clear" : blockers.join(" · "),
+        ready: Boolean(readiness?.fabricationReady),
+        item,
+      };
+    })
+    .sort((a, b) => {
+      if (a.ready !== b.ready) return a.ready ? 1 : -1;
+      const aDue = a.requiredIfc || "9999-12-31";
+      const bDue = b.requiredIfc || "9999-12-31";
+      if (aDue !== bDue) return aDue.localeCompare(bDue);
+      return a.package.localeCompare(b.package, undefined, { numeric: true });
+    })
+    .slice(0, 12);
+}

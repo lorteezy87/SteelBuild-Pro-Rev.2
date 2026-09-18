@@ -31,7 +31,7 @@
  */
 import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardList, Clock3, ShieldAlert, TrendingUp } from "lucide-react";
-import { FilterBar, useCommandSkin } from "@/components/command";
+import { FilterBar, PageHeader, useCommandSkin } from "@/components/command";
 import { useResponsiveBreakpoint } from "@/components/nav/useResponsiveBreakpoint";
 import "@/styles/command.css";
 import "./submittalWorkspace.css";
@@ -158,20 +158,20 @@ export default function SubmittalRegisterPanel({
       {!embedded && (
         <>
           {/* ── Header ─────────────────────────────────────────────────── */}
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--cmd-text-muted)" }}>
-                {projectLabel} · Submittals
-              </div>
-              <h2 style={{ margin: "3px 0 0", fontSize: 22, fontWeight: 700, color: "var(--cmd-text)" }}>
-                Submittal Register
-                <span style={{ marginLeft: 10, fontSize: 14, fontWeight: 600, color: "var(--cmd-text-muted)" }}>
-                  {filtered.length}{countUnit}
-                </span>
-              </h2>
-              <div style={{ marginTop: 3, fontSize: 13, color: "var(--cmd-text-muted)" }}>{subtitle}</div>
-            </div>
-          </div>
+          <PageHeader
+            eyebrow={`${projectLabel} / Detailing`}
+            title="Submittal Register"
+            subtitle={subtitle}
+            meta={`${filtered.length}${countUnit} visible · Approval source of truth`}
+            actions={(
+              canCreate ? (
+                <>
+                  <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onBulkAdd}>Bulk Add</button>
+                  <button type="button" className="cmd-btn cmd-btn--primary" onClick={onNewSubmittal}>New Submittal</button>
+                </>
+              ) : null
+            )}
+          />
 
           {/* ── KPI strip (click-to-filter, kit cmd-kpi cells) ─────────── */}
           <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${compact ? 100 : 150}px, 1fr))`, gap: compact ? 8 : 12 }}>

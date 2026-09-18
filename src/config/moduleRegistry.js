@@ -100,99 +100,113 @@ export const ALL_MODULES = [
   { icon: "📝", name: "Notes", group: "Tools", page: "Notes" },
 ];
 
-export const NAV_GROUPS = hideNativePages([
+const OPERATIONAL_GROUPS = [
   {
-    label: "OVERVIEW",
+    label: "COMMAND",
+    collapsible: false,
     items: [
-      { label: "Dashboard",          icon: "◈", page: "Dashboard" },
-      { label: "Command Center",     icon: "⌘", page: "CommandCenter" },
-      { label: "Portfolio Overview", icon: "✦", page: "PortfolioHub" },
-      { label: "Alerts",             icon: "🔔", page: "AlertsCenter", badgeKey: "unread" },
+      { label: "Dashboard", icon: "◈", page: "Dashboard" },
+      { label: "Command Center", icon: "⌘", page: "CommandCenter" },
+      { label: "Alerts", icon: "🔔", page: "AlertsCenter", badgeKey: "unread" },
+      { label: "Action Items", icon: "☑", page: "ActionItems" },
     ],
   },
   {
     label: "PROJECTS",
+    collapsible: true,
     items: [
       { label: "Projects", icon: "⊟", page: "ProjectsHub" },
+      { label: "Scope & Exclusions", icon: "≡", page: "ScopeExclusions" },
+      { label: "Contacts", icon: "☰", page: "Contacts" },
+      { label: "Project Members", icon: "👥", page: "ProjectMembers" },
     ],
   },
   {
     label: "DETAILING",
+    collapsible: true,
     items: [
-      { label: "Detailing Control Center", icon: "▦", page: "DrawingSubmittalHub" },
-      { label: "Document Repository",      icon: "📁", page: "Documents" },
-    ],
-  },
-  {
-    label: "PROJECT MANAGEMENT",
-    items: [
-      { label: "Schedule",     icon: "▥", page: "ScheduleHub" },
-      { label: "RFIs",         icon: "⚑", page: "RFIs", badgeKey: "rfi" },
-      { label: "Action Items", icon: "☑", page: "ActionItems" },
-      { label: "Email Inbox",  icon: "✉", page: "EmailInbox" },
-      { label: "Production Notes", icon: "📝", page: "ProductionNotes" },
+      { label: "Drawing Control", icon: "▦", page: "DrawingSubmittalHub" },
+      { label: "RFIs", icon: "⚑", page: "RFIs", badgeKey: "rfi" },
+      { label: "Documents", icon: "📁", page: "Documents" },
     ],
   },
   {
     label: "PRODUCTION",
+    collapsible: true,
     items: [
-      { label: "Work Packages",     icon: "▦", page: "WorkPackages" },
-      { label: "Piece Register",    icon: "▦", page: "PieceRegister" },
-      { label: "Fab Release",       icon: "🏭", page: "FabRelease" },
+      { label: "Work Packages", icon: "▦", page: "WorkPackages" },
+      { label: "Piece Register", icon: "▦", page: "PieceRegister" },
+      { label: "Fab Release", icon: "🏭", page: "FabRelease" },
       { label: "Production Status", icon: "🛠", page: "ProductionStatus" },
-      { label: "Procurement",       icon: "📦", page: "Procurement" },
-      { label: "Budget Hours",      icon: "⏱", page: "BudgetHours" },
-      { label: "Risk",              icon: "⚠", page: "RiskHub" },
-      { label: "Resources",         icon: "👥", page: "ResourceHub" },
-      { label: "Deliveries",        icon: "📦", page: "Deliveries" },
+      { label: "Procurement", icon: "📦", page: "Procurement" },
+      { label: "Deliveries", icon: "🚚", page: "Deliveries" },
+      { label: "Schedule", icon: "▥", page: "ScheduleHub" },
+      { label: "Risk", icon: "⚠", page: "RiskHub" },
+      { label: "Resources", icon: "👥", page: "ResourceHub" },
     ],
   },
   {
     label: "FIELD",
+    collapsible: true,
     items: [
       { label: "Field Today", icon: "📲", page: "FieldToday" },
-      { label: "Field Hub",   icon: "🏗", page: "FieldHub" },
+      { label: "Field Hub", icon: "🏗", page: "FieldHub" },
+      { label: "Daily Logs", icon: "📋", page: "DailyLogs" },
+      { label: "Inspections", icon: "🔎", page: "Inspections" },
+      { label: "Safety", icon: "⚠", page: "Safety" },
+      { label: "Quality Control", icon: "🧪", page: "QualityControl" },
+      { label: "Punchlist", icon: "✓", page: "Punchlist" },
     ],
   },
   {
-    label: "COST",
+    label: "COMMERCIAL",
+    collapsible: true,
     items: [
-      { label: "Budget Control",     icon: "◎", page: "CostHub" },
-      { label: "Change Orders",      icon: "$", page: "ChangeOrders", badgeKey: "co" },
+      { label: "Budget Control", icon: "◎", page: "CostHub" },
+      { label: "Change Orders", icon: "$", page: "ChangeOrders", badgeKey: "co" },
       { label: "Schedule of Values", icon: "📊", page: "SOV" },
-      { label: "Pay Applications",   icon: "🧾", page: "PayApplications" },
+      { label: "Pay Applications", icon: "🧾", page: "PayApplications" },
       { label: "Backcharge Defense", icon: "⚖", page: "Backcharges" },
-      { label: "Expenses",           icon: "💰", page: "Expenses" },
+      { label: "Expenses", icon: "💰", page: "Expenses" },
     ],
   },
   {
-    label: "DOCUMENTS & REPORTS",
+    label: "REPORTS",
+    collapsible: true,
     items: [
-      { label: "Documents", icon: "📁", page: "Documents" },
-      { label: "Reports",   icon: "📋", page: "ReportsHub" },
+      { label: "Portfolio", icon: "✦", page: "PortfolioHub" },
+      { label: "Reports", icon: "📋", page: "ReportsHub" },
+      { label: "Job Status Report", icon: "📄", page: "JobStatusReport" },
+      { label: "Activity", icon: "📊", page: "Activity" },
     ],
   },
   {
     label: "ADMINISTRATION",
+    collapsible: true,
+    utility: true,
     items: [
-      { label: "Team",     icon: "👥", page: "OrgMembers" },
-      { label: "Billing",  icon: "💳", page: "Billing" },
-      { label: "Vendors",  icon: "🏢", page: "Vendors" },
+      { label: "Team", icon: "👥", page: "OrgMembers" },
+      { label: "Billing", icon: "💳", page: "Billing" },
+      { label: "Vendors", icon: "🏢", page: "Vendors" },
       { label: "Settings", icon: "⚙", page: "Settings" },
     ],
   },
   {
     label: "TOOLS",
+    collapsible: true,
+    utility: true,
     items: [
       { label: "Calculators", icon: "🧮", page: "CalculatorsHub" },
       { label: "Notes", icon: "📝", page: "Notes" },
     ],
   },
-]);
+];
 
-const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DETAILING", "PROJECT MANAGEMENT"];
-const COLUMN_2_GROUPS = ["PRODUCTION", "FIELD", "DOCUMENTS & REPORTS"];
-const COLUMN_3_GROUPS = ["COST", "ADMINISTRATION", "TOOLS"];
+export const NAV_GROUPS = hideNativePages(OPERATIONAL_GROUPS.map((group) => ({ ...group, items: group.items.map((item) => ({ ...item })) })));
+
+const COLUMN_1_GROUPS = ["COMMAND", "PROJECTS", "DETAILING"];
+const COLUMN_2_GROUPS = ["PRODUCTION", "FIELD", "REPORTS"];
+const COLUMN_3_GROUPS = ["COMMERCIAL", "ADMINISTRATION", "TOOLS"];
 
 export function getDropdownColumn(groupLabel) {
   if (COLUMN_1_GROUPS.includes(groupLabel)) return 0;
@@ -200,104 +214,7 @@ export function getDropdownColumn(groupLabel) {
   return 2;
 }
 
-export const SIDEBAR_GROUPS = hideNativePages([
-  {
-    label: "OVERVIEW",
-    collapsible: false,
-    items: [
-      { label: "Dashboard",          icon: "◈", page: "Dashboard" },
-      { label: "Command Center",    icon: "⌘", page: "CommandCenter" },
-      { label: "Portfolio Overview",  icon: "✦", page: "PortfolioHub" },
-    ],
-  },
-  {
-    label: "PROJECTS",
-    collapsible: true,
-    items: [
-      { label: "Projects",           icon: "⊟", page: "ProjectsHub" },
-    ],
-  },
-  {
-    label: "DETAILING",
-    collapsible: true,
-    items: [
-      { label: "Detailing Control Center", icon: "▦", page: "DrawingSubmittalHub" },
-    ],
-  },
-  {
-    label: "PROJECT MANAGEMENT",
-    collapsible: true,
-    items: [
-      { label: "Schedule",       icon: "▥", page: "ScheduleHub" },
-      { label: "RFIs",           icon: "⚑", page: "RFIs", badgeKey: "rfi" },
-      { label: "Action Items",   icon: "☑", page: "ActionItems" },
-      { label: "Email Inbox",    icon: "✉", page: "EmailInbox" },
-      { label: "Production Notes", icon: "📝", page: "ProductionNotes" },
-    ],
-  },
-  {
-    label: "PRODUCTION",
-    collapsible: true,
-    items: [
-      { label: "Work Packages",        icon: "▦", page: "WorkPackages" },
-      { label: "Piece Register",       icon: "▦", page: "PieceRegister" },
-      { label: "Fab Release",          icon: "🏭", page: "FabRelease" },
-      { label: "Production Status",    icon: "🛠", page: "ProductionStatus" },
-      { label: "Procurement",          icon: "📦", page: "Procurement" },
-      { label: "Budget Hours",         icon: "⏱",  page: "BudgetHours" },
-      { label: "Risk",                 icon: "⚠", page: "RiskHub" },
-      { label: "Resources",            icon: "👥", page: "ResourceHub" },
-      { label: "Deliveries",           icon: "📦", page: "Deliveries" },
-    ],
-  },
-  {
-    label: "FIELD",
-    collapsible: true,
-    items: [
-      { label: "Field Today",      icon: "📲", page: "FieldToday" },
-      { label: "Field Hub",        icon: "🏗", page: "FieldHub" },
-    ],
-  },
-  {
-    label: "COST",
-    collapsible: true,
-    items: [
-      { label: "Budget Control",       icon: "◎", page: "CostHub" },
-      { label: "Change Orders",        icon: "$",  page: "ChangeOrders", badgeKey: "co" },
-      { label: "Schedule of Values",   icon: "📊", page: "SOV" },
-      { label: "Pay Applications",     icon: "🧾", page: "PayApplications" },
-      { label: "Backcharge Defense",   icon: "⚖", page: "Backcharges" },
-      { label: "Contract Management",  icon: "📑", page: "ContractManagement" },
-      { label: "Expenses",             icon: "💰", page: "Expenses" },
-    ],
-  },
-  {
-    label: "DOCUMENTS & REPORTS",
-    collapsible: true,
-    items: [
-      { label: "Documents",     icon: "📁", page: "Documents" },
-      { label: "Reports",       icon: "📋", page: "ReportsHub" },
-    ],
-  },
-  {
-    label: "ADMINISTRATION",
-    collapsible: true,
-    items: [
-      { label: "Team",             icon: "👥", page: "OrgMembers" },
-      { label: "Billing",          icon: "💳", page: "Billing" },
-      { label: "Vendors",          icon: "🏢", page: "Vendors" },
-      { label: "Settings",         icon: "⚙", page: "Settings" },
-    ],
-  },
-  {
-    label: "TOOLS",
-    collapsible: true,
-    items: [
-      { label: "Calculators", icon: "🧮", page: "CalculatorsHub" },
-      { label: "Notes",       icon: "📝", page: "Notes" },
-    ],
-  },
-]);
+export const SIDEBAR_GROUPS = hideNativePages(OPERATIONAL_GROUPS);
 
 export const PAGE_LABELS = (() => {
   const labels = {};

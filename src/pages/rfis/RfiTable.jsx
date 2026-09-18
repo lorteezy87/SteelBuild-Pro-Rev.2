@@ -81,11 +81,14 @@ export default function RfiTable({ rows, totalCount, selectedIds = new Set(), on
           />
         </div>
         <div>RFI</div>
-        <div>Question / Reference</div>
+        <div>Subject / Reference</div>
+        <div>Sent</div>
+        <div>Days Open</div>
+        <div>Required By</div>
         <div>Ball in Court</div>
-        <div>Status</div>
-        <div>Due / Age</div>
         <div>Impact</div>
+        <div>Linked WP</div>
+        <div>Status</div>
         <div></div>
       </div>
       {rows.length > VIRTUALIZE_THRESHOLD ? (

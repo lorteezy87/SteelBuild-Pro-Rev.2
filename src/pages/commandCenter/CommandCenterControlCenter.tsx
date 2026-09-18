@@ -1,124 +1,101 @@
-/**
- * CommandCenterControlCenter — light Command UI redesign of the Command Center.
- *
- * Kit archetype: PageHero + KpiStrip (6 cells) + 3 DecisionPanels + FilterBar + DataTable.
- * Canonical Command Center presentation. The page-owned CommandCenter.jsx
- * path is untouched.
- *
- * Data wiring lives in CommandCenter.jsx (the existing queries); this component is
- * pure-presentational, receiving pre-built `summary` + raw arrays + handlers.
- */
 import { useMemo } from "react";
-import {
-  LayoutDashboard,
-  AlertTriangle,
-  Clock,
-  CheckSquare,
-  Truck,
-  DollarSign,
-  CalendarCheck,
-} from "lucide-react";
 import "@/styles/command.css";
+import "@/styles/command-center-system.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
-  Pill,
-  statusTone,
-  priorityTone,
-  FilterBar,
   DataTable,
+  FilterBar,
+  OperationalSummary,
+  PageHeader,
+  Pill,
+  priorityTone,
+  statusTone,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef, PillTone } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { Column, OperationalMetric } from "@/components/command";
 import { buildCommandCenterSummary } from "./commandCenterControlCenter.derive";
 import type {
-  CommandCenterSources,
   ActionItem,
-  PanelRow,
+  CommandCenterSources,
   PanelTone,
 } from "./commandCenterControlCenter.derive";
-
-// ── Types ─────────────────────────────────────────────────────────────────
+import { deriveCommandHorizons } from "./commandCenterHorizons";
+import type { CommandHorizon } from "./commandCenterHorizons";
 
 export interface CommandCenterControlCenterProps {
-  /** All raw entity arrays — identical to what CommandCenter.jsx already queries. */
   sources: CommandCenterSources;
-  /** For the hero section. */
   projectName?: string;
   projectCount?: number;
-  /** Global search value + handler (wires into FilterBar). */
   search: string;
   onSearch: (v: string) => void;
-  /** Type-filter chips ("All" | "RFI" | "SUB" | "CO" | "DEL"). */
   typeFilter: string;
   onTypeChange: (v: string) => void;
-  /** Open the page-owned item detail drawer. */
   onOpenItem: (item: ActionItem) => void;
-  /** "Forward Look" button handler — reuses existing ForwardLookDrawer. */
   onForwardLook: () => void;
 }
 
-// ── Type filter chip labels ───────────────────────────────────────────────
-
 const TYPE_CHIPS = ["All", "RFI", "SUB", "CO", "DEL", "WP"];
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function urgencyTone(u: ActionItem["urgency"]): PanelTone {
-  switch (u) {
-    case "overdue": return "danger";
-    case "blocking": return "danger";
-    case "due-soon": return "warn";
-    case "awaiting": return "neutral";
-    default: return "neutral";
+function urgencyTone(urgency: ActionItem["urgency"]): PanelTone {
+  switch (urgency) {
+    case "overdue":
+    case "blocking":
+      return "danger";
+    case "due-soon":
+      return "warn";
+    default:
+      return "neutral";
   }
 }
 
-function panelToneToPillTone(t: PanelTone): PillTone {
-  switch (t) {
-    case "danger": return "danger";
-    case "warn": return "warn";
-    case "good": return "good";
-    default: return "neutral";
-  }
+function horizonTone(horizon: CommandHorizon): PanelTone {
+  if (horizon.items.some((item) => item.urgency === "overdue" || item.urgency === "blocking")) return "danger";
+  if (horizon.items.some((item) => item.urgency === "due-soon")) return "warn";
+  return horizon.items.length > 0 ? "neutral" : "good";
 }
 
-function itemTypeLabel(t: string): string {
-  return t; // Already short (RFI, SUB, CO, DEL, WP, TASK)
+function formatDue(item: ActionItem): string {
+  if (!item.dueDate) return item.urgency === "blocking" ? "Blocking" : "No date";
+  return item.dueDate;
 }
 
-/** Scroll the action-items table into view when a panel's "View all" fires. */
-function scrollToTable() {
-  document.querySelector(".cc-cmd .cmd-table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-// ── Panel row ─────────────────────────────────────────────────────────────
-
-function PanelItem({ row }: { row: PanelRow }) {
+function HorizonPanel({ horizon, onOpenItem }: { horizon: CommandHorizon; onOpenItem: (item: ActionItem) => void }) {
+  const tone = horizonTone(horizon);
   return (
-    <div className="cmd-row">
-      <div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span
-            className="cmd-row__num"
-            style={{ fontSize: 10, letterSpacing: "0.08em" }}
-          >
-            {row.itemType}
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>{row.label}</span>
+    <section className={`sbp-horizon is-${tone}`} aria-labelledby={`sbp-horizon-${horizon.key}`}>
+      <header className="sbp-horizon__head">
+        <div>
+          <div className="sbp-horizon__eyebrow">Project Control Horizon</div>
+          <h2 id={`sbp-horizon-${horizon.key}`}>{horizon.label}</h2>
         </div>
-        <div className="cmd-row__meta">{row.sub}</div>
+        <span className="sbp-horizon__count">{horizon.items.length}</span>
+      </header>
+      <div className="sbp-horizon__body">
+        {horizon.items.length === 0 ? (
+          <div className="sbp-horizon__empty">No dated action items in this window.</div>
+        ) : (
+          horizon.items.slice(0, 7).map((item) => (
+            <button
+              key={`${item.itemType}:${item.id}`}
+              type="button"
+              className="sbp-horizon__item"
+              onClick={() => onOpenItem(item)}
+            >
+              <div className="sbp-horizon__item-main">
+                <span className="sbp-horizon__type">{item.itemType}</span>
+                <span className="sbp-horizon__title">{item.title}</span>
+              </div>
+              <div className="sbp-horizon__item-meta">
+                <span>{formatDue(item)}</span>
+                {item.owner ? <span>{item.owner}</span> : null}
+                {item.status ? <span>{item.status}</span> : null}
+              </div>
+            </button>
+          ))
+        )}
       </div>
-      <Pill tone={panelToneToPillTone(row.tone)}>
-        {row.badge}
-      </Pill>
-    </div>
+    </section>
   );
 }
-
-// ── Main component ────────────────────────────────────────────────────────
 
 export default function CommandCenterControlCenter(props: CommandCenterControlCenterProps) {
   const {
@@ -136,189 +113,131 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
   useCommandSkin();
 
   const summary = useMemo(() => buildCommandCenterSummary(sources), [sources]);
+  const horizons = useMemo(() => deriveCommandHorizons(summary.actionItems), [summary.actionItems]);
 
-  // ── Filter action items ─────────────────────────────────────────────────
   const filteredItems = useMemo(() => {
     let items = summary.actionItems;
-    if (typeFilter !== "All") {
-      items = items.filter((i) => i.itemType === typeFilter);
-    }
+    if (typeFilter !== "All") items = items.filter((item) => item.itemType === typeFilter);
     if (search) {
       const q = search.toLowerCase();
       items = items.filter(
-        (i) =>
-          i.title.toLowerCase().includes(q) ||
-          (i.status || "").toLowerCase().includes(q) ||
-          (i.owner || "").toLowerCase().includes(q)
+        (item) =>
+          item.title.toLowerCase().includes(q) ||
+          (item.status || "").toLowerCase().includes(q) ||
+          (item.owner || "").toLowerCase().includes(q),
       );
     }
     return items;
   }, [summary.actionItems, typeFilter, search]);
 
-  // ── Hero chips ──────────────────────────────────────────────────────────
-  const chips = [
-    { label: `${sources.projects.length || projectCount} Project${(sources.projects.length || projectCount) !== 1 ? "s" : ""}` },
-    { label: `${summary.kpis.openActionItems} Open`, tone: summary.kpis.openActionItems > 0 ? "warn" as const : "good" as const },
-    { label: `${summary.kpis.overdueRfis} Overdue RFIs` },
-  ];
-
-  // ── KPI strip ────────────────────────────────────────────────────────────
-  const kpiCells: KpiCellDef[] = [
+  const projectTotal = sources.projects.length || projectCount;
+  const metrics: OperationalMetric[] = [
     {
       label: "Open Action Items",
       value: summary.kpis.openActionItems,
       sublabel: "RFIs + submittals + COs",
       tone: summary.tones.openActionItems,
-      Icon: CheckSquare,
     },
     {
       label: "Approvals Pending",
       value: summary.kpis.approvalsPending,
-      sublabel: "OFA / IFA submittals",
+      sublabel: "external review",
       tone: summary.tones.approvalsPending,
-      Icon: Clock,
     },
     {
       label: "Overdue RFIs",
       value: summary.kpis.overdueRfis,
       sublabel: "past response date",
       tone: summary.tones.overdueRfis,
-      Icon: AlertTriangle,
     },
     {
       label: "Field Issues",
       value: summary.kpis.fieldIssues,
-      sublabel: "WPs on hold + delays",
+      sublabel: "holds + delayed loads",
       tone: summary.tones.fieldIssues,
-      Icon: Truck,
     },
     {
       label: "COs Pending",
       value: summary.kpis.budgetVariance ?? 0,
-      sublabel: "awaiting approval",
+      sublabel: "awaiting disposition",
       tone: summary.tones.budgetVariance,
-      Icon: DollarSign,
     },
     {
       label: "Schedule Health",
       value: summary.kpis.scheduleHealth,
-      sublabel: "based on active tasks",
+      sublabel: "active task evidence",
       tone: summary.tones.scheduleHealth,
-      Icon: CalendarCheck,
     },
   ];
 
-  // ── DataTable columns ────────────────────────────────────────────────────
   const columns: Column<ActionItem>[] = [
     {
       key: "type",
       header: "Type",
-      render: (r) => (
-        <span className="cmd-row__num" style={{ fontSize: 10 }}>
-          {itemTypeLabel(r.itemType)}
-        </span>
-      ),
+      render: (row) => <span className="cmd-row__num" style={{ fontSize: 10 }}>{row.itemType}</span>,
     },
     {
       key: "title",
-      header: "Title",
-      render: (r) => (
-        <span style={{ fontWeight: 500 }}>{r.title}</span>
-      ),
+      header: "Issue / Action",
+      render: (row) => <span style={{ fontWeight: 650 }}>{row.title}</span>,
     },
     {
       key: "status",
       header: "Status",
-      render: (r) => (
-        r.status ? <Pill tone={statusTone(r.status)}>{r.status}</Pill> : <span className="cmd-row__meta">—</span>
-      ),
+      render: (row) => row.status ? <Pill tone={statusTone(row.status)}>{row.status}</Pill> : <span className="cmd-row__meta">—</span>,
     },
     {
       key: "priority",
       header: "Priority",
-      render: (r) => (
-        r.priority ? <Pill tone={priorityTone(r.priority)}>{r.priority}</Pill> : <span className="cmd-row__meta">—</span>
-      ),
+      render: (row) => row.priority ? <Pill tone={priorityTone(row.priority)}>{row.priority}</Pill> : <span className="cmd-row__meta">—</span>,
     },
     {
       key: "urgency",
-      header: "Urgency",
-      render: (r) => <Pill tone={urgencyTone(r.urgency)}>{r.urgency}</Pill>,
+      header: "Risk",
+      render: (row) => <Pill tone={urgencyTone(row.urgency)}>{row.urgency}</Pill>,
     },
     {
       key: "owner",
       header: "Owner / BIC",
-      render: (r) => <span>{r.owner || "—"}</span>,
+      render: (row) => <span>{row.owner || "—"}</span>,
     },
     {
       key: "due",
-      header: "Due Date",
-      render: (r) => (
-        r.dueDate
-          ? <span className={r.urgency === "overdue" ? "cmd-overdue" : ""}>{r.dueDate}</span>
-          : <span className="cmd-row__meta">—</span>
-      ),
+      header: "Required By",
+      render: (row) => row.dueDate
+        ? <span className={row.urgency === "overdue" ? "cmd-overdue" : ""}>{row.dueDate}</span>
+        : <span className="cmd-row__meta">—</span>,
     },
     {
       key: "linkedTo",
       header: "Linked To",
-      render: (r) => <span className="cmd-row__meta">{r.linkedTo || "—"}</span>,
+      render: (row) => <span className="cmd-row__meta">{row.linkedTo || "—"}</span>,
     },
   ];
 
   return (
-    <div className="cc-cmd">
-      <PageHero
-        Icon={LayoutDashboard}
+    <div className="cc-cmd sbp-command-page sbp-command-surface">
+      <PageHeader
+        eyebrow={projectName ? `${projectName} / Command` : "Portfolio / Command"}
         title="Command Center"
-        subtitle="Daily command for aligned decisions, issue resolution, and proactive project control."
-        projectName={projectName}
-        chips={chips}
-        photoSrc={photoFor("CommandCenter") ?? undefined}
-        stats={[]}
+        subtitle="Work the project by urgency: what needs action now, what must be ready in 48 hours, and what is coming in the next 10 days."
+        meta={`${projectTotal} project${projectTotal === 1 ? "" : "s"} in scope · ${summary.actionItems.length} actionable items`}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={metrics} ariaLabel="Command Center operational summary" />
 
-      <div className="cmd-panels">
-        <DecisionPanel
-          title="Today's Priorities"
-          onViewAll={() => { onTypeChange("All"); scrollToTable(); }}
-        >
-          {summary.panels.todayPriorities.length === 0 ? (
-            <div className="cmd-row__meta">Nothing due today — all clear.</div>
-          ) : (
-            summary.panels.todayPriorities.map((row) => (
-              <PanelItem key={row.id} row={row} />
-            ))
-          )}
-        </DecisionPanel>
+      <div className="sbp-horizons" aria-label="Project control horizons">
+        {horizons.map((horizon) => (
+          <HorizonPanel key={horizon.key} horizon={horizon} onOpenItem={onOpenItem} />
+        ))}
+      </div>
 
-        <DecisionPanel
-          title="Waiting On"
-          onViewAll={scrollToTable}
-        >
-          {summary.panels.waitingOn.length === 0 ? (
-            <div className="cmd-row__meta">Nothing pending external response.</div>
-          ) : (
-            summary.panels.waitingOn.map((row) => (
-              <PanelItem key={row.id} row={row} />
-            ))
-          )}
-        </DecisionPanel>
-
-        <DecisionPanel
-          title="Risk Watchlist"
-          onViewAll={scrollToTable}
-        >
-          {summary.panels.riskWatchlist.length === 0 ? (
-            <div className="cmd-row__meta">No flagged risks.</div>
-          ) : (
-            summary.panels.riskWatchlist.map((row) => (
-              <PanelItem key={row.id} row={row} />
-            ))
-          )}
-        </DecisionPanel>
+      <div className="sbp-command-register-head">
+        <div>
+          <div className="sbp-command-register-head__eyebrow">Complete Action Register</div>
+          <h2>All Action Items</h2>
+        </div>
+        <div className="sbp-command-register-head__count">{filteredItems.length} shown</div>
       </div>
 
       <FilterBar
@@ -331,14 +250,14 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
         onPrimary={onForwardLook}
         filters={
           <>
-            {TYPE_CHIPS.map((t) => (
+            {TYPE_CHIPS.map((type) => (
               <button
-                key={t}
+                key={type}
                 type="button"
-                className={`cmd-chip-btn${typeFilter === t ? " is-active" : ""}`}
-                onClick={() => onTypeChange(t)}
+                className={`cmd-chip-btn${typeFilter === type ? " is-active" : ""}`}
+                onClick={() => onTypeChange(type)}
               >
-                {t}
+                {type}
               </button>
             ))}
           </>

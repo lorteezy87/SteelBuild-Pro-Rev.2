@@ -65,6 +65,9 @@ describe("RFI register interactions", () => {
       />,
     );
 
+    expect(screen.getByLabelText("RFI lifecycle")).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Operational details" })).toBeInTheDocument();
+
     fireEvent.click(screen.getByTitle("Close"));
 
     expect(onClose).toHaveBeenCalledTimes(1);
