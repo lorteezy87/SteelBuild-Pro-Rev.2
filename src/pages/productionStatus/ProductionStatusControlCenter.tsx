@@ -156,7 +156,7 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
   const today = localTodayISO();
 
   const attentionItems: AttentionItem[] = [
-    ...s.pastDueQueue.map((piece) => ({
+    ...s.pastDueQueue.map((piece): AttentionItem => ({
       id: `late-${piece.id}`,
       issue: `${piece.piece_mark} · ${piece.status || "Stage unknown"}`,
       deadline: piece.ship_date,
@@ -169,7 +169,7 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
       nextAction: "Confirm shop status and recover ship date",
       tone: "danger" as const,
     })),
-    ...s.missingShipDateQueue.map((piece) => ({
+    ...s.missingShipDateQueue.map((piece): AttentionItem => ({
       id: `undated-${piece.id}`,
       issue: `${piece.piece_mark} · ${piece.status || "Stage unknown"}`,
       deadline: null,
