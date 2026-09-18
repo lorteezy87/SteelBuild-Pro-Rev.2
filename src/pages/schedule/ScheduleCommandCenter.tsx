@@ -10,19 +10,18 @@
  * schedule data logic. All data/state/mutations stay in Schedule.tsx.
  */
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
-import { CalendarDays, CalendarRange, Download, FileSpreadsheet, ListPlus, Plus, Sparkles, Upload } from "lucide-react";
+import { CalendarDays, Download, FileSpreadsheet, ListPlus, Plus, Sparkles, Upload } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
+  AttentionQueue,
+  OperationalSummary,
+  PageHeader,
   useCommandSkin,
   Pill,
 } from "@/components/command";
 import type { TaskRecord, ScheduleSummary } from "./scheduleCommandCenter.derive";
+import type { AttentionItem } from "@/components/command";
 import {
-  buildScheduleHeroChips,
-  buildScheduleHeroStats,
   buildScheduleKpiCells,
   buildScheduleRiskReasons,
   formatScheduleDate,
@@ -112,9 +111,33 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
   const computedSummary = useScheduleCommandSummary(tasks, summaryProp);
   const s = computedSummary;
 
-  const chips = buildScheduleHeroChips(s);
-  const heroStats = buildScheduleHeroStats(s, pctComplete, projectHealth);
-  const kpiCells = buildScheduleKpiCells(s);
+  const operationalMetrics = buildScheduleKpiCells(s).map((cell) => ({
+    label: cell.label,
+    value: cell.value,
+    sublabel: cell.sublabel,
+    tone: cell.tone,
+  }));
+
+  const attentionItems: AttentionItem[] = s.riskQueue.map((task) => {
+    const reasons = buildScheduleRiskReasons(task);
+    const owner = String(task.resource_names || task.assigned_to || "").split(",")[0]?.trim() || null;
+    return {
+      id: String(task.id || task.task_name || "schedule-risk"),
+      issue: task.task_name || "Untitled schedule task",
+      deadline: task.end_date || task.start_date || null,
+      risk: reasons.length ? reasons.join(" · ") : "Schedule risk",
+      owner,
+      nextAction: reasons.includes("Blocked")
+        ? "Clear blocker"
+        : reasons.includes("Unassigned")
+          ? "Assign owner"
+          : reasons.includes("Overdue")
+            ? "Recover schedule"
+            : "Review execution plan",
+      tone: reasons.includes("Overdue") || reasons.includes("Blocked") ? "danger" : "warn",
+      onOpen: () => onOpenTask(task),
+    };
+  });
 
   // ── Scroll helper ─────────────────────────────────────────────────────────
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -124,113 +147,93 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="sched-cc">
-      <PageHero
-        Icon={CalendarRange}
-        title="Schedule Command"
-        subtitle="Project lifecycle — Pre-Construction through Closeout"
-        projectName={projectName}
-        chips={chips}
-        stats={heroStats}
+    <div className="sched-cc sbp-command-page">
+      <PageHeader
+        eyebrow={`${projectName} / Schedule`}
+        title="Schedule Control"
+        subtitle="Near-term execution, milestones, constraints, ownership, and project lifecycle."
+        meta={[
+          projectHealth ? `Project health: ${projectHealth}` : "Project health: unknown",
+          `${pctComplete !== undefined ? pctComplete : s.pctComplete}% complete`,
+          `${s.activities} activities`,
+          `${s.inLookahead} in 14-day lookahead`,
+        ].join(" · ")}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Schedule operational summary" />
 
-      <div className="cmd-panels">
-        {/* Panel 1 — 14-Day Look-Ahead */}
-        <DecisionPanel title="14-Day Look-Ahead" onViewAll={scrollToBody}>
-          {s.lookaheadQueue.length === 0 ? (
-            <div className="cmd-row__meta">No tasks scheduled in the next 14 days.</div>
-          ) : (
-            s.lookaheadQueue.map((t) => (
+      <AttentionQueue
+        title="Schedule Attention"
+        items={attentionItems}
+        emptyMessage="No significant schedule risks detected."
+      />
+
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>14-Day Lookahead</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={scrollToBody}>View schedule</button>
+          </div>
+          <div>
+            {s.lookaheadQueue.length === 0 ? (
+              <div className="sbp-attention__empty">No tasks scheduled in the next 14 days.</div>
+            ) : s.lookaheadQueue.map((task) => (
               <div
                 className="cmd-row is-clickable"
                 role="button"
                 tabIndex={0}
                 onKeyDown={activateDecisionRow}
-                key={t.id ?? t.task_name}
-                onClick={() => onOpenTask(t)}
+                key={task.id ?? task.task_name}
+                onClick={() => onOpenTask(task)}
               >
                 <div>
-                  <div className="cmd-row__num">{t.task_name || "Untitled task"}</div>
+                  <div className="cmd-row__num">{task.task_name || "Untitled task"}</div>
                   <div className="cmd-row__meta">
-                    {t.phase || "—"}
-                    {" · "}
-                    {formatScheduleDate(t.start_date)} – {formatScheduleDate(t.end_date)}
+                    {task.phase || "—"} · {formatScheduleDate(task.start_date)} – {formatScheduleDate(task.end_date)}
                   </div>
                 </div>
-                {(t.resource_names || t.assigned_to) ? (
+                {(task.resource_names || task.assigned_to) ? (
                   <span className="cmd-row__meta" style={{ whiteSpace: "nowrap" }}>
-                    {String(t.resource_names || t.assigned_to || "").split(",")[0].trim()}
+                    {String(task.resource_names || task.assigned_to || "").split(",")[0].trim()}
                   </span>
                 ) : (
                   <Pill tone="warn">Unassigned</Pill>
                 )}
               </div>
-            ))
-          )}
-        </DecisionPanel>
+            ))}
+          </div>
+        </section>
 
-        {/* Panel 2 — Milestone Tracker */}
-        <DecisionPanel title="Milestone Tracker" onViewAll={scrollToBody}>
-          {s.milestoneQueue.length === 0 ? (
-            <div className="cmd-row__meta">No milestones found.</div>
-          ) : (
-            s.milestoneQueue.map((t) => (
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head">
+            <h2>Milestones</h2>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={scrollToBody}>View schedule</button>
+          </div>
+          <div>
+            {s.milestoneQueue.length === 0 ? (
+              <div className="sbp-attention__empty">No milestones found.</div>
+            ) : s.milestoneQueue.map((task) => (
               <div
                 className="cmd-row is-clickable"
                 role="button"
                 tabIndex={0}
                 onKeyDown={activateDecisionRow}
-                key={t.id ?? t.task_name}
-                onClick={() => onOpenTask(t)}
+                key={task.id ?? task.task_name}
+                onClick={() => onOpenTask(task)}
               >
                 <div>
-                  <div className="cmd-row__num">{t.task_name || "Untitled milestone"}</div>
+                  <div className="cmd-row__num">{task.task_name || "Untitled milestone"}</div>
                   <div className="cmd-row__meta">
-                    {t.wbs_code ? `${t.wbs_code} · ` : ""}
-                    {formatScheduleDate(t.start_date)}
+                    {task.wbs_code ? `${task.wbs_code} · ` : ""}{formatScheduleDate(task.start_date)}
                   </div>
                 </div>
-                <Pill tone={t.status === "Complete" ? "good" : "neutral"}>
-                  {t.status || "Not Started"}
+                <Pill tone={task.status === "Complete" ? "good" : "neutral"}>
+                  {task.status || "Not Started"}
                 </Pill>
               </div>
-            ))
-          )}
-        </DecisionPanel>
-
-        {/* Panel 3 — Schedule Risk */}
-        <DecisionPanel title="Schedule Risk" onViewAll={scrollToBody}>
-          {s.riskQueue.length === 0 ? (
-            <div className="cmd-row__meta">No significant schedule risks detected.</div>
-          ) : (
-            s.riskQueue.map((t) => {
-              const reasons = buildScheduleRiskReasons(t);
-
-              return (
-                <div
-                  className="cmd-row is-clickable"
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={activateDecisionRow}
-                  key={t.id ?? t.task_name}
-                  onClick={() => onOpenTask(t)}
-                >
-                  <div>
-                    <div className="cmd-row__num">{t.task_name || "Untitled task"}</div>
-                    <div className="cmd-row__meta">
-                      {reasons.length ? reasons.join(" · ") : "Flagged"}
-                    </div>
-                  </div>
-                  <Pill tone={reasons.includes("Overdue") ? "danger" : "warn"}>
-                    {reasons[0] || "Risk"}
-                  </Pill>
-                </div>
-              );
-            })
-          )}
-        </DecisionPanel>
+            ))}
+          </div>
+        </section>
       </div>
 
       <div className="sched-cc__actionbar" role="toolbar" aria-label="Schedule actions">
