@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { entities } from "@/api/supabaseClient";
+import { SORTABLE_FIELDS } from "@/components/drawings/drawingsConfig";
 
 // Loads every drawing for the current project, applies an optional
 // case-insensitive search filter (matches sheet_number OR title), and
@@ -11,8 +12,9 @@ import { entities } from "@/api/supabaseClient";
 // useQuery + filter logic that previously lived in the page.
 //
 // Returns:
-//   - drawings     — full unfiltered list for this project (used by callout
-//                    cross-sheet lookup, ContextPanel, and the filmstrip).
+//   - drawings     — full unfiltered list for this project, in natural sheet
+//                    order (used by callout cross-sheet lookup, ContextPanel,
+//                    and the filmstrip).
 //   - filtered     — search-filtered list (drives the sidebar + nav arrows).
 //   - activeDrawing
 //   - activeIndex  — index of the active drawing within `filtered`, or -1.
@@ -32,7 +34,22 @@ export function useDrawingsList({ projectId, activeId, search }) {
   // collisions per file_url and reassign duplicates to the nearest
   // unused page so both the filmstrip and the canvas render correctly
   // even when the stored data is bad.
-  const drawings = useMemo(() => fixDuplicatePdfPages(rawDrawings), [rawDrawings]);
+  // ── Natural sheet order ────────────────────────────────────────────
+  // entities.Drawing.filter() applies no ORDER BY, so rows arrive in
+  // whatever order Postgres returns them. The Drawings register sorts by
+  // sheet number before rendering; the viewer did not, so the sidebar
+  // listed sheets in database order and the Prev/Next arrows — which index
+  // straight into this list — did not walk the set in sheet order.
+  //
+  // Reuse the register's comparator rather than adding a second one, so the
+  // two views can never disagree about what "next sheet" means.
+  const sheetNumberCmp = SORTABLE_FIELDS.sheet_number.cmp;
+  const drawings = useMemo(() => {
+    const deduped = fixDuplicatePdfPages(rawDrawings);
+    // Array.prototype.sort is stable, so sheets sharing a number keep their
+    // incoming relative order instead of shuffling between renders.
+    return [...deduped].sort(sheetNumberCmp);
+  }, [rawDrawings, sheetNumberCmp]);
 
   const filtered = search.trim()
     ? drawings.filter((d) =>
