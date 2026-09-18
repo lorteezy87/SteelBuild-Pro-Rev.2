@@ -7,15 +7,12 @@
  *   PageHero → KpiStrip → DecisionPanels → FilterBar → DataTable
  */
 import { useMemo } from "react";
-import {
-  ClipboardList, DollarSign, TrendingDown, BarChart3, AlertTriangle, CheckCircle, Clock,
-} from "lucide-react";
+import { Download, Plus, Upload } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero, KpiStrip, DecisionPanel, Pill, FilterBar, DataTable, useCommandSkin,
+  AttentionQueue, OperationalSummary, PageHeader, Pill, FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { AttentionItem, Column } from "@/components/command";
 import { buildSovSummary, calcRow } from "./sovControlCenter.derive";
 import type { SovLineItem, SovSummary } from "./sovControlCenter.derive";
 // Note: shared formatCurrency/formatPercent helpers are available if needed.
@@ -183,65 +180,29 @@ export default function SovControlCenter(props: SovControlCenterProps) {
 
   const s: SovSummary = useMemo(() => buildSovSummary(lines, effectiveRetainage), [lines, effectiveRetainage]);
 
-  // Hero chips
-  const heroChips = [
-    { label: `${lines.length} Line Items` },
-    { label: `${s.pctComplete}% Complete`, tone: "good" as const },
-    { label: s.overBilledCount > 0 ? `${s.overBilledCount} Over-billed` : "No Over-billing" },
+  const operationalMetrics = [
+    { label: "Contract Value", value: fmtMoney(s.contractValue), sublabel: "scheduled", tone: "neutral" as const },
+    { label: "Billed to Date", value: fmtMoney(s.billedToDate), sublabel: `${s.pctComplete}% complete`, tone: "good" as const },
+    { label: "This Period", value: fmtMoney(s.thisPeriod), sublabel: "current billing", tone: s.thisPeriod > 0 ? "info" as const : "neutral" as const },
+    { label: "Balance to Finish", value: fmtMoney(s.balanceToFinish), sublabel: "remaining", tone: "neutral" as const },
+    { label: "Retainage Held", value: fmtMoney(s.retainageHeld), sublabel: "withheld", tone: s.retainageHeld > 0 ? "warn" as const : "neutral" as const },
+    { label: "Pending Approval", value: s.pendingApprovalCount, sublabel: "submitted items", tone: s.pendingApprovalCount > 0 ? "warn" as const : "good" as const },
+    { label: "Over-billed", value: s.overBilledCount, sublabel: "items", tone: s.overBilledCount > 0 ? "danger" as const : "good" as const },
   ];
 
-  // KPI strip
-  const kpiCells: KpiCellDef[] = [
-    {
-      label: "Contract Value",
-      value: fmtMoney(s.contractValue),
-      sublabel: "scheduled",
-      tone: "neutral",
-      Icon: DollarSign,
-    },
-    {
-      label: "Billed to Date",
-      value: fmtMoney(s.billedToDate),
-      sublabel: `${s.pctComplete}% complete`,
-      tone: "good",
-      Icon: BarChart3,
-    },
-    {
-      label: "This Period",
-      value: fmtMoney(s.thisPeriod),
-      sublabel: "current billing",
-      tone: s.thisPeriod > 0 ? "info" : "neutral",
-      Icon: ClipboardList,
-    },
-    {
-      label: "Balance to Finish",
-      value: fmtMoney(s.balanceToFinish),
-      sublabel: "remaining",
-      tone: s.balanceToFinish > 0 ? "neutral" : "good",
-      Icon: TrendingDown,
-    },
-    {
-      label: "Retainage Held",
-      value: fmtMoney(s.retainageHeld),
-      sublabel: "withheld",
-      tone: s.retainageHeld > 0 ? "warn" : "neutral",
-      Icon: Clock,
-    },
-    {
-      label: "Pending Approval",
-      value: s.pendingApprovalCount,
-      sublabel: "submitted items",
-      tone: s.pendingApprovalCount > 0 ? "warn" : "neutral",
-      Icon: AlertTriangle,
-    },
-    {
-      label: "Over-billed",
-      value: s.overBilledCount,
-      sublabel: "items",
-      tone: s.overBilledCount > 0 ? "danger" : "neutral",
-      Icon: AlertTriangle,
-    },
-  ];
+  const attentionItems: AttentionItem[] = s.attentionItems.map((item) => {
+    const row = calcRow(item, effectiveRetainage);
+    return {
+      id: String(item.id || item.line_item_number || item.sov_id),
+      issue: `${item.line_item_number ?? item.sov_id ?? "SOV"} · ${item.description || "No description"}`,
+      deadline: null,
+      risk: row.overBilled ? "Over-billed line item" : item.status === "Submitted" ? "Awaiting billing approval" : "Billing progress requires review",
+      owner: item.status === "Submitted" ? "External approval" : null,
+      nextAction: row.overBilled ? "Correct billing value" : item.status === "Submitted" ? "Advance approval" : "Review SOV line",
+      tone: row.overBilled ? "danger" : "warn",
+      onOpen: () => onOpenLine(item),
+    };
+  });
 
   const columns = useMemo(
     () => buildColumns(effectiveRetainage),
@@ -249,114 +210,54 @@ export default function SovControlCenter(props: SovControlCenterProps) {
   );
 
   return (
-    <div className="sov-cc">
-      <PageHero
-        Icon={ClipboardList}
-        title="Schedule of Values Control Center"
-        subtitle="Track billing progress, retainage, and pay application status for every line item."
-        projectName={projectName}
-        chips={heroChips}
-        photoSrc={photoFor("SOV") ?? undefined}
-        stats={[
-          { value: fmtMoney(s.contractValue), label: "Contract Value" },
-          { value: `${s.pctComplete}%`, label: "Billed to Date" },
-        ]}
+    <div className="sov-cc sbp-command-page">
+      <PageHeader
+        eyebrow={`${projectName} / Commercial`}
+        title="Schedule of Values"
+        subtitle="Billing authority, line-item progress, retainage, approval state, and balance to finish."
+        meta={`${lines.length} line items · ${s.pctComplete}% billed · ${fmtMoney(s.contractValue)} scheduled`}
+        actions={(
+          <>
+            {onImport ? <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImport}><Upload size={14} /> Import</button> : null}
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}><Download size={14} /> Export</button>
+            {canCreate && onCreate ? <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate}><Plus size={14} /> New Item</button> : null}
+          </>
+        )}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="SOV operational summary" />
 
-      <div className="cmd-panels">
-        {/* Panel 1 — Billing Progress by Pay Application */}
-        <DecisionPanel
-          title="Billing Progress by Application"
-          onViewAll={scrollToTable}
-        >
-          {s.billingProgress.length === 0 ? (
-            <div className="cmd-row__meta">No billing applications yet.</div>
-          ) : (
-            s.billingProgress.map((row) => (
+      <AttentionQueue title="Billing Attention" items={attentionItems} emptyMessage="No SOV line items currently require attention." />
+
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>Billing Progress by Application</h2></div>
+          <div>
+            {s.billingProgress.length === 0 ? <div className="sbp-attention__empty">No billing applications yet.</div> : s.billingProgress.map((row) => (
               <div className="cmd-row" key={row.appNumber}>
-                <div>
-                  <div className="cmd-row__num">App #{row.appNumber}</div>
-                  <div className="cmd-row__meta">{row.itemCount} items · {fmtFull(row.scheduled)} scheduled</div>
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <Pill tone={row.pct >= 100 ? "good" : row.pct > 0 ? "info" : "neutral"}>
-                    {row.pct}%
-                  </Pill>
-                  <span className="cmd-row__meta">{fmtFull(row.toDate)}</span>
-                </div>
+                <div><div className="cmd-row__num">App #{row.appNumber}</div><div className="cmd-row__meta">{row.itemCount} items · {fmtFull(row.scheduled)} scheduled</div></div>
+                <div style={{ textAlign: "right" }}><div>{row.pct}%</div><div className="cmd-row__meta">{fmtFull(row.toDate)}</div></div>
               </div>
-            ))
-          )}
-        </DecisionPanel>
-
-        {/* Panel 2 — By Division / Phase */}
-        <DecisionPanel
-          title="By Division / Phase"
-          onViewAll={scrollToTable}
-        >
-          {s.byDivision.length === 0 ? (
-            <div className="cmd-row__meta">No line items.</div>
-          ) : (
-            s.byDivision.slice(0, 6).map((row) => (
+            ))}
+          </div>
+        </section>
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>By Division / Phase</h2></div>
+          <div>
+            {s.byDivision.length === 0 ? <div className="sbp-attention__empty">No line items.</div> : s.byDivision.slice(0, 6).map((row) => (
               <div className="cmd-row" key={row.label}>
-                <div>
-                  <div className="cmd-row__num">{row.label}</div>
-                  <div className="cmd-row__meta">{row.itemCount} items</div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{fmtFull(row.toDate)}</span>
-                  <span className="cmd-row__meta">bal: {fmtFull(row.balance)}</span>
-                </div>
+                <div><div className="cmd-row__num">{row.label}</div><div className="cmd-row__meta">{row.itemCount} items</div></div>
+                <div style={{ textAlign: "right" }}><div>{fmtFull(row.toDate)}</div><div className="cmd-row__meta">bal: {fmtFull(row.balance)}</div></div>
               </div>
-            ))
-          )}
-        </DecisionPanel>
-
-        {/* Panel 3 — Items Needing Attention */}
-        <DecisionPanel
-          title="Items Needing Attention"
-          onViewAll={scrollToTable}
-        >
-          {s.attentionItems.length === 0 ? (
-            <div className="cmd-row__meta" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <CheckCircle style={{ width: 14, height: 14, color: "var(--status-success)" }} />
-              All items look good.
-            </div>
-          ) : (
-            s.attentionItems.map((item) => {
-              const c = calcRow(item, effectiveRetainage);
-              const tone = c.overBilled ? "danger" as const : item.status === "Submitted" ? "warn" as const : "neutral" as const;
-              const label = c.overBilled ? "Over-billed" : item.status === "Submitted" ? "Awaiting Approval" : "Not Started";
-              return (
-                <div
-                  className="cmd-row is-clickable"
-                  key={item.id}
-                  onClick={() => onOpenLine(item)}
-                >
-                  <div>
-                    <div className="cmd-row__num">{item.line_item_number ?? item.sov_id ?? "—"}</div>
-                    <div className="cmd-row__meta" style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {item.description || "No description"}
-                    </div>
-                  </div>
-                  <Pill tone={tone}>{label}</Pill>
-                </div>
-              );
-            })
-          )}
-        </DecisionPanel>
+            ))}
+          </div>
+        </section>
       </div>
 
       <FilterBar
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search line number, description, or phase"
-        onImport={onImport}
-        onExport={onExport}
-        primaryLabel="New Item"
-        onPrimary={canCreate ? onCreate ?? null : null}
         filters={
           <>
             {STATUS_CHIPS.map((s) => (
