@@ -13,7 +13,6 @@
 
 import { useMemo, useRef, type ReactNode } from "react";
 import {
-  Boxes,
   Truck,
   Anchor,
   CheckSquare,
