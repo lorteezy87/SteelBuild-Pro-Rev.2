@@ -50,7 +50,7 @@ describe("PieceRegisterRegisterView operational layout", () => {
     );
 
     const headers = screen.getAllByRole("columnheader").map((cell) =>
-      cell.textContent?.replace(/\s+/g, " ").trim(),
+      cell.textContent?.replace(/[↑↓]/g, "").replace(/\s+/g, " ").trim(),
     );
 
     expect(headers).toEqual([
