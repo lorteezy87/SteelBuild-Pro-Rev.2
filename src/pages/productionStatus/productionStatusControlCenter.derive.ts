@@ -38,6 +38,7 @@ export interface ProductionSummary {
   notStarted: number;
   qualityHold: number; // MISSING — no quality_hold field on PieceProductionRow
   pastDue: number;     // ship_date < today AND not yet Shipped
+  missingShipDate: number; // active canonical shop pieces with no ship date
   pctComplete: number; // floor avg of percent_complete across all pieces
 
   // Stage distribution (for the stacked bar + legend)
@@ -48,6 +49,7 @@ export interface ProductionSummary {
   byArea: AreaSummaryRow[];      // By Erection Area queue
   stageQueue: StageSummaryRow[]; // By Stage/Status queue (top-3 active stages)
   pastDueQueue: PieceProductionRow[]; // Past-Due pieces (ship_date < today, not Shipped)
+  missingShipDateQueue: PieceProductionRow[]; // Active shop pieces lacking ship-date evidence
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -100,6 +102,7 @@ export function buildProductionSummary(
   let pctSum = 0;
   let pctCount = 0;
   const pastDueQueue: PieceProductionRow[] = [];
+  const missingShipDateQueue: PieceProductionRow[] = [];
 
   for (const p of pieces) {
     const stage = p.status ?? "";
@@ -116,6 +119,16 @@ export function buildProductionSummary(
 
     if (isPastDue(p, today)) {
       pastDueQueue.push(p);
+    }
+
+    if (
+      !p.ship_date &&
+      stage &&
+      stageCountMap[stage] !== undefined &&
+      stage !== "Not Started" &&
+      stage !== "Shipped"
+    ) {
+      missingShipDateQueue.push(p);
     }
   }
 
@@ -176,12 +189,14 @@ export function buildProductionSummary(
     notStarted,
     qualityHold: 0, // MISSING: no quality_hold column on piece_production
     pastDue: sortedPastDue.length,
+    missingShipDate: missingShipDateQueue.length,
     pctComplete: avgPct,
     byStage,
     unknown,
     byArea,
     stageQueue,
     pastDueQueue: sortedPastDue.slice(0, 8),
+    missingShipDateQueue: missingShipDateQueue.slice(0, 8),
   };
 }
 
