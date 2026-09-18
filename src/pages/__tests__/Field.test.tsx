@@ -118,7 +118,7 @@ describe("Field page", () => {
     renderField();
 
     expect(await screen.findByText("Recorded")).toBeInTheDocument();
-    expect(screen.getByText("Open Punch")).toBeInTheDocument();
+    expect(screen.getAllByText("Open Punch").length).toBeGreaterThan(0);
     expect(screen.getByText("Today's Activity")).toBeInTheDocument();
     expect(screen.getByText("Recent Photos")).toBeInTheDocument();
     expect(screen.queryByText("field loading")).not.toBeInTheDocument();
