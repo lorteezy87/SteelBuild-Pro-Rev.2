@@ -190,7 +190,7 @@ export default function SovControlCenter(props: SovControlCenterProps) {
     { label: "Over-billed", value: s.overBilledCount, sublabel: "items", tone: s.overBilledCount > 0 ? "danger" as const : "good" as const },
   ];
 
-  const attentionItems: AttentionItem[] = s.attentionItems.map((item) => {
+  const attentionItems: AttentionItem[] = s.attentionItems.map((item): AttentionItem => {
     const row = calcRow(item, effectiveRetainage);
     return {
       id: String(item.id || item.line_item_number || item.sov_id),
