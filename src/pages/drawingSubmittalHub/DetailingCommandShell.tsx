@@ -18,7 +18,7 @@
 
 import type { ReactNode } from "react";
 import "@/styles/command.css";
-import { KpiStrip, useCommandSkin } from "@/components/command";
+import { OperationalSummary, useCommandSkin } from "@/components/command";
 import { DetailingCommandHeader } from "./DetailingCommandHeader";
 import {
   DETAILING_PANEL_ID,
@@ -120,7 +120,17 @@ export function DetailingCommandShell({
         aria-labelledby={detailingTabId(activeTab)}
         data-hub-panel={activeTab}
       >
-        {onKpiTab && <KpiStrip cells={buildDetailingKpiCells(kpis, pending)} />}
+        {onKpiTab && (
+          <OperationalSummary
+            ariaLabel="Detailing operational summary"
+            metrics={buildDetailingKpiCells(kpis, pending).map((cell) => ({
+              label: cell.label,
+              value: cell.value,
+              sublabel: cell.sublabel,
+              tone: cell.tone,
+            }))}
+          />
+        )}
         {children}
       </div>
     </div>
