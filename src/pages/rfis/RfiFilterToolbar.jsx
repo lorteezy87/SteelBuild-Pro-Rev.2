@@ -7,8 +7,18 @@ import { Icon } from "@/components/design-system";
 import SequenceFilter from "@/components/shared/SequenceFilter";
 import { DISCIPLINES, DENSITY_PRESETS } from "./constants";
 
-const STATUS_FILTERS = [
+const OPERATIONAL_FILTERS = [
   ["all", "All"],
+  ["overdue", "Overdue"],
+  ["due_soon", "Due ≤3d"],
+  ["detailing_blocker", "Detailing Block"],
+  ["fab_blocker", "Fab Block"],
+  ["field_impact", "Field Impact"],
+  ["unanswered_external", "Waiting External"],
+  ["downstream_action", "Answered + Follow-up"],
+];
+
+const STATUS_FILTERS = [
   ["open", "Open"],
   ["review", "Under Review"],
   ["incomplete", "Incomplete"],
@@ -56,7 +66,21 @@ export default function RfiFilterToolbar({
       </div>
 
       <div className="rfi-filter-group">
-        <span className="rfi-filter-label">Status</span>
+        <span className="rfi-filter-label">Operational view</span>
+        {OPERATIONAL_FILTERS.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={`rfi-chip${filter === value ? " is-active" : ""}`}
+            onClick={() => onFilterChange(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="rfi-filter-group">
+        <span className="rfi-filter-label">Lifecycle</span>
         {STATUS_FILTERS.map(([value, label]) => (
           <button
             key={value}
