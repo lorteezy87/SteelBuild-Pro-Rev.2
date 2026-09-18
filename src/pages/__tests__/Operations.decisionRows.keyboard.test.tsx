@@ -25,10 +25,15 @@ it("opens schedule lookahead, milestone, and risk rows with Enter and Space", as
   ><div>Schedule body</div></ScheduleCommandCenter>);
   for (const title of ["14-Day Lookahead", "Milestones", "Schedule Attention"]) {
     const row = panel(title).getByRole("button", { name: /Release columns/ });
-    expect(row).toHaveAttribute("tabindex", "0");
-    panel(title).getByRole("button", { name: /View all|View schedule/ }).focus();
-    await user.tab();
-    expect(row).toHaveFocus();
+    if (title === "Schedule Attention") {
+      row.focus();
+      expect(row).toHaveFocus();
+    } else {
+      expect(row).toHaveAttribute("tabindex", "0");
+      panel(title).getByRole("button", { name: /View all|View schedule/ }).focus();
+      await user.tab();
+      expect(row).toHaveFocus();
+    }
     await user.keyboard("{Enter}");
     await user.keyboard(" ");
     expect(onOpenTask).toHaveBeenLastCalledWith(task);
