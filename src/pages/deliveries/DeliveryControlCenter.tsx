@@ -360,7 +360,15 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
       render: (delivery) => {
         const plannedShip = delivery.expected_ship_date || delivery.scheduled_date;
         if (!plannedShip) return <span className="cmd-row__meta">Unknown</span>;
-        return scheduledCell({ ...delivery, scheduled_date: plannedShip });
+        return (
+          <span style={{
+            color: delivery._signals?.overdue ? "var(--status-error)" : undefined,
+            fontWeight: delivery._signals?.overdue ? 700 : undefined,
+          }}>
+            {formatDate(plannedShip)}
+            {delivery._signals?.overdue ? " · late" : ""}
+          </span>
+        );
       },
     },
     {
