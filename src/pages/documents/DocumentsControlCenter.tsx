@@ -14,19 +14,18 @@
  */
 
 import { type DragEventHandler, type ReactNode, useMemo } from "react";
-import { FolderOpen, FileText, Clock, AlertCircle, HardDrive, Layers, FolderInput, Trash2, XCircle } from "lucide-react";
+import { Download, Upload, FolderInput, Trash2, XCircle } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
+  AttentionQueue,
+  OperationalSummary,
+  PageHeader,
   Pill,
   FilterBar,
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { AttentionItem, Column } from "@/components/command";
 import FolderBar from "./FolderBar";
 import { buildDocumentsSummary, fmtSizeKb } from "./documentsControlCenter.derive";
 import type { DocumentRecord, FolderRecord } from "./documentsControlCenter.derive";
@@ -178,19 +177,24 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
     return ["All", ...Array.from(cats).sort()];
   }, [allDocuments]);
 
-  const heroChips = [
-    { label: `${s.total} Total` },
-    { label: `${s.recentCount} This Week`, tone: "good" as const },
-    { label: `${s.needsReviewCount} Needs Review` },
+  const operationalMetrics = [
+    { label: "Total Files", value: s.total, sublabel: "documents", tone: "neutral" as const },
+    { label: "Categories", value: s.categories, sublabel: "types", tone: "info" as const },
+    { label: "Recent (7d)", value: s.recentCount, sublabel: "uploaded", tone: "good" as const },
+    { label: "Total Size", value: fmtSizeKb(s.totalSizeKb), sublabel: "stored", tone: "neutral" as const },
+    { label: "Needs Review", value: s.needsReviewCount, sublabel: "documents", tone: s.reviewTone },
   ];
 
-  const kpiCells: KpiCellDef[] = [
-    { label: "Total Files",     value: s.total,                      sublabel: "documents",   tone: "neutral",        Icon: FileText },
-    { label: "Categories",      value: s.categories,                 sublabel: "types",       tone: "info",           Icon: Layers },
-    { label: "Recent (7d)",     value: s.recentCount,                sublabel: "uploaded",    tone: "good",           Icon: Clock },
-    { label: "Total Size",      value: fmtSizeKb(s.totalSizeKb),    sublabel: "stored",      tone: "neutral",        Icon: HardDrive },
-    { label: "Needs Review",    value: s.needsReviewCount,           sublabel: "documents",   tone: s.reviewTone,     Icon: AlertCircle },
-  ];
+  const attentionItems: AttentionItem[] = s.reviewQueue.map((doc) => ({
+    id: String(doc.id || doc.documentNumber || doc.displayName),
+    issue: doc.documentNumber || doc.displayName || "Untitled document",
+    deadline: null,
+    risk: doc.status || "Review status unknown",
+    owner: doc.uploadedBy || null,
+    nextAction: "Review document disposition",
+    tone: doc.status === "Rejected" ? "danger" : "warn",
+    onOpen: () => onOpenDoc(doc),
+  }));
 
   const selectable = !!(selectedIds && onToggleSelect && onToggleAll);
   const allSelected = selectable && filteredDocs.length > 0 && selectedIds!.size === filteredDocs.length;
@@ -314,110 +318,57 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
           </span>
         </div>
       )}
-      <PageHero
-        Icon={FolderOpen}
-        title="Documents Control Center"
-        subtitle="Upload, organize, and track project documents — shop drawings, specs, and submittals in one place."
-        projectName={projectName}
-        chips={heroChips}
-        photoSrc={photoFor("Documents") ?? undefined}
+      <PageHeader
+        eyebrow={`${projectName} / Documents`}
+        title="Documents"
+        subtitle="Project files, review status, folders, uploads, and document-control context."
+        meta={`${s.total} files · ${s.recentCount} uploaded this week · ${s.needsReviewCount} need review`}
+        actions={(
+          <>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}><Download size={14} /> Export</button>
+            <button type="button" className="cmd-btn cmd-btn--primary" onClick={onUpload}><Upload size={14} /> Upload</button>
+          </>
+        )}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Document operational summary" />
 
-      <div className="cmd-panels">
-        <DecisionPanel
-          title="Recent Uploads"
-          onViewAll={() => { onStatusTabChange("all"); scrollToTable(); }}
-        >
-          {s.recentUploads.map((d) => (
-            <div
-              className="cmd-row is-clickable"
-              key={d.id}
-              onClick={() => onOpenDoc(d)}
-            >
-              <div>
-                <div className="cmd-row__num">
-                  {d.documentNumber || d.displayName || "Untitled"}
-                </div>
-                <div className="cmd-row__meta">
-                  {d.category || "Uncategorized"} · {fmtDate(d.uploadedDate ?? d.created_at)}
-                </div>
-              </div>
-              {fileTypeBadge(d.fileType)}
-            </div>
-          ))}
-          {s.recentUploads.length === 0 && (
-            <div className="cmd-row__meta">No documents uploaded yet.</div>
-          )}
-        </DecisionPanel>
+      <AttentionQueue
+        title="Document Review"
+        items={attentionItems}
+        emptyMessage="No documents currently require review."
+      />
 
-        <DecisionPanel
-          title="By Category"
-          onViewAll={scrollToTable}
-        >
-          {s.byCategory.map((row) => (
-            <div
-              className="cmd-row"
-              key={row.category}
-              style={{ cursor: "pointer" }}
-              onClick={() => { onCategoryChange(row.category); scrollToTable(); }}
-            >
-              <div>
-                <div className="cmd-row__num">{row.category}</div>
-                <div className="cmd-row__meta">{fmtSizeKb(row.totalSizeKb)}</div>
-              </div>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: "var(--cmd-text)",
-                }}
-              >
-                {row.count}
-              </span>
-            </div>
-          ))}
-          {s.byCategory.length === 0 && (
-            <div className="cmd-row__meta">No categories yet.</div>
-          )}
-        </DecisionPanel>
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>Recent Uploads</h2></div>
+          <div>
+            {s.recentUploads.length === 0 ? <div className="sbp-attention__empty">No documents uploaded yet.</div> : s.recentUploads.map((doc) => (
+              <button type="button" className="cmd-row is-clickable" key={doc.id} onClick={() => onOpenDoc(doc)} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
+                <div><div className="cmd-row__num">{doc.documentNumber || doc.displayName || "Untitled"}</div><div className="cmd-row__meta">{doc.category || "Uncategorized"} · {fmtDate(doc.uploadedDate ?? doc.created_at)}</div></div>
+                {fileTypeBadge(doc.fileType)}
+              </button>
+            ))}
+          </div>
+        </section>
 
-        <DecisionPanel
-          title="Needs Review"
-          onViewAll={() => { onStatusTabChange("Under Review"); scrollToTable(); }}
-        >
-          {s.reviewQueue.map((d) => (
-            <div
-              className="cmd-row is-clickable"
-              key={d.id}
-              onClick={() => onOpenDoc(d)}
-            >
-              <div>
-                <div className="cmd-row__num">
-                  {d.documentNumber || d.displayName || "Untitled"}
-                </div>
-                <div className="cmd-row__meta">
-                  {d.uploadedBy ? `By ${d.uploadedBy}` : "Unknown uploader"}
-                </div>
-              </div>
-              <Pill tone={statusToneForDoc(d.status)}>{d.status || "—"}</Pill>
-            </div>
-          ))}
-          {s.reviewQueue.length === 0 && (
-            <div className="cmd-row__meta">No documents need review.</div>
-          )}
-        </DecisionPanel>
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>By Category</h2></div>
+          <div>
+            {s.byCategory.length === 0 ? <div className="sbp-attention__empty">No categories yet.</div> : s.byCategory.map((row) => (
+              <button type="button" className="cmd-row is-clickable" key={row.category} onClick={() => { onCategoryChange(row.category); scrollToTable(); }} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
+                <div><div className="cmd-row__num">{row.category}</div><div className="cmd-row__meta">{fmtSizeKb(row.totalSizeKb)}</div></div>
+                <span className="cmd-row__num">{row.count}</span>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
       <FilterBar
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search by name, document number, or description"
-        onExport={onExport}
-        primaryLabel="Upload"
-        onPrimary={onUpload}
         filters={
           <>
             {liveCategories.map((cat) => (
