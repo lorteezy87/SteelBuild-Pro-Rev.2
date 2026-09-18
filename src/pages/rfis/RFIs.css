@@ -1128,3 +1128,46 @@
 [data-skin="command"] .rfi-cc .rfi-row-number {
   color: var(--cmd-info);
 }
+
+
+/* Wave 2 RFI detail workspace */
+.rfi-detail-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: 12px;
+  align-items: start;
+}
+
+.rfi-detail-workspace__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rfi-downstream-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rfi-downstream-actions .cmd-btn {
+  min-width: 170px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.rfi-downstream-actions .cmd-btn small {
+  flex-basis: 100%;
+  padding-left: 20px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 500;
+  text-align: left;
+}
+
+@media (max-width: 860px) {
+  .rfi-detail-workspace {
+    grid-template-columns: 1fr;
+  }
+}
