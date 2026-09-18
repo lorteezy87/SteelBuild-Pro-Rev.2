@@ -27,14 +27,14 @@ import {
 } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
+  AttentionQueue,
+  PageHeader,
+  OperationalSummary,
   DecisionPanel,
   Pill,
   useCommandSkin,
 } from "@/components/command";
-import type { KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { AttentionItem, KpiCellDef } from "@/components/command";
 import { areAllFilteredRowsSelected, buildWpPanels } from "./wpControlCenter.derive";
 import type { WpMetrics, EnrichedWp } from "./wpControlCenter.derive";
 import { formatTons, formatHours, phaseColor, PHASE_META, VIEW_OPTIONS } from "./format";
@@ -154,29 +154,16 @@ export default function WpControlCenter(props: WpControlCenterProps) {
 
   const panels = useMemo(() => buildWpPanels(metrics), [metrics]);
 
-  // Hero — say how the headline progress was weighted. 36 of 81 production
-  // packages carry no tonnage, so "weighted progress" silently ignored them.
+  // Headline progress remains the existing analytics result; this surface only
+  // changes presentation and does not recalculate package truth.
   const tonnageMissing = metrics.tonnageMissingCount ?? 0;
   const progressLabel = metrics.progressMethod === "count"
     ? "Avg Progress (no tonnage)"
     : metrics.progressMethod === "partial-tonnage"
       ? `Ton-Weighted (${tonnageMissing} w/o tons)`
       : "Ton-Weighted Progress";
-  const heroStats = [
-    {
-      value: formatTons(metrics.totalTons),
-      label: tonnageMissing ? `Tonnage (${tonnageMissing} pkg missing)` : "Total Tonnage",
-    },
-    { value: `${metrics.progress}%`, label: progressLabel },
-  ];
   const releasedCount = metrics.released?.length ?? 0;
   const exceptionCount = metrics.exceptionReleases?.length ?? 0;
-  const heroChips = [
-    { label: `${metrics.totalCount} Packages` },
-    { label: `${metrics.highRisk.length} Exceptions`, tone: "danger" as const },
-    { label: `${metrics.overdue.length} Overdue`, tone: "warn" as const },
-    { label: `${releasedCount} Released`, tone: releasedCount ? "good" as const : "neutral" as const },
-  ];
 
   // KPI strip — 8 cells
   const laborBurnTone = metrics.laborBurn > 100 ? "danger" as const : "neutral" as const;
@@ -244,6 +231,21 @@ export default function WpControlCenter(props: WpControlCenterProps) {
     },
   ];
 
+  const attentionItems: AttentionItem[] = panels.workQueue.map((wp) => {
+    const blocker = wp._signals?.flags?.[0];
+    const due = wp.scheduled_end_date ? String(wp.scheduled_end_date) : null;
+    return {
+      id: wp.id,
+      issue: `${wp.wp_number || "WP"} · ${wp.name || "Untitled package"}`,
+      deadline: due,
+      risk: blocker?.label || (wp._signals?.overdue ? "Schedule overdue" : "Execution exception"),
+      owner: wp.crew || null,
+      nextAction: blocker ? "Clear blocker" : "Review package readiness",
+      tone: blocker?.severity === "high" || wp._signals?.overdue ? "danger" : "warn",
+      onOpen: () => onOpenWp(wp),
+    };
+  });
+
   const selectable = !!(selectedIds && onToggleSelect && onToggleAll);
 
   return (
@@ -251,24 +253,29 @@ export default function WpControlCenter(props: WpControlCenterProps) {
       <style>{RESPONSIVE_CSS}</style>
       {listTruncationNotice}
       {banner}
-      {/* ------------------------------------------------------------------ */}
-      {/* HERO                                                                 */}
-      {/* ------------------------------------------------------------------ */}
-      <PageHero
-        Icon={Boxes}
+      <PageHeader
+        eyebrow={`${projectName} / Production`}
         title="Work Package Control Center"
-        subtitle="Manage fabrication, delivery, and erection packages — surface exceptions and advance production flow."
-        projectName={projectName}
-        chips={heroChips}
-        photoSrc={photoFor("WorkPackages") ?? undefined}
-        stats={[
-          { value: projectHealth || "—", label: "Project Health" },
-          {
-            value: percentComplete != null ? `${Math.round(percentComplete)}%` : "—",
-            label: "Complete",
-          },
-          ...heroStats,
-        ]}
+        subtitle="Readiness-first control for drawing approval, fabrication, shipping, and field execution."
+        meta={[
+          projectHealth ? `Project health: ${projectHealth}` : "Project health: unknown",
+          percentComplete != null ? `${Math.round(percentComplete)}% complete` : "Completion: unknown",
+          `${metrics.totalCount} packages`,
+          `${formatTons(metrics.totalTons)} total`,
+        ].join(" · ")}
+        actions={(
+          <>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}>
+              <Download size={14} /> CSV
+            </button>
+            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onBulkAdd} disabled={!canCreate}>
+              <Upload size={14} /> Bulk Add
+            </button>
+            <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate || undefined} disabled={!canCreate}>
+              <Plus size={14} /> New WP
+            </button>
+          </>
+        )}
       />
 
       <div className="wp-cc__toolbar" style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", padding: "12px 24px" }}>
@@ -314,10 +321,29 @@ export default function WpControlCenter(props: WpControlCenterProps) {
         </div>
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* KPI STRIP                                                            */}
-      {/* ------------------------------------------------------------------ */}
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary
+        ariaLabel="Work package operational summary"
+        metrics={[
+          ...kpiCells.map((cell) => ({
+            label: cell.label,
+            value: cell.value,
+            sublabel: cell.sublabel,
+            tone: cell.tone,
+          })),
+          {
+            label: progressLabel,
+            value: `${metrics.progress}%`,
+            sublabel: tonnageMissing ? `${tonnageMissing} pkg without tonnage` : "package progress",
+            tone: metrics.progress >= 80 ? "good" : "neutral",
+          },
+        ]}
+      />
+
+      <AttentionQueue
+        title="Package Readiness Exceptions"
+        items={attentionItems}
+        emptyMessage="No high-risk package readiness exceptions."
+      />
 
       {/* ------------------------------------------------------------------ */}
       {/* PHASE RAIL (inline-styled per task spec)                             */}
