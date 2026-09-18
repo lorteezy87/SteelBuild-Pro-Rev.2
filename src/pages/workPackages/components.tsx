@@ -46,7 +46,6 @@ import {
   flagStyle,
   flagWrapStyle,
   iconButtonStyle,
-  laborLabelStyle,
   laneCountStyle,
   laneDescriptionStyle,
   laneEmptyStyle,
