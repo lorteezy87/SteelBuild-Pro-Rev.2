@@ -59,6 +59,6 @@ describe("ProductionStatusControlCenter Wave 3 layout", () => {
     expect(screen.getByRole("heading", { name: "Production Status" })).toBeInTheDocument();
     expect(screen.getByText("Production Attention")).toBeInTheDocument();
     expect(screen.getByText("Missing Ship Date")).toBeInTheDocument();
-    expect(screen.getByText(/B-101/)).toBeInTheDocument();
+    expect(screen.getAllByText(/B-101/).length).toBeGreaterThan(0);
   });
 });
