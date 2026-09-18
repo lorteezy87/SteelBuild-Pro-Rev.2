@@ -185,7 +185,7 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
     { label: "Needs Review", value: s.needsReviewCount, sublabel: "documents", tone: s.reviewTone },
   ];
 
-  const attentionItems: AttentionItem[] = s.reviewQueue.map((doc) => ({
+  const attentionItems: AttentionItem[] = s.reviewQueue.map((doc): AttentionItem => ({
     id: String(doc.id || doc.documentNumber || doc.displayName),
     issue: doc.documentNumber || doc.displayName || "Untitled document",
     deadline: null,
