@@ -173,7 +173,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   ];
 
   const attentionItems: AttentionItem[] = [
-    ...(summary.unallocatedCOTotal !== 0 ? [{
+    ...(summary.unallocatedCOTotal !== 0 ? [({
       id: "unallocated-co",
       issue: "Approved CO value not allocated to cost codes",
       deadline: null,
@@ -182,7 +182,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
       nextAction: "Allocate approved CO value to cost codes",
       tone: "danger" as const,
     }] : []),
-    ...reviewFlags.map((flag, index) => ({
+    ...reviewFlags.map((flag, index): AttentionItem => ({
       id: `review-${index}`,
       issue: flag.message,
       deadline: null,
@@ -191,7 +191,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
       nextAction: "Review financial source data",
       tone: flag.tone === "error" ? "danger" as const : "warn" as const,
     })),
-    ...varianceAlerts.slice(0, 6).map((alert) => ({
+    ...varianceAlerts.slice(0, 6).map((alert): AttentionItem => ({
       id: String(alert.id ?? alert.code),
       issue: `${alert.code} · ${alert.description || "Cost code"}`,
       deadline: null,
@@ -204,7 +204,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
         if (row) handleRowClick(row);
       },
     })),
-    ...topStaleCOs.map((co) => ({
+    ...topStaleCOs.map((co): AttentionItem => ({
       id: `stale-${co.id}`,
       issue: `${co.co_number || "CO"} · ${co.title || "Change order"}`,
       deadline: null,
