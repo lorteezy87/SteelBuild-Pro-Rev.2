@@ -148,18 +148,6 @@ const VIEW_OPTIONS = [
 // Helper: date cell with overdue highlight
 // ---------------------------------------------------------------------------
 
-function scheduledCell(delivery: DeliveryRecord) {
-  const signals = delivery._signals;
-  if (!signals?.scheduledDate) return <span style={{ color: "var(--cmd-text-muted)" }}>TBD</span>;
-  if (signals.overdue) {
-    return <span style={{ color: "var(--status-error)", fontWeight: 600 }}>{formatDate(delivery.scheduled_date)} · late</span>;
-  }
-  if (signals.dueToday) {
-    return <span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{formatDate(delivery.scheduled_date)} · today</span>;
-  }
-  return <span>{formatDate(delivery.scheduled_date)}</span>;
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
