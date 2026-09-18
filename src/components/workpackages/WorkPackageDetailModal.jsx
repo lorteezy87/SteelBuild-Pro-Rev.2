@@ -34,7 +34,7 @@ const STAGE_COLORS = {
   Released: "var(--status-success)",
 };
 
-const TABS = ["overview", "piece control", "drawings", "hours", "notes"];
+const TABS = ["scope", "release gate", "production", "logistics", "field"];
 
 /**
  * Work package drawer.
@@ -57,7 +57,7 @@ export default function WorkPackageDetailModal({
   statusPending = false,
   onNavigate = null,
 }) {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("scope");
   const { activeProject } = useProjectContext();
 
   const drawingMap = useMemo(() => {
@@ -113,7 +113,7 @@ export default function WorkPackageDetailModal({
           top: 0,
           right: 0,
           bottom: 0,
-          width: "min(520px, 100vw)",
+          width: "min(680px, 100vw)",
           background: "var(--bg-surface-low)",
           borderLeft: `3px solid ${phaseColor}`,
           zIndex: 1000,
@@ -204,12 +204,41 @@ export default function WorkPackageDetailModal({
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-          {tab === "overview" && <OverviewTab wp={wp} signals={signals} phaseColor={phaseColor} percent={percent} />}
-          {tab === "piece control" && (
-            <div
-              className="work-package-piece-control-drawer"
-              data-skin="command"
-            >
+          {tab === "scope" && (
+            <>
+              <SectionTitle
+                eyebrow="Scope"
+                title="Package scope and execution context"
+                detail="Identity, sequence, schedule, readiness, and package notes."
+              />
+              <OverviewTab wp={wp} signals={signals} phaseColor={phaseColor} percent={percent} />
+              <NotesTab notes={wp.notes} />
+            </>
+          )}
+
+          {tab === "release gate" && (
+            <div className="work-package-piece-control-drawer" data-skin="command">
+              <SectionTitle
+                eyebrow="Release Gate"
+                title="Drawings and release authority"
+                detail="Drawing approval evidence and the canonical fabrication release gate."
+              />
+              <DrawingsTab wp={wp} drawingMap={drawingMap} onNavigate={onNavigate} />
+              <CanonicalFabReleasePanel
+                projectId={wp.project_id}
+                workPackageId={wp.id}
+                pieceControlMode={pieceControlMode}
+              />
+            </div>
+          )}
+
+          {tab === "production" && (
+            <div className="work-package-piece-control-drawer" data-skin="command">
+              <SectionTitle
+                eyebrow="Production"
+                title="Piece and shop execution"
+                detail="Package assignment, shop stations, and labor performance."
+              />
               <PieceRelationshipManager
                 projectId={wp.project_id}
                 focusedWorkPackageId={wp.id}
@@ -220,21 +249,28 @@ export default function WorkPackageDetailModal({
                 workPackageId={wp.id}
                 pieceControlMode={pieceControlMode}
               />
-              <PieceLogisticsControl
-                projectId={wp.project_id}
-                workPackageId={wp.id}
-                pieceControlMode={pieceControlMode}
+              <HoursTab wp={wp} />
+            </div>
+          )}
+
+          {tab === "logistics" && (
+            <div className="work-package-piece-control-drawer" data-skin="command">
+              <SectionTitle
+                eyebrow="Logistics"
+                title="Load and shipment execution"
+                detail="Piece logistics stay tied to the canonical package and piece register."
               />
-              <CanonicalFabReleasePanel
+              <PieceLogisticsControl
                 projectId={wp.project_id}
                 workPackageId={wp.id}
                 pieceControlMode={pieceControlMode}
               />
             </div>
           )}
-          {tab === "drawings" && <DrawingsTab wp={wp} drawingMap={drawingMap} onNavigate={onNavigate} />}
-          {tab === "hours" && <HoursTab wp={wp} />}
-          {tab === "notes" && <NotesTab notes={wp.notes} />}
+
+          {tab === "field" && (
+            <FieldTab wp={wp} signals={signals} />
+          )}
         </div>
       </div>
     </>
@@ -330,6 +366,105 @@ function QuickActions({ wp, signals, onSetStatus, statusPending, onNavigate, pie
         </button>
       ))}
     </div>
+  );
+}
+
+function SectionTitle({ eyebrow, title, detail }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 3,
+        paddingBottom: 10,
+        borderBottom: "1px solid var(--divider)",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 8,
+          fontWeight: 700,
+          color: "var(--accent)",
+          letterSpacing: "0.11em",
+          textTransform: "uppercase",
+        }}
+      >
+        {eyebrow}
+      </div>
+      <strong style={{ color: "var(--text-primary)", fontSize: 14 }}>{title}</strong>
+      <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>{detail}</span>
+    </div>
+  );
+}
+
+function FieldTab({ wp, signals }) {
+  const pieces = signals.pieces || null;
+  const fieldHours = Number(wp.field_hours_actual || 0);
+  const fieldBudget = Number(wp.field_hours_budget || 0);
+  const fieldBurn = fieldBudget > 0 ? Math.round((fieldHours / fieldBudget) * 100) : null;
+  const fieldReady = Boolean(
+    wp.vif_confirmed &&
+    wp.sequence_confirmed &&
+    (wp.load_list_complete || pieces?.delivered || pieces?.erected),
+  );
+
+  return (
+    <>
+      <SectionTitle
+        eyebrow="Field"
+        title="Erection readiness"
+        detail="Known field prerequisites, delivered/erected piece state, and field labor."
+      />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+        <CheckItem label="VIF Confirmed" done={wp.vif_confirmed} detail={wp.vif_confirmed_by} />
+        <CheckItem label="Load List" done={wp.load_list_complete} />
+        <CheckItem label="Sequence" done={wp.sequence_confirmed} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+        <MiniCard
+          label="Field Readiness"
+          value={fieldReady ? "Ready" : "Prerequisites open"}
+          color={fieldReady ? "var(--status-success)" : "var(--status-warning)"}
+        />
+        <MiniCard
+          label="Field Hours"
+          value={fieldBudget > 0 ? `${fieldHours.toFixed(0)}/${fieldBudget.toFixed(0)}h · ${fieldBurn}%` : `${fieldHours.toFixed(0)}h · budget unknown`}
+          color={fieldBurn != null && fieldBurn > 100 ? "var(--status-error)" : "var(--text-secondary)"}
+        />
+        <MiniCard
+          label="Delivered Pieces"
+          value={pieces ? String(pieces.delivered || 0) : "Unknown"}
+          color="var(--text-secondary)"
+        />
+        <MiniCard
+          label="Erected Pieces"
+          value={pieces ? String(pieces.erected || 0) : "Unknown"}
+          color="var(--text-secondary)"
+        />
+      </div>
+
+      <div>
+        <Label text="Field sequence" />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {[
+            ["Area", wp.area],
+            ["Sequence", wp.sequence_number],
+            ["Install", wp.install_phase],
+            ["Start", wp.scheduled_start_date ? formatShortDate(wp.scheduled_start_date) : null],
+            ["Finish", wp.scheduled_end_date ? formatShortDate(wp.scheduled_end_date) : null],
+          ].filter(([, value]) => value).map(([label, value]) => (
+            <span key={label} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-badge)", padding: "3px 7px" }}>
+              {label}: {value}
+            </span>
+          ))}
+          {![wp.area, wp.sequence_number, wp.install_phase, wp.scheduled_start_date, wp.scheduled_end_date].some(Boolean) && (
+            <span style={{ color: "var(--text-muted)", fontSize: 11 }}>Field sequence evidence unavailable.</span>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
