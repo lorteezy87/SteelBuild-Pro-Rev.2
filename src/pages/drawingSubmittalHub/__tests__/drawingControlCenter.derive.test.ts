@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { adaptControlBoardFocus, buildControlBoardModel } from "../drawingControlCenter.derive";
+import { adaptControlBoardFocus, buildControlBoardModel, buildProductionReadinessQueue } from "../drawingControlCenter.derive";
 import type { TriageItem, TriageModel } from "../types";
 
 /** Fixture factory for a complete triage item from typed partial overrides. */
@@ -166,5 +166,88 @@ describe("buildControlBoardModel", () => {
   it("reports openCount from openItems.length", () => {
     const model = buildControlBoardModel(makeTriage());
     expect(model.openCount).toBe(4);
+  });
+});
+
+
+describe("buildProductionReadinessQueue", () => {
+  it("uses persisted readiness evidence and keeps missing schedule evidence unknown", () => {
+    const triage = makeTriage({
+      setItems: [
+        item({
+          id: "ready-1",
+          title: "Area A Main Steel",
+          detailingState: "BFA",
+          _readiness: {
+            backwardDates: {
+              fabReleaseRequiredBy: "2026-09-24",
+            },
+            scheduleRisk: { atRisk: true, reasons: ["Not released for fab"], daysLate: 2 },
+            rfiBlocked: true,
+            revisionImpacted: false,
+            materialImpacted: false,
+            longLeadImpact: false,
+            fabricationReady: false,
+          },
+        }),
+        item({
+          id: "unknown-1",
+          title: "Area B Misc Steel",
+          detailingState: "OFA",
+          _readiness: {
+            backwardDates: {},
+            scheduleRisk: { atRisk: false },
+            rfiBlocked: false,
+            revisionImpacted: false,
+            materialImpacted: false,
+            longLeadImpact: false,
+            fabricationReady: false,
+          },
+        }),
+      ],
+    });
+
+    const rows = buildProductionReadinessQueue(triage);
+
+    expect(rows[0]).toMatchObject({
+      id: "ready-1",
+      package: "Area A Main Steel",
+      currentStage: "BFA",
+      requiredIfc: "2026-09-24",
+      fabStart: null,
+      floatDays: null,
+    });
+    expect(rows[0].blocker).toMatch(/Open RFI/);
+
+    const unknown = rows.find((row) => row.id === "unknown-1");
+    expect(unknown?.requiredIfc).toBeNull();
+    expect(unknown?.fabStart).toBeNull();
+    expect(unknown?.floatDays).toBeNull();
+  });
+
+  it("summarizes concrete blockers without inventing a ready state", () => {
+    const triage = makeTriage({
+      setItems: [
+        item({
+          id: "blocked",
+          detailingState: "IFC",
+          _readiness: {
+            backwardDates: { fabReleaseRequiredBy: "2026-09-20" },
+            scheduleRisk: { atRisk: true, reasons: ["Not released for fab"] },
+            rfiBlocked: false,
+            revisionImpacted: true,
+            materialImpacted: true,
+            longLeadImpact: true,
+            fabricationReady: false,
+          },
+        }),
+      ],
+    });
+
+    const [row] = buildProductionReadinessQueue(triage);
+    expect(row.blocker).toContain("Revision");
+    expect(row.blocker).toContain("Material");
+    expect(row.blocker).toContain("Long lead");
+    expect(row.ready).toBe(false);
   });
 });
