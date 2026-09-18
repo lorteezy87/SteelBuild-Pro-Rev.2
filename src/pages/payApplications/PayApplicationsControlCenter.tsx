@@ -12,19 +12,18 @@
  * dollar fields directly.
  */
 import { useMemo } from "react";
-import { ReceiptText, DollarSign, Clock, CheckCircle, AlertTriangle, Percent } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero,
-  KpiStrip,
-  DecisionPanel,
+  AttentionQueue,
+  OperationalSummary,
+  PageHeader,
   Pill,
   FilterBar,
   DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
-import { photoFor } from "@/config/launcherConfig";
+import type { AttentionItem, Column } from "@/components/command";
 import {
   buildPayAppSummary,
   buildPayAppPanelQueues,
@@ -92,63 +91,25 @@ export default function PayApplicationsControlCenter(props: PayApplicationsContr
   const s = useMemo(() => buildPayAppSummary(payApps), [payApps]);
   const q = useMemo(() => buildPayAppPanelQueues(payApps), [payApps]);
 
-  // Hero chips: counts for quick at-a-glance
-  const chips = [
-    { label: `${s.total} Total` },
-    ...(s.submittedCount ? [{ label: `${s.submittedCount} Submitted`, tone: "info" as const }] : []),
-    ...(s.approvedCount  ? [{ label: `${s.approvedCount} Approved`,  tone: "good" as const }] : []),
+  const operationalMetrics = [
+    { label: "Pending Payment", value: formatMoney(s.pendingPaymentDue), sublabel: "submitted + approved", tone: s.pendingPaymentDue > 0 ? "warn" as const : "neutral" as const },
+    { label: "Total Paid", value: formatMoney(s.totalPaid), sublabel: "paid apps", tone: "good" as const },
+    { label: "Retainage Held", value: formatMoney(s.retainageHeld), sublabel: "withheld to date", tone: s.retainageHeld > 0 ? "warn" as const : "neutral" as const },
+    { label: "Balance to Finish", value: formatMoney(s.balanceToFinish), sublabel: "remaining on contract", tone: "neutral" as const },
+    { label: "% Complete", value: `${s.percentComplete}%`, sublabel: "earned / contract", tone: s.percentComplete >= 90 ? "good" as const : s.percentComplete >= 50 ? "info" as const : "neutral" as const },
+    { label: "Applications", value: s.total, sublabel: `${s.draftCount} draft · ${s.submittedCount} submitted · ${s.approvedCount} approved`, tone: "neutral" as const },
   ];
 
-  const heroStats = [
-    { value: formatMoney(s.pendingPaymentDue), label: "Pending Payment" },
-    { value: `${s.percentComplete}%`, label: "% Complete" },
-  ];
-
-  // KPI strip — 6 cells
-  const kpiCells: KpiCellDef[] = [
-    {
-      label: "Pending Payment",
-      value: formatMoney(s.pendingPaymentDue),
-      sublabel: "submitted + approved",
-      tone: s.pendingPaymentDue > 0 ? "warn" : "neutral",
-      Icon: DollarSign,
-    },
-    {
-      label: "Total Paid",
-      value: formatMoney(s.totalPaid),
-      sublabel: "paid apps",
-      tone: "good",
-      Icon: CheckCircle,
-    },
-    {
-      label: "Retainage Held",
-      value: formatMoney(s.retainageHeld),
-      sublabel: "withheld to date",
-      tone: s.retainageHeld > 0 ? "warn" : "neutral",
-      Icon: AlertTriangle,
-    },
-    {
-      label: "Balance to Finish",
-      value: formatMoney(s.balanceToFinish),
-      sublabel: "remaining on contract",
-      tone: "neutral",
-      Icon: Clock,
-    },
-    {
-      label: "% Complete",
-      value: `${s.percentComplete}%`,
-      sublabel: "earned / contract",
-      tone: s.percentComplete >= 90 ? "good" : s.percentComplete >= 50 ? "info" : "neutral",
-      Icon: Percent,
-    },
-    {
-      label: "Applications",
-      value: s.total,
-      sublabel: `${s.draftCount}d · ${s.submittedCount}s · ${s.approvedCount}a`,
-      tone: "neutral",
-      Icon: ReceiptText,
-    },
-  ];
+  const attentionItems: AttentionItem[] = q.awaitingAction.map((app) => ({
+    id: String(app.id || app.application_number),
+    issue: `App #${app.application_number} · ${fmtPeriod(app)}`,
+    deadline: app.period_to || null,
+    risk: `${statusLabel(app.status)} · ${formatMoney(app.current_payment_due)} due`,
+    owner: app.status === "submitted" ? "External approval" : null,
+    nextAction: app.status === "submitted" ? "Advance approval" : "Advance payment / closeout",
+    tone: app.status === "submitted" ? "warn" : "info",
+    onOpen: () => onOpen(app),
+  }));
 
   // DataTable columns — real fields only
   const columns: Column<PayApplication>[] = [
@@ -218,115 +179,57 @@ export default function PayApplicationsControlCenter(props: PayApplicationsContr
   ];
 
   return (
-    <div className="payapp-cc">
-      <PageHero
-        Icon={ReceiptText}
-        title="Pay Applications Control Center"
-        subtitle="AIA G702/G703 pay applications — track billing periods, retainage, and payment status."
-        projectName={projectName}
-        chips={chips}
-        photoSrc={photoFor("PayApplications") ?? undefined}
-        stats={heroStats}
+    <div className="payapp-cc sbp-command-page">
+      <PageHeader
+        eyebrow={`${projectName} / Commercial`}
+        title="Pay Applications"
+        subtitle="Monthly billing execution, retainage, payment status, and balance to finish."
+        meta={`${s.total} applications · ${formatMoney(s.pendingPaymentDue)} pending · ${s.percentComplete}% complete`}
+        actions={(
+          <>
+            {onExport ? <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}><Download size={14} /> Export</button> : null}
+            {canCreate && onCreate ? <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate}><Plus size={14} /> New Application</button> : null}
+          </>
+        )}
       />
 
-      <KpiStrip cells={kpiCells} />
+      <OperationalSummary metrics={operationalMetrics} ariaLabel="Pay application operational summary" />
 
-      <div className="cmd-panels">
-        {/* Panel 1: Awaiting action (submitted or approved) */}
-        <DecisionPanel
-          title="Awaiting Action"
-          onViewAll={() => { onStatusFilter("submitted"); scrollToTable(); }}
-        >
-          {q.awaitingAction.length === 0 ? (
-            <div className="cmd-row__meta">No applications awaiting action.</div>
-          ) : (
-            q.awaitingAction.map((a) => (
-              <div
-                className="cmd-row is-clickable"
-                key={a.id}
-                onClick={() => onOpen(a)}
-              >
-                <div>
-                  <div className="cmd-row__num">App #{a.application_number}</div>
-                  <div className="cmd-row__meta">{fmtPeriod(a)}</div>
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <Pill tone={payAppStatusTone(a.status)}>{statusLabel(a.status)}</Pill>
-                  <span
-                    className="cmd-row__num"
-                    style={{ fontVariantNumeric: "tabular-nums" }}
-                  >
-                    {formatMoney(a.current_payment_due)}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </DecisionPanel>
+      <AttentionQueue
+        title="Billing Attention"
+        items={attentionItems}
+        emptyMessage="No pay applications are currently awaiting action."
+      />
 
-        {/* Panel 2: By status breakdown */}
-        <DecisionPanel title="By Status" onViewAll={scrollToTable}>
-          {q.byStatus.length === 0 ? (
-            <div className="cmd-row__meta">No pay applications yet.</div>
-          ) : (
-            q.byStatus.map((b) => (
-              <div
-                className="cmd-row is-clickable"
-                key={b.status}
-                onClick={() => { onStatusFilter(b.status); scrollToTable(); }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Pill tone={payAppStatusTone(b.status)}>{b.label}</Pill>
-                  <span className="cmd-row__meta">{b.count} app{b.count !== 1 ? "s" : ""}</span>
-                </div>
-                <span
-                  className="cmd-row__num"
-                  style={{ fontVariantNumeric: "tabular-nums" }}
-                >
-                  {formatMoney(b.total)}
-                </span>
-              </div>
-            ))
-          )}
-        </DecisionPanel>
-
-        {/* Panel 3: Recent applications */}
-        <DecisionPanel title="Recent Applications" onViewAll={scrollToTable}>
-          {q.recent.length === 0 ? (
-            <div className="cmd-row__meta">No applications yet.</div>
-          ) : (
-            q.recent.map((a) => (
-              <div
-                className="cmd-row is-clickable"
-                key={a.id}
-                onClick={() => onOpen(a)}
-              >
-                <div>
-                  <div className="cmd-row__num">App #{a.application_number}</div>
-                  <div className="cmd-row__meta">{fmtPeriod(a)}</div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                  <span
-                    className="cmd-row__num"
-                    style={{ fontVariantNumeric: "tabular-nums" }}
-                  >
-                    {formatMoney(a.current_payment_due)}
-                  </span>
-                  <Pill tone={payAppStatusTone(a.status)}>{statusLabel(a.status)}</Pill>
-                </div>
-              </div>
-            ))
-          )}
-        </DecisionPanel>
+      <div className="sbp-work-grid">
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>By Status</h2></div>
+          <div>
+            {q.byStatus.length === 0 ? <div className="sbp-attention__empty">No pay applications yet.</div> : q.byStatus.map((row) => (
+              <button type="button" className="cmd-row is-clickable" key={row.status} onClick={() => { onStatusFilter(row.status); scrollToTable(); }} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
+                <div><Pill tone={payAppStatusTone(row.status)}>{row.label}</Pill><div className="cmd-row__meta">{row.count} app{row.count === 1 ? "" : "s"}</div></div>
+                <span className="cmd-row__num">{formatMoney(row.total)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="sbp-work-panel">
+          <div className="sbp-work-panel__head"><h2>Recent Applications</h2></div>
+          <div>
+            {q.recent.length === 0 ? <div className="sbp-attention__empty">No applications yet.</div> : q.recent.map((app) => (
+              <button type="button" className="cmd-row is-clickable" key={app.id} onClick={() => onOpen(app)} style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>
+                <div><div className="cmd-row__num">App #{app.application_number}</div><div className="cmd-row__meta">{fmtPeriod(app)}</div></div>
+                <div style={{ textAlign: "right" }}><div>{formatMoney(app.current_payment_due)}</div><div className="cmd-row__meta">{statusLabel(app.status)}</div></div>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
       <FilterBar
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search application number, period, or notes"
-        onExport={onExport ?? undefined}
-        primaryLabel="New Application"
-        onPrimary={canCreate && onCreate ? onCreate : null}
         filters={
           <>
             {STATUS_FILTERS.map((f) => (
