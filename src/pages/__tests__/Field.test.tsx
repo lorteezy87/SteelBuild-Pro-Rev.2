@@ -101,7 +101,7 @@ describe("Field page", () => {
     renderField();
 
     expect(await screen.findByRole("heading", { name: "Field Today" })).toBeInTheDocument();
-    expect(screen.getByText("Field Project")).toBeInTheDocument();
+    expect(screen.getByText("Field Project / Field")).toBeInTheDocument();
 
     await waitFor(() => {
       for (const entity of Object.values(entitiesMock)) {
