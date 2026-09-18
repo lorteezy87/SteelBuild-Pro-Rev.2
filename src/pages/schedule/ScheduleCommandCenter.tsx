@@ -172,7 +172,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
         <section className="sbp-work-panel">
           <div className="sbp-work-panel__head">
             <h2>14-Day Lookahead</h2>
-            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={scrollToBody}>View schedule</button>
+            <button type="button" className="cmd-btn cmd-btn--ghost" aria-label="View all lookahead tasks" onClick={scrollToBody}>View schedule</button>
           </div>
           <div>
             {s.lookaheadQueue.length === 0 ? (
@@ -207,7 +207,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
         <section className="sbp-work-panel">
           <div className="sbp-work-panel__head">
             <h2>Milestones</h2>
-            <button type="button" className="cmd-btn cmd-btn--ghost" onClick={scrollToBody}>View schedule</button>
+            <button type="button" className="cmd-btn cmd-btn--ghost" aria-label="View all milestones" onClick={scrollToBody}>View schedule</button>
           </div>
           <div>
             {s.milestoneQueue.length === 0 ? (
