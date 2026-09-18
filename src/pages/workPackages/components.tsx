@@ -391,14 +391,110 @@ interface RegisterViewProps {
 
 const REGISTER_COLUMNS: Array<{ key: string | null; label: string }> = [
   { key: "wp_number", label: "WP" },
-  { key: "name", label: "Package" },
-  { key: "phase", label: "Phase" },
-  { key: "status", label: "Status" },
-  { key: "release", label: "Release" },
-  { key: "progress", label: "Progress" },
-  { key: "readiness", label: "Readiness" },
-  { key: "labor", label: "Labor" },
+  { key: "name", label: "Description" },
+  { key: null, label: "Sequence" },
+  { key: "tonnage", label: "Tons" },
+  { key: null, label: "Pieces" },
+  { key: null, label: "Drawing Status" },
+  { key: null, label: "Material" },
+  { key: "progress", label: "Fab" },
+  { key: null, label: "Ship" },
+  { key: null, label: "Field" },
+  { key: null, label: "Risk" },
 ];
+
+function pieceStageCount(
+  pieces: EnrichedWorkPackage["_signals"]["pieces"],
+  stage: "fab" | "ship" | "field",
+): { primary: string; detail: string } {
+  if (!pieces) return { primary: "Unknown", detail: "No piece evidence" };
+  const total = pieces.leafCount || 0;
+  if (stage === "fab") {
+    const complete = pieces.fabricated + pieces.shipped + pieces.delivered + pieces.erected;
+    return {
+      primary: `${complete}/${total} fabricated`,
+      detail: pieces.inFabrication ? `${pieces.inFabrication} in fab` : "No active fab count",
+    };
+  }
+  if (stage === "ship") {
+    const shipped = pieces.shipped + pieces.delivered + pieces.erected;
+    return { primary: `${shipped}/${total} shipped`, detail: `${pieces.delivered + pieces.erected} delivered+` };
+  }
+  return { primary: `${pieces.erected}/${total} erected`, detail: `${pieces.delivered} delivered` };
+}
+
+function drawingRegisterStatus(signals: EnrichedWorkPackage["_signals"]): {
+  primary: string;
+  detail: string;
+  tone: string;
+} {
+  if (signals.released) {
+    return {
+      primary: "Released",
+      detail: signals.release?.releaseNumber || "Fab release recorded",
+      tone: "var(--status-success)",
+    };
+  }
+  const drawing = signals.drawing;
+  if (!drawing.hasAny) {
+    return { primary: "No drawings", detail: "Evidence missing", tone: "var(--status-error)" };
+  }
+  const blocked = drawing.blockedCount ?? 0;
+  const ready = drawing.fabReadyCount ?? drawing.approvedCount ?? 0;
+  if (blocked > 0) {
+    return {
+      primary: `${blocked} blocked`,
+      detail: `${ready}/${drawing.linkedCount} fab-ready`,
+      tone: "var(--status-error)",
+    };
+  }
+  return {
+    primary: `${ready}/${drawing.linkedCount} ready`,
+    detail: "Drawing gate clear",
+    tone: "var(--status-success)",
+  };
+}
+
+function materialRegisterStatus(wp: EnrichedWorkPackage): {
+  primary: string;
+  detail: string;
+  tone: string;
+} {
+  const direct = wp.material_status ?? wp.material_state ?? null;
+  if (typeof direct === "string" && direct.trim()) {
+    return {
+      primary: direct.trim(),
+      detail: "Recorded package value",
+      tone: "var(--text-secondary)",
+    };
+  }
+  if (wp.material_ready === true || wp.material_on_hand === true) {
+    return { primary: "Ready", detail: "Material evidence", tone: "var(--status-success)" };
+  }
+  if (wp.material_ready === false || wp.material_on_hand === false) {
+    return { primary: "Not ready", detail: "Material evidence", tone: "var(--status-warning)" };
+  }
+  return { primary: "Unknown", detail: "No material evidence", tone: "var(--text-muted)" };
+}
+
+function RegisterCell({
+  primary,
+  detail,
+  color = "var(--text-primary)",
+}: {
+  primary: ReactNode;
+  detail?: ReactNode;
+  color?: string;
+}) {
+  return (
+    <span style={{ display: "grid", minWidth: 0, gap: 2 }}>
+      <span style={{ ...mono, fontSize: 10, fontWeight: 800, color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {primary}
+      </span>
+      {detail ? <span style={subLineStyle}>{detail}</span> : null}
+    </span>
+  );
+}
 
 export function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit, onDelete, sort, onSort }: RegisterViewProps) {
   if (!rows.length) return <NoPackages />;
@@ -432,7 +528,7 @@ export function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit
                 justifyContent: "flex-start",
               }}
             >
-              {column.label}
+              <span data-testid="wp-register-column">{column.label}</span>
               {active && (sort.direction === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
             </button>
           );
@@ -459,14 +555,45 @@ export function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit
           <span style={wpNumberStyle}>{wp.wp_number || "-"}</span>
           <span style={{ minWidth: 0 }}>
             <span style={packageNameStyle}>{wp.name || "Unnamed package"}</span>
-            <span style={subLineStyle}>{wp.crew || "No crew"} / {formatTons(wp.tonnage)}</span>
+            <span style={subLineStyle}>{wp.crew || "No crew"} · {wp._signals.status}</span>
           </span>
-          <PhaseBadge phase={wp._signals.phase} mismatch={wp._signals.phaseMismatch} />
-          <StatusPill label={wp._signals.status} />
-          <ReleasePill signals={wp._signals} />
-          <ProgressBar value={wp._signals.progress} color={phaseColor(wp._signals.phase)} height={4} sub={`${wp._signals.progress}%`} />
-          <Readiness value={wp._signals.readinessScore} />
-          <span style={laborLabelStyle(wp._signals.hourBurn)}>{wp._signals.totalBudgetHours ? `${wp._signals.hourBurn}%` : "-"}</span>
+          <RegisterCell
+            primary={wp.sequence_number || wp.area || "Unknown"}
+            detail={wp.area && wp.sequence_number ? `Area ${wp.area}` : "Sequence evidence"}
+          />
+          <RegisterCell
+            primary={num(wp.tonnage) > 0 ? formatTons(wp.tonnage) : "Unknown"}
+            detail={num(wp.tonnage) > 0 ? "Package tonnage" : "Tonnage missing"}
+          />
+          <RegisterCell
+            primary={wp._signals.pieces ? String(wp._signals.pieces.leafCount) : "Unknown"}
+            detail={wp._signals.pieces ? `${wp._signals.pieces.onHold} held` : "Piece control unavailable"}
+          />
+          {(() => {
+            const drawing = drawingRegisterStatus(wp._signals);
+            return <RegisterCell primary={drawing.primary} detail={drawing.detail} color={drawing.tone} />;
+          })()}
+          {(() => {
+            const material = materialRegisterStatus(wp);
+            return <RegisterCell primary={material.primary} detail={material.detail} color={material.tone} />;
+          })()}
+          {(() => {
+            const fab = pieceStageCount(wp._signals.pieces, "fab");
+            return <RegisterCell primary={fab.primary} detail={fab.detail} color={wp._signals.risk === "high" ? "var(--status-error)" : "var(--text-primary)"} />;
+          })()}
+          {(() => {
+            const ship = pieceStageCount(wp._signals.pieces, "ship");
+            return <RegisterCell primary={ship.primary} detail={ship.detail} />;
+          })()}
+          {(() => {
+            const field = pieceStageCount(wp._signals.pieces, "field");
+            return <RegisterCell primary={field.primary} detail={field.detail} />;
+          })()}
+          <RegisterCell
+            primary={wp._signals.risk === "clear" ? "Clear" : wp._signals.risk === "high" ? "High" : "Watch"}
+            detail={wp._signals.flags[0]?.label || `${wp._signals.readinessScore}% ready`}
+            color={wp._signals.risk === "high" ? "var(--status-error)" : wp._signals.risk === "medium" ? "var(--status-warning)" : "var(--status-success)"}
+          />
           <RowActions
             onEdit={onEdit ? (event) => { event.stopPropagation(); onEdit(wp); } : undefined}
             onDelete={onDelete ? (event) => { event.stopPropagation(); onDelete(wp); } : undefined}
