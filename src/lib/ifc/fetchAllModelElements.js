@@ -3,35 +3,52 @@
  *
  * Supabase caps a single request at 1000 rows server-side (db-max-rows), so a
  * plain `.limit(50000)` silently returns only the first 1000 rows. On big models
- * (a Capstone roster is ~16.8k pieces) the roster has to be paged.
+ * (a Capstone roster ran ~16.8k pieces, the largest live one ~28k) the roster
+ * has to be paged.
  *
- * It used to page SERIALLY — fetch page 1, await, fetch page 2, await … — so a
- * 17-page roster meant ~17 back-to-back round-trips, which is what made fab
- * colors visibly "pop in" a few seconds after the model rendered. Now we take one
- * lightweight COUNT, then fetch pages in bounded concurrent batches: enough
- * parallelism for first paint, without opening ~28 SELECT * queries at once
- * (which timed out under statement_timeout on ~27k-row projects —
- * Sentry JAVASCRIPT-REACT-X / production-model-elements).
+ * It used to page with `.range(from, to)` — LIMIT/OFFSET. That is quadratic
+ * here, and RLS is why. The SELECT policy on model_elements is
+ *
+ *     using (user_has_project_access(project_id))
+ *
+ * and `user_has_project_access` is SECURITY DEFINER, so Postgres can neither
+ * inline it nor fold it to a constant: it shows up as a per-ROW `Filter:` and
+ * runs once for every row the scan touches. OFFSET does not reduce the rows a
+ * scan touches — page N still filters and then SORTS the whole project before
+ * discarding the first N×1000 rows. So a 28-page roster paid the RLS filter
+ * ~784k times, four pages at a time, and tripped `authenticated`'s 8s
+ * statement_timeout (57014 — Sentry JAVASCRIPT-REACT-2H, /DrawingSubmittalHub).
+ *
+ * Measured on the live DB (project 9a79f6e2…, 4,825 rows, same role, same RLS):
+ *
+ *   .range(4000, 4999)        Bitmap Heap Scan + Sort all 4,825   20,249 buffers  203 ms
+ *   .gt("id", cursor).limit() Index Scan, stops at 1,000            5,735 buffers   44 ms
+ *
+ * So we page by KEYSET instead: order by the primary key and ask for rows after
+ * the last id we saw. `model_elements_pkey` is UNIQUE on `id`, so the cursor is
+ * strictly increasing — no row is skipped or returned twice — and
+ * `model_elements_project_id_active_id_idx ON (project_id, id) WHERE
+ * is_deleted = false` serves it as a plain index scan that stops after `page`
+ * rows. Cost per page is now flat instead of proportional to the whole project,
+ * and the RLS filter runs once per row returned rather than once per row
+ * scanned per page.
+ *
+ * Keyset paging is inherently sequential (each page needs the previous page's
+ * last id), so this trades the old bounded fan-out for N round-trips. That is a
+ * good trade: the fan-out only ever existed to hide how slow each offset page
+ * was, and it was itself what turned a slow page into a timeout storm. At the
+ * largest roster size the sequential keyset walk does roughly 1.2s of database
+ * work where the concurrent offset walk did ~33s.
  */
 import { supabase } from "@/lib/supabase";
 
 const PAGE = 1000;
-/** Cap concurrent page fetches to avoid statement-timeout storms. */
-const DEFAULT_CONCURRENCY = 4;
-
-async function mapPool(items, concurrency, mapper) {
-  const results = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next;
-      next += 1;
-      results[i] = await mapper(items[i], i);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
+/**
+ * Safety stop for the keyset walk. `id` is UNIQUE and we always ask for
+ * `id > cursor`, so the loop must terminate; this only bounds the damage if a
+ * client mock or a future schema change ever breaks that invariant.
+ */
+const MAX_PAGES = 1000;
 
 /**
  * How many live model members this project has — ONE HEAD request, zero rows
@@ -55,33 +72,64 @@ export async function countModelElements(projectId, { client = supabase } = {}) 
   return count || 0;
 }
 
+/** The keyset cursor rides `id`, so a projection that drops it cannot page. */
+function assertCursorColumn(columns) {
+  if (columns === "*") return;
+  const has = String(columns)
+    .split(",")
+    .some((c) => c.trim() === "id");
+  if (!has) {
+    throw new Error(
+      `fetchAllModelElements: columns must include "id" (keyset cursor); got "${columns}"`,
+    );
+  }
+}
+
+/**
+ * @returns {Promise<Record<string, unknown>[]>} every live element, id-ascending
+ */
 export async function fetchAllModelElements(
   projectId,
-  { client = supabase, page = PAGE, concurrency = DEFAULT_CONCURRENCY, columns = "*" } = {},
+  { client = supabase, page = PAGE, columns = "*" } = {},
 ) {
   if (!projectId) return [];
+  assertCursorColumn(columns);
 
-  // One HEAD count so we know how many pages to fan out (no rows transferred).
-  const count = await countModelElements(projectId, { client });
-  if (!count) return [];
+  /**
+   * Rows are shaped by the caller's `columns` projection, so this module cannot
+   * know their type; consumers narrow at their own boundary.
+   * @type {Record<string, unknown>[]}
+   */
+  const out = [];
+  /** @type {string | null} */
+  let cursor = null;
 
-  const fetchPage = async (i) => {
-    const from = i * page;
-    const { data, error } = await client
+  for (let i = 0; i < MAX_PAGES; i += 1) {
+    let q = client
       .from("model_elements")
       .select(columns)
       .eq("project_id", projectId)
-      .eq("is_deleted", false)
-      .order("id", { ascending: true }) // stable order so pages don't overlap/skip
-      .range(from, from + page - 1);
+      .eq("is_deleted", false);
+    // First page starts at the beginning; every later page resumes strictly
+    // after the last id we saw.
+    if (cursor !== null) q = q.gt("id", cursor);
+    const { data, error } = await q.order("id", { ascending: true }).limit(page);
     if (error) throw error;
-    return data || [];
-  };
 
-  const pageCount = Math.ceil(count / page);
-  const pageIndexes = Array.from({ length: pageCount }, (_, i) => i);
-  const pages = await mapPool(pageIndexes, Math.max(1, concurrency), fetchPage);
-  return pages.flat();
+    const rows = /** @type {Record<string, unknown>[]} */ (data || []);
+    out.push(...rows);
+    // A short page is the last page — no extra probe request.
+    if (rows.length < page) return out;
+
+    const last = rows[rows.length - 1];
+    const nextCursor = /** @type {string | null} */ (last?.id ?? null);
+    // Defensive: without a usable, advancing cursor we would re-request the
+    // same page forever. Stop with what we have rather than spin.
+    if (nextCursor === null || nextCursor === cursor) return out;
+    cursor = nextCursor;
+  }
+
+  return out;
 }
 
 /** Slim projection for Production Status piece↔drawing lookup (avoids SELECT *). */
