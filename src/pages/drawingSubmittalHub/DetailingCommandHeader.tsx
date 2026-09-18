@@ -80,12 +80,12 @@ export function DetailingCommandHeader({
   const holds = typeof activeHolds === "number" ? activeHolds : null;
 
   return (
-    <header className={children ? "detailing-cc__header" : "detailing-cc__header detailing-cc__header--bare"}>
+    <header className={children ? "detailing-cc__header sbp-page-header" : "detailing-cc__header detailing-cc__header--bare sbp-page-header"}>
       <div className="detailing-cc__header-row">
         <div className="detailing-cc__heading">
-          {eyebrow ? <p className="detailing-cc__eyebrow">{eyebrow}</p> : null}
+          {eyebrow ? <p className="detailing-cc__eyebrow sbp-page-header__eyebrow">{eyebrow}</p> : null}
           <div className="detailing-cc__title-row">
-            <h1 className="detailing-cc__title">{DCC_TITLE}</h1>
+            <h1 className="detailing-cc__title sbp-page-header__title">{DCC_TITLE}</h1>
             {/* Beside the h1, not inside it, so the heading's name stays the
                 page title. */}
             {holds !== null && onOpenHolds ? (
@@ -101,7 +101,7 @@ export function DetailingCommandHeader({
               </button>
             ) : null}
           </div>
-          <p className="detailing-cc__subtitle">{DCC_SUBTITLE}</p>
+          <p className="detailing-cc__subtitle sbp-page-header__subtitle">{DCC_SUBTITLE}</p>
           {statusLine ? <p className="detailing-cc__status">{statusLine}</p> : null}
         </div>
         {actions ? <div className="detailing-cc__actions">{actions}</div> : null}
