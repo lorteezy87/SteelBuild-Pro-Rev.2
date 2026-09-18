@@ -39,6 +39,14 @@ export type DrawingSetMetadata = {
   issuedBy: string;
   discipline: string;
   projectName: string;
+  /**
+   * The individual engineer who sealed the package — a PERSON, not the issuing
+   * firm (that is `issuedBy`). Optional on the type because the key is absent
+   * whenever the extractor did not ask for it, and Document Control reads an
+   * absent key as "not inspected" rather than "not stated". See
+   * `src/lib/docControl/titleBlock.ts`.
+   */
+  authorizingEngineer?: string;
 };
 
 export type PdfSheetRecord = {
@@ -161,6 +169,11 @@ function asSetMetadata(value: unknown): DrawingSetMetadata {
     issuedBy: stringField(record, "issuedBy"),
     discipline: stringField(record, "discipline"),
     projectName: stringField(record, "projectName"),
+    // Preserve the absent/empty distinction: a MISSING key means the model was
+    // never asked, an empty string means it looked and the seal named nobody.
+    ...("authorizingEngineer" in record
+      ? { authorizingEngineer: stringField(record, "authorizingEngineer") }
+      : {}),
   };
 }
 
@@ -376,8 +389,9 @@ const REPORT_DRAWING_SET_TOOL = {
           issuedBy:    { type: "string", description: "Issuing firm / engineer of record. Empty string if unknown." },
           discipline:  { type: "string", description: "Primary discipline of the set. One of Structural, Arch, MEP, Civil, Misc Metals, or empty string." },
           projectName: { type: "string", description: "Project name as shown on the cover. Empty string if unknown." },
+          authorizingEngineer: { type: "string", description: "The PERSON named in the professional seal / stamp block — e.g. 'J. Ruiz, P.E.', 'Maria Chen, S.E.'. A firm name is NOT an authorizing engineer; if only a firm is shown, return an empty string. Empty string if unknown." },
         },
-        required: ["setName", "revision", "issueDate", "issuedBy", "discipline", "projectName"],
+        required: ["setName", "revision", "issueDate", "issuedBy", "discipline", "projectName", "authorizingEngineer"],
       },
       sheets: {
         type: "array",
@@ -410,7 +424,7 @@ You will be given the plain-text content of a PDF drawing set, page by page. Tex
 
 Your job is to call the report_drawing_set tool EXACTLY ONCE with:
 
-1. Set-level metadata from the cover sheet / title page (set name, package revision, issue date, issuing firm, project name).
+1. Set-level metadata from the cover sheet / title page (set name, package revision, issue date, issuing firm, project name, authorizing engineer).
 2. Every individual sheet you can identify from the drawing index OR from per-sheet title blocks.
 
 CRITICAL RULES — violating any of these is a failure:
@@ -430,6 +444,12 @@ FIELD SEPARATION:
 REVISIONS AND DATES:
 - The sheet-level "revision" field is the PER-SHEET revision from the sheet's own title block. If a sheet's title block shows a different revision than the cover sheet, use the per-sheet value. Do NOT copy the package revision into every sheet automatically.
 - Dates go in ISO YYYY-MM-DD format (convert from MM/DD/YY if needed).
+
+SEAL / AUTHORIZING ENGINEER:
+- setMeta.authorizingEngineer is the PERSON named inside the professional seal or stamp block — typically a name followed by P.E., S.E., R.A. or a licence number.
+- setMeta.issuedBy is the FIRM that issued the package. These are different fields and must never be filled with the same value unless the seal genuinely names a person and the firm name is that person's name.
+- If you can see a firm but no individual's name, return an empty string for authorizingEngineer. Do NOT infer an engineer from the firm, the "ENGINEER OF RECORD" title-block line, or a "DRAWN BY" / "CHECKED BY" initial.
+- Return only what is printed. A guessed engineer name travels onto a transmittal and gets attributed to a real licence holder.
 
 PDF PAGE NUMBERS:
 - Every sheet MUST have a pdfPage value (1-indexed integer ≥ 1) that points to the PDF page where this sheet's drawing physically lives. Use the "===== PAGE N =====" markers in the input to determine which page contains each sheet.

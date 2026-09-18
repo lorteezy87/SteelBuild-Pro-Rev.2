@@ -22,6 +22,22 @@ export async function extractRevisionSheets(file, options = {}) {
     throw err;
   }
   let sheets = Array.isArray(result?.sheets) ? result.sheets : [];
+  // Hand the caller the parts of the extraction that are NOT sheets — cover-sheet
+  // metadata and whether the PDF had a text layer at all. Document Control needs
+  // both: without `scanned` it cannot tell a blank title-block box from a page it
+  // was never able to read. Passed through a callback so the return contract of
+  // this function (a sheets array) stays exactly as its callers expect.
+  if (typeof options.onExtraction === "function") {
+    try {
+      options.onExtraction({
+        setMeta: result?.setMeta ?? null,
+        scanned: result?.scanned === true,
+        pageCount: result?.pageCount ?? null,
+      });
+    } catch (err) {
+      console.warn("[extractRevisionSheets] onExtraction callback failed:", err?.message);
+    }
+  }
   if (options.titleblockTemplate?.revisionRect) {
     try {
       sheets = await applyTitleblockRevisionOcr(
