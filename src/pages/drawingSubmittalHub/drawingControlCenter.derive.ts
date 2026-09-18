@@ -134,7 +134,7 @@ export function buildProductionReadinessQueue(triage: TriageModel): ProductionRe
     .map((item) => {
       const readiness = item._readiness;
       const blockers = readinessBlockers(item);
-      return {
+      const row: ProductionReadinessRow = {
         id: item.id,
         package: item.title,
         currentStage: item.detailingState || item.status || "Unknown",
@@ -147,6 +147,7 @@ export function buildProductionReadinessQueue(triage: TriageModel): ProductionRe
         ready: Boolean(readiness?.fabricationReady),
         item,
       };
+      return row;
     })
     .sort((a, b) => {
       if (a.ready !== b.ready) return a.ready ? 1 : -1;
