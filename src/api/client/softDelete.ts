@@ -47,6 +47,13 @@ export const SOFT_DELETE_TABLES = new Set<string>([
   // deleted task stops feeding the Gantt, the cascade, float and % complete.
   // Do NOT "fix" this by granting DELETE — the database forbids it on purpose.
   'schedule_tasks',
+  // GC document register. Both carry is_deleted / deleted_at, both are named in
+  // the database's hard_delete_allowlist(), and neither has a DELETE policy —
+  // so a hard delete would fail RLS. Registering here makes delete() the
+  // soft-delete UPDATE the schema expects, and makes list/filter/get skip
+  // tombstones. gc_drawings also drives gc_drawing_sets.sheet_count through
+  // trg_gc_drawings_sync_counts, which fires on the is_deleted UPDATE.
+  'gc_drawing_sets', 'gc_drawings',
 ]);
 
 /**
@@ -74,6 +81,10 @@ export const PROJECT_SCOPED_TABLES = new Set<string>([
   'email_accounts', 'email_messages', 'email_attachments',
   // Document Storage integration: linked folders + import queue.
   'linked_folders', 'document_import_queue',
+  // GC document register: an ASI against an archived project is not a live
+  // document. Both FKs are named <table>_project_id_fkey, which is what
+  // projectScopedSelect() below embeds.
+  'gc_drawing_sets', 'gc_drawings',
 ]);
 
 /**

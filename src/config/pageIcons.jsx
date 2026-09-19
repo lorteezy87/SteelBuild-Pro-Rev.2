@@ -14,7 +14,7 @@ import {
   ClipboardList, Shield, ShieldAlert, FlaskConical, Camera,
   Contact2, Building2, UserCog, Settings as SettingsIcon,
   Ruler, Calculator, HardHat, ArrowLeftRight,
-  BookOpen, StickyNote, Stamp,
+  BookOpen, StickyNote, Stamp, FileInput,
 } from "lucide-react";
 
 export const PAGE_ICON = {
@@ -45,6 +45,7 @@ export const PAGE_ICON = {
   DrawingViewer: Eye,
   Documents: Folder,
   DocumentControl: Stamp,
+  GcDocuments: FileInput,
 
   WorkPackages: Package,
   PieceRegister: Package,

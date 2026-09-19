@@ -58,6 +58,9 @@ const ROUTE_DOMAINS = {
     Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents",           { projectScoped: true }),
     Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittal Register",  { projectScoped: true }),
     DocumentControl:  r(lazyWithRetry(() => import("@/pages/DocumentControl")),  "Document Control",    { projectScoped: true }),
+    // Incoming, GC-issued documents. Separate from Drawings on purpose: that
+    // register is OUR shop drawings and their submittal workflow.
+    GcDocuments:      r(lazyWithRetry(() => import("@/pages/GcDocuments")),      "GC Documents",        { projectScoped: true }),
   },
   fabrication: {
     WorkPackages:       r(lazyWithRetry(() => import("@/pages/WorkPackages")),       "Work Packages",       { projectScoped: true }),
