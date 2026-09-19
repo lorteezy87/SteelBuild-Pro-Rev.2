@@ -8,6 +8,8 @@ import {
   getAngleStatus,
   angleFromHeightSpan,
   buildWarnings,
+  loadBearingLegs,
+  isOverCapacity,
 } from "../riggingCalculations";
 
 // Pure crane-pick math (ASME B30.9 / B30.5, OSHA 1926.1400). Safety-relevant —
@@ -62,8 +64,33 @@ describe("calculateSlingTension (per leg, symmetric pick)", () => {
     expect(calculateSlingTension(10000, 2, 30)).toBeCloseTo(10000, 1); // (10000/2)*2.0
   });
 
-  it("splits across 4 legs and applies the angle factor", () => {
-    expect(calculateSlingTension(10000, 4, 45)).toBeCloseTo(3535.5, 1);
+  // A 4-leg bridle on a RIGID load divides by TWO, not four. The load cannot
+  // flex to bring all four legs into bearing, so sling-length tolerance and any
+  // CG offset put the load into two diagonally opposite legs (ASME B30.9).
+  //
+  // This test previously asserted 3535.5 — the divide-by-four answer, which
+  // under-predicted leg tension by exactly 2x and could have put a rigger on an
+  // under-rated sling while the tool read green.
+  it("assumes only 2 of 4 legs carry on a rigid load", () => {
+    expect(calculateSlingTension(10000, 4, 45)).toBeCloseTo(7071.1, 1); // (10000/2)*1.4142
+    expect(calculateSlingTension(10000, 4, 90)).toBeCloseTo(5000, 3);
+    expect(calculateSlingTension(20000, 4, 60)).toBeCloseTo(11547.0, 1);
+  });
+
+  it("reports the same per-leg tension for a 2-leg and a 4-leg bridle", () => {
+    for (const angle of [30, 45, 60, 90]) {
+      expect(calculateSlingTension(10000, 4, angle)).toBeCloseTo(
+        calculateSlingTension(10000, 2, angle),
+        6,
+      );
+    }
+  });
+
+  it("loadBearingLegs encodes the rigid-load assumption", () => {
+    expect(loadBearingLegs(1)).toBe(1);
+    expect(loadBearingLegs(2)).toBe(2);
+    expect(loadBearingLegs(4)).toBe(2);
+    expect(loadBearingLegs(3)).toBeNaN();
   });
 
   it("returns NaN for an unsupported leg count or non-positive load", () => {
@@ -122,7 +149,11 @@ describe("getCapacityStatus thresholds (75% / 90%)", () => {
 describe("getAngleStatus thresholds (30° / 45°)", () => {
   it("is red below 30°", () => {
     expect(getAngleStatus(29.99)).toBe("red");
-    expect(getAngleStatus(0)).toBe("red");
+    // 0 is asserted null in "guards non-physical angles" below, not red: a
+    // sling at 0 deg from horizontal has no evaluable tension (sin 0 = 0), so
+    // the status is "not evaluable", not "evaluated and unsafe". The UI blocks
+    // it at input validation ("Sling angle must be > 0 deg and <= 90 deg") and
+    // renders no results, so nothing is hidden by returning null.
   });
 
   it("is yellow on the inclusive 30–45° band", () => {
@@ -204,5 +235,44 @@ describe("buildWarnings", () => {
     expect(w.map((x) => x.severity)).toEqual(["yellow", "yellow"]);
     expect(w[0].message).toContain("38.0°");
     expect(w[1].message).toContain("82.0%");
+  });
+});
+
+describe("isOverCapacity", () => {
+  it("separates an outright overload from a 90-100% critical lift", () => {
+    expect(isOverCapacity(95)).toBe(false);
+    expect(isOverCapacity(100)).toBe(false);
+    expect(isOverCapacity(100.1)).toBe(true);
+    expect(isOverCapacity(NaN)).toBe(false);
+  });
+});
+
+describe("getAngleStatus guards non-physical angles", () => {
+  it("returns null rather than green above 90 degrees or at/below zero", () => {
+    // Previously these fell through to "green" — the safest possible reading
+    // for an input the tension math refuses to evaluate.
+    expect(getAngleStatus(120)).toBeNull();
+    expect(getAngleStatus(0)).toBeNull();
+    expect(getAngleStatus(-15)).toBeNull();
+    expect(getAngleStatus(90)).toBe("green");
+  });
+});
+
+describe("buildWarnings", () => {
+  it("flags an overload distinctly from a critical lift", () => {
+    const over = buildWarnings({ capacityStatus: "red", utilizationPercent: 115, numLegs: 2 });
+    expect(over.some((w) => w.message.includes("OVERLOAD"))).toBe(true);
+    expect(over.some((w) => w.message.includes("critical lift"))).toBe(false);
+
+    const critical = buildWarnings({ capacityStatus: "red", utilizationPercent: 95, numLegs: 2 });
+    expect(critical.some((w) => w.message.includes("OVERLOAD"))).toBe(false);
+    expect(critical.some((w) => w.message.includes("critical lift"))).toBe(true);
+  });
+
+  it("discloses the two-leg assumption on a 4-leg bridle", () => {
+    const w = buildWarnings({ capacityStatus: "green", utilizationPercent: 40, numLegs: 4 });
+    expect(w.some((x) => x.message.includes("TWO legs carry"))).toBe(true);
+    const w2 = buildWarnings({ capacityStatus: "green", utilizationPercent: 40, numLegs: 2 });
+    expect(w2.some((x) => x.message.includes("TWO legs carry"))).toBe(false);
   });
 });
