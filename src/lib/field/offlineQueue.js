@@ -210,6 +210,45 @@ export async function flushQueue(queue, handlers) {
 }
 
 /**
+ * Which ops did a flush actually consume? `flushQueue` drains from the FRONT
+ * and returns what is left, so everything before the remainder was either
+ * synced or discarded as an unknown type. Returns a Set of their ids.
+ */
+export function consumedOpIds(queueAtFlushStart, remaining) {
+  const before = Array.isArray(queueAtFlushStart) ? queueAtFlushStart : [];
+  const left = Array.isArray(remaining) ? remaining : [];
+  const consumedCount = Math.max(0, before.length - left.length);
+  return new Set(
+    before
+      .slice(0, consumedCount)
+      .map((op) => op?.id)
+      .filter((id) => typeof id === "string" && id.length > 0),
+  );
+}
+
+/**
+ * Reconcile the PERSISTED queue against a completed flush.
+ *
+ * A flush snapshots the queue, awaits the network, then has to write back. It
+ * must NOT write `result.remaining` directly: anything the user enqueued while
+ * the flush was in flight is in storage but not in that snapshot, and a blind
+ * write silently destroys it (a punch item captured mid-sync just disappears).
+ *
+ * Instead: re-read storage, then drop only the ids the flush actually
+ * consumed. Ops enqueued during the flush survive, and order is preserved.
+ * Coalescing is safe here — a re-enqueued op carries a NEW id (makeProgressOp
+ * stamps `now` into it), so it is never mistaken for the consumed one.
+ *
+ * Pure: takes the persisted queue explicitly so it is testable without a
+ * browser or a clock.
+ */
+export function reconcileAfterFlush(persistedQueue, queueAtFlushStart, remaining) {
+  const consumed = consumedOpIds(queueAtFlushStart, remaining);
+  const persisted = Array.isArray(persistedQueue) ? persistedQueue : [];
+  return persisted.filter((op) => !consumed.has(op?.id));
+}
+
+/**
  * Heuristic: did this write fail because we're offline (vs. a real server
  * rejection)? Offline Supabase/fetch calls surface as "TypeError: Failed to
  * fetch". A genuine 4xx/RLS error has a different shape and should NOT be

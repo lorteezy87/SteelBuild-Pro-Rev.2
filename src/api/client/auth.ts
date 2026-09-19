@@ -21,8 +21,23 @@ const BLOCKED_FIELDS = new Set([
 
 /**
  * Server-authoritative role for a user — always from `user_profiles.role`,
- * never the client-writable user_metadata. Falls back to 'user' on any error.
+ * never the client-writable user_metadata.
+ *
+ * Two different "no role" cases, deliberately resolved differently:
+ *
+ *   • READ SUCCEEDED, role absent/blank → 'user'. This is the normal state for
+ *     an account with no elevated global role, and permissions.ts ranks it at
+ *     PM level, which is the intended default.
+ *
+ *   • READ FAILED (error or throw) → 'viewer', the LEAST privileged rank.
+ *     This previously also returned 'user', so a transient user_profiles read
+ *     failure silently handed a genuine viewer a PM-enabled UI. RLS still
+ *     blocked the writes, so it was never a breach — but the user got a screen
+ *     full of controls that fail on click, which is its own kind of broken.
+ *     An unknown role must degrade downward, not upward.
  */
+const ROLE_ON_READ_FAILURE = 'viewer';
+
 async function fetchProfileRole(userId: string): Promise<string> {
   try {
     const { data, error } = await supabase
@@ -30,11 +45,11 @@ async function fetchProfileRole(userId: string): Promise<string> {
       .select('role')
       .eq('id', userId)
       .maybeSingle();
-    if (error) return 'user';
+    if (error) return ROLE_ON_READ_FAILURE;
     const r = (data as { role?: unknown } | null)?.role;
     return (typeof r === 'string' && r.trim()) || 'user';
   } catch {
-    return 'user';
+    return ROLE_ON_READ_FAILURE;
   }
 }
 

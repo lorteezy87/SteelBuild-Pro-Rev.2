@@ -23,6 +23,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { fetchAllRows } from "@/lib/pagedQuery";
 
 const normalizeSetName = (name) =>
   (name || "").toString().trim().replace(/\s+/g, " ");
@@ -36,11 +37,13 @@ const normalizeSetName = (name) =>
  *                                  (optional).
  * @param {object} opts
  * @param {string} opts.projectName  Fallback project name for all rows.
- * @returns {Promise<{created: number, skipped: number, failed: number}>}
+ * @returns {Promise<{created: number, skipped: number, failed: number,
+ *                    dedupComplete: boolean}>} `dedupComplete` is false when the
+ *          existing-task scan failed, meaning duplicates are possible.
  */
 export async function autoCreateDetailingTasks(drawings, { projectName = "" } = {}) {
   const list = (drawings || []).filter((d) => d && d.id && d.project_id);
-  if (list.length === 0) return { created: 0, skipped: 0, failed: 0 };
+  if (list.length === 0) return { created: 0, skipped: 0, failed: 0, dedupComplete: true };
 
   const projectId = list[0].project_id;
 
@@ -55,7 +58,7 @@ export async function autoCreateDetailingTasks(drawings, { projectName = "" } = 
   }
 
   if (setsByName.size === 0) {
-    return { created: 0, skipped: orphaned, failed: 0 };
+    return { created: 0, skipped: orphaned, failed: 0, dedupComplete: true };
   }
 
   // 2. Dedup: look up existing set-level tasks already in this project.
@@ -64,20 +67,33 @@ export async function autoCreateDetailingTasks(drawings, { projectName = "" } = 
   //    the insert path will still respect any unique index.
   const setNames = Array.from(setsByName.keys());
   const existingSetNames = new Set();
+  let dedupComplete = true;
   try {
-    const { data, error } = await supabase
-      .from("schedule_tasks")
-      .select("metadata")
-      .eq("project_id", projectId)
-      .eq("metadata->>source", "drawing_set");
-    if (!error && Array.isArray(data)) {
-      for (const row of data) {
-        const name = normalizeSetName(row?.metadata?.drawing_set_name);
-        if (name) existingSetNames.add(name);
-      }
+    // PAGED. This was a single unbounded select, so PostgREST capped it at
+    // db-max-rows (1000) and returned 200 OK — on a project past that many
+    // schedule tasks the dedup set was silently short and this function minted
+    // DUPLICATE detailing tasks for sets that already had one. Page it so the
+    // dedup set is actually the whole set.
+    const rows = await fetchAllRows(
+      (start, end) => supabase
+        .from("schedule_tasks")
+        .select("id, metadata")
+        .eq("project_id", projectId)
+        .eq("metadata->>source", "drawing_set")
+        .order("id")
+        .range(start, end),
+      "detailing dedup scan",
+    );
+    for (const row of rows) {
+      const name = normalizeSetName(row?.metadata?.drawing_set_name);
+      if (name) existingSetNames.add(name);
     }
-  } catch {
-    // ignore — proceed without dedup
+  } catch (err) {
+    // Previously this fell through silently on the theory that "a duplicate is
+    // better than a missed creation". That trade is only acceptable if the
+    // caller KNOWS it happened, so report it instead of swallowing it.
+    dedupComplete = false;
+    console.warn("[autoScheduleDetailing] dedup scan failed; may create duplicates:", err);
   }
 
   const toInsert = [];
@@ -88,7 +104,7 @@ export async function autoCreateDetailingTasks(drawings, { projectName = "" } = 
   }
 
   if (toInsert.length === 0) {
-    return { created: 0, skipped, failed: 0 };
+    return { created: 0, skipped, failed: 0, dedupComplete };
   }
 
   // 3. Bulk insert with per-row fallback so one bad row doesn't lose the batch.
@@ -112,7 +128,7 @@ export async function autoCreateDetailingTasks(drawings, { projectName = "" } = 
     }
   }
 
-  return { created, skipped, failed };
+  return { created, skipped, failed, dedupComplete };
 }
 
 function rowForSet(setName, sheets, fallbackProjectName) {

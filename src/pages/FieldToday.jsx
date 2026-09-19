@@ -231,10 +231,17 @@ export default function FieldToday() {
     }
   };
 
-  // Reclaim orphaned pending-photo blobs (op already drained) once on mount.
+  // Reclaim orphaned pending-photo blobs — blobs in IndexedDB whose outbox op
+  // is gone (synced, or discarded by flushQueue as an unknown type).
+  //
+  // This ran once on mount, so a blob orphaned by a flush sat in IndexedDB for
+  // the rest of the session and only cleared on the next visit to this page.
+  // Re-running it whenever `pendingSync` changes catches the flush too: the
+  // count moves exactly when ops drain, so it is the right trigger and it is
+  // idempotent (it only deletes keys with no live op).
   useEffect(() => {
     reconcilePendingPhotos(new Set(loadQueue().map((op) => op.id)));
-  }, []);
+  }, [pendingSync]);
 
   if (!projectId) {
     return <section role="status" style={{ padding: 32 }}>

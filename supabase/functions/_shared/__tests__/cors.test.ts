@@ -56,8 +56,40 @@ describe("shared Edge Function CORS", () => {
     expect(headers["Access-Control-Allow-Origin"]).toBe(stagingOrigin);
   });
 
-  it("keeps legacy permissive behavior only when no allowlist is configured", () => {
-    expect(corsHeaders()["Access-Control-Allow-Origin"]).toBe("*");
-    expect(isAllowedOrigin("https://random-preview.vercel.app")).toBe(true);
+  // Previously: with no ALLOWED_ORIGINS the helper emitted `*` and matched any
+  // *.vercel.app host. Both are removed — an unset secret now degrades to the
+  // fixed production + loopback list, never to "anyone". stripe-billing feeds
+  // isAllowedOrigin() into Checkout redirect URLs, so a pattern match here was
+  // a post-payment open redirect.
+  describe("with no ALLOWED_ORIGINS configured", () => {
+    it("never emits a wildcard Access-Control-Allow-Origin", () => {
+      expect(corsHeaders()["Access-Control-Allow-Origin"]).toBeUndefined();
+      const unknown = corsHeaders(new Request("https://functions.example.test", {
+        headers: { Origin: "https://evil.example.com" },
+      }));
+      expect(unknown["Access-Control-Allow-Origin"]).toBeUndefined();
+      expect(unknown.Vary).toBe("Origin");
+    });
+
+    it("refuses arbitrary vercel.app hosts", () => {
+      expect(isAllowedOrigin("https://random-preview.vercel.app")).toBe(false);
+      expect(isAllowedOrigin(stagingOrigin)).toBe(false);
+      expect(isAllowedOrigin(previewOrigin)).toBe(false);
+    });
+
+    it("still allows production and loopback so dev and prod keep working", () => {
+      expect(isAllowedOrigin("https://steelbuild-pro.com")).toBe(true);
+      expect(isAllowedOrigin("https://www.steelbuild-pro.com")).toBe(true);
+      expect(isAllowedOrigin("http://localhost:5173")).toBe(true);
+
+      const prod = corsHeaders(new Request("https://functions.example.test", {
+        headers: { Origin: "https://steelbuild-pro.com" },
+      }));
+      expect(prod["Access-Control-Allow-Origin"]).toBe("https://steelbuild-pro.com");
+    });
+
+    it("does not allow loopback on an unlisted port", () => {
+      expect(isAllowedOrigin("http://localhost:9999")).toBe(false);
+    });
   });
 });

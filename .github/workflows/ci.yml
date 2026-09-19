@@ -42,11 +42,20 @@
 # resolves either (`getaddrinfo ENOTFOUND`), so staging needs rebuilding from
 # scratch — see docs/runbooks/cloudflare-migration.md step 8.
 #
+#   - secret-scan: gitleaks over the full history. BLOCKING — a committed
+#                credential is compromised on push; rotation is the only fix, so
+#                there is nothing to weigh and the run should fail.
+#
 # What does NOT run here:
 #   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
-#   - Secret scanning (gitleaks) / SAST — queued; needs an owner decision on
-#     tooling (see ENTERPRISE_READINESS_AUDIT.md L13).
+#   - SAST — still queued; needs an owner decision on tooling
+#     (see ENTERPRISE_READINESS_AUDIT.md L13).
 #   - Lighthouse / a11y / bundle-size budgets (queued for later).
+#
+# NOTE ON ENFORCEMENT: none of these gates bind until branch protection on
+# `main` requires them. Until then a direct push deploys ungated and the
+# "a red CI cannot reach steelbuild-pro.com" claim above is aspirational.
+# See TECH_DEBT.md B41-P1-005.
 
 name: CI
 
@@ -218,6 +227,52 @@ jobs:
       - name: Audit all dependencies (high+, including build and native tooling)
         if: ${{ !cancelled() }}
         run: npm audit --audit-level=high
+
+  # ── Secret scanning (enforced) ──────────────────────────────────────────────
+  # Closes the "no secret scanning" gap this file used to list under "What does
+  # NOT run here". This repo currently holds no hardcoded credentials — the job
+  # exists to keep it that way, because a leaked SUPABASE_SERVICE_ROLE_KEY,
+  # STRIPE_SECRET_KEY or EMAIL_WEBHOOK_SECRET bypasses RLS, billing auth, or the
+  # inbound-mail gate outright. Those live in Supabase Edge Function secrets and
+  # the Cloudflare project env; none of them should ever appear in a diff.
+  #
+  # BLOCKING, unlike dependency-audit. A CVE in a transitive dep is a risk to
+  # weigh; a committed credential is already compromised the moment it is pushed,
+  # and the remediation is rotation, not a merge decision. Failing the run is the
+  # only useful response.
+  #
+  # fetch-depth: 0 so gitleaks scans history, not just the tip commit — a secret
+  # added and "removed" in a later commit is still in the objects and still live.
+  # On a pull_request it diffs the PR range; elsewhere it scans the full history,
+  # so expect the first run to take longer.
+  #
+  # False positive? Do NOT delete the job or add a blanket allowlist. Add a
+  # narrowly scoped rule to .gitleaks.toml with a comment naming the file and why
+  # the match is benign.
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The workflow default is `contents: read` only. On a pull_request event
+    # gitleaks-action lists the PR's commits through the API to scan just that
+    # range, so without pull-requests:read it dies on
+    # "Resource not accessible by integration" (403) — a crash, not a finding.
+    # The push-event run passes either way because it scans history directly,
+    # which is exactly how this hid until the first PR run.
+    # Granted per-job so every other job keeps the narrower default.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ── Supabase migration + edge-function drift (enforced) ──────────────────
   # H4/H5: compares production with the reviewed shared-project ownership

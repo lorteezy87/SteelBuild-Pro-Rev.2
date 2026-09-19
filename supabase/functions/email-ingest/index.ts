@@ -16,7 +16,10 @@
 //
 // Auth: This endpoint does NOT require a JWT (verify_jwt=false) because
 // it receives webhooks from external email services. Instead, it uses
-// a shared secret (EMAIL_WEBHOOK_SECRET) as a bearer token or query param.
+// a shared secret (EMAIL_WEBHOOK_SECRET) supplied in a HEADER — either
+// `Authorization: Bearer <secret>` or `x-webhook-secret: <secret>`.
+// The former `?secret=` query-parameter form is no longer accepted: a
+// credential in a URL ends up in request logs at every hop.
 //
 // Secrets required:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, EMAIL_WEBHOOK_SECRET
@@ -80,6 +83,26 @@ function json(body: unknown, status = 200): Response {
 
 // ── Authentication ─────────────────────────────────────────────────────────
 
+/**
+ * Length-independent comparison. `===` on a secret leaks its prefix through
+ * timing; not a practical remote attack over HTTP in most setups, but this is a
+ * bearer credential for an unauthenticated endpoint and the fix is three lines.
+ * Mirrors constantTimeHexEqual in _shared/maintenance-auth.ts.
+ */
+function secretsMatch(supplied: string | null, expected: string): boolean {
+  if (!supplied) return false;
+  const a = new TextEncoder().encode(supplied);
+  const b = new TextEncoder().encode(expected);
+  // Compare a fixed number of bytes either way so the loop count does not
+  // depend on the supplied length; the length check still decides the result.
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < len; i += 1) {
+    diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  }
+  return diff === 0;
+}
+
 function authenticateWebhook(req: Request): boolean {
   const secret = Deno.env.get("EMAIL_WEBHOOK_SECRET");
   if (!secret) {
@@ -87,14 +110,26 @@ function authenticateWebhook(req: Request): boolean {
     return false;
   }
 
+  // Headers only.
+  //
+  // The `?secret=` query-parameter path is REMOVED. A credential in a URL is
+  // written to every hop that logs request lines — Supabase's own request logs,
+  // any proxy or CDN in front, the sender's outbound logs, and browser history
+  // if anyone ever pastes the URL. It is the one place a secret leaks without
+  // anybody being attacked. SendGrid Inbound Parse, Power Automate and a manual
+  // forward can all set a header instead; if a caller genuinely cannot, rotate
+  // to a dedicated per-sender secret rather than putting it back in the URL.
   const authHeader = req.headers.get("Authorization");
-  if (authHeader === `Bearer ${secret}`) return true;
+  if (authHeader?.startsWith("Bearer ") && secretsMatch(authHeader.slice(7), secret)) return true;
 
-  const webhookHeader = req.headers.get("x-webhook-secret");
-  if (webhookHeader === secret) return true;
+  if (secretsMatch(req.headers.get("x-webhook-secret"), secret)) return true;
 
-  const url = new URL(req.url);
-  if (url.searchParams.get("secret") === secret) return true;
+  if (new URL(req.url).searchParams.has("secret")) {
+    console.warn(
+      "[email-ingest] rejected a request carrying ?secret= — the query-param auth path was removed; " +
+      "send the shared secret in the x-webhook-secret header instead.",
+    );
+  }
 
   return false;
 }
