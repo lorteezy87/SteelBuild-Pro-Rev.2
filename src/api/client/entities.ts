@@ -206,6 +206,15 @@ export const entities = {
   // grid reads the drawing_register_view + the publish_drawing_revision RPC.
   DrawingTransmittal:     createEntityClient('drawing_transmittals'),
   DrawingTransmittalItem: createEntityClient('drawing_transmittal_items'),
+  // ── GC document register (20260919120000) ───────────────────────
+  // What the GC sends US: GC drawings, ASIs, addenda, bulletins, CCDs and
+  // contract documents. A DIFFERENT namespace from drawings/drawing_sets,
+  // which are OUR shop drawings — a sheet number that appears in both is not
+  // the same sheet, and a GC drawing can never satisfy a fabrication gate.
+  // One gc_drawing_sets row per issuance; gc_drawings are its sheets.
+  // Writes need PM (user_has_project_role_at_least(project_id,'pm')).
+  GcDrawingSet:           createEntityClient('gc_drawing_sets'),
+  GcDrawing:              createEntityClient('gc_drawings'),
   DrawingReview:          createEntityClient('drawing_reviews'),
   DrawingImpact:          createEntityClient('drawing_impacts'),
   DrawingMarkup:          createEntityClient('drawing_markups'),

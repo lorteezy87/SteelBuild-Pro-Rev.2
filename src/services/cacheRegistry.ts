@@ -76,6 +76,28 @@ const REGISTRY: Record<string, EntityRegistration> = {
     ],
   },
 
+  // The GC register is a SEPARATE namespace from drawing / drawingSet above —
+  // gc_drawings are what the GC sent us, not our shop sheets. Invalidating one
+  // must not be assumed to refresh the other. A sheet write also changes its
+  // set's sheet_count (trg_gc_drawings_sync_counts), so the sheet entry
+  // deliberately invalidates the set families too.
+  gcDrawingSet: {
+    primary:  (pid) => ["gc-drawing-sets", pid],
+    families: (pid) => [
+      ["gc-drawing-sets"],
+      ["gc-documents", pid],       // GcDocuments page: sets + sheets in one read
+    ],
+  },
+
+  gcDrawing: {
+    primary:  (pid) => ["gc-drawings", pid],
+    families: (pid) => [
+      ["gc-drawings"],
+      ["gc-drawing-sets"],         // sheet_count is maintained by a DB trigger
+      ["gc-documents", pid],
+    ],
+  },
+
   delivery: {
     primary:  (pid) => ["deliveries", pid],
     families: (pid) => [

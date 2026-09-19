@@ -4213,6 +4213,201 @@ export type Database = {
         }
         Relationships: []
       }
+      gc_drawing_sets: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          discipline: string | null
+          doc_number: string | null
+          doc_type: string
+          file_url: string | null
+          id: string
+          impact_notes: string | null
+          is_deleted: boolean
+          issued_by: string | null
+          issued_date: string | null
+          metadata: Json
+          project_id: string
+          received_date: string | null
+          revision: string | null
+          set_name: string
+          sheet_count: number
+          steel_impact: string
+          titleblock_number_rect: Json | null
+          titleblock_revision_rect: Json | null
+          titleblock_title_rect: Json | null
+          updated_at: string
+          upload_batch_id: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          discipline?: string | null
+          doc_number?: string | null
+          doc_type?: string
+          file_url?: string | null
+          id?: string
+          impact_notes?: string | null
+          is_deleted?: boolean
+          issued_by?: string | null
+          issued_date?: string | null
+          metadata?: Json
+          project_id: string
+          received_date?: string | null
+          revision?: string | null
+          set_name: string
+          sheet_count?: number
+          steel_impact?: string
+          titleblock_number_rect?: Json | null
+          titleblock_revision_rect?: Json | null
+          titleblock_title_rect?: Json | null
+          updated_at?: string
+          upload_batch_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          discipline?: string | null
+          doc_number?: string | null
+          doc_type?: string
+          file_url?: string | null
+          id?: string
+          impact_notes?: string | null
+          is_deleted?: boolean
+          issued_by?: string | null
+          issued_date?: string | null
+          metadata?: Json
+          project_id?: string
+          received_date?: string | null
+          revision?: string | null
+          set_name?: string
+          sheet_count?: number
+          steel_impact?: string
+          titleblock_number_rect?: Json | null
+          titleblock_revision_rect?: Json | null
+          titleblock_title_rect?: Json | null
+          updated_at?: string
+          upload_batch_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gc_drawing_sets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gc_drawings: {
+        Row: {
+          ai_extraction_source: string | null
+          ai_extraction_status: string
+          created_at: string
+          deleted_at: string | null
+          discipline: string | null
+          drawing_number: string | null
+          extracted_text: string | null
+          file_url: string | null
+          gc_drawing_set_id: string
+          id: string
+          is_deleted: boolean
+          is_superseded: boolean
+          last_extracted_at: string | null
+          metadata: Json
+          pdf_page: number
+          project_id: string
+          revision: string | null
+          superseded_by_id: string | null
+          thumbnail_url: string | null
+          title: string | null
+          updated_at: string
+          upload_batch_id: string | null
+          upload_status: string
+        }
+        Insert: {
+          ai_extraction_source?: string | null
+          ai_extraction_status?: string
+          created_at?: string
+          deleted_at?: string | null
+          discipline?: string | null
+          drawing_number?: string | null
+          extracted_text?: string | null
+          file_url?: string | null
+          gc_drawing_set_id: string
+          id?: string
+          is_deleted?: boolean
+          is_superseded?: boolean
+          last_extracted_at?: string | null
+          metadata?: Json
+          pdf_page?: number
+          project_id: string
+          revision?: string | null
+          superseded_by_id?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          upload_batch_id?: string | null
+          upload_status?: string
+        }
+        Update: {
+          ai_extraction_source?: string | null
+          ai_extraction_status?: string
+          created_at?: string
+          deleted_at?: string | null
+          discipline?: string | null
+          drawing_number?: string | null
+          extracted_text?: string | null
+          file_url?: string | null
+          gc_drawing_set_id?: string
+          id?: string
+          is_deleted?: boolean
+          is_superseded?: boolean
+          last_extracted_at?: string | null
+          metadata?: Json
+          pdf_page?: number
+          project_id?: string
+          revision?: string | null
+          superseded_by_id?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          upload_batch_id?: string | null
+          upload_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gc_drawings_gc_drawing_set_id_fkey"
+            columns: ["gc_drawing_set_id"]
+            isOneToOne: false
+            referencedRelation: "gc_drawing_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gc_drawings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gc_drawings_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "gc_drawings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inspections: {
         Row: {
           corrective_actions: string | null
