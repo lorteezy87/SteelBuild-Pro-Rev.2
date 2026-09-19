@@ -216,4 +216,103 @@ export default [
       globals: globals.node,
     },
   },
+  // ── Unbounded raw PostgREST reads ───────────────────────────────────────────
+  // PostgREST caps a response at db-max-rows (1000) and returns 200 OK. A read
+  // that exceeds it is silently SHORT — no error, no flag.
+  //
+  // src/api/client/entityClient.ts handles this properly: an explicit
+  // LIST_ROW_CAP, an EFFECTIVE_LIST_CAP that accounts for the server ceiling,
+  // and Sentry truncation telemetry. Call sites that reach past it for the raw
+  // client get none of that, and it has already shipped two defects — a claims
+  // export that silently omitted RFIs/photos past row 1000, and a detailing
+  // dedup scan that minted duplicate schedule tasks because it couldn't see the
+  // existing ones.
+  //
+  // So: raw `supabase.from(...)` is banned outside the data layer. Use the
+  // `entities.*` client, or `fetchAllRows`/`fetchCapped` from @/lib/pagedQuery
+  // when you genuinely need a raw query.
+  //
+  // ERROR, not warn: `npm run lint` passes --quiet, which suppresses warnings
+  // entirely, so a warn-level rule would never fail CI and would never be seen.
+  // Every CURRENT call site is enumerated in the ignore list below, so this is
+  // green today and blocks only NEW violations. Ratchet it by cleaning a file
+  // and deleting it from the list.
+  {
+    files: ["src/**/*.{js,jsx,ts,tsx}"],
+    ignores: [
+      // Mirror the exclusions of the two blocks that configure the JSX parser
+      // (the src js/jsx and ts/tsx blocks above). Without these, this block is
+      // the ONLY one matching the vendored shadcn primitives and the build-time
+      // vite plugins, so ESLint lints them with no JSX support and reports
+      // "Parsing error: Unexpected token <" on all 49 of them — nothing to do
+      // with this rule.
+      "src/components/ui/**/*",
+      "src/components/shared/THEME_DEVELOPER_GUIDE.jsx",
+      "src/vite-plugins/**/*",
+      // The data layer itself — this is where raw access belongs.
+      "src/api/**",
+      "src/lib/supabase.{js,ts}",
+      "src/lib/pagedQuery.ts",
+      "**/__tests__/**",
+      "**/*.test.{js,jsx,ts,tsx}",
+      // Correctly paged via @/lib/pagedQuery — the raw call sits inside the
+      // page(start, end) callback, which is the intended shape.
+      "src/components/drawings/ExportFabReleaseModal.jsx",
+      "src/lib/autoScheduleDetailing.js",
+      // Already paged via a local allRows-style helper; fold them into
+      // @/lib/pagedQuery when convenient.
+      "src/lib/detailingValidation/repository.ts",
+      "src/lib/crossSetSupersedeRepository.ts",
+      // ── Verified bounded: single-row reads, writes, or an explicit limit ──
+      // These were found by the AST selector, which catches multi-line calls
+      // the grep behind this list originally missed. Each was read before being
+      // listed; none can silently truncate.
+      "src/services/permissions.ts",              // user_profiles role, .maybeSingle()
+      "src/lib/AuthContext.tsx",                  // user_profiles role, .maybeSingle()
+      "src/components/shared/numberSequencing.jsx", // number_sequences, .single()
+      "src/pages/DrawingViewer.jsx",              // one drawing, .maybeSingle()
+      "src/pages/drawingViewer/useDrawingViewerSelection.ts", // .maybeSingle()
+      "src/components/changeorders/ChangeOrderImportModal.jsx", // .limit(1)
+      "src/components/viewer3d/Model3DTab.jsx",   // .limit(1)
+      "src/pages/projectMembers/useProjectMembersEditor.ts",    // .limit(20)
+      "src/components/drawings/viewer/zonePanel/AddDependencyModal.jsx", // .limit(500)
+      "src/lib/fabRelease/releaseStatus.ts",      // insert, not a read
+      "src/lib/rfiFromDelta.js",                  // update, not a read
+      // ── Genuinely unbounded. REAL FINDINGS, not false positives ───────────
+      // Listed so this rule can land green; each still needs paging or a cap.
+      // useDrawingRegister is the most exposed: `drawing_register_view` with no
+      // limit now backs the Drawing Register tab, so a project past 1000 sheets
+      // silently shows a short register.
+      "src/hooks/useDrawingRegister.ts",
+      "src/components/collaboration/CommentThread.jsx",
+      "src/components/drawings/ExportMarkupPDFModal.jsx",
+      "src/components/settings/SystemTab.jsx",
+      "src/pages/Dashboard.jsx",
+      "src/pages/ProductionStatus.jsx",
+      "src/pages/Projects.jsx",
+      // Grandfathered. SHRINK THIS LIST — verify each one is either bounded,
+      // paged, or reads a single row, then remove it.
+      "src/lib/drawingHub/**",
+      "src/lib/revisionSnapshotDiff.js",
+      "src/lib/importShippingTicket.js",
+      "src/lib/importRfiLog.js",
+      "src/components/deliveries/ShippingListImportModal.jsx",
+      "src/components/drawings/viewer/useMarkup.js",
+      "src/components/scope/BulkScopeModal.jsx",
+      "src/services/ifcRosterImport.js",
+      "src/hooks/useDrawingWatch.ts",
+      "src/pages/Landing.jsx",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.object.name='supabase'][callee.property.name='from']",
+          message:
+            "Raw supabase.from() silently truncates at PostgREST's 1000-row cap. Use entities.* from @/api/supabaseClient, or fetchAllRows/fetchCapped from @/lib/pagedQuery.",
+        },
+      ],
+    },
+  },
 ];
