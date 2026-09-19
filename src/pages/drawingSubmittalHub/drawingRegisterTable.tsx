@@ -335,9 +335,6 @@ export function DrawingRegisterTable({
   return (
     <SectionCard
       title="Drawing register"
-      headerAction={
-        <button type="button" className="sbd-btn" title="Full Drawings editor — filters, bulk actions, rename / delete, per-sheet" onClick={() => navigate("/Drawings")}>Open full editor ↗</button>
-      }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

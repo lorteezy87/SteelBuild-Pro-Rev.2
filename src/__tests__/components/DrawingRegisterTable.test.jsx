@@ -126,15 +126,23 @@ describe("DrawingRegisterTable (Drawing Register)", () => {
     renderTable();
     expect(screen.getByText(/Upload Drawings/i)).toBeInTheDocument();
     expect(screen.getByText(/Import Log/i)).toBeInTheDocument();
-    expect(screen.getByText(/full editor/i)).toBeInTheDocument();
   });
 
-  it("hides upload/import for a read-only user but keeps the full-editor link", () => {
+  it("hides upload/import for a read-only user", () => {
     security.can = () => false;
     renderTable();
     expect(screen.queryByText(/Upload Drawings/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Import Log/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/full editor/i)).toBeInTheDocument();
+  });
+
+  it("offers no escape hatch to a separate editor", () => {
+    // The "Open full editor ↗" button used to sit in this card's header and
+    // navigate to /Drawings, a second register with its own filters and its
+    // own idea of the truth. Everything it reached now lives in the action bar
+    // above this panel, so there is nowhere else to send anyone.
+    renderTable();
+    expect(screen.queryByText(/full editor/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /drawings/i })).not.toBeInTheDocument();
   });
 
   it("filters the register by search", async () => {

@@ -12,6 +12,7 @@ import {
   PAGE_LABELS,
   PAGE_LIFECYCLES,
   PROJECT_SCOPED_PAGES,
+  redirectTargetPath,
   ROUTE_LIFECYCLES,
   STATIC_ROUTE_METADATA,
   routeLabel,
@@ -91,7 +92,12 @@ describe("routes — page registry", () => {
 
       if (meta.kind === "redirect") {
         expect(meta.lifecycle, `Compatibility redirect ${path} should be legacy`).toBe("legacy");
-        expect(ALL_ROUTE_PATHS, `Redirect target ${meta.target} should be mounted`).toContain(meta.target);
+        // A target may carry query/hash (/Drawings lands on the hub's Drawing
+        // Register tab); only its path has to be a mounted route.
+        expect(
+          ALL_ROUTE_PATHS,
+          `Redirect target ${meta.target} should be mounted`,
+        ).toContain(redirectTargetPath(meta.target));
       }
     }
 
@@ -118,7 +124,10 @@ describe("routeLabel", () => {
 
 describe("PROJECT_SCOPED_PAGES", () => {
   it("contains pages that genuinely depend on an active project", () => {
-    expect(PROJECT_SCOPED_PAGES.has("Drawings")).toBe(true);
+    // "Drawings" is no longer a page — /Drawings redirects into the hub's
+    // Drawing Register tab, which carries the project scoping now.
+    expect(PROJECT_SCOPED_PAGES.has("Drawings")).toBe(false);
+    expect(PROJECT_SCOPED_PAGES.has("DrawingSubmittalHub")).toBe(true);
     expect(PROJECT_SCOPED_PAGES.has("ScheduleHub")).toBe(true);
     expect(PROJECT_SCOPED_PAGES.has("RFIs")).toBe(true);
   });

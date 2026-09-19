@@ -8,6 +8,15 @@ import { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } from "./moduleRegistry";
 
 export const ROUTE_LIFECYCLES = Object.freeze(["active", "internal"]);
 
+/**
+ * The mounted path a redirect target points at, with any query and hash
+ * stripped. STATIC_ROUTE_METADATA targets are allowed to carry params so a
+ * legacy route can land on a specific tab.
+ */
+export function redirectTargetPath(target) {
+  return String(target).split(/[?#]/)[0];
+}
+
 export const STATIC_ROUTE_METADATA = {
   "/": { lifecycle: "active", kind: "entry" },
   "/Landing": { lifecycle: "active", kind: "entry" },
@@ -19,6 +28,12 @@ export const STATIC_ROUTE_METADATA = {
   "/CostDashboard": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/BudgetControl": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/Detailing": { lifecycle: "legacy", kind: "redirect", target: "/DrawingSubmittalHub" },
+  // The "full editor". Everything it did — set upload, revision upload, add
+  // sheet, bulk edit, rename, titleblock mapping, log import, export packages
+  // — now sits on the Drawing Register itself (DrawingRegisterWorkbench), so
+  // the page is a second register with no reason to exist. Bookmarks and the
+  // dashboard checklist keep working through this redirect.
+  "/Drawings": { lifecycle: "legacy", kind: "redirect", target: "/DrawingSubmittalHub?hub_tab=drawings" },
   "/Team": { lifecycle: "legacy", kind: "redirect", target: "/OrgMembers" },
   "/ProjectDetail": { lifecycle: "legacy", kind: "redirect", target: "/Projects" },
   "/ResourceManagement": { lifecycle: "legacy", kind: "redirect", target: "/ResourceHub" },
@@ -53,7 +68,6 @@ const ROUTE_DOMAINS = {
   },
   documents: {
     DrawingSubmittalHub: r(lazyWithRetry(() => import("@/pages/DrawingSubmittalHub")), "Detailing Control Center", { projectScoped: true }),
-    Drawings:         r(lazyWithRetry(() => import("@/pages/Drawings")),         "Drawings",            { projectScoped: true }),
     DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),
     Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents",           { projectScoped: true }),
     Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittal Register",  { projectScoped: true }),
@@ -154,7 +168,6 @@ registerRoutePrefetcher("DrawingSubmittalHub", () => import("@/pages/DrawingSubm
 registerRoutePrefetcher("CommandCenter", () => import("@/pages/CommandCenter"));
 registerRoutePrefetcher("ScheduleHub", () => import("@/pages/ScheduleHub"));
 registerRoutePrefetcher("RFIs", () => import("@/pages/RFIs"));
-registerRoutePrefetcher("Drawings", () => import("@/pages/Drawings"));
 registerRoutePrefetcher("DrawingViewer", () => import("@/pages/DrawingViewer"));
 registerRoutePrefetcher("WorkPackages", () => import("@/pages/WorkPackages"));
 
@@ -206,7 +219,13 @@ export async function validateRoutes() {
   }
   for (const [path, meta] of Object.entries(STATIC_ROUTE_METADATA)) {
     if (!ALL_ROUTE_PATHS.includes(path)) issues.push(`Static route path not mounted: ${path}`);
-    if (meta.kind === "redirect" && !ALL_ROUTE_PATHS.includes(meta.target)) issues.push(`Redirect target not mounted: ${path} -> ${meta.target}`);
+    // A redirect target may carry query or hash (e.g. /Drawings lands on the
+    // hub's Drawing Register tab), so compare the PATH only — otherwise a
+    // perfectly good target reads as unmounted and the real check, that the
+    // path exists, never runs.
+    if (meta.kind === "redirect" && !ALL_ROUTE_PATHS.includes(redirectTargetPath(meta.target))) {
+      issues.push(`Redirect target not mounted: ${path} -> ${meta.target}`);
+    }
   }
   if (issues.length > 0 && import.meta.env.DEV) {
     console.error(`[RouteValidator] ${issues.length} drift issue(s):`);

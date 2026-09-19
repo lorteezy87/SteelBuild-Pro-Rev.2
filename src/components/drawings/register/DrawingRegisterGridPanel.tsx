@@ -15,11 +15,11 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
-import { Star, Loader2, ChevronDown, ChevronRight, Eye, ExternalLink, FileUp } from "lucide-react";
+import { Star, Loader2, ChevronDown, ChevronRight, Eye, FileUp } from "lucide-react";
 import { useDrawingRegister, type DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { usePublishRevision, type ReleaseStatus } from "@/hooks/usePublishRevision";
 import { useMyDrawingWatches, useToggleDrawingWatch } from "@/hooks/useDrawingWatch";
@@ -66,6 +66,14 @@ export interface DrawingRegisterGridPanelProps {
   summariesBySet?: Map<string, SavedRevisionSummary>;
   onRevisionUploaded?: (pkgKey: string) => void | Promise<void>;
   onOpenSummary?: (summary: SavedRevisionSummary["summary"]) => void;
+  /**
+   * Sheet selection, owned by the workbench above this panel so the Bulk edit
+   * action can act on it. Omitted (the standalone case) hides the column
+   * entirely rather than showing checkboxes that drive nothing.
+   */
+  selected?: ReadonlySet<string>;
+  onToggleSelect?: (drawingId: string) => void;
+  onToggleSelectAll?: (drawingIds: string[]) => void;
 }
 
 const STATUS_FILTERS = [
@@ -89,10 +97,9 @@ export const DRAWING_REGISTER_VIRTUALIZE_THRESHOLD = 100;
 const REGISTER_GRID_COLUMNS =
   "28px minmax(76px,.75fr) minmax(220px,2fr) minmax(64px,.65fr) minmax(180px,1.5fr) minmax(56px,.55fr) minmax(118px,1fr) 72px 72px minmax(108px,1fr) 56px";
 
-function registerGridColumns(canRelease: boolean) {
-  return canRelease
-    ? `${REGISTER_GRID_COLUMNS} minmax(150px,1.2fr)`
-    : REGISTER_GRID_COLUMNS;
+function registerGridColumns(canRelease: boolean, selectable: boolean) {
+  const base = selectable ? `32px ${REGISTER_GRID_COLUMNS}` : REGISTER_GRID_COLUMNS;
+  return canRelease ? `${base} minmax(150px,1.2fr)` : base;
 }
 
 function statusTone(status: string | null): PillTone {
@@ -156,9 +163,22 @@ export function DrawingRegisterGridPanel({
   summariesBySet = EMPTY_SUMMARIES,
   onRevisionUploaded,
   onOpenSummary,
+  selected,
+  onToggleSelect,
+  onToggleSelectAll,
 }: DrawingRegisterGridPanelProps) {
+  const selectable = !!selected && !!onToggleSelect;
   const { data = EMPTY_REGISTER_ROWS, isLoading, error } = useDrawingRegister(projectId);
-  const [query, setQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  // Seeded from ?sheet= / ?search=, which is how an inbound deep link asks for
+  // one sheet: the RFI board's "update drawing" action sends
+  // ?sheet=<drawing_reference>, and /Drawings redirects here carrying it. The
+  // retired page consumed these params; dropping them would have turned that
+  // action into a link that lands on an unfiltered register. Seed-once, so
+  // typing in the box is not fought by the URL.
+  const [query, setQuery] = useState(
+    () => searchParams.get("sheet") || searchParams.get("search") || "",
+  );
   const [statusFilter, setStatusFilter] = useState("all");
   const [setFilter, setSetFilter] = useState("all");
   /** Collapsed set keys when group-by-set is on. */
@@ -247,6 +267,21 @@ export function DrawingRegisterGridPanel({
     () => rowsNeedingProvisioning(rows.map((entry) => entry.row)),
     [rows],
   );
+
+  // Select-all covers what the FILTERS currently show, not the whole register.
+  // A checkbox above a filtered table that silently selected hidden sheets
+  // would make Bulk edit touch rows the user cannot see.
+  const visibleDrawingIds = useMemo(
+    () => rows.map((entry) => entry.row.drawing_id),
+    [rows],
+  );
+  const selectedVisibleCount = useMemo(
+    () => (selected ? visibleDrawingIds.filter((id) => selected.has(id)).length : 0),
+    [selected, visibleDrawingIds],
+  );
+  const allVisibleSelected =
+    visibleDrawingIds.length > 0 && selectedVisibleCount === visibleDrawingIds.length;
+  const someVisibleSelected = selectedVisibleCount > 0;
   const firstVisibleDrawingByPackage = useMemo(() => {
     return deriveFirstVisibleDrawingByPackage(rows);
   }, [rows]);
@@ -260,7 +295,7 @@ export function DrawingRegisterGridPanel({
     });
   };
 
-  const colCount = canRelease ? 12 : 11;
+  const colCount = (canRelease ? 12 : 11) + (selectable ? 1 : 0);
 
   const renderSheetCells = (entry: IndexedRegisterRow, virtual: boolean) => {
     const r = entry.row;
@@ -271,6 +306,16 @@ export function DrawingRegisterGridPanel({
     const savedSummary = pkg?.setId ? summariesBySet.get(String(pkg.setId)) : undefined;
     return (
       <>
+        {selectable && (
+          <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}>
+            <input
+              type="checkbox"
+              checked={selected!.has(r.drawing_id)}
+              onChange={() => onToggleSelect!(r.drawing_id)}
+              aria-label={`Select sheet ${r.sheet_number || r.drawing_id}`}
+            />
+          </RegisterCell>
+        )}
         <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}>
           <button
             type="button"
@@ -436,15 +481,10 @@ export function DrawingRegisterGridPanel({
           >
             {groupBySet ? "Grouped by set" : "Group by set"}
           </button>
-          <Link
-            to={createPageUrl("Drawings")}
-            className="cmd-btn cmd-btn--ghost"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", fontSize: 12 }}
-            title="Open the full Drawings editor for set upload, rename, bulk edit"
-          >
-            <ExternalLink size={13} />
-            Full editor
-          </Link>
+          {/* The "Full editor ↗" link that used to sit here is gone: set
+              upload, rename, bulk edit and the export packages are in the
+              action bar above this panel (DrawingRegisterWorkbench), so there
+              is nowhere else to go. */}
         </div>
       </div>
 
@@ -514,6 +554,7 @@ export function DrawingRegisterGridPanel({
           <VirtualRegisterRows
             rows={displayRows}
             canRelease={canRelease}
+            selectable={selectable}
             onToggleGroup={toggleGroup}
             renderSheetCells={renderSheetCells}
           />
@@ -522,7 +563,21 @@ export function DrawingRegisterGridPanel({
           <table className="cmd-table">
             <thead>
               <tr>
-                <th aria-label="Watch" style={{ width: 28 }} />
+                {selectable && (
+                  <th style={{ width: 32, textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible sheets"
+                      checked={allVisibleSelected}
+                      ref={(el) => {
+                        // Indeterminate is a DOM property, not an attribute:
+                        // a partial selection must not read as "none selected".
+                        if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected;
+                      }}
+                      onChange={() => onToggleSelectAll?.(visibleDrawingIds)}
+                    />
+                  </th>
+                )}
                 <th>Sheet</th>
                 <th>Title</th>
                 <th>Disc.</th>
@@ -580,11 +635,14 @@ export function DrawingRegisterGridPanel({
 function VirtualRegisterRows({
   rows,
   canRelease,
+  selectable,
   onToggleGroup,
   renderSheetCells,
 }: {
   rows: RegisterDisplayRow[];
   canRelease: boolean;
+  /** Mirrors the panel's own flag so the grid template keeps the same column count. */
+  selectable: boolean;
   onToggleGroup: (key: string) => void;
   renderSheetCells: (entry: IndexedRegisterRow, virtual: boolean) => ReactNode;
 }) {
@@ -603,6 +661,7 @@ function VirtualRegisterRows({
     initialRect: { width: 1400, height: 600 },
   });
   const columns = [
+    ...(selectable ? [{ label: "Select", align: "center" }] : []),
     { label: "Watch", align: "center" },
     { label: "Sheet" },
     { label: "Title" },
@@ -616,7 +675,7 @@ function VirtualRegisterRows({
     { label: "View", align: "center" },
     ...(canRelease ? [{ label: "Release" }] : []),
   ];
-  const gridTemplateColumns = registerGridColumns(canRelease);
+  const gridTemplateColumns = registerGridColumns(canRelease, selectable);
 
   return (
     <div
@@ -641,7 +700,7 @@ function VirtualRegisterRows({
               key={column.label}
               role="columnheader"
               aria-colindex={index + 1}
-              aria-label={column.label === "Watch" ? "Watch" : undefined}
+              aria-label={column.label === "Watch" || column.label === "Select" ? column.label : undefined}
               style={{
                 padding: "10px 14px",
                 color: "var(--cmd-text-muted)",
@@ -653,7 +712,7 @@ function VirtualRegisterRows({
                 textAlign: column.align === "center" ? "center" : "left",
               }}
             >
-              {column.label === "Watch" ? null : column.label}
+              {column.label === "Watch" || column.label === "Select" ? null : column.label}
             </div>
           ))}
         </div>
