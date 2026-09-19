@@ -8,7 +8,7 @@ import { SectionCard, StatusPill } from "@/components/desktop/module";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
-import { effectiveDetailingState } from "@/lib/detailingPackageState";
+import { effectiveDetailingState, isPackageReleasedForFab } from "@/lib/detailingPackageState";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { usePermissions } from "@/services/permissions";
 import {
@@ -22,6 +22,7 @@ import {
   textMuted,
   textPrimary,
   resolveDrawingPackageDue,
+  registerStatusTone,
 } from "./format";
 import type { CurrentRevisionInfo } from "./types";
 import {
@@ -269,12 +270,19 @@ export function DrawingRegisterTable({
         // reads the legacy columns to show progress, but it MUST NOT decide the
         // package's released/done state — that is submittal-governed below.
         const releasedCount = sheets.filter((d) => d.stage === "Released" || d.set_approval_status === "approved").length;
-        // §20-21: the package's released/done state is the submittal authority, via
-        // the SAME predicate as the hub's "Sets Released" KPI (isClosedPackage), so
-        // the Released column and the KPI never disagree. A stale legacy
-        // set_approval_status="approved" on a sheet can no longer force "Released"
-        // while a governing submittal is still mid-flow.
-        const done = isClosedPackage(pkg);
+        // Two different questions, two different predicates. The comment here
+        // used to say these were the same and that the column and the KPI
+        // "never disagree" — they did:
+        //   done     — "the shop has this package". The hub's
+        //              "Released / sets to fab" KPI uses isPackageReleasedForFab,
+        //              so this column must too, or the two contradict each other
+        //              on a Void-only set and on the deprecated
+        //              set_approval_status="approved" flag.
+        //   terminal — "nothing more will happen here" (terminal FOR TRIAGE),
+        //              which those dead ends DO satisfy. Good enough to stop
+        //              calling a package late; not evidence the shop received it.
+        const done = isPackageReleasedForFab(pkg.parent, submittals, sheets);
+        const terminal = isClosedPackage(pkg);
         // Operational (coalesced) state drives the Status chip so it agrees with the
         // Released column — a mid-flow submittal can't render alongside a green
         // "Released", and a released package reads "Released" in both columns.
@@ -295,7 +303,7 @@ export function DrawingRegisterTable({
           // `status` (raw latest-submittal status) is retained for the search
           // filter below ONLY — it does NOT drive the Status cell, which renders
           // from `effectiveState` (the coalesced operational state).
-          status: latestSubmittal?.status || null, effectiveState, done, late: !!due.overdue && !done,
+          status: latestSubmittal?.status || null, effectiveState, done, late: !!due.overdue && !terminal,
           health: healthByKey?.get(pkg.key) || null,
           locked: !!pkg.parent?.is_locked,
           lockedReason: pkg.parent?.locked_reason || null,
@@ -433,13 +441,7 @@ export function DrawingRegisterTable({
                   // the coalesced state string. OperationalStateChip is still used elsewhere
                   // in this file (triage lists, next-decision panel); only the register
                   // Status cell is swapped here.
-                  ? <StatusPill tone={
-                      /Released for Fabrication|Approved|Partially Released|Released for Erection/i.test(r.effectiveState) ? "done"
-                      : /Internal Review|OFA|BFA|OFS|IFC/i.test(r.effectiveState) ? "review"
-                      : /R&R|Revise/i.test(r.effectiveState) ? "danger"
-                      : /IFA|In Detailing|Ready to Submit/i.test(r.effectiveState) ? "open"
-                      : "neutral"
-                    }>{r.effectiveState}</StatusPill>
+                  ? <StatusPill tone={registerStatusTone(r.effectiveState)}>{r.effectiveState}</StatusPill>
                   : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>
                 }</Td>
                 <Td>{r.health ? <HealthChip health={r.health} onClick={() => setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</Td>
