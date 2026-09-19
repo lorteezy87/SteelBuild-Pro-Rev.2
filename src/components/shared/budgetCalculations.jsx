@@ -4,16 +4,41 @@ import { COST_CODES, CATEGORY_ORDER } from './costCodes';
 import { isPaidExpense, isVoidedExpense } from '@/services/costRollup';
 import { sovScheduledTotal } from '@/pages/dashboard/projectMetrics';
 
+/**
+ * Canonical form of a cost code for MATCHING. One definition, used by every
+ * comparison in this module.
+ *
+ * Cost codes arrive from four places — the COST_CODES catalog, `cost_codes`
+ * rows (`cost_code_number`), `sov_items` rows (`cost_code`) and `expenses` rows
+ * (`cost_code`) — typed by hand in some of them. They differ by surrounding
+ * whitespace and by number-vs-string.
+ *
+ * This module used to compare two different ways: `getCostCodeSummary` did a
+ * raw `===` while `getExpensesByCategory` did `String(x ?? '').trim()`. So the
+ * SAME expense could land in the category chart and be missing from the
+ * cost-code rollup, and the two views reported different totals from identical
+ * data. Anyone reconciling them loses trust in the whole cost module.
+ *
+ * Deliberately conservative: trim and stringify only. It does NOT strip leading
+ * zeros, because "01" and "1" are distinct codes in some catalogs and silently
+ * merging them would move money between lines.
+ */
+export function normalizeCostCode(value) {
+  return String(value ?? '').trim();
+}
+
 export function getCostCodeSummary(costCode, sovItems = [], expenses = [], costCodes = []) {
+  const target = normalizeCostCode(costCode);
+
   // Cost-code rows store the number in `cost_code_number` (NOT `cost_code`,
   // which is the field on EXPENSE rows). Matching on the wrong field here made
   // matchingCostCodes always empty → budget silently fell back to SOV / $0.
-  const matchingCostCodes = costCodes.filter(c => c.cost_code_number === costCode);
+  const matchingCostCodes = costCodes.filter(c => normalizeCostCode(c.cost_code_number) === target);
   const budgetFromCostCodes = roundCurrency(matchingCostCodes
     .reduce((sum, c) => sum + (Number(c.budget_amount) || 0), 0));
 
   const budgetFromSov = roundCurrency(sovItems
-    .filter(s => s.cost_code === costCode)
+    .filter(s => normalizeCostCode(s.cost_code) === target)
     .reduce((sum, s) => sum + (Number(s.scheduled_value) || 0), 0));
 
   // Use cost-code budget if any cost codes matched (even if $0), else fall back to SOV
@@ -22,7 +47,7 @@ export function getCostCodeSummary(costCode, sovItems = [], expenses = [], costC
   // Committed = sum of non-voided expenses for this cost code
   const committed = roundCurrency(expenses
     .filter(e =>
-      e.cost_code === costCode &&
+      normalizeCostCode(e.cost_code) === target &&
       !isVoidedExpense(e)
     )
     .reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
@@ -30,7 +55,7 @@ export function getCostCodeSummary(costCode, sovItems = [], expenses = [], costC
   // Paid = sum of paid expenses
   const paid = roundCurrency(expenses
     .filter(e =>
-      e.cost_code === costCode &&
+      normalizeCostCode(e.cost_code) === target &&
       isPaidExpense(e)
     )
     .reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
@@ -115,11 +140,11 @@ export function getWorkPackageCostSummary(wpId, expenses = []) {
  * what "Labor" costs.
  */
 export function getExpensesByCategory(expenses = []) {
-  const categoryOf = new Map(COST_CODES.map(c => [c.code, c.category]));
+  const categoryOf = new Map(COST_CODES.map(c => [normalizeCostCode(c.code), c.category]));
   const result = Object.fromEntries(CATEGORY_ORDER.map(c => [c, 0]));
   expenses.forEach(e => {
     if (isVoidedExpense(e)) return;
-    const category = categoryOf.get(String(e.cost_code ?? '').trim());
+    const category = categoryOf.get(normalizeCostCode(e.cost_code));
     if (!category || !(category in result)) return;
     result[category] += Number(e.amount) || 0;
   });
