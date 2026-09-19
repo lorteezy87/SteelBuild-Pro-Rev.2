@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { registerStatusTone, isClosedPackage } from "../format";
 import { buildDrawingRegisterRows } from "../drawingRegister.derive";
+import { buildTriage } from "../format";
 import { DETAILING_STATE_ORDER, isPackageReleasedForFab } from "@/lib/detailingPackageState";
 import type { CurrentRevisionInfo } from "../types";
 
@@ -83,5 +84,36 @@ describe("Drawing Register: released claim vs terminal-for-triage", () => {
     const [row] = rowsFor(parent, []);
     expect(row.done).toBe(false);
     expect(row.late).toBe(false);
+  });
+});
+
+/**
+ * `atRiskCount` was the only triage tally that did not filter closed items.
+ * A released package is harmless there — its state outranks every milestone,
+ * so computeScheduleRisk returns atRisk: false. A Void-only set is the problem:
+ * it derives to "Not Started", the bottom of the state order, so with any past
+ * backward date it reports CRITICAL schedule risk forever, on a package nobody
+ * will work again.
+ */
+describe("triage atRiskCount excludes closed packages", () => {
+  function triageFor(parent: any, submittals: any[]) {
+    const pkg: any = { key: "k", setId: "ds1", name: "Set", parent, sheets: [], submittals };
+    const readiness = new Map<string, any>([
+      ["k", { scheduleRisk: { atRisk: true, severity: "critical", missed: ["submitBy", "approvalBy"], reasons: ["late"] } }],
+    ]);
+    return buildTriage(submittals, [pkg], readiness, false);
+  }
+
+  it("does not count a Void-only set as at risk", () => {
+    const t = triageFor({ id: "ds1", detailing_state: null }, [{ id: "s", status: "Void", round_number: 1 }]);
+    expect(t.atRiskCount).toBe(0);
+  });
+
+  it("still counts an OPEN set that is genuinely at risk", () => {
+    const t = triageFor(
+      { id: "ds1", detailing_state: null },
+      [{ id: "s", status: "Submitted", round_number: 1, ball_in_court: "EOR" }],
+    );
+    expect(t.atRiskCount).toBe(1);
   });
 });

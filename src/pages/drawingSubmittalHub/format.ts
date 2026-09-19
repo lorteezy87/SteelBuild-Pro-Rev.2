@@ -811,7 +811,16 @@ export function buildTriage(
       overdueUnlinkedSubmittals: overdue.filter((item) => item.kind === "Unlinked Submittal").length,
       dueSoonDrawingSets: dueSoon.filter((item) => item.kind === "Drawing Set").length,
       noDateDrawingSets: noDate.filter((item) => item.kind === "Drawing Set").length,
-      atRiskCount: setItems.filter((item) => item._readiness?.scheduleRisk?.atRisk).length,
+      // OPEN set items only. Every sibling tally above derives from openItems;
+      // this one read `setItems` and so counted closed packages too. A released
+      // package is harmless there (its state outranks every milestone, so
+      // computeScheduleRisk returns atRisk: false), but a Void-only set derives
+      // to "Not Started" — bottom of the state order — and with any past
+      // backward date it reports CRITICAL schedule risk forever, on a package
+      // nobody will work again.
+      atRiskCount: setItems.filter(
+        (item) => !item.closed && item._readiness?.scheduleRisk?.atRisk,
+      ).length,
     };
 }
 
