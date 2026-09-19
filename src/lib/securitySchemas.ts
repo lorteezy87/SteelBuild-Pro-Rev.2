@@ -2,10 +2,24 @@ import { z } from "zod";
 
 const uuidV4ish = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ymdDate = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * An optional project date.
+ *
+ * `null` is the real "no date" value: all three project date columns are
+ * nullable, and ProjectFormModal initialises them to null. It was missing here,
+ * so creating a project without filling in a date failed validation before it
+ * ever reached the server.
+ *
+ * `""` is accepted but normalised away, because create_project casts
+ * `(project_data->>'start_date')::date` with no nullif: an empty string reaches
+ * Postgres as `''::date` and raises a raw cast error. Both empty forms collapse
+ * to null, which the cast and the column both handle.
+ */
 const optionalProjectDateSchema = z.union([
   z.string().trim().regex(ymdDate, "Date must be YYYY-MM-DD"),
   z.literal(""),
-]).optional();
+  z.null(),
+]).optional().transform((v) => (v === "" ? null : v));
 
 export const uuidSchema = z.string().regex(uuidV4ish, "Expected UUID");
 

@@ -126,7 +126,13 @@ export const entities = {
       );
       const parsed = createProjectRecordSchema.safeParse(cleanInput);
       if (!parsed.success) {
-        const detail = parsed.error.issues.map((i) => i.message).join('; ');
+        // Name the field. A failed z.union reports Zod's default "Invalid
+        // input" with the real reasons buried in unionErrors, so without the
+        // path this read as "Invalid project payload: Invalid input" and said
+        // nothing about which field was wrong.
+        const detail = parsed.error.issues
+          .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
+          .join('; ');
         throw new Error(`Invalid project payload: ${detail}`);
       }
       const { data, error } = await supabase.rpc('create_project', {
