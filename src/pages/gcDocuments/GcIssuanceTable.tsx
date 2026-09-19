@@ -7,6 +7,7 @@
  */
 
 import { Fragment } from "react";
+import { Link } from "react-router-dom";
 import {
   GC_DOC_TYPE_LABELS,
   STEEL_IMPACT_SHORT_LABELS,
@@ -80,11 +81,27 @@ function SheetRow({ sheet }: { sheet: GcDrawingRow }) {
         {String(sheet.title ?? "")}
       </td>
       <td style={cell}>{String(sheet.revision ?? "—")}</td>
-      <td style={cell} colSpan={3}>
+      <td style={cell} colSpan={2}>
         {superseded ? (
           <span style={{ color: "var(--text-muted)" }}>Superseded</span>
         ) : (
           <span style={{ color: "var(--status-success)" }}>Current</span>
+        )}
+      </td>
+      <td style={cell}>
+        {/* Only offered when a PDF actually exists. A register row can be
+            logged before its file lands, and a View link that opens an empty
+            viewer is worse than no link. */}
+        {sheet.file_url ? (
+          <Link
+            to={`/GcDrawingViewer?doc=${encodeURIComponent(String(sheet.id))}`}
+            className="sbd-btn-ghost"
+            style={{ fontSize: 11, textDecoration: "none" }}
+          >
+            View
+          </Link>
+        ) : (
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>No file</span>
         )}
       </td>
     </tr>

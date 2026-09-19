@@ -75,6 +75,7 @@ const ROUTE_DOMAINS = {
     // Incoming, GC-issued documents. Separate from Drawings on purpose: that
     // register is OUR shop drawings and their submittal workflow.
     GcDocuments:      r(lazyWithRetry(() => import("@/pages/GcDocuments")),      "GC Documents",        { projectScoped: true }),
+    GcDrawingViewer:  r(lazyWithRetry(() => import("@/pages/GcDrawingViewer")),  "GC Drawing Viewer",   { projectScoped: true }),
   },
   fabrication: {
     WorkPackages:       r(lazyWithRetry(() => import("@/pages/WorkPackages")),       "Work Packages",       { projectScoped: true }),

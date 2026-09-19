@@ -67,8 +67,12 @@ export function useDrawingsList({ projectId, activeId, search }) {
 /**
  * Detect and fix duplicate pdf_page values among sheets sharing the same
  * file_url. Returns a new array (or the same reference if no fixes needed).
+ *
+ * Exported because GC documents are uploaded the same way — one PDF split into
+ * N sheet rows keyed by pdf_page — so the GC viewer inherits the same collision
+ * hazard and must not grow a second, drifting copy of this logic.
  */
-function fixDuplicatePdfPages(drawings) {
+export function fixDuplicatePdfPages(drawings) {
   if (!drawings || drawings.length === 0) return drawings;
 
   // Group by file_url — only multi-sheet groups can have collisions.
