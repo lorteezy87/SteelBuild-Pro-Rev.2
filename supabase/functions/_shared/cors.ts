@@ -1,13 +1,34 @@
 // Shared CORS helpers for browser-facing Edge Functions.
 //
 // When ALLOWED_ORIGINS is set, it is the complete allowlist. Origins are
-// normalized and matched exactly; no production, localhost, or Vercel-preview
-// fallback is added. When it is unset, preserve the legacy permissive behavior
-// for local development and existing deployments.
+// normalized and matched exactly.
+//
+// When it is UNSET we fall back to DEFAULT_ALLOWED_ORIGINS — the production
+// hostnames plus loopback for `supabase functions serve`. This used to fall
+// back to `Access-Control-Allow-Origin: *` plus a `^https://[a-z0-9-]+\.vercel\.app$`
+// regex, which was two separate holes:
+//
+//   • `*` let any site on the internet script a call with a token it had
+//     obtained, against every browser-facing function.
+//   • the Vercel regex matched ANY Vercel account's deployment, not ours. Since
+//     stripe-billing feeds isAllowedOrigin() straight into the Checkout
+//     success/cancel and billing-portal return URLs, an attacker could stand up
+//     `<anything>.vercel.app` and become a post-payment redirect target.
+//
+// Both are gone. The fallback is now a fixed, reviewable list, so an unset
+// secret degrades to "production + localhost only" instead of "anyone". To add
+// a preview host, name it explicitly in the ALLOWED_ORIGINS secret — never a
+// pattern. (Nothing here is an authorization control; RLS and the per-function
+// JWT checks still are. CORS just stops the browser being the attacker's
+// delivery vehicle.)
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://steelbuild-pro.com",
   "https://www.steelbuild-pro.com",
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:4173",
 ];
 
 const ALLOW_HEADERS =
@@ -43,20 +64,18 @@ export function parseAllowedOrigins(raw: string | null | undefined): string[] {
   )];
 }
 
-function legacyOriginAllowed(origin: string): boolean {
-  if (DEFAULT_ALLOWED_ORIGINS.includes(origin)) return true;
-  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
-  return /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin);
+/**
+ * The effective allowlist: the ALLOWED_ORIGINS secret when set, else the fixed
+ * default list. Never a pattern, never `*`.
+ */
+function effectiveOrigins(): string[] {
+  return configuredOrigins() ?? DEFAULT_ALLOWED_ORIGINS;
 }
 
 export function isAllowedOrigin(origin: string | null | undefined): boolean {
   const normalized = origin ? normalizeOrigin(origin) : null;
   if (!normalized) return false;
-
-  const configured = configuredOrigins();
-  return configured === null
-    ? legacyOriginAllowed(normalized)
-    : configured.includes(normalized);
+  return effectiveOrigins().includes(normalized);
 }
 
 export function corsHeaders(
@@ -68,16 +87,12 @@ export function corsHeaders(
     "Access-Control-Allow-Methods": methods,
     "Vary": "Origin",
   };
-  const configured = configuredOrigins();
-
-  if (configured === null) {
-    headers["Access-Control-Allow-Origin"] = "*";
-    return headers;
-  }
-
+  // Reflect the caller's origin only when it is on the allowlist. A disallowed
+  // or missing Origin gets NO Access-Control-Allow-Origin header at all, which
+  // the browser treats as a refusal — the previous `*` fallback is gone.
   const origin = req?.headers.get("Origin");
   const normalized = origin ? normalizeOrigin(origin) : null;
-  if (normalized && configured.includes(normalized)) {
+  if (normalized && effectiveOrigins().includes(normalized)) {
     headers["Access-Control-Allow-Origin"] = normalized;
   }
   return headers;
