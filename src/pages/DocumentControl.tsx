@@ -66,6 +66,7 @@ type ExtractionState = {
     revision?: string;
     date?: string;
     pdfPage?: unknown;
+    extractedText?: string;
   }>;
   scanned: boolean;
   pageTexts: Record<number, string>;
@@ -133,12 +134,12 @@ export default function DocumentControl() {
         registerComplete,
         incoming: {
           title: sheet.sheetTitle ?? null,
-          // Left null deliberately. The harvested page text is whitespace-
-          // collapsed for seal detection and does not share a line structure
-          // with the stored `drawings.extracted_text`, so diffing the two would
-          // report every sheet as wholly rewritten. The change summary says the
-          // text layer is not comparable instead of inventing a diff.
-          extractedText: null,
+          // The sheet's OWN text from the extractor — the same column-aware
+          // line format the register stores — so the diff compares like with
+          // like. Note this is NOT `pageTexts` below: that copy is whitespace-
+          // collapsed for seal detection and would report every sheet as
+          // wholly rewritten if it were diffed against a stored page.
+          extractedText: typeof sheet.extractedText === "string" ? sheet.extractedText : null,
           callouts: [],
         },
       });
