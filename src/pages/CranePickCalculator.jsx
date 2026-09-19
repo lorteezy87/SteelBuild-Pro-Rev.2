@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import {
   calculateTotalLoad,
   calculateSlingTension,
+  loadBearingLegs,
   calculateLAF,
   calculateUtilization,
   getCapacityStatus,
@@ -185,8 +186,11 @@ export default function CranePickCalculator() {
       capacityStatus,
       angleDegrees: effectiveAngle,
       utilizationPercent: utilization,
+      // Drives the rigid-load disclosure for a 4-leg bridle, where tension is
+      // computed assuming only two legs carry.
+      numLegs,
     }) : []),
-    [hasValidResults, angleStatus, capacityStatus, effectiveAngle, utilization]
+    [hasValidResults, angleStatus, capacityStatus, effectiveAngle, utilization, numLegs]
   );
 
   // ── Actions ────────────────────────────────────────────────
@@ -204,6 +208,13 @@ export default function CranePickCalculator() {
   const buildSnapshot = () => ({
     pieceWeight: piece, riggingWeight: rigging, totalLoad,
     numLegs, angleDegrees: effectiveAngle, laf, tensionPerLeg,
+    // How many legs the tension figure ASSUMES are carrying. For a 4-leg
+    // bridle on a rigid load that is 2, not 4 (ASME B30.9). Stamped into the
+    // snapshot so the summary and the text export can state it, and so a pick
+    // recalled from the history tape can be told apart from one captured
+    // before this assumption was applied (those have no field and their
+    // 4-leg tension is understated by 2x — see legsCarryingNote()).
+    legsAssumedCarrying: loadBearingLegs(numLegs),
     craneCapacity: cap, utilization,
     capacityStatus, angleStatus, warnings,
     craneModel, boomLength, workingRadius, counterweight,
@@ -470,7 +481,14 @@ export default function CranePickCalculator() {
                     <ResultRow label="Total Load on Hook"
                       primary={`${totalLoad.toLocaleString(undefined, { maximumFractionDigits: 1 })} lb`}
                       secondary={`${(totalLoad / 2000).toFixed(3)} T`} />
-                    <ResultRow label={numLegs === 1 ? "Tension (single leg)" : `Tension per Leg (×${numLegs})`}
+                    <ResultRow label={numLegs === 1
+                      ? "Tension (single leg)"
+                      : numLegs === 4
+                        // Say the assumption in the label. A rigger reading
+                        // "×4" would reasonably assume the load was split four
+                        // ways; it is not (ASME B30.9 rigid-load rule).
+                        ? "Tension per Leg (4-leg bridle — 2 legs assumed carrying)"
+                        : `Tension per Leg (×${numLegs})`}
                       primary={`${tensionPerLeg.toLocaleString(undefined, { maximumFractionDigits: 1 })} lb`}
                       secondary={`${(tensionPerLeg / 2000).toFixed(3)} T`} />
                     <ResultRow label="Load Angle Factor (LAF)"
@@ -571,6 +589,42 @@ export default function CranePickCalculator() {
 }
 
 // ── Modal ──────────────────────────────────────────────────────────
+/**
+ * "4 (two assumed carrying)" — the leg count with the load-sharing assumption
+ * attached. The summary modal and the text export are the artifacts that end up
+ * in a lift plan or a pre-lift email, so the assumption has to travel with the
+ * number, not just live on the calculator screen.
+ */
+function legsSummaryValue(d) {
+  const legs = Number(d?.numLegs);
+  const carrying = Number(d?.legsAssumedCarrying);
+  if (Number.isFinite(carrying) && Number.isFinite(legs) && carrying !== legs) {
+    return `${legs} (${carrying} assumed carrying)`;
+  }
+  return String(d?.numLegs ?? "—");
+}
+
+/**
+ * The line printed under "Tension per Leg".
+ *
+ * Two cases:
+ *   - A current 4-leg snapshot: state the ASME B30.9 rigid-load assumption.
+ *   - A 4-leg snapshot recalled from the persisted history tape that predates
+ *     this fix: it has no `legsAssumedCarrying` field, and its stored tension
+ *     was computed by dividing the load by FOUR — understated by exactly 2x.
+ *     Recalculating it here would silently rewrite a recorded pick, so instead
+ *     the stale value is labelled as unsafe and the planner is told to re-run
+ *     it. A recalled pick is read-only by design.
+ */
+function legsCarryingNote(d) {
+  const legs = Number(d?.numLegs);
+  if (legs !== 4) return "";
+  if (!Number.isFinite(Number(d?.legsAssumedCarrying))) {
+    return "⚠ RECORDED BEFORE THE 4-LEG CORRECTION — this tension assumed all 4 legs shared the load and is understated by ~2x. Re-run this pick before using it.";
+  }
+  return "Rigid load: only 2 of 4 legs assumed carrying (ASME B30.9). Rate every leg for the full value above.";
+}
+
 function PickSummaryModal({ onClose, data }) {
   const copySummary = async () => {
     try {
@@ -651,10 +705,13 @@ function PickSummaryModal({ onClose, data }) {
           </SummarySection>
 
           <SummarySection title="Rigging Configuration">
-            <SummaryRow k="Number of Legs" v={String(data.numLegs)} />
+            <SummaryRow k="Number of Legs" v={legsSummaryValue(data)} />
             <SummaryRow k="Sling Angle"    v={data.numLegs === 1 ? "Single vertical pick" : `${data.angleDegrees.toFixed(1)}°`} />
             <SummaryRow k="Load Angle Factor (LAF)" v={Number.isFinite(data.laf) ? data.laf.toFixed(3) : "—"} />
             <SummaryRow k={data.numLegs === 1 ? "Tension (single leg)" : "Tension per Leg"} v={`${lbOrDash(data.tensionPerLeg)} (${tonsOrDash(data.tensionPerLeg)})`} bold />
+            {legsCarryingNote(data) && (
+              <SummaryRow k="" v={legsCarryingNote(data)} />
+            )}
           </SummarySection>
 
           <SummarySection title="Capacity">
@@ -729,7 +786,7 @@ function buildSummaryText(d) {
   lines.push(`  Total Load on Hook:  ${lbOrDash(d.totalLoad)}  (${tonsOrDash(d.totalLoad)})`);
   lines.push("");
   lines.push("RIGGING");
-  lines.push(`  Number of Legs:      ${d.numLegs}`);
+  lines.push(`  Number of Legs:      ${legsSummaryValue(d)}`);
   if (d.numLegs === 1) {
     lines.push(`  Sling Angle:         Single vertical pick`);
   } else {
@@ -737,6 +794,8 @@ function buildSummaryText(d) {
   }
   lines.push(`  Load Angle Factor:   ${Number.isFinite(d.laf) ? d.laf.toFixed(3) : "—"}`);
   lines.push(`  Tension per Leg:     ${lbOrDash(d.tensionPerLeg)}  (${tonsOrDash(d.tensionPerLeg)})`);
+  const carryNote = legsCarryingNote(d);
+  if (carryNote) lines.push(`                       ${carryNote}`);
   lines.push("");
   lines.push("CAPACITY");
   lines.push(`  Rated Capacity:      ${lbOrDash(d.craneCapacity)}`);

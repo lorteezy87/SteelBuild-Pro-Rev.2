@@ -89,32 +89,67 @@ export function validateStationConfiguration(
   };
 }
 
+/**
+ * Build the two lookups the per-piece earned-percent calculation needs.
+ *
+ * `earnedPercentForPiece` used to rebuild BOTH of these on every call: it
+ * re-derived the active-station map from `configurations` and then ran a full
+ * `completions.filter(...)` scan to find one piece's rows. Called once per
+ * piece from calculateWeightedProductionProgress, that is O(pieces ×
+ * completions) — a 5,000-piece job with ~30,000 completions did roughly 150
+ * million comparisons on every render of Production Status and Piece Register.
+ *
+ * Built once, it is O(pieces + completions).
+ */
+function buildEarnedIndex(
+  configurations: StationConfiguration[],
+  completions: StationCompletion[],
+) {
+  const activeEarnedByStation = new Map<string, number>(
+    configurations
+      .filter((configuration) => configuration.is_active)
+      .map((configuration) => [
+        configuration.station_key as string,
+        Number(configuration.earned_percent),
+      ]),
+  );
+
+  // Station keys completed per piece. A Set per piece preserves the original
+  // de-duplication: two completion rows for the same station (an override plus
+  // an inherited row) must earn that station's percent ONCE, not twice.
+  const completedKeysByPiece = new Map<string, Set<string>>();
+  for (const completion of completions) {
+    const pieceId = completion.piece_id;
+    let keys = completedKeysByPiece.get(pieceId);
+    if (!keys) {
+      keys = new Set<string>();
+      completedKeysByPiece.set(pieceId, keys);
+    }
+    keys.add(completion.station_key as string);
+  }
+
+  return { activeEarnedByStation, completedKeysByPiece };
+}
+
+function earnedPercentFromIndex(
+  pieceId: string,
+  index: ReturnType<typeof buildEarnedIndex>,
+): number {
+  const completedKeys = index.completedKeysByPiece.get(pieceId);
+  if (!completedKeys) return 0;
+  let total = 0;
+  for (const stationKey of completedKeys) {
+    total += index.activeEarnedByStation.get(stationKey) ?? 0;
+  }
+  return Math.min(100, total);
+}
+
 export function earnedPercentForPiece(
   pieceId: string,
   configurations: StationConfiguration[],
   completions: StationCompletion[],
 ): number {
-  const activeEarnedByStation = new Map(
-    configurations
-      .filter((configuration) => configuration.is_active)
-      .map((configuration) => [
-        configuration.station_key,
-        Number(configuration.earned_percent),
-      ]),
-  );
-  const completedKeys = new Set(
-    completions
-      .filter((completion) => completion.piece_id === pieceId)
-      .map((completion) => completion.station_key),
-  );
-
-  return Math.min(
-    100,
-    [...completedKeys].reduce(
-      (total, stationKey) => total + (activeEarnedByStation.get(stationKey) ?? 0),
-      0,
-    ),
-  );
+  return earnedPercentFromIndex(pieceId, buildEarnedIndex(configurations, completions));
 }
 
 export function calculateWeightedProductionProgress(
@@ -125,19 +160,21 @@ export function calculateWeightedProductionProgress(
   const actionablePieces = pieces.filter(
     (piece) => !piece.is_deleted && !piece.is_container,
   );
+  // Index ONCE for the whole rollup, not once per piece.
+  const index = buildEarnedIndex(configurations, completions);
   // One unit per denominator: weight by pounds when every actionable piece has
   // a weight, otherwise by quantity. Mixing the two (5,000 lb next to "3 pcs")
   // made unweighted lots vanish from the percentage.
   const pounds = actionablePieces.map((piece) => pieceTotalWeightLbs(piece));
   const allWeighted =
     actionablePieces.length > 0 && pounds.every((lbs) => lbs != null && lbs > 0);
-  const weighted = actionablePieces.map((piece, index) => {
+  const weighted = actionablePieces.map((piece, index_) => {
     const basis = allWeighted
-      ? (pounds[index] as number)
+      ? (pounds[index_] as number)
       : Math.max(Number(piece.quantity) || 0, 0);
     return {
       basis,
-      earned: earnedPercentForPiece(piece.id, configurations, completions),
+      earned: earnedPercentFromIndex(piece.id, index),
     };
   });
   const totalBasis = weighted.reduce((total, piece) => total + piece.basis, 0);

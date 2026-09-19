@@ -67,14 +67,51 @@ export function calculateLAF(angleDegrees) {
 }
 
 /**
+ * Number of sling legs that may be ASSUMED to carry load, for a given leg
+ * count on a rigid load.
+ *
+ *   1 leg  → 1
+ *   2 legs → 2
+ *   4 legs → 2   ← NOT 4
+ *
+ * The 4-leg case is the one that matters and the one this module previously
+ * got wrong. A four-leg bridle on a RIGID load (which is what structural steel
+ * is — a beam, a column, a braced frame, a stair tower) cannot equalize. The
+ * load will not flex to bring all four legs into bearing, so manufacturing
+ * tolerance in sling length and any small CG offset put essentially the whole
+ * load into two diagonally opposite legs while the other two float.
+ *
+ * ASME B30.9 and every rigging handbook say the same thing: for a bridle on a
+ * rigid load, assume only TWO legs carry the load unless the rigging is
+ * positively equalized (an equalizer sheave/block) or the load is flexible.
+ *
+ * Dividing by 4 under-predicted tension per leg by a factor of 2. On a 20,000 lb
+ * pick at 60° that is 5,774 lb reported against 11,547 lb actual — enough to put
+ * a rigger on a sling rated well below the real load while the tool showed
+ * green. This is the conservative assumption and it is not configurable.
+ */
+export function loadBearingLegs(numLegs) {
+  const legs = Number(numLegs);
+  if (legs === 1) return 1;
+  if (legs === 2) return 2;
+  if (legs === 4) return 2; // rigid-load assumption — see above
+  return NaN;
+}
+
+/**
  * Tension per sling leg for a symmetric pick.
  *
- *   Tension per leg = (Total Load / numLegs) · LAF
- *                   = (Total Load / numLegs) / sin(θ)
+ *   Tension per leg = (Total Load / loadBearingLegs) · LAF
+ *                   = (Total Load / loadBearingLegs) / sin(θ)
  *
  *   totalLoad     — lb on the hook
  *   numLegs       — 1 (single vertical), 2, or 4
  *   angleDegrees  — sling angle from horizontal, 0 < θ ≤ 90
+ *
+ * NOTE the divisor is loadBearingLegs(numLegs), not numLegs. A 4-leg bridle
+ * divides by 2, not 4 — see loadBearingLegs() for why. A 2-leg and a 4-leg
+ * bridle at the same angle therefore report the SAME tension per leg, which is
+ * correct and is what a lift plan should show.
  *
  * For a single-leg vertical pick (numLegs === 1), angle is treated as
  * 90° regardless of what the caller passed — a "vertical" pick has no
@@ -89,9 +126,12 @@ export function calculateSlingTension(totalLoad, numLegs, angleDegrees) {
   // Single-leg vertical pick — force LAF 1.000 no matter the angle input.
   if (legs === 1) return load;
 
+  const bearing = loadBearingLegs(legs);
+  if (!Number.isFinite(bearing) || bearing <= 0) return NaN;
+
   const laf = calculateLAF(angleDegrees);
   if (!Number.isFinite(laf)) return NaN;
-  return (load / legs) * laf;
+  return (load / bearing) * laf;
 }
 
 /**
@@ -132,6 +172,19 @@ export function getCapacityStatus(utilizationPercent) {
 }
 
 /**
+ * True when the planned load EXCEEDS rated capacity outright (>100%).
+ *
+ * getCapacityStatus() already returns "red" above 90%, so an overload and a
+ * 91% critical lift were rendered identically. They are not the same thing:
+ * one needs an engineered lift plan, the other needs a different crane or a
+ * shorter radius. Callers use this to say so.
+ */
+export function isOverCapacity(utilizationPercent) {
+  const p = Number(utilizationPercent);
+  return Number.isFinite(p) && p > 100;
+}
+
+/**
  * Traffic-light status for sling angle.
  *
  *   > 45°     → green   (low leg tension)
@@ -144,6 +197,11 @@ export function getCapacityStatus(utilizationPercent) {
 export function getAngleStatus(angleDegrees) {
   const a = Number(angleDegrees);
   if (!Number.isFinite(a)) return null;
+  // A sling angle is measured from HORIZONTAL, so >90° or <=0° is not a
+  // physical configuration. This used to fall through to "green", so a
+  // transposed height/span entry (or a bad protractor read) showed the safest
+  // possible status for an input the math can't even evaluate.
+  if (a <= 0 || a > 90) return null;
   if (a < 30) return "red";
   if (a <= 45) return "yellow";
   return "green";
@@ -178,7 +236,7 @@ export function angleFromHeightSpan(height, halfSpan) {
  *
  *   { angleStatus, capacityStatus, angleDegrees, utilizationPercent }
  */
-export function buildWarnings({ angleStatus, capacityStatus, angleDegrees, utilizationPercent }) {
+export function buildWarnings({ angleStatus, capacityStatus, angleDegrees, utilizationPercent, numLegs }) {
   const out = [];
   if (angleStatus === "red") {
     out.push({
@@ -186,7 +244,15 @@ export function buildWarnings({ angleStatus, capacityStatus, angleDegrees, utili
       message: `Sling angle ${Number(angleDegrees).toFixed(1)}° is below 30° — unsafe configuration. Reduce sling length or widen pick points to raise angle.`,
     });
   }
-  if (capacityStatus === "red") {
+  // An outright overload is a different problem from a 90–100% critical lift:
+  // one needs a different crane or radius, the other needs an engineered plan.
+  // Both were previously rendered with the same "critical lift" message.
+  if (isOverCapacity(utilizationPercent)) {
+    out.push({
+      severity: "red",
+      message: `OVERLOAD — ${Number(utilizationPercent).toFixed(1)}% of rated capacity. The load exceeds the chart. Do not lift: change crane, shorten radius, reduce rigging weight, or break the pick down.`,
+    });
+  } else if (capacityStatus === "red") {
     out.push({
       severity: "red",
       message: `Capacity utilization ${Number(utilizationPercent).toFixed(1)}% exceeds 90% — critical lift territory. Engineered lift plan required per OSHA 1926.1431(k) and most contractor standards.`,
@@ -202,6 +268,15 @@ export function buildWarnings({ angleStatus, capacityStatus, angleDegrees, utili
     out.push({
       severity: "yellow",
       message: `Capacity utilization ${Number(utilizationPercent).toFixed(1)}% is in the 75–90% range. Double-check crane load chart entry, boom length, radius, and counterweight configuration.`,
+    });
+  }
+  // State the rigid-load assumption on the face of the output. A rigger reading
+  // "tension per leg" off a 4-leg bridle will otherwise assume the load was
+  // split four ways, and has no way to tell from the number that it wasn't.
+  if (Number(numLegs) === 4) {
+    out.push({
+      severity: "yellow",
+      message: "Four-leg bridle on a rigid load: tension is calculated assuming only TWO legs carry (ASME B30.9). Without a positive equalizer the other two cannot be relied on. Rate every leg for the full value shown.",
     });
   }
   return out;
