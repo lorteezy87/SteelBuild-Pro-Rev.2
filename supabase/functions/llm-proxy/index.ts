@@ -104,6 +104,28 @@ const EXPENSIVE_USE_CASES = new Set([
   "rfi-log-import",
 ]);
 
+// Telemetry's project_id comes from the request body, so it is caller-supplied.
+// It is only ever used as a value in a JSON insert (never interpolated into a
+// PostgREST filter here), but an unvalidated string still lets a caller attribute
+// their spend to another org's project and corrupt per-project cost reporting.
+// Accept a UUID or nothing.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Ceiling on the raw request body.
+ *
+ * maxTokens already clamps OUTPUT cost. Input was unbounded: a caller can pack
+ * arbitrarily many base64 `document` blocks into `messages`, and input tokens
+ * are billed too. The rolling-24h quota only notices AFTER the spend, so a
+ * single request could outrun the cap before the cap ever sees it.
+ *
+ * 24 MB of base64 is roughly 18 MB of decoded document — comfortably above the
+ * largest real drawing set anyone submits, and bounded. Checked from
+ * Content-Length before the body is read, so an oversized payload is rejected
+ * without being buffered.
+ */
+const MAX_REQUEST_BYTES = 24 * 1024 * 1024;
+
 function json(body: unknown, status = 200, req?: Request): Response {
   return jsonResponse(body, status, req);
 }
@@ -253,6 +275,19 @@ async function handle(req: Request): Promise<Response> {
   // (below), so it can fail CLOSED for expensive use-cases. Body parse + routing
   // are cheap; the provider call (the thing being gated) is still well after it.
 
+  // Reject an oversized payload from Content-Length BEFORE buffering it.
+  const declaredLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
+    return json(
+      {
+        error: `Request too large (${Math.round(declaredLength / 1024 / 1024)} MB). The gateway accepts up to ${MAX_REQUEST_BYTES / 1024 / 1024} MB — split the document and retry.`,
+        protocol_version: PROTOCOL_VERSION,
+      },
+      413,
+      req,
+    );
+  }
+
   let body: any;
   try {
     body = await req.json();
@@ -358,7 +393,7 @@ async function handle(req: Request): Promise<Response> {
 
   // ── Provider call (timed) ──────────────────────────────────────────────
   const t0 = performance.now();
-  const projectId = typeof body?.project_id === "string" && body.project_id
+  const projectId = typeof body?.project_id === "string" && UUID_RE.test(body.project_id)
     ? body.project_id
     : null;
 
