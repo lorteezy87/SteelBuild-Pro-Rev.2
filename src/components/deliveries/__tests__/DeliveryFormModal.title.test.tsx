@@ -48,9 +48,11 @@ vi.mock("@/hooks/useFormValidation", () => ({
   }),
 }));
 
-vi.mock("@/hooks/useFocusTrap", () => ({ useFocusTrap: () => ({ current: null }) }));
+vi.mock("@/hooks/useFocusTrap", () => ({
+  useFocusTrap: (): { current: HTMLElement | null } => ({ current: null }),
+}));
 
-vi.mock("@/components/shared/AutoLinkSuggestions", () => ({ default: () => null }));
+vi.mock("@/components/shared/AutoLinkSuggestions", () => ({ default: (): null => null }));
 
 import DeliveryFormModal from "../DeliveryFormModal";
 
