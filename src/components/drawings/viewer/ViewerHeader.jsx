@@ -34,7 +34,24 @@ export function pageLabel(activeDrawing, currentPage, totalPages) {
     : base;
 }
 
-export default function ViewerHeader({ projectName, activeDrawing, drawingSet, onUnlock, currentPage = null, totalPages = null }) {
+/**
+ * Viewer chrome: breadcrumbs, sheet identity, status tiles and the stage strip.
+ *
+ * Typed here because the `= null` defaults would otherwise be inferred as the
+ * literal type `null` under checkJs, which makes the prop impossible to pass —
+ * `onCompareRevisions` takes a function, and `onUnlock` is genuinely optional
+ * (only a project admin on a locked set ever sees it).
+ *
+ * @param {object} props
+ * @param {string} [props.projectName]
+ * @param {any} [props.activeDrawing]
+ * @param {any} [props.drawingSet]
+ * @param {(reason: string) => unknown} [props.onUnlock]
+ * @param {number|null} [props.currentPage]
+ * @param {number|null} [props.totalPages]
+ * @param {(() => void)|null} [props.onCompareRevisions]
+ */
+export default function ViewerHeader({ projectName, activeDrawing, drawingSet, onUnlock, currentPage = null, totalPages = null, onCompareRevisions = null }) {
   const navigate = useNavigate();
   const { isAdmin } = usePermissions();
   const isLocked = !!drawingSet?.is_locked;
@@ -166,7 +183,16 @@ export default function ViewerHeader({ projectName, activeDrawing, drawingSet, o
 
         <div className="drawing-viewer-header-status" style={statusPanelStyle}>
           <MetaBlock label="Stage" value={stageConfig?.label || stageKey} color={stageConfig?.color} />
-          <MetaBlock label="Revision" value={revisionLabel} />
+          {/* Compare lives on the Revision tile rather than as a fourth tile:
+              the status panel is a fixed 3-column grid. Only offered once a
+              sheet is open — with no activeDrawing there is nothing to diff. */}
+          <MetaBlock
+            label="Revision"
+            value={revisionLabel}
+            onAction={activeDrawing && onCompareRevisions ? onCompareRevisions : undefined}
+            actionTitle="Compare this sheet against a previous revision"
+            actionIcon={Layers}
+          />
           {/* Show the page actually on screen, not the stored pdf_page. The
               header used to print pdf_page while the toolbar showed the
               rendered page, so a sheet whose stored page is out of range (the
@@ -210,12 +236,38 @@ export default function ViewerHeader({ projectName, activeDrawing, drawingSet, o
   );
 }
 
-function MetaBlock({ label, value, color }) {
-  return (
-    <div style={metaBlockStyle}>
+function MetaBlock({ label, value, color, onAction, actionTitle, actionIcon: ActionIcon }) {
+  const body = (
+    <>
       <span style={metaLabelStyle}>{label}</span>
-      <strong style={{ ...metaValueStyle, color: color || "var(--text-primary)" }}>{value || "TBD"}</strong>
-    </div>
+      <strong style={{ ...metaValueStyle, color: color || "var(--text-primary)" }}>
+        {value || "TBD"}
+        {onAction && ActionIcon ? (
+          <ActionIcon size={11} style={{ marginLeft: 5, flexShrink: 0, opacity: 0.85 }} aria-hidden="true" />
+        ) : null}
+      </strong>
+    </>
+  );
+
+  // Without an action this stays the plain block it has always been, so every
+  // other tile renders byte-identically.
+  if (!onAction) return <div style={metaBlockStyle}>{body}</div>;
+
+  return (
+    <button
+      type="button"
+      onClick={onAction}
+      title={actionTitle}
+      style={{
+        ...metaBlockStyle,
+        font: "inherit",
+        textAlign: "left",
+        cursor: "pointer",
+        borderColor: "var(--accent)",
+      }}
+    >
+      {body}
+    </button>
   );
 }
 

@@ -16,6 +16,8 @@ import ViewerHeader from "@/components/drawings/viewer/ViewerHeader";
 // out of the static import graph means opening a drawing does not download the
 // vendor-pdf-export chunk until the user actually exports markups.
 const ExportMarkupPDFModal = lazy(() => import("@/components/drawings/ExportMarkupPDFModal"));
+// Overlay compare carries pdfjs rasterization — keep it off the viewer's chunk.
+const RevisionCompareModal = lazy(() => import("@/components/drawings/RevisionCompareModal"));
 import ShortcutsOverlay from "@/components/drawings/viewer/ShortcutsOverlay";
 import RenderSkeleton from "@/components/drawings/viewer/RenderSkeleton";
 import ThumbnailFilmstrip from "@/components/drawings/viewer/ThumbnailFilmstrip";
@@ -113,6 +115,7 @@ export default function DrawingViewer() {
   const [hideResolved, setHideResolved] = useState(false);
   // Sprint 4 — markup PDF export modal trigger.
   const [exportMarkupOpen, setExportMarkupOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   const {
     drawings,
@@ -125,6 +128,14 @@ export default function DrawingViewer() {
     setSearch,
   } = useDrawingViewerSelection(projectId);
   const markupScale = activeDrawing?.markup_scale || null;
+
+  // Sheet-navigation shortcuts stay live while a modal is open —
+  // useViewerKeyboardShortcuts only skips <input> — so an arrow key can swap
+  // activeDrawing out from under the compare modal. Close it on a sheet change
+  // rather than let it silently re-target to a sheet the user never picked.
+  useEffect(() => {
+    setCompareOpen(false);
+  }, [activeDrawing?.id]);
 
   // PDF lifecycle: file_url → signed URL → pdfjs document. Owns currentPage
   // because the loader needs to clamp it to the active drawing's pdf_page
@@ -504,6 +515,7 @@ export default function DrawingViewer() {
           drawingSet={activeDrawingSet}
           currentPage={currentPage}
           totalPages={totalPages}
+          onCompareRevisions={() => setCompareOpen(true)}
           onUnlock={async (reason) => {
             try {
               await unlockSetSvc({ setId: activeDrawingSet.id, reason });
@@ -984,6 +996,18 @@ export default function DrawingViewer() {
             project={activeProject}
             activeDrawing={activeDrawing}
             drawings={drawings}
+          />
+        </Suspense>
+      )}
+      {/* Revision compare, opened from the header's Revision tile. Gated on
+          activeDrawing too: the modal keys every query off drawing.id, so
+          mounting it without a sheet open would query for null. */}
+      {compareOpen && activeDrawing && (
+        <Suspense fallback={null}>
+          <RevisionCompareModal
+            open
+            onClose={() => setCompareOpen(false)}
+            drawing={activeDrawing}
           />
         </Suspense>
       )}

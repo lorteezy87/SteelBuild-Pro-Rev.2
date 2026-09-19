@@ -38,11 +38,6 @@ describe("Storage backup planner", () => {
         source: "supabase:email-attachments",
         current: "offsite:steelbuild-pro-storage/current/email-attachments",
       },
-      {
-        bucket: "sheets-files",
-        source: "supabase:sheets-files",
-        current: "offsite:steelbuild-pro-storage/current/sheets-files",
-      },
     ]);
   });
 

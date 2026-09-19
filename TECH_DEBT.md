@@ -101,7 +101,7 @@ Do not re-raise B41-P1-001 without first re-running the checks above. If a
 future audit reports it open from a source-only search, that search cannot see
 remote policy state and is not evidence.
 
-### Open: `sheets-files` is public and not tenant-scoped
+### Resolved: `sheets-files` decommissioned (2026-09-19)
 
 Distinct from B41-P1-001, **not** covered by the cutover above, and newer than
 every audit that discusses Storage isolation. Found 2026-09-19.
@@ -115,24 +115,49 @@ every audit that discusses Storage isolation. Found 2026-09-19.
 - Paths are `job_<nanoid>/files/<uuid>.pdf` — **neither org- nor
   project-scoped**. This is structurally the same flat, tenant-blind namespace
   that B41-P1-001 was about, reintroduced in a new bucket.
-- Nothing under `src/` references this bucket. The writer is the sibling app
-  (`lorteezy87/SteelBuild-Pro-2026`) or a script, on the shared project — so
-  the fix needs that repo's owner, and CLAUDE.md already notes schema ownership
-  between the two repos is undecided.
+- Nothing under `src/` references this bucket, and neither does the 2026 app —
+  both use `app-files` with signed URLs. The writer is the **`sheets-api` Edge
+  Function**, a passcode-gated gateway for a separate prototype ("SteelBuild
+  Sheets") that keeps its whole state in the single `sheets_doc` row. That
+  function uploads with the service role and returns only a `relativePath`, and
+  it has **no read route at all** — which is why the bucket had to be public
+  for the prototype's client to display anything.
 
 Enumeration is blocked (no anonymous list policy, UUID filenames), so each URL
 behaves as an unexpiring capability token rather than an open directory. The
 exposure is that any leaked URL — forwarded mail, browser history, referrer
 header, proxy log — grants permanent unauthenticated access to that sheet.
 
-**Required before organization #2.** Options, in order of preference:
+**Resolved the same day by removing the app, not by re-architecting it.** The
+owner confirmed the Sheets app was a prototype that had been abandoned (last
+write 2026-09-05), so none of the three hardening options was worth building.
 
-1. Flip the bucket private and serve through signed URLs (`getSignedUrl` is
-   already exported from `@/api/supabaseClient`).
-2. Keep it public but re-path to `<org_id>/…` and add a policy mirroring
-   `auth_read`.
-3. Accept it explicitly, in writing, with a stated scope limit — not by
-   silence.
+Done:
+
+- `storage.buckets.public` set to **false** for `sheets-files`. With no RLS
+  policies on the bucket, only the service role can now reach those objects.
+  This is what closed the exposure, and it is reversible.
+- `sheets-files` removed from the backup contract — `REQUIRED_BUCKETS`
+  (`scripts/lib/storageBackup.mjs`) and the arity guard in
+  `scripts/lib/b2Backup.mjs`, which hard-required all three buckets and would
+  have failed the nightly job the moment the bucket was deleted — plus
+  `supabase/config.toml`, `supabase/README.md` and the backup runbook.
+- A current snapshot of `sheets_doc` (rev 220, 132 kB) was written to
+  `sheets_doc_backup` first. The pre-existing backup row there was rev 33 from
+  2026-09-02, i.e. 187 revisions stale — do not treat that table as a live
+  safety net.
+
+Still owed, and needs the Supabase dashboard or CLI (no MCP tool deletes
+storage objects, buckets or Edge Functions):
+
+- Delete the 435 objects and the `sheets-files` bucket.
+- Delete the `sheets-api` Edge Function.
+- Drop `sheets_doc`, `sheets_config`, `sheets_doc_backup`.
+
+Order matters: `sheets-api`'s `DELETE /file` route is the clean way to remove
+the objects and it authenticates against the passcode in `sheets_config`, so
+dropping that table first throws away the tidiest deletion path. The last B2
+backup covering these files ran 2026-09-18 and is the recovery window.
 
 ## Active items
 
