@@ -12,7 +12,13 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import { loadQueue, saveQueue, enqueueOp, flushQueue } from "@/lib/field/offlineQueue";
+import {
+  loadQueue,
+  saveQueue,
+  enqueueOp,
+  flushQueue,
+  reconcileAfterFlush,
+} from "@/lib/field/offlineQueue";
 
 export function useFieldOutbox(handlers) {
   const handlersRef = useRef(handlers);
@@ -35,8 +41,14 @@ export function useFieldOutbox(handlers) {
     flushingRef.current = true;
     try {
       const result = await flushQueue(queue, handlersRef.current);
-      saveQueue(result.remaining);
-      setPending(result.remaining.length);
+      // Do NOT write result.remaining directly. `queue` was snapshotted before
+      // the await, so any op the user enqueued DURING the flush (a punch item
+      // captured while syncing on marginal signal) is in storage but not in
+      // that snapshot — a blind write would silently destroy it. Re-read and
+      // subtract only what the flush actually consumed.
+      const merged = reconcileAfterFlush(loadQueue(), queue, result.remaining);
+      saveQueue(merged);
+      setPending(merged.length);
       if (result.synced > 0) {
         toast.success(`Synced ${result.synced} field update${result.synced === 1 ? "" : "s"}`);
       }
