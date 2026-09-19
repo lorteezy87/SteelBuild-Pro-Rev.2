@@ -39,6 +39,21 @@ import { normalizeRecipients } from "./recipients.ts";
 // edge limits. MS Graph's inline sendMail path is stricter (~4 MB total).
 const MAX_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024;
 
+// Abuse ceilings for outbound mail. Attachment size was already bounded; the
+// two things that actually determine blast radius — how many people one message
+// reaches, and how many messages one account can send — were not.
+//
+// Both matter because every send leaves from OUR verified domain through OUR
+// provider tenant. One compromised or careless account damages deliverability
+// for every customer on the platform, and that reputation takes weeks to
+// rebuild. These are deliberately generous relative to real project
+// correspondence and deliberately far below "mailing list".
+const MAX_RECIPIENTS_PER_MESSAGE = 50;
+
+/** Rolling-window send cap per user. 0 disables (set via EMAIL_SEND_HOURLY_LIMIT). */
+const DEFAULT_SEND_HOURLY_LIMIT = 100;
+const SEND_WINDOW_MS = 60 * 60 * 1000;
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface EmailAttachmentInput {
@@ -103,6 +118,97 @@ async function verifyJwt(req: Request): Promise<{ userId: string; email: string 
   }
 }
 
+// ── Identifier validation ─────────────────────────────────────────────────────
+
+/**
+ * Every id below is interpolated into a PostgREST filter URL
+ * (`?project_id=eq.${projectId}`). PostgREST parses that value as filter
+ * SYNTAX, so an unvalidated string is an injection vector — and here it lands
+ * inside getProjectRole(), i.e. the authorization check itself, where a crafted
+ * value could change which row the role lookup returns.
+ *
+ * email-ingest already validated its path-supplied project id with exactly this
+ * pattern; email-send took its id from the request BODY and did not. Same guard,
+ * applied at the boundary and again defensively at each fetch site, so no future
+ * caller can reintroduce it.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_RE.test(value);
+}
+
+// ── Send Rate Limit ───────────────────────────────────────────────────────────
+
+/**
+ * Rolling-hour outbound cap per user, counted off the `email_messages` rows
+ * this function already writes (`sent_by`, `sent_at`, `direction='outbound'`)
+ * — no new table.
+ *
+ * Fails CLOSED. That is the opposite of the llm-proxy quota default, and
+ * deliberately so: there, an unverifiable cheap call costs fractions of a cent
+ * and the rule is "telemetry never breaks the user's request". Here the
+ * unbounded failure mode is a spam run from our verified domain, which costs
+ * every customer's deliverability for weeks. A short outage that delays a few
+ * emails with a clear retry message is the cheaper failure.
+ *
+ * Set EMAIL_SEND_HOURLY_LIMIT=0 to disable.
+ */
+async function checkSendRateLimit(
+  userId: string,
+  supabaseUrl: string,
+  serviceKey: string,
+): Promise<{ ok: true } | { ok: false; status: 429 | 503; error: string; retryAfterSeconds: number }> {
+  const raw = Deno.env.get("EMAIL_SEND_HOURLY_LIMIT");
+  const limit = raw === undefined || raw === ""
+    ? DEFAULT_SEND_HOURLY_LIMIT
+    : Number(raw);
+  if (!Number.isFinite(limit) || limit <= 0) return { ok: true }; // explicitly disabled
+
+  if (!isUuid(userId)) {
+    return { ok: false, status: 503, error: "Send limits can't be verified right now.", retryAfterSeconds: 30 };
+  }
+
+  const sinceIso = new Date(Date.now() - SEND_WINDOW_MS).toISOString();
+  try {
+    const resp = await fetch(
+      `${supabaseUrl}/rest/v1/email_messages` +
+      `?sent_by=eq.${userId}&direction=eq.outbound&sent_at=gte.${encodeURIComponent(sinceIso)}` +
+      `&select=id&limit=1`,
+      {
+        headers: {
+          "apikey": serviceKey,
+          "Authorization": `Bearer ${serviceKey}`,
+          // Exact count in Content-Range without transferring the rows.
+          "Prefer": "count=exact",
+        },
+        // Bound the pre-send read so a stalled PostgREST can't hang the send.
+        signal: AbortSignal.timeout(2000),
+      },
+    );
+    if (!resp.ok) {
+      console.error(`[email-send] rate-limit read ${resp.status}`);
+      return { ok: false, status: 503, error: "Send limits can't be verified right now. Please retry shortly.", retryAfterSeconds: 30 };
+    }
+    // Content-Range: "0-0/123" — the total is after the slash.
+    const total = Number(resp.headers.get("content-range")?.split("/")[1]);
+    if (!Number.isFinite(total)) {
+      console.error("[email-send] rate-limit read returned no usable count");
+      return { ok: false, status: 503, error: "Send limits can't be verified right now. Please retry shortly.", retryAfterSeconds: 30 };
+    }
+    if (total >= limit) {
+      // Keep the configured cap in the SERVER log only, so a caller can't read
+      // the threshold off the response and pace just under it.
+      console.warn(`[email-send] rate limit BLOCK user=${userId} sent=${total} >= cap=${limit}`);
+      return { ok: false, status: 429, error: "Hourly send limit reached. Please try again later.", retryAfterSeconds: 900 };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error(`[email-send] rate-limit check threw: ${err instanceof Error ? err.message : err}`);
+    return { ok: false, status: 503, error: "Send limits can't be verified right now. Please retry shortly.", retryAfterSeconds: 30 };
+  }
+}
+
 // ── Project Access Check ──────────────────────────────────────────────────────
 
 async function checkProjectAccess(
@@ -131,6 +237,11 @@ async function getProjectRole(
   supabaseUrl: string,
   serviceKey: string,
 ): Promise<string | null> {
+  // Defence in depth: the handler already rejects a non-UUID project_id, but
+  // this function builds PostgREST filters from it, so it refuses to run on
+  // anything that isn't a UUID regardless of how it was called.
+  if (!isUuid(projectId) || !isUuid(userId)) return null;
+
   const headers = { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` };
   try {
     // 1. Direct project membership role.
@@ -152,7 +263,9 @@ async function getProjectRole(
     if (!projResp.ok) return null;
     const projRows = await projResp.json();
     const orgId = Array.isArray(projRows) && projRows.length ? projRows[0]?.org_id : null;
-    if (!orgId) return null;
+    // DB-sourced, so trusted — but it is interpolated into another filter URL
+    // below, and "trusted source" is exactly the assumption that rots. Check it.
+    if (!isUuid(orgId)) return null;
     const omResp = await fetch(
       `${supabaseUrl}/rest/v1/organization_members?org_id=eq.${orgId}&user_id=eq.${userId}&select=role&limit=1`,
       { headers },
@@ -507,7 +620,24 @@ async function handle(req: Request): Promise<Response> {
 
   // Validate required fields
   if (!body.project_id) return errorResponse(400, "project_id is required", req);
+  // Must be a UUID before it reaches any PostgREST filter — see isUuid().
+  if (!isUuid(body.project_id)) return errorResponse(400, "Invalid project_id format", req);
   if (!body.to || body.to.length === 0) return errorResponse(400, "to is required (array of email addresses)", req);
+
+  // Recipient ceiling. This function sends from OUR verified domain through OUR
+  // Resend / Microsoft Graph tenant, so a single authenticated user blasting a
+  // large list burns the platform's sending reputation for every customer. Real
+  // correspondence tops out well under this; anything larger is a mailing list
+  // and belongs in a marketing tool, not the project email surface.
+  const totalRecipients =
+    (body.to?.length ?? 0) + (body.cc?.length ?? 0) + (body.bcc?.length ?? 0);
+  if (totalRecipients > MAX_RECIPIENTS_PER_MESSAGE) {
+    return errorResponse(
+      400,
+      `Too many recipients (${totalRecipients}). Maximum is ${MAX_RECIPIENTS_PER_MESSAGE} across to/cc/bcc.`,
+      req,
+    );
+  }
   if (!body.subject) return errorResponse(400, "subject is required", req);
   if (!body.body_text) return errorResponse(400, "body_text is required", req);
 
@@ -576,6 +706,16 @@ async function handle(req: Request): Promise<Response> {
   const projectRole = await getProjectRole(user.userId, body.project_id, supabaseUrl, serviceKey);
   if (!projectRole || !SEND_ALLOWED_ROLES.has(projectRole)) {
     return errorResponse(403, "Your project role does not permit sending email", req);
+  }
+
+  // Per-user hourly cap. Checked AFTER authorization (so an unauthorized caller
+  // can't probe it) and BEFORE the provider call (so a throttled user never
+  // reaches Resend / Graph and never burns domain reputation).
+  const rate = await checkSendRateLimit(user.userId, supabaseUrl, serviceKey);
+  if (!rate.ok) {
+    const res = errorResponse(rate.status, rate.error, req);
+    res.headers.set("Retry-After", String(rate.retryAfterSeconds));
+    return res;
   }
 
   // Determine the from address. A caller-supplied from_email must be one of the
