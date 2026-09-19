@@ -1,10 +1,17 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, FileText, Layers, Link2, X } from "lucide-react";
+import { AlertTriangle, CornerUpLeft, FileText, Layers, Link2, X } from "lucide-react";
+import {
+  backLinkTooltip,
+  buildSectionCutLinkIndex,
+  linkLabel,
+  linkTooltip,
+} from "@/lib/sectionCutLinks";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import SignoffStampPanel from "@/components/drawings/SignoffStampPanel";
+import { DEFAULT_LIST_CAP } from "@/components/shared/ListTruncationNotice";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const SHEET_REF_RE = /[A-Z]{1,3}[-\s]?\d{1,5}/gi;
@@ -61,7 +68,22 @@ export default function ContextPanel({
       .slice(0, 12);
   }, [allDrawings, setId, setName, activeDrawing?.id]);
 
-  const callouts = Array.isArray(activeDrawing?.callouts) ? activeDrawing.callouts : [];
+  // Both directions in one O(links) build, replacing the per-callout
+  // allDrawings.find() below. `incoming` is new: until now nothing could answer
+  // "what references THIS sheet?".
+  //
+  // allDrawings is the project register read, which is row-capped. A sheet past
+  // the cap was never read, so its callouts were never seen — which is why the
+  // reverse section must never print a bare "nothing references this sheet".
+  const linkIndex = useMemo(
+    () => buildSectionCutLinkIndex(allDrawings || [], {
+      registerComplete: (allDrawings?.length ?? 0) < DEFAULT_LIST_CAP,
+    }),
+    [allDrawings],
+  );
+  const outgoing = linkIndex.outgoing(activeDrawing?.id);
+  const incoming = linkIndex.incoming(activeDrawing?.id);
+  const outgoingLinks = [...outgoing.resolved, ...outgoing.unresolved];
 
   if (!activeDrawing) return null;
 
@@ -94,7 +116,8 @@ export default function ContextPanel({
 
       <div style={scorecardStyle}>
         <Signal label="RFIs" value={linkedRfis.length} tone={linkedRfis.length ? "risk" : "neutral"} />
-        <Signal label="Callouts" value={callouts.length} />
+        <Signal label="Refs out" value={outgoingLinks.length} />
+        <Signal label="Refs in" value={incoming.links.length} />
         <Signal label="Set Sheets" value={siblingSheets.length + 1} />
       </div>
 
@@ -146,21 +169,21 @@ export default function ContextPanel({
           {linkedRfis.length > 8 && <div style={moreStyle}>+{linkedRfis.length - 8} more linked RFIs</div>}
         </Section>
 
-        <Section icon={<Link2 size={13} />} title={`Detected Callouts (${callouts.length})`}>
-          {callouts.length === 0 ? (
-            <EmptyLine>No cross-sheet callouts detected.</EmptyLine>
+        <Section icon={<Link2 size={13} />} title={`References Out (${outgoingLinks.length})`}>
+          {!outgoing.sourceHarvested ? (
+            <EmptyLine>This sheet has not been scanned for callouts yet.</EmptyLine>
+          ) : outgoingLinks.length === 0 ? (
+            <EmptyLine>No cross-sheet callouts detected on this sheet.</EmptyLine>
           ) : (
-            callouts.slice(0, 10).map((callout, index) => {
-              const match = allDrawings.find(
-                (drawing) => normalizeSN(drawing.sheet_number) === normalizeSN(callout.targetSheetNumber),
-              );
-              const resolved = !!match;
+            outgoingLinks.slice(0, 10).map((link, index) => {
+              const resolved = !!link.targetDrawingId;
               return (
                 <button
-                  key={`${callout.targetSheetNumber || "callout"}-${index}`}
+                  key={`out-${link.targetKey}-${link.detailNumber || ""}-${index}`}
                   type="button"
                   disabled={!resolved}
-                  onClick={() => resolved && onSelect(match.id)}
+                  onClick={() => resolved && onSelect(link.targetDrawingId)}
+                  title={linkTooltip(link)}
                   className="drawing-context-link"
                   style={{
                     ...linkRowStyle,
@@ -169,15 +192,59 @@ export default function ContextPanel({
                   }}
                 >
                   <div style={rowTopStyle}>
-                    <span style={rowPrimaryStyle}>{callout.text || callout.targetSheetNumber || "Callout"}</span>
-                    <span style={statusTextStyle}>{resolved ? "Resolved" : "Unmatched"}</span>
+                    <span style={rowPrimaryStyle}>
+                      <Link2 size={11} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-1px" }} />
+                      {linkLabel(link)}
+                    </span>
+                    <span style={statusTextStyle}>
+                      {resolved ? (link.origin === "manual" ? "Manual" : "Resolved") : "Unmatched"}
+                    </span>
                   </div>
                   <div style={rowTitleStyle}>
-                    {callout.targetSheetNumber || "No target"}{match?.title ? ` - ${match.title}` : ""}
+                    {resolved
+                      ? `${link.targetSheetNumber}${link.targetSheetTitle ? ` - ${link.targetSheetTitle}` : ""}`
+                      : `${link.targetAsPrinted} not in this register`}
                   </div>
                 </button>
               );
             })
+          )}
+          {outgoingLinks.length > 10 && <div style={moreStyle}>+{outgoingLinks.length - 10} more references</div>}
+        </Section>
+
+        <Section icon={<CornerUpLeft size={13} />} title={`Referenced By (${incoming.links.length})`}>
+          {incoming.links.length === 0 ? (
+            <EmptyLine>
+              {incoming.complete
+                ? "No other sheet in this register calls out this sheet."
+                : "None found — but the register read was capped, so a referencing sheet may not have been read."}
+            </EmptyLine>
+          ) : (
+            incoming.links.slice(0, 10).map((link, index) => (
+              <button
+                key={`in-${link.sourceDrawingId}-${link.detailNumber || ""}-${index}`}
+                type="button"
+                onClick={() => onSelect(link.sourceDrawingId)}
+                title={backLinkTooltip(link)}
+                className="drawing-context-link"
+                style={linkRowStyle}
+              >
+                <div style={rowTopStyle}>
+                  <span style={rowPrimaryStyle}>
+                    <CornerUpLeft size={11} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-1px" }} />
+                    {link.sourceSheetNumber || "Sheet"}
+                  </span>
+                  <span style={statusTextStyle}>
+                    {link.detailNumber ? `Detail ${link.detailNumber}` : "Reference"}
+                  </span>
+                </div>
+                <div style={rowTitleStyle}>{link.sourceSheetTitle || "Untitled sheet"}</div>
+              </button>
+            ))
+          )}
+          {incoming.links.length > 10 && <div style={moreStyle}>+{incoming.links.length - 10} more referencing sheets</div>}
+          {incoming.links.length > 0 && !incoming.complete && (
+            <div style={moreStyle}>Register read was capped — more may reference this sheet.</div>
           )}
         </Section>
 
