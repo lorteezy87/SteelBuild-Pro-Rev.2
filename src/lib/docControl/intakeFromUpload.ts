@@ -13,7 +13,7 @@
  */
 
 import { buildDocControlRecord } from "./record";
-import { toMdrEntry } from "./mdr";
+import { normalizeCallouts, toMdrEntry } from "./mdr";
 import type {
   DocControlAttestations,
   DocControlRecord,
@@ -47,6 +47,11 @@ export type UploadNewSheet = {
    * `drawings.extracted_text`. Absent when the page was never harvested.
    */
   extractedText?: string | null;
+  /**
+   * Cross-sheet callouts detected on this sheet's page, as persisted to
+   * `drawings.callouts`.
+   */
+  callouts?: unknown;
 };
 
 /** One row of the wizard's `matchSheets` output. */
@@ -126,7 +131,7 @@ export function buildIntakeRecords(input: IntakeInput): DocControlRecord[] {
           // like. It stays null when the page was never harvested, and the
           // change summary then says so instead of inventing a diff.
           extractedText: typeof incoming.extractedText === "string" ? incoming.extractedText : null,
-          callouts: [],
+          callouts: normalizeCallouts(incoming.callouts),
         },
         now: input.now,
       }),

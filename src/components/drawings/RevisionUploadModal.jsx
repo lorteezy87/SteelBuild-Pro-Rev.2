@@ -134,6 +134,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           revision:    s.revision,
           date:        s.date,
           extractedText: s.extractedText,
+          callouts:    s.callouts,
         })),
       );
       matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
@@ -247,6 +248,9 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             ...(typeof match.newSheet?.extractedText === "string"
               ? { extracted_text: match.newSheet.extractedText }
               : {}),
+            ...(Array.isArray(match.newSheet?.callouts)
+              ? { callouts: match.newSheet.callouts }
+              : {}),
           });
           added++;
           try {
@@ -283,6 +287,11 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               // against a sheet that is no longer the sheet of record.
               ...(typeof match.newSheet?.extractedText === "string"
                 ? { extracted_text: match.newSheet.extractedText }
+                : {}),
+              // Refresh with THIS revision's references. A revision that drops
+              // a detail callout must stop showing a jump to it.
+              ...(Array.isArray(match.newSheet?.callouts)
+                ? { callouts: match.newSheet.callouts }
                 : {}),
               ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
               is_superseded: false,
