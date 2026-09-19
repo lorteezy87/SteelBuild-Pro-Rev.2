@@ -29,6 +29,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     priority: "Normal",
     pieces: "",
     weight_tons: "",
+    delivery_title: "",
     description: "",
     notes: "",
     special_instructions: "",
@@ -142,6 +143,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     mutation.mutate({
       ...formData,
       project_name: proj?.name || proj?.project_name || formData.project_name || "",
+      delivery_title: formData.delivery_title?.trim() || "",
       description: formData.description?.trim() || (wp ? (wp.name || wp.wp_number || "") : ""),
       pieces: parseInt(formData.pieces) || 0,
       weight_tons: parseFloat(formData.weight_tons) || 0,
@@ -276,11 +278,12 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <SectionLabel>Delivery Info</SectionLabel>
             <div>
-              <label style={labelStyle}>Delivery Title *</label>
+              <label style={labelStyle} htmlFor="delivery-title">Delivery Title *</label>
               <input
+                id="delivery-title"
                 type="text"
-                value={formData.description || ""}
-                onChange={(e) => set("description", e.target.value)}
+                value={formData.delivery_title || ""}
+                onChange={(e) => set("delivery_title", e.target.value)}
                 style={inputStyle}
                 placeholder="e.g. Anchor Bolts — Phase 1, HSS Columns Load 3"
                 required
@@ -439,8 +442,9 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
             <SectionLabel>Material</SectionLabel>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Description</label>
+                <label style={labelStyle} htmlFor="delivery-description">Description</label>
                 <textarea
+                  id="delivery-description"
                   value={formData.description}
                   onChange={(e) => set("description", e.target.value)}
                   style={{ ...inputStyle, minHeight: 70, resize: "vertical" }}
