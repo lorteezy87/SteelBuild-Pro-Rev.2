@@ -589,19 +589,30 @@ The four areas the pass above deferred. Live counts taken the same day:
     `TransmittalLogPanel.test` immediately; a test pins the mirror to
     `DEFAULT_LIST_CAP`.
 
-- **Two board components are dead and untested.**
-  `revisionImpactBoard.tsx` (256 lines, single export `RevisionImpactBoard`) and
-  `TriageBoard` (`triageBoard.tsx` lines 105–334) are referenced **only** by the
-  `drawingSubmittalHub/components.tsx` barrel — no JSX usage anywhere, and no
-  test covers either. The rest of `triageBoard.tsx` is live:
-  `ModelMappingSection`, `SequenceReadinessSection`, `RevisionImpactSection` and
-  `ReadinessPanel` all ship via `ControlBoardPanel`, so the file must not be
-  deleted wholesale. `RevisionImpactBoard` is also a *divergent* second renderer
-  of `affectedPieces`: it prints a bare `—`, where the live `RevisionImpactPanel`
-  distinguishes "no piece resolves to this set" from "roster not loaded" in a
-  tooltip. Reviving it would reintroduce that ambiguity. *Remediation:* delete
-  both and their barrel re-exports. A product call, like the dead-register item
-  above, so it is recorded rather than done.
+- **Two dead board components removed** (was open; done 2026-09-19).
+  `drawingSubmittalHub/revisionImpactBoard.tsx` (256 lines, whole file) and the
+  `TriageBoard` orchestrator in `triageBoard.tsx`, plus the helpers only it used
+  (`TriageBoardProps`, `TriageList(+Props)`, `TriageItemRow`,
+  `PipelinePanel(+Props)`, `REV_SEVERITY_TONE`, the local `LoadingSkeleton` cast
+  and `AnyProps`) and their two `components.tsx` re-exports. 688 lines net. No
+  test covered any of it — the suite total was unchanged at 6,504, which is the
+  proof.
+  - `RevisionImpactBoard` was also a *divergent* second renderer of
+    `affectedPieces`: a bare `—` where the live `RevisionImpactPanel`
+    distinguishes "no piece resolves to this set" from "roster not loaded".
+    Reviving it would have reintroduced that ambiguity.
+  - `triageBoard.tsx` was NOT deleted. `ModelMappingSection`,
+    `SequenceReadinessSection`, `RevisionImpactSection` and `ReadinessPanel`
+    are live via `ControlBoardPanel` and stay (948 → 521 lines).
+  - **Do not confuse `src/lib/revisionImpactBoard.ts` with the deleted
+    `src/pages/drawingSubmittalHub/revisionImpactBoard.tsx`.** The lib module
+    exports `buildRevisionImpactRows` and is live — `DrawingSubmittalHub.tsx`
+    and `src/lib/revisionSummary.js` both import it.
+  - A shared block belonging to `ModelMappingSection` (`ELEMENT_BUCKET_ORDER`,
+    `DRILLDOWN_ROW_CAP`, `FabStatusKey`, `OpenBucket`) sits physically BETWEEN
+    where the dead orchestrator was and the live sections. Deleting by line
+    range took it too; `tsc` caught it. Cut this file by symbol and re-run
+    `tsc`, never by range.
 
 - **`tabCounts` covers 6 of the 9 tabs.** `TABS` (format.ts) lists overview,
   process, drawings, submittals, transmittals, matrix, revimpact, holds,
