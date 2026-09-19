@@ -15,6 +15,7 @@ import {
   toMdrEntry,
 } from "@/lib/docControl";
 import type { IncomingSheet, MdrEntry } from "@/lib/docControl";
+import { PAGE_TEXT_TRUNCATION_MARKER } from "@/lib/pageTextFormat";
 
 function entry(overrides: Partial<MdrEntry> = {}): MdrEntry {
   return {
@@ -326,6 +327,41 @@ describe("buildChangeSummary", () => {
     const summary = buildChangeSummary({ ...incoming, revisionNumber: "1" }, entry({ revisionNumber: "1" }));
     const meta = summary.bullets.find((b) => b.channel === "metadata");
     expect(meta?.text).toMatch(/unchanged at 1/i);
+  });
+
+  it("refuses to call two CAPPED pages identical", () => {
+    // Both sides were cut at the harvest limit. What was captured matches;
+    // what was not captured is unknown on both sides, so "identical" is a
+    // claim the summary is not entitled to make.
+    const capped = `NOTE 1\nNOTE 2${PAGE_TEXT_TRUNCATION_MARKER}`;
+    const summary = buildChangeSummary(
+      { ...incoming, extractedText: capped },
+      entry({ extractedText: capped }),
+    );
+    const text = summary.bullets.find((b) => b.channel === "text");
+    expect(text?.comparable).toBe(false);
+    expect(text?.text).toMatch(/cut at the harvest limit/i);
+    expect(text?.text).not.toMatch(/identical/i);
+  });
+
+  it("still reports real changes on a capped page, and warns there may be more", () => {
+    const summary = buildChangeSummary(
+      { ...incoming, extractedText: `NOTE 1\nNOTE 2${PAGE_TEXT_TRUNCATION_MARKER}` },
+      entry({ extractedText: `NOTE 1\nNOTE 9${PAGE_TEXT_TRUNCATION_MARKER}` }),
+    );
+    const text = summary.bullets.find((b) => b.channel === "text" && b.comparable);
+    expect(text?.text).toContain("+ NOTE 2");
+    expect(text?.text).toMatch(/may be further changes past it/i);
+  });
+
+  it("calls two COMPLETE identical pages identical", () => {
+    const summary = buildChangeSummary(
+      { ...incoming, extractedText: "NOTE 1\nNOTE 2" },
+      entry({ extractedText: "NOTE 1\nNOTE 2" }),
+    );
+    const text = summary.bullets.find((b) => b.channel === "text");
+    expect(text?.comparable).toBe(true);
+    expect(text?.text).toMatch(/identical/i);
   });
 
   it("says so plainly when there is no sheet of record", () => {

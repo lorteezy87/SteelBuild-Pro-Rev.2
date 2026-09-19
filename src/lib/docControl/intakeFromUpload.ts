@@ -13,7 +13,7 @@
  */
 
 import { buildDocControlRecord } from "./record";
-import { toMdrEntry } from "./mdr";
+import { normalizeCallouts, toMdrEntry } from "./mdr";
 import type {
   DocControlAttestations,
   DocControlRecord,
@@ -42,6 +42,16 @@ export type UploadNewSheet = {
   revision?: string | null;
   date?: string | null;
   pdfPage?: unknown;
+  /**
+   * This sheet's harvested page text, in the same format persisted to
+   * `drawings.extracted_text`. Absent when the page was never harvested.
+   */
+  extractedText?: string | null;
+  /**
+   * Cross-sheet callouts detected on this sheet's page, as persisted to
+   * `drawings.callouts`.
+   */
+  callouts?: unknown;
 };
 
 /** One row of the wizard's `matchSheets` output. */
@@ -116,11 +126,12 @@ export function buildIntakeRecords(input: IntakeInput): DocControlRecord[] {
         registerOverride: registerFromMatch(match),
         incoming: {
           title: incoming.sheetTitle ?? null,
-          // The wizard does not harvest per-sheet text, so this stays null and
-          // the change summary says the text layer is not comparable rather
-          // than reporting a clean diff it never ran.
-          extractedText: null,
-          callouts: [],
+          // The extractor now attaches each sheet's own page text in the same
+          // format the register stores, so this channel compares like with
+          // like. It stays null when the page was never harvested, and the
+          // change summary then says so instead of inventing a diff.
+          extractedText: typeof incoming.extractedText === "string" ? incoming.extractedText : null,
+          callouts: normalizeCallouts(incoming.callouts),
         },
         now: input.now,
       }),

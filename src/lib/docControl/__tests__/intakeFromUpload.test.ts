@@ -119,10 +119,23 @@ describe("buildIntakeRecords", () => {
     expect(records[1].disposition).toBe("accept");
   });
 
-  it("never reports the text layer as unchanged when the wizard harvested none", () => {
+  it("never reports the text layer as unchanged when the sheet carries no harvested text", () => {
     const [record] = intake([revised]);
     const text = record.changeSummary.bullets.find((b) => b.channel === "text");
     expect(text?.comparable).toBe(false);
+  });
+
+  it("diffs the text layer once the incoming sheet carries its own page text", () => {
+    const [record] = intake([
+      {
+        ...revised,
+        newSheet: { ...revised.newSheet, extractedText: "NOTE 1\nNOTE 2" },
+      },
+    ]);
+    const text = record.changeSummary.bullets.find((b) => b.channel === "text" && b.comparable);
+    // Sheet of record carries "NOTE 1"; the incoming revision adds "NOTE 2".
+    expect(text?.text).toContain("1 line added");
+    expect(text?.text).toContain("+ NOTE 2");
   });
 
   it("tolerates a match list with no incoming sheets at all", () => {

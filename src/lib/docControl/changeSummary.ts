@@ -23,6 +23,7 @@
  * Pure. No React, no Supabase.
  */
 
+import { isTruncatedPageText } from "@/lib/pageTextFormat";
 import type { ChangeBullet, ChangeSummary, CalloutRef, MdrEntry } from "./types";
 
 /** The incoming document, already normalised by `readTitleBlock`. */
@@ -142,12 +143,23 @@ function textLayerBullet(incoming: IncomingSheet, previous: MdrEntry): ChangeBul
   const added = [...newLines].filter((l) => !oldLines.has(l));
   const removed = [...oldLines].filter((l) => !newLines.has(l));
 
+  // A page is harvested only up to a character cap. Two capped pages that agree
+  // on what WAS captured tell us nothing about the rest, so "identical" is a
+  // claim this function is not entitled to make about them.
+  const truncated = isTruncatedPageText(oldText) || isTruncatedPageText(newText);
+
   if (added.length === 0 && removed.length === 0) {
-    return {
-      channel: "text",
-      text: "Text layer is identical — no notes, dimensions or schedule text changed.",
-      comparable: true,
-    };
+    return truncated
+      ? {
+          channel: "text",
+          text: "Text layer matches as far as it was captured, but the page was cut at the harvest limit — anything past that was never read on either side, so this is not a clean bill of health.",
+          comparable: false,
+        }
+      : {
+          channel: "text",
+          text: "Text layer is identical — no notes, dimensions or schedule text changed.",
+          comparable: true,
+        };
   }
 
   const parts: string[] = [];
@@ -160,12 +172,16 @@ function textLayerBullet(incoming: IncomingSheet, previous: MdrEntry): ChangeBul
 
   return {
     channel: "text",
-    text: `Text changed (${parts.join(", ")}): ${samples.join(" · ")}${
-      added.length + removed.length > samples.length ? " …" : ""
-    }`,
+    text:
+      `Text changed (${parts.join(", ")}): ${samples.join(" · ")}` +
+      (added.length + removed.length > samples.length ? " …" : "") +
+      (truncated
+        ? " — and the page was cut at the harvest limit, so there may be further changes past it."
+        : ""),
     comparable: true,
   };
 }
+
 
 function calloutBullet(incoming: IncomingSheet, previous: MdrEntry): ChangeBullet {
   // An empty callouts array on a row that was never text-harvested means the

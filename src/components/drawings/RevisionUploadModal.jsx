@@ -133,6 +133,8 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           discipline:  s.discipline,
           revision:    s.revision,
           date:        s.date,
+          extractedText: s.extractedText,
+          callouts:    s.callouts,
         })),
       );
       matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
@@ -240,6 +242,15 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
             ifc_status: revMeta.revisionLabel.toUpperCase().includes("IFC") ? "IFC" : undefined,
             is_superseded: false,
+            // Only write when the page was actually harvested. `undefined`
+            // leaves the column alone; writing null would record "read, and
+            // blank" for a page nobody read.
+            ...(typeof match.newSheet?.extractedText === "string"
+              ? { extracted_text: match.newSheet.extractedText }
+              : {}),
+            ...(Array.isArray(match.newSheet?.callouts)
+              ? { callouts: match.newSheet.callouts }
+              : {}),
           });
           added++;
           try {
@@ -271,6 +282,17 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
               file_url: newFileUrl,
               pdf_page: updatedPage ?? 1,
+              // Refresh the stored text to THIS revision's page. Leaving the
+              // prior revision's text behind would make the next revision diff
+              // against a sheet that is no longer the sheet of record.
+              ...(typeof match.newSheet?.extractedText === "string"
+                ? { extracted_text: match.newSheet.extractedText }
+                : {}),
+              // Refresh with THIS revision's references. A revision that drops
+              // a detail callout must stop showing a jump to it.
+              ...(Array.isArray(match.newSheet?.callouts)
+                ? { callouts: match.newSheet.callouts }
+                : {}),
               ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
               is_superseded: false,
             });

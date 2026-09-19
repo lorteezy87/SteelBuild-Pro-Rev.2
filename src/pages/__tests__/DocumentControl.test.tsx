@@ -139,6 +139,103 @@ describe("DocumentControl page", () => {
     expect(screen.getByText(/Seal text found in the page text layer/)).toBeTruthy();
   });
 
+  it("diffs the text layer against the sheet of record when both carry harvested text", async () => {
+    m.drawings = [
+      {
+        id: "d1",
+        sheet_number: "S-101",
+        title: "FOUNDATION PLAN",
+        revision_number: "1",
+        is_superseded: false,
+        extracted_text: "NOTE 1\nWELD 1/4 FILLET",
+      },
+    ];
+    m.extraction = {
+      ...m.extraction,
+      sheets: [
+        {
+          sheetNumber: "S-101",
+          sheetTitle: "FOUNDATION PLAN",
+          revision: "IFC",
+          date: "04/02/2026",
+          pdfPage: 1,
+          extractedText: "NOTE 1\nWELD 5/16 FILLET",
+        },
+      ],
+    };
+    render(<DocumentControl />, { wrapper });
+    await waitFor(() => expect(screen.getByText(/Checked against/)).toBeTruthy());
+    await dropPdf();
+    fireEvent.click(screen.getByText("S-101"));
+
+    expect(screen.getByText(/\+ WELD 5\/16 FILLET/)).toBeTruthy();
+    expect(screen.getByText(/− WELD 1\/4 FILLET/)).toBeTruthy();
+  });
+
+  it("does not diff the seal-detection text, which is a different shape", async () => {
+    // pageTexts feeds seal detection only. If it ever leaked into the change
+    // summary it would report every sheet as wholly rewritten.
+    m.drawings = [
+      { id: "d1", sheet_number: "S-101", is_superseded: false, extracted_text: "NOTE 1\nNOTE 2" },
+    ];
+    m.pageTexts = { 1: "NOTE 1 NOTE 2 REGISTERED PROFESSIONAL ENGINEER" };
+    render(<DocumentControl />, { wrapper });
+    await waitFor(() => expect(screen.getByText(/Checked against/)).toBeTruthy());
+    await dropPdf();
+    fireEvent.click(screen.getByText("S-101"));
+
+    const textBullet = screen.getByText(/Text layer not comparable/);
+    expect(textBullet).toBeTruthy();
+    // The seal still comes from the harvested page text.
+    expect(screen.getByText(/Seal text found in the page text layer/)).toBeTruthy();
+  });
+
+  it("diffs cross-sheet callouts once both sides carry them", async () => {
+    m.drawings = [
+      {
+        id: "d1",
+        sheet_number: "S-101",
+        is_superseded: false,
+        extracted_text: "NOTE 1",
+        callouts: [{ targetSheetNumber: "S-402", text: "SEE S-402" }],
+      },
+    ];
+    m.extraction = {
+      ...m.extraction,
+      sheets: [
+        {
+          sheetNumber: "S-101",
+          sheetTitle: "FOUNDATION PLAN",
+          revision: "IFC",
+          pdfPage: 1,
+          extractedText: "NOTE 1",
+          callouts: [
+            { targetSheetNumber: "S-401", text: "SEE S-401", coords: { x: 1, y: 2, width: 3, height: 4 } },
+          ],
+        },
+      ],
+    };
+    render(<DocumentControl />, { wrapper });
+    await waitFor(() => expect(screen.getByText(/Checked against/)).toBeTruthy());
+    await dropPdf();
+    fireEvent.click(screen.getByText("S-101"));
+
+    const callouts = screen.getByText(/Cross-sheet callouts changed/);
+    expect(callouts.textContent).toContain("now references S-401");
+    expect(callouts.textContent).toContain("no longer references S-402");
+  });
+
+  it("still treats an empty callout list on an unextracted row as unknown", async () => {
+    // The legacy case: 0 of the existing rows were ever extracted.
+    m.drawings = [{ id: "d1", sheet_number: "S-101", is_superseded: false }];
+    render(<DocumentControl />, { wrapper });
+    await waitFor(() => expect(screen.getByText(/Checked against/)).toBeTruthy());
+    await dropPdf();
+    fireEvent.click(screen.getByText("S-101"));
+
+    expect(screen.getByText(/unknown rather than empty/)).toBeTruthy();
+  });
+
   it("surfaces an extraction failure rather than an empty result", async () => {
     m.extraction = { extractFailed: true, error: "AI extraction failed" };
     render(<DocumentControl />, { wrapper });
