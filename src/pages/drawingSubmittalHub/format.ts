@@ -811,7 +811,16 @@ export function buildTriage(
       overdueUnlinkedSubmittals: overdue.filter((item) => item.kind === "Unlinked Submittal").length,
       dueSoonDrawingSets: dueSoon.filter((item) => item.kind === "Drawing Set").length,
       noDateDrawingSets: noDate.filter((item) => item.kind === "Drawing Set").length,
-      atRiskCount: setItems.filter((item) => item._readiness?.scheduleRisk?.atRisk).length,
+      // OPEN set items only. Every sibling tally above derives from openItems;
+      // this one read `setItems` and so counted closed packages too. A released
+      // package is harmless there (its state outranks every milestone, so
+      // computeScheduleRisk returns atRisk: false), but a Void-only set derives
+      // to "Not Started" — bottom of the state order — and with any past
+      // backward date it reports CRITICAL schedule risk forever, on a package
+      // nobody will work again.
+      atRiskCount: setItems.filter(
+        (item) => !item.closed && item._readiness?.scheduleRisk?.atRisk,
+      ).length,
     };
 }
 
@@ -834,6 +843,50 @@ const OPERATIONAL_STATE_COLORS: Record<string, string> = {
   "Partially Released":   "#10b981", // emerald
   "Released for Erection":"#14b8a6", // teal
 };
+
+/**
+ * Tone for the Drawing Register's Status chip, over the operational state.
+ *
+ * Keyed off the canonical vocabulary (`DETAILING_STATE_ORDER`), because the
+ * register used to hand-roll this as a regex chain whose first alternative
+ * tested for "Released for Fabrication" and "Approved" — SUBMITTAL statuses,
+ * which `effectiveDetailingState` never returns. Those two alternatives could
+ * not match anything, and "Released" — the terminal workflow state, the one
+ * that means the shop has it — matched no alternative at all and fell through
+ * to the same neutral grey as "Not Started", beside a green Released column.
+ *
+ * Exhaustive by construction: every state maps here explicitly, and a test
+ * walks DETAILING_STATE_ORDER so a state added later cannot quietly inherit
+ * the fallback.
+ */
+export function registerStatusTone(state: string | null | undefined): "done" | "review" | "danger" | "open" | "neutral" {
+  switch (String(state ?? "")) {
+    // At or past release: the shop has the package.
+    case "Released":
+    case "Partially Released":
+    case "Released for Erection":
+      return "done";
+    // Out for / under review by others.
+    case "Internal Review":
+    case "OFA":
+    case "BFA":
+    case "OFS":
+    case "IFC":
+      return "review";
+    // Sent back — the detailer owns rework.
+    case "R&R":
+      return "danger";
+    // Open work in the detailer's hands.
+    case "In Detailing":
+    case "Ready to Submit":
+    case "IFA":
+      return "open";
+    case "Not Started":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
 
 /** Color for any operational state: drafting/release overrides, then the
  *  canonical stage color (IFA..Released), then submittal status, then muted. */

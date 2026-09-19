@@ -7,7 +7,7 @@
  * stays strict-null / no-implicit-any clean. Mirrors drawingControlCenter.derive.ts.
  */
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
-import { effectiveDetailingState } from "@/lib/detailingPackageState";
+import { effectiveDetailingState, isPackageReleasedForFab } from "@/lib/detailingPackageState";
 import {
   currentRevisionForPackage,
   isClosedPackage,
@@ -66,9 +66,17 @@ export function buildDrawingRegisterRows({
     // legacy columns to show progress but MUST NOT decide the package's
     // released/done state — that is submittal-governed below.
     const releasedCount = sheets.filter((d) => d.stage === "Released" || d.set_approval_status === "approved").length;
-    // §20-21: the package's released/done state is the submittal authority, via the
-    // SAME predicate as the hub's "Sets Released" KPI (isClosedPackage).
-    const done = isClosedPackage(pkg);
+    // Two different questions, two different predicates — they are NOT the same
+    // and a comment here used to claim they were:
+    //   done    — "the shop has this package". Must match the hub's
+    //             "Released / sets to fab" KPI, which uses isPackageReleasedForFab.
+    //   terminal— "nothing more will happen here" (terminal FOR TRIAGE). Also
+    //             fires on a Void-only set and on the deprecated
+    //             set_approval_status="approved" flag, neither of which means
+    //             the shop ever received anything — so it must not colour the
+    //             Released column, only suppress the late flag.
+    const done = isPackageReleasedForFab(pkg.parent, submittals, sheets);
+    const terminal = isClosedPackage(pkg);
     const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);
     const due = packageDue.due;
     const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
@@ -82,7 +90,7 @@ export function buildDrawingRegisterRows({
     return {
       pkg, due, sheetCount, releasedCount, discipline, maxRev, dominantStage,
       status: latestSubmittal?.status || null,
-      effectiveState, done, late: !!due.overdue && !done,
+      effectiveState, done, late: !!due.overdue && !terminal,
       health: healthByKey?.get(pkg.key) || null,
       locked: !!pkg.parent?.is_locked,
       lockedReason: pkg.parent?.locked_reason || null,

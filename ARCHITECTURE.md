@@ -720,6 +720,55 @@ public/             Static assets including web-ifc wasm (public/wasm/) + pdf wo
 
 ## Decision log (recent material decisions)
 
+### 2026-09-19 — Detailing Control Center re-audit (3 fixes), amending 2026-09-07
+
+A second pass over `/DrawingSubmittalHub`, in the same spirit as the entry
+below: the defect class is still **confident, wrong display**. Three findings,
+each proven by executing the code rather than reading it.
+
+**1. `"Released"` toned neutral grey.** The Drawing Register's Status chip
+derived its tone from a regex chain whose first alternative tested
+`"Released for Fabrication"` and `"Approved"`. Those are SUBMITTAL statuses;
+`effectiveDetailingState` returns members of `DETAILING_STATE_ORDER` and can
+return neither, so that alternative matched nothing and `"Released"` — the
+terminal state — fell through to the same neutral grey as `"Not Started"`,
+beside a GREEN Released column on the same row. Live at the time on sets
+`Anchor Bolts` and `Embeds`. Replaced by `registerStatusTone`, keyed off the
+canonical vocabulary, with a test that walks `DETAILING_STATE_ORDER` and asserts
+`"Not Started"` is the only state that tones neutral — so a state added later
+cannot inherit the fallback the way `"Released"` did.
+
+**2. This amends the note below.** The 2026-09-07 entry records
+`isPackageReleasedForFab` being added "rather than widening `isClosedPackage`
+(terminal-for-triage, shared with the triage queue **and Register column**)".
+That sharing is what this pass changes, and only for one of the column's two
+jobs. `isClosedPackage` fires on a Void-only set and on the deprecated
+`set_approval_status="approved"`, so leaving it on the **Released** column meant
+the column claimed the shop had a package it never received, while the Released
+KPI — on `isPackageReleasedForFab` since 2026-09-07 — excluded it. The code
+comment at both call sites asserted the two "never disagree"; it was written
+when both used `isClosedPackage` and was falsified by that KPI change. Split:
+
+- `done` → `isPackageReleasedForFab`. The Released column and the green row
+  accent, matching the KPI.
+- `terminal` → `isClosedPackage`. Late suppression only, which those dead ends
+  legitimately deserve — a voided set should not be chased as overdue.
+
+The triage queue's use of `isClosedPackage` is unchanged.
+
+**3. `atRiskCount` counted closed packages.** It was the only `buildTriage`
+tally not derived from `openItems`. A released package is harmless there (its
+state outranks every risk milestone, so `computeScheduleRisk` returns
+`atRisk: false`), but a Void-only set derives to `"Not Started"` — the bottom of
+the order — and with any past backward date reported CRITICAL schedule risk
+forever, on work nobody will pick up again.
+
+Findings 2 and 3 are latent on current data and were verified so against the
+live project rather than assumed: all 3 legacy-`approved` sets also carry a
+governing submittal, which outranks the legacy flag, and there are 0 Void
+submittals. One deleted submittal surfaces both. Open items and the unaudited
+remainder (Holds, Transmittals, 3D, board rendering paths) are in `TECH_DEBT.md`.
+
 ### 2026-09-07 — Detailing Control Center truthfulness audit (12 fixes)
 
 A full audit of `/DrawingSubmittalHub` found that the dominant defect class on
