@@ -43,6 +43,7 @@ export const PAGE_ICON = {
   DrawingSubmittalHub: ScanLine,
   Drawings: FileText,
   DrawingViewer: Eye,
+  GcDrawingViewer: Eye,
   Documents: Folder,
   DocumentControl: Stamp,
   GcDocuments: FileInput,
