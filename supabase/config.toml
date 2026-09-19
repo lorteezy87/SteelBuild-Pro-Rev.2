@@ -152,12 +152,6 @@ allowed_mime_types = [
 public = false
 file_size_limit = "25MiB"
 
-# sheets-files: the only PUBLIC bucket in production. Sheet renders served
-# straight to the browser.
-[storage.buckets.sheets-files]
-public = true
-file_size_limit = "200MiB"
-
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

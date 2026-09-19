@@ -62,14 +62,13 @@ demonstrated and signed off; it has to refuse what production refuses.
 
 ## Storage buckets
 
-The three production buckets are declared in `config.toml` so a branch or a
+The two production buckets are declared in `config.toml` so a branch or a
 local stack comes up with the same storage surface:
 
 | Bucket | Public | Limit | Notes |
 |---|---|---|---|
 | `app-files` | no | 50 MiB | drawings, models, documents, photos; 31 allowed MIME types |
 | `email-attachments` | no | 25 MiB | inbound email intake; no MIME restriction, senders choose |
-| `sheets-files` | **yes** | 200 MiB | the only public bucket; sheet renders served to the browser |
 
 Before this, a new branch reported `No buckets found` and every upload path
 failed there, so drawing and model features could not be exercised on a branch

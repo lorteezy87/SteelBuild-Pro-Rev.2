@@ -59,7 +59,7 @@ describe('B2 native inventory', () => {
 
 import { runIncrementalBackup } from '../lib/b2Backup.mjs';
 describe('incremental execution', () => {
-  const plan = ['app-files', 'email-attachments', 'sheets-files'].map(bucket => ({ bucket, source: `supabase:${bucket}`, current: `offsite:backup/current/${bucket}` }));
+  const plan = ['app-files', 'email-attachments'].map(bucket => ({ bucket, source: `supabase:${bucket}`, current: `offsite:backup/current/${bucket}` }));
   function executor() {
     const calls = [];
     return { calls, execute: async (args) => {
@@ -77,10 +77,10 @@ describe('incremental execution', () => {
   it('stages all buckets, checks budget, then syncs only current paths and checks SHA-1', async () => {
     const { calls, execute } = executor();
     const result = await runIncrementalBackup({ plan, stageRoot: '/tmp/stage', execute, inventory: async () => ({ storedBytes: 0 }) });
-    expect(result.buckets).toHaveLength(3);
+    expect(result.buckets).toHaveLength(2);
     expect(result.buckets[0].files[0].sha1).toBe('a'.repeat(40));
-    expect(result.budget.transferBytes).toBe(300);
-    expect(calls.filter(a => a[0] === 'sync')).toHaveLength(3);
+    expect(result.budget.transferBytes).toBe(200);
+    expect(calls.filter(a => a[0] === 'sync')).toHaveLength(2);
     expect(calls.filter(a => a[0] === 'sync').every(a => a.includes('--checksum') && a.includes('--b2-hard-delete=false'))).toBe(true);
     expect(calls.filter(a => a[0] === 'check').every(a => !a.includes('--size-only'))).toBe(true);
     expect(JSON.stringify(calls)).not.toContain('snapshots/');

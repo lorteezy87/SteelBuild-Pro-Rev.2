@@ -121,7 +121,7 @@ export function assertManifestFits(buckets) {
 const COPY_FLAGS = ['--fast-list', '--transfers', '4', '--checkers', '8', '--retries', '1', '--low-level-retries', '1', '--stats', '30s', '--stats-log-level', 'NOTICE', '--stats-one-line'];
 const SAFE_B2_FLAGS = ['--b2-hard-delete=false', '--b2-disable-checksum=false'];
 export async function runIncrementalBackup({ plan, stageRoot, execute, inventory, stageSource }) {
-  if (plan.length !== 3 || ['app-files', 'email-attachments', 'sheets-files'].some(b => !plan.some(p => p.bucket === b))) throw new Error('Backup must cover all three required buckets');
+  if (plan.length !== 2 || ['app-files', 'email-attachments'].some(b => !plan.some(p => p.bucket === b))) throw new Error('Backup must cover both required buckets');
   const json = async args => JSON.parse(await execute(args, { captureOutput: true, label: args[0] }));
   const run = args => execute(args, { captureOutput: false, label: args[0] });
   const before = await inventory();

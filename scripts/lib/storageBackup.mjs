@@ -9,7 +9,7 @@ export function rcloneRetryFlags(args) {
   return ["--retries", "1", "--low-level-retries", sourceRead ? "3" : "1"];
 }
 
-const REQUIRED_BUCKETS = ["app-files", "email-attachments", "sheets-files"];
+const REQUIRED_BUCKETS = ["app-files", "email-attachments"];
 const REQUIRED_ENV_KEYS = [
   "OFFSITE_RCLONE_CONFIG_B64",
   "OFFSITE_ROOT",

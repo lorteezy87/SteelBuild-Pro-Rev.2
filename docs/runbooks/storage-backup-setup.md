@@ -1,6 +1,6 @@
 # Supabase Storage backups to Backblaze B2
 
-The Storage backup workflow backs up `app-files`, `email-attachments`, and `sheets-files` from the expected Supabase project. It keeps one current copy and B2's native historical versions, rather than creating a full copy every day. It never permanently deletes versions or runs cleanup. Expiration lifecycle rules cause the job to fail before transferring data.
+The Storage backup workflow backs up `app-files` and `email-attachments` from the expected Supabase project. (`sheets-files` was removed on 2026-09-19 when the Sheets app was decommissioned; historical versions of it stay in B2 under their own retention.) It keeps one current copy and B2's native historical versions, rather than creating a full copy every day. It never permanently deletes versions or runs cleanup. Expiration lifecycle rules cause the job to fail before transferring data.
 
 ## Configuration
 
@@ -52,7 +52,6 @@ Download a verified manifest from GitHub Actions. For each bucket, use that buck
 ```bash
 rclone copy offsite:YOUR-BUCKET/steelbuild-pro-storage/current/app-files ./restore/app-files --b2-version-at 'RESTORE_AT_FROM_APP_FILES'
 rclone copy offsite:YOUR-BUCKET/steelbuild-pro-storage/current/email-attachments ./restore/email-attachments --b2-version-at 'RESTORE_AT_FROM_EMAIL_ATTACHMENTS'
-rclone copy offsite:YOUR-BUCKET/steelbuild-pro-storage/current/sheets-files ./restore/sheets-files --b2-version-at 'RESTORE_AT_FROM_SHEETS_FILES'
 ```
 
 Compare every restored file's SHA-1, size, and stored `path` with the manifest before any production restoration. When restoring to object storage, upload each file using its exact `sourcePath` as the object key. A key ending in `/` contains real file bytes and cannot be represented by an ordinary local filename; keep its reserved local path until uploading by exact key. `--b2-version-at` resolves actual object history and avoids selecting synthetic version filenames. Do not run `rclone cleanup`, `cleanup-hidden`, `purge`, or enable `--b2-hard-delete`: those remove recovery history.
