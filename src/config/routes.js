@@ -6,7 +6,14 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import { registerRoutePrefetcher } from "@/lib/routePrefetch";
 import { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } from "./moduleRegistry";
 
+// Lifecycles a REGISTERED PAGE may declare.
 export const ROUTE_LIFECYCLES = Object.freeze(["active", "internal"]);
+
+// Lifecycles a STATIC_ROUTE_METADATA entry may declare. "legacy" belongs here
+// and only here: it marks a retired URL kept alive as a redirect, which is a
+// valid state for a bare path but never for a page in the registry. Nothing
+// validated these at all, so a typo in a static entry was silent.
+export const STATIC_ROUTE_LIFECYCLES = Object.freeze(["active", "internal", "legacy"]);
 
 /**
  * The mounted path a redirect target points at, with any query and hash
@@ -194,6 +201,30 @@ export const ALL_ROUTE_PATHS = Array.from(new Set([
   ...Object.keys(PAGES).map((p) => `/${p}`),
 ]));
 
+/**
+ * Paths AppRoutes actually mounts, derived the way the router derives them
+ * (see src/boot/AppRoutes.jsx).
+ *
+ * Deliberately NOT ALL_ROUTE_PATHS. That is the union of the registry and
+ * STATIC_ROUTE_METADATA's OWN KEYS, so the old check
+ * `!ALL_ROUTE_PATHS.includes(path)` compared STATIC_ROUTE_METADATA against a
+ * set built from STATIC_ROUTE_METADATA — a tautology that could never fail. A
+ * `kind: "entry"` path pointing at no mounted route would 404 in production
+ * and the validator would report nothing.
+ */
+export function mountedRoutePaths() {
+  return new Set([
+    "/",
+    "/Landing",
+    "/ProjectDetail",
+    "/DesktopConnect",
+    ...Object.keys(PAGES).map((p) => `/${p}`),
+    ...Object.entries(STATIC_ROUTE_METADATA)
+      .filter(([, meta]) => meta.kind === "redirect")
+      .map(([path]) => path),
+  ]);
+}
+
 export function routeLabel(pageName) {
   if (!pageName) return "Page";
   if (PAGE_LABELS[pageName]) return PAGE_LABELS[pageName];
@@ -217,14 +248,30 @@ export async function validateRoutes() {
   for (const p of PROJECT_SCOPED_PAGES) {
     if (!registered.has(p)) issues.push(`PROJECT_SCOPED_PAGES references unregistered page: ${p}`);
   }
+  const mounted = mountedRoutePaths();
   for (const [path, meta] of Object.entries(STATIC_ROUTE_METADATA)) {
-    if (!ALL_ROUTE_PATHS.includes(path)) issues.push(`Static route path not mounted: ${path}`);
-    // A redirect target may carry query or hash (e.g. /Drawings lands on the
-    // hub's Drawing Register tab), so compare the PATH only — otherwise a
-    // perfectly good target reads as unmounted and the real check, that the
-    // path exists, never runs.
-    if (meta.kind === "redirect" && !ALL_ROUTE_PATHS.includes(redirectTargetPath(meta.target))) {
-      issues.push(`Redirect target not mounted: ${path} -> ${meta.target}`);
+    if (!mounted.has(path)) issues.push(`Static route path not mounted: ${path}`);
+    if (meta.kind === "redirect") {
+      // A redirect target may carry query or hash (e.g. /Drawings lands on the
+      // hub's Drawing Register tab), so compare the PATH only — otherwise a
+      // perfectly good target reads as unmounted and the real check, that the
+      // path exists, never runs.
+      const targetPath = meta.target ? redirectTargetPath(meta.target) : "";
+      if (!meta.target) {
+        issues.push(`Redirect has no target: ${path}`);
+      } else if (!mounted.has(targetPath)) {
+        issues.push(`Redirect target not mounted: ${path} -> ${meta.target}`);
+      } else if (targetPath === path) {
+        // Would send the browser to the URL it is already on, forever.
+        issues.push(`Redirect points at itself: ${path}`);
+      }
+    }
+    // STATIC_ROUTE_METADATA lifecycles were never checked at all, so a typo
+    // here was invisible. "legacy" is valid HERE (it marks a retired URL kept
+    // alive as a redirect) but is deliberately absent from ROUTE_LIFECYCLES,
+    // which governs REGISTERED PAGES — a registered page must never be legacy.
+    if (!STATIC_ROUTE_LIFECYCLES.includes(meta.lifecycle)) {
+      issues.push(`Unknown lifecycle for static route ${path}: ${meta.lifecycle}`);
     }
   }
   if (issues.length > 0 && import.meta.env.DEV) {
