@@ -123,12 +123,29 @@ describe('auth', () => {
       await expect(auth.me()).rejects.toThrow('Not authenticated');
     });
 
-    it('defaults role to user when profile query fails', async () => {
+    // A FAILED read is not the same as "no elevated role". This used to return
+    // 'user', which permissions.ts ranks at PM — so a transient user_profiles
+    // error handed a genuine viewer a PM-enabled UI full of controls that fail
+    // on click. An unknown role degrades DOWN.
+    it('degrades role to viewer when the profile query errors', async () => {
       (supabase.auth.getUser as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: { user: { id: 'u1', email: 'a@b.com', user_metadata: {} } },
         error: null,
       });
       mockProfileRole(null, { message: 'rls' });
+
+      await expect(auth.me()).resolves.toMatchObject({ role: 'viewer' });
+    });
+
+    // The other "no role" case, and it resolves the other way: the read WORKED
+    // and the column is simply empty, which is the normal state for an account
+    // with no elevated global role.
+    it('still defaults to user when the profile reads back with no role', async () => {
+      (supabase.auth.getUser as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: { user: { id: 'u1', email: 'a@b.com', user_metadata: {} } },
+        error: null,
+      });
+      mockProfileRole(null, null);
 
       await expect(auth.me()).resolves.toMatchObject({ role: 'user' });
     });
