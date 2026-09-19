@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { fetchAllRows } from "@/lib/pagedQuery";
 import { resolveFileUrl } from "@/api/supabaseClient";
 import { computeFabReleaseGate, linkedRfiNumbers } from "@/lib/fabReleaseGate";
 import { recordFabRelease, FabReleaseBlockedError } from "@/lib/fabRelease/releaseStatus";
@@ -358,21 +359,50 @@ export default function ExportFabReleaseModal({
       // ── For claims, also pull RFIs / COs / photos for the project ────
       let claimsExtras = { rfis: [], changeOrders: [], photos: [] };
       if (kind === "claims") {
-        try {
-          const [rfisQ, cosQ, photosQ] = await Promise.allSettled([
-            // NOTE: rfis has NO `subject` column (use title) — selecting it made
-            // PostgREST reject the whole query, and allSettled swallowed the
-            // error, so claims packages silently shipped ZERO RFIs.
-            supabase.from("rfis").select("id, rfi_number, title, question, status, submitted_date, created_at, author, created_by").eq("project_id", project.id).eq("is_deleted", false),
-            supabase.from("change_orders").select("id, co_number, title, description, status, issued_date, created_at, issued_by, created_by").eq("project_id", project.id).eq("is_deleted", false),
-            supabase.from("photos").select("id, caption, file_name, taken_at, created_at, uploaded_by, linked_drawing_id").eq("project_id", project.id).eq("is_deleted", false),
-          ]);
-          if (rfisQ.status === "fulfilled" && !rfisQ.value.error) claimsExtras.rfis = rfisQ.value.data || [];
-          if (cosQ.status === "fulfilled" && !cosQ.value.error) claimsExtras.changeOrders = cosQ.value.data || [];
-          if (photosQ.status === "fulfilled" && !photosQ.value.error) claimsExtras.photos = photosQ.value.data || [];
-        } catch (err) {
-          console.warn("[ExportFabReleaseModal] claims extras fetch threw:", err);
-        }
+        // These reads MUST be complete and MUST be paged.
+        //
+        // They were single unbounded selects. PostgREST caps a response at
+        // db-max-rows (1000) and returns 200 OK, so a project with more than
+        // 1000 photos (routine) produced a claims package that looked whole and
+        // was not — on a document that goes to a GC, an insurer, or a lawyer.
+        // Same silent-truncation class the entity client already guards against;
+        // this call site bypassed it by using the raw client.
+        //
+        // Failure handling changed too. The old Promise.allSettled + per-query
+        // error check downgraded a failed fetch to an EMPTY array and carried on
+        // — exactly how the `subject` column bug (see below) shipped claims
+        // packages containing zero RFIs. A claims export that cannot read its
+        // own evidence must ABORT, not quietly omit it.
+        //
+        // NOTE: rfis has NO `subject` column (use title) — selecting it made
+        // PostgREST reject the whole query.
+        const [rfis, changeOrders, photos] = await Promise.all([
+          fetchAllRows(
+            (start, end) => supabase
+              .from("rfis")
+              .select("id, rfi_number, title, question, status, submitted_date, created_at, author, created_by")
+              .eq("project_id", project.id).eq("is_deleted", false)
+              .order("id").range(start, end),
+            "claims RFIs",
+          ),
+          fetchAllRows(
+            (start, end) => supabase
+              .from("change_orders")
+              .select("id, co_number, title, description, status, issued_date, created_at, issued_by, created_by")
+              .eq("project_id", project.id).eq("is_deleted", false)
+              .order("id").range(start, end),
+            "claims change orders",
+          ),
+          fetchAllRows(
+            (start, end) => supabase
+              .from("photos")
+              .select("id, caption, file_name, taken_at, created_at, uploaded_by, linked_drawing_id")
+              .eq("project_id", project.id).eq("is_deleted", false)
+              .order("id").range(start, end),
+            "claims photos",
+          ),
+        ]);
+        claimsExtras = { rfis, changeOrders, photos };
       }
 
       // ── Build manifest CSV ────────────────────────────────────────────
