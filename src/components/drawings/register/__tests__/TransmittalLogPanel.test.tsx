@@ -94,6 +94,8 @@ function transmittalRow(overrides: Partial<TransmittalRow> = {}): TransmittalRow
     is_deleted: false,
     items: [{
       id: "item-1",
+      kind: "shop" as const,
+      gc_drawing_id: null,
       drawing_revision_id: "revision-1",
       drawing_id: "drawing-1",
       sheet_number: "S101",

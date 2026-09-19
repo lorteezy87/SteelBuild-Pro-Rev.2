@@ -18,6 +18,7 @@ const reads = vi.hoisted(() => ({
   transmittals: vi.fn(),
   items: vi.fn(),
   revisions: vi.fn(),
+  gcDrawings: vi.fn(),
 }));
 vi.mock("@/api/supabaseClient", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/supabaseClient")>()),
@@ -28,6 +29,10 @@ vi.mock("@/api/supabaseClient", async (importOriginal) => ({
     // they are a LOOKUP keyed by revision id, and a truncated one made an item
     // whose revision sat past the cap indistinguishable from an unmatched item.
     DrawingRevision: { filterAll: reads.revisions },
+    // Paged for the same reason as revisions: a LOOKUP keyed by id. A capped
+    // read would resolve a GC attachment to a blank number, indistinguishable
+    // from one whose GC drawing was deleted.
+    GcDrawing: { filterAll: reads.gcDrawings },
   },
 }));
 
@@ -49,12 +54,18 @@ const header = (i: number, overrides: Record<string, unknown> = {}) => ({
 });
 const item = (i: number) => ({ id: `i-${i}`, transmittal_id: "t-0", drawing_revision_id: "r1" });
 const REVISIONS = [{ id: "r1", drawing_id: "d1", sheet_number: "S1", sheet_title: null as string | null, revision_code: "0" }];
+const GC_DRAWINGS = [{ id: "g1", drawing_number: "A-101", title: "Level 1 plan", revision: "3" }];
 const itemsAtCap = () => Array.from({ length: CAP }, (_, i) => item(i));
 
-function serve({ transmittals = [header(0)], items = [item(0)] }: { transmittals?: unknown[]; items?: unknown[] } = {}) {
+function serve({
+  transmittals = [header(0)],
+  items = [item(0)],
+  gcDrawings = GC_DRAWINGS,
+}: { transmittals?: unknown[]; items?: unknown[]; gcDrawings?: unknown[] } = {}) {
   reads.transmittals.mockResolvedValue(transmittals);
   reads.items.mockResolvedValue(items);
   reads.revisions.mockResolvedValue(REVISIONS);
+  reads.gcDrawings.mockResolvedValue(gcDrawings);
 }
 
 function renderLog() {
@@ -142,7 +153,8 @@ describe("useTransmittals — items as the shared DB (m4_1) stores them", () => 
     expect(log[0]?.status).toBe("sent");
     expect(log[0]?.item_count).toBe(1);
     expect(log[0]?.items[0]).toEqual({
-      id: "i-n", drawing_revision_id: null, drawing_id: "d7", sheet_number: "S7", sheet_title: "Framing", revision_code: "2",
+      id: "i-n", kind: "shop", gc_drawing_id: null,
+      drawing_revision_id: null, drawing_id: "d7", sheet_number: "S7", sheet_title: "Framing", revision_code: "2",
     });
   });
 
@@ -159,15 +171,68 @@ describe("useTransmittals — items as the shared DB (m4_1) stores them", () => 
     expect(byId.get("legacy")).toMatchObject({ drawing_id: "d1", drawing_revision_id: "r1", sheet_number: "S1" });
   });
 
-  it("skips GC-drawing items, which aren't Rev.2 sheets, and items with no transmittal", async () => {
+  it("skips items with no transmittal", async () => {
     serve({
       items: [
-        { id: "gc", transmittal_id: "t-0", drawing_revision_id: null, drawing_id: null, gc_drawing_id: "g1", number_at_send: "A-101" },
         { id: "orphan", transmittal_id: null, drawing_revision_id: "r1", drawing_id: "d1" },
         item(0),
       ],
     });
     const log = await loadedLog(renderLog());
     expect(log[0]?.items.map((it) => it.id)).toEqual(["i-0"]);
+  });
+
+  it("keeps a GC-drawing item and resolves it against the GC register", async () => {
+    // These used to be dropped, so a transmittal carrying only GC sheets
+    // rendered as an empty one — which reads as "nothing was sent".
+    serve({
+      items: [{
+        id: "gc", transmittal_id: "t-0", drawing_revision_id: null, drawing_id: null,
+        gc_drawing_id: "g1", number_at_send: "A-101",
+      }],
+    });
+    const log = await loadedLog(renderLog());
+    expect(log[0]?.item_count).toBe(1);
+    expect(log[0]?.items[0]).toEqual({
+      id: "gc",
+      kind: "gc",
+      gc_drawing_id: "g1",
+      // Not a Rev.2 sheet: it borrows neither a drawing_id nor a revision id.
+      drawing_id: null,
+      drawing_revision_id: null,
+      sheet_number: "A-101",
+      sheet_title: "Level 1 plan",
+      revision_code: "3",
+    });
+  });
+
+  it("falls back to a GC item's send-time snapshot when the GC drawing is gone", async () => {
+    serve({
+      gcDrawings: [],
+      items: [{
+        id: "gc", transmittal_id: "t-0", drawing_revision_id: null, drawing_id: null,
+        gc_drawing_id: "g1", number_at_send: "A-101", title_at_send: "Level 1 plan",
+        revision_at_send: "2",
+      }],
+    });
+    const log = await loadedLog(renderLog());
+    expect(log[0]?.items[0]).toMatchObject({
+      kind: "gc", sheet_number: "A-101", sheet_title: "Level 1 plan", revision_code: "2",
+    });
+  });
+
+  it("tags shop items so the two id spaces can never be confused", async () => {
+    // A sheet number can exist in BOTH registers and mean different drawings,
+    // so anything resolving an attachment back to a record branches on `kind`.
+    serve({
+      items: [
+        item(0),
+        { id: "gc", transmittal_id: "t-0", drawing_revision_id: null, drawing_id: null, gc_drawing_id: "g1" },
+      ],
+    });
+    const log = await loadedLog(renderLog());
+    const byId = new Map((log[0]?.items ?? []).map((it) => [it.id, it]));
+    expect(byId.get("i-0")).toMatchObject({ kind: "shop", gc_drawing_id: null, drawing_id: "d1" });
+    expect(byId.get("gc")).toMatchObject({ kind: "gc", gc_drawing_id: "g1", drawing_id: null });
   });
 });

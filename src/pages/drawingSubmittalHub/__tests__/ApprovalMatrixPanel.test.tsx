@@ -45,7 +45,7 @@ const TRANSMITTALS: TransmittalRow[] = [{
   id: "t-1", project_id: "p1", transmittal_number: "T-014", direction: "outgoing",
   source_company: null, received_from: null, sent_to: "EOR", subject: null,
   date_sent: "2026-08-03", date_received: null, notes: null, created_at: "2026-08-03T09:00:00Z", is_deleted: false,
-  items: [{ id: "i1", drawing_revision_id: "r1", drawing_id: "d1", sheet_number: "S1", sheet_title: null, revision_code: "0" }],
+  items: [{ id: "i1", kind: "shop" as const, gc_drawing_id: null, drawing_revision_id: "r1", drawing_id: "d1", sheet_number: "S1", sheet_title: null, revision_code: "0" }],
   item_count: 1,
 }];
 
@@ -110,7 +110,7 @@ function expandLastSent(setId: string): HTMLElement {
 }
 
 const sentItem = (id: string, drawingId: string | null, revisionId: string | null): TransmittalAttachment => ({
-  id, drawing_revision_id: revisionId, drawing_id: drawingId, sheet_number: null, sheet_title: null, revision_code: null,
+  id, kind: "shop", gc_drawing_id: null, drawing_revision_id: revisionId, drawing_id: drawingId, sheet_number: null, sheet_title: null, revision_code: null,
 });
 
 describe("ApprovalMatrixPanel — 2026 columns on Rev.2 logic", () => {
