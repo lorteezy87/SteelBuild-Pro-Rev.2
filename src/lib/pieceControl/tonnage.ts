@@ -42,3 +42,54 @@ export function sumPieceTons(pieces: Array<PieceWeightInputs> | null | undefined
     return total + (tons ?? 0);
   }, 0);
 }
+
+export interface TonnageRollup {
+  /** Tons from pieces that HAVE a resolvable weight. */
+  tons: number;
+  /** Pieces counted in `tons`. */
+  weighedCount: number;
+  /**
+   * Pieces with no resolvable weight. They contribute 0 tons — surface this,
+   * don't ignore it.
+   */
+  unknownWeightCount: number;
+  /** True when at least one piece has no weight, so `tons` is a FLOOR. */
+  partial: boolean;
+}
+
+/**
+ * sumPieceTons() with the missing-data signal attached.
+ *
+ * sumPieceTons treats a piece with no resolvable weight as 0 tons, which is
+ * arithmetically the only option but silently under-reports the total with no
+ * indication. Tonnage drives shipping, billing lines and production percent for
+ * a fabricator, so "142 tons" and "142 tons plus 38 pieces we couldn't weigh"
+ * are very different numbers to hand someone.
+ *
+ * sumPieceTons is left exactly as it was — plenty of call sites just want the
+ * number — but anything that DISPLAYS or BILLS a tonnage should use this and
+ * show the partial flag.
+ */
+export function rollupPieceTons(
+  pieces: Array<PieceWeightInputs> | null | undefined,
+): TonnageRollup {
+  if (!pieces?.length) {
+    return { tons: 0, weighedCount: 0, unknownWeightCount: 0, partial: false };
+  }
+
+  let tons = 0;
+  let weighedCount = 0;
+  let unknownWeightCount = 0;
+
+  for (const piece of pieces) {
+    const pieceTonnage = pieceTons(piece);
+    if (pieceTonnage === null) {
+      unknownWeightCount += 1;
+    } else {
+      tons += pieceTonnage;
+      weighedCount += 1;
+    }
+  }
+
+  return { tons, weighedCount, unknownWeightCount, partial: unknownWeightCount > 0 };
+}
