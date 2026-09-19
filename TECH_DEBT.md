@@ -614,14 +614,17 @@ The four areas the pass above deferred. Live counts taken the same day:
     range took it too; `tsc` caught it. Cut this file by symbol and re-run
     `tsc`, never by range.
 
-- **`tabCounts` covers 6 of the 9 tabs.** `TABS` (format.ts) lists overview,
-  process, drawings, submittals, transmittals, matrix, revimpact, holds,
-  validation; `tabCounts` (DrawingSubmittalHub.tsx) supplies all but
-  transmittals, revimpact and validation. `tabCounts[key] ?? 0` plus the strip's
-  `count > 0 &&` means those three never badge. Not a false claim — a missing
-  badge asserts nothing — but the three are silently uncountable rather than
-  deliberately zero. *Remediation:* supply the three counts, or comment why they
-  are intentionally unbadged.
+- **`tabCounts` — the one badgeable tab was badged; two are deliberately not**
+  (was open; resolved 2026-09-19). `revimpact` now badges `revisionImpact.length`,
+  which the hub already computes for the tab itself, so it is free.
+  `transmittals` and `validation` stay unbadged **on purpose**, and the reason is
+  now a comment at the call site: `useTransmittals` is gated to
+  `activeTab === "matrix"` because it is a three-table read, and
+  `runDetailingValidation` is `enabled: false` behind an explicit "Run
+  validation" button. Badging either would force its query eager on every page
+  load — and for validation, a `0` would claim a clean report nobody ran. The
+  strip renders no badge at 0, so omitting them asserts nothing. Adding a count
+  to either is a performance decision first, not a display one.
 
 **Verified correct — no action**
 

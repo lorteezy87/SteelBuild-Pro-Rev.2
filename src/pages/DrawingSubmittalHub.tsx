@@ -642,14 +642,30 @@ function DetailingControlCenter() {
   // A tab badge must count the ROWS that tab lists. The Drawing Register tab
   // renders sheets (DrawingRegisterGridPanel), so badging it with the set count
   // read "Drawing Register 11" above 148 rows.
+  //
+  // TABS has nine entries and this map has seven. The two it leaves out are
+  // deliberate, not oversights — badging either would undo a load the hub
+  // avoids on purpose:
+  //   transmittals — useTransmittals is gated to `activeTab === "matrix"`
+  //     because it is a three-table read. A badge would force it on every
+  //     page load, for every tab.
+  //   validation   — runDetailingValidation is `enabled: false` behind an
+  //     explicit "Run validation" button. There is no count until the user
+  //     asks for one, and inventing a 0 would claim a clean report nobody ran.
+  // The strip renders no badge at 0 (`count > 0 &&`), so leaving them out
+  // asserts nothing. Adding a count to either means making its query eager
+  // first — a performance decision, not a display one.
   const tabCounts = useMemo(() => ({
     overview: triage.openItems.length,
     process: setPackages.length + triage.unlinkedSubmittalItems.length,
     drawings: drawingKpis.totalSheets,
     submittals: kpis.total,
     matrix: drawingSets.filter((set) => !set?.is_deleted).length,
+    // Already computed above for the Revision Impact tab itself, so this is
+    // free — it was the one missing badge with data in hand.
+    revimpact: revisionImpact.length,
     holds: activeHolds ?? 0,
-  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSheets, kpis.total, drawingSets, activeHolds]);
+  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSheets, kpis.total, drawingSets, revisionImpact.length, activeHolds]);
 
   // ── Inline quick-action mutations (Next Decision card) ────────────────
   const invalidateHub = async () => {
