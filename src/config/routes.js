@@ -57,6 +57,7 @@ const ROUTE_DOMAINS = {
     DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),
     Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents",           { projectScoped: true }),
     Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittal Register",  { projectScoped: true }),
+    DocumentControl:  r(lazyWithRetry(() => import("@/pages/DocumentControl")),  "Document Control",    { projectScoped: true }),
   },
   fabrication: {
     WorkPackages:       r(lazyWithRetry(() => import("@/pages/WorkPackages")),       "Work Packages",       { projectScoped: true }),

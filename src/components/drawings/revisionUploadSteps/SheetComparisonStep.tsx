@@ -1,9 +1,11 @@
 import React from "react";
 import { ChevronRight, ChevronLeft, AlertTriangle } from "lucide-react";
 import { CHANGE_STYLE } from "../revisionUploadHelpers";
+import { DocControlIntakePanel } from "../DocControlReviewPanel";
+import { useAuth } from "@/lib/AuthContext";
 // ── Step D: Sheet Comparison ───────────────────────────────────────
 export default function StepSheetComparison(props: any) {
-  const { selectedSet, revMeta, matchedSheets, setMatchedSheets, supersedeUnlisted, setSupersedeUnlisted, onBack, onConfirm } = props;
+  const { selectedSet, revMeta, extraction, activeProject, matchedSheets, setMatchedSheets, supersedeUnlisted, setSupersedeUnlisted, onBack, onConfirm } = props;
   const counts = {
     same: matchedSheets.filter((m: any) => m.change === "revised" && m.oldSheet?.sheetTitle === m.newSheet?.sheetTitle).length,
     revised: matchedSheets.filter((m: any) => m.change === "revised").length,
@@ -19,6 +21,22 @@ export default function StepSheetComparison(props: any) {
   const updateTitle = (idx: any, val: any) => {
     setMatchedSheets((prev: any) => prev.map((m: any, i: any) => i === idx ? { ...m, newSheet: { ...m.newSheet, sheetTitle: val } } : m));
   };
+
+  const { user } = useAuth();
+
+  // Document Control intake for this upload. Memoised on the inputs the engine
+  // actually reads so attesting a seal on one sheet does not rebuild the others.
+  const docControlIntake = React.useMemo(
+    () => ({
+      matches: matchedSheets,
+      setMeta: extraction?.setMeta ?? null,
+      scanned: extraction?.scanned === true,
+      revisionFromRect: !!selectedSet?.titleblock_revision_rect,
+      existingSet: selectedSet ?? null,
+      projectId: activeProject?.id ?? null,
+    }),
+    [matchedSheets, extraction, selectedSet, activeProject],
+  );
 
   return (
     <div>
@@ -50,6 +68,14 @@ export default function StepSheetComparison(props: any) {
           </div>
         </div>
       )}
+
+      {/* Document Control read — title block, seal, register verdict, findings.
+          Sits above the sheet diff because a held document should stop a
+          reviewer before they scroll into the row-by-row comparison. */}
+      <DocControlIntakePanel
+        intake={docControlIntake}
+        reviewerName={user?.full_name || user?.email || ""}
+      />
 
       {/* Sheets in the set but NOT in this upload. Retiring them is OPT-IN: the
           default treats the upload as a PARTIAL revision and leaves those sheets
