@@ -17,6 +17,20 @@ import {
   validateRoutes,
 } from "@/config/routes";
 
+/**
+ * STATIC_ROUTE_METADATA is a plain object literal, so TypeScript infers a
+ * union in which only the redirect members carry `target`. These tests are
+ * ABOUT the redirect members, so widen once here rather than narrowing at
+ * every call site.
+ */
+interface StaticRouteMeta {
+  lifecycle: string;
+  kind: string;
+  target?: string;
+}
+const staticEntries = (): [string, StaticRouteMeta][] =>
+  Object.entries(STATIC_ROUTE_METADATA as Record<string, StaticRouteMeta>);
+
 describe("mountedRoutePaths", () => {
   it("is not the set the old check compared against", () => {
     // Every static path is in ALL_ROUTE_PATHS by construction — that is the bug.
@@ -55,14 +69,14 @@ describe("the live registry", () => {
   });
 
   it("has no redirect pointing at itself", () => {
-    const selfies = Object.entries(STATIC_ROUTE_METADATA)
+    const selfies = staticEntries()
       .filter(([path, meta]) => meta.kind === "redirect" && meta.target === path)
       .map(([path]) => path);
     expect(selfies).toEqual([]);
   });
 
   it("has no redirect without a target", () => {
-    const targetless = Object.entries(STATIC_ROUTE_METADATA)
+    const targetless = staticEntries()
       .filter(([, meta]) => meta.kind === "redirect" && !meta.target)
       .map(([path]) => path);
     expect(targetless).toEqual([]);
