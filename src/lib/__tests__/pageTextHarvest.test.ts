@@ -53,6 +53,52 @@ describe("attachPageText", () => {
   });
 });
 
+describe("attachPageText — callouts", () => {
+  const calloutsByPage = [
+    [{ targetSheetNumber: "S-401", text: "SEE S-401", coords: { x: 1, y: 2, width: 3, height: 4 } }],
+    [{ targetSheetNumber: "S-101", text: "3/S-101", coords: { x: 5, y: 6, width: 7, height: 8 } }],
+  ];
+
+  it("gives each sheet the callouts found on its own page", () => {
+    const sheets: PdfSheetRecord[] = [{ sheetNumber: "S-101", pdfPage: 1 }];
+    const out = attachPageText(sheets, ["page one"], calloutsByPage);
+    expect(out[0].callouts).toEqual(calloutsByPage[0]);
+  });
+
+  it("drops a self-reference once the sheet number is known", () => {
+    // Page 2 references S-101, and this IS S-101 — a bubble pointing at the
+    // page you are already on, which would render a button going nowhere.
+    const sheets: PdfSheetRecord[] = [{ sheetNumber: "S101", pdfPage: 2 }];
+    const out = attachPageText(sheets, ["a", "b"], calloutsByPage);
+    expect(out[0].callouts).toEqual([]);
+  });
+
+  it("keeps an empty ARRAY for a read page that referenced nothing", () => {
+    // Distinct from absent: read-and-none is evidence, never-read is not.
+    const sheets: PdfSheetRecord[] = [{ sheetNumber: "S-101", pdfPage: 1 }];
+    const out = attachPageText(sheets, ["page one"], [[]]);
+    expect(out[0].callouts).toEqual([]);
+  });
+
+  it("leaves callouts ABSENT for a page that was never harvested", () => {
+    const sheets: PdfSheetRecord[] = [{ sheetNumber: "S-900", pdfPage: 9 }];
+    const out = attachPageText(sheets, ["page one"], calloutsByPage);
+    expect("callouts" in out[0]).toBe(false);
+  });
+
+  it("still attaches callouts when the page text is missing", () => {
+    const sheets: PdfSheetRecord[] = [{ sheetNumber: "S-102", pdfPage: 1 }];
+    const out = attachPageText(sheets, [], calloutsByPage);
+    expect(out[0].callouts).toEqual(calloutsByPage[0]);
+    expect("extractedText" in out[0]).toBe(false);
+  });
+
+  it("is a no-op when no callouts were supplied", () => {
+    const sheets: PdfSheetRecord[] = [{ sheetNumber: "S-101", pdfPage: 1 }];
+    expect("callouts" in attachPageText(sheets, ["page one"])[0]).toBe(false);
+  });
+});
+
 describe("isTruncatedPageText", () => {
   it("detects a page cut at the harvest cap", () => {
     expect(isTruncatedPageText(`NOTES${PAGE_TEXT_TRUNCATION_MARKER}`)).toBe(true);

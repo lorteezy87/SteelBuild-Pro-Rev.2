@@ -190,6 +190,52 @@ describe("DocumentControl page", () => {
     expect(screen.getByText(/Seal text found in the page text layer/)).toBeTruthy();
   });
 
+  it("diffs cross-sheet callouts once both sides carry them", async () => {
+    m.drawings = [
+      {
+        id: "d1",
+        sheet_number: "S-101",
+        is_superseded: false,
+        extracted_text: "NOTE 1",
+        callouts: [{ targetSheetNumber: "S-402", text: "SEE S-402" }],
+      },
+    ];
+    m.extraction = {
+      ...m.extraction,
+      sheets: [
+        {
+          sheetNumber: "S-101",
+          sheetTitle: "FOUNDATION PLAN",
+          revision: "IFC",
+          pdfPage: 1,
+          extractedText: "NOTE 1",
+          callouts: [
+            { targetSheetNumber: "S-401", text: "SEE S-401", coords: { x: 1, y: 2, width: 3, height: 4 } },
+          ],
+        },
+      ],
+    };
+    render(<DocumentControl />, { wrapper });
+    await waitFor(() => expect(screen.getByText(/Checked against/)).toBeTruthy());
+    await dropPdf();
+    fireEvent.click(screen.getByText("S-101"));
+
+    const callouts = screen.getByText(/Cross-sheet callouts changed/);
+    expect(callouts.textContent).toContain("now references S-401");
+    expect(callouts.textContent).toContain("no longer references S-402");
+  });
+
+  it("still treats an empty callout list on an unextracted row as unknown", async () => {
+    // The legacy case: 0 of the existing rows were ever extracted.
+    m.drawings = [{ id: "d1", sheet_number: "S-101", is_superseded: false }];
+    render(<DocumentControl />, { wrapper });
+    await waitFor(() => expect(screen.getByText(/Checked against/)).toBeTruthy());
+    await dropPdf();
+    fireEvent.click(screen.getByText("S-101"));
+
+    expect(screen.getByText(/unknown rather than empty/)).toBeTruthy();
+  });
+
   it("surfaces an extraction failure rather than an empty result", async () => {
     m.extraction = { extractFailed: true, error: "AI extraction failed" };
     render(<DocumentControl />, { wrapper });

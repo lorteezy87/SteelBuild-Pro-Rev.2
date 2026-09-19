@@ -31,6 +31,7 @@ import { integrations } from "@/api/supabaseClient";
 import { extractTextFromRect } from "@/lib/pdfTitleblockText";
 import { parseTitleblockRect } from "@/lib/titleblock";
 import { PAGE_TEXT_TRUNCATION_MARKER } from "@/lib/pageTextFormat";
+import { calloutSheetKey, detectCallouts, type DetectedCallout } from "@/lib/calloutDetection";
 import type { Json } from "@/types/supabase";
 
 export type DrawingSetMetadata = {
@@ -69,6 +70,13 @@ export type PdfSheetRecord = {
    * so the two must stay distinguishable all the way to the database.
    */
   extractedText?: string;
+  /**
+   * Cross-sheet callouts detected on this sheet's page, as persisted to
+   * `drawings.callouts`. Absent when the page was never harvested — not the
+   * same as an empty array, which means the page was read and referenced
+   * nothing.
+   */
+  callouts?: DetectedCallout[];
   _note?: PdfExtractionWarning;
   [key: string]: unknown;
 };
@@ -115,6 +123,12 @@ type ExtractedPdfText = {
   perPageTitle: string[] | null;
   perPageNumber: string[] | null;
   titleblockApplied: boolean;
+  /**
+   * Cross-sheet callouts found on each page, parallel to `pages`. Detected
+   * here because this is the only place the POSITIONED text items exist —
+   * a callout without coordinates cannot be drawn on the sheet.
+   */
+  perPageCallouts: DetectedCallout[][];
 };
 
 export type PdfTextItem = {
@@ -122,6 +136,12 @@ export type PdfTextItem = {
   y: number;
   str: string;
   width: number;
+  /**
+   * Glyph height in PDF user units, when the text layer reports one. Used
+   * only by callout detection, which needs a box to draw; the columnar text
+   * builder below ignores it.
+   */
+  height?: number;
 };
 
 type TextLine = { y: number; items: PdfTextItem[] };
@@ -274,6 +294,7 @@ async function extractPdfText(
   // to `pages` above. Empty string = no text in rect on this page.
   const perPageTitle  = useTemplate ? new Array(pageCount).fill("") : null;
   const perPageNumber = useTemplate ? new Array(pageCount).fill("") : null;
+  const perPageCallouts: DetectedCallout[][] = [];
   let totalChars = 0;
 
   for (let p = 1; p <= pageCount; p++) {
@@ -312,7 +333,21 @@ async function extractPdfText(
         const width = typeof item.width === "number" && Number.isFinite(item.width)
           ? item.width
           : str.length * 5;
-        rawItems.push({ x, y, str, width });
+        const height = typeof item.height === "number" && Number.isFinite(item.height) && item.height > 0
+          ? item.height
+          : undefined;
+        rawItems.push({ x, y, str, width, height });
+      }
+
+      // 1b. Cross-sheet callouts, from the positioned items — the only point
+      //     in the pipeline where coordinates still exist. The joined text
+      //     below has none, and CalloutOverlay skips a callout without them.
+      try {
+        const viewport = page.getViewport({ scale: 1 });
+        perPageCallouts[p - 1] = detectCallouts(rawItems, { pageHeight: viewport.height });
+      } catch (calloutErr) {
+        console.warn(`[pdfSheetExtractor] callout detection failed for page ${p}:`, calloutErr);
+        perPageCallouts[p - 1] = [];
       }
 
       // 2. Bucket by y-tolerance. We sort once by descending y so stable
@@ -374,6 +409,7 @@ async function extractPdfText(
     perPageTitle,
     perPageNumber,
     titleblockApplied: useTemplate,
+    perPageCallouts,
   };
 }
 
@@ -1017,9 +1053,9 @@ export async function extractSheetsFromPdf(
   //    validate (positive integer, within page range) and warn on misses.
   sheets = assignPdfPages(sheets, extracted.pageCount);
 
-  // 7. Attach each sheet's own page text — the producer for
-  //    `drawings.extracted_text`. See attachPageText.
-  sheets = attachPageText(sheets, extracted.pages);
+  // 7. Attach each sheet's own page text and callouts — the producers for
+  //    `drawings.extracted_text` and `drawings.callouts`. See attachPageText.
+  sheets = attachPageText(sheets, extracted.pages, extracted.perPageCallouts);
 
   return {
     setMeta,
@@ -1031,7 +1067,7 @@ export async function extractSheetsFromPdf(
 }
 
 /**
- * Attach each sheet's own page text, keyed by its assigned `pdfPage`.
+ * Attach each sheet's own page text and callouts, keyed by its `pdfPage`.
  *
  * This is the producer for `drawings.extracted_text`. The upload helper has
  * always read `sheet.extractedText` and nothing ever set it, so the column was
@@ -1051,13 +1087,30 @@ export async function extractSheetsFromPdf(
 export function attachPageText<T extends PdfSheetRecord>(
   sheets: readonly T[] | null | undefined,
   pages: readonly string[] | null | undefined,
+  callouts?: readonly DetectedCallout[][] | null,
 ): T[] {
   const pageList = Array.isArray(pages) ? pages : [];
+  const calloutList = Array.isArray(callouts) ? callouts : [];
   return (Array.isArray(sheets) ? sheets : []).map((sheet) => {
     const page = validatePdfPage(sheet?.pdfPage);
     if (page === null) return sheet;
+
     const pageText = pageList[page - 1];
-    return typeof pageText === "string" ? { ...sheet, extractedText: pageText } : sheet;
+    const pageCallouts = calloutList[page - 1];
+    if (typeof pageText !== "string" && !Array.isArray(pageCallouts)) return sheet;
+
+    const out: T = { ...sheet };
+    if (typeof pageText === "string") out.extractedText = pageText;
+    if (Array.isArray(pageCallouts)) {
+      // Self-references are dropped here rather than during detection: the
+      // page's own sheet number is not known until the sheets have been
+      // parsed and the titleblock override has run.
+      const selfKey = calloutSheetKey(sheet?.sheetNumber);
+      out.callouts = selfKey
+        ? pageCallouts.filter((c) => calloutSheetKey(c?.targetSheetNumber) !== selfKey)
+        : pageCallouts;
+    }
+    return out;
   });
 }
 

@@ -27,7 +27,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { isPdfFile } from "@/lib/drawingUploadUtils";
 import { extractSheetsFromPdf, type PdfExtractionStatus } from "@/lib/pdfSheetExtractor";
 import { readPdfPageTexts } from "@/lib/pdfPageText";
-import { buildDocControlRecord, toMdrEntry, type MdrEntry } from "@/lib/docControl";
+import { buildDocControlRecord, normalizeCallouts, toMdrEntry, type MdrEntry } from "@/lib/docControl";
 import DocControlReviewPanel, {
   useDocControlAttestations,
 } from "@/components/drawings/DocControlReviewPanel";
@@ -67,6 +67,7 @@ type ExtractionState = {
     date?: string;
     pdfPage?: unknown;
     extractedText?: string;
+    callouts?: unknown;
   }>;
   scanned: boolean;
   pageTexts: Record<number, string>;
@@ -140,7 +141,7 @@ export default function DocumentControl() {
           // collapsed for seal detection and would report every sheet as
           // wholly rewritten if it were diffed against a stored page.
           extractedText: typeof sheet.extractedText === "string" ? sheet.extractedText : null,
-          callouts: [],
+          callouts: normalizeCallouts(sheet.callouts),
         },
       });
     });
