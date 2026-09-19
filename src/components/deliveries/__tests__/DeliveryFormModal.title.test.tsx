@@ -21,12 +21,14 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+type AnyArgs = unknown[];
+
 const create = vi.fn();
 const update = vi.fn();
 
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
-    Delivery: { create: (...a) => create(...a), update: (...a) => update(...a) },
+    Delivery: { create: (...a: AnyArgs) => create(...a), update: (...a: AnyArgs) => update(...a) },
     Project: { filter: vi.fn().mockResolvedValue([]), list: vi.fn().mockResolvedValue([]) },
     WorkPackage: { filter: vi.fn().mockResolvedValue([]) },
     Drawing: { filter: vi.fn().mockResolvedValue([]) },
@@ -52,11 +54,14 @@ vi.mock("@/components/shared/AutoLinkSuggestions", () => ({ default: () => null 
 
 import DeliveryFormModal from "../DeliveryFormModal";
 
+// The modal is .jsx with no exported prop type; cast once at the boundary.
+const Modal = DeliveryFormModal as unknown as React.FC<Record<string, unknown>>;
+
 function renderModal() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={qc}>
-      <DeliveryFormModal projectId="p1" onClose={vi.fn()} />
+      <Modal projectId="p1" onClose={vi.fn()} />
     </QueryClientProvider>,
   );
 }
