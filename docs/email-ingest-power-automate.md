@@ -186,10 +186,12 @@ upstream keeps the Email Inbox focused.
 
 ## Security notes
 
-- Treat `EMAIL_WEBHOOK_SECRET` like a password. Prefer the `x-webhook-secret`
-  **header** over the `?secret=` query param so it isn't captured in flow-run
-  URLs or logs. In Power Automate, you can mark the HTTP action's inputs as
-  **secure inputs** (action → Settings → Secure Inputs).
+- Treat `EMAIL_WEBHOOK_SECRET` like a password. It must be sent in a **header** —
+  either `x-webhook-secret: <secret>` or `Authorization: Bearer <secret>`. The
+  `?secret=` query-parameter form is **no longer accepted**: a credential in a
+  URL is captured in flow-run history, Supabase request logs, and every proxy in
+  between. In Power Automate, also mark the HTTP action's inputs as **secure
+  inputs** (action → Settings → Secure Inputs).
 - The endpoint runs without a JWT (`verify_jwt=false`) by design — the shared
   secret is the only gate. Rotate it by updating the function secret in Supabase
   and the header value in each flow.
