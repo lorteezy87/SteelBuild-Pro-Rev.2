@@ -30,6 +30,7 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { integrations } from "@/api/supabaseClient";
 import { extractTextFromRect } from "@/lib/pdfTitleblockText";
 import { parseTitleblockRect } from "@/lib/titleblock";
+import { PAGE_TEXT_TRUNCATION_MARKER } from "@/lib/pageTextFormat";
 import type { Json } from "@/types/supabase";
 
 export type DrawingSetMetadata = {
@@ -58,6 +59,16 @@ export type PdfSheetRecord = {
   scale?: string;
   date?: string;
   pdfPage?: unknown;
+  /**
+   * The harvested text of this sheet's PDF page, in the same column-aware
+   * line format that is persisted to `drawings.extracted_text`.
+   *
+   * ABSENT (undefined) when the page was never harvested — past the total
+   * character budget, or a page that failed to render. That is not the same
+   * as an empty string, which means the page was read and carried no text,
+   * so the two must stay distinguishable all the way to the database.
+   */
+  extractedText?: string;
   _note?: PdfExtractionWarning;
   [key: string]: unknown;
 };
@@ -156,6 +167,7 @@ function asSheetRecord(value: unknown): PdfSheetRecord {
     scale: optionalStringField(record, "scale"),
     date: optionalStringField(record, "date"),
     pdfPage: record.pdfPage,
+    extractedText: optionalStringField(record, "extractedText"),
     _note: optionalStringField(record, "_note"),
   };
 }
@@ -336,7 +348,7 @@ async function extractPdfText(
 
       let pageText = lineStrings.join("\n");
       if (pageText.length > MAX_CHARS_PER_PAGE) {
-        pageText = pageText.slice(0, MAX_CHARS_PER_PAGE) + " …[truncated]";
+        pageText = pageText.slice(0, MAX_CHARS_PER_PAGE) + PAGE_TEXT_TRUNCATION_MARKER;
       }
       pages.push(pageText);
       totalChars += pageText.length;
@@ -1005,6 +1017,10 @@ export async function extractSheetsFromPdf(
   //    validate (positive integer, within page range) and warn on misses.
   sheets = assignPdfPages(sheets, extracted.pageCount);
 
+  // 7. Attach each sheet's own page text — the producer for
+  //    `drawings.extracted_text`. See attachPageText.
+  sheets = attachPageText(sheets, extracted.pages);
+
   return {
     setMeta,
     sheets,
@@ -1012,6 +1028,37 @@ export async function extractSheetsFromPdf(
     extractFailed: false,
     pageCount: extracted.pageCount,
   };
+}
+
+/**
+ * Attach each sheet's own page text, keyed by its assigned `pdfPage`.
+ *
+ * This is the producer for `drawings.extracted_text`. The upload helper has
+ * always read `sheet.extractedText` and nothing ever set it, so the column was
+ * NULL on every row the app had written — which left the revision change
+ * summary with no prior text to compare and nothing true to say about notes,
+ * schedules or weld callouts.
+ *
+ * `pages` can be SHORTER than the page count: the harvest loop stops at the
+ * total character budget. A sheet whose page falls past that end, or whose
+ * page never rendered, is returned UNCHANGED — `extractedText` stays absent
+ * rather than becoming "". The two mean different things to every consumer
+ * downstream: absent is "never harvested", empty is "read, and carried no
+ * text", and only the second is evidence about the sheet.
+ *
+ * Returns a new array; does not mutate. Exported for testing.
+ */
+export function attachPageText<T extends PdfSheetRecord>(
+  sheets: readonly T[] | null | undefined,
+  pages: readonly string[] | null | undefined,
+): T[] {
+  const pageList = Array.isArray(pages) ? pages : [];
+  return (Array.isArray(sheets) ? sheets : []).map((sheet) => {
+    const page = validatePdfPage(sheet?.pdfPage);
+    if (page === null) return sheet;
+    const pageText = pageList[page - 1];
+    return typeof pageText === "string" ? { ...sheet, extractedText: pageText } : sheet;
+  });
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────
