@@ -244,7 +244,7 @@ describe('the real manifest', () => {
 });
 
 /**
- * The live ledger at the time these overrides were written (121 rows). Kept as
+ * The live ledger at the time these overrides were written (124 rows). Kept as
  * a literal so the "nothing unclassified" test above is deterministic and needs
  * no network access.
  */
@@ -274,4 +274,7 @@ const LEDGER = new Set([
   '20260912034015', '20260912042823', '20260912045532', '20260912052502', '20260912055243',
   '20260912062606', '20260913201853', '20260913201900', '20260913203000', '20260914010000',
   '20260914020000', '20260914120000', '20260914120100',
+  // Applied out-of-band 2026-09-19 08:27:58 by the Section Cut work (PR #437)
+  // before its file was committed; verified present in the live ledger.
+  '20260919082758',
 ]);
