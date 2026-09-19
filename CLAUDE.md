@@ -11,7 +11,7 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 ## Commands
 - `npm run dev` — local dev server
 - `npm run lint` — lint (must be clean before commit)
-- `npm run test` — full test suite (4,932 tests / 525 files on `main` as of 2026-09-11)
+- `npm run test` — full test suite (6,470 tests / 678 files as of 2026-09-19)
 - `npm run build` — production build
 - CI gates — every PR must pass all of them: `lint`, `typecheck`, `typecheck:js`, `typecheck:strict`, `typecheck:noimplicitany`, `check:no-new-js`, `test`, `build`.
   - New source files must be `.ts`/`.tsx` (enforced by `check:no-new-js`). Editing existing `.js`/`.jsx` files is fine.
@@ -67,6 +67,13 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 - **Gate controls on the write validator**, not a hand-written weaker condition — use the `canWrite*` predicates in `format.ts`.
 - **Row caps:** `LIST_ROW_CAP` (2000) is what a request *asks* for; `SERVER_MAX_ROWS` (1000) is PostgREST's `db-max-rows`. Truncation detectors must compare against `EFFECTIVE_LIST_CAP` (the min), or they can never fire.
 - **Bulk edit must respect gates.** `handleBulkEdit` in `pages/drawings/useDrawingsPageController.ts` must use `validateStageTransition` and `classifyDrawingStageMutation` when updating `stage` to prevent bypassing submittal approval gates (fixed 2026-09-13).
+- **Three predicates, three different questions — do not collapse them** (audit 2026-09-19).
+  - `isPackageReleasedForFab` — "the shop has it". Drives the **Released KPI** and the Drawing Register's **Released column** and green row accent. Both must use it, or they contradict each other.
+  - `isClosedPackage` — terminal *for triage*. Also fires on a Void-only set and on the deprecated `set_approval_status="approved"`, neither of which means the shop received anything. Use it ONLY to suppress the late flag.
+  - `effectiveDetailingState` — the operational state, for display.
+  The register once used `isClosedPackage` for the Released column under a comment claiming it matched the KPI. It did not.
+- **`registerStatusTone` is exhaustive on purpose.** The register's Status chip used to tone via a regex whose first alternative tested `"Released for Fabrication"` and `"Approved"` — those are SUBMITTAL statuses, never returned by `effectiveDetailingState`, so they matched nothing and `"Released"` fell through to the same neutral grey as `"Not Started"`, beside a green Released column. Tone from the canonical `DETAILING_STATE_ORDER` vocabulary; a test asserts `"Not Started"` is the only state that tones neutral.
+- **Every triage tally counts OPEN items.** `buildTriage`'s `overdue` / `dueSoon` / `needsAction` / `noDate` all derive from `openItems` (`!item.closed`). `atRiskCount` alone read `setItems` and so counted closed packages: a released one is harmless (its state outranks every risk milestone) but a **Void-only set derives to "Not Started"**, the bottom of the order, and reported CRITICAL schedule risk forever on work nobody will touch again.
 
 ## Schedule tasks — DO NOT regress
 - **Two CHECK constraints decide what saves.** `chk_schedule_tasks_status` accepts

@@ -496,6 +496,54 @@ Remaining:
 
 ---
 
+## Detailing Control Center audit — 2026-09-19
+
+Three defects found and fixed (PR #433); each was proven by executing the code,
+not by reading it. Recorded here because the two latent ones are masked by
+current data, not by the code.
+
+**Fixed**
+
+- **`Released` toned neutral grey** in the Drawing Register's Status chip. The
+  tone came from a regex whose first alternative tested `"Released for
+  Fabrication"` and `"Approved"` — SUBMITTAL statuses that
+  `effectiveDetailingState` never returns — so `"Released"` matched nothing and
+  fell through to the same grey as `"Not Started"`, beside a GREEN Released
+  column. Live at the time on sets `Anchor Bolts` and `Embeds`. Replaced with
+  the exhaustive `registerStatusTone`.
+- **Released column vs Released KPI** used different predicates
+  (`isClosedPackage` vs `isPackageReleasedForFab`) under comments claiming they
+  were the same. Split into `done` (released claim) and `terminal` (triage /
+  late suppression).
+- **`atRiskCount` counted closed packages** — the only `buildTriage` tally not
+  derived from `openItems`. A Void-only set derives to `"Not Started"` and so
+  reported CRITICAL schedule risk forever.
+
+**Open — noted, not fixed**
+
+- **`DetailingKpis.overdue` is dead.** `DrawingSubmittalHub.tsx` sets it to
+  `triage.overdueDrawingSets` only, while every reader uses `totalOverdue()`
+  (drawing sets + unlinked submittals). Harmless today because nothing reads the
+  field; it is an under-count waiting for the first consumer. *Remediation:*
+  delete the field, or set it to `totalOverdue`-equivalent and have the KPI cell
+  read it.
+- **`TriageItem.kind` is `string`, not a union.** `overdueDrawingSets` and
+  `overdueUnlinkedSubmittals` both filter on exact string literals and are
+  summed as if exhaustive — which they are today, because `buildTriage` emits
+  only `"Drawing Set"` and `"Unlinked Submittal"`. A third kind added later
+  would silently under-count the Overdue tile with no type error.
+  *Remediation:* `kind: "Drawing Set" | "Unlinked Submittal"` in
+  `drawingSubmittalHub/types.ts`.
+- **Deprecated `drawing_sets.set_approval_status` still carries data.** 3 of 15
+  live sets (`Anchor Bolts`, `Embeds`, `Deck`) carry `"approved"`. It is masked
+  today because each also has a governing submittal, which outranks the legacy
+  flag in `isClosedPackage`. Deleting any of those submittals surfaces the
+  legacy path. *Remediation:* a migration to clear the column once the
+  submittal-governed state is confirmed authoritative for those sets.
+
+**Not audited in this pass** — Holds panel, Transmittals tab, 3D tab, and the
+board components' rendering paths.
+
 ## Recently-resolved (last 30 days, kept here for context)
 
 - 2026-09-13 **Bulk-edit approval gate enforcement:** added stage transition and submittal-link checks to `handleBulkEdit` in `pages/drawings/useDrawingsPageController.ts` to prevent bypassing the fabrication-release gate during bulk updates.

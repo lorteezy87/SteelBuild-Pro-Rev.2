@@ -201,7 +201,7 @@ suites (default `node` env) plus jsdom integration tests
 Supabase client mocked. Playwright smoke and fab-release gate specs are available
 under `e2e/`, but remain opt-in and nonblocking until dedicated test fixtures are
 configured. Counts change as tested helper modules are added; run `npm test --
---run` for the current total (479 files / 4,417 tests as of 2026-09-07).
+--run` for the current total (678 files / 6,470 tests as of 2026-09-19).
 
 ## CI/CD
 
@@ -291,6 +291,13 @@ stays always on. Config: `src/config/moduleGating.js` + `useModuleAccess`.
 
 - **Drawing Register** — flat Doc Control sheet table with **set name filter** /
   grouping (Detailing Control Center).
+- **Document Control** (`/DocumentControl`) — read-only intake desk: drop a
+  drawing PDF and get its title block, its place in the project's whole live
+  register, what changed against the sheet of record, seal / signature and
+  approval findings, and a database-ready JSON payload. Writes nothing;
+  extraction runs in the browser. The engine is `src/lib/docControl/`, which the
+  revision-upload wizard also renders — the difference is register scope ("is
+  this sheet in THIS set" vs "anywhere on this job").
 - **Detailing event glue** — Create submittal from package (`?targetSetId=`),
   revision **Attach / Not now** confirm, status → BIC/dates **suggest strip**
   (`src/lib/submittalLinkGlue.ts`).
