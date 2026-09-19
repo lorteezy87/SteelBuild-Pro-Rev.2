@@ -11,6 +11,17 @@ import { entities } from "@/api/supabaseClient";
 export interface TransmittalAttachment {
   id: string;
   /**
+   * Which register the attachment points at. The shared DB's
+   * drawing_transmittal_items_one_target CHECK guarantees exactly one of
+   * drawing_id / gc_drawing_id is set, and the two id spaces are NOT
+   * interchangeable: a sheet number can exist in both registers and mean
+   * different drawings. Anything that resolves an attachment back to a record
+   * must branch on this, never on the sheet number.
+   */
+  kind: "shop" | "gc";
+  /** Set only when kind is "gc". */
+  gc_drawing_id: string | null;
+  /**
    * The revision it carried, or null when none was recorded. The shared DB
    * (2026's m4_1) keys items by drawing_id; send_transmittal fills this only
    * when the sheet had a current drawing_revisions row at send time.
@@ -89,7 +100,7 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
     // fetch anyway.
     structuralSharing: false,
     queryFn: async (): Promise<TransmittalLog> => {
-      const [rawTransmittals, rawItems, rawRevisions] = await Promise.all([
+      const [rawTransmittals, rawItems, rawRevisions, rawGcDrawings] = await Promise.all([
         entities.DrawingTransmittal.filter({ project_id: projectId }),
         entities.DrawingTransmittalItem.filter({ project_id: projectId }),
         // Paged to completeness: this is a LOOKUP TABLE keyed by revision id,
@@ -97,6 +108,10 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
         // sat past the cap resolved to a blank sheet number and revision code —
         // indistinguishable from a genuinely unmatched row.
         entities.DrawingRevision.filterAll({ project_id: projectId }),
+        // Same reasoning as revisions: a LOOKUP keyed by id, so page it. A
+        // capped read would resolve a GC attachment to a blank number,
+        // indistinguishable from one whose GC drawing was deleted.
+        entities.GcDrawing.filterAll({ project_id: projectId }),
       ]);
       // Counted on the raw reads, before soft-deleted headers are dropped.
       // Revisions are read paged (above), so an unmatched item now means the
@@ -111,17 +126,50 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
         if (revision?.id) revisionsById.set(String(revision.id), revision);
       }
 
+      const gcById = new Map<string, any>();
+      for (const gc of (rawGcDrawings as any[]) ?? []) {
+        if (gc?.id) gcById.set(String(gc.id), gc);
+      }
+
       const itemsByTransmittal = new Map<string, TransmittalAttachment[]>();
       for (const it of (rawItems as any[]) ?? []) {
         const tid = String(it?.transmittal_id ?? "");
-        // A GC / contract drawing (m4_1's gc_drawing_id) is not a Rev.2 sheet.
-        if (!tid || it?.gc_drawing_id) continue;
+        if (!tid) continue;
+
+        // A GC / contract drawing. These were dropped on the floor until Rev.2
+        // had a GC register to resolve them against; a transmittal that carried
+        // only GC sheets then rendered as an empty one, which reads as
+        // "nothing was sent".
+        if (it.gc_drawing_id) {
+          const gcId = String(it.gc_drawing_id);
+          const gc = gcById.get(gcId);
+          const gcAttachment: TransmittalAttachment = {
+            id: String(it.id),
+            kind: "gc",
+            gc_drawing_id: gcId,
+            // A GC drawing has no drawing_revisions history — one flat
+            // `revision` string — and it is not a Rev.2 sheet, so drawing_id
+            // and drawing_revision_id stay null rather than borrowing a shop id.
+            drawing_revision_id: null,
+            drawing_id: null,
+            sheet_number: gc?.drawing_number ?? it.number_at_send ?? null,
+            sheet_title: gc?.title ?? it.title_at_send ?? null,
+            revision_code: gc?.revision ?? it.revision_at_send ?? null,
+          };
+          const gcItems = itemsByTransmittal.get(tid) ?? [];
+          gcItems.push(gcAttachment);
+          itemsByTransmittal.set(tid, gcItems);
+          continue;
+        }
+
         // Kept without a revision: m4_1 items carry drawing_id, and a sheet
         // with no current revision at send leaves drawing_revision_id NULL.
         const revisionId = it?.drawing_revision_id ? String(it.drawing_revision_id) : "";
         const revision = revisionId ? revisionsById.get(revisionId) : undefined;
         const attachment: TransmittalAttachment = {
           id: String(it.id),
+          kind: "shop",
+          gc_drawing_id: null,
           drawing_revision_id: revisionId || null,
           drawing_id: it.drawing_id ? String(it.drawing_id) : revision?.drawing_id ? String(revision.drawing_id) : null,
           sheet_number: revision?.sheet_number ?? it.number_at_send ?? null,

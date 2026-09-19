@@ -7,9 +7,17 @@
  *                     workflow, without discarding the hub callbacks.
  *   reviews           the role-based Review Queue (formerly Doc Control's
  *                     Reviews view).
+ *
+ * The sheet and set views are wrapped in DrawingRegisterWorkbench, which puts
+ * the editing actions (upload set, new revision, add sheet, import log, bulk
+ * edit, export packages) directly above the register. They used to live only
+ * on /Drawings, an unlinked page reached through "Open full editor ↗"; that
+ * route now redirects here. Reviews is left bare — it is a queue of other
+ * people's sheets, not a place to upload one.
  */
 import { DrawingRegisterGridPanel } from "@/components/drawings/register/DrawingRegisterGridPanel";
 import { lazy, Suspense } from "react";
+import DrawingRegisterWorkbench from "./DrawingRegisterWorkbench";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { HubViewToggle } from "./HubViewToggle";
 import type { HubViewOption } from "./HubViewToggle";
@@ -49,20 +57,31 @@ export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
   return <>
     <HubViewToggle label="Drawing register view" options={VIEWS} value={view} onChange={setView} />
     {view === "sheets" && (
-      <DrawingRegisterGridPanel
-        projectId={projectId}
-        activeProject={props.activeProject}
-        drawingSets={props.drawingSets}
-        setPackages={props.setPackages}
-        summariesBySet={props.summariesBySet}
-        onRevisionUploaded={props.onRevisionUploaded}
-        onOpenSummary={props.onOpenSummary}
-      />
+      <DrawingRegisterWorkbench projectId={projectId} activeProject={props.activeProject}>
+        {({ selected, onToggleSelect, onToggleSelectAll }) => (
+          <DrawingRegisterGridPanel
+            projectId={projectId}
+            activeProject={props.activeProject}
+            drawingSets={props.drawingSets}
+            setPackages={props.setPackages}
+            summariesBySet={props.summariesBySet}
+            onRevisionUploaded={props.onRevisionUploaded}
+            onOpenSummary={props.onOpenSummary}
+            selected={selected}
+            onToggleSelect={onToggleSelect}
+            onToggleSelectAll={onToggleSelectAll}
+          />
+        )}
+      </DrawingRegisterWorkbench>
     )}
     {view === "sets" && (
-      <Suspense fallback={<p role="status">Loading drawing sets…</p>}>
-        <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []} />
-      </Suspense>
+      <DrawingRegisterWorkbench projectId={projectId} activeProject={props.activeProject}>
+        {() => (
+          <Suspense fallback={<p role="status">Loading drawing sets…</p>}>
+            <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []} />
+          </Suspense>
+        )}
+      </DrawingRegisterWorkbench>
     )}
     {view === "reviews" && (
       <Suspense fallback={<p role="status">Loading reviews…</p>}>

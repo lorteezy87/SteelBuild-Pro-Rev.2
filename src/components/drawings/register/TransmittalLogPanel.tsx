@@ -572,6 +572,22 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
                                   <div style={{ display: "grid", gap: 4 }}>
                                     {transmittal.items.map((item) => (
                                       <div key={item.id} style={{ display: "flex", gap: 8, alignItems: "baseline", color: "var(--cmd-text)", fontSize: 12 }}>
+                                        {/* A sheet number can exist in BOTH registers and mean different
+                                            drawings, so a GC sheet has to be readable as one at a glance —
+                                            otherwise "S-301 Rev 3" here is ambiguous. */}
+                                        {item.kind === "gc" && (
+                                          <span
+                                            title="A GC-issued drawing, not one of our sheets"
+                                            style={{
+                                              fontSize: 9, fontWeight: 800, letterSpacing: "0.08em",
+                                              padding: "1px 5px", borderRadius: 999,
+                                              border: "1px solid var(--cmd-text-muted)",
+                                              color: "var(--cmd-text-muted)",
+                                            }}
+                                          >
+                                            GC
+                                          </span>
+                                        )}
                                         <span style={{ fontWeight: 800 }}>{item.sheet_number || "Unknown sheet"}</span>
                                         <span style={{ color: "var(--cmd-text-muted)" }}>Rev {item.revision_code || "—"}</span>
                                         <span style={{ color: "var(--cmd-text-muted)" }}>{item.sheet_title || ""}</span>

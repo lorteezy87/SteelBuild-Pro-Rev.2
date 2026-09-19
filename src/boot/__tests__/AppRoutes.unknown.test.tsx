@@ -85,6 +85,25 @@ describe("AppRoutes unknown URL handling", () => {
       .toBe("/ScheduleHub?project=26179#week-4");
   });
 
+  it("merges a target's own query with the incoming one", () => {
+    // /Drawings redirects to a specific hub TAB, so its target carries a
+    // param. Concatenating produced "…?hub_tab=drawings?sheet=S-301", which no
+    // router parses — and the RFI board's "update drawing" deep link rides on
+    // exactly this path.
+    expect(buildStaticRedirectTarget("/DrawingSubmittalHub?hub_tab=drawings", "?sheet=S-301"))
+      .toBe("/DrawingSubmittalHub?hub_tab=drawings&sheet=S-301");
+  });
+
+  it("keeps a target's own query when nothing comes in, and keeps the hash", () => {
+    expect(buildStaticRedirectTarget("/DrawingSubmittalHub?hub_tab=drawings", "", "#top"))
+      .toBe("/DrawingSubmittalHub?hub_tab=drawings#top");
+  });
+
+  it("lets the incoming param win, since it came from the link followed", () => {
+    expect(buildStaticRedirectTarget("/DrawingSubmittalHub?hub_tab=drawings", "?hub_tab=holds"))
+      .toBe("/DrawingSubmittalHub?hub_tab=holds");
+  });
+
   it.each([
     ["/ProjectDetail?id=proj-42"],
     ["/ProjectDetail?projectId=proj-42"],

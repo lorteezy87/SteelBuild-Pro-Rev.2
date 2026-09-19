@@ -43,6 +43,8 @@ function transmittal(overrides: Partial<TransmittalRow> & { drawingIds?: Array<s
   const { drawingIds = [], ...rest } = overrides;
   const items = drawingIds.map((drawingId, i) => ({
     id: `${rest.id ?? "t"}-item-${i}`,
+    kind: "shop" as const,
+    gc_drawing_id: null as string | null,
     drawing_revision_id: `rev-${drawingId ?? `unmatched-${i}`}`,
     drawing_id: drawingId,
     sheet_number: drawingId ? drawingId.toUpperCase() : null,
@@ -278,8 +280,8 @@ describe("buildLastOutgoingBySet + lastSentForSet (the expanded row's Last sent)
     Object.defineProperty(rows, "possiblyTruncated", { value: true, enumerable: false });
 
   // One sheet sent at two revisions, the older of which is no longer current.
-  const CURRENT_REV_ITEM = { id: "a", drawing_revision_id: "rev-d1", drawing_id: "d1", sheet_number: "D1", sheet_title: null as string | null, revision_code: "1" };
-  const OLDER_REV_ITEM = { id: "b", drawing_revision_id: "rev-d1-A", drawing_id: "d1", sheet_number: "D1", sheet_title: null as string | null, revision_code: "0" };
+  const CURRENT_REV_ITEM = { id: "a", kind: "shop" as const, gc_drawing_id: null as string | null, drawing_revision_id: "rev-d1", drawing_id: "d1", sheet_number: "D1", sheet_title: null as string | null, revision_code: "1" };
+  const OLDER_REV_ITEM = { id: "b", kind: "shop" as const, gc_drawing_id: null as string | null, drawing_revision_id: "rev-d1-A", drawing_id: "d1", sheet_number: "D1", sheet_title: null as string | null, revision_code: "0" };
 
   type Expected =
     | "none"

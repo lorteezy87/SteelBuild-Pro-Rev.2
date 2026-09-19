@@ -16,5 +16,6 @@ export {
   PROJECT_SCOPED_PAGES,
   ALL_ROUTE_PATHS,
   STATIC_ROUTE_METADATA,
+  redirectTargetPath,
   routeLabel,
 } from "@/config/routes";

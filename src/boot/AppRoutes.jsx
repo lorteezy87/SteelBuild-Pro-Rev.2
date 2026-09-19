@@ -74,8 +74,23 @@ function LegacyProjectDetailRedirect() {
   return <Navigate to={`/Projects?recordId=${encodeURIComponent(projectId)}`} replace />;
 }
 
+/**
+ * Where a legacy route sends the browser, keeping the incoming query and hash.
+ *
+ * The target may carry its own query (e.g. /Drawings → the hub's Drawing
+ * Register tab), so the two query strings are MERGED rather than concatenated:
+ * naive concatenation produced "…?hub_tab=drawings?project=26179", which no
+ * router parses. The incoming params win on a collision — they came from the
+ * link the user actually followed.
+ */
 export function buildStaticRedirectTarget(target, search = "", hash = "") {
-  return `${target}${search}${hash}`;
+  const [path, targetSearch = ""] = String(target).split("?");
+  if (!targetSearch) return `${target}${search}${hash}`;
+
+  const params = new URLSearchParams(targetSearch);
+  for (const [key, value] of new URLSearchParams(search)) params.set(key, value);
+  const merged = params.toString();
+  return `${path}${merged ? `?${merged}` : ""}${hash}`;
 }
 
 function StaticRouteRedirect({ route }) {

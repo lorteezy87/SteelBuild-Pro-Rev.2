@@ -243,7 +243,13 @@ describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/Filter by drawing set/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Group by set/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Full editor/i })).toBeInTheDocument();
+
+    // The editing actions that used to require leaving for /Drawings are on
+    // the tab itself now, and the "Full editor ↗" link is gone with them.
+    expect(screen.queryByRole("link", { name: /Full editor/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Upload set/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /New revision/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Import log/i })).toBeInTheDocument();
   });
 
   it("embeds the Submittal Register without stacking a second title and KPI toolbar", async () => {

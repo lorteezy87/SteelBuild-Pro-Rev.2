@@ -29,6 +29,8 @@ function transmittal(overrides: Partial<TransmittalRow> & { drawingIds?: string[
   const { drawingIds = [], ...rest } = overrides;
   const items = drawingIds.map((drawingId, i) => ({
     id: `${rest.id ?? "t"}-item-${i}`,
+    kind: "shop" as const,
+    gc_drawing_id: null as string | null,
     drawing_revision_id: `rev-${drawingId}`,
     drawing_id: drawingId,
     sheet_number: drawingId.toUpperCase(),

@@ -25,10 +25,15 @@ vi.mock('@/hooks/useDrawingWatch', () => ({
   useMyDrawingWatches: () => ({ data: new Set() }), useToggleDrawingWatch: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('@/components/shared/useAppSecurity', () => ({ useAppSecurity: () => ({ user: { id: 'user' } }) }));
+// Honours `open` like the real modal does. The panel now also mounts
+// DrawingsPageModals (the workbench's dialog host), which renders this modal
+// closed at all times until "New revision" is clicked — a mock that ignored
+// `open` put two of these in the tree and made every query for it ambiguous.
 vi.mock('@/components/drawings/RevisionUploadModal', () => ({
-  default: ({ onComplete }: { onComplete: () => void }) => (
-    <button type="button" onClick={onComplete}>Finish revision upload</button>
-  ),
+  default: ({ open, onComplete }: { open?: boolean; onComplete: () => void }) =>
+    open === false ? null : (
+      <button type="button" onClick={onComplete}>Finish revision upload</button>
+    ),
 }));
 
 const HUB = '/DrawingSubmittalHub?hub_tab=drawings';
@@ -178,5 +183,71 @@ describe('Drawing register views (?hub_view=)', () => {
     await user.click(screen.getByRole('button', { name: 'Sets & revisions' }));
     expect(screen.getByTestId('nav-type')).toHaveTextContent('POP');
     expect(screen.getByTestId('search').textContent).toBe('?hub_tab=drawings&hub_view=sets');
+  });
+});
+
+describe('Drawing register workbench — the retired "full editor"', () => {
+  beforeEach(() => {
+    canEdit = true;
+    registerRows = [{
+      drawing_id: 'dwg-1', project_id: 'p1', sheet_number: 'S101', sheet_title: 'Framing',
+      drawing_set_id: 'set-1',
+      discipline: 'S', drawing_set_name: 'Main steel', stage: 'IFC', current_revision_id: 'rev-1',
+      current_revision: 'A', current_status: 'released_for_shop', current_issued_at: null,
+      open_impact_count: 0, pending_review_count: 0, rfi_count: 0, work_package_count: 0,
+      last_activity: null,
+    }];
+    reviewCalls.length = 0;
+  });
+
+  it('offers the editing actions on the register, with no link off to /Drawings', () => {
+    mount();
+    for (const name of [/Upload set/i, /New revision/i, /Add sheet/i, /Import log/i, /Fab release/i]) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    // The whole point: nothing sends the user to a second register any more.
+    expect(screen.queryByRole('link', { name: /full editor/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/full editor/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps Bulk edit inert until sheets are actually selected', async () => {
+    mount();
+    const bulk = screen.getByRole('button', { name: /Bulk edit/i });
+    expect(bulk).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Select sheet S101/i }));
+    expect(screen.getByRole('button', { name: /Bulk edit \(1\)/i })).toBeEnabled();
+  });
+
+  it('select-all covers only the rows the register is showing', async () => {
+    // The filters belong to the register, not to the workbench, so select-all
+    // must be driven by the visible rows — otherwise it would silently select
+    // sheets that are filtered out and Bulk edit would write to them.
+    registerRows = [
+      registerRows[0],
+      { ...registerRows[0], drawing_id: 'dwg-2', sheet_number: 'A201', sheet_title: 'Elevations' },
+    ];
+    mount();
+
+    // Both sheets visible: select-all takes both.
+    await userEvent.click(screen.getByRole('checkbox', { name: /Select all visible sheets/i }));
+    expect(screen.getByRole('button', { name: /Bulk edit \(2\)/i })).toBeEnabled();
+
+    // Clear, then filter down to one and select-all again.
+    await userEvent.click(screen.getByRole('checkbox', { name: /Select all visible sheets/i }));
+    expect(screen.getByRole('button', { name: /Bulk edit/i })).toBeDisabled();
+
+    await userEvent.type(
+      screen.getByPlaceholderText(/Filter sheet, title, discipline, set/i),
+      'A201',
+    );
+    await userEvent.click(screen.getByRole('checkbox', { name: /Select all visible sheets/i }));
+    expect(screen.getByRole('button', { name: /Bulk edit \(1\)/i })).toBeEnabled();
+  });
+
+  it('shows no selection column on the Reviews queue', async () => {
+    mount({ entries: [`${HUB}&hub_view=reviews`] });
+    expect(await screen.findByRole('heading', { name: 'Review Queue' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Select all visible sheets/i })).not.toBeInTheDocument();
   });
 });
