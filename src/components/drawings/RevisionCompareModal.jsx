@@ -13,7 +13,7 @@
  *
  * Rendering is local pdfjs — the PDFs never leave the browser.
  */
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -21,7 +21,9 @@ import {
   Columns2, Layers, MoveHorizontal, RotateCcw, RotateCw, Sparkles, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
-import { rasterizePage, RASTER_TARGET_WIDTH, canvasToPngBase64 } from "@/lib/pdfRasterize";
+import { RASTER_TARGET_WIDTH, canvasToPngBase64 } from "@/lib/pdfRasterize";
+import { OLD_TINT, NEW_TINT } from "@/lib/rasterCompare";
+import { useRasterCompare } from "@/hooks/useRasterCompare";
 import RevisionDeltaCard from "@/components/drawings/RevisionDeltaCard";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { toast } from "sonner";
@@ -37,28 +39,9 @@ import {
   sortDeltasBySeverity,
 } from "@/lib/revisionSnapshotDiff";
 
-const OLD_TINT = "#FF4D4D";   // removed content
-const NEW_TINT = "#2F81F7";   // added content
 const PDF_PAGE_BACKGROUND = "#fff";
-const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3];
 
 const mono = "var(--font-mono)";
-
-// ── Raster helpers (pure canvas, no React) ──────────────────────────────
-
-/** Tint dark linework toward `color`, keep paper white ("lighten" keeps the
- * per-channel max: black ink → color, white stays white). */
-function tintCanvas(src, color) {
-  const out = document.createElement("canvas");
-  out.width = src.width;
-  out.height = src.height;
-  const ctx = out.getContext("2d");
-  ctx.drawImage(src, 0, 0);
-  ctx.globalCompositeOperation = "lighten";
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, out.width, out.height);
-  return out;
-}
 
 // ── AI Revision Impact panel (review-only) ──────────────────────────────
 
@@ -209,12 +192,6 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
 
   const [oldKey, setOldKey] = useState(null);
   const [newKey, setNewKey] = useState(null);
-  const [mode, setMode] = useState("overlay"); // overlay | wipe | side
-  const [wipePct, setWipePct] = useState(50);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [rendering, setRendering] = useState(false);
-  const [renderError, setRenderError] = useState("");
 
   // Default pair: newest history rev vs current.
   useEffect(() => {
@@ -228,113 +205,18 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
   const oldSel = candidates.find((c) => c.key === oldKey) || null;
   const newSel = candidates.find((c) => c.key === newKey) || null;
 
-  const bufferCacheRef = useRef(new Map());
-  const rastersRef = useRef({ old: null, new: null });
-  const displayRef = useRef(null);       // overlay/wipe canvas
-  const sideOldRef = useRef(null);
-  const sideNewRef = useRef(null);
-  const renderSeqRef = useRef(0);
-
-  // Free cached PDF bytes when the modal closes.
-  useEffect(() => {
-    if (!open) {
-      bufferCacheRef.current = new Map();
-      rastersRef.current = { old: null, new: null };
-      setOffset({ x: 0, y: 0 });
-      setRenderError("");
-    }
-  }, [open]);
-
-  // Compose the visible canvas(es) from the cached rasters. Cheap — runs on
-  // every mode / offset / wipe change without touching pdfjs.
-  const compose = useCallback(() => {
-    const { old: oldRaster, new: newRaster } = rastersRef.current;
-    if (!oldRaster || !newRaster) return;
-    if (mode === "side") {
-      for (const [ref, raster] of [[sideOldRef, oldRaster], [sideNewRef, newRaster]]) {
-        const canvas = ref.current;
-        if (!canvas) continue;
-        canvas.width = raster.width;
-        canvas.height = raster.height;
-        canvas.getContext("2d").drawImage(raster, 0, 0);
-      }
-      return;
-    }
-    const canvas = displayRef.current;
-    if (!canvas) return;
-    const W = Math.max(oldRaster.width, newRaster.width);
-    const H = Math.max(oldRaster.height, newRaster.height);
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(0, 0, W, H);
-    if (mode === "overlay") {
-      ctx.drawImage(tintCanvas(oldRaster, OLD_TINT), 0, 0);
-      ctx.globalCompositeOperation = "multiply";
-      ctx.drawImage(tintCanvas(newRaster, NEW_TINT), offset.x, offset.y);
-      ctx.globalCompositeOperation = "source-over";
-    } else {
-      // wipe: old underneath, new on top clipped to the left wipePct%.
-      ctx.drawImage(oldRaster, 0, 0);
-      const split = Math.round((wipePct / 100) * W);
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, split, H);
-      ctx.clip();
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillRect(0, 0, split, H);
-      ctx.drawImage(newRaster, offset.x, offset.y);
-      ctx.restore();
-      ctx.fillStyle = "#F59E0B"; // wipe divider (canvas can't read CSS vars)
-      ctx.fillRect(split - 1, 0, 2, H);
-    }
-  }, [mode, offset, wipePct]);
-
-  // Rasterize when the selected pair changes.
-  useEffect(() => {
-    if (!open || !oldSel || !newSel) return;
-    const seq = ++renderSeqRef.current;
-    setRendering(true);
-    setRenderError("");
-    (async () => {
-      const cache = bufferCacheRef.current;
-      const [oldRaster, newRaster] = await Promise.all([
-        rasterizePage({ fileUrl: oldSel.fileUrl, page: oldSel.pdfPage, bufferCache: cache }),
-        rasterizePage({ fileUrl: newSel.fileUrl, page: newSel.pdfPage, bufferCache: cache }),
-      ]);
-      if (renderSeqRef.current !== seq) return; // stale selection
-      rastersRef.current = { old: oldRaster, new: newRaster };
-      compose();
-    })()
-      .catch((err) => {
-        if (renderSeqRef.current !== seq) return;
-        console.error("[RevisionCompareModal] render failed:", err);
-        setRenderError(err?.message || "Failed to render one of the revisions.");
-      })
-      .finally(() => {
-        if (renderSeqRef.current === seq) setRendering(false);
-      });
-    // compose intentionally omitted — pair changes always re-compose via rasters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, oldSel?.fileUrl, oldSel?.pdfPage, newSel?.fileUrl, newSel?.pdfPage]);
-
-  // Re-compose (no re-raster) on mode / offset / wipe changes.
-  useEffect(() => {
-    compose();
-  }, [compose]);
+  // Rasterizing, compositing, and the mode/wipe/nudge/zoom controls live in
+  // useRasterCompare, shared with the GC document viewer's compare so the two
+  // surfaces can never disagree about what red and blue mean.
+  const {
+    mode, setMode, wipePct, setWipePct, offset, nudge, resetOffset,
+    zoom, zoomBy, rendering, renderError,
+    displayRef, sideOldRef, sideNewRef, rastersRef,
+  } = useRasterCompare({ open, oldPage: oldSel, newPage: newSel });
 
   const swap = () => {
     setOldKey(newKey);
     setNewKey(oldKey);
-  };
-  const nudge = (dx, dy) => setOffset((o) => ({ x: o.x + dx, y: o.y + dy }));
-  const zoomBy = (dir) => {
-    setZoom((z) => {
-      const i = ZOOM_STEPS.indexOf(z);
-      const next = ZOOM_STEPS[Math.min(Math.max(0, i + dir), ZOOM_STEPS.length - 1)];
-      return next ?? 1;
-    });
   };
 
   const sheetLabel = [drawing?.sheet_number, drawing?.title].filter(Boolean).join(" — ");
@@ -591,7 +473,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                   <button type="button" className="sbd-btn-ghost" style={{ minHeight: 28, padding: "2px 6px" }} onClick={() => nudge(0, 1)}><ChevronDown size={12} /></button>
                   <button type="button" className="sbd-btn-ghost" style={{ minHeight: 28, padding: "2px 6px" }} onClick={() => nudge(1, 0)}><ChevronRight size={12} /></button>
                   <button type="button" className="sbd-btn-ghost" style={{ minHeight: 28, padding: "2px 6px" }} title="Reset alignment"
-                    onClick={() => setOffset({ x: 0, y: 0 })}>
+                    onClick={resetOffset}>
                     <RotateCcw size={12} />
                   </button>
                   {(offset.x !== 0 || offset.y !== 0) && (
