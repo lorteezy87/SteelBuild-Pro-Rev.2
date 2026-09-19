@@ -1,0 +1,50 @@
+# gitleaks configuration — see .github/workflows/ci.yml, job `secret-scan`.
+#
+# Starts from the upstream default ruleset and adds only NARROW allowlists for
+# matches that are provably not credentials. Do not widen these, and never add a
+# blanket path exclusion: the whole point is that the next real key fails the
+# build.
+#
+# The secrets that actually matter here, none of which belong in the repo:
+#   SUPABASE_SERVICE_ROLE_KEY   — bypasses RLS entirely
+#   STRIPE_SECRET_KEY / SK_TEST — full billing API
+#   STRIPE_WEBHOOK_SECRET       — lets an attacker forge subscription events
+#   EMAIL_WEBHOOK_SECRET        — the only gate on the unauthenticated
+#                                 email-ingest endpoint
+#   ANTHROPIC_API_KEY / OPENAI_API_KEY
+#   SENTRY_AUTH_TOKEN           — build-time source-map upload
+#
+# All of the above live in Supabase Edge Function secrets or the Cloudflare
+# project env.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Reviewed non-credential matches"
+
+paths = [
+  # Lockfile: integrity hashes look like high-entropy strings and are not secrets.
+  '''package-lock\.json''',
+  # Placeholder values only (documented as such in the file itself).
+  '''\.env\.example''',
+]
+
+regexes = [
+  # Supabase PROJECT REF, not a key. It appears in package.json's `types:db`
+  # script, function deploy comments, and test fixtures. It is the public
+  # subdomain of the API URL and grants nothing on its own.
+  #
+  # It is still worth moving to an env var (TECH_DEBT: reconnaissance value in a
+  # repo that may be opened up) — but it must not block the build meanwhile.
+  '''kjrwqagyeswwoxpjkcko''',
+
+  # Sentry DSN. Write-only ingest keys, designed to ship in the browser bundle;
+  # .env.example explains this. Both the app DSN and the CSP report-uri key.
+  '''https://o?\d*\.?[a-z0-9]*\.?ingest\.(us\.)?sentry\.io''',
+  '''sentry_key=[a-f0-9]{32}''',
+
+  # Anti-FOUC inline-script CSP hash in public/_headers, recomputed and asserted
+  # by scripts/__tests__/deployHeaders.test.ts.
+  '''sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg=''',
+]
