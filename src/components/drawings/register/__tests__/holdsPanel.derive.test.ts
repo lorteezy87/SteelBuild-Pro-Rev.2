@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterHoldsByScope, holdableSheets } from "@/components/drawings/register/HoldsPanel";
+import { filterHoldsByScope, holdPickerEmptyMessage, holdableSheets } from "@/components/drawings/register/HoldsPanel";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 
@@ -84,5 +84,53 @@ describe("filterHoldsByScope", () => {
   });
   it("all returns everything untouched", () => {
     expect(filterHoldsByScope([active, released], "all")).toHaveLength(2);
+  });
+});
+
+/**
+ * Regression: the sheet picker read an unloaded register as "every sheet is
+ * already held". `holdableSheets([])` is `[]` whether the register holds no
+ * holdable sheets or was never read, so the message has to come from the query
+ * state, not the array length. Live `drawing_holds` is empty, so the holds
+ * query always answers first and this was the default first-visit message.
+ */
+describe("holdPickerEmptyMessage", () => {
+  const base = { registerKnown: true, registerLoading: false, registerError: false, optionCount: 0 };
+
+  it("says loading — not 'every sheet is held' — while the register is unread", () => {
+    expect(holdPickerEmptyMessage({ ...base, registerKnown: false })).toBe("Loading sheets…");
+  });
+
+  it("says loading while the register query is in flight", () => {
+    expect(holdPickerEmptyMessage({ ...base, registerLoading: true })).toBe("Loading sheets…");
+  });
+
+  it("reports a failed register read rather than claiming anything about holds", () => {
+    const msg = holdPickerEmptyMessage({ ...base, registerKnown: false, registerError: true });
+    expect(msg).toMatch(/Couldn't load the sheet list/);
+    expect(msg).not.toMatch(/already has an active hold/);
+  });
+
+  it("only claims every sheet is held once the register is actually known", () => {
+    expect(holdPickerEmptyMessage(base)).toBe("Every sheet already has an active hold.");
+  });
+
+  it("falls to the filter message when options exist but none match", () => {
+    expect(holdPickerEmptyMessage({ ...base, optionCount: 12 })).toBe("No sheets match.");
+  });
+
+  it("never claims every sheet is held unless the register is known and empty of options", () => {
+    for (const registerKnown of [true, false]) {
+      for (const registerLoading of [true, false]) {
+        for (const registerError of [true, false]) {
+          for (const optionCount of [0, 5]) {
+            const msg = holdPickerEmptyMessage({ registerKnown, registerLoading, registerError, optionCount });
+            if (msg === "Every sheet already has an active hold.") {
+              expect(registerKnown && !registerLoading && !registerError && optionCount === 0).toBe(true);
+            }
+          }
+        }
+      }
+    }
   });
 });

@@ -30,6 +30,26 @@ import { Pill } from "@/components/command";
 
 const ON_HOLD_STATUS = "on_hold";
 
+/** Stable identity so the `register` memos don't re-run on every render. */
+const EMPTY_REGISTER: DrawingRegisterRow[] = [];
+
+/**
+ * What the sheet picker should say when it has no options to offer. Split out
+ * so the three causes stay distinguishable and testable:
+ * unread register ≠ failed register ≠ genuinely every sheet already held.
+ */
+export function holdPickerEmptyMessage(args: {
+  registerKnown: boolean;
+  registerLoading: boolean;
+  registerError: boolean;
+  optionCount: number;
+}): string {
+  if (args.registerError) return "Couldn't load the sheet list, so no sheets can be offered. Retry in a moment.";
+  if (!args.registerKnown || args.registerLoading) return "Loading sheets…";
+  if (args.optionCount === 0) return "Every sheet already has an active hold.";
+  return "No sheets match.";
+}
+
 type Scope = "active" | "released" | "all";
 
 const SCOPES: { key: Scope; label: string }[] = [
@@ -73,7 +93,15 @@ function sheetLabel(row: DrawingRegisterRow | undefined, drawingId: string): str
 
 export function HoldsPanel({ projectId }: { projectId: string | null }) {
   const { data: holds = [], isLoading, error } = useDrawingHolds(projectId);
-  const { data: register = [] } = useDrawingRegister(projectId);
+  // The register is a SEPARATE query from the holds one, and the guards below
+  // only cover holds. An unread register is `[]`, and `holdableSheets([])` is
+  // also `[]` — which the picker rendered as "Every sheet already has an active
+  // hold." With zero holds live, the holds query answers first on every visit,
+  // so that false claim was what a PM saw while the register was still landing.
+  // Absence is not evidence: carry the unknown through instead of defaulting.
+  const { data: registerData, isLoading: registerLoading, error: registerError } = useDrawingRegister(projectId);
+  const registerKnown = registerData !== undefined;
+  const register = registerData ?? EMPTY_REGISTER;
   const { can } = usePermissions();
   const { user } = useAuth();
   const canHold = can("hold", "drawing");
@@ -248,7 +276,12 @@ export function HoldsPanel({ projectId }: { projectId: string | null }) {
               style={{ maxHeight: 200, overflowY: "auto", border: "1px solid var(--cmd-border)", borderRadius: 2, padding: 6 }}>
               {visibleOptions.length === 0 ? (
                 <div style={{ color: "var(--cmd-text-muted)", fontSize: 12, padding: 8 }}>
-                  {options.length === 0 ? "Every sheet already has an active hold." : "No sheets match."}
+                  {holdPickerEmptyMessage({
+                    registerKnown,
+                    registerLoading,
+                    registerError: Boolean(registerError),
+                    optionCount: options.length,
+                  })}
                 </div>
               ) : visibleOptions.map((option) => {
                 const selected = option.drawingId === selectedDrawingId;

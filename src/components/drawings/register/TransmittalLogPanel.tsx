@@ -15,7 +15,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { usePermissions } from "@/services/permissions";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useTransmittals } from "@/hooks/useTransmittals";
-import type { TransmittalAttachment, TransmittalRow } from "@/hooks/useTransmittals";
+import type { TransmittalAttachment, TransmittalRow, TransmittalTruncation } from "@/hooks/useTransmittals";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
@@ -231,8 +231,107 @@ function TransmittalEditor({
   );
 }
 
+/**
+ * The log's cap and truncation accessor are MIRRORED here, not imported from
+ * "@/hooks/useTransmittals", for the reason that hook already documents about
+ * "@/api/supabaseClient": page tests mock the module, and reading a named
+ * export the mock does not define throws. Importing them broke
+ * TransmittalLogPanel.test the moment this notice was added. A type-only
+ * import is erased at build time, so `TransmittalTruncation` above is safe.
+ * transmittalTruncation.test pins this cap to the shared list cap.
+ */
+const LOG_READ_CAP = 1000;
+
+const NO_LOG_TRUNCATION: TransmittalTruncation = { headers: false, items: false };
+
+/**
+ * The log's truncation detail. Defensive on purpose: a log built anywhere else
+ * — a test fixture, a mocked hook — carries no flag and must read as complete,
+ * never as unknown.
+ */
+export function transmittalTruncationOf(
+  rows: readonly TransmittalRow[] | null | undefined,
+): TransmittalTruncation {
+  const flagged = rows as { truncation?: TransmittalTruncation } | null | undefined;
+  return flagged?.truncation ?? NO_LOG_TRUNCATION;
+}
+
+/**
+ * What a capped log read means for the reader. The two reads fail differently,
+ * so the notice names which happened rather than saying "some rows missing":
+ *
+ * - headers — whole transmittals are absent from the list.
+ * - items   — every transmittal is listed, but attachment lists and the sheet
+ *             counts beside them are lower bounds.
+ *
+ * Both reads are newest-first, so what a cap drops is the OLDEST record. That
+ * is the dangerous direction here: the absent rows are exactly the early
+ * issues, so "this set was never sent" is the conclusion this log can no
+ * longer support. Says so explicitly.
+ */
+export function transmittalTruncationMessage(
+  truncation: TransmittalTruncation,
+  cap: number = LOG_READ_CAP,
+): { heading: string; body: string } | null {
+  if (!truncation.headers && !truncation.items) return null;
+  const capLabel = cap.toLocaleString();
+  const oldestWarning =
+    " The log is read newest first, so what is missing is the OLDEST — do not read this log as proof that a set was never sent.";
+  if (truncation.headers && truncation.items) {
+    return {
+      heading: `SHOWING THE NEWEST ${capLabel} TRANSMITTALS`,
+      body: `This log is capped at ${capLabel} rows and more exist, and the attachment read hit the same cap, so sheet counts are lower bounds too.${oldestWarning}`,
+    };
+  }
+  if (truncation.headers) {
+    return {
+      heading: `SHOWING THE NEWEST ${capLabel} TRANSMITTALS`,
+      body: `This log is capped at ${capLabel} rows and more exist.${oldestWarning}`,
+    };
+  }
+  return {
+    heading: "ATTACHMENT LISTS INCOMPLETE",
+    body: `Every transmittal is listed, but the attachment read is capped at ${capLabel} rows, so the sheets shown on a transmittal — and the count beside it — are lower bounds.${oldestWarning}`,
+  };
+}
+
+/** Non-dismissible: a capped read is an ongoing data-completeness condition. */
+export function TransmittalTruncationNotice({ truncation }: { truncation: TransmittalTruncation }) {
+  const message = transmittalTruncationMessage(truncation);
+  if (!message) return null;
+  return (
+    <div
+      role="status"
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 10,
+        padding: "10px 14px",
+        borderRadius: 2,
+        background: "var(--cmd-warn-muted, var(--warning-muted))",
+        border: "1px solid var(--cmd-warn, var(--status-warning))",
+      }}
+    >
+      <span aria-hidden="true" style={{ fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>⚠</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--cmd-warn, var(--status-warning))", letterSpacing: "0.04em", marginBottom: 2 }}>
+          {message.heading}
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--cmd-text-muted, var(--text-secondary))", lineHeight: 1.4 }}>
+          {message.body}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TransmittalLogPanel({ projectId }: { projectId: string | null }) {
   const { data: transmittals = [], isLoading, error } = useTransmittals(projectId);
+  // useTransmittals flags a capped read; the log is the reason the flag exists
+  // and was the one consumer ignoring it. Derived from the flag, never from
+  // `transmittals.length` — soft-deleted headers are filtered out after the
+  // count, so the rendered length under-reports and could never reach the cap.
+  const truncation = transmittalTruncationOf(transmittals);
   const { data: register = [] } = useDrawingRegister(projectId);
   const { can } = usePermissions();
   const canCreate = can("create", "drawing");
@@ -442,6 +541,7 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
 
   return (
     <section className="detailing-cc" style={{ padding: 0, gap: 12 }}>
+      <TransmittalTruncationNotice truncation={truncation} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h3 style={{ margin: 0, color: "var(--cmd-text)", fontSize: 16, fontWeight: 700 }}>Transmittals</h3>

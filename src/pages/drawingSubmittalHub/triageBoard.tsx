@@ -1,38 +1,21 @@
 import { useMemo, useState } from "react";
-import type { ComponentType, CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import { SectionCard, StatusPill } from "@/components/desktop/module";
 import {
-  AlertTriangle,
-  ArrowRight,
   Boxes,
   CalendarClock,
-  CheckCircle2,
-  CircleDollarSign,
-  ClipboardList,
-  Clock3,
-  FileQuestion,
   GitCompareArrows,
-  ShieldCheck,
 } from "lucide-react";
-import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import type { ElementStatusKey, ElementStatusSummary } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER, summarizeFabStatus } from "@/lib/fabStatus";
 import {
   accent,
   border,
-  canWriteDetailingState,
-  canWriteDueDate,
-  canWriteOwner,
-  canWriteReadinessFlags,
-  dueInfo,
   error,
   fmtDate,
-  getActionTone,
-  info,
   mono,
   pluralize,
-  review,
   success,
   surface1,
   surface2,
@@ -41,273 +24,20 @@ import {
   warning,
 } from "./format";
 import {
-  DueChip,
   EmptyState,
-  EscalateIconButton,
   FlagToggle,
-  OperationalStateChip,
-  PipelineBar,
-  RRChip,
   ReadyChip,
-  RiskPill,
   SeqMetric,
-  TriageMetric,
 } from "./primitives";
-import {
-  InlineDateControl,
-  InlineDetailingControl,
-  InlineOwnerControl,
-} from "./inlineControls";
-import { buildControlBoardModel } from "./drawingControlCenter.derive";
-import type { HubTabKey } from "./hubLinks";
+
+
 import type {
   DetailingReadiness,
-  DrawingKpis,
   ModelElementViewRow,
   RevisionImpactViewRow,
   SequenceReadinessRow,
-  SubmittalKpis,
-  TriageItem,
-  TriageModel,
 } from "./types";
-import { useControlBoardNavigation } from "./useControlBoardNavigation";
 
-// These shared screens are still .jsx; cast at the boundary (removable
-// once they are typed).
-type AnyProps = Record<string, any>;
-const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
-
-interface TriageBoardProps {
-  triage: TriageModel;
-  kpis: SubmittalKpis;
-  drawingKpis: DrawingKpis;
-  isLoading: boolean;
-  onOpenTab: (key: HubTabKey) => void;
-  onUpdateOwner: (item: TriageItem, owner: string) => void;
-  onUpdateDueDate: (item: TriageItem, date: string) => void;
-  onAdvanceDetailing: (item: TriageItem, next: string) => void;
-  onToggleReadiness: (item: TriageItem, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
-  sequenceReadiness: SequenceReadinessRow[];
-  revisionImpact: RevisionImpactViewRow[];
-  isSaving: boolean;
-  /** Escalate a queue item into a draft RFI / potential CO. Absent = hidden. */
-  onEscalate?: (item: TriageItem, kind: "rfi" | "pco") => void;
-  /** Open the revision overlay compare for a sheet. Absent = hidden. */
-  onCompareRevision?: (drawingId: string) => void;
-  /** 3D model element mapping rollup (Phase 0 of the BIM integration). */
-  modelMapping?: ElementStatusSummary | null;
-  /** The raw model_elements rows (for the per-bucket member drill-down). */
-  modelElementRows?: ModelElementViewRow[];
-  /** Open the Tekla/SDS2 member CSV import. Absent = section hidden. */
-  onImportModelElements?: () => void;
-}
-
-export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving, onEscalate, onCompareRevision, modelMapping, modelElementRows, onImportModelElements }: TriageBoardProps) {
-  const { openItem, createSubmittal } = useControlBoardNavigation({ onOpenTab });
-  if (isLoading) return <LoadingSkeleton />;
-
-  const model = buildControlBoardModel(triage);
-  const focusItem = model.focusItem;
-  const topStatuses = model.topStatuses;
-  const focusDrawingSetId = focusItem?._drawingSetId ?? null;
-  const criticalItems = model.criticalItems;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <section style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))",
-        gap: 14,
-      }}>
-        <SectionCard title="Critical work queue">
-          <div style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            color: triage.overdue.length ? error : success,
-            fontFamily: mono,
-            fontSize: 10,
-            fontWeight: 800,
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            marginBottom: 12,
-          }}>
-            {triage.overdue.length ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
-            {triage.overdue.length ? "Immediate approval risk" : "Pipeline current"}
-          </div>
-          <h2 style={{
-            margin: 0,
-            color: textPrimary,
-            fontFamily: "var(--font-display)",
-            fontSize: 34,
-            lineHeight: 1,
-            fontWeight: 600,
-          }}>
-            {triage.overdue.length
-              ? `${pluralize(triage.overdue.length, "item")} past due`
-              : "No overdue drawing or submittal work"}
-          </h2>
-          <p style={{ margin: "10px 0 0", color: "var(--text-secondary)", maxWidth: 880, lineHeight: 1.5, fontSize: 13 }}>
-            {triage.overdue.length
-              ? `${pluralize(triage.overdueDrawingSets, "drawing set")} and ${pluralize(triage.overdueUnlinkedSubmittals, "unlinked submittal")} need attention before detailing can hand off cleanly.`
-              : "Use this control board to watch due dates, rejected or resubmittal work, missing dates, and fabrication release readiness by drawing set."}
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 18 }}>
-            <RiskPill icon={Clock3} label="Due this week" value={triage.dueSoon.length} color={warning} />
-            <RiskPill icon={AlertTriangle} label="Needs action" value={triage.needsAction.length} color={review} />
-            <RiskPill icon={CalendarClock} label="Missing dates" value={triage.noDate.length} color={textMuted} />
-            <RiskPill icon={CheckCircle2} label="Sets Released" value={drawingKpis.released} color={success} />
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Next decision" headerAction={<DueChip info={focusItem?.due || dueInfo(null)} compact />}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
-            <div>
-              <h3 style={{ margin: "6px 0 0", color: textPrimary, fontSize: 18, lineHeight: 1.2 }}>
-                {focusItem ? focusItem.title : "No open exception"}
-              </h3>
-            </div>
-          </div>
-          {focusItem ? (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.45 }}>
-                  {focusItem.group} - {focusItem.status}
-                </span>
-                {focusItem.detailingState && <OperationalStateChip state={focusItem.detailingState} />}
-                {/* R&R is a first-class stage (2026-07-25): skip the extra badge
-                    when the state chip itself already reads R&R. */}
-                {focusItem.isRR && focusItem.detailingState !== "R&R" && <RRChip />}
-              </div>
-              {/* ── Inline Quick-Action Controls ──────────────────────── */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
-                <InlineOwnerControl
-                  currentOwner={focusItem.owner}
-                  onAssign={(owner) => onUpdateOwner(focusItem, owner)}
-                  disabled={isSaving || !canWriteOwner(focusItem)}
-                />
-                <InlineDateControl
-                  currentDate={focusItem.dueDate}
-                  isOverdue={focusItem.due.overdue}
-                  onSetDate={(date) => onUpdateDueDate(focusItem, date)}
-                  disabled={isSaving || !canWriteDueDate(focusItem)}
-                />
-              </div>
-              {/* ── Detailing-state advance (drafting phase only) ─────── */}
-              {focusItem.kind === "Drawing Set" && canWriteDetailingState(focusItem) && (
-                <InlineDetailingControl
-                  current={focusItem._detailingStateRaw}
-                  onAdvance={(next) => onAdvanceDetailing(focusItem, next)}
-                  disabled={isSaving}
-                />
-              )}
-              {/* ── Backward schedule + readiness (drawing sets) ──────── */}
-              {focusItem.kind === "Drawing Set" && focusItem._readiness && (
-                <ReadinessPanel
-                  readiness={focusItem._readiness}
-                  onToggle={(field, value) => onToggleReadiness(focusItem, field, value)}
-                  disabled={isSaving || !canWriteReadinessFlags(focusItem)}
-                />
-              )}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
-                <button
-                  type="button"
-                  onClick={() => openItem(focusItem)}
-                  className="sbd-btn-primary"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                >
-                  Open Work
-                  <ArrowRight size={14} />
-                </button>
-                {focusItem.kind === "Drawing Set" && focusDrawingSetId && (focusItem._canDraft || focusItem._needsUnlinkedHint) && (
-                  <button
-                    type="button"
-                    className="sbd-btn-ghost"
-                    onClick={() => createSubmittal(focusDrawingSetId)}
-                    title="Create a submittal linked to this drawing set"
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
-                  >
-                    Create submittal
-                  </button>
-                )}
-                {/* Contextual escalation — turn the blocker into a draft RFI
-                    or a potential CO without leaving the control board. */}
-                {onEscalate && (
-                  <>
-                    <button
-                      type="button"
-                      className="sbd-btn-ghost"
-                      onClick={() => onEscalate(focusItem, "rfi")}
-                      title="Draft an RFI from this item"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
-                    >
-                      <FileQuestion size={13} /> Draft RFI
-                    </button>
-                    <button
-                      type="button"
-                      className="sbd-btn-ghost"
-                      onClick={() => onEscalate(focusItem, "pco")}
-                      title="Draft a potential change order from this item"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
-                    >
-                      <CircleDollarSign size={13} /> Draft PCO
-                    </button>
-                  </>
-                )}
-              </div>
-            </>
-          ) : (
-            <EmptyState text="No overdue, due-soon, action, or missing-date work is currently flagged." />
-          )}
-        </SectionCard>
-      </section>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
-        <TriageMetric icon={AlertTriangle} label="Overdue Sets" value={triage.overdueDrawingSets} color={error} sub={`${triage.overdueUnlinkedSubmittals} unlinked subs`} />
-        <TriageMetric icon={Clock3} label="Due This Week" value={triage.dueSoonDrawingSets} color={warning} sub="Next 7 days" />
-        <TriageMetric icon={ShieldCheck} label="Needs Action" value={triage.needsAction.length} color={review} sub="Rejected / resubmit" />
-        <TriageMetric icon={CalendarClock} label="Missing Dates" value={triage.noDateDrawingSets} color={textMuted} sub="Needs cleanup" />
-        <TriageMetric icon={ClipboardList} label="Pending Review" value={kpis.pending} color={warning} sub={`${kpis.total} total submittals`} />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16 }}>
-        <TriageList
-          title="Critical Work Queue"
-          subtitle="Overdue, rejected, resubmittal, and near-term items."
-          items={criticalItems}
-          empty="No critical work is currently queued."
-          onOpenTab={onOpenTab}
-          onEscalate={onEscalate}
-        />
-        <PipelinePanel topStatuses={topStatuses} openCount={triage.openItems.length} onOpenTab={onOpenTab} />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16 }}>
-        <TriageList
-          title="Due Next 7 Days"
-          subtitle="Drawing sets with required dates approaching."
-          items={triage.dueSoon.slice(0, 8)}
-          empty="No drawing or submittal due dates in the next week."
-          onOpenTab={onOpenTab}
-          onEscalate={onEscalate}
-        />
-        <TriageList
-          title="Missing Due Dates"
-          subtitle="Assign dates before these can be managed against schedule."
-          items={triage.noDate.slice(0, 8)}
-          empty="All open items have due dates."
-          onOpenTab={onOpenTab}
-        />
-      </div>
-
-      <SequenceReadinessSection rows={sequenceReadiness} />
-      {onImportModelElements && (
-        <ModelMappingSection summary={modelMapping} elements={modelElementRows} onImport={onImportModelElements} />
-      )}
-      <RevisionImpactSection rows={revisionImpact} onCompare={onCompareRevision} />
-    </div>
-  );
-}
 
 // ── 3D Model Mapping (BIM integration Phase 0) ──────────────────────────────
 // Member-level piece-mark mapping coverage + status buckets. The same buckets
@@ -631,7 +361,6 @@ export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[
 // Revisions that landed on sheets already moving downstream (fabricated /
 // delivered / in field) — the rework / change-order exposure (design doc §7).
 
-const REV_SEVERITY_TONE: Record<string, string> = { critical: error, high: warning, medium: info, low: textMuted };
 
 export function RevisionImpactSection({ rows, onCompare }: { rows: RevisionImpactViewRow[]; onCompare?: (drawingId: string) => void }) {
   const shown = (rows || []).slice(0, 8);
@@ -786,163 +515,7 @@ export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanel
   );
 }
 
-interface PipelinePanelProps {
-  topStatuses: Array<[string, number]>;
-  openCount: number;
-  onOpenTab: (key: HubTabKey) => void;
-}
 
-function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps) {
-  return (
-    <SectionCard
-      title="Open pipeline"
-      headerAction={
-        <button type="button" className="sbd-btn-ghost" onClick={() => onOpenTab("matrix")} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          Matrix
-          <ArrowRight size={13} />
-        </button>
-      }
-    >
-      <p style={{ margin: "0 0 11px", color: textMuted, fontSize: 12 }}>
-        Current approval status distribution.
-      </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-        {topStatuses.length === 0 ? (
-          <EmptyState text="No open items to summarize." />
-        ) : (
-          topStatuses.map(([status, count]) => (
-            <PipelineBar key={status} status={status} count={count} total={openCount} />
-          ))
-        )}
-      </div>
-    </SectionCard>
-  );
-}
 
-interface TriageListProps {
-  title: string;
-  subtitle: string;
-  items: TriageItem[];
-  empty: string;
-  onOpenTab: (key: HubTabKey) => void;
-  compact?: boolean;
-  onEscalate?: (item: TriageItem, kind: "rfi" | "pco") => void;
-}
 
-function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false, onEscalate }: TriageListProps) {
-  return (
-    <SectionCard
-      title={title}
-      headerAction={<span className="sbd-badge-info">{items.length}</span>}
-    >
-      <p style={{ margin: "0 0 12px", color: textMuted, fontSize: 12 }}>{subtitle}</p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {items.length === 0 ? (
-          <EmptyState text={empty} />
-        ) : (
-          items.map((item) => (
-            <TriageItemRow key={item.id} item={item} onOpen={() => onOpenTab(item.routeTab)} onEscalate={onEscalate} />
-          ))
-        )}
-      </div>
-    </SectionCard>
-  );
-}
 
-function TriageItemRow({ item, onOpen, onEscalate }: { item: TriageItem; onOpen: () => void; onEscalate?: (item: TriageItem, kind: "rfi" | "pco") => void }) {
-  const tone = getActionTone(item);
-  // div+role=button (not <button>) so the per-row escalation buttons can nest
-  // without invalid button-in-button markup. Enter/Space still activate.
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      style={{
-        display: "grid",
-        gridTemplateColumns: onEscalate
-          ? "minmax(0, 1.5fr) minmax(90px, 0.35fr) minmax(120px, 0.45fr) auto 28px"
-          : "minmax(0, 1.5fr) minmax(90px, 0.35fr) minmax(120px, 0.45fr) 28px",
-        gap: 12,
-        alignItems: "center",
-        width: "100%",
-        textAlign: "left",
-        padding: "12px 14px",
-        borderRadius: 12,
-        border: `1px solid ${item.due.overdue ? "color-mix(in srgb, var(--status-error) 60%, transparent)" : border}`,
-        background: item.due.overdue
-          ? "color-mix(in srgb, var(--status-error) 11%, var(--bg-surface-low) 89%)"
-          : "var(--bg-surface-low)",
-        color: textPrimary,
-        cursor: "pointer",
-      }}
-    >
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, marginBottom: 5 }}>
-          <span style={{
-            width: 8,
-            height: 8,
-            borderRadius: 999,
-            background: tone,
-            boxShadow: `0 0 12px color-mix(in srgb, ${tone} 45%, transparent)`,
-            flex: "0 0 auto",
-          }} />
-          <span style={{ fontFamily: mono, fontSize: 9, color: item.kind === "Drawing Set" ? accent : success, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 800 }}>
-            {item.kind}
-          </span>
-        </div>
-        <div style={{ color: textPrimary, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: 13 }}>
-          {item.title}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, minWidth: 0 }}>
-          <span style={{ color: textMuted, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
-            {item.group}
-          </span>
-          {item.detailingState
-            ? <OperationalStateChip state={item.detailingState} />
-            : <span style={{ color: textMuted, fontSize: 12, whiteSpace: "nowrap" }}>- {item.status}</span>}
-          {/* R&R is a first-class stage (2026-07-25): skip the extra badge
-              when the state chip itself already reads R&R. */}
-          {item.isRR && item.detailingState !== "R&R" && <RRChip />}
-        </div>
-      </div>
-      <div>
-        <DueChip info={item.due} compact />
-      </div>
-      <div style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        <span style={{ color: textMuted, fontFamily: mono, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>Owner / Due</span>
-        <br />
-        {item.owner} - {fmtDate(item.dueDate)}
-      </div>
-      {onEscalate && (
-        <div
-          style={{ display: "flex", gap: 4 }}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          <EscalateIconButton
-            icon={FileQuestion}
-            label="RFI"
-            title={`Draft an RFI from "${item.title}"`}
-            onClick={() => onEscalate(item, "rfi")}
-          />
-          <EscalateIconButton
-            icon={CircleDollarSign}
-            label="PCO"
-            title={`Draft a potential change order from "${item.title}"`}
-            onClick={() => onEscalate(item, "pco")}
-          />
-        </div>
-      )}
-      <div style={{ color: textMuted, display: "flex", justifyContent: "flex-end" }}>
-        <ArrowRight size={15} />
-      </div>
-    </div>
-  );
-}

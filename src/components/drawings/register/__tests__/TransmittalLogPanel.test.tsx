@@ -298,3 +298,56 @@ describe("TransmittalLogPanel", () => {
     expect(drawingTransmittalItemCreate).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The truncation notice. useTransmittals has flagged a capped read since it was
+ * written — and documented that both reads are newest-first, so a cap drops the
+ * OLDEST rows and "a set sent only on them would otherwise look never sent".
+ * The Approval Matrix consumed that flag; this panel ignored it.
+ *
+ * Rendered from the flag, never from `transmittals.length`: the count is taken
+ * on the raw reads before soft-deleted headers are dropped, so a truncated log
+ * can be far shorter than the cap. Each case below carries 1 row.
+ */
+describe("TransmittalLogPanel truncation notice", () => {
+  function flag(rows: TransmittalRow[], truncation: { headers: boolean; items: boolean }) {
+    Object.defineProperty(rows, "truncation", { value: truncation, enumerable: false });
+    return rows;
+  }
+
+  beforeEach(() => {
+    can.mockReturnValue(true);
+    register = [];
+  });
+
+  it("shows nothing when the log is complete", () => {
+    transmittals = [transmittalRow()];
+    renderPanel();
+    expect(screen.queryByText(/SHOWING THE NEWEST/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ATTACHMENT LISTS INCOMPLETE/)).not.toBeInTheDocument();
+  });
+
+  it("warns that rows are missing when the header read capped", () => {
+    transmittals = flag([transmittalRow()], { headers: true, items: false });
+    renderPanel();
+    expect(screen.getByText("SHOWING THE NEWEST 1,000 TRANSMITTALS")).toBeInTheDocument();
+    expect(screen.getByText(/do not read this log as proof that a set was never sent/)).toBeInTheDocument();
+  });
+
+  it("warns about under-reported attachments — not missing rows — when only items capped", () => {
+    transmittals = flag([transmittalRow()], { headers: false, items: true });
+    renderPanel();
+    expect(screen.getByText("ATTACHMENT LISTS INCOMPLETE")).toBeInTheDocument();
+    expect(screen.getByText(/Every transmittal is listed/)).toBeInTheDocument();
+  });
+
+  it("fires on a one-row log, which a count-driven notice could never do", () => {
+    transmittals = flag([transmittalRow()], { headers: true, items: true });
+    renderPanel();
+    expect(transmittals.length).toBe(1);
+    // Both reads capped: the message has to carry the missing-rows warning AND
+    // the lower-bound one, on a log of a single row.
+    expect(screen.getByText(/more exist/)).toBeInTheDocument();
+    expect(screen.getByText(/lower bounds/)).toBeInTheDocument();
+  });
+});
