@@ -36,12 +36,16 @@ These findings were rechecked against the Batch 40 HEAD. No local source defect
 was reproducible, so no speculative security, RLS, migration, or workflow fix
 was made:
 
-- **B41-P1-001 - legacy flat Storage isolation residual:** **requires staging**.
-  Batch 40's evidence identifies 775 legacy `app-files/uploads/...` objects
-  whose historical policy permits founding-org reads across projects. A local
-  repository search cannot verify remote objects, policy execution, or storage
-  references. The safe correction remains owner-run copy, reference backfill,
-  verification, then policy cutover; do not do this from the browser.
+- **B41-P1-001 - legacy flat Storage isolation residual:** ~~**requires
+  staging**~~ → **RESOLVED in production 2026-07-21.** See
+  [Storage isolation — B41-P1-001 closure](#storage-isolation--b41-p1-001-closure)
+  below for the live evidence. The original finding is kept verbatim for the
+  audit trail: Batch 40's evidence identifies 775 legacy
+  `app-files/uploads/...` objects whose historical policy permits founding-org
+  reads across projects. A local repository search cannot verify remote
+  objects, policy execution, or storage references. The safe correction remains
+  owner-run copy, reference backfill, verification, then policy cutover; do not
+  do this from the browser.
 - **B41-P1-002 - staging database and migration alignment:** **requires
   staging**. `supabase --version` and `supabase migration list --local` are not
   available in this environment. The six committed feature-flag seed
@@ -62,6 +66,73 @@ was made:
 The local Node 24 versus CI Node 20 difference remains a P2 environment
 deviation, not a source defect. The P1 findings remain visible in the release
 checklist and are not counted as resolved by documentation alone.
+
+## Storage isolation — B41-P1-001 closure
+
+**Status: resolved in production 2026-07-21. Verified against the live database
+2026-09-19.**
+
+B41-P1-001 was carried as open for roughly two months after it was fixed. The
+remediation ran on 2026-07-20/21 and is recorded in
+[`docs/app-files-tenant-isolation-plan.md`](docs/app-files-tenant-isolation-plan.md),
+but neither the Batch 41 entry, the Batch 42 acceptance, nor
+[`docs/audits/WORKFLOW_AUDIT_2026-07-26.md`](docs/audits/WORKFLOW_AUDIT_2026-07-26.md)
+(item 1, written five days *after* the cutover) was updated. The audit and the
+runbook then said opposite things about the same finding, which is why it kept
+being re-raised.
+
+Live evidence, re-verified 2026-09-19 against project `kjrwqagyeswwoxpjkcko`:
+
+| Check | Result |
+|---|---|
+| `auth_read` policy on `storage.objects` | Requires path segment 1 to be a UUID **and** `user_is_org_member()`. The `uploads/` grandfather branch is gone. |
+| `auth_upload` policy | Same UUID + org-member predicate. |
+| Migrations `20260721030200`, `20260721031557`, `20260721031606` | All three present in `supabase_migrations.schema_migrations`. |
+| `private.maintenance_jobs` completion marker | `completed_at` 2026-07-21, `grandfather_policy_closed: true`, `legacy_database_references: 0`, 706 ETag + 69 SHA-256 verified, `verification_failed: 0`. |
+| `app-files` bucket | `public = false`. |
+| Object census | 775 legacy flat, 1,597 org-scoped, 0 other prefixes. |
+
+The 775 flat `uploads/...` objects are **still present and that is correct** —
+they are retained rollback material (`originals_deleted: 0`). They are
+unreachable: `storage.foldername(name)[1]` is `'uploads'`, which fails the UUID
+regex, so `auth_read` denies them to every authenticated session.
+
+Do not re-raise B41-P1-001 without first re-running the checks above. If a
+future audit reports it open from a source-only search, that search cannot see
+remote policy state and is not evidence.
+
+### Open: `sheets-files` is public and not tenant-scoped
+
+Distinct from B41-P1-001, **not** covered by the cutover above, and newer than
+every audit that discusses Storage isolation. Found 2026-09-19.
+
+- Bucket created 2026-09-01 with `public = true`, declared deliberately in
+  [`supabase/config.toml`](supabase/config.toml) and
+  [`supabase/README.md`](supabase/README.md) as "the only public bucket".
+- Holds **435 PDFs / 730 MB** of drawing content across 7 prefixes.
+- **No RLS policies exist on it at all.** Reads are unauthenticated by URL,
+  with no expiry and no revocation path short of moving the object.
+- Paths are `job_<nanoid>/files/<uuid>.pdf` — **neither org- nor
+  project-scoped**. This is structurally the same flat, tenant-blind namespace
+  that B41-P1-001 was about, reintroduced in a new bucket.
+- Nothing under `src/` references this bucket. The writer is the sibling app
+  (`lorteezy87/SteelBuild-Pro-2026`) or a script, on the shared project — so
+  the fix needs that repo's owner, and CLAUDE.md already notes schema ownership
+  between the two repos is undecided.
+
+Enumeration is blocked (no anonymous list policy, UUID filenames), so each URL
+behaves as an unexpiring capability token rather than an open directory. The
+exposure is that any leaked URL — forwarded mail, browser history, referrer
+header, proxy log — grants permanent unauthenticated access to that sheet.
+
+**Required before organization #2.** Options, in order of preference:
+
+1. Flip the bucket private and serve through signed URLs (`getSignedUrl` is
+   already exported from `@/api/supabaseClient`).
+2. Keep it public but re-path to `<org_id>/…` and add a policy mirroring
+   `auth_read`.
+3. Accept it explicitly, in writing, with a stated scope limit — not by
+   silence.
 
 ## Active items
 
@@ -781,11 +852,16 @@ board components' rendering paths.
 
 ## Batch 42 accepted staging disposition
 
-- **B41-P1-001 legacy flat Storage isolation:** accepted for the current
+- **B41-P1-001 legacy flat Storage isolation:** ~~accepted for the current
   single-tenant staging candidate because the available evidence does not show
   an active leak. This is not a resolution. Storage policy/object verification
   remains required before organization #2 and is paired with the legal-review
-  gate.
+  gate.~~ **Superseded — resolved in production 2026-07-21.** The cutover this
+  acceptance was deferring happened; see
+  [Storage isolation — B41-P1-001 closure](#storage-isolation--b41-p1-001-closure).
+  The "before organization #2" condition is discharged for `app-files`, but
+  **not** for the `sheets-files` bucket created afterwards — see the open item
+  in that section.
 - **B41-P1-002 through B41-P1-006:** remain staging or owner-controlled gates
   for migration alignment, Edge Function deployment/configuration, critical
   smoke coverage, branch protection, and backup/rollback readiness.
