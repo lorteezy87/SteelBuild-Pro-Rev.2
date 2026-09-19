@@ -118,6 +118,9 @@ describe("Field page", () => {
     renderField();
 
     expect(await screen.findByText("Recorded")).toBeInTheDocument();
+    // "Open Punch" renders twice by design: once as an operational KPI tile
+    // (Field.jsx, "field closeout") and once as a Today's Activity chip
+    // (FieldDashboardSections.tsx). Two views of one metric, not a duplicate.
     expect(screen.getAllByText("Open Punch").length).toBeGreaterThan(0);
     expect(screen.getByText("Today's Activity")).toBeInTheDocument();
     expect(screen.getByText("Recent Photos")).toBeInTheDocument();
