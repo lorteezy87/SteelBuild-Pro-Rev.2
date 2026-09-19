@@ -253,6 +253,16 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # The workflow default is `contents: read` only. On a pull_request event
+    # gitleaks-action lists the PR's commits through the API to scan just that
+    # range, so without pull-requests:read it dies on
+    # "Resource not accessible by integration" (403) — a crash, not a finding.
+    # The push-event run passes either way because it scans history directly,
+    # which is exactly how this hid until the first PR run.
+    # Granted per-job so every other job keeps the narrower default.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
