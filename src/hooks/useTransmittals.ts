@@ -79,10 +79,32 @@ export const TRANSMITTAL_LOG_READ_CAP = 1000;
  * and every other consumer still get a plain-looking array (spreads, equality
  * and JSON never see it). A log built anywhere else reads as complete.
  */
-export type TransmittalLog = TransmittalRow[] & { readonly possiblyTruncated?: boolean };
+export type TransmittalLog = TransmittalRow[] & {
+  readonly possiblyTruncated?: boolean;
+  readonly truncation?: TransmittalTruncation;
+};
 
-function withTruncationFlag(rows: TransmittalRow[], possiblyTruncated: boolean): TransmittalLog {
-  return Object.defineProperty(rows, "possiblyTruncated", { value: possiblyTruncated, enumerable: false });
+/**
+ * WHICH read hit the cap, because the two fail differently and the log's
+ * notice has to say which happened:
+ * - `headers` — whole transmittals are missing from the list.
+ * - `items` — the transmittals are all here, but their attachment lists and
+ *   `item_count` under-report, so a row can look like it carried fewer sheets
+ *   than it did.
+ * `possiblyTruncated` stays the OR of the two: it is the existing contract the
+ * Approval Matrix reads (approvalMatrix.derive.ts), and it keeps its meaning.
+ */
+export interface TransmittalTruncation {
+  headers: boolean;
+  items: boolean;
+}
+
+function withTruncationFlag(rows: TransmittalRow[], truncation: TransmittalTruncation): TransmittalLog {
+  Object.defineProperty(rows, "possiblyTruncated", {
+    value: truncation.headers || truncation.items,
+    enumerable: false,
+  });
+  return Object.defineProperty(rows, "truncation", { value: truncation, enumerable: false });
 }
 
 /**
@@ -117,9 +139,10 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
       // Revisions are read paged (above), so an unmatched item now means the
       // revision really is missing — it no longer also means "your project has
       // more than 1000 revisions".
-      const possiblyTruncated =
-        ((rawTransmittals as any[]) ?? []).length >= TRANSMITTAL_LOG_READ_CAP ||
-        ((rawItems as any[]) ?? []).length >= TRANSMITTAL_LOG_READ_CAP;
+      const truncation: TransmittalTruncation = {
+        headers: ((rawTransmittals as any[]) ?? []).length >= TRANSMITTAL_LOG_READ_CAP,
+        items: ((rawItems as any[]) ?? []).length >= TRANSMITTAL_LOG_READ_CAP,
+      };
 
       const revisionsById = new Map<string, any>();
       for (const revision of (rawRevisions as any[]) ?? []) {
@@ -191,7 +214,7 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
           return { ...t, items, item_count: items.length };
         })
         .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
-      return withTruncationFlag(rows, possiblyTruncated);
+      return withTruncationFlag(rows, truncation);
     },
   });
 }

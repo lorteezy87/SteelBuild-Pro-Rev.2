@@ -566,17 +566,28 @@ The four areas the pass above deferred. Live counts taken the same day:
 
 **Open — verified, not fixed**
 
-- **The transmittal log never surfaces its own truncation flag.**
-  `useTransmittals` computes `possiblyTruncated` when the transmittals or items
-  read returns `TRANSMITTAL_LOG_READ_CAP` (1000) rows, and documents why it
-  matters: the reads are newest-first, so a cap drops the **oldest** rows and a
-  set sent only on those looks never sent. `approvalMatrix.derive.ts` consumes
-  the flag; `TransmittalLogPanel` destructures only `data` and ignores it.
-  Latent at 24 headers / 135 items. *Remediation:* a notice driven by the flag,
-  not by `transmittals.length` — the filtered length understates truncation, so
-  `ListTruncationNotice count={rows.length}` would be wrong. Wording needs to
-  distinguish a capped header read from a capped item read and say the oldest
-  are missing.
+- **The transmittal log surfaces its own truncation flag** (was open; fixed
+  2026-09-19). `useTransmittals` had flagged a capped read since it was written
+  and documented the stakes — both reads are newest-first, so a cap drops the
+  OLDEST rows and *a set sent only on them would otherwise look never sent*.
+  `approvalMatrix.derive.ts` consumed the flag; `TransmittalLogPanel`
+  destructured only `data` and ignored it. The flag is now split into which read
+  capped, because the two fail differently: `headers` means whole transmittals
+  are absent, `items` means every transmittal is listed but its attachment list
+  and count are lower bounds. `possiblyTruncated` is unchanged as the OR of the
+  two, so the Approval Matrix's contract is untouched. Latent at 24 headers /
+  135 items.
+  - The notice is driven by the flag, never by `transmittals.length`: the count
+    is taken on the RAW reads before soft-deleted headers are dropped, so a
+    truncated log can be far shorter than the cap. A test renders the notice on
+    a **one-row** log to pin that — `ListTruncationNotice count={rows.length}`
+    could not have fired there.
+  - The panel MIRRORS the cap and the truncation accessor rather than importing
+    them, for the reason `useTransmittals` already documents about
+    `@/api/supabaseClient`: page tests mock the module, and reading a named
+    export the mock does not define throws. Importing them broke
+    `TransmittalLogPanel.test` immediately; a test pins the mirror to
+    `DEFAULT_LIST_CAP`.
 
 - **Two board components are dead and untested.**
   `revisionImpactBoard.tsx` (256 lines, single export `RevisionImpactBoard`) and
