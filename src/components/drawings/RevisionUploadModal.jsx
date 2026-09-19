@@ -70,6 +70,9 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   const [processingPct, setProcessingPct] = useState(0);
   const [flowError, setFlowError] = useState("");
   const [applyStats, setApplyStats] = useState({ updated: 0, added: 0, removed: 0 });
+  // Cover-sheet metadata + text-layer flag from the extraction. Document Control
+  // reads `scanned` to tell "the box was blank" from "the page was unreadable".
+  const [extraction, setExtraction] = useState({ setMeta: null, scanned: false });
   useEffect(() => {
     if (preSelectedSet) { setSelectedSet(preSelectedSet); setStep("revMeta"); }
   }, [preSelectedSet]);
@@ -90,7 +93,9 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       const res = await integrations.Core.UploadFile({ file: pdfFile, workflow: "drawings" });
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
+      setExtraction({ setMeta: null, scanned: false });
       const newSheets = await extractRevisionSheets(pdfFile, {
+        onExtraction: setExtraction,
         titleblockTemplate: {
           titleRect:  selectedSet?.titleblock_title_rect  ?? null,
           numberRect: selectedSet?.titleblock_number_rect ?? null,
@@ -103,7 +108,20 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     let oldSheets = [];
     try {
       const existing = await loadSetDrawings(activeProject?.id, selectedSet);
-      oldSheets = existing.filter(d => !d.is_superseded).map(d => ({ sheetNumber: d.sheet_number, sheetTitle: d.title, fileUrl: d.file_url }));
+      oldSheets = existing.filter(d => !d.is_superseded).map(d => ({
+        sheetNumber: d.sheet_number,
+        sheetTitle: d.title,
+        fileUrl: d.file_url,
+        // Carried for Document Control. The matcher ignores them; the change
+        // summary cannot say anything true without them.
+        id: d.id,
+        revisionNumber: d.revision_number,
+        drawingSetName: d.drawing_set_name,
+        stage: d.stage,
+        isSuperseded: d.is_superseded,
+        callouts: d.callouts,
+        extractedText: d.extracted_text,
+      }));
     } catch (e) { console.error("Failed to fetch existing drawings:", e); }
 
       const matched = matchSheets(
@@ -114,6 +132,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           pdfPage:     s.pdfPage,
           discipline:  s.discipline,
           revision:    s.revision,
+          date:        s.date,
         })),
       );
       matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
@@ -336,7 +355,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           )}
           {step === "processing" && <StepProcessing message={processingMsg} progress={processingPct} />}
           {step === "comparison" && (
-            <StepSheetComparison selectedSet={selectedSet} revMeta={revMeta} matchedSheets={matchedSheets} setMatchedSheets={setMatchedSheets} supersedeUnlisted={supersedeUnlisted} setSupersedeUnlisted={setSupersedeUnlisted} onBack={() => setStep("dropPDF")} onConfirm={handleApply} />
+            <StepSheetComparison selectedSet={selectedSet} revMeta={revMeta} extraction={extraction} activeProject={activeProject} matchedSheets={matchedSheets} setMatchedSheets={setMatchedSheets} supersedeUnlisted={supersedeUnlisted} setSupersedeUnlisted={setSupersedeUnlisted} onBack={() => setStep("dropPDF")} onConfirm={handleApply} />
           )}
           {step === "success" && (
             <StepSuccess selectedSet={selectedSet} revMeta={revMeta} stats={applyStats} onClose={handleClose} />

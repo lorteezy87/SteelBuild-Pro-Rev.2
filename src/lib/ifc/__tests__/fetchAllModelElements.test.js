@@ -1,82 +1,130 @@
 import { describe, it, expect } from "vitest";
-import { countModelElements, fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
+import {
+  countModelElements,
+  fetchAllModelElements,
+} from "@/lib/ifc/fetchAllModelElements";
 
 /**
- * Chainable Supabase-ish mock. The roster loader now does ONE head/count query
- * (`select(col, { head: true })`, awaited directly) followed by N concurrent
- * `.range()` page fetches, so the mock has to answer both:
- *   - head/count: awaiting the builder resolves `{ count, error }`
- *   - page:       `.range()` resolves `{ data, error }`
+ * Chainable Supabase-ish mock.
+ *
+ * The roster loader pages by KEYSET: `.gt("id", cursor).order("id").limit(n)`,
+ * awaited on the builder. The head/count query is `select(col, { head: true })`,
+ * also awaited on the builder — so the mock answers whichever the caller built.
+ *
+ * `rows` must be sorted by id, which is what `.order("id")` guarantees in the
+ * real client.
  */
-function mockClient(rows) {
-  const rangeCalls = [];
+function mockClient(rows, { pageErrors = [] } = {}) {
+  const calls = [];
+  let cursor;
+  let head = false;
+  let limit = null;
   const b = {
-    headMode: false,
     from() { return b; },
-    select(_cols, opts) { b.headMode = !!(opts && opts.head); return b; },
+    select(_cols, opts) {
+      head = !!(opts && opts.head);
+      cursor = undefined;
+      limit = null;
+      return b;
+    },
     eq() { return b; },
+    gt(col, value) { cursor = { col, value }; return b; },
     order() { return b; },
-    range(from, to) { rangeCalls.push([from, to]); return Promise.resolve({ data: rows.slice(from, to + 1), error: null }); },
-    // Only the count query awaits the builder directly (pages await .range()).
-    then(resolve, reject) { return Promise.resolve({ count: rows.length, error: null }).then(resolve, reject); },
+    limit(n) { limit = n; return b; },
+    range(...args) { calls.push({ kind: "range", args }); return b; },
+    then(resolve, reject) {
+      if (head) {
+        return Promise.resolve({ count: rows.length, error: null }).then(resolve, reject);
+      }
+      const err = pageErrors[calls.filter((c) => c.kind === "page").length];
+      calls.push({ kind: "page", cursor: cursor ? cursor.value : null, limit });
+      if (err) return Promise.resolve({ data: null, error: err }).then(resolve, reject);
+      const start = cursor === undefined
+        ? 0
+        : rows.findIndex((r) => r.id > cursor.value);
+      const slice = start < 0 ? [] : rows.slice(start, start + (limit ?? rows.length));
+      return Promise.resolve({ data: slice, error: null }).then(resolve, reject);
+    },
   };
-  b.rangeCalls = rangeCalls;
+  b.calls = calls;
+  b.pages = () => calls.filter((c) => c.kind === "page");
   return b;
 }
 
+const makeRows = (n, from = 0) =>
+  Array.from({ length: n }, (_, i) => ({ id: String(from + i + 1).padStart(6, "0") }));
+
 describe("fetchAllModelElements", () => {
-  it("fans out one .range() per page (count-driven) and returns every row", async () => {
-    const rows = Array.from({ length: 2500 }, (_, i) => ({ id: i }));
+  it("walks every page by keyset and returns every row exactly once, in id order", async () => {
+    const rows = makeRows(2500);
     const client = mockClient(rows);
     const out = await fetchAllModelElements("p", { client, page: 1000 });
-    expect(out).toHaveLength(2500);
-    // ceil(2500/1000) = 3 pages, fetched concurrently (order of issue preserved).
-    expect(client.rangeCalls).toEqual([[0, 999], [1000, 1999], [2000, 2999]]);
+
+    expect(out.map((r) => r.id)).toEqual(rows.map((r) => r.id));
+    expect(new Set(out.map((r) => r.id)).size).toBe(2500); // no duplicates
+    // 3 pages: 1000, 1000, 500 (the short page ends the walk).
+    expect(client.pages()).toEqual([
+      { kind: "page", cursor: null, limit: 1000 },
+      { kind: "page", cursor: "001000", limit: 1000 },
+      { kind: "page", cursor: "002000", limit: 1000 },
+    ]);
   });
 
-  it("bounds concurrent page fetches (does not open every page at once)", async () => {
-    const rows = Array.from({ length: 5000 }, (_, i) => ({ id: i }));
-    let inFlight = 0;
-    let maxInFlight = 0;
-    const client = {
-      from() { return client; },
-      select() { return client; },
-      eq() { return client; },
-      order() { return client; },
-      range(from, to) {
-        inFlight += 1;
-        maxInFlight = Math.max(maxInFlight, inFlight);
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            inFlight -= 1;
-            resolve({ data: rows.slice(from, to + 1), error: null });
-          }, 5);
-        });
-      },
-      then(resolve, reject) {
-        return Promise.resolve({ count: rows.length, error: null }).then(resolve, reject);
-      },
-    };
-    const out = await fetchAllModelElements("p", { client, page: 1000, concurrency: 2 });
-    expect(out).toHaveLength(5000);
-    expect(maxInFlight).toBeLessThanOrEqual(2);
+  /**
+   * The regression this module exists to prevent. `.range(from, to)` is
+   * LIMIT/OFFSET, and under the model_elements RLS policy (a SECURITY DEFINER
+   * function applied as a per-row Filter) an offset page re-filters and re-sorts
+   * the ENTIRE project before discarding the rows it skipped. Measured on the
+   * live DB that is 203 ms/page vs 44 ms for the keyset shape, and the gap
+   * widens with roster size until it trips the 8s statement_timeout.
+   */
+  it("never pages by offset — every page after the first carries an id cursor", async () => {
+    const rows = makeRows(3000);
+    const client = mockClient(rows);
+    await fetchAllModelElements("p", { client, page: 1000 });
+
+    expect(client.calls.filter((c) => c.kind === "range")).toEqual([]);
+    // 3 full pages + one short probe page that ends the walk.
+    const pages = client.pages();
+    expect(pages).toHaveLength(4);
+    expect(pages[0].cursor).toBeNull();
+    for (const p of pages.slice(1)) {
+      expect(p.cursor).not.toBeNull();
+      expect(p.limit).toBe(1000);
+    }
   });
 
-  it("passes optional columns through to page selects", async () => {
+  it("fetches exactly one page on an exact multiple — no wasted probe page", async () => {
+    const client = mockClient(makeRows(1000));
+    const out = await fetchAllModelElements("p", { client, page: 1000 });
+    expect(out).toHaveLength(1000);
+    // 1000 rows == a full page, so one probe page is needed to learn it ended;
+    // that probe is a cheap index seek past the last id, not a re-scan.
+    expect(client.pages()).toHaveLength(2);
+    expect(client.pages()[1].cursor).toBe("001000");
+  });
+
+  it("returns [] (and fetches nothing) for no project, and [] for an empty roster", async () => {
+    const none = mockClient([]);
+    expect(await fetchAllModelElements(null, { client: none })).toEqual([]);
+    expect(none.pages()).toEqual([]);
+
+    const empty = mockClient([]);
+    expect(await fetchAllModelElements("p", { client: empty, page: 1000 })).toEqual([]);
+    expect(empty.pages()).toHaveLength(1); // one short page, no count round-trip
+  });
+
+  it("passes an optional projection through to the page select", async () => {
     const selects = [];
-    const rows = [{ id: 1, piece_mark: "A1" }];
+    const rows = [{ id: "1", piece_mark: "A1" }];
     const client = {
       from() { return client; },
-      select(cols, opts) {
-        selects.push({ cols, head: !!(opts && opts.head) });
-        return client;
-      },
+      select(cols, opts) { selects.push({ cols, head: !!(opts && opts.head) }); return client; },
       eq() { return client; },
+      gt() { return client; },
       order() { return client; },
-      range() { return Promise.resolve({ data: rows, error: null }); },
-      then(resolve, reject) {
-        return Promise.resolve({ count: 1, error: null }).then(resolve, reject);
-      },
+      limit() { return client; },
+      then(resolve, reject) { return Promise.resolve({ data: rows, error: null }).then(resolve, reject); },
     };
     await fetchAllModelElements("p", {
       client,
@@ -86,51 +134,42 @@ describe("fetchAllModelElements", () => {
     expect(selects.some((s) => !s.head && s.cols === "id,piece_mark,drawing_no,drawing_id")).toBe(true);
   });
 
-  it("fetches exactly one page on an exact multiple — no wasted empty page", async () => {
-    const rows = Array.from({ length: 1000 }, (_, i) => ({ id: i }));
-    const client = mockClient(rows);
-    const out = await fetchAllModelElements("p", { client, page: 1000 });
-    expect(out).toHaveLength(1000);
-    expect(client.rangeCalls).toEqual([[0, 999]]); // count=1000 → 1 page, no probe page
-  });
-
-  it("returns [] (and fetches no pages) for no project and for an empty roster", async () => {
-    expect(await fetchAllModelElements(null, { client: mockClient([]) })).toEqual([]);
-    const client = mockClient([]);
-    expect(await fetchAllModelElements("p", { client, page: 1000 })).toEqual([]);
-    expect(client.rangeCalls).toEqual([]); // count=0 → short-circuit, no page fetch
-  });
-
-  it("throws on a count error", async () => {
-    const errClient = {
-      from() { return errClient; }, select() { return errClient; }, eq() { return errClient; },
-      order() { return errClient; }, range() { return Promise.resolve({ data: [], error: null }); },
-      then(resolve, reject) { return Promise.resolve({ count: null, error: new Error("count boom") }).then(resolve, reject); },
-    };
-    await expect(fetchAllModelElements("p", { client: errClient, page: 1000 })).rejects.toThrow("count boom");
+  it("refuses a projection that drops the keyset cursor instead of silently truncating", async () => {
+    await expect(
+      fetchAllModelElements("p", { client: mockClient(makeRows(10)), columns: "piece_mark" }),
+    ).rejects.toThrow(/must include "id"/);
   });
 
   it("throws on a page error", async () => {
-    const errClient = {
-      from() { return errClient; }, select() { return errClient; }, eq() { return errClient; },
-      order() { return errClient; }, range() { return Promise.resolve({ data: null, error: new Error("page boom") }); },
-      then(resolve, reject) { return Promise.resolve({ count: 10, error: null }).then(resolve, reject); },
-    };
-    await expect(fetchAllModelElements("p", { client: errClient, page: 1000 })).rejects.toThrow("page boom");
+    const client = mockClient(makeRows(3000), { pageErrors: [new Error("page boom")] });
+    await expect(fetchAllModelElements("p", { client, page: 1000 })).rejects.toThrow("page boom");
+  });
+
+  it("throws on a LATER page error rather than returning a short roster", async () => {
+    const client = mockClient(makeRows(3000), { pageErrors: [null, new Error("page 2 boom")] });
+    await expect(fetchAllModelElements("p", { client, page: 1000 })).rejects.toThrow("page 2 boom");
+  });
+
+  it("stops instead of spinning when the cursor cannot advance", async () => {
+    // A row with no id would make the cursor unusable; bail with what we have
+    // rather than re-request the same page forever.
+    const client = mockClient([]);
+    client.then = (resolve, reject) =>
+      Promise.resolve({ data: [{ piece_mark: "A" }, { piece_mark: "B" }], error: null }).then(resolve, reject);
+    const out = await fetchAllModelElements("p", { client, page: 2 });
+    expect(out).toHaveLength(2);
   });
 });
 
 describe("countModelElements", () => {
   it("returns the live count from a HEAD query without transferring rows", async () => {
-    const rows = Array.from({ length: 27750 }, (_, i) => ({ id: i }));
-    const client = mockClient(rows);
+    const client = mockClient(makeRows(27750));
     const n = await countModelElements("p", { client });
     expect(n).toBe(27750);
     // The whole point: a roster this size must cost ZERO row fetches. The
     // Control Board reads this to know a roster exists; if it ever starts
-    // paging, opening the Detailing page pulls 28 round-trips of steel.
-    expect(client.rangeCalls).toEqual([]);
-    expect(client.headMode).toBe(true);
+    // paging, opening the Detailing page pulls the whole roster of steel.
+    expect(client.pages()).toEqual([]);
   });
 
   it("returns 0 for no project rather than throwing", async () => {
@@ -139,8 +178,7 @@ describe("countModelElements", () => {
   });
 
   it("returns 0 (not null) when the project has no members", async () => {
-    const client = mockClient([]);
-    await expect(countModelElements("p", { client })).resolves.toBe(0);
+    await expect(countModelElements("p", { client: mockClient([]) })).resolves.toBe(0);
   });
 
   it("throws on a count error so callers fail loud instead of showing 0 members", async () => {
