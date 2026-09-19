@@ -541,8 +541,87 @@ current data, not by the code.
   legacy path. *Remediation:* a migration to clear the column once the
   submittal-governed state is confirmed authoritative for those sets.
 
-**Not audited in this pass** — Holds panel, Transmittals tab, 3D tab, and the
-board components' rendering paths.
+**Not audited in that pass** — Holds panel, Transmittals tab, 3D tab, and the
+board components' rendering paths. Audited 2026-09-19 (below).
+
+## Detailing Control Center — remainder audit, 2026-09-19
+
+The four areas the pass above deferred. Live counts taken the same day:
+`drawing_holds` 0, `drawing_transmittals` 24 / items 135, `model_elements`
+6,498, `drawings` 226, `drawing_links` 0.
+
+**Fixed**
+
+- **The Holds picker read an unloaded register as "every sheet is held".**
+  `HoldsPanel` guards only the *holds* query; the *register* query is a second,
+  separate read whose `data` defaulted to `[]`. `holdableSheets([])` is also
+  `[]`, so the sheet picker rendered the literal claim *"Every sheet already has
+  an active hold."* while the register was still in flight — or permanently if
+  that read failed. With `drawing_holds` empty live, the holds query always wins
+  the race, making the false claim the **default first paint** of the Place-hold
+  picker. Message now derives from the register's query state via
+  `holdPickerEmptyMessage` (unread / failed / genuinely all-held are three
+  different strings). Proven by rendering the real component; the render test
+  fails on the pre-fix code.
+
+**Open — verified, not fixed**
+
+- **The transmittal log never surfaces its own truncation flag.**
+  `useTransmittals` computes `possiblyTruncated` when the transmittals or items
+  read returns `TRANSMITTAL_LOG_READ_CAP` (1000) rows, and documents why it
+  matters: the reads are newest-first, so a cap drops the **oldest** rows and a
+  set sent only on those looks never sent. `approvalMatrix.derive.ts` consumes
+  the flag; `TransmittalLogPanel` destructures only `data` and ignores it.
+  Latent at 24 headers / 135 items. *Remediation:* a notice driven by the flag,
+  not by `transmittals.length` — the filtered length understates truncation, so
+  `ListTruncationNotice count={rows.length}` would be wrong. Wording needs to
+  distinguish a capped header read from a capped item read and say the oldest
+  are missing.
+
+- **Two board components are dead and untested.**
+  `revisionImpactBoard.tsx` (256 lines, single export `RevisionImpactBoard`) and
+  `TriageBoard` (`triageBoard.tsx` lines 105–334) are referenced **only** by the
+  `drawingSubmittalHub/components.tsx` barrel — no JSX usage anywhere, and no
+  test covers either. The rest of `triageBoard.tsx` is live:
+  `ModelMappingSection`, `SequenceReadinessSection`, `RevisionImpactSection` and
+  `ReadinessPanel` all ship via `ControlBoardPanel`, so the file must not be
+  deleted wholesale. `RevisionImpactBoard` is also a *divergent* second renderer
+  of `affectedPieces`: it prints a bare `—`, where the live `RevisionImpactPanel`
+  distinguishes "no piece resolves to this set" from "roster not loaded" in a
+  tooltip. Reviving it would reintroduce that ambiguity. *Remediation:* delete
+  both and their barrel re-exports. A product call, like the dead-register item
+  above, so it is recorded rather than done.
+
+- **`tabCounts` covers 6 of the 9 tabs.** `TABS` (format.ts) lists overview,
+  process, drawings, submittals, transmittals, matrix, revimpact, holds,
+  validation; `tabCounts` (DrawingSubmittalHub.tsx) supplies all but
+  transmittals, revimpact and validation. `tabCounts[key] ?? 0` plus the strip's
+  `count > 0 &&` means those three never badge. Not a false claim — a missing
+  badge asserts nothing — but the three are silently uncountable rather than
+  deliberately zero. *Remediation:* supply the three counts, or comment why they
+  are intentionally unbadged.
+
+**Verified correct — no action**
+
+- **3D tab gating.** `Model3DGateLoading` / `Model3DGateError` /
+  `Model3DGateNotice` keep "flags still loading", "couldn't check" and "viewer is
+  off" as three distinct states, with a retry on the error path. The flag gates
+  the tab body, never its link, so a `?hub_tab=model3d` deep link always lands on
+  the 3D tab rather than silently showing the Control Board.
+- **Model roster laziness.** `countModelElements` (HEAD, zero rows) answers "does
+  a roster exist" and is always enabled; the 6,498-row roster itself pages and
+  loads only on the 3D tab or on explicit request. `ModelMappingSection` receives
+  `rosterCount`, `rosterCountLoading` and `rosterLoading` separately and is
+  covered by tests over `rosterCount` null / 0 / 16771.
+- **`affectedPieces` unknown-handling.** `buildRevisionImpactRows` types it
+  `number | null` and leaves it null when the roster is unloaded;
+  `RevisionImpactPanel` renders `—` and names which of the two causes applies.
+- **Holds header badge.** `activeHolds` is `null` until the query is ready and
+  `DetailingCommandHeader` hides the badge on null — it never shows "No holds"
+  before the query answers.
+- **`useTransmittals` lookups.** Revisions and GC drawings are read with
+  `filterAll` (paged) precisely because they are id-keyed lookups; a capped read
+  there would render a blank sheet number indistinguishable from a deleted row.
 
 ## Recently-resolved (last 30 days, kept here for context)
 
