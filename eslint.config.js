@@ -280,10 +280,9 @@ export default [
       "src/lib/rfiFromDelta.js",                  // update, not a read
       // ── Genuinely unbounded. REAL FINDINGS, not false positives ───────────
       // Listed so this rule can land green; each still needs paging or a cap.
-      // useDrawingRegister is the most exposed: `drawing_register_view` with no
-      // limit now backs the Drawing Register tab, so a project past 1000 sheets
-      // silently shows a short register.
-      "src/hooks/useDrawingRegister.ts",
+      // useDrawingRegister was the most exposed of these and is now FIXED —
+      // it pages `drawing_register_view` to completeness, so it is off this
+      // list and the rule guards it like any other file. Six left.
       "src/components/collaboration/CommentThread.jsx",
       "src/components/drawings/ExportMarkupPDFModal.jsx",
       "src/components/settings/SystemTab.jsx",
