@@ -1,6 +1,6 @@
 # Claude handoff reconciliation — 2026-09-21
 
-Scope: the three supplied Claude sessions, both distinct pasted handoffs, current main at ada5426d, and read-only production catalog checks except the single authorized contractor-name correction below. Work is on `codex/claude-pending-issues`.
+Scope: the three supplied Claude sessions, both distinct pasted handoffs, main through 795041c64, and the owner-approved production rollout below. Work is on `codex/claude-pending-issues`; the broader launch-security audit is a separate PR.
 
 ## Verified fixes in this branch
 
@@ -13,8 +13,8 @@ Scope: the three supplied Claude sessions, both distinct pasted handoffs, curren
 | PDF page collision repair (#458) | Integrated preservation of uncontested page assignments. Collisions are grouped by file URL, not drawing set. |
 | RFI parties and import (#459, remaining portions of #453) | Canonical eight-party vocabulary; case-insensitive canonical values and generic Engineer → EOR. Unknown people/company text remains in assigned_to, with party unset. No S&H alias or guessed EOR. All eight chip colors use theme tokens. Unset parties display and aggregate as Unassigned, with a neutral color, instead of being mislabeled Contractor. |
 | Company-neutral outputs (#456 / #453 overlap) | Retained main's organization-based sender contract; neutral calendar identity, import preview label, and company placeholder. Recorded approved GC-register ownership. |
-| All project members may create change requests | Staged migration 20260921054458 changes both the invoker RPC and INSERT policy to the org-aware project-access helper. Atomic numbering, validation, auditing, and PM-only editing remain enforced. |
-| RFI duplicate dates | Staged migration 20260921055027 synchronizes canonical and legacy date pairs for both writing applications, including clears. Conflicts fail visibly; backfill uses only existing dates. Constraint handoff reads the canonical date first. |
+| All project members may create change requests | Applied migration 20260921054458 changes both the invoker RPC and INSERT policy to the org-aware project-access helper. Atomic numbering, validation, auditing, and PM-only editing remain enforced. |
+| RFI duplicate dates | Applied migration 20260921055027 synchronizes canonical and legacy date pairs for both writing applications, including clears. Conflicts fail visibly; backfill uses only existing dates. Constraint handoff reads the canonical date first. |
 | Staging fixture (#446) | Replaced the proposed SQL seed with scripts/seed-staging.mjs: explicit staging target, generated password supplied outside source control, Auth admin user creation, real org/project RPCs, valid drawing defaults, atomic submittal number. |
 | Staging reconstruction | Persistent schema-only branch ndyfjffsulfbwpmwdmic; synthetic org/project/account and private buckets; separate Cloudflare Worker configuration and CI deploy job. See staging-setup.md. |
 | Live project-export failure | A real staging export failed on drawing_watchers, whose primary key is (drawing_id, user_id), not id. The Edge Function now pages by that composite key and the project-calendar key. It retains the live shared v2 contract and all 66 existing tables, adds the Rev.2 tables, preserves row file references and actor IDs, and lists stored objects separately. Eight focused tests and a complete 96-table live export pass. |
@@ -33,16 +33,21 @@ Scope: the three supplied Claude sessions, both distinct pasted handoffs, curren
 
 ## Deliberately separate or awaiting owner information
 
-- **#457 branding:** reviewed as an independent visual change from a fourth Claude session. It remains separate from these bug fixes. No registration symbol was added.
+- **#457 branding:** merged independently into main as 795041c64 while this release was being verified. The final PR merge-result CI includes it. No registration symbol was added.
 - **Spare Supabase access tokens:** the handoffs do not identify which token IDs are disposable. The working repository token must remain; no credentials were revoked by guessing.
 - **Deprecated remote functions / Stripe:** repository inactivity does not establish that external webhook clients are gone. No shared Stripe endpoints or schema were deleted without that evidence.
 - **Contract execution:** requires the owner and counterparty, not a software change.
 - **Stale Claude branch:** preserved because it contains the reviewed #458 fix and the user asked to pause and retain Claude work. Cosmetic deletion is unnecessary.
-- **Production release:** the two new migrations are applied and stamped only on staging. The production drift check should continue to report them missing until the reviewed production rollout; they are explicitly classified required, not hidden by an allowlist.
+
+## Approved production rollout
+
+The owner approved releasing #460 after checks on 2026-09-21. Both migrations were applied and stamped with their exact committed SQL in one transaction after staging verification. Recorded SQL MD5 values are 8e7a375975fa3d6ca73bbaa8894d892e (20260921054458) and d0dba6a21cc34e544e54f26c9947f87d (20260921055027). Production preflight found no conflicting dates; 25 rows needed synchronization and zero remained afterward. Both functions remain SECURITY INVOKER, the org-aware INSERT policy is installed, and the alias trigger is enabled. No production test fixtures were created.
+
+Production project-export v29 is deployed with verify_jwt=true. All five downloaded deployed source files match this branch byte for byte. A request without credentials returns 401 and the production-origin preflight succeeds. The full authenticated export and inaccessible-project rejection were verified on isolated staging. The previous live v28 source was captured before deployment for rollback. The frontend release still proceeds through the gated main CI deployment.
 
 ## Verification
 
-- Staging Linux CI passed all 6,744 tests and 18 desktop/mobile shell-recovery checks; six authenticated navigation/auth-boundary tests passed after deployment.
+- Final PR merge-result CI 35572690560 passed 704 files / 6,764 unit tests, all lint/type/build gates and 18 desktop/mobile shell-recovery checks, including the newly merged branding change. Staging CI 35572678465 passed deployment, six authenticated navigation/auth-boundary tests and five disposable server-gate tests; three separate Piece Control fixtures remain skipped.
 - Existing full suite: 701 files, 6,743 tests; 6,741 passed on the first completed run. The two Windows full-tree scan timeouts subsequently passed with their assertions unchanged.
 - Targeted regression suites cover paging over 1,000 rows, later-page failures, organization isolation, party normalization, PDF page preservation, revision-scoped markup export and canonical RFI deadlines.
 - Final RFI regression run: 16 files, 112 tests passed after correcting the unknown-party display and aggregate behavior.

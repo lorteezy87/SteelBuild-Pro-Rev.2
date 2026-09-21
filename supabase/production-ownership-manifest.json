@@ -27,12 +27,12 @@
       {
         "version": "20260921054458",
         "lifecycle": "required",
-        "evidence": "Owner requested all project members may create change requests on 2026-09-21. New staged migration; requires reviewed deployment and ledger stamping. Not yet applied to production."
+        "evidence": "Owner approved release of PR #460 on 2026-09-21 after checks. Applied and stamped atomically in production after transactional staging permission tests; ledger SQL matches the committed file (MD5 8e7a375975fa3d6ca73bbaa8894d892e). Invoker RPC and INSERT policy use org-aware project access; PM-only edits remain."
       },
       {
         "version": "20260921055027",
         "lifecycle": "required",
-        "evidence": "RFI required/answered dates and their legacy aliases diverged in production. New staged synchronization migration; requires reviewed deployment and ledger stamping. Not yet applied to production."
+        "evidence": "Owner approved release of PR #460 on 2026-09-21 after checks. Applied and stamped atomically in production after transactional staging alias tests; ledger SQL matches the committed file (MD5 d0dba6a21cc34e544e54f26c9947f87d). Preflight found no conflicts; 25 recorded-date alias discrepancies were synchronized and verification found zero remaining."
       },
       {
         "version": "20260913084700",

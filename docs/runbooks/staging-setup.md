@@ -22,7 +22,7 @@ The empty staging database was recovered from a current schema-only pg_dump of p
 Source dump SHA-256: 134d9aac061b8c3b7d9627505eccc707f6f1ac935cb8cf7486fcd51b8ea67653.
 Before new migrations, parity was 140 public tables, 140 RLS tables, 393 policies and 352 functions. All public function definitions matched exactly (combined MD5 ac446bb3130e1fd6cf5a5ec3b1d67729).
 
-Migrations 20260921054458 and 20260921055027 were then tested, applied and stamped with their exact SQL on staging only. Supabase's historical branch-workflow label may still display MIGRATIONS_FAILED for the original replay; it is not proof of the manually restored schema's readiness. Do not claim that automatic branch replay is fixed.
+Migrations 20260921054458 and 20260921055027 were then tested, applied and stamped with their exact SQL on staging. Following explicit owner approval and final checks, they were also applied and stamped atomically in production on 2026-09-21; see docs/claude-issue-review-2026-09-21.md for hashes and verification. Supabase's historical branch-workflow label may still display MIGRATIONS_FAILED for the original replay; it is not proof of the manually restored schema's readiness. Do not claim that automatic branch replay is fixed.
 
 **Never run db push, migration repair, branch merge or unreviewed replay against production.** Do not connect automatic Git migration replay to this manually recovered branch. Recreating it currently requires a reviewed schema-only restore and parity checks.
 
