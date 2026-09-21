@@ -76,13 +76,15 @@ describe("RFI import helpers", () => {
         { rfi_number: "10", title: "Person assignee", assigned_to: "John Doe, PE" },
         { rfi_number: "11", title: "Blank assignee" },
         { rfi_number: "12", title: "Real party", assigned_to: "GC" },
+        { rfi_number: "13", title: "Company assignee", assigned_to: "S&H" },
       ],
     });
 
-    expect(rows.map((r) => r.ball_in_court)).toEqual(["EOR", "EOR", "GC"]);
+    expect(rows.map((r) => r.ball_in_court)).toEqual([null, null, "GC", null]);
     // A recognised party is taken as given; the person's name is preserved
     // where it belongs and does not become a party.
     expect(rows[0].assigned_to).toBe("John Doe, PE");
+    expect(rows[3].assigned_to).toBe("S&H");
   });
 
   it("marks answered imported RFIs closed", () => {

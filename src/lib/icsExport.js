@@ -93,7 +93,7 @@ export function buildIcs({ events = [], calendarName = "SteelBuild Pro" } = {}) 
   const lines = [];
   lines.push("BEGIN:VCALENDAR");
   lines.push("VERSION:2.0");
-  lines.push(`PRODID:-//S&H Steel Co//SteelBuild Pro//EN`);
+  lines.push("PRODID:-//SteelBuild Pro//Calendar Export//EN");
   lines.push("CALSCALE:GREGORIAN");
   lines.push("METHOD:PUBLISH");
   lines.push(foldLine(`X-WR-CALNAME:${escapeText(calendarName)}`));

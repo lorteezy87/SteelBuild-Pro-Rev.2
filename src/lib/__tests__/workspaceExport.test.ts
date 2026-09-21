@@ -181,10 +181,10 @@ describe("fetchWorkspaceProjects", () => {
     expect(calls[0].filters.org_id).toBe("org-1");
   });
 
-  it("omits the org filter when none is given, leaving RLS to narrow it", async () => {
-    const calls = serveProjects(1);
-    await fetchWorkspaceProjects(null);
-    expect(calls[0].filters).not.toHaveProperty("org_id");
+  it("does not turn a missing workspace into a backup of every accessible org", async () => {
+    serveProjects(1);
+    await expect(fetchWorkspaceProjects(null)).rejects.toThrow("Select a workspace");
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it("excludes soft-deleted projects but not on-hold ones", async () => {

@@ -63,5 +63,6 @@ describe("revoke link_unlinked_model_elements_for_piece EXECUTE", () => {
         fs.readFileSync(file, "utf8").includes("link_unlinked_model_elements_for_piece"),
       );
     expect(callers).toEqual([]);
-  });
+  // Full-tree I/O takes more than 5s on Windows, independently of RPC behavior.
+  }, 30_000);
 });

@@ -5,7 +5,7 @@ Purpose: make Cloudflare Workers the production host for the web frontend, and r
 
 > **The Vercel account is closed.** This is not a dual-run migration with a Vercel fallback — there is no Vercel to fall back to. The `deploy` and `deploy-staging` jobs have been deleted from `ci.yml`, along with `vercel.json`, `.vercelignore` and the Skew Protection helper, because they could only ever fail.
 
-> **Consequence, stated plainly:** until you complete the owner steps below and set `CLOUDFLARE_ENABLED=true`, **a push to `main` deploys nowhere.** That is deliberate — publishing before the secrets exist would ship an app that cannot reach Supabase — but it does mean nothing ships until you flip it.
+> **Current state (2026-09-21):** `CLOUDFLARE_ENABLED=true` and production uses the gated Cloudflare workflow. The historical setup steps below describe the cutover. Current staging targets and readiness are in [staging-setup.md](staging-setup.md). `CLOUDFLARE_BASE_URL` was removed because health checks use the custom domain directly.
 
 Refs:
 - Cloudflare Worker: `steelbuild-pro-rev-2` · Repo: `lorteezy87/SteelBuild-Pro-Rev.2`

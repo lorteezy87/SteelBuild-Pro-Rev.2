@@ -52,7 +52,8 @@ const PARTY_SET: ReadonlySet<string> = new Set(BALL_IN_COURT_PARTIES);
 /**
  * NULL means nobody holds it — the record is closed, or it was never routed.
  *
- * It does NOT mean "unassigned but open". `ball_in_court` used to carry the
+ * Imported rows may also have an unknown party; status determines closure.
+ * `ball_in_court` used to carry the
  * literal string "Closed" on 6 production rows, which is a status, not a party;
  * the status column already said Closed on every one of them. Absence is the
  * honest representation and the constraint permits it.
@@ -77,5 +78,6 @@ export function normalizeBallInCourt(value: unknown): BallInCourtParty | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  return PARTY_SET.has(trimmed) ? (trimmed as BallInCourtParty) : null;
+  if (trimmed.toLowerCase() === "engineer") return "EOR";
+  return BALL_IN_COURT_PARTIES.find((party) => party.toLowerCase() === trimmed.toLowerCase()) ?? null;
 }

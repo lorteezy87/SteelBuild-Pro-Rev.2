@@ -10,10 +10,15 @@ import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 
 export const mono = { fontFamily: "var(--font-mono)" };
 
+export const UNASSIGNED_BIC_COLORS = {
+  bg: "var(--bg-elevated)",
+  text: "var(--text-muted)",
+};
+
 // One entry per BALL_IN_COURT_PARTIES member, asserted by test. DetailPanel
-// tones via `BIC_COLORS[p] || BIC_COLORS.Contractor`, so a missing party does
-// not fail loudly — it renders as a second Contractor chip, which looks
-// deliberate. The five original parties keep their existing colours; EOR takes
+// renders unknown parties neutrally; the coverage test keeps a missing
+// canonical party from silently losing its color. The original parties keep
+// their existing colours; EOR takes
 // the slot "Engineer" had, since Engineer was its synonym.
 export const BIC_COLORS = {
   // Detailer class — our side of the handoff.

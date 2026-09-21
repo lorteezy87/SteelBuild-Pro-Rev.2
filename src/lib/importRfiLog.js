@@ -283,13 +283,12 @@ export function buildRfiImportRows({ rfis = [], projectId, projectName, existing
       priority:       "Medium",
       // assigned_to is free text from a spreadsheet -- often a PERSON ("John
       // Doe, PE"), which is not a party and which chk_rfis_ball_in_court
-      // rejects, failing the whole row. Normalise it, and fall back to EOR
-      // (the synonym the old "Engineer" default meant) only when the column
-      // says nothing. The raw value is preserved in assigned_to above, so
-      // normalising loses no information.
+      // rejects, failing the whole row. Preserve unrecognised parties as null;
+      // neither a person's name nor a company name proves who holds the ball.
+      // The raw value remains in assigned_to above.
       ball_in_court:  answered
         ? "Contractor"
-        : (normalizeBallInCourt(r.assigned_to) ?? "EOR"),
+        : normalizeBallInCourt(r.assigned_to),
     });
   }
 

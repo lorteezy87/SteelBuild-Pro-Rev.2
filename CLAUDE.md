@@ -140,7 +140,8 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 ## Sibling app: SteelBuild-Pro-2026
 - `lorteezy87/SteelBuild-Pro-2026` is a **reference only**. Borrow ideas, layout and logic from it, not code wholesale; Rev.2 is the product.
 - Both apps share the production Supabase project, and which repo owns the schema is still undecided.
-- Without the owner's say-so, don't add migrations for 2026-only tables or columns: `gc_drawings`, `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
+- The owner authorized Rev.2's GC register on 2026-09-19. Migration `20260919120000_gc_document_register.sql` adopts `gc_drawings` and `gc_drawing_sets` into Rev.2's lineage; changes still have to preserve sibling callers.
+- Without the owner's say-so, don't add migrations for the other 2026-only tables or columns: `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
 
 ## MCP server
 `steelbuild-mcp-server` — 18 tools across portfolio/coordination/commercial/logistics domains. Authenticates via user JWT so RLS applies automatically. Don't bypass this with service-role calls in application code.

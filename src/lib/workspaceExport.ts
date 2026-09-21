@@ -164,14 +164,15 @@ export async function exportWorkspace(
  * .list()` drops on-hold rows and is not org-scoped, which is why this reads the
  * table directly — a backup labelled "every project in <org>" has to contain the
  * paused ones and none from the user's other orgs. RLS still limits the result
- * to projects the caller can read, so a missing `orgId` narrows rather than
- * leaks.
+ * to projects the caller can read. A missing workspace is rejected before
+ * querying so a backup cannot mix multiple organizations.
  *
  * Ordered by `created_at` with `id` as the stable unique tiebreaker: timestamps
  * are not unique, and `.range()` windows over a non-total order can skip or
  * repeat rows.
  */
 export async function fetchWorkspaceProjects(orgId?: string | null): Promise<WorkspaceExportProject[]> {
+  if (!orgId?.trim()) throw new Error("Select a workspace before exporting its projects.");
   return fetchAllRows<WorkspaceExportProject>(
     async (start, end) => {
       // The no-restricted-syntax rule matches any `supabase.from()`, including
@@ -185,16 +186,7 @@ export async function fetchWorkspaceProjects(orgId?: string | null): Promise<Wor
         .from("projects")
         .select("id, name")
         .eq("is_deleted", false);
-      // `projects.org_id` exists in production (uuid — verified against
-      // information_schema, not inferred) but is MISSING from the checked-in
-      // generated types in src/types/supabase.ts, so the typed `.eq()` rejects
-      // it. Cast narrowly here rather than regenerating the whole types file in
-      // this change. Dropping the filter instead would widen a workspace backup
-      // to every org the caller can read, so it is not an option.
-      if (orgId) {
-        query = (query as unknown as { eq: (column: string, value: string) => typeof query })
-          .eq("org_id", orgId);
-      }
+      query = query.eq("org_id", orgId);
       const { data, error } = await query
         .order("created_at", { ascending: false })
         .order("id", { ascending: true })

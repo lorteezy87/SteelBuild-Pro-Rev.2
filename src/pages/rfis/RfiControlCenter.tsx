@@ -145,7 +145,7 @@ function attentionFromRfi(rfi: RfiRecord, onOpen: () => void): AttentionItem | n
     issue: `${rfi.rfi_number || "RFI"} · ${rfi.title || "Untitled RFI"}`,
     deadline: rfi.date_required ? fmtDate(rfi.date_required) : null,
     risk,
-    owner: rfi.ball_in_court || "Contractor",
+    owner: rfi.ball_in_court || "Unassigned",
     nextAction,
     tone,
     onOpen,
