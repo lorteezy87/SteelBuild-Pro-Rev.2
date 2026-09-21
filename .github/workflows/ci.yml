@@ -7,7 +7,8 @@
 #                request to any branch, so contributors get green/red feedback
 #                before merge.
 #   - deploy-cloudflare: THE production deploy — `wrangler deploy` to the
-#                Cloudflare Worker. GATED on `ci` and ONLY on a push to main, so
+#                Cloudflare Worker. GATED on `ci`, secret scan, Edge typecheck
+#                and production drift, and ONLY on a push to main, so
 #                a red lint/typecheck/test/build cannot reach
 #                steelbuild-pro.com. That gate only holds while this is the SOLE
 #                publisher, so Cloudflare's own Workers Builds git integration
@@ -47,9 +48,10 @@
 #     (see ENTERPRISE_READINESS_AUDIT.md L13).
 #   - Lighthouse / a11y / bundle-size budgets (queued for later).
 #
-# NOTE ON ENFORCEMENT: none of these gates bind until branch protection on
-# `main` requires them. Until then a direct push deploys ungated and the
-# "a red CI cannot reach steelbuild-pro.com" claim above is aspirational.
+# NOTE ON ENFORCEMENT: deploy dependencies block a failed build from publishing.
+# Branch protection must ALSO require these checks to prevent unchecked merges
+# or direct changes to the workflow itself. Repository credentials still need
+# migration into restricted environments; YAML alone does not isolate secrets.
 # See TECH_DEBT.md B41-P1-005.
 
 name: CI
@@ -84,6 +86,24 @@ permissions:
   contents: read
 
 jobs:
+  edge-typecheck:
+    name: Release Edge Function typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.6'
+      - name: Check the reviewed backend release entrypoints
+        run: >-
+          deno check --node-modules-dir=none --no-config --no-lock
+          supabase/functions/llm-proxy/index.ts
+          supabase/functions/project-export/index.ts
+          supabase/functions/stripe-billing/index.ts
+
   ci:
     name: Lint + Typecheck + Test + Build
     runs-on: ubuntu-latest
@@ -101,6 +121,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -122,6 +144,8 @@ jobs:
         # .js/.jsx additions vs origin/main (existing JS may remain until
         # intentionally converted with real types).
         run: npm run check:no-new-js
+        env:
+          NO_NEW_JS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
       - name: Typecheck (TypeScript)
         # Blocking: guards Supabase table names, hook contracts,
@@ -336,7 +360,7 @@ jobs:
   # Setup + cutover steps: docs/runbooks/cloudflare-migration.md
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers (production)
-    needs: ci
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -482,7 +506,7 @@ jobs:
   # public/_headers marks them noindex, and Cloudflare Access is the real fix.
   preview-cloudflare:
     name: Cloudflare preview (PR)
-    needs: ci
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck]
     # Same-repo PRs only. Secrets are not exposed to forked-PR workflows, so a
     # fork would trip the config check below instead of building something
     # broken; skipping outright is clearer.
@@ -556,7 +580,7 @@ jobs:
   # Staging has its own Worker and Supabase branch. Never inherit prod env.
   deploy-staging-cloudflare:
     name: Deploy to Cloudflare Workers (staging)
-    needs: ci
+    needs: [ci, secret-scan, edge-typecheck]
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20

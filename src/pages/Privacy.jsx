@@ -35,7 +35,7 @@ const CONTACT = {
   security: "security@steelbuild-pro.com",
 };
 
-const LAST_UPDATED = "June 22, 2026";
+const LAST_UPDATED = "September 21, 2026";
 
 export default function Privacy() {
   // Paint html/body with the near-black steel base while mounted so the
@@ -110,9 +110,8 @@ export default function Privacy() {
 
       <Section title="Third parties and sub-processors">
         <p>
-          We rely on a small set of trusted infrastructure providers to operate
-          the Service. These sub-processors act on our behalf and are bound to
-          protect your information:
+          We use the following infrastructure and service providers. The data
+          shared depends on the features you use and your workspace settings:
         </p>
         <ul style={ulStyle}>
           <li>
@@ -120,8 +119,8 @@ export default function Privacy() {
             file storage, and hosting of our backend.
           </li>
           <li>
-            <strong style={strong}>Vercel</strong> — hosting and delivery of our
-            web frontend.
+            <strong style={strong}>Cloudflare</strong> — web hosting, content
+            delivery, security, and Web Analytics through its global network.
           </li>
           <li>
             <strong style={strong}>Stripe</strong> — subscription billing and
@@ -130,8 +129,23 @@ export default function Privacy() {
           <li>
             <strong style={strong}>Sentry</strong> — error monitoring and
             performance, including <em>masked</em> session replay. Replays are
-            captured with all text masked and media blocked, so readable project
-            or financial content is not collected.
+            configured to mask text and block media. Error diagnostics and
+            performance events may also contain technical context about a request.
+          </li>
+          <li>
+            <strong style={strong}>Resend and Microsoft Graph</strong> — email
+            delivery and mailbox integration where configured. Messages may
+            include recipients, subjects, content, and attachments.
+          </li>
+          <li>
+            <strong style={strong}>Open-Meteo</strong> — geocoding and weather
+            forecasts using project locations or coordinates when weather
+            features are used.
+          </li>
+          <li>
+            <strong style={strong}>Google Fonts</strong> — font delivery;
+            requesting fonts sends network information such as your IP address
+            and browser headers to Google.
           </li>
           <li>
             <strong style={strong}>OpenAI</strong> — AI-assisted document
@@ -185,15 +199,14 @@ export default function Privacy() {
 
       <Section title="Where your data lives">
         <p>
-          Your data is stored and processed in the{" "}
-          <strong style={strong}>United States</strong>. Primary storage —
+          Primary storage for customer data —
           database, authentication, and uploaded files — is hosted on Supabase
           running on AWS in the <strong style={strong}>us-east-1</strong> region
-          (a single region). Our web frontend is hosted and delivered by Vercel
-          (US), payments are processed by Stripe (US), and error monitoring runs
-          on Sentry (US). AI-assisted processing is performed by US-based
-          providers. We do not store customer data outside the United States, and
-          we do not currently offer an EU or other regional data-residency option.
+          in the United States. Frontend delivery uses Cloudflare's global
+          network. Other providers may process information in additional
+          countries under their applicable service terms and configurations.
+          We do not offer a guarantee that all processing occurs in the United
+          States, or a selectable regional data-residency option.
         </p>
       </Section>
 
