@@ -95,3 +95,27 @@ RLS-4 is not present in the current policy set. Keep the atomic RPC's project
 access guard because viewers are explicitly allowed to create change requests.
 `pma_audit_logs` likewise has no current authenticated write policy. The audit's
 static repository replay is not a substitute for the production catalog.
+
+## Validation of the candidate
+
+- Local verification passed lint, all four typecheck gates, production build,
+  no-new-JavaScript comparison and Deno checks for the three selected functions.
+- The full local suite passed 710 files / 6,828 tests. A subsequent quota
+  compatibility test passed separately and preserves the documented non-positive
+  configuration opt-out; malformed configuration still fails closed.
+- The staging SQL boundary suite passed with all six field-write/viewer-read
+  cases, last-owner protection, normal second-owner removal, membership identity,
+  invitation visibility, anonymous/viewer/foreign-project denial, valid PM audit
+  paths, viewer change-request creation and parent erasure. It rolled back.
+- Candidate functions were deployed only to `ndyfjffsulfbwpmwdmic`. Real staging
+  authentication returned 403 for a foreign AI telemetry project, 400 for invalid
+  tokens on an accessible project, 400 for malformed project/provider selections,
+  and 401 without a session. No paid model request was issued.
+- Unconfigured staging billing returned the intended 503; this is not a Stripe
+  checkout/payment success test. Test-mode billing configuration remains an
+  activation prerequisite.
+- Staging project export returned HTTP 200 with v2 format, 96 table sections,
+  four drawing fixtures and two submittals. Mailbox-token omission also has a
+  regression test using synthetic credentials.
+- Production source for the current three functions was captured for rollback
+  review. No hardening production function, SQL or hosting deployment occurred.

@@ -36,4 +36,9 @@ describe('configured AI quotas', () => {
     env.LLM_DAILY_REQUEST_LIMIT = 'invalid';
     await expect(checkUserQuota('user-id')).resolves.toMatchObject({ ok: false, status: 503 });
   });
+  it('retains the existing non-positive configuration opt-out', async () => {
+    env.LLM_DAILY_REQUEST_LIMIT = '-1';
+    await expect(checkUserQuota('user-id')).resolves.toEqual({ ok: true });
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });

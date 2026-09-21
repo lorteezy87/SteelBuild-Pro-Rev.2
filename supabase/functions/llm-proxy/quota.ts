@@ -36,7 +36,7 @@ function numEnv(name: string): number {
   const raw = Deno.env.get(name);
   if (!raw) return 0;
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : Number.NaN;
+  return Number.isFinite(n) ? Math.max(0, n) : Number.NaN;
 }
 
 export interface QuotaDenied {
