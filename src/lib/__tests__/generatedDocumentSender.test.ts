@@ -21,7 +21,7 @@ describe("the .ics PRODID identifies the product, not a company", () => {
     const ics = buildIcs({ events: [], calendarName: "Project 1234" });
     const prodids = ics.split("\r\n").filter((l) => l.startsWith("PRODID:"));
     expect(prodids).toHaveLength(1);
-    expect(prodids[0]).toBe("PRODID:-//SteelBuild Pro//SteelBuild Pro//EN");
+    expect(prodids[0]).toBe("PRODID:-//SteelBuild Pro//Calendar Export//EN");
   });
 
   it("does not put the signed-in org here either", () => {

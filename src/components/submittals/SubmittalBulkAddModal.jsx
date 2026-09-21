@@ -256,10 +256,10 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit, busy =
       // ball_in_court needs the same clamp as status/submittal_type above:
       // chk_submittals_ball_in_court rejects anything outside the party
       // vocabulary, and the spread of `r` puts the RAW CSV cell over the
-      // default, so a "reviewer" column holding "S&H" or a person's name
-      // 400'd the row. normalizeBallInCourt maps the retired spellings and
-      // returns null for anything it cannot place; null is legal here and
-      // honest -- the party is unknown, not Contractor.
+      // default, so a "reviewer" column holding a company or a person's name
+      // 400'd the row. normalizeBallInCourt returns null for anything it
+      // cannot place; null is legal here and honest -- the party is unknown,
+      // not Contractor.
       const out = {
         ...r,
         ball_in_court: "ball_in_court" in r
