@@ -423,19 +423,52 @@ jobs:
         run: npx wrangler deploy
 
       - name: Post-deploy health check
-        # Only runs once CLOUDFLARE_BASE_URL is configured; until then the job
-        # stays green while DNS/custom-domain setup is still in progress
-        # (mirrors deploy-staging). Point it at the workers.dev URL first, then
-        # at the custom domain after cutover.
-        if: ${{ vars.CLOUDFLARE_BASE_URL != '' }}
+        # Probes the CUSTOM DOMAIN, and takes it from this file rather than
+        # from a repo variable. Both halves of that are the fix.
+        #
+        # This step used to read `vars.CLOUDFLARE_BASE_URL`, gated on it being
+        # non-empty. The variable WAS set — to the workers.dev URL, per step 3
+        # of docs/runbooks/cloudflare-migration.md ("verify off-domain before
+        # touching DNS"). Step 7.4 of that same runbook then says to repoint it
+        # at https://steelbuild-pro.com once the cutover lands. Nobody did.
+        #
+        # So the check kept passing against
+        # https://steelbuild-pro-rev-2.n-lortz1987.workers.dev/ — a URL no
+        # customer uses. `wrangler deploy` binds all three hostnames (the
+        # deploy log lists workers.dev, steelbuild-pro.com and www), and
+        # workers.dev answers straight from the Worker. It stays 200 through a
+        # missing custom-domain binding, a wrong route, or DNS pointed
+        # somewhere else entirely — every way the live site can go dark while
+        # the Worker itself is perfectly healthy.
+        #
+        # A repo variable is invisible in review: nothing in a diff shows what
+        # it holds, which is how it sat on a stale value through the whole
+        # cutover and a run of green deploys. What production is health-checked
+        # against belongs in the file, where changing it needs a PR. For a
+        # future cutover, edit the line below — that is a feature, not friction.
+        #
+        # Red here means "deployed but not serving" — a signal, not a
+        # rollback; the version is already promoted by the time this runs.
+        env:
+          BASE: https://steelbuild-pro.com
         run: |
           set -e
+          echo "probing $BASE"
           for i in 1 2 3 4 5 6; do
-            code=$(curl -sL -o /dev/null -w '%{http_code}' "${{ vars.CLOUDFLARE_BASE_URL }}")
-            if [ "$code" = "200" ]; then echo "cloudflare healthy ($code)"; exit 0; fi
+            # `|| code="000"` is load-bearing. An HTTP error status leaves curl
+            # exit 0, but a TRANSPORT failure (DNS, TLS, refused, timeout) does
+            # not — and under `set -e` a bare assignment from a failed command
+            # substitution exits the shell right here, before the loop can log
+            # an attempt, sleep, retry, or reach the ::error:: below. The six
+            # attempts would be fiction and one DNS blip would fail a deploy
+            # that is actually fine. Putting the assignment in an || list is
+            # what errexit exempts. 000 is curl's own "no HTTP response" value,
+            # so "attempt 1: HTTP 000" reads correctly.
+            code=$(curl -sL -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "$BASE") || code="000"
+            if [ "$code" = "200" ]; then echo "cloudflare healthy ($code) at $BASE"; exit 0; fi
             echo "attempt $i: HTTP $code"; sleep 10
           done
-          echo "::error::Cloudflare health check failed after deploy"; exit 1
+          echo "::error::Cloudflare health check failed after deploy: $BASE never returned 200"; exit 1
 
   # ── PR preview → Cloudflare version preview URL ──────────────────────────
   # Gives back the per-PR preview URLs that Cloudflare's Workers Builds git

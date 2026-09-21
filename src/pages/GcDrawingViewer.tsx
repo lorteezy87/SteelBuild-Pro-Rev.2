@@ -1,12 +1,16 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FileText, RotateCcw, RotateCw, Search, ZoomIn, ZoomOut } from "lucide-react";
+import { FileText, Layers, RotateCcw, RotateCw, Search, ZoomIn, ZoomOut } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 import { usePdfLoader } from "@/pages/drawingViewer/usePdfLoader";
 import { usePdfRenderer } from "@/pages/drawingViewer/usePdfRenderer";
 import { drawingViewerStyles } from "@/pages/drawingViewer/drawingViewerStyles";
 import RenderSkeleton from "@/components/drawings/viewer/RenderSkeleton";
 import { useGcDrawingsList, type GcViewerDrawing } from "@/pages/gcDrawingViewer/useGcDrawingsList";
+import { useGcDrawingSets } from "@/pages/gcDrawingViewer/useGcDrawingSets";
+
+// Compare pulls in pdfjs rasterization and is opened deliberately, not on load.
+const GcCompareModal = lazy(() => import("@/pages/gcDrawingViewer/GcCompareModal"));
 
 /**
  * GcDrawingViewer — read-only viewer for GC-issued documents.
@@ -45,11 +49,21 @@ export default function GcDrawingViewer() {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
 
-  const { filtered, activeDrawing, isLoading } = useGcDrawingsList({
+  const { drawings, filtered, activeDrawing, isLoading } = useGcDrawingsList({
     projectId,
     activeId,
     search,
   });
+  const { sets } = useGcDrawingSets(projectId);
+
+  const [compareOpen, setCompareOpen] = useState(false);
+
+  // Switching sheets must close compare. The modal resolves its candidates from
+  // whichever sheet is active, so leaving it open across a switch would swap the
+  // pair out from under a comparison the user is mid-way through reading.
+  useEffect(() => {
+    setCompareOpen(false);
+  }, [activeDrawing?.id]);
 
   const setActiveId = useCallback(
     (id: string) => {
@@ -235,6 +249,22 @@ export default function GcDrawingViewer() {
 
             <span style={{ flex: 1 }} />
 
+            <button
+              type="button"
+              className="sbd-btn-ghost"
+              title="Compare this sheet against another issuance of it"
+              disabled={!activeDrawing}
+              onClick={() => setCompareOpen(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800,
+                letterSpacing: "0.06em", textTransform: "uppercase",
+                opacity: activeDrawing ? 1 : 0.45,
+              }}
+            >
+              <Layers size={13} /> Compare
+            </button>
+
             <button type="button" className="sbd-btn-ghost" title="Zoom out"
               onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}>
               <ZoomOut size={14} />
@@ -321,6 +351,18 @@ export default function GcDrawingViewer() {
           </div>
         </main>
       </div>
+
+      {compareOpen && (
+        <Suspense fallback={null}>
+          <GcCompareModal
+            open={compareOpen}
+            onClose={() => setCompareOpen(false)}
+            active={activeDrawing ?? null}
+            sheets={drawings}
+            sets={sets}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

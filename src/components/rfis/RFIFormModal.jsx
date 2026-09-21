@@ -4,6 +4,7 @@ import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNextFormattedNumber } from "../shared/numberSequencing";
+import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import { RFI_TYPES, buildRfiPreflight } from "@/lib/rfiPreflight";
@@ -490,9 +491,15 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
               </select>
             </Field>
             <Field label="Ball in Court">
-              <DarkSelect value={formData.ball_in_court} onChange={(value) => set("ball_in_court", value)} options={["Contractor", "GC", "Engineer", "Architect", "Owner"].map((o) => ({ value: o, label: o }))} />
+              {/* Vocabulary comes from the shared list, which mirrors the DB CHECK.
+                  This menu used to offer "Engineer" -- a synonym for EOR that
+                  nothing stored and that APPROVER_CLASS_BIC does not recognise,
+                  so an RFI parked on it was invisible to the approver-class
+                  logic. It also disagreed with RfiBulkEditModal on the same
+                  field. */}
+              <DarkSelect value={formData.ball_in_court} onChange={(value) => set("ball_in_court", value)} options={BALL_IN_COURT_PARTIES.map((o) => ({ value: o, label: o }))} />
               <select style={{ display: "none" }} value={formData.ball_in_court} onChange={(e) => set("ball_in_court", e.target.value)}>
-                {["Contractor", "GC", "Engineer", "Architect", "Owner"].map((o) => <option key={o} value={o}>{o}</option>)}
+                {BALL_IN_COURT_PARTIES.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </Field>
             <Field label="Submitted By">
