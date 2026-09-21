@@ -117,7 +117,10 @@ describe("RFI operational signals", () => {
     const rfi = {
       id: "ops-1",
       status: "Open",
-      ball_in_court: "Engineer",
+      // Was "Engineer", which chk_rfis_ball_in_court rejects -- no row can
+      // hold it, so the fixture asserted a state production cannot reach.
+      // EOR is the storable party it was a synonym for.
+      ball_in_court: "EOR",
       date_required: isoOffset(2),
       work_package_id: "wp-42",
       metadata: {

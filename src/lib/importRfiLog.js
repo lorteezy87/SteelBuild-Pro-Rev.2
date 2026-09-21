@@ -15,6 +15,7 @@
 import { supabase } from "@/lib/supabase";
 import { integrations } from "@/api/supabaseClient";
 import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
+import { normalizeBallInCourt } from "@/lib/ballInCourt";
 
 const STORAGE_BUCKET  = "app-files";
 const MAX_PDF_BYTES   = 32 * 1024 * 1024;
@@ -280,7 +281,15 @@ export function buildRfiImportRows({ rfis = [], projectId, projectName, existing
       date_answered:  answered,
       status:         answered ? "Closed" : "Open",
       priority:       "Medium",
-      ball_in_court:  answered ? "Contractor" : (r.assigned_to || "Engineer"),
+      // assigned_to is free text from a spreadsheet -- often a PERSON ("John
+      // Doe, PE"), which is not a party and which chk_rfis_ball_in_court
+      // rejects, failing the whole row. Normalise it, and fall back to EOR
+      // (the synonym the old "Engineer" default meant) only when the column
+      // says nothing. The raw value is preserved in assigned_to above, so
+      // normalising loses no information.
+      ball_in_court:  answered
+        ? "Contractor"
+        : (normalizeBallInCourt(r.assigned_to) ?? "EOR"),
     });
   }
 
