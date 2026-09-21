@@ -17,13 +17,9 @@
 // Either dimension is DISABLED when its env var is unset or <= 0, so you can ship
 // with just a cost cap, just a request cap, or both.
 //
-// Failure policy: PER-CALL. If the usage read errors (Supabase REST hiccup,
-// missing env, migration not yet applied → 404) we either ALLOW (fail-open) or
-// DENY with 503 (fail-closed) depending on the caller's `failClosed` flag — set
-// for expensive document/image use-cases so a usage-read outage can't be used to
-// bypass the spend cap on the costly calls, while cheap calls keep the codebase's
-// "telemetry never breaks the user-facing request" rule. The over-limit verdict
-// is always a 429. The window is rolling, not calendar-day, so no reset cliff.
+// Configured limits fail closed whenever usage cannot be verified. Routing
+// labels supplied by a caller never weaken this boundary. Telemetry insertion
+// remains best-effort, so this aggregate is not an atomic spend reservation.
 //
 // Secrets required (already present for telemetry):
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -33,17 +29,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
-// This read sits on the PRE-DISPATCH hot path of every llm-proxy request, so it
-// must be bounded: fail-open covers errors/non-2xx, but NOT a hung connection
-// (PgBouncer/PostgREST stall). A short deadline turns a stall into a fast
-// fail-open instead of hanging the user's LLM call.
+// Bound the pre-dispatch usage read so database outages return a retryable 503.
 const READ_TIMEOUT_MS = 2000;
 
 function numEnv(name: string): number {
   const raw = Deno.env.get(name);
   if (!raw) return 0;
   const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  return Number.isFinite(n) && n >= 0 ? n : Number.NaN;
 }
 
 export interface QuotaDenied {
@@ -54,24 +47,7 @@ export interface QuotaDenied {
 }
 export type QuotaResult = { ok: true } | QuotaDenied;
 
-export interface QuotaOptions {
-  /**
-   * When true, an INABILITY TO VERIFY usage (config missing, REST error, timeout)
-   * denies the request (503) instead of failing open. Set for expensive use-cases
-   * (document/image extraction) so a usage-read outage can't be used to bypass the
-   * spend cap on the costly calls. Cheap calls stay fail-open so a telemetry hiccup
-   * never breaks the everyday user-facing request.
-   */
-  failClosed?: boolean;
-}
-
-/**
- * The usage read couldn't produce a verdict. Fail OPEN for cheap calls (the
- * codebase's "telemetry never breaks the request" rule); fail CLOSED (503) when
- * the caller flagged this as an expensive use-case.
- */
-function unavailable(failClosed?: boolean): QuotaResult {
-  if (!failClosed) return { ok: true };
+function unavailable(): QuotaResult {
   return {
     ok: false,
     status: 503,
@@ -82,12 +58,14 @@ function unavailable(failClosed?: boolean): QuotaResult {
 
 /**
  * Returns { ok: true } to proceed, or a QuotaDenied the caller renders as 429
- * (over limit) or 503 (can't verify + failClosed). Caller passes the
+ * (over limit) or 503 (cannot verify usage). Caller passes the
  * authenticated user id (from authenticateRequest).
  */
-export async function checkUserQuota(userId: string, opts: QuotaOptions = {}): Promise<QuotaResult> {
+export async function checkUserQuota(userId: string): Promise<QuotaResult> {
   const costLimit = numEnv("LLM_DAILY_COST_LIMIT_USD");
   const reqLimit  = numEnv("LLM_DAILY_REQUEST_LIMIT");
+
+  if (!Number.isFinite(costLimit) || !Number.isFinite(reqLimit)) return unavailable();
 
   // Both caps off → nothing to enforce. Skip the round trip entirely. (Nothing to
   // fail closed about — there is no configured limit to protect.)
@@ -97,7 +75,7 @@ export async function checkUserQuota(userId: string, opts: QuotaOptions = {}): P
   const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceKey) {
     console.error("[llm-proxy] quota skipped: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing");
-    return unavailable(opts.failClosed);
+    return unavailable();
   }
 
   const sinceIso = new Date(Date.now() - WINDOW_MS).toISOString();
@@ -111,12 +89,12 @@ export async function checkUserQuota(userId: string, opts: QuotaOptions = {}): P
         "Authorization": `Bearer ${serviceKey}`,
       },
       body: JSON.stringify({ p_user_id: userId, p_since: sinceIso }),
-      // Bound the hot-path read; an AbortError (timeout) lands in the catch → fail-open.
+      // A timeout also fails closed.
       signal: AbortSignal.timeout(READ_TIMEOUT_MS),
     });
     if (!resp.ok) {
       console.error(`[llm-proxy] quota read ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
-      return unavailable(opts.failClosed);
+      return unavailable();
     }
 
     // The TABLE-returning RPC yields a one-row array. numeric (cost_sum) is
@@ -124,8 +102,10 @@ export async function checkUserQuota(userId: string, opts: QuotaOptions = {}): P
     // both it and the bigint count.
     const rows = (await resp.json()) as Array<{ request_count: number | string; cost_sum: number | string | null }>;
     const row = Array.isArray(rows) ? rows[0] : undefined;
-    const requestCount = Number(row?.request_count) || 0;
-    const costSum      = Number(row?.cost_sum) || 0;
+    if (!row || row.request_count == null || row.cost_sum == null) return unavailable();
+    const requestCount = Number(row.request_count);
+    const costSum = Number(row.cost_sum);
+    if (!Number.isFinite(requestCount) || requestCount < 0 || !Number.isFinite(costSum) || costSum < 0) return unavailable();
 
     const overCost = costLimit > 0 && costSum >= costLimit;
     const overReq  = reqLimit  > 0 && requestCount >= reqLimit;
@@ -150,6 +130,6 @@ export async function checkUserQuota(userId: string, opts: QuotaOptions = {}): P
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[llm-proxy] quota check threw: ${msg}`);
-    return unavailable(opts.failClosed);
+    return unavailable();
   }
 }

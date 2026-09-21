@@ -40,7 +40,7 @@ project-export is deployed with JWT verification. Its ALLOWED_ORIGINS setting ex
 
 ## CI deployment and browser checks
 
-deploy-staging-cloudflare runs after ci only on a push to staging with STAGING_ENABLED=true. It builds from staging-only Supabase secrets, verifies the exact project URL and separate Worker name, deploys with wrangler.staging.jsonc, then checks the staging URL.
+deploy-staging-cloudflare runs after ci, secret-scan and edge-typecheck, only on a push to staging with STAGING_ENABLED=true. It builds from staging-only Supabase secrets, verifies the exact project URL and separate Worker name, deploys with wrangler.staging.jsonc, then checks the staging URL.
 
 The read-only and disposable-mutation E2E jobs both depend on that deploy and retain explicit staging-branch/push gates. E2E rejects the production app host and production database even if the expected project ref is misconfigured.
 
@@ -56,7 +56,9 @@ Run supabase/tests/pending_issue_permissions.sql with psql and ON_ERROR_STOP aga
 
 ## Rollout and rollback
 
-Production changes require a reviewed release. Apply and stamp the two exact migration files in one transaction per file, then release the frontend through the main CI gate. The ownership manifest intentionally reports these versions missing until then.
+The #460 migrations (`20260921054458`, `20260921055027`) were approved, applied and stamped together in production on September 21; their ledger payload hashes match the committed SQL. #460 then passed production CI at `4837dd6bb` and deployed successfully. They are no longer pending.
+
+The separate launch-security migration `20260921080604` remains a candidate. Its boundary tests in `supabase/tests/launch_security_boundaries.sql` run in a rolled-back staging transaction; no permanent application is implied. Follow [the reviewed backend release runbook](reviewed-backend-release.md) for that next release.
 
 To reverse the access-policy change, restore the field-role INSERT policy and original field-role RPC guard. To reverse date synchronization, remove trg_sync_rfi_date_aliases and sync_rfi_date_aliases(); do not erase valid copied dates. Rehearse reversals on staging first.
 

@@ -6,7 +6,7 @@ Finding: [H27] (no incident detection/response process)
 
 Refs:
 - Production: `https://steelbuild-pro.com`
-- Vercel project: `steelbuildpro-og`
+- Cloudflare Worker: `steelbuild-pro-rev-2`
 - Supabase project: `kjrwqagyeswwoxpjkcko`
 - GitHub repo: `lorteezy87/SteelBuild-Pro-Rev.2`
 - Primary on-call / owner: **nickl@shsteelaz.com** (+ SMS)
@@ -19,7 +19,7 @@ Incidents are detected by, in rough priority order:
 
 1. **Uptime monitor** (UptimeRobot / Checkly — see owner-checklist H27) on `https://steelbuild-pro.com` + a health endpoint → alert to email + SMS on failure.
 2. **Sentry alerts** (owner-checklist H7): new-issue alert and error-rate-spike alert → email + SMS.
-3. **Supabase / Vercel status** (vendor status pages + dashboards).
+3. **Supabase / Cloudflare status** (vendor status pages + dashboards).
 4. **Stripe dashboard** (payment/webhook failures).
 5. **User report** (support@ mailbox — owner-checklist L27).
 
@@ -41,17 +41,17 @@ When in doubt, **round up** one level.
 
 ## 3. Per-dependency playbooks
 
-### 3.A Vercel — bad deploy / frontend broken
+### 3.A Cloudflare Workers — bad deploy / frontend broken
 Symptoms: site errors right after a deploy; new JS bundle throwing.
-1. Confirm the last deploy time correlates with onset (Vercel dashboard → Deployments).
-2. **Instant Rollback**: Vercel dashboard → Deployments → select the last-known-good production deployment → **Promote to Production** (instant, no rebuild). CLI equivalent: `vercel rollback` (or `vercel rollback <deployment-url>`).
-3. Because Vercel git auto-deploy is **off** and CI is the sole deploy path, do **not** just re-push — first roll back to restore users, then fix forward on a branch and let CI redeploy.
-4. Verify prod loads; capture the bad SHA and root-cause it before re-deploying.
+1. Confirm the last production CI deployment correlates with the onset; record its commit and Cloudflare version ID.
+2. Follow [the rollback runbook](rollback.md#frontend-deployment) to select the recorded last known-good version of `steelbuild-pro-rev-2` in Cloudflare Workers. Confirm the environment and version before publishing the rollback.
+3. Keep Workers Builds disconnected; CI remains the normal deployment path. Fix forward on a reviewed branch once users are restored.
+4. Verify login, a project route and its JavaScript assets, not just the root HTTP status. Preserve the failed SHA and error evidence.
 
 ### 3.B Supabase — database / API outage
 Symptoms: app loads but all data calls fail; auth fails.
 1. Check the **Supabase status page** and project dashboard health.
-2. If **vendor outage**: nothing to fix in-app — post status (Section 4), monitor, wait for vendor recovery. The frontend stays up (Vercel) but shows data errors.
+2. If **vendor outage**: nothing to fix in-app — post status (Section 4), monitor, wait for vendor recovery. The frontend stays up (Cloudflare Workers) but shows data errors.
 3. If **project-specific** (e.g. connection exhaustion, a bad migration, corruption): see `backup-dr.md` (PITR in-place for bad-write/corruption; restore-to-new for project loss).
 4. If **connection exhaustion**: review pooler settings / recent query changes; consider the Auth connection-allocation fix (owner-checklist L19).
 
@@ -77,7 +77,7 @@ Symptoms: `llm_telemetry` volume/cost spiking; suspected loop or abuse.
 4. Once contained, clear the kill switch (`LLM_KILL_SWITCH=0` / unset) and confirm normal calls resume (an `llm_telemetry` success row).
 
 ### 3.F Suspected data breach / cross-tenant leak (SEV1)
-1. **Contain**: if a specific vector is known (a leaking endpoint/query/RLS gap), disable the path. For LLM data exposure, `LLM_KILL_SWITCH=1`. Rotate any exposed keys/tokens immediately (Vercel token, Supabase keys, provider keys, Stripe keys).
+1. **Contain**: if a specific vector is known (a leaking endpoint/query/RLS gap), disable the path. For LLM data exposure, `LLM_KILL_SWITCH=1`. Rotate any exposed keys/tokens immediately (Cloudflare deployment token, Supabase keys, provider keys, Stripe keys).
 2. **Preserve evidence**: snapshot logs (Sentry, edge logs, `activities` audit trail) before they roll off.
 3. **Assess scope**: which tenants, which data, over what window.
 4. **Notify**: follow the breach-notification SLA (**72 hours** — see `assurance-pack.md`). Engage counsel; notify affected orgs and any required authorities.
