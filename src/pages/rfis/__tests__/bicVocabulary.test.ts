@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { BIC_PARTIES, BIC_COLORS } from "../constants";
 import { BALL_IN_COURT_PARTIES, isValidBallInCourt } from "@/lib/ballInCourt";
 import { rfiOperationalSignals } from "../rfiControlCenter.derive";
+import { BIC_COLOR } from "@/components/design-system/tokens";
 
 /**
  * chk_rfis_ball_in_court is live and validated. DetailPanel writes
@@ -68,4 +69,37 @@ describe("unansweredExternal classification", () => {
       expect(rfiOperationalSignals(openRfi(party)).unansweredExternal).toBe(false);
     },
   );
+});
+
+/**
+ * There are TWO ball-in-court colour maps and they feed different surfaces:
+ *   BIC_COLORS (pages/rfis/constants.js) -> the RFI DetailPanel chips
+ *   BIC_COLOR  (components/design-system/tokens.js) -> BicPill, used on
+ *              RfiRow and AgendaPanel
+ * Both read rfis.ball_in_court, so a party missing from either renders wrong
+ * on that surface while looking right on the other. BIC_COLOR held only the
+ * five original keys, "Engineer" among them, so Subcontractor / Detailer /
+ * EOR / AOR fell through BicPill's `|| var(--text-muted)` to neutral grey.
+ */
+describe("BicPill colour map", () => {
+  it("has a hue for every party a row can hold", () => {
+    for (const party of BALL_IN_COURT_PARTIES) {
+      expect(BIC_COLOR[party], `${party} has no hue`).toBeDefined();
+    }
+  });
+
+  it("carries no hue for a party that cannot be stored", () => {
+    expect(BIC_COLOR).not.toHaveProperty("Engineer");
+  });
+
+  it("gives each party a distinct hue", () => {
+    // Two parties sharing a hue defeats the point of the chip.
+    const hues = BALL_IN_COURT_PARTIES.map((p) => BIC_COLOR[p]);
+    expect(new Set(hues).size).toBe(hues.length);
+  });
+
+  it("agrees with the DetailPanel map on which parties exist", () => {
+    // The two maps may differ on hue, never on membership.
+    expect(Object.keys(BIC_COLOR).sort()).toEqual(Object.keys(BIC_COLORS).sort());
+  });
 });

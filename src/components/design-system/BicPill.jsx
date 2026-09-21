@@ -1,8 +1,13 @@
 /**
- * BicPill — ball-in-court chip. One of five party types each with a
- * distinct semantic color (Contractor gold / GC blue / Engineer teal /
- * Architect darker teal / Owner green). Mono uppercase like StatusPill
- * but slightly smaller (8pt).
+ * BicPill — ball-in-court chip. One chip per BALL_IN_COURT_PARTIES member,
+ * each with a distinct semantic hue from BIC_COLOR.
+ *
+ * The map used to hold only five parties, including "Engineer", which no row
+ * can store. The four parties rows CAN hold but it lacked — Subcontractor,
+ * Detailer, EOR, AOR — fell through to the `var(--text-muted)` default below,
+ * so on an RFI row and in the agenda they rendered as neutral grey: readable,
+ * and indistinguishable from "nobody in particular". A test asserts the map
+ * stays complete against the vocabulary.
  */
 
 import React from "react";
