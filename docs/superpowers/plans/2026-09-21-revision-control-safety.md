@@ -399,9 +399,6 @@ npm run supabase:drift
 
 Expected: PASS with no drift.
 
-```bash
-```
-
 Stage the one stamped migration safely in PowerShell:
 
 ```powershell
