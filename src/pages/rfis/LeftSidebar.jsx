@@ -12,7 +12,7 @@
 
 import React from "react";
 import { parseUTCDate } from "@/components/shared/formatters";
-import { mono, BIC_COLORS } from "./constants";
+import { mono, BIC_COLORS, UNASSIGNED_BIC_COLORS } from "./constants";
 import { isClosed } from "./utils";
 
 const AGING_ROWS = [
@@ -41,7 +41,7 @@ export default function LeftSidebar({
         <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>Ball in Court</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {bicCounts.map(({ party, count }) => {
-            const cfg = BIC_COLORS[party] || BIC_COLORS.Contractor;
+            const cfg = BIC_COLORS[party] || UNASSIGNED_BIC_COLORS;
             return (
               <div key={party} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} onClick={() => setFilterBIC(party)}>
                 <div style={{ flex: 1 }}>
@@ -107,7 +107,7 @@ export default function LeftSidebar({
           })
           .sort((a, b) => new Date(a.date_required + "T00:00:00") - new Date(b.date_required + "T00:00:00"))
           .map((r) => {
-            const cfg = BIC_COLORS[r.ball_in_court || "Contractor"] || BIC_COLORS.Contractor;
+            const cfg = BIC_COLORS[r.ball_in_court || "Unassigned"] || UNASSIGNED_BIC_COLORS;
             const due = parseUTCDate(r.date_required);
             const diff = Math.ceil((due - new Date()) / 86400000);
             const badgeColor = diff <= 3 ? "var(--status-error)" : "var(--status-warning)";
@@ -116,7 +116,7 @@ export default function LeftSidebar({
                 <div style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>{r.rfi_number}</div>
                 <div style={{ fontSize: 10, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4 }}>
-                  <span style={{ ...mono, fontSize: 8, background: cfg.bg, color: cfg.text, padding: "2px 6px", borderRadius: 4 }}>{r.ball_in_court || "Contractor"}</span>
+                  <span style={{ ...mono, fontSize: 8, background: cfg.bg, color: cfg.text, padding: "2px 6px", borderRadius: 4 }}>{r.ball_in_court || "Unassigned"}</span>
                   <span style={{ ...mono, fontSize: 8, color: badgeColor, fontWeight: 700 }}>{diff <= 0 ? "TODAY" : `${diff}d`}</span>
                 </div>
               </div>

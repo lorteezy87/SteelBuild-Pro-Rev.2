@@ -84,7 +84,7 @@ export default function UserSettingsTab({ user, workspaceRole }) {
           </div>
           <div>
             <label style={S.label}>Company</label>
-            <input style={S.input} value={form.company} onChange={e => set('company', e.target.value)} placeholder="e.g. S&H Steel" />
+            <input style={S.input} value={form.company} onChange={e => set('company', e.target.value)} placeholder="e.g. Acme Steel" />
           </div>
           <div>
             <label style={S.label}>Phone</label>

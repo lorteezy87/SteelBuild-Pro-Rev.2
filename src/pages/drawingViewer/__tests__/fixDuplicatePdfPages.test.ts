@@ -115,6 +115,39 @@ describe("fixDuplicatePdfPages — partial collisions", () => {
     expect(out.c).toBe(3); // nearest free page
   });
 
+  // Reported by Codex review on PR #454, after merge. A sheet whose stored page
+  // nothing else claims must never be moved to make room for a duplicate: the
+  // duplicate took the nearest free page, which was S-3's, and pushed S-3 off a
+  // page that was already correct. The row that was right is the one that lost.
+  it("never displaces a sheet whose stored page was uncontested", () => {
+    const rows = [
+      shop("a", "S-1", 1),
+      shop("b", "S-2", 1), // collides with S-1
+      shop("c", "S-3", 2), // uniquely holds page 2 — must keep it
+    ];
+    const out = mapping(fixDuplicatePdfPages(rows));
+    expect(out.c).toBe(2);
+    expect(out.a).toBe(1); // lower sheet number keeps the contested page
+    expect(out.b).toBe(3); // the duplicate moves, to the nearest page still free
+  });
+
+  // The same defect reaching downwards. The contested page is 2 and the free
+  // page nearest it is 1 — which S-3 already holds uniquely. Without the
+  // reserve pass the duplicate takes page 1 out from under S-3, and S-3 is
+  // pushed to 3: the sheet that was correct ends up two pages from where it
+  // belongs, and it is the lowest-numbered page that gets stolen.
+  it("does not let a duplicate take a lower page that is already held", () => {
+    const rows = [
+      shop("hi_a", "S-1", 2),
+      shop("hi_b", "S-2", 2), // collides with S-1
+      shop("lo", "S-3", 1), // uniquely holds page 1
+    ];
+    const out = mapping(fixDuplicatePdfPages(rows));
+    expect(out.lo).toBe(1);
+    expect(out.hi_a).toBe(2);
+    expect(out.hi_b).toBe(3);
+  });
+
   it("returns a new array only when it actually changed something", () => {
     const clean = [shop("a", "S-1", 1), shop("b", "S-2", 2)];
     expect(fixDuplicatePdfPages(clean)).toBe(clean);
