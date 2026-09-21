@@ -50,8 +50,15 @@ describe("revoke link_unlinked_model_elements_for_piece EXECUTE", () => {
   it("has no caller in the app or Edge Functions, which would now get 42501", () => {
     // The revoke is safe only because the definer trigger is the sole caller.
     // A direct .rpc() call added later would fail for every signed-in user.
+    //
+    // src/types/supabase.ts is excluded: it is generated from the Postgres
+    // catalog, which lists every function regardless of who may EXECUTE it, so
+    // the name appears there as a type declaration. Declaring a signature is
+    // not calling it — this scan is looking for a caller.
+    const GENERATED_TYPES = path.resolve(process.cwd(), "src/types/supabase.ts");
     const callers = ["src", "supabase/functions"]
       .flatMap((dir) => sourceFiles(path.resolve(process.cwd(), dir)))
+      .filter((file) => file !== GENERATED_TYPES)
       .filter((file) =>
         fs.readFileSync(file, "utf8").includes("link_unlinked_model_elements_for_piece"),
       );
