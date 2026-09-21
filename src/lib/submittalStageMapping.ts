@@ -93,7 +93,7 @@ export interface StageSubmittalPair {
 
 /** BIC discriminator classes — used to split status buckets by ownership. */
 const DETAILER_CLASS_BIC: ReadonlySet<string> = new Set([
-  "Detailer", "S&H", "Contractor", "Subcontractor",
+  "Detailer", "Contractor", "Subcontractor",
 ]);
 const APPROVER_CLASS_BIC: ReadonlySet<string> = new Set(["EOR", "Architect", "AOR"]);
 const DOWNSTREAM_CLASS_BIC: ReadonlySet<string> = new Set(["GC", "Owner"]);

@@ -1,4 +1,5 @@
 import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldAlert, Send, ListChecks, Workflow } from "lucide-react";
+import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { DRAFTING_STATES, effectiveDetailingState, hasGoverningSubmittal, isPackageReleasedForFab, isPackageRR } from "@/lib/detailingPackageState";
@@ -79,13 +80,9 @@ export const CLOSED_SUBMITTAL_STATUSES = new Set([
   "Void",
 ]);
 
-// Ball-in-court choices — matches the canonical list used in submittal modals
-// (src/components/submittals/NewRoundModal.jsx).
-export const BIC_CHOICES = [
-  "Detailer", "S&H", "Contractor", "Subcontractor",
-  "EOR", "Architect", "AOR",
-  "GC", "Owner",
-];
+// Ball-in-court choices — re-exported from the one vocabulary, so a picker can
+// never offer a value the DB CHECK constraints reject.
+export const BIC_CHOICES = BALL_IN_COURT_PARTIES;
 
 export const ACTION_STATUSES = new Set([
   "Rejected",

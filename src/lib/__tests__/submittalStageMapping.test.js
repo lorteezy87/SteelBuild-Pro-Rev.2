@@ -21,7 +21,7 @@ describe("submittalStatusToStage", () => {
   describe("Submitted / Under Review", () => {
     it("maps to IFA when bic is Detailer-class", () => {
       expect(submittalStatusToStage("Submitted",   "Detailer",   null)).toBe("IFA");
-      expect(submittalStatusToStage("Submitted",   "S&H",        null)).toBe("IFA");
+      expect(submittalStatusToStage("Submitted",   "Subcontractor", null)).toBe("IFA");
       expect(submittalStatusToStage("Submitted",   "Contractor", null)).toBe("IFA");
       expect(submittalStatusToStage("Under Review","Detailer",   null)).toBe("IFA");
     });
@@ -52,7 +52,7 @@ describe("submittalStatusToStage", () => {
 
     it("maps to OFS when bic is Detailer-class (post-approval scrub)", () => {
       expect(submittalStatusToStage("Approved",          "Detailer",   null)).toBe("OFS");
-      expect(submittalStatusToStage("Approved",          "S&H",        null)).toBe("OFS");
+      expect(submittalStatusToStage("Approved",          "Subcontractor", null)).toBe("OFS");
       expect(submittalStatusToStage("Approved",          "Contractor", null)).toBe("OFS");
       expect(submittalStatusToStage("Approved as Noted", "Detailer",   null)).toBe("OFS");
     });

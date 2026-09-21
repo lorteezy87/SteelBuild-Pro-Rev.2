@@ -299,7 +299,7 @@ export function buildOperationalGraphHealth({
         sourceId: set.id,
         sourceLabel: label,
         title: "Drawing set has no linked submittal",
-        detail: "S&H workflow treats submittals as wrappers around drawing sets. This set will be tracked manually unless it is linked to a submittal.",
+        detail: "This workflow treats submittals as wrappers around drawing sets. This set will be tracked manually unless it is linked to a submittal.",
         recommendedAction: "Link this drawing set to the current submittal transmission.",
         duplicateRisk: true,
         ruleKey: "submittals-reference-drawing-sets",

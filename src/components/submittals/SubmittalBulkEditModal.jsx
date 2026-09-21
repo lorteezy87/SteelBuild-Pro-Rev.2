@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 
 const STATUSES = [
   "Draft",
@@ -12,17 +13,7 @@ const STATUSES = [
   "Void",
 ];
 
-const BIC_CHOICES = [
-  "Detailer",
-  "S&H",
-  "Contractor",
-  "Subcontractor",
-  "EOR",
-  "Architect",
-  "AOR",
-  "GC",
-  "Owner",
-];
+const BIC_CHOICES = BALL_IN_COURT_PARTIES;
 
 const TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
 

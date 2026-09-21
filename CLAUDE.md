@@ -41,6 +41,17 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 - SECURITY DEFINER functions must set `search_path` explicitly.
 - Known-fixed classes of bugs (do not reintroduce): feature_flags privilege escalation, vendors blanket-true policies.
 
+## Applying a migration — the file lands with the stamp, DO NOT regress
+`supabase db push` **cannot run against this project**: 42 versions in the remote ledger have no local file (41 of them owned by the sibling 2026 app), and the CLI refuses rather than understanding a database two repos share. Its own suggested remedy, `migration repair --status reverted`, would mark those applied migrations as reverted and **corrupt the ledger for both apps** — never run it. MCP `apply_migration` is also out: it stamps its own apply-time version, which is how the ledger drifted from the repo in the first place.
+
+So migrations here are applied and stamped by hand, and *that* is what makes the ordering a rule rather than a nicety:
+
+- **Commit the file in the same change that applies the migration — file first if anything.** `Supabase drift check` reads production's ledger against the repo's `supabase/migrations/` on **every branch**, so a stamp whose file is still unmerged turns `main` red *and* every open PR red, each one a PR whose own diff is innocent. This has happened three times in two days: `20260919082758` (#441), `20260920014500` (#445), `20260921034212` (#455). Each cost several sessions a red-CI diagnosis.
+- **The name must be the stamped ledger version**, not the authoring timestamp — the check matches local filenames against remote versions.
+- **Verify the committed file against the ledger payload** (`supabase_migrations.schema_migrations.statements`) rather than trusting that it is what ran. Hash it.
+- **Never clear a drift failure by weakening the check** — no manifest override, no exclusion, no deleting the stamp. Production holding an asset the repo can't account for is exactly the condition the check exists to catch on a shared database. Land the file.
+- If a drift failure names a version another branch already carries, **port that file alone** (byte-identical, so neither branch conflicts) instead of waiting for that PR to merge.
+
 ## Number-sequence integrity — DO NOT regress
 Official record numbers (RFI/CO/submittal/…) come ONLY from the atomic DB RPC `get_next_sequence_number` — never derive the next number client-side. `src/components/shared/numberSequencing.jsx` once floored the RPC with a client-side `Math.max()`, which could mint duplicate numbers under concurrency; that was removed (fixed c5612168) — `getNextFormattedNumber` now re-allocates from the RPC until it clears any existing records, and fails closed if the RPC is unavailable. Keep it RPC-only. Gated by a hook (see `.claude/hooks/`).
 
