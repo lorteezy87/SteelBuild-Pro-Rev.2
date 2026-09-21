@@ -79,7 +79,11 @@ export interface RfiOperationalSignals {
 }
 
 const OPEN_STATUSES = new Set(["Open", "Under Review", "Incomplete Response"]);
-const EXTERNAL_BIC = new Set(["GC", "Engineer", "Architect", "Owner"]);
+// Parties outside our own shop. "Engineer" was here but no row can hold it --
+// chk_rfis_ball_in_court rejects it -- while EOR and AOR, which rows CAN hold,
+// were missing, so an RFI parked on either counted as internal and never
+// showed as awaiting an outside response.
+const EXTERNAL_BIC = new Set(["GC", "EOR", "AOR", "Architect", "Owner"]);
 const SETTLED_STATUSES = new Set(["Closed", "Void"]);
 
 /** Whole days from today (UTC-midnight basis) until `dateStr`; null if absent/invalid. */
