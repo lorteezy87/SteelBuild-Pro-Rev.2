@@ -32,6 +32,8 @@ const PAGE = PAGE_SIZE;
 interface Recorded {
   table: string;
   columns: string;
+  /** The column `.in()` filtered on — how the tests prove revision scoping. */
+  inColumn: string;
   ids: string[];
   orders: string[];
   ranges: { from: number; to: number }[];
@@ -45,11 +47,11 @@ interface Recorded {
 function serve(rowsFor: (table: string, ids: string[]) => Record<string, unknown>[], error?: unknown) {
   const calls: Recorded[] = [];
   from.mockImplementation((table: string) => {
-    const rec: Recorded = { table, columns: "", ids: [], orders: [], ranges: [], filters: {} };
+    const rec: Recorded = { table, columns: "", inColumn: "", ids: [], orders: [], ranges: [], filters: {} };
     calls.push(rec);
     const chain = {
       select: (columns: string) => { rec.columns = columns; return chain; },
-      in: (_c: string, ids: string[]) => { rec.ids = ids; return chain; },
+      in: (column: string, ids: string[]) => { rec.inColumn = column; rec.ids = ids; return chain; },
       eq: (column: string, value: unknown) => { rec.filters[column] = value; return chain; },
       order: (column: string) => { rec.orders.push(column); return chain; },
       range: (start: number, end: number) => {
@@ -74,6 +76,18 @@ const signoff = (i: number) => ({
   id: `s-${i}`, drawing_id: "d-1", stamped_by_name: `Approver ${i}`,
   stamped_at: "2026-09-02T00:00:00Z", stamp_type: "approved",
 });
+
+/** Serves the current-revision lookup plus the sign-offs behind it. */
+function serveSignoffs(
+  currentRevisionIds: string[],
+  signoffRows: Record<string, unknown>[],
+  error?: unknown,
+) {
+  return serve((table) => {
+    if (table === "drawing_revisions") return currentRevisionIds.map((id) => ({ id }));
+    return signoffRows;
+  }, error);
+}
 
 beforeEach(() => from.mockReset());
 
@@ -123,24 +137,28 @@ describe("markup rows — the export's redlines", () => {
 });
 
 describe("sign-off rows — columns that never existed", () => {
+  const CURRENT = ["rev-current"];
+
   it("selects the columns the table actually has", async () => {
-    const calls = serve(() => [signoff(0)]);
+    const calls = serveSignoffs(CURRENT, [signoff(0)]);
     await fetchSignoffRows(["d-1"]);
-    expect(calls[0].columns).toContain("stamped_by_name");
-    expect(calls[0].columns).toContain("stamped_at");
-    expect(calls[0].columns).toContain("stamp_type");
+    const signoffCall = calls.find((c) => c.table === "drawing_signoffs")!;
+    expect(signoffCall.columns).toContain("stamped_by_name");
+    expect(signoffCall.columns).toContain("stamped_at");
+    expect(signoffCall.columns).toContain("stamp_type");
   });
 
   it("never asks for signed_by / signed_at / status, which PostgREST rejects", async () => {
-    const calls = serve(() => [signoff(0)]);
+    const calls = serveSignoffs(CURRENT, [signoff(0)]);
     await fetchSignoffRows(["d-1"]);
-    expect(calls[0].columns).not.toMatch(/\bsigned_by\b/);
-    expect(calls[0].columns).not.toMatch(/\bsigned_at\b/);
-    expect(calls[0].columns).not.toMatch(/\bstatus\b/);
+    const signoffCall = calls.find((c) => c.table === "drawing_signoffs")!;
+    expect(signoffCall.columns).not.toMatch(/\bsigned_by\b/);
+    expect(signoffCall.columns).not.toMatch(/\bsigned_at\b/);
+    expect(signoffCall.columns).not.toMatch(/\bstatus\b/);
   });
 
   it("maps the real columns onto the shape the PDF helper renders", async () => {
-    serve(() => [signoff(7)]);
+    serveSignoffs(CURRENT, [signoff(7)]);
     const [row] = await fetchSignoffRows(["d-1"]);
     expect(row).toEqual({
       drawing_id: "d-1",
@@ -151,18 +169,57 @@ describe("sign-off rows — columns that never existed", () => {
   });
 
   it("excludes voided stamps — a retracted stamp must not print as a sign-off", async () => {
-    const calls = serve(() => [signoff(0)]);
+    const calls = serveSignoffs(CURRENT, [signoff(0)]);
     await fetchSignoffRows(["d-1"]);
-    expect(calls[0].filters.is_voided).toBe(false);
+    expect(calls.find((c) => c.table === "drawing_signoffs")!.filters.is_voided).toBe(false);
   });
 
   it("pages past one page of sign-offs", async () => {
-    serve(() => Array.from({ length: PAGE + 5 }, (_, i) => signoff(i)));
+    serveSignoffs(CURRENT, Array.from({ length: PAGE + 5 }, (_, i) => signoff(i)));
     expect(await fetchSignoffRows(["d-1"])).toHaveLength(PAGE + 5);
   });
 
   it("throws rather than silently exporting a PDF with an empty sign-off block", async () => {
-    serve(() => [signoff(0)], { message: "read failed" });
-    await expect(fetchSignoffRows(["d-1"])).rejects.toThrow(/sign-off rows/);
+    serveSignoffs(CURRENT, [signoff(0)], { message: "read failed" });
+    await expect(fetchSignoffRows(["d-1"])).rejects.toThrow(/current revisions|sign-off rows/);
+  });
+});
+
+/**
+ * Revision scoping. Sign-offs belong to a revision, not a sheet — printing one
+ * from a superseded revision under the current one asserts an approval nobody
+ * gave, on a document that goes to the shop. Found by a Codex review of this PR.
+ */
+describe("sign-off rows — scoped to the current revision", () => {
+  it("filters on drawing_revision_id, never on drawing_id", async () => {
+    const calls = serveSignoffs(["rev-current"], [signoff(0)]);
+    await fetchSignoffRows(["d-1"]);
+    const signoffCall = calls.find((c) => c.table === "drawing_signoffs")!;
+    expect(signoffCall.inColumn).toBe("drawing_revision_id");
+    expect(signoffCall.ids).toEqual(["rev-current"]);
+  });
+
+  it("asks drawing_revisions only for the rows marked is_current", async () => {
+    const calls = serveSignoffs(["rev-current"], [signoff(0)]);
+    await fetchSignoffRows(["d-1"]);
+    const revisionCall = calls.find((c) => c.table === "drawing_revisions")!;
+    expect(revisionCall.filters.is_current).toBe(true);
+    expect(revisionCall.inColumn).toBe("drawing_id");
+  });
+
+  it("returns nothing for a sheet with no current revision, rather than every stamp it ever had", async () => {
+    const calls = serveSignoffs([], [signoff(0)]);
+    expect(await fetchSignoffRows(["d-1"])).toEqual([]);
+    // No revision ids to filter by, so the sign-off table is never queried —
+    // the old drawing-scoped query would have returned the superseded stamps.
+    expect(calls.some((c) => c.table === "drawing_signoffs")).toBe(false);
+  });
+
+  it("chunks the revision-id filter, not the drawing-id filter", async () => {
+    const revisionIds = Array.from({ length: EXPORT_ID_CHUNK_SIZE + 2 }, (_, i) => `rev-${i}`);
+    const calls = serveSignoffs(revisionIds, []);
+    await fetchSignoffRows(["d-1"]);
+    const signoffChunks = calls.filter((c) => c.table === "drawing_signoffs").map((c) => c.ids.length);
+    expect(signoffChunks).toEqual([EXPORT_ID_CHUNK_SIZE, 2]);
   });
 });
