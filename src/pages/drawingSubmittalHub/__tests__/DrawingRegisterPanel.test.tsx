@@ -35,6 +35,16 @@ vi.mock('@/components/drawings/RevisionUploadModal', () => ({
       <button type="button" onClick={onComplete}>Finish revision upload</button>
     ),
 }));
+vi.mock('@/components/drawings/TitleblockMarkerModal', () => ({
+  default: ({ set, onClose }: {
+    set: { id: string; project_id: string; file_url: string; titleblock_title_rect: unknown };
+    onClose: () => void;
+  }) => <div role="dialog" aria-label="Titleblock marker" data-set-id={set.id}
+    data-project-id={set.project_id} data-file={set.file_url}
+    data-title-rect={JSON.stringify(set.titleblock_title_rect)}>
+    <button type="button" onClick={onClose}>Close marker</button>
+  </div>,
+}));
 
 const HUB = '/DrawingSubmittalHub?hub_tab=drawings';
 
@@ -59,15 +69,26 @@ function mount({
   onOpenSummary = vi.fn<(summary: unknown) => void>(),
   onRevisionUploaded = vi.fn<(pkgKey: string) => void>(),
   entries = [HUB],
+  locked = false,
 }: {
   onOpenSummary?: OpenSummary;
   onRevisionUploaded?: RevisionUploaded;
   entries?: string[];
+  locked?: boolean;
 } = {}) {
-  render(<MemoryRouter initialEntries={entries}><QueryClientProvider client={new QueryClient()}>
+  const parent = { id: 'set-1', project_id: 'p1', set_name: 'Main steel', is_locked: locked,
+    file_url: 'p1/main-steel.pdf', titleblock_title_rect: { x: 0.7, y: 0.8, width: 0.2, height: 0.1 } };
+  const sheet = { id: 'dwg-1', project_id: 'p1', drawing_set_id: 'set-1',
+    drawing_set_name: 'Main steel', sheet_number: 'S101', title: 'Framing', file_url: parent.file_url };
+  const client = new QueryClient();
+  client.setQueryData(['drawing_sets', 'p1'], [parent]);
+  client.setQueryData(['drawings', 'p1'], [sheet]);
+  client.setQueryData(['rfis', 'p1'], []);
+  client.setQueryData(['submittals', 'p1'], []);
+  render(<MemoryRouter initialEntries={entries}><QueryClientProvider client={client}>
     <DrawingRegisterPanel projectId="p1" setPackages={[{
-      key: 'set-1', setId: 'set-1', name: 'Main steel', parent: { id: 'set-1' },
-      sheets: [{ id: 'dwg-1' }], supersededSheets: [], submittals: [],
+      key: 'set-1', setId: 'set-1', name: 'Main steel', parent,
+      sheets: [sheet], supersededSheets: [], submittals: [],
     }]} activeProject={{ id: 'p1', name: 'Project One' }}
       drawingSets={[{ id: 'set-1', set_name: 'Main steel' }]}
       summariesBySet={new Map([['set-1', { summary, sheets_changed: 3 } as any]])}
@@ -208,6 +229,31 @@ describe('Drawing register workbench — the retired "full editor"', () => {
     // The whole point: nothing sends the user to a second register any more.
     expect(screen.queryByRole('link', { name: /full editor/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/full editor/i)).not.toBeInTheDocument();
+  });
+
+  it.each(['sheets', 'sets'])('opens the existing titleblock marker directly from the %s register', async (view) => {
+    mount({ entries: [`${HUB}&hub_view=${view}`] });
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark Titleblock for Main steel' }));
+    const marker = screen.getByRole('dialog', { name: 'Titleblock marker' });
+    expect(marker).toHaveAttribute('data-set-id', 'set-1');
+    expect(marker).toHaveAttribute('data-project-id', 'p1');
+    expect(marker).toHaveAttribute('data-file', 'p1/main-steel.pdf');
+    expect(JSON.parse(marker.getAttribute('data-title-rect')!)).toEqual({ x: 0.7, y: 0.8, width: 0.2, height: 0.1 });
+    expect(screen.queryByText('Upload Drawing Set')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Close marker' }));
+    expect(screen.queryByRole('dialog', { name: 'Titleblock marker' })).not.toBeInTheDocument();
+  });
+
+  it.each(['sheets', 'sets'])('keeps titleblock writes disabled for locked sets in the %s register', async (view) => {
+    mount({ entries: [`${HUB}&hub_view=${view}`], locked: true });
+    expect(await screen.findByRole('button', { name: 'Mark Titleblock for Main steel' })).toBeDisabled();
+  });
+
+  it.each(['sheets', 'sets'])('does not offer titleblock writes to viewers in the %s register', async (view) => {
+    canEdit = false;
+    mount({ entries: [`${HUB}&hub_view=${view}`] });
+    expect(await screen.findByRole('button', { name: /revised · 3/i })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /Mark Titleblock/i })).not.toBeInTheDocument();
   });
 
   it('keeps Bulk edit inert until sheets are actually selected', async () => {
