@@ -161,7 +161,12 @@ export function buildProjectExport(args: { project: Record<string, unknown>; tab
   const rowCounts: Record<string, number> = {};
   let totalRows = 0;
   for (const result of args.tableResults) {
-    const rows = Array.isArray(result.rows) ? result.rows : [];
+    const sourceRows = Array.isArray(result.rows) ? result.rows : [];
+    // Mailbox credentials are authentication material, not project records.
+    // Keep connection metadata and the v2 table shape, but never export tokens.
+    const rows = result.table === "email_accounts"
+      ? sourceRows.map(({ access_token: _access, refresh_token: _refresh, ...record }) => record)
+      : sourceRows;
     tables[result.table] = rows;
     rowCounts[result.table] = rows.length;
     totalRows += rows.length;

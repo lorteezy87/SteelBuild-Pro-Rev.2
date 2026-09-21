@@ -35,6 +35,7 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import type { SavedRevisionSummary } from "@/lib/revisionSummaryRepo";
 import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
 import { registerRowToDrawing, rowsNeedingProvisioning } from "./registerProvision";
+import { TitleblockActionButton } from "./TitleblockActionButton";
 import {
   buildRegisterDisplayRows,
   createDrawingRegisterIndex,
@@ -66,6 +67,7 @@ export interface DrawingRegisterGridPanelProps {
   summariesBySet?: Map<string, SavedRevisionSummary>;
   onRevisionUploaded?: (pkgKey: string) => void | Promise<void>;
   onOpenSummary?: (summary: SavedRevisionSummary["summary"]) => void;
+  onMarkTitleblock?: (setId: string) => void;
   /**
    * Sheet selection, owned by the workbench above this panel so the Bulk edit
    * action can act on it. Omitted (the standalone case) hides the column
@@ -163,6 +165,7 @@ export function DrawingRegisterGridPanel({
   summariesBySet = EMPTY_SUMMARIES,
   onRevisionUploaded,
   onOpenSummary,
+  onMarkTitleblock,
   selected,
   onToggleSelect,
   onToggleSelectAll,
@@ -355,6 +358,15 @@ export function DrawingRegisterGridPanel({
           </div>
           {showRevisionActions && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+              {canEdit && pkg.parent && onMarkTitleblock && (
+                <TitleblockActionButton
+                  setId={pkg.parent.id}
+                  setName={pkg.name}
+                  locked={!!pkg.parent.is_locked}
+                  onMarkTitleblock={onMarkTitleblock}
+                  style={{ padding: "2px 6px", fontSize: 9 }}
+                />
+              )}
               {savedSummary && onOpenSummary && (
                 <button
                   type="button"

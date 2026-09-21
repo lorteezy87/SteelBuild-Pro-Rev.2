@@ -21,7 +21,7 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 
 ## Deploy — Cloudflare Workers
 - **Production:** the static-asset Worker `steelbuild-pro-rev-2`, configured in `wrangler.jsonc`.
-- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after a green `ci` run. PRs get a Cloudflare preview.
+- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after green `ci`, `secret-scan`, `supabase-drift`, and `edge-typecheck` jobs. PRs get a Cloudflare preview.
 - **Custom domains:** `steelbuild-pro.com` and `www.steelbuild-pro.com`.
 - **Vercel is retired.** Don't reintroduce it.
 - **`wrangler.jsonc`:** keep `workers_dev` and `preview_urls` set explicitly. Adding `routes` silently turns both off, which once broke the post-deploy health check.
