@@ -507,8 +507,8 @@
     {
       "slug": "sheets-api",
       "owner": "lorteezy87/steelbuild-sheets-web",
-      "lifecycle": "required",
-      "evidence": "supabase/migrations/20260912023827_revoke_trigger_fn_execute_and_sheets_grants.sql documents the external source-of-truth repository and legitimate service-role caller"
+      "lifecycle": "deprecated",
+      "evidence": "Owner confirmed intentional retirement on 2026-09-21 after live inventory verified removal; see docs/runbooks/supabase-production-ownership.md#sheets-api-retirement. Historical owner and grants remain recorded in supabase/migrations/20260912023827_revoke_trigger_fn_execute_and_sheets_grants.sql"
     },
     {
       "slug": "schedule-assistant",
