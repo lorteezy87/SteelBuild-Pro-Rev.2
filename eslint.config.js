@@ -280,15 +280,23 @@ export default [
       "src/lib/rfiFromDelta.js",                  // update, not a read
       // ── Genuinely unbounded. REAL FINDINGS, not false positives ───────────
       // Listed so this rule can land green; each still needs paging or a cap.
-      // useDrawingRegister is the most exposed: `drawing_register_view` with no
-      // limit now backs the Drawing Register tab, so a project past 1000 sheets
-      // silently shows a short register.
-      "src/hooks/useDrawingRegister.ts",
+      // Two of the original seven are FIXED and off this list, so the rule now
+      // guards them like any other file: useDrawingRegister (pages
+      // `drawing_register_view`) and ExportMarkupPDFModal (its reads moved to
+      // src/lib/exports/markupExportData.ts and are paged there).
+      //
+      // Dashboard.jsx and ProductionStatus.jsx are FALSE POSITIVES, kept here
+      // only because the selector cannot see it: both are
+      // `.select("id", { count: "exact", head: true })`. A head request
+      // transfers no rows, so db-max-rows cannot truncate it. Do not "fix"
+      // them by paging a count.
+      "src/pages/Dashboard.jsx",          // head:true exact count, no rows
+      "src/pages/ProductionStatus.jsx",   // head:true exact count, no rows
+      // Genuinely unbounded, still owed a fix. Two left.
+      // SystemTab is FIXED and off this list — its workspace-backup project
+      // read moved to fetchWorkspaceProjects in src/lib/workspaceExport.ts and
+      // is paged there.
       "src/components/collaboration/CommentThread.jsx",
-      "src/components/drawings/ExportMarkupPDFModal.jsx",
-      "src/components/settings/SystemTab.jsx",
-      "src/pages/Dashboard.jsx",
-      "src/pages/ProductionStatus.jsx",
       "src/pages/Projects.jsx",
       // Grandfathered. SHRINK THIS LIST — verify each one is either bounded,
       // paged, or reads a single row, then remove it.

@@ -1,11 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const invokeMock = vi.fn();
+const fromMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabase", () => ({
-  supabase: { functions: { invoke: (...args: unknown[]) => invokeMock(...args) } },
+  supabase: {
+    functions: { invoke: (...args: unknown[]) => invokeMock(...args) },
+    from: fromMock,
+  },
 }));
 
-import { buildWorkspaceExport, workspaceExportFileName, exportWorkspace } from "../workspaceExport";
+import { PAGE_SIZE } from "@/lib/pagedQuery";
+import {
+  buildWorkspaceExport,
+  workspaceExportFileName,
+  exportWorkspace,
+  fetchWorkspaceProjects,
+} from "../workspaceExport";
 
 describe("buildWorkspaceExport", () => {
   it("bundles envelopes, sums total_rows, defaults workspace, carries failures", () => {
@@ -101,5 +111,93 @@ describe("exportWorkspace", () => {
     expect(bundle.failures).toHaveLength(1);
     expect(bundle.failures[0].project_id).toBe("slow");
     expect(bundle.failures[0].error).toMatch(/timed out/i);
+  });
+});
+
+/**
+ * fetchWorkspaceProjects — the read that decides what a "backup" contains.
+ *
+ * It used to be a raw unbounded `.select()` in SystemTab, cut off at
+ * PostgREST's 1000-row ceiling (audit batch 1, #435). The truncation happened
+ * BEFORE exportWorkspace saw the list, so the dropped projects never became
+ * `failures` — the one mechanism that is supposed to stop a backup being
+ * silently partial — and the caller's success toast reported the truncated
+ * count as the number of projects backed up.
+ */
+describe("fetchWorkspaceProjects", () => {
+  interface Recorded {
+    orders: string[];
+    filters: Record<string, unknown>;
+    ranges: { from: number; to: number }[];
+  }
+
+  function serveProjects(total: number, error?: unknown) {
+    const calls: Recorded[] = [];
+    const rows = Array.from({ length: total }, (_, i) => ({ id: `p-${i}`, name: `Project ${i}` }));
+    fromMock.mockImplementation(() => {
+      const rec: Recorded = { orders: [], filters: {}, ranges: [] };
+      calls.push(rec);
+      const chain = {
+        select: () => chain,
+        eq: (column: string, value: unknown) => { rec.filters[column] = value; return chain; },
+        order: (column: string) => { rec.orders.push(column); return chain; },
+        range: (start: number, end: number) => {
+          rec.ranges.push({ from: start, to: end });
+          return error
+            ? Promise.resolve({ data: null, error })
+            : Promise.resolve({ data: rows.slice(start, end + 1), error: null });
+        },
+      };
+      return chain;
+    });
+    return calls;
+  }
+
+  beforeEach(() => fromMock.mockReset());
+
+  it("returns every project past the 1000-row ceiling that used to truncate", async () => {
+    serveProjects(PAGE_SIZE * 2 + 1);
+    expect(await fetchWorkspaceProjects("org-1")).toHaveLength(PAGE_SIZE * 2 + 1);
+  });
+
+  it("requests consecutive, non-overlapping windows", async () => {
+    const calls = serveProjects(PAGE_SIZE + 1);
+    await fetchWorkspaceProjects("org-1");
+    expect(calls.flatMap((c) => c.ranges)).toEqual([
+      { from: 0, to: PAGE_SIZE - 1 },
+      { from: PAGE_SIZE, to: PAGE_SIZE * 2 - 1 },
+    ]);
+  });
+
+  it("orders by created_at with id as the unique tiebreaker paging needs", async () => {
+    const calls = serveProjects(1);
+    await fetchWorkspaceProjects("org-1");
+    expect(calls[0].orders).toEqual(["created_at", "id"]);
+  });
+
+  it("scopes to the org so a backup cannot mix in another org's projects", async () => {
+    const calls = serveProjects(1);
+    await fetchWorkspaceProjects("org-1");
+    expect(calls[0].filters.org_id).toBe("org-1");
+  });
+
+  it("omits the org filter when none is given, leaving RLS to narrow it", async () => {
+    const calls = serveProjects(1);
+    await fetchWorkspaceProjects(null);
+    expect(calls[0].filters).not.toHaveProperty("org_id");
+  });
+
+  it("excludes soft-deleted projects but not on-hold ones", async () => {
+    const calls = serveProjects(1);
+    await fetchWorkspaceProjects("org-1");
+    expect(calls[0].filters.is_deleted).toBe(false);
+    // on_hold is deliberately NOT filtered: a backup labelled "every project in
+    // <org>" has to include the paused ones.
+    expect(calls[0].filters).not.toHaveProperty("on_hold");
+  });
+
+  it("throws rather than handing back a short list a backup would be built from", async () => {
+    serveProjects(PAGE_SIZE + 1, { message: "read failed" });
+    await expect(fetchWorkspaceProjects("org-1")).rejects.toThrow(/workspace projects/);
   });
 });

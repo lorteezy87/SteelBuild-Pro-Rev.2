@@ -6,14 +6,16 @@
  *     pre-loaded sheets list of length 1)
  *   - Set:     every sheet whose drawing_set_name === activeDrawing.drawing_set_name
  *
- * Caller wires this from DrawingViewer's toolbar. Sign-offs are queried
- * here from drawing_signoffs so the helper can stay pure.
+ * Caller wires this from DrawingViewer's toolbar. Both server reads live in
+ * @/lib/exports/markupExportData so the PDF helper can stay pure and the reads
+ * can be paged and tested; a failed read fails the export rather than quietly
+ * producing a PDF missing its redlines.
  */
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
 import { generateMarkupSummaryPdf, suggestMarkupPdfFilename } from "@/lib/exports/markupPDF";
+import { fetchMarkupRows, fetchSignoffRows } from "@/lib/exports/markupExportData";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 
@@ -62,60 +64,38 @@ export default function ExportMarkupPDFModal({
       // collaborative-redlining migration — drawings.markup is legacy/empty.
       // Resolve each sheet's rows into the legacy item shape the pure PDF
       // helpers expect, with the author attribution the rows now carry.
+      // Neither read is wrapped in a swallow any more. Both used to catch,
+      // console.warn and carry on, which produced a PDF that looked finished
+      // and was missing its redlines or its sign-offs — on a document that goes
+      // to a GC or the shop. A failure now reaches the outer catch and surfaces
+      // as "Export failed: …", the same call audit batch 1 made for the claims
+      // package. The reads are also paged, so a set past PostgREST's 1000-row
+      // ceiling no longer drops markups silently.
+      const ids = sheets.map((s) => s.id).filter(Boolean);
+
       let sheetsWithMarkup = sheets;
-      try {
-        const ids = sheets.map((s) => s.id).filter(Boolean);
-        if (ids.length > 0) {
-          const { data: markupRows, error: markupError } = await supabase
-            .from("drawing_markups")
-            .select("id, drawing_id, markup_type, page_number, status, comment, color, payload, author_name, author_email, created_at")
-            .in("drawing_id", ids)
-            .order("created_at", { ascending: true });
-          if (markupError) throw markupError;
-          const byDrawing = new Map();
-          for (const row of markupRows || []) {
-            const item = {
-              ...(row.payload && typeof row.payload === "object" ? row.payload : {}),
-              id: row.id,
-              kind: row.markup_type,
-              pdf_page: row.page_number || 1,
-              status: row.status || "open",
-              text: row.comment ?? "",
-              color: row.color || undefined,
-              created_at: row.created_at,
-              created_by: row.author_name || row.author_email || null,
-            };
-            if (!byDrawing.has(row.drawing_id)) byDrawing.set(row.drawing_id, []);
-            byDrawing.get(row.drawing_id).push(item);
-          }
-          sheetsWithMarkup = sheets.map((s) => ({ ...s, markup: byDrawing.get(s.id) || [] }));
+      if (ids.length > 0) {
+        const markupRows = await fetchMarkupRows(ids);
+        const byDrawing = new Map();
+        for (const row of markupRows) {
+          const item = {
+            ...(row.payload && typeof row.payload === "object" ? row.payload : {}),
+            id: row.id,
+            kind: row.markup_type,
+            pdf_page: row.page_number || 1,
+            status: row.status || "open",
+            text: row.comment ?? "",
+            color: row.color || undefined,
+            created_at: row.created_at,
+            created_by: row.author_name || row.author_email || null,
+          };
+          if (!byDrawing.has(row.drawing_id)) byDrawing.set(row.drawing_id, []);
+          byDrawing.get(row.drawing_id).push(item);
         }
-      } catch (err) {
-        console.warn("[ExportMarkupPDFModal] markup rows fetch failed — exporting without markup:", err);
-        sheetsWithMarkup = sheets.map((s) => ({ ...s, markup: [] }));
+        sheetsWithMarkup = sheets.map((s) => ({ ...s, markup: byDrawing.get(s.id) || [] }));
       }
 
-      let signoffs = [];
-      if (includeSignoffs) {
-        try {
-          const ids = sheets.map((s) => s.id).filter(Boolean);
-          if (ids.length > 0) {
-            const { data, error } = await supabase
-              .from("drawing_signoffs")
-              .select("drawing_id, signed_by, signed_at, status")
-              .in("drawing_id", ids)
-              .eq("is_voided", false);
-            if (error) {
-              // Non-fatal: continue without sign-offs and warn.
-              console.warn("[ExportMarkupPDFModal] signoffs fetch failed:", error);
-            } else {
-              signoffs = data || [];
-            }
-          }
-        } catch (err) {
-          console.warn("[ExportMarkupPDFModal] signoffs fetch threw:", err);
-        }
-      }
+      const signoffs = includeSignoffs && ids.length > 0 ? await fetchSignoffRows(ids) : [];
 
       const label = scope === "set"
         ? (activeDrawing?.drawing_set_name || activeDrawing?.sheet_number || "set")
