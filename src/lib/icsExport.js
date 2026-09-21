@@ -93,7 +93,15 @@ export function buildIcs({ events = [], calendarName = "SteelBuild Pro" } = {}) 
   const lines = [];
   lines.push("BEGIN:VCALENDAR");
   lines.push("VERSION:2.0");
-  lines.push(`PRODID:-//S&H Steel Co//SteelBuild Pro//EN`);
+  // PRODID identifies the SOFTWARE that produced the file (RFC 5545 s3.7.3),
+  // not the sender and not the customer. It read "-//S&H Steel Co//...", which
+  // stamped one company's name into every .ics any customer exported.
+  //
+  // The signed-in org deliberately does NOT go here -- that would swap one
+  // wrong value for another, because this field is not a sender. An organizer
+  // belongs on the events (ORGANIZER) and the workspace's own label already
+  // rides on X-WR-CALNAME below, which the caller supplies.
+  lines.push("PRODID:-//SteelBuild Pro//SteelBuild Pro//EN");
   lines.push("CALSCALE:GREGORIAN");
   lines.push("METHOD:PUBLISH");
   lines.push(foldLine(`X-WR-CALNAME:${escapeText(calendarName)}`));

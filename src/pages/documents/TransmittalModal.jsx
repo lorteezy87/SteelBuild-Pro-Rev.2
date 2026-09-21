@@ -9,6 +9,7 @@
 
 import React from "react";
 import { generateTransmittal } from "@/lib/generateTransmittal";
+import { useOrg } from "@/components/shared/OrgContext";
 
 const PURPOSES = ["For Review", "For Approval", "For Construction", "For Record", "For Information", "Resubmitted"];
 
@@ -21,12 +22,23 @@ export default function TransmittalModal({
   onClose,
   onGenerated,
 }) {
+  // Read the org here rather than taking it as a prop: Documents.jsx renders
+  // this modal from two places, and a letterhead that silently fell back to a
+  // literal is exactly the bug being fixed. OrgProvider wraps the authenticated
+  // app, so useOrg is always available.
+  const { currentOrg } = useOrg();
+  const senderName = (currentOrg?.name || "").trim();
+
   if (!open) return null;
 
   const handleGenerate = () => {
+    // generateTransmittal throws without a sender. Guard here too so the
+    // button is visibly disabled instead of failing on click.
+    if (!senderName) return;
     generateTransmittal({
       project: project || {},
       docs: selectedDocs,
+      senderName,
       issuedTo: form.issuedTo,
       issuedBy: form.issuedBy,
       purpose: form.purpose,
@@ -132,7 +144,9 @@ export default function TransmittalModal({
           </button>
           <button
             onClick={handleGenerate}
-            style={{ padding: "8px 20px", background: "var(--success-muted)", border: "1px solid var(--success-border)", color: "var(--status-success)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
+            disabled={!senderName}
+            title={senderName ? undefined : "No organization is selected, so the transmittal would have no sender."}
+            style={{ padding: "8px 20px", background: "var(--success-muted)", border: "1px solid var(--success-border)", color: "var(--status-success)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: senderName ? "pointer" : "not-allowed", letterSpacing: "0.06em", opacity: senderName ? 1 : 0.5 }}
           >
             {"\u2193"} GENERATE PDF
           </button>

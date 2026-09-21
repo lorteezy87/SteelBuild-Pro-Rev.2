@@ -32,24 +32,41 @@ const STATUS_COLOR = {
 function statusColor(s) { return STATUS_COLOR[s] || C.muted; }
 
 /**
+ * Every parameter but `senderName` is optional and carries a default; the
+ * brackets say so, so a caller is not forced to pass eight keys to typecheck.
+ * `senderName` is the one thing this document cannot invent.
+ *
  * @param {object} opts
- * @param {object} opts.project   — project record
- * @param {object[]} opts.docs    — selected document records
- * @param {string} opts.issuedTo  — recipient name/company
- * @param {string} opts.issuedBy  — sender name
- * @param {string} opts.purpose   — e.g. "For Review", "For Approval", "For Construction"
- * @param {string} opts.notes     — optional transmittal notes
- * @param {string} opts.transmittalNumber — e.g. "T-001"
+ * @param {string} opts.senderName — REQUIRED. The sending organization, taken
+ *   from the signed-in org (organizations.name). This letterhead used to read
+ *   "S&H Steel" as a literal, so every customer's transmittal went out under
+ *   one company's name.
+ * @param {object} [opts.project]  — project record
+ * @param {object[]} [opts.docs]   — selected document records
+ * @param {string} [opts.issuedTo] — recipient name/company
+ * @param {string} [opts.issuedBy] — sender name (the PERSON issuing it)
+ * @param {string} [opts.purpose]  — e.g. "For Review", "For Approval", "For Construction"
+ * @param {string} [opts.notes]    — optional transmittal notes
+ * @param {string} [opts.transmittalNumber] — e.g. "T-001"
  */
 export function generateTransmittal({
   project = {},
   docs = [],
+  senderName = "",
   issuedTo = "",
   issuedBy = "",
   purpose = "For Review",
   notes = "",
   transmittalNumber = "",
 }) {
+  // Fail rather than print a nameless or wrong letterhead. A transmittal is an
+  // outward-facing record of what was issued, to whom and when; the one thing
+  // it cannot be vague about is who sent it. Defaulting would re-create the
+  // bug this replaced, just with a different literal.
+  const sender = String(senderName || "").trim();
+  if (!sender) {
+    throw new Error("Cannot generate a transmittal without a sending organization.");
+  }
   const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
   const PAGE_W = 612;
   const PAGE_H = 792;
@@ -76,15 +93,18 @@ export function generateTransmittal({
   // ── Header: Company + Title ──────────────────────────────────────────────
   y = 30;
 
-  // Left: Company name
+  // Left: sending organization.
+  //
+  // The trade-descriptor and website lines that used to sit under this were
+  // "Structural Steel Construction" and "steelbuildpro.com" — the first is one
+  // company's positioning and the second is THIS PRODUCT's domain, printed
+  // where a reader takes it for the sender's own. organizations carries only a
+  // name, so there is nothing truthful to put there; both are gone rather than
+  // invented. `y` is reset absolutely to 80 below, so removing them shifts
+  // nothing.
   font(20, "bold");
   color(C.black);
-  pdf.text("S&H Steel", MARGIN, y);
-
-  font(8);
-  color(C.muted);
-  pdf.text("Structural Steel Construction", MARGIN, y + 14);
-  pdf.text("steelbuildpro.com", MARGIN, y + 26);
+  pdf.text(sender, MARGIN, y);
 
   // Right: TRANSMITTAL label
   font(22, "bold");
