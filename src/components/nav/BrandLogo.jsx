@@ -1,11 +1,15 @@
 /**
  * BrandLogo — application-ready SteelBuild-Pro identity.
  *
- * The approved brand reference uses an SB structural-steel monogram, a strong
- * STEELBUILD-PRO wordmark, and the SteelBuild orange accent. The product UI
- * intentionally uses a flat vector interpretation so the mark remains legible
- * at navigation sizes; the dimensional metallic treatment stays a marketing
- * presentation style.
+ * The 2026 brand mark is a pointy-top hexagon with an "S" carved through it in
+ * Signal Amber, locked up with a heavy condensed "SteelBuild-Pro" wordmark and
+ * the "Built for the people who build" rule line. The hexagon geometry is
+ * shared with the favicon, the app icons and the landing page via
+ * `components/brand/steelBuildMarkGeometry` — never re-draw it inline.
+ *
+ * The lockup stays an <svg> with a fixed viewBox (250×64 full, 70×64 mark) so
+ * existing call sites can keep sizing it with `height`, `width: 100%` or
+ * `maxWidth` and have the type scale with the artwork.
  *
  * `plate` is kept for backwards compatibility with older call sites. New code
  * should normally leave it false and let the surrounding shell provide the
@@ -13,30 +17,25 @@
  */
 
 import React from "react";
+import { MARK_AMBER, MARK_PATH } from "../brand/steelBuildMarkGeometry";
 
-function SteelMark() {
+// The mark is authored on a 512 canvas with the hexagon spanning x 102–410,
+// y 46–466. These transforms drop it into the lockup at a known height.
+const FULL_MARK_SCALE = 48 / 420;
+const COMPACT_MARK_SCALE = 52 / 420;
+
+function markTransform(scale, x, y) {
+  return `translate(${(x - 102 * scale).toFixed(3)} ${(y - 46 * scale).toFixed(3)}) scale(${scale.toFixed(6)})`;
+}
+
+function SteelMark({ compact }) {
+  const transform = compact
+    ? markTransform(COMPACT_MARK_SCALE, 15.93, 6)
+    : markTransform(FULL_MARK_SCALE, 6, 8);
+
   return (
-    <g aria-hidden="true">
-      <rect x="8" y="7" width="11" height="50" rx="1.5" fill="currentColor" />
-      <rect x="51" y="7" width="11" height="50" rx="1.5" fill="currentColor" />
-      <rect x="18" y="10" width="34" height="8" rx="1.5" fill="currentColor" />
-      <rect x="18" y="46" width="34" height="8" rx="1.5" fill="currentColor" />
-      <path
-        d="M22 21h21.5c6.6 0 11 3.4 11 8.5 0 3.7-2.2 6.4-6 7.6 4.9 1 7.5 4 7.5 8.5C56 52 51 55 43.3 55H22v-8h20.3c2.8 0 4.4-1.2 4.4-3.3 0-2.2-1.6-3.3-4.5-3.3H27v-7.1h14.5c2.5 0 4-1.1 4-3.1 0-1.9-1.5-3-4-3H22V21Z"
-        fill="var(--brand-orange, #FF5A1F)"
-      />
-      <text
-        x="35"
-        y="39"
-        textAnchor="middle"
-        fontFamily="'Barlow Condensed', 'Arial Narrow', sans-serif"
-        fontWeight="900"
-        fontSize="20"
-        letterSpacing="-1"
-        fill="currentColor"
-      >
-        SB
-      </text>
+    <g aria-hidden="true" transform={transform}>
+      <path d={MARK_PATH} fillRule="evenodd" fill={`var(--brand-amber, ${MARK_AMBER})`} />
     </g>
   );
 }
@@ -78,32 +77,40 @@ export function BrandLogo({
         />
       ) : null}
 
-      <SteelMark />
+      <SteelMark compact={compact} />
 
       {!compact ? (
         <g>
+          {/* textLength pins both lines to a known width. Barlow Condensed and
+              IBM Plex Mono arrive from Google Fonts after first paint, and the
+              'Arial Narrow' fallback is wider still — without this the wordmark
+              renders past the 250-unit viewBox and gets clipped mid-word until
+              the webfont lands. */}
           <text
-            x="77"
-            y="31"
+            x="50"
+            y="36"
+            textLength="168"
+            lengthAdjust="spacingAndGlyphs"
             fontFamily="'Barlow Condensed', 'Arial Narrow', sans-serif"
-            fontWeight="800"
-            fontSize="24"
-            letterSpacing="0.7"
+            fontWeight="900"
+            fontSize="27"
+            letterSpacing="-0.4"
             fill="currentColor"
           >
-            STEELBUILD-PRO
+            SteelBuild-Pro
           </text>
-          <rect x="77" y="38" width="155" height="2" rx="1" fill="var(--brand-orange, #FF5A1F)" />
           <text
-            x="77"
-            y="52"
+            x="51"
+            y="50"
+            textLength="168"
+            lengthAdjust="spacingAndGlyphs"
             fontFamily="'IBM Plex Mono', ui-monospace, monospace"
             fontWeight="600"
-            fontSize="7.2"
-            letterSpacing="1.5"
+            fontSize="6.2"
+            letterSpacing="1.35"
             fill="var(--text-secondary, #A7B0B8)"
           >
-            BUILT FOR WHAT YOU BUILD
+            BUILT FOR THE PEOPLE WHO BUILD
           </text>
         </g>
       ) : null}

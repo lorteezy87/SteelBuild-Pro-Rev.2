@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="86 30 340 452" role="img" aria-label="SteelBuild-Pro">
+  <title>SteelBuild-Pro</title>
+  <!-- Hex-S mark. Geometry mirrors src/components/brand/steelBuildMarkGeometry.ts —
+       hexagon outline, upper slot (opens right), lower slot (opens left), filled
+       evenodd so the slots stay transparent on any surface. -->
+  <path fill-rule="evenodd" fill="#F5BB00"
+        d="M256 46 L410 142 L410 370 L256 466 L102 370 L102 142 Z
+           M410 168 L150 216 L196 246 L410 214 Z
+           M102 344 L362 296 L316 266 L102 298 Z"/>
+</svg>
