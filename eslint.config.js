@@ -292,9 +292,11 @@ export default [
       // them by paging a count.
       "src/pages/Dashboard.jsx",          // head:true exact count, no rows
       "src/pages/ProductionStatus.jsx",   // head:true exact count, no rows
-      // Genuinely unbounded, still owed a fix. Three left.
+      // Genuinely unbounded, still owed a fix. Two left.
+      // SystemTab is FIXED and off this list — its workspace-backup project
+      // read moved to fetchWorkspaceProjects in src/lib/workspaceExport.ts and
+      // is paged there.
       "src/components/collaboration/CommentThread.jsx",
-      "src/components/settings/SystemTab.jsx",
       "src/pages/Projects.jsx",
       // Grandfathered. SHRINK THIS LIST — verify each one is either bounded,
       // paged, or reads a single row, then remove it.

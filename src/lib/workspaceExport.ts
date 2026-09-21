@@ -8,6 +8,7 @@
  * project; this module only orchestrates, packages, and downloads.
  */
 import { supabase } from "@/lib/supabase";
+import { fetchAllRows } from "@/lib/pagedQuery";
 import type { ProjectExportEnvelope } from "@/services/projectExportService";
 
 export interface WorkspaceExportFailure {
@@ -138,6 +139,70 @@ export async function exportWorkspace(
   }
   opts.onProgress?.(done, total, "");
   return buildWorkspaceExport(envelopes, { workspaceName: opts.workspaceName, failures });
+}
+
+/**
+ * Every project in the workspace, READ TO COMPLETENESS.
+ *
+ * This lived in SettingsTab as a raw unbounded `.select()`, which PostgREST cuts
+ * off at its 1000-row `db-max-rows` ceiling with a 200 OK and no flag. Audit
+ * batch 1 (#435) flagged it as genuinely unbounded.
+ *
+ * A short read here is worse than a short list. It happens BEFORE
+ * `exportWorkspace` sees anything, so the projects it drops never become
+ * `failures` — the bundle's whole point is that a partial backup announces
+ * itself, and a truncated read slips past that. Worse, the caller's success
+ * toast prints `bundle.project_count`, so an org with 1,400 projects would be
+ * told "Exported 1000 projects" and hand that file to someone as a backup.
+ *
+ * Deliberately NOT capped-with-a-notice: pagedQuery's own guidance names
+ * exports as the case where short data is simply wrong, and `fetchAllRows`
+ * throws rather than returning a partial set, so a failed page fails the export
+ * instead of shrinking it.
+ *
+ * Soft-deleted projects are excluded; on-hold ones are NOT. `entities.Project
+ * .list()` drops on-hold rows and is not org-scoped, which is why this reads the
+ * table directly — a backup labelled "every project in <org>" has to contain the
+ * paused ones and none from the user's other orgs. RLS still limits the result
+ * to projects the caller can read, so a missing `orgId` narrows rather than
+ * leaks.
+ *
+ * Ordered by `created_at` with `id` as the stable unique tiebreaker: timestamps
+ * are not unique, and `.range()` windows over a non-total order can skip or
+ * repeat rows.
+ */
+export async function fetchWorkspaceProjects(orgId?: string | null): Promise<WorkspaceExportProject[]> {
+  return fetchAllRows<WorkspaceExportProject>(
+    async (start, end) => {
+      // The no-restricted-syntax rule matches any `supabase.from()`, including
+      // inside the page callback it recommends, so fetchAllRows cannot be used
+      // without this. `.range()` is what bounds the read.
+      // Every filter has to be applied BEFORE .order()/.range(): those return a
+      // transform builder, which has no .eq(), so appending the org filter
+      // afterwards throws "query.eq is not a function" at runtime.
+      // eslint-disable-next-line no-restricted-syntax
+      let query = supabase
+        .from("projects")
+        .select("id, name")
+        .eq("is_deleted", false);
+      // `projects.org_id` exists in production (uuid — verified against
+      // information_schema, not inferred) but is MISSING from the checked-in
+      // generated types in src/types/supabase.ts, so the typed `.eq()` rejects
+      // it. Cast narrowly here rather than regenerating the whole types file in
+      // this change. Dropping the filter instead would widen a workspace backup
+      // to every org the caller can read, so it is not an option.
+      if (orgId) {
+        query = (query as unknown as { eq: (column: string, value: string) => typeof query })
+          .eq("org_id", orgId);
+      }
+      const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(start, end);
+      return { data: data as WorkspaceExportProject[] | null, error };
+    },
+    "workspace projects",
+  );
 }
 
 /** Slugify a workspace name + date into a stable download filename. */
