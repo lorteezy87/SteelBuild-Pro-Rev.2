@@ -44,6 +44,11 @@ describe("project export paging", () => {
     expect((await readTablePaged(client, "drawings", "project-1")).rows).toHaveLength(3);
     expect(calls[0].columns).toEqual(["id"]);
   });
+  it("uses the project key for project calendars, which also have no id", async () => {
+    const { client, calls } = fixture("project_calendars", 1);
+    expect((await readTablePaged(client, "project_calendars", "project-1")).error).toBeNull();
+    expect(calls[0].columns).toEqual(["project_id"]);
+  });
   it("reports a later-page error so the endpoint cannot return a partial backup", async () => {
     const { client } = fixture("drawing_watchers", 1003, true);
     expect((await readTablePaged(client, "drawing_watchers", "project-1")).error).toBe("page failed");

@@ -46,9 +46,9 @@ The read-only and disposable-mutation E2E jobs both depend on that deploy and re
 
 Set STAGING_BASE_URL to the frontend above. Enable STAGING_E2E_ENABLED only after fixture secrets and the staging deployment exist. STAGING_E2E_MUTATIONS_ENABLED is enabled after provisioning the disposable fab-gate fixtures. Full Piece Control lifecycle fixtures remain disabled; the basic direct-table-denial check is configured.
 
-Read-only browser verification passed in [staging CI run 35569765272](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/35569765272): four navigation tests and two authentication/sign-out tests. The same run passed all 6,744 unit tests and 18 desktop/mobile shell-recovery checks, then deployed the isolated Worker. A real project-export request returned all 81 table sections, while inaccessible-project and unauthenticated requests returned 403 and 401.
+Read-only browser verification passed in [staging CI run 35569765272](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/35569765272): four navigation tests and two authentication/sign-out tests. The same run passed all 6,744 unit tests and 18 desktop/mobile shell-recovery checks, then deployed the isolated Worker. A real project-export request returned all 96 table sections, while inaccessible-project and unauthenticated requests returned 403 and 401.
 
-The fabrication-release server was also exercised using real staging user JWTs: blocked RFI refused, admin override recorded and snapshotted, clean separate set released, viewer denied. The CI mutation job is enabled for subsequent staging pushes.
+The fabrication-release server was also exercised using real staging user JWTs: blocked RFI refused, admin override recorded and snapshotted, clean separate set released, viewer denied. CI run 35571242322 also passed the four fab-gate checks and one Piece Control direct-write denial. Three separate Piece Control lifecycle/cross-tenant fixtures are intentionally skipped. The final export implementation preserves production v2 row-file references and canonical piece/GC records, pages project calendars and note-folder descendants, and passes a Deno type check.
 
 ## Database regression tests
 
