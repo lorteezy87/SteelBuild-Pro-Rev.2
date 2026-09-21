@@ -30,13 +30,13 @@ Migrations 20260921054458 and 20260921055027 were then tested, applied and stamp
 
 Run scripts/seed-staging.mjs with STAGING_SUPABASE_URL, STAGING_SERVICE_ROLE_KEY, STAGING_ANON_KEY and a random STAGING_E2E_PASS of at least 24 characters. The script rejects every project except ndyfjffsulfbwpmwdmic. Credentials must come from a secret store, never source code.
 
-The synthetic account is staging.pm@steelbuild-pro.invalid. The fixture includes Example Fabrication (staging), STG-0001, three drawing sheets, one drawing set and one draft submittal. It uses Auth admin creation, normal authenticated RPCs and atomic numbering. Both storage buckets are private; app-files is 50 MiB with the configured MIME allowlist and email-attachments is 25 MiB.
+The synthetic account is staging.pm@steelbuild-pro.invalid. The fixture includes Example Fabrication (staging), STG-0001, three drawing sheets and one drawing set/submittal. The later disposable fab-gate fixture adds a separate clean set, a fourth sheet, a second submittal and a viewer account; both submittals follow the normal review/checklist transition to IFC. A synthetic PDF is uploaded under the staging organization/project path. It uses Auth admin creation, normal authenticated RPCs and atomic numbering. Both storage buckets are private; app-files is 50 MiB with the configured MIME allowlist and email-attachments is 25 MiB.
 
 GitHub Actions secrets: STAGING_E2E_USER, STAGING_E2E_PASS, STAGING_E2E_SUPABASE_URL and STAGING_E2E_SUPABASE_ANON_KEY. The service-role key is not needed by the frontend or read-only E2E jobs. The fixture password has been stored in the repository's encrypted secrets.
 
 Auth settings are in supabase/config.staging.toml. Copy that file to a temporary directory's supabase/config.toml, review config diff, then config push with that workdir and the explicit staging ref. This avoids applying unrelated CLI defaults. Auth redirects target the staging frontend, email confirmation stays enabled, and OTP length is eight.
 
-project-export is deployed with JWT verification. Other external integrations are not automatically enabled or copied from production.
+project-export is deployed with JWT verification. Its ALLOWED_ORIGINS setting explicitly includes the staging frontend and local development origins. Other external integrations are not automatically enabled or copied from production.
 
 ## CI deployment and browser checks
 
@@ -44,9 +44,11 @@ deploy-staging-cloudflare runs after ci only on a push to staging with STAGING_E
 
 The read-only and disposable-mutation E2E jobs both depend on that deploy and retain explicit staging-branch/push gates. E2E rejects the production app host and production database even if the expected project ref is misconfigured.
 
-Set STAGING_BASE_URL to the frontend above. Enable STAGING_E2E_ENABLED only after fixture secrets and the staging deployment exist. Leave STAGING_E2E_MUTATIONS_ENABLED unset until the separate disposable mutation fixtures are provisioned.
+Set STAGING_BASE_URL to the frontend above. Enable STAGING_E2E_ENABLED only after fixture secrets and the staging deployment exist. STAGING_E2E_MUTATIONS_ENABLED is enabled after provisioning the disposable fab-gate fixtures. Full Piece Control lifecycle fixtures remain disabled; the basic direct-table-denial check is configured.
 
-Read-only browser verification: pending first deployment of this review branch.
+Read-only browser verification passed in [staging CI run 35569765272](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/35569765272): four navigation tests and two authentication/sign-out tests. The same run passed all 6,744 unit tests and 18 desktop/mobile shell-recovery checks, then deployed the isolated Worker. A real project-export request returned all 81 table sections, while inaccessible-project and unauthenticated requests returned 403 and 401.
+
+The fabrication-release server was also exercised using real staging user JWTs: blocked RFI refused, admin override recorded and snapshotted, clean separate set released, viewer denied. The CI mutation job is enabled for subsequent staging pushes.
 
 ## Database regression tests
 

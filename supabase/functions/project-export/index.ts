@@ -36,6 +36,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { readTablePaged } from "./readTablePaged.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
@@ -45,7 +46,7 @@ import { reportError } from "../_shared/reportError.ts";
 const PROJECT_EXPORT_VERSION = 1;
 
 // Comprehensive project-scoped tenant table set. Every table listed has a
-// `project_id` column and an `id` column; reads run under RLS. Org-scoped
+// `project_id` column; reads use each table's primary key under RLS. Org-scoped
 // note folders are exported separately via readNoteFolderExport.
 const PROJECT_EXPORT_TABLES: readonly string[] = [
   "action_items",
@@ -268,44 +269,6 @@ async function verifyJwt(
 }
 
 // ── Paginated table read ───────────────────────────────────────────────────────
-
-interface PaginatedReadResult {
-  rows: Record<string, unknown>[];
-  error: string | null;
-}
-
-/**
- * Read every row of a project-scoped table under RLS, paging through PostgREST's
- * ~1000-row cap. Accumulates fixed-size pages ordered by id until a short page
- * (fewer than EXPORT_PAGE_SIZE rows) signals the end. On any page error the whole
- * read fails — the caller aborts the export rather than shipping a partial backup.
- */
-async function readTablePaged(
-  rls: SupabaseClient,
-  table: string,
-  projectId: string,
-): Promise<PaginatedReadResult> {
-  const rows: Record<string, unknown>[] = [];
-  let from = 0;
-  // Bounded loop: every iteration either appends a full page (advancing `from`)
-  // or returns. A short page ends it, so it can't spin.
-  for (;;) {
-    const { data, error } = await rls
-      .from(table)
-      .select("*")
-      .eq("project_id", projectId)
-      .order("id", { ascending: true })
-      .range(from, from + EXPORT_PAGE_SIZE - 1);
-    if (error) {
-      return { rows, error: error.message };
-    }
-    const page = (data ?? []) as Record<string, unknown>[];
-    rows.push(...page);
-    if (page.length < EXPORT_PAGE_SIZE) break; // short page → last page
-    from += EXPORT_PAGE_SIZE;
-  }
-  return { rows, error: null };
-}
 
 /**
  * Note folders are org-scoped (no project_id / no single id on the link PK).

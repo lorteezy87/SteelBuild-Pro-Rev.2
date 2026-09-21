@@ -17,6 +17,7 @@ Scope: the three supplied Claude sessions, both distinct pasted handoffs, curren
 | RFI duplicate dates | Staged migration 20260921055027 synchronizes canonical and legacy date pairs for both writing applications, including clears. Conflicts fail visibly; backfill uses only existing dates. Constraint handoff reads the canonical date first. |
 | Staging fixture (#446) | Replaced the proposed SQL seed with scripts/seed-staging.mjs: explicit staging target, generated password supplied outside source control, Auth admin user creation, real org/project RPCs, valid drawing defaults, atomic submittal number. |
 | Staging reconstruction | Persistent schema-only branch ndyfjffsulfbwpmwdmic; synthetic org/project/account and private buckets; separate Cloudflare Worker configuration and CI deploy job. See staging-setup.md. |
+| Live project-export failure | A real staging export failed on drawing_watchers, whose primary key is (drawing_id, user_id), not id. The Edge Function now pages by that composite key; three new tests and a complete 81-table live export pass. |
 | Windows verification failures | LF checkout contract for byte-sensitive migration/CSP checks; file-scan tests get 30 seconds without changing assertions. |
 | Mortensen → Mortenson | Corrected the one matching production project, ca598779-a332-4e65-8a13-30560d954016, only while the stored contractor value exactly equalled Mortensen. No bulk text replacement. |
 | Obsolete Cloudflare URL variable | Removed CLOUDFLARE_BASE_URL after verifying no workflow reads it. |
@@ -41,10 +42,11 @@ Scope: the three supplied Claude sessions, both distinct pasted handoffs, curren
 
 ## Verification
 
+- Staging Linux CI passed all 6,744 tests and 18 desktop/mobile shell-recovery checks; six authenticated navigation/auth-boundary tests passed after deployment.
 - Existing full suite: 701 files, 6,743 tests; 6,741 passed on the first completed run. The two Windows full-tree scan timeouts subsequently passed with their assertions unchanged.
 - Targeted regression suites cover paging over 1,000 rows, later-page failures, organization isolation, party normalization, PDF page preservation, revision-scoped markup export and canonical RFI deadlines.
 - Final RFI regression run: 16 files, 112 tests passed after correcting the unknown-party display and aggregate behavior.
 - Lint, base TS, JS checking, strict-null and no-implicit-any ratchets, no-new-JS gate, scripts TypeScript and production build passed locally.
 - Before new migrations, staging matched production at 140 public tables (all with RLS), 393 policies and 352 functions. Combined function-definition MD5: ac446bb3130e1fd6cf5a5ec3b1d67729 on both.
 - Transactional database tests on staging prove viewer/field/PM creation, PM-only updates, cross-tenant and non-project-member denials, direct-insert rejection, evidence-based date backfill, both alias write directions, clearing and conflict rejection. Fixtures roll back.
-- Staging deployment and browser verification results are recorded in the staging runbook.
+- Real fabrication-release server checks passed: blocked, audited admin override, clean separate set, and viewer denial. Staging deployment and browser verification results are recorded in the staging runbook.
