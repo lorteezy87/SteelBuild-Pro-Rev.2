@@ -59,10 +59,11 @@ Verified against production on 2026-09-21:
 
 Follow-up order: verified authorization and deployment controls; session and integration boundaries; the concrete schedule/pay-app/numbering/import regressions; then performance, recovery rehearsal and remaining audit findings. Paid PITR, legal execution, provider secrets unavailable for migration, native-platform builds and external store submissions remain separate owner-dependent work. Preserve the user's explicit exception that viewers may create change requests; do not blindly raise the shared numbering RPC to `field` and break that approved flow.
 
-## Prepared changes after the #460 release
+## Changes prepared after the #460 release
 
-These are candidate changes on `codex/launch-security-hardening`, not production
-remediation. #460 is already merged at `4837dd6bb`; its production CI run
+The table records the candidate review on `codex/launch-security-hardening`;
+the approved backend rollout is recorded below. #460 is already merged at
+`4837dd6bb`; its production CI run
 `35575063074`, Worker health check and served JavaScript passed.
 
 | Audit finding | Candidate implementation and evidence |
@@ -117,5 +118,35 @@ static repository replay is not a substitute for the production catalog.
 - Staging project export returned HTTP 200 with v2 format, 96 table sections,
   four drawing fixtures and two submittals. Mailbox-token omission also has a
   regression test using synthetic credentials.
-- Production source for the current three functions was captured for rollback
-  review. No hardening production function, SQL or hosting deployment occurred.
+- Production source for the three functions was captured for rollback review
+  before the separately approved rollout below.
+
+## Approved #461 backend rollout
+
+The owner approved release after final checks. Source commit
+`c93a84e5c5279998e522a95a31145b48dfd5875c` passed 710 test files, 18 desktop/mobile
+shell tests, all type/lint/build gates, Deno checks and secret scanning.
+
+Migration `20260921080604` was applied and stamped atomically in production and
+staging on 2026-09-21. Its ledger payload MD5 is
+`cdf1be475b4c306ac1fa12c336f9d769`, matching the committed SQL. Preconditions
+checked the six original function definitions, original policies and absent
+stamp. Verification confirmed 18 restrictive policies, the membership trigger
+on INSERT/UPDATE/DELETE, revoked anonymous fabrication RPC access and retained
+authenticated access. The exact package had first passed a staging rollback
+rehearsal. Both branch and PR drift checks then passed.
+
+The three approved production functions were deployed individually:
+`llm-proxy` v43 (JWT false, internal authentication), `project-export` v30
+(JWT true), and `stripe-billing` v30 (JWT false, internal authentication and
+webhook signatures). All 21 downloaded source files matched the reviewed commit
+after line-ending normalization. Prior source and JWT modes were retained.
+Production smoke checks returned 401 for unauthenticated gateway/export/billing,
+405 for unsupported billing methods, and 400 for unsigned webhooks. Real
+authenticated staging checks again passed foreign-project denial and v2 export.
+
+The frontend merge and final staging/production CI are tracked on PR #461.
+This release used the explicitly approved manual backend path; the new GitHub
+backend workflow still needs environment secrets/review rules. Production
+billing is in test mode, and no payment or paid AI request was made. The
+remaining audit findings above are not closed by this release.

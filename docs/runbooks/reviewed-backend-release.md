@@ -30,7 +30,9 @@ adding an `environment:` line would not remove that access.
    Supabase drift check must also pass. Never suppress a pending migration.
 3. Apply a reviewed migration with its exact SQL and matching ledger payload
    in one transaction, following `CLAUDE.md`; do not run `db push` or repair.
-   The launch-security migration has been tested with a rollback, not released.
+   The launch-security migration was approved, applied and stamped in production
+   and staging on 2026-09-21. Its committed SQL MD5 is
+   `cdf1be475b4c306ac1fa12c336f9d769`; do not reapply it.
 4. Run the manual workflow for the selected function with `target=staging` on
    the release commit. It requires passing CI checks for that exact SHA.
 5. Verify staging with real authentication and synthetic fixtures. In
@@ -56,6 +58,18 @@ download or retain an existing source stops deployment. A missing production
 function also stops deployment; staging permits a first installation.
 
 ## Rollback and limits
+
+The initial #461 release used the owner's explicitly approved manual rollout:
+the prepared SQL package passed a staging rollback rehearsal, the production
+ledger hash and 18 restrictive policies were verified, and named CLI deploys
+published `llm-proxy` v43, `project-export` v30 and `stripe-billing` v30.
+All 21 downloaded source files matched the reviewed commit after line-ending
+normalization, and each JWT mode matched the original contract. The separate
+GitHub backend workflow remains inactive until its environment credentials and
+review rules are configured; this manual release does not prove that workflow.
+Production rejected unauthenticated gateway/export/billing requests with 401,
+unsupported billing methods with 405 and unsigned webhooks with 400. Billing
+remains in test mode. No payment or paid AI request was made during verification.
 
 Redeploy the captured previous source with its original JWT mode after explicit
 approval. A frontend rollback does not revert functions or database migrations.

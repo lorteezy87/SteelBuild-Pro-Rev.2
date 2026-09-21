@@ -58,7 +58,7 @@ Run supabase/tests/pending_issue_permissions.sql with psql and ON_ERROR_STOP aga
 
 The #460 migrations (`20260921054458`, `20260921055027`) were approved, applied and stamped together in production on September 21; their ledger payload hashes match the committed SQL. #460 then passed production CI at `4837dd6bb` and deployed successfully. They are no longer pending.
 
-The separate launch-security migration `20260921080604` remains a candidate. Its boundary tests in `supabase/tests/launch_security_boundaries.sql` run in a rolled-back staging transaction; no permanent application is implied. Follow [the reviewed backend release runbook](reviewed-backend-release.md) for that next release.
+The separate launch-security migration `20260921080604` was owner-approved and applied/stamped in production and staging on September 21. Its ledger payload matches committed SQL MD5 `cdf1be475b4c306ac1fa12c336f9d769`. The boundary suite and exact release package both passed rollback rehearsals before application. The boundary suite includes the migration and is intended for the pre-migration baseline, not an already migrated database. Follow [the reviewed backend release runbook](reviewed-backend-release.md) for rollout evidence and remaining workflow setup.
 
 To reverse the access-policy change, restore the field-role INSERT policy and original field-role RPC guard. To reverse date synchronization, remove trg_sync_rfi_date_aliases and sync_rfi_date_aliases(); do not erase valid copied dates. Rehearse reversals on staging first.
 
