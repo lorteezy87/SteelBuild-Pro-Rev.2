@@ -9,6 +9,7 @@
 
 import React from "react";
 import { generateTransmittal } from "@/lib/generateTransmittal";
+import { useOrg } from "@/components/shared/OrgContext";
 
 const PURPOSES = ["For Review", "For Approval", "For Construction", "For Record", "For Information", "Resubmitted"];
 
@@ -21,9 +22,15 @@ export default function TransmittalModal({
   onClose,
   onGenerated,
 }) {
+  // Hooks must run before the early return, or the hook order changes between
+  // an open and a closed modal.
+  const { currentOrg } = useOrg();
+  const issuerName = String(currentOrg?.name ?? "").trim();
+
   if (!open) return null;
 
   const handleGenerate = () => {
+    if (!issuerName) return;
     generateTransmittal({
       project: project || {},
       docs: selectedDocs,
@@ -32,6 +39,10 @@ export default function TransmittalModal({
       purpose: form.purpose,
       notes: form.notes,
       transmittalNumber: form.number,
+      // The sending company is the signed-in org. Without it the PDF would go
+      // to the GC with no sender, so generation is blocked rather than
+      // producing an unattributed record.
+      issuer: { name: issuerName },
     });
     onGenerated();
   };
@@ -132,7 +143,9 @@ export default function TransmittalModal({
           </button>
           <button
             onClick={handleGenerate}
-            style={{ padding: "8px 20px", background: "var(--success-muted)", border: "1px solid var(--success-border)", color: "var(--status-success)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
+            disabled={!issuerName}
+            title={issuerName ? undefined : "No organization loaded — a transmittal needs a sending company"}
+            style={{ padding: "8px 20px", background: "var(--success-muted)", border: "1px solid var(--success-border)", color: "var(--status-success)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: issuerName ? "pointer" : "not-allowed", letterSpacing: "0.06em", opacity: issuerName ? 1 : 0.5 }}
           >
             {"\u2193"} GENERATE PDF
           </button>
