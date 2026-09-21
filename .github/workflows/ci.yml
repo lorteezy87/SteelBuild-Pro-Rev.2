@@ -446,7 +446,16 @@ jobs:
           set -e
           echo "probing $BASE"
           for i in 1 2 3 4 5 6; do
-            code=$(curl -sL -o /dev/null -w '%{http_code}' "$BASE")
+            # `|| code="000"` is load-bearing. An HTTP error status leaves curl
+            # exit 0, but a TRANSPORT failure (DNS, TLS, refused, timeout) does
+            # not — and under `set -e` a bare assignment from a failed command
+            # substitution exits the shell right here, before the loop can log
+            # an attempt, sleep, retry, or reach the ::error:: below. The six
+            # attempts would be fiction and one DNS blip would fail a deploy
+            # that is actually fine. Putting the assignment in an || list is
+            # what errexit exempts. 000 is curl's own "no HTTP response" value,
+            # so "attempt 1: HTTP 000" reads correctly.
+            code=$(curl -sL -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "$BASE") || code="000"
             if [ "$code" = "200" ]; then echo "cloudflare healthy ($code) at $BASE"; exit 0; fi
             echo "attempt $i: HTTP $code"; sleep 10
           done
