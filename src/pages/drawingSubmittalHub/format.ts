@@ -1,4 +1,5 @@
 import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldAlert, Send, ListChecks, Workflow } from "lucide-react";
+import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { DRAFTING_STATES, effectiveDetailingState, hasGoverningSubmittal, isPackageReleasedForFab, isPackageRR } from "@/lib/detailingPackageState";
@@ -8,7 +9,6 @@ import { workingDaysBetween } from "@/lib/workingDays";
 import { todayLocalISO } from "@/lib/dateMath";
 import { pickMostRecentSubmittal, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
-import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 import type {
   ApprovalMatrixRow,
   CurrentRevisionInfo,
@@ -80,9 +80,9 @@ export const CLOSED_SUBMITTAL_STATUSES = new Set([
   "Void",
 ]);
 
-// Ball-in-court choices -- taken from the one vocabulary so the hub's inline
-// control can never offer a value the DB CHECK constraints reject.
-export const BIC_CHOICES = [...BALL_IN_COURT_PARTIES];
+// Ball-in-court choices — re-exported from the one vocabulary, so a picker can
+// never offer a value the DB CHECK constraints reject.
+export const BIC_CHOICES = BALL_IN_COURT_PARTIES;
 
 export const ACTION_STATUSES = new Set([
   "Rejected",

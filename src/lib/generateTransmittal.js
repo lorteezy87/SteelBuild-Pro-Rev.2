@@ -32,41 +32,35 @@ const STATUS_COLOR = {
 function statusColor(s) { return STATUS_COLOR[s] || C.muted; }
 
 /**
- * Every parameter but `senderName` is optional and carries a default; the
- * brackets say so, so a caller is not forced to pass eight keys to typecheck.
- * `senderName` is the one thing this document cannot invent.
- *
  * @param {object} opts
- * @param {string} opts.senderName — REQUIRED. The sending organization, taken
- *   from the signed-in org (organizations.name). This letterhead used to read
- *   "S&H Steel" as a literal, so every customer's transmittal went out under
- *   one company's name.
- * @param {object} [opts.project]  — project record
- * @param {object[]} [opts.docs]   — selected document records
- * @param {string} [opts.issuedTo] — recipient name/company
- * @param {string} [opts.issuedBy] — sender name (the PERSON issuing it)
- * @param {string} [opts.purpose]  — e.g. "For Review", "For Approval", "For Construction"
- * @param {string} [opts.notes]    — optional transmittal notes
- * @param {string} [opts.transmittalNumber] — e.g. "T-001"
+ * @param {object} opts.project   — project record
+ * @param {object[]} opts.docs    — selected document records
+ * @param {string} opts.issuedTo  — recipient name/company
+ * @param {string} opts.issuedBy  — sender name
+ * @param {string} opts.purpose   — e.g. "For Review", "For Approval", "For Construction"
+ * @param {string} opts.notes     — optional transmittal notes
+ * @param {string} opts.transmittalNumber — e.g. "T-001"
+ * @param {object} opts.issuer    — the sending company: { name, tagline, website }.
+ *   `name` comes from the signed-in organization (OrgContext `currentOrg.name`,
+ *   i.e. organizations.name, which is NOT NULL). This header used to hardcode
+ *   one customer's name, its tagline, and "steelbuildpro.com" — the software
+ *   vendor's own domain — onto a document the GC reads as coming from the
+ *   fabricator. Every tenant got the wrong sender.
+ *
+ *   Each line is omitted when absent rather than defaulted. A transmittal with
+ *   no sender is visibly incomplete; one with somebody else's name is a false
+ *   record, and TransmittalModal will not generate without a name.
  */
 export function generateTransmittal({
   project = {},
   docs = [],
-  senderName = "",
   issuedTo = "",
   issuedBy = "",
   purpose = "For Review",
   notes = "",
   transmittalNumber = "",
+  issuer = {},
 }) {
-  // Fail rather than print a nameless or wrong letterhead. A transmittal is an
-  // outward-facing record of what was issued, to whom and when; the one thing
-  // it cannot be vague about is who sent it. Defaulting would re-create the
-  // bug this replaced, just with a different literal.
-  const sender = String(senderName || "").trim();
-  if (!sender) {
-    throw new Error("Cannot generate a transmittal without a sending organization.");
-  }
   const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
   const PAGE_W = 612;
   const PAGE_H = 792;
@@ -93,18 +87,24 @@ export function generateTransmittal({
   // ── Header: Company + Title ──────────────────────────────────────────────
   y = 30;
 
-  // Left: sending organization.
-  //
-  // The trade-descriptor and website lines that used to sit under this were
-  // "Structural Steel Construction" and "steelbuildpro.com" — the first is one
-  // company's positioning and the second is THIS PRODUCT's domain, printed
-  // where a reader takes it for the sender's own. organizations carries only a
-  // name, so there is nothing truthful to put there; both are gone rather than
-  // invented. `y` is reset absolutely to 80 below, so removing them shifts
-  // nothing.
-  font(20, "bold");
-  color(C.black);
-  pdf.text(sender, MARGIN, y);
+  // Left: issuing company, from the signed-in organization. Nothing is
+  // invented here: a missing line is left blank rather than filled with a
+  // placeholder that would misattribute the document.
+  const issuerName = String(issuer.name ?? "").trim();
+  const issuerTagline = String(issuer.tagline ?? "").trim();
+  const issuerWebsite = String(issuer.website ?? "").trim();
+
+  if (issuerName) {
+    font(20, "bold");
+    color(C.black);
+    pdf.text(issuerName, MARGIN, y);
+  }
+
+  font(8);
+  color(C.muted);
+  let subY = y + 14;
+  if (issuerTagline) { pdf.text(issuerTagline, MARGIN, subY); subY += 12; }
+  if (issuerWebsite) { pdf.text(issuerWebsite, MARGIN, subY); }
 
   // Right: TRANSMITTAL label
   font(22, "bold");
