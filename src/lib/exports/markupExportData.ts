@@ -105,15 +105,65 @@ export async function fetchMarkupRows(drawingIds: readonly string[]): Promise<Ma
 }
 
 /**
- * Every live sign-off for the given sheets, mapped to the PDF helper's shape.
+ * The CURRENT revision id of each given sheet.
  *
- * `is_voided` rows are excluded: a retracted stamp must not print as a
+ * `drawing_revisions.is_current` is the canonical marker — the viewer resolves
+ * its `currentRevision` the same way and hands that id to `listSignoffs`. The
+ * `drawings` table has no current-revision column (only `revision_number`), so
+ * this is the only place the answer lives.
+ */
+async function fetchCurrentRevisionIds(drawingIds: readonly string[]): Promise<string[]> {
+  const revisionIds: string[] = [];
+  for (const ids of chunkIds(drawingIds)) {
+    const chunk = await fetchAllRows<{ id: string }>(
+      async (start, end) => {
+        // eslint-disable-next-line no-restricted-syntax
+        const { data, error } = await supabase
+          .from("drawing_revisions")
+          .select("id")
+          .in("drawing_id", ids)
+          .eq("is_current", true)
+          .order("id", { ascending: true })
+          .range(start, end);
+        return { data: data as { id: string }[] | null, error };
+      },
+      "current revisions",
+    );
+    for (const row of chunk) revisionIds.push(row.id);
+  }
+  return revisionIds;
+}
+
+/**
+ * Every live sign-off for the CURRENT revision of the given sheets, mapped to
+ * the PDF helper's shape.
+ *
+ * Scoped by revision, not by drawing. Sign-offs are revision-scoped — the
+ * viewer's `listSignoffs` filters on `drawing_revision_id` whenever it has one
+ * (drawingHub/signoffs.js:63) — so filtering only on `drawing_id` returns every
+ * approval ever recorded for the sheet, including ones belonging to superseded
+ * revisions. On a shop-facing PDF that prints an approval of revision A
+ * underneath current revision B and asserts B was approved when nobody approved
+ * it. Caught by a Codex review of this PR before it shipped.
+ *
+ * That risk arrived WITH this PR: before it, the sign-off query named columns
+ * that do not exist and the section was always empty, so nothing could print.
+ * Repairing the query is what made a stale approval printable. Nothing has
+ * actually gone out wrong — production currently has 0 non-voided sign-offs on
+ * superseded revisions — but drawings with multiple revisions do exist, so it
+ * would have fired the first time someone re-stamped a resubmitted sheet.
+ *
+ * A sheet with no current revision contributes no revision id and therefore no
+ * sign-offs, which is correct: nothing current means nothing approved.
+ *
+ * `is_voided` rows are excluded — a retracted stamp must not print as a
  * sign-off. Ordered by `stamped_at` with `id` as the unique tiebreaker, for the
  * same paging reason as above.
  */
 export async function fetchSignoffRows(drawingIds: readonly string[]): Promise<SignoffRow[]> {
   const rows: SignoffRow[] = [];
-  for (const ids of chunkIds(drawingIds)) {
+  const currentRevisionIds = await fetchCurrentRevisionIds(drawingIds);
+  for (const ids of chunkIds(currentRevisionIds)) {
     const chunk = await fetchAllRows<{
       drawing_id: string;
       stamped_by_name: string | null;
@@ -125,7 +175,7 @@ export async function fetchSignoffRows(drawingIds: readonly string[]): Promise<S
         const { data, error } = await supabase
           .from("drawing_signoffs")
           .select("id, drawing_id, stamped_by_name, stamped_at, stamp_type")
-          .in("drawing_id", ids)
+          .in("drawing_revision_id", ids)
           .eq("is_voided", false)
           .order("stamped_at", { ascending: true })
           .order("id", { ascending: true })
