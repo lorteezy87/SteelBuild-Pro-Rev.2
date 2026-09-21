@@ -423,25 +423,34 @@ jobs:
         run: npx wrangler deploy
 
       - name: Post-deploy health check
-        # Probes the CUSTOM DOMAIN, not workers.dev. `wrangler deploy` can
-        # publish a perfectly healthy Worker while steelbuild-pro.com serves
-        # nothing — wrong route, missing custom-domain binding, DNS pointed
-        # elsewhere — and workers.dev would report green through all of it.
+        # Probes the CUSTOM DOMAIN, and takes it from this file rather than
+        # from a repo variable. Both halves of that are the fix.
         #
-        # This step used to carry `if: vars.CLOUDFLARE_BASE_URL != ''`, added
-        # while the DNS cutover was in progress. The cutover landed but the
-        # variable was never set, so the step reported success in 0s having
-        # probed nothing. The fallback below replaces the gate: set the repo
-        # variable to override (point it at workers.dev during a future
-        # cutover), otherwise the production hostname is probed.
+        # This step used to read `vars.CLOUDFLARE_BASE_URL`, gated on it being
+        # non-empty. The variable WAS set — to the workers.dev URL, per step 3
+        # of docs/runbooks/cloudflare-migration.md ("verify off-domain before
+        # touching DNS"). Step 7.4 of that same runbook then says to repoint it
+        # at https://steelbuild-pro.com once the cutover lands. Nobody did.
+        #
+        # So the check kept passing against
+        # https://steelbuild-pro-rev-2.n-lortz1987.workers.dev/ — a URL no
+        # customer uses. `wrangler deploy` binds all three hostnames (the
+        # deploy log lists workers.dev, steelbuild-pro.com and www), and
+        # workers.dev answers straight from the Worker. It stays 200 through a
+        # missing custom-domain binding, a wrong route, or DNS pointed
+        # somewhere else entirely — every way the live site can go dark while
+        # the Worker itself is perfectly healthy.
+        #
+        # A repo variable is invisible in review: nothing in a diff shows what
+        # it holds, which is how it sat on a stale value through the whole
+        # cutover and a run of green deploys. What production is health-checked
+        # against belongs in the file, where changing it needs a PR. For a
+        # future cutover, edit the line below — that is a feature, not friction.
         #
         # Red here means "deployed but not serving" — a signal, not a
         # rollback; the version is already promoted by the time this runs.
-        #
-        # BASE arrives through env rather than being interpolated into the
-        # script body, so a repo variable can never be read as shell.
         env:
-          BASE: ${{ vars.CLOUDFLARE_BASE_URL || 'https://steelbuild-pro.com' }}
+          BASE: https://steelbuild-pro.com
         run: |
           set -e
           echo "probing $BASE"

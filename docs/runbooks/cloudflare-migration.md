@@ -84,7 +84,7 @@ Variables (same page → **Variables**):
 | Name | Value | Effect |
 |---|---|---|
 | `CLOUDFLARE_ENABLED` | `true` | Turns the deploy job on. Leave unset to keep it inert. |
-| `CLOUDFLARE_BASE_URL` | workers.dev URL now, `https://steelbuild-pro.com` after step 7 | Turns the post-deploy health check on |
+| ~~`CLOUDFLARE_BASE_URL`~~ | **RETIRED — no longer read by CI** | The health check now takes its URL from `ci.yml` directly. See the note under step 7.4. Safe to delete from the repo settings. |
 
 ### 2. Disconnect Workers Builds — CONFIRMED CONNECTED, do this before step 1
 
@@ -111,7 +111,9 @@ The plan is to retire it once Cloudflare is serving. Until then:
 
 ### 3. Turn it on and verify off-domain
 
-Set `CLOUDFLARE_ENABLED=true`, push to `main`, confirm `deploy-cloudflare` runs green, and set `CLOUDFLARE_BASE_URL` to the workers.dev URL.
+Set `CLOUDFLARE_ENABLED=true`, push to `main`, and confirm `deploy-cloudflare` runs green.
+
+To point the post-deploy health check at the workers.dev URL for this phase, edit `BASE` in the `Post-deploy health check` step of `.github/workflows/ci.yml`. This used to be the repo variable `CLOUDFLARE_BASE_URL`; it is not any more, for the reason in step 7.4.
 
 **Verify on the workers.dev URL before touching DNS** (steps 4–5). With Vercel gone there is no second host to fall back to, so the workers.dev URL is the only place left to find a problem cheaply. Spend the time here.
 
@@ -173,7 +175,9 @@ The fab-release gate spec is a P0 path (CLAUDE.md) — it must be green here bef
 1. Add the `steelbuild-pro.com` zone to Cloudflare and move the nameservers at the registrar. **Lower the DNS TTL to 300s at least 24h beforehand** so a rollback propagates in minutes.
 2. Attach the custom domain to the Worker (Workers & Pages → the Worker → Settings → Domains & Routes → **Add custom domain**). Cloudflare issues the certificate.
 3. Watch it. Health check, Sentry error rate, Workers Logs.
-4. Set `CLOUDFLARE_BASE_URL=https://steelbuild-pro.com` so the deploy health check covers the real domain.
+4. Point the deploy health check at the real domain: set `BASE` to `https://steelbuild-pro.com` in the `Post-deploy health check` step of `.github/workflows/ci.yml`.
+
+   **This step was missed on the real cutover**, and it is why the health check is no longer a repo variable. `CLOUDFLARE_BASE_URL` stayed on its step-3 workers.dev value, so every production deploy afterwards health-checked a URL no customer uses. workers.dev answers straight from the Worker, so it returns 200 through a missing custom-domain binding, a wrong route, or DNS pointed elsewhere — the live site can be dark while the check is green. A repo variable is invisible in review; nothing in a diff shows what it holds. `BASE` now lives in `ci.yml`, where changing it needs a PR.
 5. Update `E2E_BASE_URL` / `playwright.config.ts` if the default base URL needs to change (it does not — the domain is the same).
 
 **Keep Netlify deployable until Cloudflare has served cleanly for at least a week.** It is the only rollback target left — see Rollback below.
