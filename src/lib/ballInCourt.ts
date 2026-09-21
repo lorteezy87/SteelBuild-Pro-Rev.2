@@ -1,8 +1,9 @@
 /**
  * ballInCourt — the one list of parties who can hold an RFI or submittal.
  *
- * THIS MUST MATCH THE DB CHECK CONSTRAINTS `chk_rfis_ball_in_court` and
- * `chk_submittals_ball_in_court` exactly. Same rule as `drawingEnums.ts`: a
+ * THIS MUST MATCH THE DB CHECK CONSTRAINTS `chk_rfis_ball_in_court`,
+ * `chk_submittals_ball_in_court` and `chk_submittal_rounds_ball_in_court`
+ * exactly. Same rule as `drawingEnums.ts`: a
  * value the constraint rejects makes the INSERT fail and the user loses the
  * save, with a raw Postgres constraint name for a message.
  *
@@ -21,6 +22,15 @@
  * `AOR` has no rows in production but IS in the approver class in code, so it
  * stays in the vocabulary — omitting it would make a code path that already
  * exists start failing at the constraint.
+ *
+ * "S&H" was the other live bug, and the more dangerous one. Five separate
+ * BIC_CHOICES lists offered it, four "detailer class" sets accepted it, and it
+ * was never in this vocabulary — so once `chk_submittals_ball_in_court` landed,
+ * picking it in SubmittalDetail, the submittal form, the register panel, the
+ * hub's inline control, the suggest strip or bulk edit failed the save with a
+ * raw Postgres constraint name. Zero rows ever stored it (the constraint
+ * validated clean), so removing it lost nothing. It is a private company and
+ * has no place in this product's logic; every picker now reads this list.
  */
 
 /** Every party that may hold the ball. Order is the order menus render. */

@@ -98,12 +98,12 @@ describe("chainState", () => {
 
 describe("firstExternalStepIndex", () => {
   it("finds the first non-detailing party", () => {
-    const steps = normalizeChain(["Detailer", "S&H", "GC", "EOR"]);
+    const steps = normalizeChain(["Detailer", "Subcontractor", "GC", "EOR"]);
     expect(firstExternalStepIndex(steps)).toBe(2);
   });
 
   it("falls back to the second step when every party is internal", () => {
-    expect(firstExternalStepIndex(normalizeChain(["Detailer", "S&H"]))).toBe(1);
+    expect(firstExternalStepIndex(normalizeChain(["Detailer", "Subcontractor"]))).toBe(1);
     expect(firstExternalStepIndex(normalizeChain(["Detailer"]))).toBe(0);
   });
 });
