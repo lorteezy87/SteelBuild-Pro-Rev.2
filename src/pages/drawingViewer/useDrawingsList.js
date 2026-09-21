@@ -65,12 +65,42 @@ export function useDrawingsList({ projectId, activeId, search }) {
 }
 
 /**
+ * Order sheets within one file by their printed identifier, so a repair is
+ * reproducible instead of depending on what order the rows happened to arrive.
+ *
+ * `sheet_number` on shop drawings, `drawing_number` on GC documents — the
+ * helper is shared by both viewers. `id` breaks ties so two sheets carrying the
+ * same number can never swap pages between two loads of the same data.
+ */
+function repairOrderCmp(a, b) {
+  const an = String(a?.sheet_number ?? a?.drawing_number ?? "");
+  const bn = String(b?.sheet_number ?? b?.drawing_number ?? "");
+  const byNumber = an.localeCompare(bn, undefined, { numeric: true, sensitivity: "base" });
+  if (byNumber !== 0) return byNumber;
+  return String(a?.id ?? "").localeCompare(String(b?.id ?? ""));
+}
+
+/**
  * Detect and fix duplicate pdf_page values among sheets sharing the same
  * file_url. Returns a new array (or the same reference if no fixes needed).
  *
  * Exported because GC documents are uploaded the same way — one PDF split into
  * N sheet rows keyed by pdf_page — so the GC viewer inherits the same collision
  * hazard and must not grow a second, drifting copy of this logic.
+ *
+ * Grouping by `file_url` is load-bearing and is NOT the same as grouping by
+ * drawing set. A set uploaded as one sheet per PDF has every row on `pdf_page`
+ * 1 legitimately — page 1 of its own file. Only rows sharing a file_url can
+ * collide, which is why a set-level "all 20 sheets are on page 1" reading means
+ * nothing on its own. (Production, 2026-09-21: 22 multi-sheet shop files and 3
+ * multi-sheet GC files, zero collisions in any of them.)
+ *
+ * The repair is a guess and is ordered so it is at least a *stable* guess:
+ * `entities.Drawing.filter()` applies no ORDER BY, so iterating rows in arrival
+ * order let the same stored data produce a different sheet→page mapping between
+ * loads. Sorting by sheet number first makes the mapping reproducible, and for
+ * a fully-collapsed group it yields the only defensible reading of a multi-page
+ * set — the first sheet on page 1, the second on page 2, and so on.
  */
 export function fixDuplicatePdfPages(drawings) {
   if (!drawings || drawings.length === 0) return drawings;
@@ -111,10 +141,13 @@ export function fixDuplicatePdfPages(drawings) {
     const allPages = new Set();
     for (let p = 1; p <= maxPage; p++) allPages.add(p);
 
-    // First-come-first-served: first sheet claiming a page keeps it,
-    // subsequent duplicates get reassigned to the nearest unclaimed page.
+    // Walk the group in sheet-number order, not arrival order: the first sheet
+    // claiming a page keeps it, later duplicates take the nearest unclaimed
+    // page. Arrival order came straight from PostgREST, which imposes none.
+    const ordered = [...indices].sort((x, y) => repairOrderCmp(drawings[x], drawings[y]));
+
     const claimed = new Set();
-    for (const idx of indices) {
+    for (const idx of ordered) {
       const pg = drawings[idx].pdf_page || 1;
       if (!claimed.has(pg)) {
         claimed.add(pg);
