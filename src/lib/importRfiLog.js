@@ -15,6 +15,7 @@
 import { supabase } from "@/lib/supabase";
 import { integrations } from "@/api/supabaseClient";
 import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
+import { normalizeBallInCourt } from "@/lib/ballInCourt";
 
 const STORAGE_BUCKET  = "app-files";
 const MAX_PDF_BYTES   = 32 * 1024 * 1024;
@@ -280,7 +281,15 @@ export function buildRfiImportRows({ rfis = [], projectId, projectName, existing
       date_answered:  answered,
       status:         answered ? "Closed" : "Open",
       priority:       "Medium",
-      ball_in_court:  answered ? "Contractor" : (r.assigned_to || "Engineer"),
+      // assigned_to is a PERSON ("John Doe, PE"); ball_in_court is a PARTY,
+      // constrained by chk_rfis_ball_in_court. Routing the raw name here made
+      // every import of an unanswered RFI fail at the database, and the
+      // "Engineer" fallback was itself rejected. The name is already stored
+      // above, so normalising loses nothing: a recognised party (or the
+      // retired "Engineer"/"S&H" spellings) resolves, anything else falls back
+      // to EOR -- which is what "Engineer" meant and who an open RFI is
+      // normally waiting on.
+      ball_in_court:  answered ? "Contractor" : (normalizeBallInCourt(r.assigned_to) || "EOR"),
     });
   }
 

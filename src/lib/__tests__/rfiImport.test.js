@@ -55,9 +55,36 @@ describe("RFI import helpers", () => {
       rfi_number: "RFI #002",
       title: "Missing submitted date",
       status: "Open",
-      ball_in_court: "Engineer",
+      // The source said "Engineer", which chk_rfis_ball_in_court rejects.
+      // It is a synonym for EOR and resolves to it rather than failing the
+      // import or silently becoming null.
+      ball_in_court: "EOR",
     });
+    // Nothing is lost by normalising: the raw value stays in assigned_to.
+    expect(rows[0].assigned_to).toBe("Engineer");
     expect(rows[0].submitted_date).toBeNull();
+  });
+
+  it("does not route a person's name into the ball_in_court party column", () => {
+    // assigned_to is free text off a spreadsheet. It used to be written
+    // straight to ball_in_court, so every import of an unanswered RFI whose
+    // assignee was a person failed the CHECK constraint at the database.
+    const { rows } = buildRfiImportRows({
+      projectId: "project-1",
+      rfis: [{ rfi_number: "7", title: "Open RFI", assigned_to: "John Doe, PE" }],
+    });
+
+    expect(rows[0].assigned_to).toBe("John Doe, PE");
+    expect(rows[0].ball_in_court).toBe("EOR");
+  });
+
+  it("maps an S&H assignee to Subcontractor", () => {
+    const { rows } = buildRfiImportRows({
+      projectId: "project-1",
+      rfis: [{ rfi_number: "8", title: "Open RFI", assigned_to: "S&H" }],
+    });
+
+    expect(rows[0].ball_in_court).toBe("Subcontractor");
   });
 
   it("marks answered imported RFIs closed", () => {

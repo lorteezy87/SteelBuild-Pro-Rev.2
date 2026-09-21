@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 
 const STATUSES = [
   "Draft",
@@ -12,17 +13,12 @@ const STATUSES = [
   "Void",
 ];
 
-const BIC_CHOICES = [
-  "Detailer",
-  "S&H",
-  "Contractor",
-  "Subcontractor",
-  "EOR",
-  "Architect",
-  "AOR",
-  "GC",
-  "Owner",
-];
+// Ball-in-court is constrained by chk_submittals_ball_in_court. This list
+// used to include "S&H", which the constraint rejects -- picking it failed
+// the save with a raw Postgres constraint name. S&H Steel is the GC's
+// subcontractor, so that choice is now "Subcontractor". Never re-spell the
+// vocabulary here; take it from the canonical source.
+const BIC_CHOICES = [...BALL_IN_COURT_PARTIES];
 
 const TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
 

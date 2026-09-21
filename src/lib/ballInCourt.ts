@@ -40,6 +40,29 @@ export type BallInCourtParty = (typeof BALL_IN_COURT_PARTIES)[number];
 const PARTY_SET: ReadonlySet<string> = new Set(BALL_IN_COURT_PARTIES);
 
 /**
+ * Retired spellings, mapped to the party they always meant.
+ *
+ * These are NOT alternative vocabulary — nothing may offer them and nothing
+ * stores them (verified 0 rows across rfis, submittals and the UNCONSTRAINED
+ * submittal_rounds). They exist only so a value arriving from outside the app
+ * resolves instead of silently becoming null:
+ *
+ *   "Engineer" -> EOR          the synonym this file's header describes.
+ *   "S&H"      -> Subcontractor  S&H Steel is the fabricator/erector, i.e. the
+ *                                GC's subcontractor. Three submittal modals
+ *                                offered it and the constraint rejects it, so
+ *                                every one of those saves failed at the
+ *                                database with a raw constraint name.
+ *
+ * Keys are lower-cased because the realistic source is a spreadsheet column,
+ * where "s&h" and "ENGINEER" are as likely as the canonical casing.
+ */
+const BALL_IN_COURT_ALIASES: Readonly<Record<string, BallInCourtParty>> = {
+  "engineer": "EOR",
+  "s&h": "Subcontractor",
+};
+
+/**
  * NULL means nobody holds it — the record is closed, or it was never routed.
  *
  * It does NOT mean "unassigned but open". `ball_in_court` used to carry the
@@ -67,5 +90,10 @@ export function normalizeBallInCourt(value: unknown): BallInCourtParty | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  return PARTY_SET.has(trimmed) ? (trimmed as BallInCourtParty) : null;
+  if (PARTY_SET.has(trimmed)) return trimmed as BallInCourtParty;
+  // An unrecognised value becomes null, not a guessed party. The RFI log
+  // importer used to route a PERSON's name ("John Doe, PE") into this column;
+  // null is the honest reading of "we cannot tell which party", and the name
+  // is still preserved in rfis.assigned_to.
+  return BALL_IN_COURT_ALIASES[trimmed.toLowerCase()] ?? null;
 }

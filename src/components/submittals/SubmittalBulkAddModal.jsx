@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { normalizeBallInCourt } from "@/lib/ballInCourt";
 
 /**
  * SubmittalBulkAddModal — bulk-create submittals from one of two flows:
@@ -32,11 +33,6 @@ const STATUSES = [
 ];
 // Standardized across the submittal modals — see src/pages/Submittals.jsx
 // for the canonical list and stage-mapping rationale.
-const BIC_CHOICES = [
-  "Detailer", "S&H", "Contractor", "Subcontractor",
-  "EOR", "Architect", "AOR",
-  "GC", "Owner",
-];
 
 // DB CHECK constraint allows only these values for submittal_type (or NULL).
 // Anything else from a pasted CSV produces a 400 from PostgREST, so we clamp
@@ -258,9 +254,18 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit, busy =
       // gave us — better than a row-failed toast for "no title".
       const submittal_number = (r.submittal_number || r.title || "").trim();
       const title = (r.title || r.submittal_number || "").trim();
+      // ball_in_court needs the same clamp as status/submittal_type above:
+      // chk_submittals_ball_in_court rejects anything outside the party
+      // vocabulary, and the spread of `r` puts the RAW CSV cell over the
+      // default, so a "reviewer" column holding "S&H" or a person's name
+      // 400'd the row. normalizeBallInCourt maps the retired spellings and
+      // returns null for anything it cannot place; null is legal here and
+      // honest -- the party is unknown, not Contractor.
       const out = {
-        ball_in_court: "Contractor",
         ...r,
+        ball_in_court: "ball_in_court" in r
+          ? normalizeBallInCourt(r.ball_in_court)
+          : "Contractor",
         submittal_number,
         title,
         status: clampedStatus,

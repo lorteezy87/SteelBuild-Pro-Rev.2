@@ -131,3 +131,86 @@ describe("the RFI modals no longer disagree", () => {
     expect(withoutComments).not.toContain("Engineer");
   });
 });
+
+describe("the retired spellings resolve instead of vanishing", () => {
+  // normalizeBallInCourt returns null for anything it cannot place, which is
+  // right for a person's name but wrong for a value that HAS a party: "S&H"
+  // silently becoming null would drop the ball-in-court off every imported
+  // row rather than pointing it at the subcontractor.
+  it("maps S&H to Subcontractor — S&H Steel is the GC's subcontractor", () => {
+    expect(normalizeBallInCourt("S&H")).toBe("Subcontractor");
+  });
+
+  it("maps Engineer to EOR, the party it was always a synonym for", () => {
+    expect(normalizeBallInCourt("Engineer")).toBe("EOR");
+  });
+
+  it("matches an alias whatever the spreadsheet capitalised it as", () => {
+    for (const spelling of ["s&h", "S&H", "  s&H  "]) {
+      expect(normalizeBallInCourt(spelling)).toBe("Subcontractor");
+    }
+    expect(normalizeBallInCourt("ENGINEER")).toBe("EOR");
+  });
+
+  it("still refuses a person's name rather than guessing a party", () => {
+    // The RFI log importer routed rfis.assigned_to straight into this column.
+    expect(normalizeBallInCourt("John Doe, PE")).toBeNull();
+    expect(normalizeBallInCourt("Closed")).toBeNull();
+  });
+
+  it("never resolves an alias to a value the constraint rejects", () => {
+    for (const alias of ["S&H", "Engineer"]) {
+      expect(isValidBallInCourt(normalizeBallInCourt(alias))).toBe(true);
+    }
+  });
+});
+
+describe("every ball_in_court WRITER uses the shared vocabulary", () => {
+  const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+
+  // The constraint went live before the app matched it, and the first pass
+  // fixed only the two RFI modals. These five are the rest of the paths that
+  // can put a value INTO rfis/submittals.ball_in_court. A writer that spells
+  // its own list is how "S&H" survived: the picker offered it, the database
+  // refused it, and the user got a raw Postgres constraint name.
+  const WRITERS = [
+    "src/components/rfis/RFIFormModal.jsx",
+    "src/components/rfis/RfiBulkEditModal.jsx",
+    "src/pages/rfis/constants.js",
+    "src/components/submittals/NewRoundModal.jsx",
+    "src/components/submittals/SubmittalBulkEditModal.jsx",
+    "src/components/submittals/SubmittalBulkAddModal.jsx",
+    "src/lib/importRfiLog.js",
+  ];
+
+  const stripComments = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("imports from @/lib/ballInCourt rather than re-spelling the list", () => {
+    for (const file of WRITERS) {
+      expect(stripComments(read(file)), `${file} must use the shared vocabulary`)
+        .toMatch(/from "@\/lib\/ballInCourt"/);
+    }
+  });
+
+  it("offers neither S&H nor Engineer anywhere a value can be written", () => {
+    for (const file of WRITERS) {
+      const code = stripComments(read(file));
+      expect(code, `${file} still offers S&H`).not.toContain('"S&H"');
+      expect(code, `${file} still offers Engineer`).not.toContain('"Engineer"');
+    }
+  });
+
+  it("keeps the RFI detail panel's colour map complete", () => {
+    // DetailPanel writes BIC_PARTIES straight to the column on click and
+    // tones each chip via BIC_COLORS[p] || BIC_COLORS.Contractor. A party
+    // missing from the map renders as a second Contractor chip — wrong, and
+    // it looks deliberate.
+    const code = read("src/pages/rfis/constants.js");
+    for (const party of BALL_IN_COURT_PARTIES) {
+      expect(code, `BIC_COLORS has no entry for ${party}`).toMatch(
+        new RegExp(`\\b${party.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*\\{`),
+      );
+    }
+  });
+});
