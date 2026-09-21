@@ -1,6 +1,12 @@
 # Auto detect text files and perform LF normalization
 * text=auto eol=lf
 
+# These files are read as exact bytes by migration/CSP checks or loaded as
+# executable modules by the test runner. Keep checkouts stable on Windows.
+*.mjs text eol=lf
+*.sql text eol=lf
+/index.html text eol=lf
+
 # Captures under supabase/_capture/ are verbatim records of what is live in
 # production, checkable against an md5 the database itself computed. Some
 # function bodies genuinely contain CRLF (the piece-control *_impl functions),
