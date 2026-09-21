@@ -159,7 +159,7 @@ function BrandLockup({ size = 38, wordmarkSize = 21, tagline = false }) {
         </span>
         {tagline ? (
           <span style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: ".17em", color: C.muted, lineHeight: 1 }}>
-            BUILT FOR THE PEOPLE WHO BUILD
+            BUILT FOR PEOPLE WHO BUILD
           </span>
         ) : null}
       </span>
@@ -766,7 +766,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
             <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "var(--bg-surface-low)", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
               <SteelBuildMark tile size={54} title="SteelBuild-Pro" style={{ borderRadius: 14, display: "block" }} />
-              <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.045em" }}>SteelBuild-Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Built for the people who build</div></div>
+              <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.045em" }}>SteelBuild-Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Built for people who build</div></div>
             </div>
             {(signupNotice || forgotNotice) ? (
               <div style={{ display: "grid", gap: 18 }}>

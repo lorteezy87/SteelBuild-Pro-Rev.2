@@ -10,14 +10,14 @@ describe("BrandLogo", () => {
 
     expect(screen.getByRole("img", { name: "SteelBuild Pro" })).toBeInTheDocument();
     expect(screen.getByText("SteelBuild-Pro")).toBeInTheDocument();
-    expect(screen.getByText("BUILT FOR THE PEOPLE WHO BUILD")).toBeInTheDocument();
+    expect(screen.getByText("BUILT FOR PEOPLE WHO BUILD")).toBeInTheDocument();
   });
 
   it("renders the compact mark without the wordmark", () => {
     render(<BrandLogo variant="mark" />);
 
     expect(screen.queryByText("SteelBuild-Pro")).not.toBeInTheDocument();
-    expect(screen.queryByText("BUILT FOR THE PEOPLE WHO BUILD")).not.toBeInTheDocument();
+    expect(screen.queryByText("BUILT FOR PEOPLE WHO BUILD")).not.toBeInTheDocument();
   });
 
   it("draws the shared hex-S geometry rather than an inline copy of it", () => {
@@ -32,7 +32,10 @@ describe("BrandLogo", () => {
   it("pins both text lines to a fixed width so the fallback font cannot overflow the viewBox", () => {
     const { container } = render(<BrandLogo />);
 
-    const lengths = Array.from(container.querySelectorAll("text")).map((t) => t.getAttribute("textLength"));
-    expect(lengths).toEqual(["168", "168"]);
+    const texts = Array.from(container.querySelectorAll("text"));
+    expect(texts.map((t) => t.getAttribute("textLength"))).toEqual(["168", "168"]);
+    // The rule line is nearly twice the wordmark's character count, so it
+    // reaches 168 by tracking out rather than by fattening its glyphs.
+    expect(texts.map((t) => t.getAttribute("lengthAdjust"))).toEqual(["spacingAndGlyphs", "spacing"]);
   });
 });

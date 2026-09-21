@@ -45,8 +45,8 @@ const socialCard = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height=
     <g transform="translate(0 300) scale(0.80 1)">
       <text x="0" y="0" font-family="DejaVu Sans" font-weight="bold" font-size="104" letter-spacing="-2" fill="#FFFFFF">SteelBuild-Pro</text>
     </g>
-    <rect x="2" y="330" width="578" height="3" fill="${AMBER}"/>
-    <text x="2" y="376" font-family="DejaVu Sans Mono" font-weight="bold" font-size="22" letter-spacing="6" fill="#98A2B3">BUILT FOR THE PEOPLE WHO BUILD</text>
+    <rect x="2" y="330" width="500" height="3" fill="${AMBER}"/>
+    <text x="2" y="376" font-family="DejaVu Sans Mono" font-weight="bold" font-size="22" letter-spacing="6" fill="#98A2B3">BUILT FOR PEOPLE WHO BUILD</text>
     <text x="2" y="432" font-family="DejaVu Sans" font-size="23" letter-spacing="1" fill="#64748B">Structural steel construction management software</text>
   </g>
 </svg>`;

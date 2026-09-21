@@ -3,7 +3,7 @@
  *
  * The 2026 brand mark is a pointy-top hexagon with an "S" carved through it in
  * Signal Amber, locked up with a heavy condensed "SteelBuild-Pro" wordmark and
- * the "Built for the people who build" rule line. The hexagon geometry is
+ * the "Built for people who build" rule line. The hexagon geometry is
  * shared with the favicon, the app icons and the landing page via
  * `components/brand/steelBuildMarkGeometry` — never re-draw it inline.
  *
@@ -81,11 +81,18 @@ export function BrandLogo({
 
       {!compact ? (
         <g>
-          {/* textLength pins both lines to a known width. Barlow Condensed and
-              IBM Plex Mono arrive from Google Fonts after first paint, and the
-              'Arial Narrow' fallback is wider still — without this the wordmark
-              renders past the 250-unit viewBox and gets clipped mid-word until
-              the webfont lands. */}
+          {/* textLength pins both lines to 168 so the lockup stays flush and
+              cannot overflow: Barlow Condensed and IBM Plex Mono arrive from
+              Google Fonts after first paint, and the 'Arial Narrow' fallback is
+              wider still — without this the wordmark renders past the 250-unit
+              viewBox and gets clipped mid-word until the webfont lands.
+
+              The two lines adjust differently on purpose. The wordmark uses
+              spacingAndGlyphs because it is already set solid and only the
+              fallback needs reining in. The rule line is 26 characters against
+              the wordmark's 14, so reaching 168 by glyph-stretching would
+              visibly fatten it; 'spacing' tracks the letters apart instead,
+              which is the treatment the brand sheet uses anyway. */}
           <text
             x="50"
             y="36"
@@ -103,14 +110,14 @@ export function BrandLogo({
             x="51"
             y="50"
             textLength="168"
-            lengthAdjust="spacingAndGlyphs"
+            lengthAdjust="spacing"
             fontFamily="'IBM Plex Mono', ui-monospace, monospace"
             fontWeight="600"
             fontSize="6.2"
             letterSpacing="1.35"
             fill="var(--text-secondary, #A7B0B8)"
           >
-            BUILT FOR THE PEOPLE WHO BUILD
+            BUILT FOR PEOPLE WHO BUILD
           </text>
         </g>
       ) : null}
