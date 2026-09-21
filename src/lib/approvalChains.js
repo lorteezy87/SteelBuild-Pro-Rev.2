@@ -23,7 +23,7 @@
 /** Parties that count as "internal / detailing side" — routing out of these
  * is what flips a Draft to Submitted. Mirrors submittalStageMapping.js. */
 export const DETAILER_CLASS_PARTIES = new Set([
-  "Detailer", "S&H", "Contractor", "Subcontractor",
+  "Detailer", "Contractor", "Subcontractor",
 ]);
 
 /** Statuses during which advancing along the chain is meaningful. */
