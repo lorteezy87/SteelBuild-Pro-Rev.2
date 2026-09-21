@@ -4,9 +4,14 @@
  * The mark is a pointy-top hexagon with an "S" carved out of it by two angled
  * slots. The upper slot opens from the RIGHT edge (so the top bar stays
  * attached on the left) and the lower slot opens from the LEFT edge. That
- * handedness is the whole letter: swap the two and the mark reads as a Z. The
- * slots are 180° rotations of each other about the hexagon centre (256, 256),
- * which is what keeps the S balanced at nav sizes.
+ * handedness is the whole letter: swap the two and the mark reads as a Z.
+ *
+ * Both cuts descend left-to-right, matching the brand sheet. Flipping that
+ * slope keeps a readable S, so nothing breaks loudly — it just stops being
+ * this logo, which is why it is written down here.
+ *
+ * The slots are 180° rotations of each other about the hexagon centre
+ * (256, 256), which is what keeps the S balanced at nav sizes.
  *
  * The three sub-paths are filled as ONE path with `fill-rule="evenodd"` so the
  * slots stay genuinely transparent. That is deliberate: the mark has to sit on
@@ -31,8 +36,8 @@ export const MARK_TILE_VIEWBOX = "0 0 512 512";
 /** Hexagon outline, then the upper slot (opens right), then the lower slot (opens left). */
 export const MARK_PATH = [
   "M256 46 L410 142 L410 370 L256 466 L102 370 L102 142 Z",
-  "M410 168 L150 216 L196 246 L410 214 Z",
-  "M102 344 L362 296 L316 266 L102 298 Z",
+  "M158 176 L410 222 L410 250 L200 208 Z",
+  "M354 336 L102 290 L102 262 L312 304 Z",
 ].join(" ");
 
 /** Signal Amber — the mark's own colour, from the SteelBuild-Pro brand palette. */

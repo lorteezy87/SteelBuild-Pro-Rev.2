@@ -5,6 +5,6 @@
        evenodd so the slots stay transparent on any surface. -->
   <path fill-rule="evenodd" fill="#F5BB00"
         d="M256 46 L410 142 L410 370 L256 466 L102 370 L102 142 Z
-           M410 168 L150 216 L196 246 L410 214 Z
-           M102 344 L362 296 L316 266 L102 298 Z"/>
+           M158 176 L410 222 L410 250 L200 208 Z
+           M354 336 L102 290 L102 262 L312 304 Z"/>
 </svg>
