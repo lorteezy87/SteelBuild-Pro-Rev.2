@@ -297,40 +297,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # TEMPORARY DIAGNOSTIC — delete once the drift 401 is settled.
-      #
-      # The token authenticates fine against api.supabase.com from a laptop
-      # (200 on both /v1/projects and this project's database/migrations), but
-      # a fresh CI run on this same secret gets 401. That can only mean the
-      # string stored in GitHub differs from the one that works, so this
-      # measures the stored string instead of guessing at it.
-      #
-      # NOTHING derived from the token's characters is printed — only its
-      # length and yes/no answers. GitHub masks a secret's VALUE in logs but
-      # not `${#VAR}`, which is exactly what makes this safe and useful.
-      # A Supabase personal access token is `sbp_` + 40 hex = 44 characters.
-      - name: Probe the access token's shape (never prints its value)
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: |
-          raw="$SUPABASE_ACCESS_TOKEN"
-          stripped="$(printf '%s' "$raw" | tr -d '[:space:]')"
-          echo "length_raw=${#raw}"
-          echo "length_without_whitespace=${#stripped}"
-          case "$raw" in
-            sbp_*) echo "starts_with_sbp_=yes" ;;
-            *)     echo "starts_with_sbp_=no" ;;
-          esac
-          case "$raw" in
-            '"'*|"'"*) echo "starts_with_quote=yes" ;;
-            *)         echo "starts_with_quote=no" ;;
-          esac
-          case "$raw" in
-            *'"'|*"'") echo "ends_with_quote=yes" ;;
-            *)         echo "ends_with_quote=no" ;;
-          esac
-          echo "--- a healthy secret reads: length_raw=44, length_without_whitespace=44, starts_with_sbp_=yes, starts_with_quote=no, ends_with_quote=no"
-
       - name: Check migration + edge-function drift
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
