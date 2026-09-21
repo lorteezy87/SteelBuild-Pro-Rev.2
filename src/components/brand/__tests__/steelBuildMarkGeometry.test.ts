@@ -50,4 +50,41 @@ describe("SteelBuild-Pro hex-S mark geometry", () => {
     const brandCss = read("src/styles/brand-theme.css");
     expect(brandCss).toMatch(/--accent:\s+var\(--brand-orange\)/);
   });
+
+  it("fills the landing-page mark with Signal Amber, not the landing UI accent", () => {
+    // The landing page keeps its own executive-light accent (C.amber, #F5A800)
+    // for buttons, rules and focus rings. It is close enough to Signal Amber to
+    // look right in isolation, which is exactly why passing it to the mark went
+    // unnoticed: the public logo rendered a different yellow from the favicon
+    // and the in-app logo.
+    const landing = read("src/pages/Landing.jsx");
+    expect(landing).toContain("<SteelBuildMark size={size} color={MARK_AMBER}");
+    expect(landing).not.toMatch(/<SteelBuildMark[^>]*color=\{C\.amber\}/);
+  });
+});
+
+/** Width and height out of a PNG's IHDR chunk, which always starts at byte 16. */
+function pngSize(rel: string): { width: number; height: number } {
+  const buf = readFileSync(resolve(process.cwd(), rel));
+  expect(buf.subarray(12, 16).toString("ascii")).toBe("IHDR");
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+describe("social card", () => {
+  it("is committed at the size index.html advertises", () => {
+    // sharp scales an SVG by density/72, so rasterising the 1200x630 card at
+    // density 150 without a resize silently produced 2500x1313 files while the
+    // Open Graph tags kept claiming 1200x630.
+    const html = read("index.html");
+    const width = Number(html.match(/og:image:width" content="(\d+)"/)?.[1]);
+    const height = Number(html.match(/og:image:height" content="(\d+)"/)?.[1]);
+    expect({ width, height }).toEqual({ width: 1200, height: 630 });
+
+    expect(pngSize("public/steelbuild-pro-og.png")).toEqual({ width, height });
+    expect(pngSize("public/steelbuild-pro-logo.png")).toEqual({ width, height });
+  });
+
+  it("points the Open Graph tags at the generated card", () => {
+    expect(read("index.html")).toContain('og:image" content="https://steelbuild-pro.com/steelbuild-pro-og.png"');
+  });
 });

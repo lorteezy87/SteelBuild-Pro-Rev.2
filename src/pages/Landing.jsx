@@ -9,6 +9,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { SteelBuildMark } from "@/components/brand/SteelBuildMark";
+import { MARK_AMBER } from "@/components/brand/steelBuildMarkGeometry";
 import { PLANS } from "@/lib/billing/plans";
 import { supabase } from "@/lib/supabase";
 
@@ -145,8 +146,14 @@ function Reveal({ children, delay = 0, as: Tag = "div", className = "", style })
 // The public page runs the brand's light-background lockup: the Signal Amber
 // hex-S mark beside the "SteelBuild-Pro" wordmark. The mark itself is the shared
 // vector from components/brand — never re-draw the hexagon here.
+//
+// The fill is MARK_AMBER (#F5BB00), NOT C.amber (#F5A800). C.amber is this
+// page's own UI accent — buttons, rules, focus rings — and is close enough to
+// Signal Amber to look correct in isolation while making the landing logo a
+// different yellow from the favicon and the in-app logo. The mark takes the
+// brand value; the page keeps its accent.
 function BrandMark({ size = 38 }) {
-  return <SteelBuildMark size={size} color={C.amber} style={{ display: "block", flex: "0 0 auto" }} />;
+  return <SteelBuildMark size={size} color={MARK_AMBER} style={{ display: "block", flex: "0 0 auto" }} />;
 }
 
 function BrandLockup({ size = 38, wordmarkSize = 21, tagline = false }) {
