@@ -141,13 +141,33 @@ export function fixDuplicatePdfPages(drawings) {
     const allPages = new Set();
     for (let p = 1; p <= maxPage; p++) allPages.add(p);
 
-    // Walk the group in sheet-number order, not arrival order: the first sheet
-    // claiming a page keeps it, later duplicates take the nearest unclaimed
-    // page. Arrival order came straight from PostgREST, which imposes none.
+    // Walk the group in sheet-number order, not arrival order: arrival order
+    // came straight from PostgREST, which imposes none, so the same stored data
+    // could otherwise resolve differently on a later load.
     const ordered = [...indices].sort((x, y) => repairOrderCmp(drawings[x], drawings[y]));
 
     const claimed = new Set();
+
+    // Pass 1 — a sheet whose stored page NOTHING else claims keeps it, whatever
+    // order it appears in. Skipping this pass let a duplicate take the nearest
+    // free page and displace a sheet that was never in contention: with
+    // S-1→1, S-2→1, S-3→2, the second page-1 row took page 2 and pushed S-3,
+    // whose page was already unique, onto page 3. A row that was right is now
+    // never moved to make room for one that was wrong.
+    const contested = [];
     for (const idx of ordered) {
+      const pg = drawings[idx].pdf_page || 1;
+      if (pageCounts[pg] === 1) {
+        claimed.add(pg);
+        allPages.delete(pg);
+      } else {
+        contested.push(idx);
+      }
+    }
+
+    // Pass 2 — only the rows that actually collide move. Within one contested
+    // page the first in sheet order keeps it; the rest take the nearest free.
+    for (const idx of contested) {
       const pg = drawings[idx].pdf_page || 1;
       if (!claimed.has(pg)) {
         claimed.add(pg);
