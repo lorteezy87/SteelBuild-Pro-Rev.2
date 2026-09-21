@@ -423,19 +423,34 @@ jobs:
         run: npx wrangler deploy
 
       - name: Post-deploy health check
-        # Only runs once CLOUDFLARE_BASE_URL is configured; until then the job
-        # stays green while DNS/custom-domain setup is still in progress
-        # (mirrors deploy-staging). Point it at the workers.dev URL first, then
-        # at the custom domain after cutover.
-        if: ${{ vars.CLOUDFLARE_BASE_URL != '' }}
+        # Probes the CUSTOM DOMAIN, not workers.dev. `wrangler deploy` can
+        # publish a perfectly healthy Worker while steelbuild-pro.com serves
+        # nothing — wrong route, missing custom-domain binding, DNS pointed
+        # elsewhere — and workers.dev would report green through all of it.
+        #
+        # This step used to carry `if: vars.CLOUDFLARE_BASE_URL != ''`, added
+        # while the DNS cutover was in progress. The cutover landed but the
+        # variable was never set, so the step reported success in 0s having
+        # probed nothing. The fallback below replaces the gate: set the repo
+        # variable to override (point it at workers.dev during a future
+        # cutover), otherwise the production hostname is probed.
+        #
+        # Red here means "deployed but not serving" — a signal, not a
+        # rollback; the version is already promoted by the time this runs.
+        #
+        # BASE arrives through env rather than being interpolated into the
+        # script body, so a repo variable can never be read as shell.
+        env:
+          BASE: ${{ vars.CLOUDFLARE_BASE_URL || 'https://steelbuild-pro.com' }}
         run: |
           set -e
+          echo "probing $BASE"
           for i in 1 2 3 4 5 6; do
-            code=$(curl -sL -o /dev/null -w '%{http_code}' "${{ vars.CLOUDFLARE_BASE_URL }}")
-            if [ "$code" = "200" ]; then echo "cloudflare healthy ($code)"; exit 0; fi
+            code=$(curl -sL -o /dev/null -w '%{http_code}' "$BASE")
+            if [ "$code" = "200" ]; then echo "cloudflare healthy ($code) at $BASE"; exit 0; fi
             echo "attempt $i: HTTP $code"; sleep 10
           done
-          echo "::error::Cloudflare health check failed after deploy"; exit 1
+          echo "::error::Cloudflare health check failed after deploy: $BASE never returned 200"; exit 1
 
   # ── PR preview → Cloudflare version preview URL ──────────────────────────
   # Gives back the per-PR preview URLs that Cloudflare's Workers Builds git
