@@ -244,9 +244,15 @@ describe('the real manifest', () => {
 });
 
 /**
- * The live ledger at the time these overrides were written (124 rows). Kept as
- * a literal so the "nothing unclassified" test above is deterministic and needs
- * no network access.
+ * The live ledger, as a 125-version snapshot. Kept as a literal so the
+ * "nothing unclassified" test above is deterministic and needs no network
+ * access.
+ *
+ * Production currently holds 126 rows. The one version deliberately absent here
+ * is 20260914122050, which is still carried by a migrationOverride in the
+ * manifest; that override is stale (the version reached the ledger) and its own
+ * evidence string says to move it into this literal and drop the override.
+ * Doing so is out of scope for the change that added 20260920014500 below.
  */
 const LEDGER = new Set([
   '20260101000000', '20260101000010', '20260101000020', '20260620231716', '20260623032908',
@@ -277,4 +283,9 @@ const LEDGER = new Set([
   // Applied out-of-band 2026-09-19 08:27:58 by the Section Cut work (PR #437)
   // before its file was committed; verified present in the live ledger.
   '20260919082758',
+  // Applied and stamped by hand 2026-09-20 01:45:00 (ball_in_court vocabulary)
+  // before its file was committed; transcribed byte-faithfully into
+  // supabase/migrations/20260920014500_ball_in_court_vocabulary.sql and
+  // verified present in the live ledger.
+  '20260920014500',
 ]);
