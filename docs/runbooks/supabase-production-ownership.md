@@ -35,6 +35,20 @@ configuration.
 
 ## Updating the manifest
 
+### sheets-api retirement
+
+On 2026-09-21 the owner confirmed that `sheets-api` was intentionally retired
+and requested this inventory update. Read-only production inventory verified
+its removal. The old `required` entry then blocked the approved titleblock
+frontend release (#462) with `missingFunctions: ["sheets-api"]`.
+
+The function is now `deprecated`: absence passes, while any reappearance fails
+the same drift gate. Historical ownership remains `lorteezy87/steelbuild-sheets-web`.
+This change does not deploy or delete a function, change database grants or
+migration history, or exempt other shared assets from checking.
+
+### Review procedure
+
 1. Identify the authoritative source repository and exact source path or commit
    object. For an original recovered from the authenticated production ledger,
    preserve exact SQL and hashes outside active migrations and name shared
