@@ -10,19 +10,27 @@ import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 
 export const mono = { fontFamily: "var(--font-mono)" };
 
-// One entry per BALL_IN_COURT_PARTIES member. DetailPanel falls back to
-// Contractor's colors for an unknown key, so a missing party here does not
-// throw -- it renders as a second Contractor chip, which is worse than an
-// error because it looks deliberate. "Engineer" was retired (it is a synonym
-// for EOR); its warning hue moves to EOR rather than being orphaned.
+export const UNASSIGNED_BIC_COLORS = {
+  bg: "var(--bg-elevated)",
+  text: "var(--text-muted)",
+};
+
+// One entry per BALL_IN_COURT_PARTIES member, asserted by test. DetailPanel
+// renders unknown parties neutrally; the coverage test keeps a missing
+// canonical party from silently losing its color. The original parties keep
+// their existing colours; EOR takes
+// the slot "Engineer" had, since Engineer was its synonym.
 export const BIC_COLORS = {
+  // Detailer class — our side of the handoff.
   Contractor:    { bg: "var(--info-muted)",          text: "var(--accent)" },
-  Subcontractor: { bg: "var(--info-muted)",          text: "var(--info)" },
-  Detailer:      { bg: "var(--status-review-muted)", text: "var(--status-review)" },
-  GC:            { bg: "var(--accent-muted)",        text: "var(--secondary)" },
+  Subcontractor: { bg: "var(--info-muted)",          text: "var(--status-info)" },
+  Detailer:      { bg: "var(--secondary-muted)",     text: "var(--secondary)" },
+  // Approver class.
   EOR:           { bg: "var(--warning-muted)",       text: "var(--status-warning)" },
-  AOR:           { bg: "var(--accent-orange-muted)", text: "var(--accent-orange)" },
   Architect:     { bg: "var(--success-muted)",       text: "var(--status-success)" },
+  AOR:           { bg: "var(--status-review-muted)", text: "var(--status-review)" },
+  // Downstream.
+  GC:            { bg: "var(--accent-muted)",        text: "var(--secondary)" },
   Owner:         { bg: "var(--danger-muted)",        text: "var(--status-error)" },
 };
 
@@ -72,12 +80,11 @@ export const KPI_ACCENT_MAP = {
   "var(--accent)":         "var(--accent-muted)",
 };
 
-// DetailPanel writes these straight to rfis.ball_in_court on click, so this
-// list IS a write vocabulary and must match chk_rfis_ball_in_court. It used to
-// be its own five-value list including "Engineer", which the constraint
-// rejects -- one click and the save failed with a raw Postgres constraint
-// name. Take it from the canonical source, never re-spell it here.
-export const BIC_PARTIES = [...BALL_IN_COURT_PARTIES];
+// The buttons DetailPanel writes straight to rfis.ball_in_court, so this must
+// be the vocabulary chk_rfis_ball_in_court enforces. It used to be its own
+// five-value list containing "Engineer", which no constraint allows — one click
+// lost the user's save.
+export const BIC_PARTIES = BALL_IN_COURT_PARTIES;
 export const PRIORITIES  = ["Critical", "High", "Medium", "Low"];
 
 // Discipline filter chips used by the canonical RFI control center.

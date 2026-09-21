@@ -12,7 +12,9 @@ import {
 function photo(overrides: Partial<PhotoRecord>): PhotoRecord {
   return {
     category: "Progress",
+    client_op_id: null,
     created_at: "2026-09-01T12:00:00Z",
+    created_by: null,
     daily_log_id: null,
     deleted_at: null,
     description: null,
@@ -29,6 +31,7 @@ function photo(overrides: Partial<PhotoRecord>): PhotoRecord {
     taken_date: "2026-09-01T12:00:00Z",
     title: null,
     updated_at: null,
+    work_package_id: null,
     ...overrides,
   };
 }

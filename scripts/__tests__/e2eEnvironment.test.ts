@@ -7,19 +7,19 @@ import {
 
 const staging = {
   E2E_TARGET: "staging",
-  E2E_BASE_URL: "https://steelbuild-pro-staging.vercel.app",
-  E2E_SUPABASE_URL: "https://abbeavtbifuddtrifvae.supabase.co",
+  E2E_BASE_URL: "https://steelbuild-pro-staging.n-lortz1987.workers.dev",
+  E2E_SUPABASE_URL: "https://ndyfjffsulfbwpmwdmic.supabase.co",
   E2E_SUPABASE_ANON_KEY: "browser-public-key",
   E2E_USER: "synthetic@example.invalid",
   E2E_PASS: "test-password-not-a-secret",
-  E2E_EXPECTED_SUPABASE_REF: "abbeavtbifuddtrifvae",
+  E2E_EXPECTED_SUPABASE_REF: "ndyfjffsulfbwpmwdmic",
 };
 
 describe("staging E2E environment guardrails", () => {
   it("accepts a matched staging app and Supabase target", () => {
     const resolved = resolveE2EEnvironment(staging);
     expect(resolved.target).toBe("staging");
-    expect(resolved.supabaseRef).toBe("abbeavtbifuddtrifvae");
+    expect(resolved.supabaseRef).toBe("ndyfjffsulfbwpmwdmic");
   });
 
   it("rejects a production app host in staging mode", () => {
@@ -48,6 +48,14 @@ describe("staging E2E environment guardrails", () => {
         E2E_MUTATION_FIXTURE_KIND: "disposable",
       }),
     ).not.toThrow();
+  });
+
+  it("rejects production even when the expected ref is also misconfigured", () => {
+    expect(() => resolveE2EEnvironment({
+      ...staging,
+      E2E_SUPABASE_URL: "https://kjrwqagyeswwoxpjkcko.supabase.co",
+      E2E_EXPECTED_SUPABASE_REF: "kjrwqagyeswwoxpjkcko",
+    })).toThrow(/production database/);
   });
 
   it("wires only read-only specs into the STAGING_E2E_ENABLED job", () => {

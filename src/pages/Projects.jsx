@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { entities } from "@/api/supabaseClient";
-import { supabase } from "@/lib/supabase";
+import { fetchProjectRegister } from "./projects/projectQueries";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ProjectFormModal from "@/components/projects/ProjectFormModal";
 import { applyProjectTemplate } from "@/lib/projectTemplates";
@@ -36,17 +36,9 @@ export default function Projects() {
      on_hold=true) and query the table directly, still honouring soft-delete
      and project-membership RLS. Every other consumer keeps using
      Project.list() and silently gets the active subset. */
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useQuery({
     queryKey: ["projects", "all-including-on-hold"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("is_deleted", false)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data || [];
-    },
+    queryFn: fetchProjectRegister,
     staleTime: 5 * 60 * 1000,
   });
   const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => entities.WorkPackage.listAll() });
@@ -153,7 +145,14 @@ export default function Projects() {
       && (healthFilter === "all"  || healthByProjectId[p.id]?.label === healthFilter);
   }), [projects, search, phaseFilter, healthFilter, healthByProjectId]);
 
-  const canCreate = !atProjectLimit;
+  const canCreate = !projectsLoading && !projectsError && !atProjectLimit;
+
+  if (projectsError) return (
+    <div role="alert" style={{ padding: 24, color: "var(--status-error)" }}>
+      Projects could not be loaded. <button onClick={() => refetchProjects()}>Retry</button>
+    </div>
+  );
+  if (projectsLoading) return <div role="status" style={{ padding: 24 }}>Loading projects…</div>;
 
   return (
     <>
