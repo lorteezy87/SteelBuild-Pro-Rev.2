@@ -1,4 +1,5 @@
 import { compareDrawingSetPackages } from "@/lib/drawingSetOrdering";
+import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 import type { DrawingSetsById, Submittal } from "./types";
 
 export const STATUSES = [
@@ -8,17 +9,15 @@ export const STATUSES = [
 
 export const TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
 
-// Ball-in-court values, ordered to mirror the real workflow handoff
-// (corrected May 2026 / migration 077):
-//   Detailer-class:  Detailer / S&H / Contractor / Subcontractor → IFA/OFS
-//   Approver-class:  EOR / Architect / AOR                       → OFA/BFA
-//   Downstream-class: GC / Owner                                  → IFC
-// See src/lib/submittalStageMapping.js for the canonical mapping.
-export const BIC_CHOICES = [
-  "Detailer", "S&H", "Contractor", "Subcontractor",
-  "EOR", "Architect", "AOR",
-  "GC", "Owner",
-];
+// Ball-in-court values. Taken from the one vocabulary so a picker can never
+// offer a value the DB CHECK constraints reject -- this list feeds
+// SubmittalDetail, SubmittalFormModal, SubmittalRegisterPanel and
+// StatusSuggestStrip, four separate write paths that all offered "S&H".
+//   Detailer-class:   Detailer / Contractor / Subcontractor → IFA/OFS
+//   Approver-class:   EOR / Architect / AOR                 → OFA/BFA
+//   Downstream-class: GC / Owner                            → IFC
+// See src/lib/submittalStageMapping.ts for the canonical mapping.
+export const BIC_CHOICES = [...BALL_IN_COURT_PARTIES];
 
 // One-color-per-status palette so adjacent statuses don't blur into
 // each other. Earlier scheme collapsed eight statuses onto four

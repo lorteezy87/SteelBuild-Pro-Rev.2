@@ -8,6 +8,7 @@ import { workingDaysBetween } from "@/lib/workingDays";
 import { todayLocalISO } from "@/lib/dateMath";
 import { pickMostRecentSubmittal, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
+import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 import type {
   ApprovalMatrixRow,
   CurrentRevisionInfo,
@@ -79,13 +80,9 @@ export const CLOSED_SUBMITTAL_STATUSES = new Set([
   "Void",
 ]);
 
-// Ball-in-court choices — matches the canonical list used in submittal modals
-// (src/components/submittals/NewRoundModal.jsx).
-export const BIC_CHOICES = [
-  "Detailer", "S&H", "Contractor", "Subcontractor",
-  "EOR", "Architect", "AOR",
-  "GC", "Owner",
-];
+// Ball-in-court choices -- taken from the one vocabulary so the hub's inline
+// control can never offer a value the DB CHECK constraints reject.
+export const BIC_CHOICES = [...BALL_IN_COURT_PARTIES];
 
 export const ACTION_STATUSES = new Set([
   "Rejected",

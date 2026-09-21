@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -169,10 +169,17 @@ describe("every ball_in_court WRITER uses the shared vocabulary", () => {
   const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
   // The constraint went live before the app matched it, and the first pass
-  // fixed only the two RFI modals. These five are the rest of the paths that
-  // can put a value INTO rfis/submittals.ball_in_court. A writer that spells
-  // its own list is how "S&H" survived: the picker offered it, the database
-  // refused it, and the user got a raw Postgres constraint name.
+  // fixed only the two RFI modals. These are the rest of the modules that
+  // decide what can be put INTO rfis / submittals / submittal_rounds
+  // .ball_in_court. A writer that spells its own list is how "S&H" survived:
+  // the picker offered it, the database refused it, and the user got a raw
+  // Postgres constraint name.
+  //
+  // The two format modules are each one list behind SEVERAL pickers --
+  // submittals/format feeds SubmittalDetail, SubmittalFormModal,
+  // SubmittalRegisterPanel and StatusSuggestStrip; drawingSubmittalHub/format
+  // feeds the hub's inline control. Counting modals alone undercounts the
+  // write surface, which is how this list missed them the first time.
   const WRITERS = [
     "src/components/rfis/RFIFormModal.jsx",
     "src/components/rfis/RfiBulkEditModal.jsx",
@@ -180,6 +187,8 @@ describe("every ball_in_court WRITER uses the shared vocabulary", () => {
     "src/components/submittals/NewRoundModal.jsx",
     "src/components/submittals/SubmittalBulkEditModal.jsx",
     "src/components/submittals/SubmittalBulkAddModal.jsx",
+    "src/pages/submittals/format.ts",
+    "src/pages/drawingSubmittalHub/format.ts",
     "src/lib/importRfiLog.js",
   ];
 
@@ -212,5 +221,52 @@ describe("every ball_in_court WRITER uses the shared vocabulary", () => {
         new RegExp(`\\b${party.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*\\{`),
       );
     }
+  });
+});
+
+describe("no module re-spells the party vocabulary", () => {
+  // The scan above only checks files it already knows about, which is exactly
+  // how src/pages/submittals/format.ts and drawingSubmittalHub/format.ts were
+  // missed: each is one BIC_CHOICES behind several pickers. This catches a
+  // NEW list instead, by looking for the vocabulary's own shape anywhere in
+  // src/ rather than in a maintained roster.
+  const SRC = join(process.cwd(), "src");
+  const CANONICAL = ["src/lib/ballInCourt.ts"];
+
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) return walk(full);
+      return /\.(ts|tsx|js|jsx)$/.test(e.name) ? [full] : [];
+    });
+
+  it("declares the full party list in exactly one place", () => {
+    // Deliberately NOT "mentions a party". Classification subsets are
+    // legitimate and must stay independent: DETAILER_CLASS_BIC in
+    // submittalStageMapping, DETAILER_CLASS in submittalReviewEngine and
+    // DETAILER_CLASS_PARTIES in approvalChains each name the detailing side
+    // only, and forcing them onto the whole vocabulary would change what they
+    // classify. What must not recur is a second copy of the WHOLE picker
+    // list -- that is what a menu offers, and what the constraint judges.
+    const QUORUM = 6;
+    const offenders = walk(SRC)
+      .filter((f) => !CANONICAL.some((c) => f.endsWith(c.replace("src/", "/"))))
+      .filter((f) => !/__tests__|\.test\./.test(f))
+      .filter((f) => {
+        const code = readFileSync(f, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/^\s*\/\/.*$/gm, "");
+        for (const literal of code.match(/\[[^[\]]*\]/gs) ?? []) {
+          const named = BALL_IN_COURT_PARTIES.filter((party) =>
+            literal.includes(`"${party}"`),
+          );
+          if (named.length >= QUORUM) return true;
+        }
+        return false;
+      })
+      .map((f) => f.slice(process.cwd().length + 1));
+
+    expect(offenders, "these re-spell the whole vocabulary instead of importing it")
+      .toEqual([]);
   });
 });
