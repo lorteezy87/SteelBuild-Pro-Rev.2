@@ -8,6 +8,8 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
+import { SteelBuildMark } from "@/components/brand/SteelBuildMark";
+import { MARK_AMBER } from "@/components/brand/steelBuildMarkGeometry";
 import { PLANS } from "@/lib/billing/plans";
 import { supabase } from "@/lib/supabase";
 
@@ -36,7 +38,6 @@ const F = {
 };
 
 const HERO_STRIP = "/steelbuild-hero.svg";
-const LOGO_IMG = "/steelbuild-pro-logo.jpg";
 
 const NAV_LINKS = [
   { label: "Platform", target: "platform" },
@@ -142,14 +143,34 @@ function Reveal({ children, delay = 0, as: Tag = "div", className = "", style })
   );
 }
 
+// The public page runs the brand's light-background lockup: the Signal Amber
+// hex-S mark beside the "SteelBuild-Pro" wordmark. The mark itself is the shared
+// vector from components/brand — never re-draw the hexagon here.
+//
+// The fill is MARK_AMBER (#F5BB00), NOT C.amber (#F5A800). C.amber is this
+// page's own UI accent — buttons, rules, focus rings — and is close enough to
+// Signal Amber to look correct in isolation while making the landing logo a
+// different yellow from the favicon and the in-app logo. The mark takes the
+// brand value; the page keeps its accent.
 function BrandMark({ size = 38 }) {
+  return <SteelBuildMark size={size} color={MARK_AMBER} style={{ display: "block", flex: "0 0 auto" }} />;
+}
+
+function BrandLockup({ size = 38, wordmarkSize = 21, tagline = false }) {
   return (
-    <div
-      className="lp-brand-mark"
-      style={{ width: size, height: size, minWidth: size, borderRadius: Math.max(10, size * 0.26) }}
-    >
-      SB
-    </div>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 11 }}>
+      <BrandMark size={size} />
+      <span style={{ display: "grid", gap: 3, textAlign: "left" }}>
+        <span style={{ color: C.ink, fontWeight: 950, letterSpacing: "-.045em", fontSize: wordmarkSize, lineHeight: 1 }}>
+          SteelBuild-Pro
+        </span>
+        {tagline ? (
+          <span style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: ".17em", color: C.muted, lineHeight: 1 }}>
+            BUILT FOR PEOPLE WHO BUILD
+          </span>
+        ) : null}
+      </span>
+    </span>
   );
 }
 
@@ -163,7 +184,7 @@ function ProductMockup() {
   return (
     <div className="lp-product-shell" aria-label="SteelBuild Pro product preview">
       <div className="lp-product-sidebar">
-        <div className="lp-product-brand"><BrandMark size={28} /><span>SteelBuild Pro</span></div>
+        <div className="lp-product-brand"><BrandMark size={26} /><span>SteelBuild-Pro</span></div>
         {["Dashboard", "Command Center", "Portfolio", "Projects", "Action Items", "RFIs", "Detailing", "Schedule", "Field Today", "Budget Control"].map((item, idx) => (
           <div key={item} className={`lp-product-nav ${idx === 0 ? "active" : ""}`}>
             <span />{item}
@@ -393,7 +414,6 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
         .lp-sec { padding: 104px 0; position: relative; }
         .lp-reveal { opacity: 0; transform: translateY(20px); transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1); }
         .lp-reveal.is-in { opacity: 1; transform: translateY(0); }
-        .lp-brand-mark { display: grid; place-items: center; background: linear-gradient(180deg, #FFF7DE, #FFFFFF); border: 2px solid ${C.amber}; color: ${C.amberDark}; font-weight: 900; font-size: 12px; letter-spacing: .02em; box-shadow: 0 12px 24px rgba(245,168,0,.15); }
         .lp-kicker { display: inline-flex; align-items: center; gap: 10px; font-family: ${F.mono}; font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: ${C.amberDark}; }
         .lp-kicker::before { content: ''; width: 28px; height: 2px; border-radius: 999px; background: linear-gradient(90deg, transparent, ${C.amber}); }
         .lp-h1 { font-family: ${F.display}; font-size: clamp(46px, 6.4vw, 84px); line-height: .96; letter-spacing: -.06em; color: ${C.ink}; margin: 20px 0 0; font-weight: 900; }
@@ -416,7 +436,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
         .lp-product-shell { width: min(760px, 100%); display: grid; grid-template-columns: 150px minmax(0,1fr); background: #F8FAFC; border: 1px solid ${C.line}; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 80px rgba(15,23,42,.18); animation: lpFloat 9s ease-in-out infinite; position: relative; }
         .lp-product-shell::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,.18) 46%, transparent 62%); transform: translateX(-120%); animation: lpShine 8s ease-in-out infinite; }
         .lp-product-sidebar { background: #FFFFFF; border-right: 1px solid ${C.line}; padding: 16px 12px; }
-        .lp-product-brand { display: flex; align-items: center; gap: 8px; color: ${C.ink}; font-weight: 900; font-size: 13px; margin-bottom: 16px; }
+        .lp-product-brand { display: flex; align-items: center; gap: 8px; color: ${C.ink}; font-weight: 900; font-size: 12.5px; letter-spacing: -.02em; white-space: nowrap; margin-bottom: 16px; }
         .lp-product-nav { display: flex; align-items: center; gap: 8px; min-height: 26px; padding: 0 8px; border-radius: 8px; color: ${C.body}; font-size: 10px; font-weight: 800; margin-bottom: 3px; }
         .lp-product-nav span { width: 8px; height: 8px; border-radius: 3px; border: 1px solid ${C.line2}; }
         .lp-product-nav.active { background: #FFF4D5; color: ${C.ink}; }
@@ -506,8 +526,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
       <nav style={{ position: "sticky", top: 0, zIndex: 50, background: scrolled ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.68)", backdropFilter: "blur(18px)", borderBottom: `1px solid ${scrolled ? C.line : "transparent"}`, transition: "background .2s, border-color .2s" }}>
         <div className="lp-wrap" style={{ height: 74, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18 }}>
           <button type="button" onClick={() => scrollTo("platform")} style={{ display: "flex", alignItems: "center", gap: 12, border: 0, background: "none", padding: 0, cursor: "pointer" }}>
-            <BrandMark />
-            <span style={{ color: C.ink, fontWeight: 950, letterSpacing: "-.04em", fontSize: 20 }}>SteelBuild Pro</span>
+            <BrandLockup size={36} wordmarkSize={21} />
           </button>
           <div className="lp-nav-links" style={{ display: "flex", alignItems: "center", gap: 28 }}>
             {NAV_LINKS.map(({ label, target }) => <button key={target} className="lp-navlink" onClick={() => scrollTo(target)}>{label}</button>)}
@@ -721,7 +740,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
       <footer style={{ background: C.surface, borderTop: `1px solid ${C.line}`, padding: "54px 0 34px" }}>
         <div className="lp-wrap lp-footer-main" style={{ display: "flex", justifyContent: "space-between", gap: 34, flexWrap: "wrap" }}>
           <div style={{ maxWidth: 330 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}><BrandMark /><span style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.04em" }}>SteelBuild Pro</span></div>
+            <div style={{ marginBottom: 14 }}><BrandLockup size={40} wordmarkSize={22} tagline /></div>
             <p style={{ color: C.body, lineHeight: 1.6, margin: 0, fontSize: 13.5 }}>A professional project delivery platform built for structural steel teams.</p>
           </div>
           <div style={{ display: "flex", gap: 58, flexWrap: "wrap" }}>
@@ -753,8 +772,8 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
           <div role="dialog" aria-modal="true" aria-label={authMode === "signup" ? "Create account" : "Sign in"} className="lp-card" style={{ width: "100%", maxWidth: 438, padding: 32, borderRadius: 24, position: "relative", boxShadow: "0 34px 90px rgba(15,23,42,.28)" }}>
             <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "var(--bg-surface-low)", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-              <img src={LOGO_IMG} alt="SteelBuild Pro" onError={(e) => { e.currentTarget.style.display = "none"; }} style={{ width: 54, height: 54, objectFit: "cover", borderRadius: 14, border: `1px solid ${C.line}` }} />
-              <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.04em" }}>SteelBuild Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Project controls for steel</div></div>
+              <SteelBuildMark tile size={54} title="SteelBuild-Pro" style={{ borderRadius: 14, display: "block" }} />
+              <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.045em" }}>SteelBuild-Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Built for people who build</div></div>
             </div>
             {(signupNotice || forgotNotice) ? (
               <div style={{ display: "grid", gap: 18 }}>
