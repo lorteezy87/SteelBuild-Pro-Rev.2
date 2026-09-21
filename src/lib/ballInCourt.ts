@@ -21,6 +21,19 @@
  * `AOR` has no rows in production but IS in the approver class in code, so it
  * stays in the vocabulary — omitting it would make a code path that already
  * exists start failing at the constraint.
+ *
+ * "S&H" was the wider bug. Seven separate lists offered it — three submittal
+ * modals plus submittals/format and drawingSubmittalHub/format, which sit
+ * behind five more pickers between them — and four detailer-class sets
+ * classified it. It was never in this vocabulary, so once
+ * chk_submittals_ball_in_court landed, picking it failed the save with a raw
+ * Postgres constraint name. Zero rows ever stored it (all three constraints
+ * validated clean), so removing it lost nothing.
+ *
+ * It maps to `Subcontractor`: S&H Steel is the fabricator/erector, i.e. the
+ * GC's subcontractor. That is the owner's call, recorded here because it is
+ * not derivable from the schema. The company name itself is ordinary domain
+ * prose elsewhere in the repo — what it may not be is a party value.
  */
 
 /** Every party that may hold the ball. Order is the order menus render. */

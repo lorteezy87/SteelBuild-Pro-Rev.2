@@ -240,6 +240,32 @@ describe("no module re-spells the party vocabulary", () => {
       return /\.(ts|tsx|js|jsx)$/.test(e.name) ? [full] : [];
     });
 
+  it("never names S&H alongside real parties, in any list", () => {
+    // NOT a ban on the string. S&H Steel is the founding customer and appears
+    // legitimately all over the repo as domain prose, a PDF byline and a
+    // settings placeholder. What must not exist is "S&H" sitting in a literal
+    // BESIDE canonical parties -- that shape is a party list or a
+    // classification set, and there it is a value three CHECK constraints
+    // reject. It survived in four detailer-class sets after the pickers were
+    // fixed, where it was a dead branch that made the sets look authoritative.
+    const offenders = walk(SRC)
+      .filter((f) => !/__tests__|\.test\./.test(f))
+      .filter((f) => {
+        const code = readFileSync(f, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/^\s*\/\/.*$/gm, "");
+        const literals: string[] = code.match(/\[[^[\]]*\]/gs) ?? [];
+        return literals.some(
+          (literal) =>
+            literal.includes('"S&H"') &&
+            BALL_IN_COURT_PARTIES.some((party) => literal.includes(`"${party}"`)),
+        );
+      })
+      .map((f) => f.slice(process.cwd().length + 1));
+
+    expect(offenders, "S&H is not a party these constraints accept").toEqual([]);
+  });
+
   it("declares the full party list in exactly one place", () => {
     // Deliberately NOT "mentions a party". Classification subsets are
     // legitimate and must stay independent: DETAILER_CLASS_BIC in
