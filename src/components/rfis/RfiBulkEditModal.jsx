@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 
 /**
  * RfiBulkEditModal — apply the same field changes to many RFIs at once.
@@ -16,7 +17,9 @@ import React, { useState } from "react";
 
 const PRIORITIES = ["Critical", "High", "Medium", "Low"];
 const STATUSES = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
-const BIC_CHOICES = ["Contractor", "EOR", "Architect", "GC", "Owner"];
+// Shared with RFIFormModal and the DB CHECK. These two modals write the same
+// column and used to offer different lists for it.
+const BIC_CHOICES = BALL_IN_COURT_PARTIES;
 
 export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {
   // "unchanged" sentinel lets us send a subset of fields on submit.
