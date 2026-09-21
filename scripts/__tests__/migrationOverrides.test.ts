@@ -287,4 +287,9 @@ const LEDGER = new Set([
   // Verified present in the live ledger with the file's contents as its
   // single statement.
   '20260920014500',
+  // Applied 2026-09-21 03:42:12 by the ball-in-court constraint work: the same
+  // vocabulary on submittal_rounds, which 20260920014500 left unconstrained.
+  // Committed file is the ledger payload byte-for-byte (sha256 9037d66d...,
+  // 1929 bytes).
+  '20260921034212',
 ]);
