@@ -1,5 +1,6 @@
 /**
- * generate-brand-rasters — renders the raster brand assets in public/ from the
+ * generate-brand-rasters — renders the raster brand assets in public/ and the
+ * iOS app icon + launch splash in ios/App/App/Assets.xcassets/ from the
  * SteelBuild-Pro hex-S vector.
  *
  * The mark geometry is duplicated here as a string because this script runs
@@ -19,6 +20,7 @@ const path = require("node:path");
 const sharp = require("sharp");
 
 const PUBLIC_DIR = path.resolve(__dirname, "..", "public");
+const IOS_ASSETS_DIR = path.resolve(__dirname, "..", "ios", "App", "App", "Assets.xcassets");
 
 /** Social-card pixel size. Must match og:image:width / og:image:height in index.html. */
 const SOCIAL_WIDTH = 1200;
@@ -32,6 +34,11 @@ const MARK_PATH = [
 
 const AMBER = "#F5BB00";
 const FOUNDRY_BLACK = "#0D1117";
+/** The web boot shell's field; capacitor.config.ts paints the native splash and webview the same colour. */
+const SHELL_BLACK = "#0B0E11";
+
+/** Square canvas the Capacitor launch storyboard aspect-fills onto every iPhone and iPad shape. */
+const IOS_SPLASH_SIZE = 2732;
 
 /** Places the 512-canvas mark so its hexagon is `height` tall with its top-left at (x, y). */
 function placeMark(height, x, y) {
@@ -83,6 +90,33 @@ async function main() {
   await card.clone().jpeg({ quality: 92 }).toFile(path.join(PUBLIC_DIR, "steelbuild-pro-logo.jpg"));
 
   console.log("Brand rasters regenerated in public/.");
+
+  // iOS app icon: the favicon tile at 1024. App Store Connect rejects an icon
+  // with an alpha channel (ITMS-90717) even when every pixel is opaque, so the
+  // channel is dropped, not just filled.
+  await sharp(iconSvg, { density: 900 })
+    .resize(1024, 1024)
+    .flatten({ background: FOUNDRY_BLACK })
+    .removeAlpha()
+    .png({ compressionLevel: 9 })
+    .toFile(path.join(IOS_ASSETS_DIR, "AppIcon.appiconset", "AppIcon-512@2x.png"));
+
+  // Launch splash: the mark centred at 20% of the canvas height, small enough
+  // to survive the storyboard's aspect-fill crop on a tall iPhone and a
+  // landscape iPad alike. The three names are the 1x/2x/3x slots of the
+  // Capacitor template's Splash.imageset.
+  const markHeight = IOS_SPLASH_SIZE * 0.2;
+  const markWidth = (308 / 420) * markHeight;
+  const splashSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${IOS_SPLASH_SIZE}" height="${IOS_SPLASH_SIZE}" viewBox="0 0 ${IOS_SPLASH_SIZE} ${IOS_SPLASH_SIZE}">
+  <rect width="${IOS_SPLASH_SIZE}" height="${IOS_SPLASH_SIZE}" fill="${SHELL_BLACK}"/>
+  ${placeMark(markHeight, (IOS_SPLASH_SIZE - markWidth) / 2, (IOS_SPLASH_SIZE - markHeight) / 2)}
+</svg>`;
+  const splash = sharp(Buffer.from(splashSvg)).flatten({ background: SHELL_BLACK }).removeAlpha();
+  for (const name of ["splash-2732x2732.png", "splash-2732x2732-1.png", "splash-2732x2732-2.png"]) {
+    await splash.clone().png({ compressionLevel: 9 }).toFile(path.join(IOS_ASSETS_DIR, "Splash.imageset", name));
+  }
+
+  console.log("iOS app icon and launch splash regenerated in ios/App/App/Assets.xcassets/.");
 }
 
 main().catch((error) => {
