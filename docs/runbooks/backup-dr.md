@@ -7,7 +7,7 @@ Findings: [H24] (backups/PITR untested) · [H25] (Storage not backed up)
 Refs:
 - Supabase project: `kjrwqagyeswwoxpjkcko`
 - Production: `https://steelbuild-pro.com`
-- Vercel project: `steelbuildpro-og`
+- Cloudflare Worker: `steelbuild-pro-rev-2` (config `wrangler.jsonc`); staging Worker `steelbuild-pro-staging` (`wrangler.staging.jsonc`). **Vercel is retired** — the account is closed and `steelbuildpro-og` no longer exists.
 - Storage S3 endpoint: `https://kjrwqagyeswwoxpjkcko.storage.supabase.co/storage/v1/s3`
 
 ---
@@ -58,16 +58,26 @@ Use when the Supabase project itself is unrecoverable (deleted, region outage wi
 1. Create a **new Supabase project** (note the new project ref and new URL).
 2. Restore the latest backup / PITR snapshot into the new project (Supabase support or dashboard restore-to-new-project flow).
 3. **Re-point the app** at the new project:
-   - Update **`VITE_SUPABASE_URL`** (and the anon key if it changed) in the Vercel `steelbuildpro-og` project env.
-   - **Redeploy** the frontend (push to `main` → CI deploy, or Vercel redeploy) so the new env is baked into the build.
+   - Update **`VITE_SUPABASE_URL`** (and the anon key if it changed) in the GitHub Actions secrets that the deploy job reads. These are build-time Vite variables baked into the bundle, so changing them requires a rebuild — editing a Cloudflare setting is not enough.
+   - **Redeploy** the frontend by pushing to `main`: the gated workflow runs `ci`, `secret-scan`, `supabase-drift` and `edge-typecheck`, then publishes the Worker. There is no dashboard redeploy path; `npm run deploy` from a laptop is refused by `scripts/require-ci-deploy.mjs`. To undo a bad publish, use `wrangler rollback <version-id>` (see `rollback.md`) rather than a redeploy.
 4. **Redeploy every edge function** to the new project and **re-enter all edge secrets** (they do not travel with a DB restore):
    ```powershell
-   # Deploy each function (repeat for: llm-proxy, email-ingest, email-send,
-   # project-export, stripe-billing). Match each function's verify_jwt.
+   # Deploy each function. Match each function's verify_jwt exactly —
+   # getting this wrong either breaks the caller or removes its auth.
    npx supabase functions deploy <name> --project-ref <NEW_PROJECT_REF> [--no-verify-jwt]
    ```
-   - `--no-verify-jwt` for: `llm-proxy`, `email-ingest`, `stripe-billing` (they do their own auth / are webhooks).
-   - **Without** `--no-verify-jwt` for: `email-send`, `project-export`.
+   All **nine** live functions must be redeployed (inventory verified 2026-09-22):
+   - `--no-verify-jwt` (they do their own auth, or are public/webhook endpoints):
+     `llm-proxy`, `email-ingest`, `stripe-billing`, `health`,
+     `command-center-read`, `command-center-session-handoff`.
+   - **Without** `--no-verify-jwt`: `email-send`, `project-export`, `account-delete`.
+   - Do **not** redeploy the retired slugs (`sheets-api`, `legacy-app-files-copy`,
+     `sharepoint-proxy`, `bluebeam-proxy`, `stripe-setup`, `stripe-webhook`,
+     `stripe-worker`) — `supabase/production-ownership-manifest.json` marks them
+     deprecated. A `deprecated` slug fails the drift gate if it reappears;
+     `legacy-app-files-copy` is `intentionally-frozen` instead, which the check
+     buckets nowhere, so redeploying that one would pass silently — treat the
+     manifest as the record, not as a guarantee for that slug.
    - Re-set secrets: LLM keys, provider keys, `LLM_DAILY_COST_LIMIT_USD` / `LLM_DAILY_REQUEST_LIMIT`, `EMAIL_SEND_DAILY_LIMIT` / `EMAIL_CLASSIFY_DAILY_LIMIT`, `ALLOWED_ORIGINS`, Stripe keys + webhook secret.
    - Re-point the **Stripe webhook** endpoint (the `/webhook` route inside `stripe-billing`) at the new project URL in the Stripe dashboard.
 5. **Restore Storage** (both buckets) from a verified offsite snapshot into the new project's Storage. Follow `storage-backup-setup.md#restore-rehearsal`, restore both buckets, and preserve the same object keys/paths so signed URLs and DB `file_url` references resolve.
