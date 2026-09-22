@@ -6,18 +6,30 @@ document is the end-to-end runbook: what is already wired up in this repo, and
 the remaining steps — most of which **require a Mac with Xcode** and cannot be
 done in CI/Linux.
 
-> Legal note: public-facing/store work (marketing copy, signup, billing) was
-> cleared for the S&H Steel conflict before this was started (see `CLAUDE.md`).
-> If that clearance changes, stop and re-check before submitting.
+> **Status (2026-09-22): not submittable yet.** The items marked **Action** and
+> **Not handled** below are blocking. See MOB-1 … MOB-10 in
+> [`../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md`](../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md).
+>
+> There is no legal hold or conflict blocking store, marketing, signup or
+> billing work (owner, 2026-09-11; see `CLAUDE.md` → Workflow rules).
 
 ---
 
 ## Already done in this repo
 
 - **Capacitor iOS wrapper** — `capacitor.config.ts` (appId `com.steelbuildpro.app`,
-  `webDir: dist`), plugins installed (`app`, `status-bar`, `splash-screen`,
+  `webDir: dist`), plugins **installed** (`app`, `status-bar`, `splash-screen`,
   `keyboard`, `haptics`, `camera`, `share`, `preferences`), npm scripts
   (`cap:add:ios`, `cap:sync`, `cap:open`, `ios`).
+  - ⚠️ Installed is not wired. Only `app`, `keyboard`, `splash-screen` and
+    `status-bar` have call sites; `camera`, `haptics`, `share` and `preferences`
+    have none — see guideline 4.2 below.
+  - ⚠️ **No `ios/` directory is committed.** The Xcode project does not exist
+    yet; it is generated on a Mac with `npm run cap:add:ios`. Nothing native has
+    been built or run.
+  - ⚠️ **No Android platform exists at all** — `@capacitor/android` is not a
+    dependency and there is no `android/` directory. Google Play is a
+    from-scratch effort (MOB-1), not covered by this runbook.
 - **Native bootstrap** — `src/lib/native/capacitor.ts`, loaded only inside the
   native shell (guarded in `src/main.jsx`): status-bar theming, splash hide,
   keyboard classes, deep-link routing, safe-area root class. The web bundle and
@@ -122,9 +134,9 @@ must serve the bundled offline assets, not a dev URL.
 | Guideline | What it requires | Status / action |
 |---|---|---|
 | **2.1 Completeness** | Reviewer can actually use the app | **Action:** create a demo login with seeded data; put it in App Review Information. |
-| **4.2 Minimum functionality** | Not "just a repackaged website" | **Handled:** native camera capture, haptics, share sheet, native status bar/splash, offline-capable bundled assets. Keep leaning on native capabilities. |
+| **4.2 Minimum functionality** | Not "just a repackaged website" | **NOT handled — highest rejection risk (MOB-2).** `@capacitor/camera`, `@capacitor/haptics`, `@capacitor/share` and `@capacitor/preferences` are installed but have **zero call sites in `src/`** (verified 2026-09-22). Only `app`, `keyboard`, `splash-screen` and `status-bar` are wired, in `src/lib/native/capacitor.ts` — that is chrome, not capability. As it stands this is a wrapped website. **Action:** actually ship camera capture (field photos, punchlist), the share sheet (transmittals, reports) and haptics on the gated actions before submitting. |
 | **5.1.1(v) Account deletion** | Any user who can create an account can delete it **in-app** | ✅ **Implemented — see §6.1** (self-service "Delete my account" in Settings → Profile). Needs staging deploy + test before submission. |
-| **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ✅ **Sign-in-only — see §6.2.** The native build hides all in-app purchase UI (plans, checkout, portal, upgrade upsells); subscriptions are managed on the web. |
+| **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ⚠️ **Partly — see §6.2 (MOB-4).** Billing, checkout, portal and upsells are hidden natively, but `src/pages/Landing.jsx` renders plan prices (`$${p.priceMonthly}`) and "Start free" buttons with **no `isNativePlatform()` gate** (verified 2026-09-22), so a signed-out user sees subscription pricing inside the native shell. **Action:** gate the Landing pricing section natively before submitting. |
 | **5.1.1 / 5.1.2 Data & privacy** | Privacy policy linked; data use disclosed | **Handled:** legal pages exist; link them and complete nutrition labels. |
 | **4.8 / 5.1.1 Sign in with Apple** | If you offer a third-party social login (e.g. Google), you must also offer Sign in with Apple (with narrow exceptions) | **Check:** if only email/password is offered, this does not apply. Confirm the auth methods enabled in Supabase. |
 | **2.3 Accurate metadata** | Store listing matches the app | Keep marketing copy truthful; no hidden/unfinished features. |
@@ -168,7 +180,10 @@ carries no in-app purchase surface, so Apple IAP is not required and there's no
 - `src/config/moduleRegistry.js` — the **Billing** nav entry is stripped from
   the menus natively (the route still resolves for the read-only page).
 - Plan-limit **"Upgrade"** upsells are hidden natively (the limit messages still
-  show): `OrgMembers.jsx`, `team/TeamControlCenter.tsx`, `Projects.jsx`.
+  show): `OrgMembers.jsx`, `team/TeamControlCenter.tsx`. (`Projects.jsx` no
+  longer carries an upgrade upsell, so there is nothing to gate there.)
+- ⚠️ **Gap:** `Landing.jsx` is not gated — it renders plan prices and "Start
+  free" to signed-out users inside the native shell (MOB-4).
 
 **Adding IAP later** is a clean, additive change (see the discussion on
 migration direction): you'd add StoreKit as an option without stranding anyone.

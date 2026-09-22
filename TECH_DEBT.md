@@ -63,9 +63,11 @@ was made:
   evidence**. Local source cannot prove remote backup freshness, restore
   rehearsal, Vercel rollback, or Edge Function rollback readiness.
 
-The local Node 24 versus CI Node 20 difference remains a P2 environment
-deviation, not a source defect. The P1 findings remain visible in the release
-checklist and are not counted as resolved by documentation alone.
+~~The local Node 24 versus CI Node 20 difference remains a P2 environment
+deviation.~~ **Closed 2026-09-22** — every job in `.github/workflows/ci.yml`
+pins `node-version: "24"`, matching local. (`storage-backup.yml` runs Node 22;
+it builds nothing.) The P1 findings remain visible in the release checklist and
+are not counted as resolved by documentation alone.
 
 ## Storage isolation — B41-P1-001 closure
 
@@ -148,16 +150,25 @@ Done:
   safety net.
 
 Still owed, and needs the Supabase dashboard or CLI (no MCP tool deletes
-storage objects, buckets or Edge Functions):
+storage objects, buckets or Edge Functions). Re-checked against live production
+2026-09-22:
 
-- Delete the 435 objects and the `sheets-files` bucket.
-- Delete the `sheets-api` Edge Function.
-- Drop `sheets_doc`, `sheets_config`, `sheets_doc_backup`.
+- ~~Delete the `sheets-api` Edge Function.~~ **Done.** The owner confirmed the
+  retirement on 2026-09-21 and the live function inventory no longer lists it.
+  Its manifest entry is now `lifecycle: deprecated`, so absence passes the drift
+  gate and any reappearance fails it — see
+  `docs/runbooks/supabase-production-ownership.md#sheets-api-retirement`.
+  Removing the stale `required` entry is what unblocked #462.
+- **Still owed:** delete the 435 objects and the `sheets-files` bucket.
+- **Still owed:** drop `sheets_doc`, `sheets_config`, `sheets_doc_backup` — all
+  three are still live (1, 1 and 2 rows respectively on 2026-09-22).
 
-Order matters: `sheets-api`'s `DELETE /file` route is the clean way to remove
-the objects and it authenticates against the passcode in `sheets_config`, so
-dropping that table first throws away the tidiest deletion path. The last B2
-backup covering these files ran 2026-09-18 and is the recovery window.
+The ordering note below is now historical: `sheets-api`'s `DELETE /file` route
+was the tidy way to remove the objects and it authenticated against the passcode
+in `sheets_config`, but the function is deleted, so the bucket must be emptied
+from the Supabase dashboard or the Storage API instead. Dropping the three
+tables is now unblocked — nothing reads them. The last B2 backup covering these
+files ran 2026-09-18 and is the recovery window.
 
 ## Active items
 
@@ -174,6 +185,71 @@ live, and data export works. A 2026-07-01 enterprise-readiness audit
 (`origin/main@642ce154`) is driving a remediation pass — see the entries below
 and `docs/runbooks/`. These are go-to-market, typing, and platform-maturity
 follow-ups._
+
+### Production-readiness audit (2026-09-21) — open items
+
+Full report with evidence per finding:
+[`docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md`](docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md).
+Taken at `ada5426`; **§9 reconciles it against `main@7227d32`** after PRs
+#460–#464, so check a finding's status there before working it. Counts after
+that reconciliation: 0 critical · 20 high (3 closed) · 54 medium (8 closed) ·
+~45 low. No committed credential was found in the tree or its history.
+
+**Already closed by `main` / production — do not re-open:** AUTH-1 (org admin
+could delete the sole owner), AUTH-3 (invite tokens readable by every member),
+RLS-1 (cross-tenant audit-row RPCs), RLS-8, CI-1 (secret-scan and drift are now
+deploy gates), CI-4, CI-8, EDGE-1, EDGE-3, EDGE-4, PERF-11, DR-4. Narrowed:
+RLS-2, RLS-6, EDGE-2, EDGE-13, EDGE-14, EDGE-16, CI-3, CI-6, COMP-1, TEST-2.
+
+**P0 — before the next production deploy:**
+
+- **Session hardening.** AUTH-5 (`src/lib/supabase.ts` sets no `flowType`, so
+  auth runs the implicit flow and tokens land in the URL fragment), AUTH-2 (the
+  TOTP gate is browser-only and racy — `AuthContext` sets `isAuthenticated`
+  before `refreshMfaRequired()` resolves), AUTH-4 (a password-recovery session
+  reaches the full app), AUTH-6 (sign-out leaves tenant caches populated and
+  swallows the error).
+- **Invariant regressions that corrupt records.** DATA-2 and DATA-3 (schedule
+  status/percent — both flagged in `CLAUDE.md`), LOGIC-1 (ZonePanel invents an
+  official RFI number when the sequence RPC fails), DATA-1 (the Pay Applications
+  contract query is permanently broken by the global `['projects']` select
+  default), DATA-4 (two shipping importers write `deliveries` in a shape
+  production rejects), DATA-5, LOGIC-5, LOGIC-6.
+- **Release pipeline.** CI-2 — the deploy jobs declare no `environment:`, so the
+  production Cloudflare token is reachable from any branch's workflow. Branch
+  protection remains blocked by the repository plan (B41-P1-005). **CI-10 (new):**
+  the Netlify site is still connected and builds every PR — confirm it cannot
+  publish to the production hostnames, then disconnect it. An ungated publisher
+  is the same risk class as Cloudflare Workers Builds.
+- **Recovery and monitoring (owner).** OBS-1 (no uptime monitor and no Sentry
+  alert rules), DR-1 (PITR off, no restore ever rehearsed), DR-2 (the nightly
+  Storage backup's activation is unverified). Enable leaked-password protection.
+- **RLS remainder.** RLS-2's tail: `activities` and `pma_audit_logs` INSERT are
+  still membership-only, so a viewer can write audit noise.
+
+**P1 — before another tenant or a store submission:** RLS-3, RLS-4
+(`number_sequences` is writable below the RPC — the same surface the
+number-sequence rule protects), RLS-5, RLS-7, RLS-9, AUTH-7, AUTH-8, EDGE-5
+(self-deletion fails for a sole owner with live projects), EDGE-7, DB-9,
+LOGIC-2/3/4/12, WEB-1…WEB-4, SEC-1…SEC-4, CI-5, and the App Store code-level
+list (§6.1).
+
+**P2 — scale cliffs, at the project sizes this repo already documents:** PERF-1
+(the Piece Register renders ~28k rows unvirtualised from a `select *`), PERF-2
+(the 3D tab re-pages the whole table every 30 s), PERF-3 (canonical realtime has
+no debounce), PERF-4 (every entity read ships every column), PERF-5…PERF-10.
+
+**Mobile — neither store build exists.** MOB-1: no Android platform at all.
+MOB-2…MOB-10 for iOS: no `ios/` project is committed, the four native plugins
+the App Store 4.2 defence cites have **zero call sites**, auth e-mails redirect
+to `capacitor://localhost`, signed-out users see plan prices in the native
+shell, and downloads are dead in WKWebView. See
+[`docs/app-store/SUBMISSION.md`](docs/app-store/SUBMISSION.md).
+
+**Owner-only, unverifiable from the repo:** PITR, backup restore rehearsal,
+Sentry alert rules, uptime monitoring, branch protection, the Netlify and
+Workers Builds connections, App Store Connect and Play Console accounts. Listed
+in §8 of the audit.
 
 ### Detailing Control Center — audit remainder (2026-09-07)
 

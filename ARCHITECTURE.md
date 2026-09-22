@@ -38,7 +38,7 @@ For the running list of known issues, see [`TECH_DEBT.md`](./TECH_DEBT.md).
                   └────────────────────────┘
 
          Hosting: Cloudflare Workers (CI-gated deploy job) → steelbuild-pro.com
-                  migration in progress — see docs/runbooks/cloudflare-migration.md
+                  migration complete; Vercel retired — docs/runbooks/cloudflare-migration.md
 ```
 
 There is no separate backend service. The app is a SPA that talks
@@ -198,7 +198,7 @@ are document artifacts. Both `drawings.stage` and
 `drawing_sets.set_approval_status` are deprecated for workflow
 rollups — read `submittals.status` + `submittals.ball_in_court` and
 map via `submittalStatusToStage(status, bic, approved_date)` (see
-[`src/lib/submittalStageMapping.js`](src/lib/submittalStageMapping.js)).
+[`src/lib/submittalStageMapping.ts`](src/lib/submittalStageMapping.ts)).
 
 The mapping uses ball-in-court class to discriminate phases:
 
@@ -333,11 +333,17 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
 
 - **Preferred (Docker available):** `npx supabase migration new <name>` → edit the file
   → `npx supabase db push`. The CLI keeps the filename version == `schema_migrations`.
-- **MCP path (cloud/Linux sessions):** after `apply_migration(name, query)`, immediately
-  read the recorded version
-  (`select version from supabase_migrations.schema_migrations order by version desc limit 1`)
-  and commit a repo file named `supabase/migrations/<that-version>_<name>.sql` with the
-  **identical** SQL. Never let the on-disk name and the recorded version diverge.
+- **Cloud/Linux sessions — by hand, and `apply_migration` is NOT the path.** The MCP
+  `apply_migration` tool stamps its own apply-time version, which is how the ledger
+  drifted from the repo in the first place, and `supabase db push` refuses outright
+  because the ledger carries a sibling app's versions. Apply the SQL, read the
+  recorded version
+  (`select version from supabase_migrations.schema_migrations order by version desc limit 1`),
+  and commit `supabase/migrations/<that-version>_<name>.sql` with the **identical**
+  SQL — verified against the ledger's `statements` payload, not assumed. Commit the
+  file in the same change that applies it: `Supabase drift check` runs on every
+  branch, so an unmerged file behind a live stamp turns `main` and every open PR
+  red. `CLAUDE.md` holds the authoritative procedure.
 - Write DDL replay-safe (`IF NOT EXISTS`, `to_regprocedure()` guards). A migration that
   changes the exposed schema ends with `NOTIFY pgrst, 'reload schema'`.
 - **NEVER** run `supabase db reset` (or point reset/branch tooling) at prod — it DROPS
@@ -357,17 +363,30 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
 - `stripe-billing` — subscription checkout, portal, and the `/webhook` route
   (the tamper-proof `org.plan` anchor). Does its own auth (deploy `--no-verify-jwt`).
 - `_shared/` — CORS + attachment helpers (a shared dir, not a deployed function).
-- **Deprecated / orphan — still deployed, pending `supabase functions delete`
-  (owner/CLI):** `sharepoint-proxy`, `bluebeam-proxy` (removed integrations) and
-  the Stripe Sync Engine orphans `stripe-setup` / `stripe-webhook` /
-  `stripe-worker` (these are NOT the real webhook — that lives inside
-  `stripe-billing`). As of 2026-07-24 the application inventory is **5 real**
-  (`llm-proxy`, `email-ingest`, `email-send`, `project-export`, `stripe-billing`)
-  **+ 5 orphan/deprecated** (`sharepoint-proxy`, `bluebeam-proxy`, `stripe-setup`,
-  `stripe-webhook`, `stripe-worker`). A previously shipped schedule chat Edge
-  Function may still exist remotely pending `supabase functions delete`
-  (owner/CLI). The `pg_cron` job that pinged `stripe-worker` every 60s was
-  unscheduled 2026-07-01. See `docs/runbooks/owner-checklist.md`.
+- `health` — public, DB-aware healthcheck (200 `{status:ok,db:ok}` / 503) used as
+  the uptime-monitor target.
+- `account-delete` — self-service account deletion (App Store guideline 5.1.1(v)).
+- `command-center-read` / `command-center-session-handoff` — the desktop
+  hand-off pair.
+- `staging-e2e-bootstrap` — staging only; not deployed to production.
+
+**Live production inventory: 9 functions** (verified 2026-09-22) — `llm-proxy`,
+`email-ingest`, `email-send`, `stripe-billing`, `project-export`, `health`,
+`command-center-read`, `command-center-session-handoff`, `account-delete`.
+
+**Every previously deprecated function has been deleted.** `sharepoint-proxy`,
+`bluebeam-proxy`, the Stripe Sync Engine orphans `stripe-setup` /
+`stripe-webhook` / `stripe-worker` (never the real webhook — that lives inside
+`stripe-billing`), the schedule-chat function, `sheets-api` (retired 2026-09-21)
+and `legacy-app-files-copy` are all gone from production. The `pg_cron` job that
+pinged `stripe-worker` every 60s was unscheduled 2026-07-01. Slug ownership and
+lifecycle are tracked in `supabase/production-ownership-manifest.json`; the drift
+gate fails if a retired slug reappears.
+
+**Reviewed release path:** `.github/workflows/supabase-deploy-reviewed.yml` is a
+manual, reviewed deploy for `llm-proxy`, `project-export` and `stripe-billing`.
+`edge-typecheck` (a `deno check` over `supabase/functions/*/index.ts`) gates the
+web deploy too, so a broken Edge Function blocks a frontend release.
 
 ### Storage
 
@@ -520,8 +539,13 @@ branches and every PR:
 2. TypeScript — four gates: `typecheck` (TS), `typecheck:js` (JS/JSX), and the
    `typecheck:strict` (strictNullChecks) + `typecheck:noimplicitany` ratchets,
    all blocking
-3. Vitest (~1,740 tests)
+3. Vitest (710 files / 6,835 tests as of 2026-09-22)
 4. Production Vite build
+
+Three sibling jobs run alongside `ci` and **also gate the deploy**:
+`secret-scan` (gitleaks), `supabase-drift` (production ledger vs
+`supabase/migrations/`) and `edge-typecheck` (`deno check` over the Edge
+Functions). `dependency-audit` is advisory. Every job pins Node 24.
 
 Concurrency group cancels redundant runs on rapid iteration.
 
@@ -531,9 +555,13 @@ Production deploys are **CI-gated** (since 2026-06-19). The `deploy-cloudflare`
 job in `.github/workflows/ci.yml` is the sole path. Workflow:
 
 1. Develop on a `claude/<slug>` feature branch (or directly on `main`)
-2. Push to `main` → the `ci` job runs (lint + 4 typechecks + Vitest + build)
-3. **Only if `ci` is green** does `deploy-cloudflare` publish
-   (`wrangler deploy`). A red run leaves prod on the last good version.
+2. Push to `main` → `ci` (lint + 4 typechecks + Vitest + build) runs alongside
+   `secret-scan`, `supabase-drift` and `edge-typecheck`
+3. **Only if all four are green** does `deploy-cloudflare` publish
+   (`wrangler deploy`) — it declares
+   `needs: [ci, secret-scan, supabase-drift, edge-typecheck]`. A red run leaves
+   prod on the last good version. `npm run deploy` from a laptop is refused by
+   `scripts/require-ci-deploy.mjs`.
 4. Verify on the live URL
 
 That gate only holds while this job is the sole publisher. Cloudflare's own
@@ -566,14 +594,17 @@ Single-region, all-US vendor chain (an accepted risk at this stage):
 
 - **Database + Auth + Storage:** Supabase (Postgres 17) on AWS **us-east-1**,
   single region. Daily backups; PITR is an owner dashboard toggle.
-- **Hosting / CDN:** in transition — the Vercel account is closed and Cloudflare
-  is not yet serving the domain. This line and the customer-facing subprocessor
-  disclosures (Subprocessors/Privacy/Security pages) must be corrected together
-  once Cloudflare serves; note Cloudflare's network is global by default, so the
-  all-US claim below needs restating. See `docs/runbooks/cloudflare-migration.md`.
-  **Payments:** Stripe (US). **Monitoring:**
-  Sentry (US). **AI:** US-based model providers via `llm-proxy`.
-- No customer data is stored outside the US; there is no EU-residency option.
+- **Hosting / CDN:** Cloudflare Workers, serving `steelbuild-pro.com` and
+  `www.steelbuild-pro.com`; the Vercel account is closed. **Cloudflare's network
+  is global by default**, so static assets are served from edge locations
+  worldwide — the "all-US vendor chain" framing above applies to the data
+  stores, not the CDN. The customer-facing disclosures (Subprocessors, Privacy,
+  Security) now list Cloudflare; all four legal pages still carry a
+  `// DRAFT — MUST be reviewed by legal counsel` marker (COMP-1).
+  **Payments:** Stripe (US). **Monitoring:** Sentry (US). **AI:** US-based model
+  providers via `llm-proxy`.
+- Customer data at rest (Postgres, Auth, Storage) is US-only; there is no
+  EU-residency option. Cached static assets are not customer data.
 
 Degradation stance: auth fails closed with a clear error; AI features degrade to
 deterministic paths (regex email-classify, deterministic revision overlay);
@@ -586,7 +617,7 @@ anchor. See `docs/runbooks/backup-dr.md` + `incident-response.md`.
 
 ### Unit / integration
 
-Vitest. ~1,250 tests across pure helpers (`drawingHub`, `submittalStageMapping`,
+Vitest. 6,835 tests across 710 files (2026-09-22) covering pure helpers (`drawingHub`, `submittalStageMapping`,
 `costRollup`, `projectKpis`, `payapp`, `backcharge`, `pdfSheetExtractor`, etc.),
 hook-level tests, and jsdom integration tests that drive real components +
 import flows with the Supabase client mocked.
@@ -642,15 +673,28 @@ logic — they prove that the test infrastructure works on real
 production code paths and catch the kind of "import broke at module
 load" regression that pure-helper tests miss.
 
+### End-to-end (Playwright)
+
+`playwright.config.ts` + `e2e/` hold six specs: `smoke`, `foundation`,
+`daily-workflow`, `piece-control-pilot`, `staging-auth-boundary`, and
+**`fab-release-gate`** — the P0 path, which `CLAUDE.md` requires to stay green.
+They run against the rebuilt staging environment via the
+`staging-e2e-readonly` and `staging-e2e-mutations` CI jobs. The mutation job is
+still opt-in behind `STAGING_E2E_MUTATIONS_ENABLED`, so **the P0 fab-gate spec
+has no scheduled run** (audit CI-6).
+
 ### What's not tested yet
 
-- E2E flows (no Playwright / Cypress)
 - Visual regression
 - Most page-level components beyond the three smoke targets above
+- Role-based RLS regression tests in CI — two psql suites exist
+  (`supabase/tests/launch_security_boundaries.sql`,
+  `pending_issue_permissions.sql`) but are run by hand against staging (TEST-2)
+- Edge Function handler tests
 
-Priorities for the next test sprint: extend RTL coverage to
-DrawingViewer and ModelViewer, then add interaction tests
-(`@testing-library/user-event`) for the most-trafficked flows.
+Priorities for the next test sprint: give the fab-release gate spec a scheduled
+run, extend RTL coverage to DrawingViewer and ModelViewer, then add interaction
+tests (`@testing-library/user-event`) for the most-trafficked flows.
 
 ---
 
@@ -699,7 +743,7 @@ src/
   hooks/            useDrawings, useSubmittals, useFeatureFlag,
                     useProjectRole, useDrawingViewerState, etc.
   lib/              drawingHub/ (entity-style CRUD wrappers per submodule),
-                    submittalStageMapping.js, exports/, etc.
+                    submittalStageMapping.ts, exports/, etc.
   pages/            Top-level page components, mostly thin orchestrators
   services/         Cross-cutting service helpers — validation,
                     cacheRegistry, scheduleCascade, workflowEngine,
@@ -709,9 +753,14 @@ src/
   utils/            Pure helpers (batchProcess, formatters, etc.)
 
 supabase/
-  migrations/       3 baseline files (20260101000000/10/20) — replay from zero
+  migrations/       123 files (2026-09-22): 3 baseline (20260101000000/10/20)
+                    + timestamped follow-ups. Applied and stamped BY HAND —
+                    never `db push`, never MCP `apply_migration` (see CLAUDE.md)
   migrations_archive/  190 pre-2026-06-20 migrations (history; not applied)
-  functions/        Edge function source
+  migrations_external/ SQL recovered from production that this repo does not own
+  production-ownership-manifest.json  who owns each ledger-only version/slug
+  functions/        Edge function source (9 deployed, + staging-e2e-bootstrap)
+  tests/            psql RLS boundary suites (run by hand against staging)
 
 public/             Static assets including web-ifc wasm (public/wasm/) + pdf workers
 ```
